@@ -9,3 +9,7 @@ out/
 supabase/.temp/
 tsconfig.tsbuildinfo
 
+
+# local audit outputs
+commercial_audit.*
+
