@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, Suspense, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "../i18n-provider";
 
@@ -109,7 +110,7 @@ function LoginContent() {
               className="input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder="********"
               type="password"
               autoComplete="current-password"
               required
@@ -120,9 +121,9 @@ function LoginContent() {
             <button type="submit" disabled={busy} className={`btn ${busy ? "" : "btnPrimary"}`}>
               {busy ? t("auth.signing_in") : t("auth.sign_in")}
             </button>
-            <a className="btn" href="/">
+            <Link className="btn" href="/">
               {t("common.back_home")}
-            </a>
+            </Link>
           </div>
         </form>
       </div>

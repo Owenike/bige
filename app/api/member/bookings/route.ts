@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../lib/auth-context";
 
 const CANCEL_OR_RESCHEDULE_LOCK_MINUTES = 120;
@@ -157,5 +157,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ booking: data }, { status: 201 });
 }
-
-export { canModify };

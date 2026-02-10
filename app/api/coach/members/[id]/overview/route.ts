@@ -115,8 +115,8 @@ async function fetchListWithBranchFilter(args: {
   return { data: null, error: new Error(lastMissingColMessage || "branch_scope_unenforceable") as any };
 }
 
-export async function GET(request: Request, ctx: { params: { id: string } }) {
-  const memberId = ctx.params.id;
+export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const memberId = (await ctx.params).id;
   if (!memberId || !isUuid(memberId)) {
     return NextResponse.json({ error: "invalid_member_id" }, { status: 400 });
   }

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 
@@ -52,7 +52,7 @@ export async function PATCH(request: Request) {
       "id, tenant_id, store_id, full_name, phone, photo_url, notes, consent_status, consent_signed_at, auth_user_id",
     )
     .eq("auth_user_id", user.id)
-    .maybeSingle<MemberRow>();
+    .maybeSingle();
 
   if (memberResult.error || !memberResult.data) {
     return NextResponse.json({ error: "Member not found" }, { status: 404 });
@@ -93,7 +93,7 @@ export async function PATCH(request: Request) {
     .select(
       "id, tenant_id, store_id, full_name, phone, photo_url, notes, consent_status, consent_signed_at, auth_user_id",
     )
-    .maybeSingle<MemberRow>();
+    .maybeSingle();
 
   if (updatedResult.error || !updatedResult.data) {
     return NextResponse.json({ error: updatedResult.error?.message || "Update failed" }, { status: 500 });
