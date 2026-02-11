@@ -3,13 +3,10 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { useI18n } from "../i18n-provider";
 
 type ViewState = "loading" | "ready" | "invalid" | "submitting" | "done";
 
 export default function ResetPasswordPage() {
-  const { t } = useI18n();
-
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -44,6 +41,25 @@ export default function ResetPasswordPage() {
       });
 
       if (!cancelled) setClient(supabase);
+
+      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+      const p = new URLSearchParams(hash);
+      const accessToken = p.get("access_token");
+      const refreshToken = p.get("refresh_token");
+      const type = p.get("type");
+
+      if (accessToken && refreshToken && type === "recovery") {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (!cancelled && !error) {
+          setState("ready");
+          setMessage("請輸入新密碼。");
+          return;
+        }
+      }
 
       const { data, error } = await supabase.auth.getSession();
       if (cancelled) return;
