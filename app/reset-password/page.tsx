@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -42,21 +42,51 @@ export default function ResetPasswordPage() {
 
       if (!cancelled) setClient(supabase);
 
-      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
-      const p = new URLSearchParams(hash);
-      const accessToken = p.get("access_token");
-      const refreshToken = p.get("refresh_token");
-      const type = p.get("type");
+      const url = new URL(window.location.href);
+      const query = url.searchParams;
+      const hash = url.hash.startsWith("#") ? url.hash.slice(1) : "";
+      const hp = new URLSearchParams(hash);
 
-      if (accessToken && refreshToken && type === "recovery") {
+      const tokenHash = query.get("token_hash") || hp.get("token_hash");
+      const type = query.get("type") || hp.get("type");
+      if (tokenHash && type === "recovery") {
+        const { error } = await supabase.auth.verifyOtp({
+          type: "recovery",
+          token_hash: tokenHash,
+        });
+        if (!error) {
+          if (!cancelled) {
+            setState("ready");
+            setMessage("請輸入新密碼。");
+          }
+          return;
+        }
+      }
+
+      const code = query.get("code");
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error) {
+          if (!cancelled) {
+            setState("ready");
+            setMessage("請輸入新密碼。");
+          }
+          return;
+        }
+      }
+
+      const accessToken = hp.get("access_token");
+      const refreshToken = hp.get("refresh_token");
+      if (accessToken && refreshToken) {
         const { error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
         });
-
-        if (!cancelled && !error) {
-          setState("ready");
-          setMessage("請輸入新密碼。");
+        if (!error) {
+          if (!cancelled) {
+            setState("ready");
+            setMessage("請輸入新密碼。");
+          }
           return;
         }
       }
@@ -149,7 +179,11 @@ export default function ResetPasswordPage() {
             </label>
 
             <div className="actions" style={{ marginTop: 14 }}>
-              <button type="submit" className={`btn ${state === "submitting" ? "" : "btnPrimary"}`} disabled={state === "submitting"}>
+              <button
+                type="submit"
+                className={`btn ${state === "submitting" ? "" : "btnPrimary"}`}
+                disabled={state === "submitting"}
+              >
                 {state === "submitting" ? "更新中..." : "更新密碼"}
               </button>
               <Link href="/login" className="btn">
