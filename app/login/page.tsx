@@ -121,6 +121,9 @@ function LoginContent() {
             <button type="submit" disabled={busy} className={`btn ${busy ? "" : "btnPrimary"}`}>
               {busy ? t("auth.signing_in") : t("auth.sign_in")}
             </button>
+            <Link className="btn" href="/forgot-password">
+              忘記密碼
+            </Link>
             <Link className="btn" href="/">
               {t("common.back_home")}
             </Link>
