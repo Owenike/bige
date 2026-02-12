@@ -8,8 +8,9 @@ export default function ForgotPasswordPage() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const appUrl =
+    (typeof window !== "undefined" ? window.location.origin : null) ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    (typeof window !== "undefined" ? window.location.origin : "https://bige-nu.vercel.app");
+    "https://bige-nu.vercel.app";
 
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
