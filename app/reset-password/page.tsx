@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 type ViewState = "loading" | "ready" | "invalid" | "submitting" | "done";
@@ -16,13 +16,11 @@ export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const envMissing = useMemo(() => !supabaseUrl || !supabaseAnonKey, [supabaseUrl, supabaseAnonKey]);
-
   useEffect(() => {
     let cancelled = false;
 
     async function bootstrap() {
-      if (envMissing) {
+      if (!supabaseUrl || !supabaseAnonKey) {
         if (!cancelled) {
           setState("invalid");
           setMessage("系統設定缺少 Supabase 環境變數。");
@@ -32,83 +30,79 @@ export default function ResetPasswordPage() {
 
       if (!cancelled) setMessage("正在檢查重設連結...");
 
-      const supabase = createClient(supabaseUrl!, supabaseAnonKey!, {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true,
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
         },
       });
 
       if (!cancelled) setClient(supabase);
 
-      const url = new URL(window.location.href);
-      const query = url.searchParams;
-      const hash = url.hash.startsWith("#") ? url.hash.slice(1) : "";
-      const hp = new URLSearchParams(hash);
-
-      const tokenHash = query.get("token_hash") || hp.get("token_hash");
-      const type = query.get("type") || hp.get("type");
-      if (tokenHash && type === "recovery") {
-        const { error } = await supabase.auth.verifyOtp({
-          type: "recovery",
-          token_hash: tokenHash,
-        });
-        if (!error) {
-          if (!cancelled) {
-            setState("ready");
-            setMessage("請輸入新密碼。");
-          }
-          return;
-        }
+      try {
+        await supabase.auth.signOut({ scope: "local" });
+      } catch {
+        // ignore stale local session cleanup errors
       }
 
-      const code = query.get("code");
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!error) {
-          if (!cancelled) {
-            setState("ready");
-            setMessage("請輸入新密碼。");
-          }
-          return;
+      try {
+        const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const query = new URLSearchParams(window.location.search);
+
+        let sessionReady = false;
+
+        const accessToken = hash.get("access_token");
+        const refreshToken = hash.get("refresh_token");
+        const tokenHash = query.get("token_hash");
+        const type = query.get("type");
+        const code = query.get("code");
+        const errCode = query.get("error_code") || hash.get("error_code");
+
+        if (errCode) {
+          throw new Error("重設連結無效或已過期，請重新申請。");
         }
-      }
 
-      const accessToken = hp.get("access_token");
-      const refreshToken = hp.get("refresh_token");
-      if (accessToken && refreshToken) {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (!error) {
-          if (!cancelled) {
-            setState("ready");
-            setMessage("請輸入新密碼。");
-          }
-          return;
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (!error) sessionReady = true;
+        } else if (tokenHash && type === "recovery") {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: "recovery",
+          });
+          if (!error) sessionReady = true;
+        } else if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error) sessionReady = true;
         }
-      }
 
-      const { data, error } = await supabase.auth.getSession();
-      if (cancelled) return;
-
-      if (error || !data.session) {
+        if (!sessionReady) {
+          const { data, error } = await supabase.auth.getSession();
+          if (error || !data.session) {
+            throw new Error("重設連結無效或已過期，請重新申請。");
+          }
+        }
+      } catch (e) {
+        if (cancelled) return;
         setState("invalid");
-        setMessage("重設連結無效或已過期，請重新申請。");
+        setMessage(e instanceof Error ? e.message : "重設連結無效或已過期，請重新申請。");
         return;
       }
 
+      if (cancelled) return;
       setState("ready");
       setMessage("請輸入新密碼。");
     }
 
-    bootstrap();
+    void bootstrap();
     return () => {
       cancelled = true;
     };
-  }, [envMissing, supabaseAnonKey, supabaseUrl]);
+  }, [supabaseAnonKey, supabaseUrl]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
