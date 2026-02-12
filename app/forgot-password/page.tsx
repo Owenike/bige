@@ -7,12 +7,15 @@ import { createClient } from "@supabase/supabase-js";
 export default function ForgotPasswordPage() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://bige-nu.vercel.app";
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "https://bige-nu.vercel.app");
 
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [debug, setDebug] = useState<string>("");
 
   const envMissing = useMemo(() => !supabaseUrl || !supabaseAnonKey, [supabaseUrl, supabaseAnonKey]);
 
@@ -21,15 +24,19 @@ export default function ForgotPasswordPage() {
     setBusy(true);
     setError("");
     setMessage("");
+    setDebug("");
 
     try {
       if (envMissing) throw new Error("缺少 Supabase 環境變數設定。");
       const supabase = createClient(supabaseUrl!, supabaseAnonKey!);
-      const { error: sendError } = await supabase.auth.resetPasswordForEmail(email, {
+
+      const { error: sendError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo: `${appUrl}/reset-password`,
       });
       if (sendError) throw sendError;
+
       setMessage("重設密碼信已寄出，請到信箱點擊最新連結。");
+      setDebug(`sent via ${supabaseUrl} -> redirectTo ${appUrl}/reset-password`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "寄送失敗。");
     } finally {
@@ -51,10 +58,18 @@ export default function ForgotPasswordPage() {
             {error}
           </div>
         ) : null}
+
         {message ? (
           <div style={{ marginTop: 12, color: "#2f7a66" }}>
             {message}
           </div>
+        ) : null}
+
+        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+          current supabase: {supabaseUrl || "(missing)"} | appUrl: {appUrl}
+        </div>
+        {debug ? (
+          <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>{debug}</div>
         ) : null}
 
         <form onSubmit={onSubmit} style={{ marginTop: 12 }}>
