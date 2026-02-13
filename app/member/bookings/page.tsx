@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
+import { useI18n } from "../../i18n-provider";
 
 const CANCEL_OR_RESCHEDULE_LOCK_MINUTES = 120;
 
@@ -56,15 +57,6 @@ function fmt(iso: string) {
   return d.toLocaleString();
 }
 
-function useLang(): "zh" | "en" {
-  const [lang, setLang] = useState<"zh" | "en">("zh");
-  useEffect(() => {
-    const htmlLang = (document.documentElement.lang || "").toLowerCase();
-    setLang(htmlLang.startsWith("en") ? "en" : "zh");
-  }, []);
-  return lang;
-}
-
 function statusLabel(value: string, lang: "zh" | "en") {
   const map: Record<string, { zh: string; en: string }> = {
     "": { zh: "全部", en: "All" },
@@ -81,7 +73,8 @@ export default function MemberBookingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const status = searchParams.get("status") ?? "";
-  const lang = useLang();
+  const { locale } = useI18n();
+  const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

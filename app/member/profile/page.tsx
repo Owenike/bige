@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
+import { useI18n } from "../../i18n-provider";
 
 const MemberSchema = z
   .object({
@@ -41,17 +42,9 @@ function formatDateTime(iso: string | null | undefined) {
   return d.toLocaleString();
 }
 
-function useLang(): "zh" | "en" {
-  const [lang, setLang] = useState<"zh" | "en">("zh");
-  useEffect(() => {
-    const htmlLang = (document.documentElement.lang || "").toLowerCase();
-    setLang(htmlLang.startsWith("en") ? "en" : "zh");
-  }, []);
-  return lang;
-}
-
 export default function MemberProfilePage() {
-  const lang = useLang();
+  const { locale } = useI18n();
+  const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
