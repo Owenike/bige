@@ -29,7 +29,14 @@ try { npm run ui:check-cards | Out-Host; Ok "ui:check-cards passed" } catch { Fa
 try { npm run test:smoke | Out-Host; Ok "test:smoke passed" } catch { Fail "test:smoke failed"; throw }
 
 Header "Testing and CI Presence"
-$testFiles = rg --files | rg "(test|spec|__tests__|playwright|cypress|jest|vitest)" 2>$null
+$rgCmd = Get-Command rg -ErrorAction SilentlyContinue
+if ($rgCmd) {
+  $testFiles = rg --files | rg "(test|spec|__tests__|playwright|cypress|jest|vitest)" 2>$null
+} else {
+  $testFiles = Get-ChildItem -Recurse -Force -File | Where-Object {
+    $_.FullName -match "(test|spec|__tests__|playwright|cypress|jest|vitest)"
+  } | Select-Object -First 50
+}
 if ($testFiles) { Ok "Test-related files found." } else { Warn "No test-related files found in repo scan." }
 
 if (Test-Path ".github/workflows") {
