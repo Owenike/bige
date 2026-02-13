@@ -274,6 +274,15 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     radial-gradient(180px 92px at 44% 80%, rgba(189, 243, 220, .30), transparent 72%);
   pointer-events: none;
 }
+.fdGlassBackdrop::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.36) 0%, rgba(255,255,255,.06) 32%, rgba(255,255,255,0) 50%),
+    radial-gradient(420px 220px at 86% 88%, rgba(167, 205, 255, .20), transparent 74%);
+  pointer-events: none;
+}
 .fdGlassTop{
   position: relative;
   z-index: 1;
@@ -295,8 +304,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   padding: 16px;
   color: var(--fd-ink);
   box-shadow:
-    inset 0 .5px 0 rgba(255,255,255,.90),
-    0 12px 24px rgba(130,145,168,.20);
+    inset 0 .6px 0 rgba(255,255,255,.92),
+    inset 18px 16px 24px rgba(255,255,255,.20),
+    inset -14px -16px 24px rgba(176,194,220,.20),
+    inset 0 -18px 26px rgba(196,210,228,.18),
+    0 16px 26px rgba(117,132,157,.24),
+    0 28px 46px rgba(104,121,148,.20);
 }
 .fdGlassSubPanel{
   position: relative;
@@ -309,8 +322,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   backdrop-filter: saturate(1.1) blur(12px);
   -webkit-backdrop-filter: saturate(1.1) blur(12px);
   box-shadow:
-    inset 0 .5px 0 rgba(255,255,255,.88),
-    0 8px 18px rgba(141,157,181,.18);
+    inset 0 .6px 0 rgba(255,255,255,.92),
+    inset 10px 10px 16px rgba(255,255,255,.18),
+    inset -10px -10px 16px rgba(181,198,223,.16),
+    inset 0 -12px 20px rgba(193,207,227,.14),
+    0 10px 20px rgba(136,154,184,.22),
+    0 18px 32px rgba(120,139,171,.18);
 }
 .fdGlassPanel::after{
   content: "";
@@ -321,6 +338,28 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   height: 38%;
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(255,255,255,.48), rgba(255,255,255,0));
+  pointer-events: none;
+}
+.fdGlassSubPanel::after{
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  height: 28%;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(214,232,255,.22));
+  pointer-events: none;
+}
+.fdGlassSubPanel::before{
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  width: 44%;
+  height: 34%;
+  border-radius: 10px;
+  background: linear-gradient(160deg, rgba(255,255,255,.46), rgba(255,255,255,0));
   pointer-events: none;
 }
 .fdGlassTall{ min-height: 420px; }
@@ -371,14 +410,22 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   color: #38465a;
   padding: 10px 14px;
   font-size: 13px;
-  box-shadow: 0 6px 14px rgba(132,149,176,.18);
+  box-shadow:
+    inset 0 .6px 0 rgba(255,255,255,.95),
+    inset 8px 8px 12px rgba(255,255,255,.20),
+    inset -6px -6px 10px rgba(183,201,226,.16),
+    0 8px 14px rgba(132,149,176,.22),
+    0 14px 24px rgba(124,141,170,.16);
   transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
 }
 .fdPillBtn:hover{
   text-decoration: none;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   border-color: rgba(176, 198, 222, .92);
-  box-shadow: 0 8px 16px rgba(126,149,185,.20);
+  box-shadow:
+    inset 0 .6px 0 rgba(255,255,255,.98),
+    0 10px 18px rgba(126,149,185,.24),
+    0 20px 30px rgba(122,145,180,.18);
 }
 .fdPillBtnPrimary{
   background:
@@ -386,7 +433,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     linear-gradient(180deg, rgba(255,255,255,.92), rgba(231,241,255,.80));
   border-color: rgba(139, 188, 236, .92);
   color: #23425f;
-  box-shadow: 0 0 0 1px rgba(187,224,255,.8), 0 12px 22px rgba(126, 176, 232, .30);
+  box-shadow:
+    0 0 0 1px rgba(187,224,255,.9),
+    inset 8px 8px 12px rgba(255,255,255,.34),
+    inset -8px -8px 14px rgba(124, 176, 236, .20),
+    0 14px 24px rgba(126, 176, 232, .34),
+    0 22px 34px rgba(111, 162, 223, .20);
 }
 .fdGaugeWrap{
   position: relative;
@@ -475,9 +527,14 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdActionCard:hover{
   text-decoration: none;
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   border-color: rgba(176, 198, 222, .95);
-  box-shadow: 0 16px 28px rgba(139,157,187,.22);
+  box-shadow:
+    inset 0 .6px 0 rgba(255,255,255,.95),
+    inset 10px 10px 14px rgba(255,255,255,.20),
+    inset -10px -10px 16px rgba(176,195,220,.16),
+    0 18px 30px rgba(139,157,187,.26),
+    0 30px 46px rgba(126,145,177,.18);
 }
 .fdActionCard:focus-visible{
   outline: none;
