@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useI18n } from "../../i18n-provider";
 
 type EntitlementSummary = {
   monthly_expires_at: string | null;
@@ -41,9 +42,28 @@ function getNumberField(row: Record<string, unknown>, keys: string[]) {
 }
 
 export default function MemberEntitlementsPage() {
+  const { locale } = useI18n();
+  const zh = locale !== "en";
   const [data, setData] = useState<EntitlementsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  function passTypeLabel(input: string) {
+    if (!zh) return input;
+    if (input === "single") return "\u55ae\u6b21\u7968";
+    if (input === "punch") return "\u6b21\u6578\u7968";
+    if (input === "monthly") return "\u6708\u6703\u54e1";
+    if (input === "entry_pass") return "\u5165\u5834\u7968";
+    return input;
+  }
+
+  function statusLabel(input: string) {
+    if (!zh) return input;
+    if (input === "active") return "\u555f\u7528\u4e2d";
+    if (input === "expired") return "\u5df2\u904e\u671f";
+    if (input === "inactive") return "\u672a\u555f\u7528";
+    return input;
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -59,7 +79,9 @@ export default function MemberEntitlementsPage() {
 
         if (!cancelled) setData(json as EntitlementsResponse);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load entitlements");
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : zh ? "\u8f09\u5165\u6b0a\u76ca\u5931\u6557" : "Failed to load entitlements");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -68,41 +90,45 @@ export default function MemberEntitlementsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [zh]);
 
   return (
     <main style={{ padding: 16, maxWidth: 980, margin: "0 auto" }}>
       <div className="card" style={{ padding: 16 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>My Entitlements</h1>
-        <p style={{ opacity: 0.8, marginTop: 8 }}>Membership and pass validity for entry and bookings.</p>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{zh ? "\u6211\u7684\u6b0a\u76ca" : "My Entitlements"}</h1>
+        <p style={{ opacity: 0.8, marginTop: 8 }}>
+          {zh ? "\u5165\u5834\u8207\u9810\u7d04\u76f8\u95dc\u7684\u6703\u54e1\u8207\u7968\u5238\u6548\u671f\u3002" : "Membership and pass validity for entry and bookings."}
+        </p>
 
-        {loading ? <p style={{ marginTop: 12 }}>Loading...</p> : null}
+        {loading ? <p style={{ marginTop: 12 }}>{zh ? "\u8f09\u5165\u4e2d..." : "Loading..."}</p> : null}
         {error ? <p style={{ marginTop: 12, color: "crimson" }}>{error}</p> : null}
 
         {data ? (
           <>
             <section style={{ marginTop: 16 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Current Summary</h2>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{zh ? "\u76ee\u524d\u6458\u8981" : "Current Summary"}</h2>
               <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", marginTop: 10 }}>
                 <div className="card kv">
-                  <div className="kvLabel">Monthly Expires</div>
+                  <div className="kvLabel">{zh ? "\u6708\u6703\u54e1\u5230\u671f" : "Monthly Expires"}</div>
                   <div className="kvValue">{formatDateTime(data.summary?.monthly_expires_at)}</div>
                 </div>
                 <div className="card kv">
-                  <div className="kvLabel">Remaining Sessions</div>
+                  <div className="kvLabel">{zh ? "\u5269\u9918\u5802\u6578" : "Remaining Sessions"}</div>
                   <div className="kvValue">{typeof data.summary?.remaining_sessions === "number" ? data.summary.remaining_sessions : "-"}</div>
                 </div>
                 <div className="card kv">
-                  <div className="kvLabel">Pass Valid Until</div>
+                  <div className="kvLabel">{zh ? "\u7968\u5238\u6709\u6548\u81f3" : "Pass Valid Until"}</div>
                   <div className="kvValue">{formatDateTime(data.summary?.pass_valid_to)}</div>
                 </div>
               </div>
             </section>
 
             <section style={{ marginTop: 20 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Recent Passes</h2>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{zh ? "\u8fd1\u671f\u7968\u5238" : "Recent Passes"}</h2>
               {data.entryPasses.length === 0 ? (
-                <p style={{ marginTop: 10, opacity: 0.75 }}>No active or historical passes found.</p>
+                <p style={{ marginTop: 10, opacity: 0.75 }}>
+                  {zh ? "\u627e\u4e0d\u5230\u4efb\u4f55\u7968\u5238\u7d00\u9304\u3002" : "No active or historical passes found."}
+                </p>
               ) : (
                 <ul style={{ marginTop: 10, paddingLeft: 18 }}>
                   {data.entryPasses.slice(0, 10).map((row, idx) => {
@@ -114,7 +140,8 @@ export default function MemberEntitlementsPage() {
 
                     return (
                       <li key={`${id}-${idx}`} style={{ marginBottom: 8 }}>
-                        {passType} | remain {remaining ?? "-"} | expires {formatDateTime(expiresAt === "-" ? null : expiresAt)} | status {status}
+                        {passTypeLabel(passType)} | {zh ? "\u5269\u9918" : "remain"} {remaining ?? "-"} | {zh ? "\u5230\u671f" : "expires"}{" "}
+                        {formatDateTime(expiresAt === "-" ? null : expiresAt)} | {zh ? "\u72c0\u614b" : "status"} {statusLabel(status)}
                       </li>
                     );
                   })}
@@ -123,9 +150,11 @@ export default function MemberEntitlementsPage() {
             </section>
 
             <section style={{ marginTop: 20 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Data Volume</h2>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{zh ? "\u8cc7\u6599\u7d71\u8a08" : "Data Volume"}</h2>
               <p style={{ marginTop: 10, opacity: 0.85 }}>
-                subscriptions: {data.subscriptions.length} | entitlements: {data.entitlements.length} | entry passes: {data.entryPasses.length}
+                {zh ? "\u6703\u54e1\u65b9\u6848" : "subscriptions"}: {data.subscriptions.length} |{" "}
+                {zh ? "\u6b0a\u76ca" : "entitlements"}: {data.entitlements.length} |{" "}
+                {zh ? "\u7968\u5238" : "entry passes"}: {data.entryPasses.length}
               </p>
             </section>
           </>

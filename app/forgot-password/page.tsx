@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { useI18n } from "../i18n-provider";
 
 export default function ForgotPasswordPage() {
+  const { locale } = useI18n();
+  const zh = locale !== "en";
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -21,7 +24,7 @@ export default function ForgotPasswordPage() {
 
     try {
       if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error("缺少 Supabase 環境設定");
+        throw new Error(zh ? "缺少 Supabase 環境變數。" : "Missing Supabase environment variables.");
       }
 
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -41,10 +44,11 @@ export default function ForgotPasswordPage() {
       });
 
       if (recoverError) throw recoverError;
-
-      setMessage("重設密碼信已寄出，請到信箱點擊最新連結。");
+      setMessage(
+        zh ? "已寄出重設密碼連結，請到信箱收信。" : "Password reset link sent. Please check your inbox.",
+      );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "寄送失敗");
+      setError(e instanceof Error ? e.message : zh ? "送出失敗" : "Request failed");
     } finally {
       setBusy(false);
     }
@@ -53,15 +57,17 @@ export default function ForgotPasswordPage() {
   return (
     <main className="container">
       <div className="card formCard" style={{ maxWidth: 560, margin: "0 auto" }}>
-        <div className="kvLabel">會員區</div>
+        <div className="kvLabel">{zh ? "會員區" : "MEMBER"}</div>
         <h1 className="sectionTitle" style={{ marginTop: 10 }}>
-          忘記密碼
+          {zh ? "忘記密碼" : "Forgot Password"}
         </h1>
-        <p style={{ opacity: 0.85, marginTop: 8 }}>輸入你的 Email，我們會寄送重設密碼連結。</p>
+        <p style={{ opacity: 0.85, marginTop: 8 }}>
+          {zh
+            ? "輸入你的 Email，我們會寄送重設密碼連結。"
+            : "Enter your email and we will send a reset-password link."}
+        </p>
 
-        {message ? (
-          <div style={{ marginTop: 12, color: "#2b7a6b", fontWeight: 600 }}>{message}</div>
-        ) : null}
+        {message ? <div style={{ marginTop: 12, color: "#2b7a6b", fontWeight: 600 }}>{message}</div> : null}
         {error ? (
           <div className="error" style={{ marginTop: 12 }}>
             {error}
@@ -71,7 +77,7 @@ export default function ForgotPasswordPage() {
         <form onSubmit={submit} style={{ marginTop: 12 }}>
           <label className="field">
             <span className="kvLabel" style={{ textTransform: "none" }}>
-              電子信箱
+              {zh ? "登入信箱" : "Email"}
             </span>
             <input
               className="input"
@@ -86,10 +92,10 @@ export default function ForgotPasswordPage() {
 
           <div className="actions" style={{ marginTop: 14 }}>
             <button type="submit" className={`btn ${busy ? "" : "btnPrimary"}`} disabled={busy}>
-              {busy ? "寄送中..." : "寄送重設信"}
+              {busy ? (zh ? "送出中..." : "Submitting...") : zh ? "送出重設連結" : "Send Reset Link"}
             </button>
             <Link href="/login" className="btn">
-              回登入
+              {zh ? "回登入" : "Back to Login"}
             </Link>
           </div>
         </form>

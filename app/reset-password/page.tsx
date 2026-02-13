@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { useI18n } from "../i18n-provider";
 
 type ViewState = "loading" | "ready" | "invalid" | "submitting" | "done";
 
 export default function ResetPasswordPage() {
+  const { locale } = useI18n();
+  const zh = locale !== "en";
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -23,12 +26,12 @@ export default function ResetPasswordPage() {
       if (!supabaseUrl || !supabaseAnonKey) {
         if (!cancelled) {
           setState("invalid");
-          setMessage("系統設定缺少 Supabase 環境變數。");
+          setMessage(zh ? "缺少 Supabase 環境變數。" : "Missing Supabase environment variables.");
         }
         return;
       }
 
-      if (!cancelled) setMessage("正在檢查重設連結...");
+      if (!cancelled) setMessage(zh ? "正在驗證重設連結..." : "Validating reset link...");
 
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
@@ -60,7 +63,7 @@ export default function ResetPasswordPage() {
         const errCode = query.get("error_code") || hash.get("error_code");
 
         if (errCode) {
-          throw new Error("重設連結無效或已過期，請重新申請。");
+          throw new Error(zh ? "重設連結無效或已過期。" : "Reset link is invalid or expired.");
         }
 
         if (accessToken && refreshToken) {
@@ -83,60 +86,60 @@ export default function ResetPasswordPage() {
         if (!sessionReady) {
           const { data, error } = await supabase.auth.getSession();
           if (error || !data.session) {
-            throw new Error("重設連結無效或已過期，請重新申請。");
+            throw new Error(zh ? "重設連結無效或已過期。" : "Reset link is invalid or expired.");
           }
         }
       } catch (e) {
         if (cancelled) return;
         setState("invalid");
-        setMessage(e instanceof Error ? e.message : "重設連結無效或已過期，請重新申請。");
+        setMessage(e instanceof Error ? e.message : zh ? "重設連結驗證失敗。" : "Failed to validate reset link.");
         return;
       }
 
       if (cancelled) return;
       setState("ready");
-      setMessage("請輸入新密碼。");
+      setMessage(zh ? "請輸入新密碼。" : "Please enter your new password.");
     }
 
     void bootstrap();
     return () => {
       cancelled = true;
     };
-  }, [supabaseAnonKey, supabaseUrl]);
+  }, [supabaseAnonKey, supabaseUrl, zh]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!client) return;
 
     if (password.length < 8) {
-      setMessage("密碼至少需要 8 碼。");
+      setMessage(zh ? "密碼長度至少需要 8 碼。" : "Password must be at least 8 characters.");
       return;
     }
     if (password !== confirmPassword) {
-      setMessage("兩次輸入的密碼不一致。");
+      setMessage(zh ? "兩次輸入的密碼不一致。" : "Passwords do not match.");
       return;
     }
 
     setState("submitting");
-    setMessage("正在更新密碼...");
+    setMessage(zh ? "正在更新密碼..." : "Updating password...");
 
     const { error } = await client.auth.updateUser({ password });
     if (error) {
       setState("ready");
-      setMessage(error.message || "更新密碼失敗。");
+      setMessage(error.message || (zh ? "更新密碼失敗。" : "Failed to update password."));
       return;
     }
 
     setState("done");
-    setMessage("密碼已更新，請重新登入。");
+    setMessage(zh ? "密碼已更新，請重新登入。" : "Password updated. Please sign in again.");
   }
 
   return (
     <main className="container" style={{ maxWidth: 560, margin: "0 auto", padding: 16 }}>
       <div className="card formCard">
-        <div className="kvLabel">會員區</div>
+        <div className="kvLabel">{zh ? "會員區" : "MEMBER"}</div>
         <h1 className="sectionTitle" style={{ marginTop: 10 }}>
-          重設密碼
+          {zh ? "重設密碼" : "Reset Password"}
         </h1>
         <p style={{ opacity: 0.85, marginTop: 8 }}>{message}</p>
 
@@ -144,7 +147,7 @@ export default function ResetPasswordPage() {
           <form onSubmit={onSubmit} style={{ marginTop: 14 }}>
             <label className="field">
               <span className="kvLabel" style={{ textTransform: "none" }}>
-                新密碼
+                {zh ? "新密碼" : "New Password"}
               </span>
               <input
                 className="input"
@@ -159,7 +162,7 @@ export default function ResetPasswordPage() {
 
             <label className="field">
               <span className="kvLabel" style={{ textTransform: "none" }}>
-                確認新密碼
+                {zh ? "確認新密碼" : "Confirm Password"}
               </span>
               <input
                 className="input"
@@ -178,10 +181,10 @@ export default function ResetPasswordPage() {
                 className={`btn ${state === "submitting" ? "" : "btnPrimary"}`}
                 disabled={state === "submitting"}
               >
-                {state === "submitting" ? "更新中..." : "更新密碼"}
+                {state === "submitting" ? (zh ? "更新中..." : "Updating...") : zh ? "更新密碼" : "Update Password"}
               </button>
               <Link href="/login" className="btn">
-                回登入
+                {zh ? "回登入" : "Back to Login"}
               </Link>
             </div>
           </form>
@@ -190,7 +193,7 @@ export default function ResetPasswordPage() {
         {(state === "invalid" || state === "done") && (
           <div className="actions" style={{ marginTop: 14 }}>
             <Link href="/login" className="btn btnPrimary">
-              回登入
+              {zh ? "前往登入" : "Go to Login"}
             </Link>
           </div>
         )}

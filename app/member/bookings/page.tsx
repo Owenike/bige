@@ -286,7 +286,7 @@ export default function MemberBookingsPage() {
     <main className="container">
       <section className="hero">
         <div className="card" style={{ padding: 18 }}>
-          <div className="kvLabel">BOOKINGS</div>
+          <div className="kvLabel">{lang === "zh" ? "\u9810\u7d04" : "BOOKINGS"}</div>
           <h1 className="h1" style={{ marginTop: 10, fontSize: 34 }}>
             {t.title}
           </h1>
@@ -355,7 +355,7 @@ export default function MemberBookingsPage() {
                 <div key={b.id} className="card" style={{ padding: 14 }}>
                   <div className="kvLabel">{t.booking}</div>
                   <div className="sub" style={{ marginTop: 6 }}>
-                    id: {b.id}
+                    {lang === "zh" ? "ID" : "id"}: {b.id}
                   </div>
                   <div className="sub">
                     {t.service}: {b.service_name ?? "-"}

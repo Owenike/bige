@@ -2,6 +2,7 @@
 
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useI18n } from "../i18n-provider";
 
 interface BookingItem {
   id: string;
@@ -98,25 +99,44 @@ function localDatetimeToIso(value: string) {
   return value ? new Date(value).toISOString() : "";
 }
 
-function translateApiError(input: string) {
-  const map: Record<string, string> = {
-    reason_required: "Please enter a reason",
-    booking_not_found: "Booking not found",
-    booking_not_modifiable: "Booking cannot be modified",
-    booking_locked_for_modification: "Booking is locked for modification",
-    reschedule_time_required: "Reschedule needs startsAt and endsAt",
-    invalid_reschedule_range: "Invalid reschedule time range",
-    reschedule_must_be_future: "Reschedule time must be in the future",
-    booking_time_overlap: "Booking time overlaps with another booking",
-    invalid_redemption_input: "Invalid redemption input",
-    invalid_redeemed_kind: "Invalid redemption kind",
-    pass_id_required: "Pass redemption requires passId",
-    pass_not_found: "Pass not found",
-    insufficient_remaining_sessions: "Insufficient remaining sessions",
-    "Booking already redeemed": "Booking already redeemed",
-    Forbidden: "Forbidden",
-    Unauthorized: "Unauthorized"
-  };
+function translateApiError(input: string, zh: boolean) {
+  const map: Record<string, string> = zh
+    ? {
+        reason_required: "\u8acb\u8f38\u5165\u539f\u56e0",
+        booking_not_found: "\u627e\u4e0d\u5230\u9810\u7d04",
+        booking_not_modifiable: "\u9019\u7b46\u9810\u7d04\u7121\u6cd5\u4fee\u6539",
+        booking_locked_for_modification: "\u9810\u7d04\u5df2\u9396\u5b9a\uff0c\u7121\u6cd5\u4fee\u6539",
+        reschedule_time_required: "\u6539\u671f\u9700\u8981 startsAt \u8207 endsAt",
+        invalid_reschedule_range: "\u6539\u671f\u6642\u9593\u7bc4\u570d\u7121\u6548",
+        reschedule_must_be_future: "\u6539\u671f\u6642\u9593\u5fc5\u9808\u662f\u672a\u4f86",
+        booking_time_overlap: "\u8a72\u6642\u6bb5\u8207\u5176\u4ed6\u9810\u7d04\u885d\u7a81",
+        invalid_redemption_input: "\u6838\u92b7\u53c3\u6578\u7121\u6548",
+        invalid_redeemed_kind: "\u6838\u92b7\u985e\u578b\u7121\u6548",
+        pass_id_required: "\u7968\u5238\u6838\u92b7\u9700\u8981 passId",
+        pass_not_found: "\u627e\u4e0d\u5230\u7968\u5238",
+        insufficient_remaining_sessions: "\u5269\u9918\u5802\u6578\u4e0d\u8db3",
+        "Booking already redeemed": "\u9019\u7b46\u9810\u7d04\u5df2\u6838\u92b7",
+        Forbidden: "\u7121\u6b0a\u9650",
+        Unauthorized: "\u672a\u6388\u6b0a",
+      }
+    : {
+        reason_required: "Please enter a reason",
+        booking_not_found: "Booking not found",
+        booking_not_modifiable: "Booking cannot be modified",
+        booking_locked_for_modification: "Booking is locked for modification",
+        reschedule_time_required: "Reschedule needs startsAt and endsAt",
+        invalid_reschedule_range: "Invalid reschedule time range",
+        reschedule_must_be_future: "Reschedule time must be in the future",
+        booking_time_overlap: "Booking time overlaps with another booking",
+        invalid_redemption_input: "Invalid redemption input",
+        invalid_redeemed_kind: "Invalid redemption kind",
+        pass_id_required: "Pass redemption requires passId",
+        pass_not_found: "Pass not found",
+        insufficient_remaining_sessions: "Insufficient remaining sessions",
+        "Booking already redeemed": "Booking already redeemed",
+        Forbidden: "Forbidden",
+        Unauthorized: "Unauthorized",
+      };
   return map[input] || input;
 }
 
@@ -128,6 +148,8 @@ function statusColor(status: string) {
 }
 
 function CoachPortalContent() {
+  const { locale } = useI18n();
+  const zh = locale !== "en";
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -174,6 +196,25 @@ function CoachPortalContent() {
     {},
   );
 
+  function bookingStatusLabel(status: string) {
+    if (!zh) return status;
+    if (status === "booked") return "\u5df2\u9810\u7d04";
+    if (status === "checked_in") return "\u5df2\u5831\u5230";
+    if (status === "completed") return "\u5df2\u5b8c\u6210";
+    if (status === "cancelled") return "\u5df2\u53d6\u6d88";
+    if (status === "no_show") return "\u672a\u51fa\u5e2d";
+    return status;
+  }
+
+  function passTypeLabel(passType: string | null) {
+    if (!zh) return passType || "pass";
+    if (!passType) return "\u7968\u5238";
+    if (passType === "single") return "\u55ae\u6b21\u7968";
+    if (passType === "punch") return "\u6b21\u6578\u7968";
+    if (passType === "pass") return "\u7968\u5238";
+    return passType;
+  }
+
   const activeCount = useMemo(
     () => bookings.filter((item) => item.status === "booked" || item.status === "checked_in").length,
     [bookings],
@@ -212,14 +253,14 @@ function CoachPortalContent() {
       const query = params.toString();
       const res = await fetch(query ? `/api/bookings?${query}` : "/api/bookings");
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || "Failed to load bookings");
+      if (!res.ok) throw new Error(payload?.error || (zh ? "\u8f09\u5165\u9810\u7d04\u5931\u6557" : "Failed to load bookings"));
       setBookings((payload.items || []) as BookingItem[]);
     } catch (err) {
-      setError(translateApiError(err instanceof Error ? err.message : "Failed to load bookings"));
+      setError(translateApiError(err instanceof Error ? err.message : zh ? "\u8f09\u5165\u9810\u7d04\u5931\u6557" : "Failed to load bookings", zh));
     } finally {
       setLoading(false);
     }
-  }, [fromLocal, toLocal]);
+  }, [fromLocal, toLocal, zh]);
 
   useEffect(() => {
     void loadBookings();
@@ -323,14 +364,14 @@ function CoachPortalContent() {
     try {
       const res = await fetch(`/api/members?q=${encodeURIComponent(query)}`);
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || "Member search failed");
+      if (!res.ok) throw new Error(payload?.error || (zh ? "\u641c\u5c0b\u6703\u54e1\u5931\u6557" : "Member search failed"));
       setMemberOptions((payload.items || []) as MemberItem[]);
     } catch (err) {
-      setError(translateApiError(err instanceof Error ? err.message : "Member search failed"));
+      setError(translateApiError(err instanceof Error ? err.message : zh ? "\u641c\u5c0b\u6703\u54e1\u5931\u6557" : "Member search failed", zh));
     } finally {
       setMembersLoading(false);
     }
-  }, []);
+  }, [zh]);
 
   const loadPasses = useCallback(async (targetMemberId: string) => {
     if (!targetMemberId) {
@@ -343,20 +384,20 @@ function CoachPortalContent() {
     try {
       const res = await fetch(`/api/members/${encodeURIComponent(targetMemberId)}/passes`);
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || "Load passes failed");
+      if (!res.ok) throw new Error(payload?.error || (zh ? "\u8f09\u5165\u7968\u5238\u5931\u6557" : "Load passes failed"));
       const items = (payload.items || []) as PassItem[];
       setPassOptions(items);
       if (!items.some((item) => item.id === passId)) {
         setPassId(items[0]?.id || "");
       }
     } catch (err) {
-      setError(translateApiError(err instanceof Error ? err.message : "Load passes failed"));
+      setError(translateApiError(err instanceof Error ? err.message : zh ? "\u8f09\u5165\u7968\u5238\u5931\u6557" : "Load passes failed", zh));
       setPassOptions([]);
       setPassId("");
     } finally {
       setPassesLoading(false);
     }
-  }, [passId]);
+  }, [passId, zh]);
 
   useEffect(() => {
     void searchMembers("");
@@ -420,12 +461,12 @@ function CoachPortalContent() {
     try {
       const res = await fetch(`/api/coach/members/${encodeURIComponent(item.member_id)}/overview`);
       const payload = (await res.json()) as any;
-      if (!res.ok) throw new Error(payload?.error || "Failed to load member overview");
+      if (!res.ok) throw new Error(payload?.error || (zh ? "\u8f09\u5165\u6703\u54e1\u72c0\u614b\u5931\u6557" : "Failed to load member overview"));
       setMemberOverviewByBookingId((prev) => ({ ...prev, [item.id]: payload as CoachMemberOverviewResponse }));
     } catch (err) {
       setMemberOverviewErrorByBookingId((prev) => ({
         ...prev,
-        [item.id]: translateApiError(err instanceof Error ? err.message : "Failed to load member overview"),
+        [item.id]: translateApiError(err instanceof Error ? err.message : zh ? "\u8f09\u5165\u6703\u54e1\u72c0\u614b\u5931\u6557" : "Failed to load member overview", zh),
       }));
       setMemberOverviewByBookingId((prev) => ({ ...prev, [item.id]: null }));
     } finally {
@@ -449,12 +490,16 @@ function CoachPortalContent() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || "Update booking failed");
-      setMessage(`Booking ${updateBookingId} updated to ${updateStatus}.`);
+      if (!res.ok) throw new Error(payload?.error || (zh ? "\u66f4\u65b0\u9810\u7d04\u5931\u6557" : "Update booking failed"));
+      setMessage(
+        zh
+          ? `\u9810\u7d04 ${updateBookingId} \u5df2\u66f4\u65b0\u70ba ${updateStatus}\u3002`
+          : `Booking ${updateBookingId} updated to ${updateStatus}.`,
+      );
       setUpdateReason("");
       await loadBookings();
     } catch (err) {
-      setError(translateApiError(err instanceof Error ? err.message : "Update booking failed"));
+      setError(translateApiError(err instanceof Error ? err.message : zh ? "\u66f4\u65b0\u9810\u7d04\u5931\u6557" : "Update booking failed", zh));
     }
   }
 
@@ -477,8 +522,8 @@ function CoachPortalContent() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || "Redemption failed");
-      setMessage(`Session redeemed for member ${memberId}.`);
+      if (!res.ok) throw new Error(payload?.error || (zh ? "\u6838\u92b7\u5931\u6557" : "Redemption failed"));
+      setMessage(zh ? `\u6703\u54e1 ${memberId} \u6838\u92b7\u5b8c\u6210\u3002` : `Session redeemed for member ${memberId}.`);
       setRedeemNote("");
       if (redeemedKind === "pass") {
         setPassId("");
@@ -486,43 +531,43 @@ function CoachPortalContent() {
       }
       await loadBookings();
     } catch (err) {
-      setError(translateApiError(err instanceof Error ? err.message : "Redemption failed"));
+      setError(translateApiError(err instanceof Error ? err.message : zh ? "\u6838\u92b7\u5931\u6557" : "Redemption failed", zh));
     }
   }
 
   return (
     <main className="mx-auto max-w-6xl p-6">
-      <h1 className="text-2xl font-bold">Coach Portal</h1>
+      <h1 className="text-2xl font-bold">{zh ? "\u6559\u7df4\u5de5\u4f5c\u53f0" : "Coach Portal"}</h1>
       <p className="mt-1 text-sm text-gray-600">
-        My bookings: {bookings.length} | Active sessions: {activeCount}
+        {zh ? "\u6211\u7684\u9810\u7d04" : "My bookings"}: {bookings.length} | {zh ? "\u9032\u884c\u4e2d\u5834\u6b21" : "Active sessions"}: {activeCount}
       </p>
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       {message ? <p className="mt-3 text-sm text-green-700">{message}</p> : null}
 
       <section className="card mt-6 rounded-lg border p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">My Schedule</h2>
+          <h2 className="text-lg font-semibold">{zh ? "\u6211\u7684\u8ab2\u8868" : "My Schedule"}</h2>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               className={`rounded border px-3 py-1 text-sm ${dateFilterPreset === "today" ? "bg-black text-white" : ""}`}
               onClick={() => applyPreset("today")}
             >
-              Today
+              {zh ? "\u4eca\u5929" : "Today"}
             </button>
             <button
               type="button"
               className={`rounded border px-3 py-1 text-sm ${dateFilterPreset === "week" ? "bg-black text-white" : ""}`}
               onClick={() => applyPreset("week")}
             >
-              This Week
+              {zh ? "\u672c\u9031" : "This Week"}
             </button>
             <button
               type="button"
               className={`rounded border px-3 py-1 text-sm ${dateFilterPreset === "all" ? "bg-black text-white" : ""}`}
               onClick={() => applyPreset("all")}
             >
-              All
+              {zh ? "\u5168\u90e8" : "All"}
             </button>
             <button
               type="button"
@@ -530,7 +575,7 @@ function CoachPortalContent() {
               onClick={() => void loadBookings()}
               disabled={loading}
             >
-              {loading ? "Loading..." : "Refresh"}
+              {loading ? (zh ? "\u8f09\u5165\u4e2d..." : "Loading...") : zh ? "\u91cd\u65b0\u6574\u7406" : "Refresh"}
             </button>
           </div>
         </div>
@@ -559,7 +604,7 @@ function CoachPortalContent() {
           <input
             value={scheduleQuery}
             onChange={(e) => setScheduleQuery(e.target.value)}
-            placeholder="Search service/memberId/note/bookingId"
+            placeholder={zh ? "\u641c\u5c0b\u670d\u52d9/memberId/\u5099\u8a3b/bookingId" : "Search service/memberId/note/bookingId"}
             className="rounded border px-3 py-2 text-sm"
           />
           <select
@@ -567,12 +612,12 @@ function CoachPortalContent() {
             onChange={(e) => setScheduleStatusFilter(e.target.value as ScheduleStatusFilter)}
             className="rounded border px-3 py-2 text-sm"
           >
-            <option value="all">all status</option>
-            <option value="booked">booked</option>
-            <option value="checked_in">checked_in</option>
-            <option value="completed">completed</option>
-            <option value="cancelled">cancelled</option>
-            <option value="no_show">no_show</option>
+            <option value="all">{zh ? "\u5168\u90e8\u72c0\u614b" : "all status"}</option>
+            <option value="booked">{bookingStatusLabel("booked")}</option>
+            <option value="checked_in">{bookingStatusLabel("checked_in")}</option>
+            <option value="completed">{bookingStatusLabel("completed")}</option>
+            <option value="cancelled">{bookingStatusLabel("cancelled")}</option>
+            <option value="no_show">{bookingStatusLabel("no_show")}</option>
           </select>
         </div>
 
@@ -591,12 +636,12 @@ function CoachPortalContent() {
                   {" - "}
                   {new Date(item.ends_at).toLocaleTimeString()}
                 </p>
-                <span className={statusColor(item.status)}>{item.status}</span>       
+                <span className={statusColor(item.status)}>{bookingStatusLabel(item.status)}</span>       
               </div>
               <p className="mt-1">
-                {item.service_name} | member: <code>{item.member_id}</code>
+                {item.service_name} | {zh ? "\u6703\u54e1" : "member"}: <code>{item.member_id}</code>
               </p>
-              <p className="mt-1 text-gray-600">note: {item.note || "-"}</p>
+              <p className="mt-1 text-gray-600">{zh ? "\u5099\u8a3b" : "note"}: {item.note || "-"}</p>
               <p className="mt-2">
                 <span className="flex flex-wrap gap-2">
                   <button
@@ -604,14 +649,14 @@ function CoachPortalContent() {
                     className="rounded bg-black px-3 py-1 text-white"
                     onClick={() => bindBooking(item)}
                   >
-                    Use in forms
+                    {zh ? "\u5e36\u5165\u8868\u55ae" : "Use in forms"}
                   </button>
                   <button
                     type="button"
                     className="rounded border px-3 py-1"
                     onClick={() => void toggleMemberOverview(item)}
                   >
-                    {open ? "Hide member status" : "Member status"}
+                    {open ? (zh ? "\u96b1\u85cf\u6703\u54e1\u72c0\u614b" : "Hide member status") : zh ? "\u6703\u54e1\u72c0\u614b" : "Member status"}
                   </button>
                 </span>
               </p>
@@ -619,19 +664,19 @@ function CoachPortalContent() {
               {open ? (
                 <div className="mt-3 rounded border bg-gray-50 p-3">
                   {overviewLoading ? (
-                    <p className="text-xs text-gray-600">Loading member status...</p>
+                    <p className="text-xs text-gray-600">{zh ? "\u8f09\u5165\u6703\u54e1\u72c0\u614b\u4e2d..." : "Loading member status..."}</p>
                   ) : overviewError ? (
                     <p className="text-xs text-red-600">{overviewError}</p>
                   ) : overview ? (
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="rounded border bg-white p-3">
-                        <p className="text-xs font-semibold text-gray-700">Member</p>
+                        <p className="text-xs font-semibold text-gray-700">{zh ? "\u6703\u54e1" : "Member"}</p>
                         <div className="mt-2 flex items-start gap-3">
                           {overview.member.photoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={overview.member.photoUrl}
-                              alt="member photo"
+                              alt={zh ? "\u6703\u54e1\u5927\u982d\u7167" : "member photo"}
                               className="h-12 w-12 rounded object-cover"
                             />
                           ) : (
@@ -639,125 +684,125 @@ function CoachPortalContent() {
                           )}
                           <div className="min-w-0">
                             <p className="truncate font-medium">
-                              {overview.member.fullName || "(no name)"}
+                              {overview.member.fullName || (zh ? "\uff08\u672a\u547d\u540d\uff09" : "(no name)")}
                             </p>
                             <p className="mt-1 text-xs text-gray-600">
-                              phone last4: {overview.member.phoneLast4 || "-"}
+                              {zh ? "\u96fb\u8a71\u5f8c\u56db\u78bc" : "phone last4"}: {overview.member.phoneLast4 || "-"}
                             </p>
                             <p className="mt-1 text-xs text-gray-600">
-                              memberId: <code>{overview.member.id}</code>
+                              {zh ? "\u6703\u54e1 ID" : "memberId"}: <code>{overview.member.id}</code>
                             </p>
                           </div>
                         </div>
                       </div>
 
                       <div className="rounded border bg-white p-3">
-                        <p className="text-xs font-semibold text-gray-700">Plan</p>
+                        <p className="text-xs font-semibold text-gray-700">{zh ? "\u6703\u54e1\u65b9\u6848" : "Plan"}</p>
                         <p className="mt-2 text-sm">
-                          monthly:{" "}
+                          {zh ? "\u6708\u6703\u54e1" : "monthly"}:{" "}
                           {overview.subscription.expiresAt
                             ? new Date(overview.subscription.expiresAt).toLocaleDateString()
                             : "-"}
                           {" | "}
                           {overview.subscription.isActive === null
-                            ? "unknown"
+                            ? zh ? "\u672a\u77e5" : "unknown"
                             : overview.subscription.isActive
-                              ? "active"
-                              : "inactive"}
+                              ? zh ? "\u555f\u7528\u4e2d" : "active"
+                              : zh ? "\u672a\u555f\u7528" : "inactive"}
                         </p>
-                        <p className="mt-2 text-xs text-gray-600">passes: {overview.passes.length}</p>
+                        <p className="mt-2 text-xs text-gray-600">{zh ? "\u7968\u5238\u6578" : "passes"}: {overview.passes.length}</p>
                         {overview.passes.length ? (
                           <ul className="mt-2 space-y-1 text-xs text-gray-700">
                             {overview.passes.slice(0, 5).map((p) => (
                               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded border px-2 py-1">
                                 <span className="truncate">
-                                  {p.passType || "pass"} | remain {p.remaining ?? "-"}
+                                  {passTypeLabel(p.passType)} | {zh ? "\u5269\u9918" : "remain"} {p.remaining ?? "-"}
                                 </span>
                                 <span className="text-gray-600">
-                                  exp {p.expiresAt ? new Date(p.expiresAt).toLocaleDateString() : "-"}
+                                  {zh ? "\u5230\u671f" : "exp"} {p.expiresAt ? new Date(p.expiresAt).toLocaleDateString() : "-"}
                                 </span>
                               </li>
                             ))}
                             {overview.passes.length > 5 ? (
-                              <li className="text-gray-500">(+{overview.passes.length - 5} more)</li>
+                              <li className="text-gray-500">(+{overview.passes.length - 5} {zh ? "\u7b46" : "more"})</li>
                             ) : null}
                           </ul>
                         ) : (
-                          <p className="mt-2 text-xs text-gray-500">No passes.</p>
+                          <p className="mt-2 text-xs text-gray-500">{zh ? "\u7121\u7968\u5238\u8cc7\u6599\u3002" : "No passes."}</p>
                         )}
                       </div>
 
                       <div className="rounded border bg-white p-3 md:col-span-2">
-                        <p className="text-xs font-semibold text-gray-700">Notes</p>
+                        <p className="text-xs font-semibold text-gray-700">{zh ? "\u5099\u8a3b" : "Notes"}</p>
                         <p className="mt-2 whitespace-pre-wrap text-sm text-gray-800">
                           {overview.member.note || "-"}
                         </p>
                       </div>
 
                       <div className="rounded border bg-white p-3">
-                        <p className="text-xs font-semibold text-gray-700">Recent check-in</p>
+                        <p className="text-xs font-semibold text-gray-700">{zh ? "\u6700\u8fd1\u5831\u5230" : "Recent check-in"}</p>
                         {overview.recentCheckin ? (
                           <>
                             <p className="mt-2 text-sm">
                               {new Date(overview.recentCheckin.checkedAt).toLocaleString()} | {overview.recentCheckin.result || "-"}
                             </p>
                             <p className="mt-1 text-xs text-gray-600">
-                              reason: {overview.recentCheckin.reason || "-"}
+                              {zh ? "\u539f\u56e0" : "reason"}: {overview.recentCheckin.reason || "-"}
                             </p>
                           </>
                         ) : (
-                          <p className="mt-2 text-xs text-gray-500">No check-ins.</p>
+                          <p className="mt-2 text-xs text-gray-500">{zh ? "\u7121\u5831\u5230\u8cc7\u6599\u3002" : "No check-ins."}</p>
                         )}
                       </div>
 
                       <div className="rounded border bg-white p-3">
-                        <p className="text-xs font-semibold text-gray-700">Recent redemption</p>
+                        <p className="text-xs font-semibold text-gray-700">{zh ? "\u6700\u8fd1\u6838\u92b7" : "Recent redemption"}</p>
                         {overview.recentRedemption ? (
                           <>
                             <p className="mt-2 text-sm">
                               {new Date(overview.recentRedemption.redeemedAt).toLocaleString()} |{" "}
                               {overview.recentRedemption.kind || "-"}
-                              {" | qty "}
+                              {zh ? " | \u6578\u91cf " : " | qty "}
                               {overview.recentRedemption.quantity}
                             </p>
                           </>
                         ) : (
-                          <p className="mt-2 text-xs text-gray-500">No redemptions.</p>
+                          <p className="mt-2 text-xs text-gray-500">{zh ? "\u7121\u6838\u92b7\u8cc7\u6599\u3002" : "No redemptions."}</p>
                         )}
                       </div>
 
                       <div className="rounded border bg-white p-3 md:col-span-2">
-                        <p className="text-xs font-semibold text-gray-700">Recent booking</p>
+                        <p className="text-xs font-semibold text-gray-700">{zh ? "\u6700\u8fd1\u9810\u7d04" : "Recent booking"}</p>
                         {overview.recentBooking ? (
                           <p className="mt-2 text-sm">
                             {new Date(overview.recentBooking.startsAt).toLocaleString()} |{" "}
-                            {overview.recentBooking.serviceName || "-"} | {overview.recentBooking.status || "-"}
+                            {overview.recentBooking.serviceName || "-"} | {bookingStatusLabel(overview.recentBooking.status || "-")}
                           </p>
                         ) : (
-                          <p className="mt-2 text-xs text-gray-500">No bookings.</p>
+                          <p className="mt-2 text-xs text-gray-500">{zh ? "\u7121\u9810\u7d04\u8cc7\u6599\u3002" : "No bookings."}</p>
                         )}
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-gray-500">No data.</p>
+                    <p className="text-xs text-gray-500">{zh ? "\u7121\u8cc7\u6599\u3002" : "No data."}</p>
                   )}
                 </div>
               ) : null}
             </li>
             );
           })}
-          {!visibleBookings.length && !loading ? <li className="text-gray-500">No bookings.</li> : null}
+          {!visibleBookings.length && !loading ? <li className="text-gray-500">{zh ? "\u7121\u9810\u7d04\u8cc7\u6599\u3002" : "No bookings."}</li> : null}
         </ul>
       </section>
 
       <section className="card mt-6 grid gap-4 lg:grid-cols-2 p-4">
         <form className="rounded-lg border p-4" onSubmit={updateBooking}>
-          <h2 className="text-lg font-semibold">Class Status & Notes</h2>
+          <h2 className="text-lg font-semibold">{zh ? "\u8ab2\u5802\u72c0\u614b\u8207\u5099\u8a3b" : "Class Status & Notes"}</h2>
           <p className="mt-2">
             <input
               value={updateBookingId}
               onChange={(e) => setUpdateBookingId(e.target.value)}
-              placeholder="bookingId"
+              placeholder={zh ? "\u9810\u7d04 ID" : "bookingId"}
               className="w-full rounded border px-3 py-2 font-mono text-sm"
               required
             />
@@ -768,16 +813,16 @@ function CoachPortalContent() {
               onChange={(e) => setUpdateStatus(e.target.value as CoachBookingStatus)}
               className="w-full rounded border px-3 py-2 text-sm"
             >
-              <option value="checked_in">checked_in</option>
-              <option value="completed">completed</option>
-              <option value="no_show">no_show</option>
+              <option value="checked_in">{bookingStatusLabel("checked_in")}</option>
+              <option value="completed">{bookingStatusLabel("completed")}</option>
+              <option value="no_show">{bookingStatusLabel("no_show")}</option>
             </select>
           </p>
           <p className="mt-2">
             <input
               value={updateNote}
               onChange={(e) => setUpdateNote(e.target.value)}
-              placeholder="coach note"
+              placeholder={zh ? "\u6559\u7df4\u5099\u8a3b" : "coach note"}
               className="w-full rounded border px-3 py-2 text-sm"
             />
           </p>
@@ -785,24 +830,24 @@ function CoachPortalContent() {
             <input
               value={updateReason}
               onChange={(e) => setUpdateReason(e.target.value)}
-              placeholder="reason (required)"
+              placeholder={zh ? "\u539f\u56e0\uff08\u5fc5\u586b\uff09" : "reason (required)"}
               className="w-full rounded border px-3 py-2 text-sm"
               required
             />
           </p>
           <button type="submit" className="mt-3 rounded bg-black px-4 py-2 text-sm text-white">
-            Update Booking
+            {zh ? "\u66f4\u65b0\u9810\u7d04" : "Update Booking"}
           </button>
         </form>
 
         <form className="rounded-lg border p-4" onSubmit={redeem}>
-          <h2 className="text-lg font-semibold">Session Redemption</h2>
-          <p className="mt-2 text-xs text-gray-600">Search member</p>
+          <h2 className="text-lg font-semibold">{zh ? "\u5802\u6578/\u6708\u8cbb\u6838\u92b7" : "Session Redemption"}</h2>
+          <p className="mt-2 text-xs text-gray-600">{zh ? "\u641c\u5c0b\u6703\u54e1" : "Search member"}</p>
           <p className="mt-1">
             <input
               value={memberQuery}
               onChange={(e) => setMemberQuery(e.target.value)}
-              placeholder="name / phone"
+              placeholder={zh ? "\u59d3\u540d / \u96fb\u8a71" : "name / phone"}
               className="w-full rounded border px-3 py-2 text-sm"
             />
           </p>
@@ -813,7 +858,7 @@ function CoachPortalContent() {
               onClick={() => void searchMembers(memberQuery)}
               disabled={membersLoading}
             >
-              {membersLoading ? "Searching..." : "Search Members"}
+              {membersLoading ? (zh ? "\u641c\u5c0b\u4e2d..." : "Searching...") : zh ? "\u641c\u5c0b\u6703\u54e1" : "Search Members"}
             </button>
           </p>
           <p className="mt-2">
@@ -823,7 +868,7 @@ function CoachPortalContent() {
               className="w-full rounded border px-3 py-2 text-sm"
               required
             >
-              <option value="">Select member</option>
+              <option value="">{zh ? "\u9078\u64c7\u6703\u54e1" : "Select member"}</option>
               {memberOptions.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.full_name} | {item.phone || "-"} | {item.id.slice(0, 8)}
@@ -831,17 +876,17 @@ function CoachPortalContent() {
               ))}
             </select>
           </p>
-          <p className="mt-1 text-xs text-gray-600">memberId: {memberId || "-"}</p>
+          <p className="mt-1 text-xs text-gray-600">{zh ? "\u6703\u54e1 ID" : "memberId"}: {memberId || "-"}</p>
           <p className="mt-2">
             <select
               value={bookingId}
               onChange={(e) => setBookingId(e.target.value)}
               className="w-full rounded border px-3 py-2 text-sm"
             >
-              <option value="">No booking link (optional)</option>
+              <option value="">{zh ? "\u4e0d\u7d81\u5b9a booking\uff08\u9078\u586b\uff09" : "No booking link (optional)"}</option>
               {memberBookingOptions.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {new Date(item.starts_at).toLocaleString()} | {item.service_name} | {item.status}
+                  {new Date(item.starts_at).toLocaleString()} | {item.service_name} | {bookingStatusLabel(item.status)}
                 </option>
               ))}
             </select>
@@ -853,17 +898,19 @@ function CoachPortalContent() {
               checked={redeemableOnly}
               onChange={(e) => setRedeemableOnly(e.target.checked)}
             />
-            <label htmlFor="redeemableOnly">Only show redeemable bookings (booked / checked_in)</label>
+            <label htmlFor="redeemableOnly">
+              {zh ? "\u50c5\u986f\u793a\u53ef\u6838\u92b7\u9810\u7d04\uff08\u5df2\u9810\u7d04 / \u5df2\u5831\u5230\uff09" : "Only show redeemable bookings (booked / checked_in)"}
+            </label>
           </p>
-          <p className="mt-1 text-xs text-gray-600">bookingId: {bookingId || "-"}</p>
+          <p className="mt-1 text-xs text-gray-600">{zh ? "\u9810\u7d04 ID" : "bookingId"}: {bookingId || "-"}</p>
           <p className="mt-2">
             <select
               value={redeemedKind}
               onChange={(e) => setRedeemedKind(e.target.value as "monthly" | "pass")}
               className="w-full rounded border px-3 py-2 text-sm"
             >
-              <option value="monthly">monthly</option>
-              <option value="pass">pass</option>
+              <option value="monthly">{zh ? "\u6708\u6703\u54e1" : "monthly"}</option>
+              <option value="pass">{zh ? "\u7968\u5238" : "pass"}</option>
             </select>
           </p>
           {redeemedKind === "pass" ? (
@@ -877,11 +924,11 @@ function CoachPortalContent() {
                   disabled={!memberId || passesLoading}
                 >
                   <option value="">
-                    {passesLoading ? "Loading passes..." : passOptions.length ? "Select pass" : "No active pass"}
+                    {passesLoading ? (zh ? "\u8f09\u5165\u7968\u5238\u4e2d..." : "Loading passes...") : passOptions.length ? (zh ? "\u9078\u64c7\u7968\u5238" : "Select pass") : zh ? "\u7121\u53ef\u7528\u7968\u5238" : "No active pass"}
                   </option>
                   {passOptions.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.pass_type} | remain {item.remaining} | exp{" "}
+                      {passTypeLabel(item.pass_type)} | {zh ? "\u5269\u9918" : "remain"} {item.remaining} | {zh ? "\u5230\u671f" : "exp"}{" "}
                       {item.expires_at ? new Date(item.expires_at).toLocaleDateString() : "-"}
                     </option>
                   ))}
@@ -903,12 +950,12 @@ function CoachPortalContent() {
             <input
               value={redeemNote}
               onChange={(e) => setRedeemNote(e.target.value)}
-              placeholder="class note"
+              placeholder={zh ? "\u8ab2\u5802\u5099\u8a3b" : "class note"}
               className="w-full rounded border px-3 py-2 text-sm"
             />
           </p>
           <button type="submit" className="mt-3 rounded bg-black px-4 py-2 text-sm text-white">
-            Redeem Session
+            {zh ? "\u6838\u92b7" : "Redeem Session"}
           </button>
         </form>
       </section>
@@ -917,8 +964,16 @@ function CoachPortalContent() {
 }
 
 export default function CoachPortalPage() {
+  const { locale } = useI18n();
+  const zh = locale !== "en";
   return (
-    <Suspense fallback={<main className="mx-auto max-w-6xl p-6 text-sm text-gray-600">Loading coach portal...</main>}>
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-6xl p-6 text-sm text-gray-600">
+          {zh ? "\u8f09\u5165\u6559\u7df4\u5de5\u4f5c\u53f0\u4e2d..." : "Loading coach portal..."}
+        </main>
+      }
+    >
       <CoachPortalContent />
     </Suspense>
   );

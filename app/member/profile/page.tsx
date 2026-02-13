@@ -198,7 +198,7 @@ export default function MemberProfilePage() {
     <main className="container">
       <section className="hero">
         <div className="card" style={{ padding: 18 }}>
-          <div className="kvLabel">PROFILE</div>
+          <div className="kvLabel">{lang === "zh" ? "\u500b\u4eba\u8cc7\u6599" : "PROFILE"}</div>
           <h1 className="h1" style={{ marginTop: 10, fontSize: 34 }}>
             {t.profile}
           </h1>
@@ -272,7 +272,7 @@ export default function MemberProfilePage() {
                   className="input"
                   value={form.full_name}
                   onChange={(ev) => setForm((s) => ({ ...s, full_name: ev.target.value }))}
-                  placeholder="full_name"
+                  placeholder={lang === "zh" ? "\u59d3\u540d" : "full_name"}
                 />
 
                 <label className="sub" style={{ display: "block", marginTop: 10 }}>
@@ -282,7 +282,7 @@ export default function MemberProfilePage() {
                   className="input"
                   value={form.phone}
                   onChange={(ev) => setForm((s) => ({ ...s, phone: ev.target.value }))}
-                  placeholder="phone"
+                  placeholder={lang === "zh" ? "\u96fb\u8a71" : "phone"}
                 />
 
                 <label className="sub" style={{ display: "block", marginTop: 10 }}>
@@ -292,7 +292,7 @@ export default function MemberProfilePage() {
                   className="input"
                   value={form.photo_url}
                   onChange={(ev) => setForm((s) => ({ ...s, photo_url: ev.target.value }))}
-                  placeholder="photo_url"
+                  placeholder={lang === "zh" ? "\u7167\u7247 URL" : "photo_url"}
                 />
 
                 <label className="sub" style={{ display: "block", marginTop: 10 }}>
@@ -302,7 +302,7 @@ export default function MemberProfilePage() {
                   className="input"
                   value={form.notes}
                   onChange={(ev) => setForm((s) => ({ ...s, notes: ev.target.value }))}
-                  placeholder="notes"
+                  placeholder={lang === "zh" ? "\u5099\u8a3b" : "notes"}
                   rows={4}
                 />
 
