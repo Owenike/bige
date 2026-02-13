@@ -21,11 +21,18 @@ export default function LogoutPage() {
   }, [router]);
 
   return (
-    <main style={{ padding: 24 }}>
-      <div className="card" style={{ padding: 16 }}>
-        <h1>Signing out...</h1>
-        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      </div>
+    <main className="fdGlassScene">
+      <section className="fdGlassBackdrop">
+        <section className="hero" style={{ paddingTop: 0 }}>
+          <div className="card fdGlassPanel">
+            <div className="fdEyebrow">SESSION</div>
+            <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
+              Signing out...
+            </h1>
+            {error ? <div className="error" style={{ marginTop: 10 }}>{error}</div> : <p className="fdGlassText">Please wait while your session is being cleared.</p>}
+          </div>
+        </section>
+      </section>
     </main>
   );
 }

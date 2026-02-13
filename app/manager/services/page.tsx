@@ -15,6 +15,8 @@ export default function ManagerServicesPage() {
   const [items, setItems] = useState<ServiceItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [code, setCode] = useState("personal_training");
   const [name, setName] = useState("Personal Training");
@@ -29,14 +31,17 @@ export default function ManagerServicesPage() {
   }, [items]);
 
   async function load() {
+    setLoading(true);
     setError(null);
     const res = await fetch("/api/manager/services");
     const payload = await res.json();
     if (!res.ok) {
       setError(payload?.error || "Load services failed");
+      setLoading(false);
       return;
     }
     setItems((payload.items || []) as ServiceItem[]);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -55,97 +60,93 @@ export default function ManagerServicesPage() {
 
   async function upsert(event: FormEvent) {
     event.preventDefault();
+    setSaving(true);
     setError(null);
     setMessage(null);
-
-    const res = await fetch("/api/manager/services", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code,
-        name,
-        durationMinutes: Number(durationMinutes),
-        capacity: Number(capacity),
-        isActive,
-      }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setError(payload?.error || "Save failed");
-      return;
+    try {
+      const res = await fetch("/api/manager/services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          name,
+          durationMinutes: Number(durationMinutes),
+          capacity: Number(capacity),
+          isActive,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        setError(payload?.error || "Save failed");
+        return;
+      }
+      setMessage(`Saved: ${payload.service?.code || code}`);
+      await load();
+    } finally {
+      setSaving(false);
     }
-    setMessage(`Saved: ${payload.service?.code || code}`);
-    await load();
   }
 
   return (
-    <main style={{ padding: 24 }}>
-      <div className="card" style={{ padding: 16 }}>
-        <h1>Services (Course Templates)</h1>
-        <p>
+    <main className="fdGlassScene">
+      <section className="fdGlassBackdrop">
+        <section className="hero" style={{ paddingTop: 0 }}>
+          <div className="fdGlassPanel">
+            <div className="fdEyebrow">COURSE TEMPLATES</div>
+            <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
+              Services
+            </h1>
+            <p className="fdGlassText">Define bookable service templates including duration, capacity, and activation state.</p>
+          </div>
+        </section>
+
+        <p className="sub" style={{ marginBottom: 12 }}>
           <a href="/manager">Back to dashboard</a>
         </p>
 
-        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-        {message ? <p style={{ color: "green" }}>{message}</p> : null}
+        {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
+        {message ? <div className="sub" style={{ marginBottom: 12, color: "var(--brand)" }}>{message}</div> : null}
 
-        <section style={{ marginTop: 16 }}>
-          <h2>Upsert Service</h2>
-          <form onSubmit={upsert}>
-            <p>
-              <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="code" required />
-            </p>
-            <p>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="name" required />
-            </p>
-            <p>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={durationMinutes}
-                onChange={(e) => setDurationMinutes(e.target.value)}
-                placeholder="durationMinutes"
-                required
-              />
-            </p>
-            <p>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={capacity}
-                onChange={(e) => setCapacity(e.target.value)}
-                placeholder="capacity"
-                required
-              />
-            </p>
-            <p>
-              <label>
+        <section className="fdTwoCol">
+          <form onSubmit={upsert} className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">Upsert Service</h2>
+            <div style={{ display: "grid", gap: 8 }}>
+              <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="code" className="input" required />
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="name" className="input" required />
+              <input type="number" min="1" step="1" value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} placeholder="durationMinutes" className="input" required />
+              <input type="number" min="1" step="1" value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="capacity" className="input" required />
+              <label className="sub">
                 <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> isActive
               </label>
-            </p>
-            <button type="submit">{codeToExisting.has(code) ? "Update" : "Create"}</button>
-            <button type="button" onClick={() => void load()} style={{ marginLeft: 8 }}>
-              Reload
-            </button>
+            </div>
+            <div className="actions" style={{ marginTop: 10 }}>
+              <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={saving}>
+                {saving ? "Saving..." : codeToExisting.has(code) ? "Update" : "Create"}
+              </button>
+              <button type="button" className="fdPillBtn" onClick={() => void load()} disabled={loading}>
+                {loading ? "Reloading..." : "Reload"}
+              </button>
+            </div>
           </form>
-        </section>
 
-        <section style={{ marginTop: 16 }}>
-          <h2>Service List</h2>
-          <ul>
-            {items.map((s) => (
-              <li key={s.code}>
-                <button type="button" onClick={() => loadIntoForm(s)} style={{ marginRight: 8 }}>
-                  Edit
-                </button>
-                {s.code} | {s.name} | {s.durationMinutes}m | cap {s.capacity} | active {s.isActive ? "1" : "0"}
-              </li>
-            ))}
-          </ul>
+          <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">Service List</h2>
+            <div className="fdActionGrid">
+              {items.map((s) => (
+                <article key={s.code} className="fdGlassSubPanel fdActionCard" style={{ padding: 12 }}>
+                  <h3 className="fdActionTitle" style={{ fontSize: 18 }}>{s.name}</h3>
+                  <p className="sub" style={{ marginTop: 6 }}>{s.code}</p>
+                  <p className="sub" style={{ marginTop: 2 }}>{s.durationMinutes}m | cap {s.capacity} | active {s.isActive ? "1" : "0"}</p>
+                  <button type="button" className="fdPillBtn" onClick={() => loadIntoForm(s)} style={{ marginTop: 8 }}>
+                    Edit
+                  </button>
+                </article>
+              ))}
+              {items.length === 0 ? <p className="fdGlassText">No services found.</p> : null}
+            </div>
+          </section>
         </section>
-      </div>
+      </section>
     </main>
   );
 }

@@ -35,6 +35,8 @@ function localDatetimeToIso(value: string) {
 export default function ManagerCoachSlotsPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [coaches, setCoaches] = useState<CoachItem[]>([]);
   const [branches, setBranches] = useState<BranchItem[]>([]);
@@ -75,6 +77,7 @@ export default function ManagerCoachSlotsPage() {
   }
 
   async function loadSlots() {
+    setLoading(true);
     setError(null);
     const params = new URLSearchParams();
     if (coachId) params.set("coachId", coachId);
@@ -82,9 +85,11 @@ export default function ManagerCoachSlotsPage() {
     const payload = await res.json();
     if (!res.ok) {
       setError(payload?.error || "Load slots failed");
+      setLoading(false);
       return;
     }
     setItems((payload.items || []) as SlotItem[]);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -99,28 +104,32 @@ export default function ManagerCoachSlotsPage() {
 
   async function createSlot(event: FormEvent) {
     event.preventDefault();
+    setSaving(true);
     setError(null);
     setMessage(null);
-
-    const res = await fetch("/api/manager/coach-slots", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        coachId,
-        branchId: branchId || null,
-        startsAt: localDatetimeToIso(startsLocal),
-        endsAt: localDatetimeToIso(endsLocal),
-        note: note || null,
-      }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setError(payload?.error || "Create slot failed");
-      return;
+    try {
+      const res = await fetch("/api/manager/coach-slots", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coachId,
+          branchId: branchId || null,
+          startsAt: localDatetimeToIso(startsLocal),
+          endsAt: localDatetimeToIso(endsLocal),
+          note: note || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        setError(payload?.error || "Create slot failed");
+        return;
+      }
+      setMessage(`Created slot: ${payload.slot?.id || ""}`);
+      setNote("");
+      await loadSlots();
+    } finally {
+      setSaving(false);
     }
-    setMessage(`Created slot: ${payload.slot?.id || ""}`);
-    setNote("");
-    await loadSlots();
   }
 
   async function updateSlot(id: string, action: "cancel" | "activate", reason: string) {
@@ -142,21 +151,30 @@ export default function ManagerCoachSlotsPage() {
   }
 
   return (
-    <main style={{ padding: 24 }}>
-      <div className="card" style={{ padding: 16 }}>
-        <h1>Coach Schedule (Slots)</h1>
-        <p>
+    <main className="fdGlassScene">
+      <section className="fdGlassBackdrop">
+        <section className="hero" style={{ paddingTop: 0 }}>
+          <div className="fdGlassPanel">
+            <div className="fdEyebrow">COACH SCHEDULE</div>
+            <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
+              Coach Slots
+            </h1>
+            <p className="fdGlassText">Create and manage coach availability windows with branch scope and status transitions.</p>
+          </div>
+        </section>
+
+        <p className="sub" style={{ marginBottom: 12 }}>
           <a href="/manager">Back to dashboard</a>
         </p>
 
-        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-        {message ? <p style={{ color: "green" }}>{message}</p> : null}
+        {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
+        {message ? <div className="sub" style={{ marginBottom: 12, color: "var(--brand)" }}>{message}</div> : null}
 
-        <section style={{ marginTop: 16 }}>
-          <h2>Create Slot</h2>
-          <form onSubmit={createSlot}>
-            <p>
-              <select value={coachId} onChange={(e) => setCoachId(e.target.value)} required>
+        <section className="fdTwoCol">
+          <form onSubmit={createSlot} className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">Create Slot</h2>
+            <div style={{ display: "grid", gap: 8 }}>
+              <select value={coachId} onChange={(e) => setCoachId(e.target.value)} className="input" required>
                 <option value="">Select coach</option>
                 {coaches.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -164,9 +182,7 @@ export default function ManagerCoachSlotsPage() {
                   </option>
                 ))}
               </select>
-            </p>
-            <p>
-              <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+              <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="input">
                 <option value="">(No branch)</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>
@@ -174,56 +190,61 @@ export default function ManagerCoachSlotsPage() {
                   </option>
                 ))}
               </select>
-            </p>
-            <p>
-              <input type="datetime-local" value={startsLocal} onChange={(e) => setStartsLocal(e.target.value)} required />
-            </p>
-            <p>
-              <input type="datetime-local" value={endsLocal} onChange={(e) => setEndsLocal(e.target.value)} required />
-            </p>
-            <p>
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="note (optional)" />
-            </p>
-            <button type="submit">Create</button>
-            <button type="button" onClick={() => void loadSlots()} style={{ marginLeft: 8 }}>
-              Reload
-            </button>
+              <input type="datetime-local" value={startsLocal} onChange={(e) => setStartsLocal(e.target.value)} className="input" required />
+              <input type="datetime-local" value={endsLocal} onChange={(e) => setEndsLocal(e.target.value)} className="input" required />
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="note (optional)" className="input" />
+            </div>
+            <div className="actions" style={{ marginTop: 10 }}>
+              <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={saving}>
+                {saving ? "Creating..." : "Create"}
+              </button>
+              <button type="button" className="fdPillBtn" onClick={() => void loadSlots()} disabled={loading}>
+                {loading ? "Reloading..." : "Reload"}
+              </button>
+            </div>
           </form>
-        </section>
 
-        <section style={{ marginTop: 16 }}>
-          <h2>Slot List</h2>
-          <ul>
-            {items.map((s) => (
-              <li key={s.id}>
-                <input
-                  value={actionReasonById[s.id] || ""}
-                  onChange={(e) => setActionReasonById((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                  placeholder="reason (required)"
-                  style={{ marginRight: 8 }}
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    void updateSlot(
-                      s.id,
-                      s.status === "active" ? "cancel" : "activate",
-                      (actionReasonById[s.id] || "").trim(),
-                    )
-                  }
-                  style={{ marginRight: 8 }}
-                  disabled={!(actionReasonById[s.id] || "").trim()}
-                >
-                  {s.status === "active" ? "Cancel" : "Activate"}
-                </button>
-                coach {coachMap.get(s.coach_id)?.displayName || s.coach_id.slice(0, 8)} | branch{" "}
-                {s.branch_id ? branchMap.get(s.branch_id)?.name || s.branch_id.slice(0, 8) : "-"} |{" "}
-                {new Date(s.starts_at).toLocaleString()} - {new Date(s.ends_at).toLocaleString()} | {s.status}
-              </li>
-            ))}
-          </ul>
+          <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">Slot List</h2>
+            <div className="fdActionGrid">
+              {items.map((s) => {
+                const reason = (actionReasonById[s.id] || "").trim();
+                return (
+                  <article key={s.id} className="fdGlassSubPanel fdActionCard" style={{ padding: 12 }}>
+                    <h3 className="fdActionTitle" style={{ fontSize: 18 }}>
+                      {coachMap.get(s.coach_id)?.displayName || s.coach_id.slice(0, 8)}
+                    </h3>
+                    <p className="sub" style={{ marginTop: 8 }}>
+                      branch: {s.branch_id ? branchMap.get(s.branch_id)?.name || s.branch_id.slice(0, 8) : "-"}
+                    </p>
+                    <p className="sub" style={{ marginTop: 2 }}>
+                      {new Date(s.starts_at).toLocaleString()} - {new Date(s.ends_at).toLocaleString()}
+                    </p>
+                    <p className="sub" style={{ marginTop: 2 }}>status: {s.status}</p>
+                    <input
+                      value={actionReasonById[s.id] || ""}
+                      onChange={(e) => setActionReasonById((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                      placeholder="reason (required)"
+                      className="input"
+                      style={{ marginTop: 8 }}
+                    />
+                    <button
+                      type="button"
+                      className="fdPillBtn"
+                      style={{ marginTop: 8 }}
+                      disabled={!reason}
+                      onClick={() => void updateSlot(s.id, s.status === "active" ? "cancel" : "activate", reason)}
+                    >
+                      {s.status === "active" ? "Cancel" : "Activate"}
+                    </button>
+                  </article>
+                );
+              })}
+              {items.length === 0 ? <p className="fdGlassText">No slots found.</p> : null}
+            </div>
+          </section>
         </section>
-      </div>
+      </section>
     </main>
   );
 }

@@ -11,10 +11,18 @@ interface MemberItem {
   created_at: string;
 }
 
+function fmtDate(value: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString();
+}
+
 export default function ManagerMembersPage() {
   const [items, setItems] = useState<MemberItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [q, setQ] = useState("");
 
@@ -25,6 +33,7 @@ export default function ManagerMembersPage() {
   const [editStoreId, setEditStoreId] = useState("");
 
   async function load(query?: string) {
+    setLoading(true);
     setError(null);
     const params = new URLSearchParams();
     const value = (query ?? q).trim();
@@ -33,9 +42,11 @@ export default function ManagerMembersPage() {
     const payload = await res.json();
     if (!res.ok) {
       setError(payload?.error || "Load members failed");
+      setLoading(false);
       return;
     }
     setItems((payload.items || []) as MemberItem[]);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -55,93 +66,107 @@ export default function ManagerMembersPage() {
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    setSaving(true);
     setError(null);
     setMessage(null);
-
-    const res = await fetch(`/api/manager/members/${encodeURIComponent(editId)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fullName: editName,
-        phone: editPhone,
-        notes: editNotes,
-        storeId: editStoreId,
-      }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setError(payload?.error || "Save failed");
-      return;
+    try {
+      const res = await fetch(`/api/manager/members/${encodeURIComponent(editId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: editName,
+          phone: editPhone,
+          notes: editNotes,
+          storeId: editStoreId,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        setError(payload?.error || "Save failed");
+        return;
+      }
+      setMessage(`Saved: ${payload.member?.id || editId}`);
+      await load();
+    } finally {
+      setSaving(false);
     }
-    setMessage(`Saved: ${payload.member?.id || editId}`);
-    await load();
   }
 
   return (
-    <main style={{ padding: 24 }}>
-      <div className="card" style={{ padding: 16 }}>
-        <h1>Members</h1>
-        <p>
+    <main className="fdGlassScene">
+      <section className="fdGlassBackdrop">
+        <section className="hero" style={{ paddingTop: 0 }}>
+          <div className="fdGlassPanel">
+            <div className="fdEyebrow">MEMBER OPS</div>
+            <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
+              Members
+            </h1>
+            <p className="fdGlassText">Search member profiles, edit details, and map member records to the correct branch.</p>
+          </div>
+        </section>
+
+        <p className="sub" style={{ marginBottom: 12 }}>
           <a href="/manager">Back to dashboard</a>
         </p>
 
-        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-        {message ? <p style={{ color: "green" }}>{message}</p> : null}
+        {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
+        {message ? <div className="sub" style={{ marginBottom: 12, color: "var(--brand)" }}>{message}</div> : null}
 
-        <section style={{ marginTop: 16 }}>
-          <h2>Search</h2>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void load();
-            }}
-          >
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="name / phone" />
-            <button type="submit" style={{ marginLeft: 8 }}>
-              Search
-            </button>
-            <button type="button" onClick={() => void load("")} style={{ marginLeft: 8 }}>
-              Recent
+        <section className="fdTwoCol">
+          <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">Search</h2>
+            <form
+              className="actions"
+              style={{ marginTop: 10 }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                void load();
+              }}
+            >
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="name / phone" className="input" />
+              <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={loading}>
+                {loading ? "Searching..." : "Search"}
+              </button>
+              <button type="button" className="fdPillBtn" onClick={() => void load("")}>
+                Recent
+              </button>
+            </form>
+          </section>
+
+          <form onSubmit={save} className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">Edit Member</h2>
+            <div style={{ display: "grid", gap: 8 }}>
+              <input value={editId} onChange={(e) => setEditId(e.target.value)} placeholder="memberId" className="input" required />
+              <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="full name" className="input" />
+              <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="phone" className="input" />
+              <input value={editStoreId} onChange={(e) => setEditStoreId(e.target.value)} placeholder="branchId/storeId" className="input" />
+              <input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="notes" className="input" />
+            </div>
+            <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }} disabled={saving}>
+              {saving ? "Saving..." : "Save"}
             </button>
           </form>
         </section>
 
-        <section style={{ marginTop: 16 }}>
-          <h2>Edit Member</h2>
-          <form onSubmit={save}>
-            <p>
-              <input value={editId} onChange={(e) => setEditId(e.target.value)} placeholder="memberId" required />
-            </p>
-            <p>
-              <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="full name" />
-            </p>
-            <p>
-              <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="phone" />
-            </p>
-            <p>
-              <input value={editStoreId} onChange={(e) => setEditStoreId(e.target.value)} placeholder="branchId/storeId" />
-            </p>
-            <p>
-              <input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="notes" />
-            </p>
-            <button type="submit">Save</button>
-          </form>
-        </section>
-
-        <section style={{ marginTop: 16 }}>
-          <h2>Member List</h2>
-          <ul>
+        <section style={{ marginTop: 14 }}>
+          <h2 className="sectionTitle">Member List</h2>
+          <div className="fdActionGrid">
             {items.map((m) => (
-              <li key={m.id}>
-                <button type="button" onClick={() => loadIntoForm(m)} style={{ marginRight: 8 }}>
+              <article key={m.id} className="fdGlassSubPanel fdActionCard" style={{ padding: 12 }}>
+                <h3 className="fdActionTitle" style={{ fontSize: 18 }}>{m.full_name || "-"}</h3>
+                <p className="sub" style={{ marginTop: 8 }}>phone: {m.phone || "-"}</p>
+                <p className="sub" style={{ marginTop: 2 }}>branch: {m.store_id || "-"}</p>
+                <p className="sub" style={{ marginTop: 2 }}>created: {fmtDate(m.created_at)}</p>
+                <p className="sub" style={{ marginTop: 2 }}>id: {m.id}</p>
+                <button type="button" className="fdPillBtn" style={{ marginTop: 8 }} onClick={() => loadIntoForm(m)}>
                   Edit
                 </button>
-                {m.full_name} | {m.phone || "-"} | store {m.store_id || "-"} | id {m.id}
-              </li>
+              </article>
             ))}
-          </ul>
+            {items.length === 0 ? <p className="fdGlassText">No members found.</p> : null}
+          </div>
         </section>
-      </div>
+      </section>
     </main>
   );
 }
