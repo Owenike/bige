@@ -221,7 +221,7 @@ export default function FrontdeskCheckinPage() {
   const decisionColor = result?.decision === "allow" ? "var(--brand)" : "#9b1c1c";
 
   return (
-    <main className="container fdGlassScene">
+    <main className="fdGlassScene">
       <section className="fdGlassBackdrop">
         <section className="hero" style={{ paddingTop: 0 }}>
           <div className="fdGlassPanel">

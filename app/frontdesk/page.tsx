@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useI18n } from "../i18n-provider";
 
 type ActionCard = {
@@ -13,28 +13,40 @@ type ActionCard = {
 export default function FrontdeskPortalPage() {
   const { locale } = useI18n();
   const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
+  const sceneRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (!sceneRef.current) return;
+      const y = Math.min(window.scrollY || 0, 320);
+      sceneRef.current.style.setProperty("--fd-scroll", `${y}px`);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const t = useMemo(
     () =>
       lang === "zh"
         ? {
             badge: "FRONTDESK",
-            title: "\u6ac3\u6aaf\u4f5c\u696d\u4e2d\u6a1e",
-            sub: "\u96c6\u4e2d\u8655\u7406\u5831\u5230\u3001\u5efa\u6a94\u3001\u6536\u6b3e\u8207\u4ea4\u73ed\uff0c\u8b93\u73ed\u52d9\u66f4\u7a69\u5b9a\u3002",
-            primary: "\u958b\u59cb\u5831\u5230\u6383\u78bc",
-            secondary: "\u6703\u54e1\u67e5\u8a62 / \u5efa\u6a94",
-            statusTitle: "\u7576\u524d\u73ed\u52d9",
-            statusOpen: "\u73ed\u5225\u72c0\u614b",
-            statusOpenValue: "\u5df2\u958b\u73ed",
-            statusTasks: "\u5f85\u8655\u7406",
-            statusTasksValue: "3 \u9805",
-            statusTip: "\u5efa\u8b70\u5148\u5b8c\u6210\u5831\u5230\u8207\u6536\u6b3e\uff0c\u518d\u9032\u884c\u4ea4\u73ed\u3002",
+            title: "櫃檯作業中樞",
+            sub: "集中處理報到、建檔、收款與交班，讓班務更穩定。",
+            primary: "開始報到掃碼",
+            secondary: "會員查詢 / 建檔",
+            statusTitle: "當前班務",
+            statusOpen: "班別狀態",
+            statusOpenValue: "已開班",
+            statusTasks: "待處理",
+            statusTasksValue: "3 項",
+            statusTip: "建議先完成報到與收款，再進行交班。",
             cards: [
-              { href: "/frontdesk/checkin", title: "\u5831\u5230\u6383\u78bc", desc: "\u6383\u63cf\u6703\u54e1\u52d5\u614b QR\uff0c\u5feb\u901f\u5b8c\u6210\u5165\u5834\u9a57\u8b49\u3002", tag: "ENTRY" },
-              { href: "/frontdesk/member-search", title: "\u6703\u54e1\u67e5\u8a62 / \u5efa\u6a94", desc: "\u67e5\u770b\u6703\u54e1\u8cc7\u6599\uff0c\u4e26\u53ef\u76f4\u63a5\u5efa\u7acb\u65b0\u6703\u54e1\u3002", tag: "MEMBER" },
-              { href: "/frontdesk/orders/new", title: "\u65b0\u589e\u8a02\u55ae + \u6536\u6b3e", desc: "\u73fe\u5834\u5efa\u7acb\u8a02\u55ae\u4e26\u8a18\u9304\u4ed8\u6b3e\u6d41\u7a0b\u3002", tag: "PAYMENT" },
-              { href: "/frontdesk/bookings", title: "\u9810\u7d04\u5354\u52a9", desc: "\u5354\u52a9\u8abf\u6574\u3001\u53d6\u6d88\u8207\u5b89\u6392\u6642\u6bb5\u3002", tag: "BOOKING" },
-              { href: "/frontdesk/handover", title: "\u4ea4\u73ed", desc: "\u6574\u7406\u672c\u73ed\u6458\u8981\uff0c\u5b8c\u6210\u4ea4\u63a5\u3002", tag: "SHIFT" },
+              { href: "/frontdesk/checkin", title: "報到掃碼", desc: "掃描會員動態 QR，快速完成入場驗證。", tag: "ENTRY" },
+              { href: "/frontdesk/member-search", title: "會員查詢 / 建檔", desc: "查看會員資料，並可直接建立新會員。", tag: "MEMBER" },
+              { href: "/frontdesk/orders/new", title: "新增訂單 + 收款", desc: "現場建立訂單並記錄付款流程。", tag: "PAYMENT" },
+              { href: "/frontdesk/bookings", title: "預約協助", desc: "協助調整、取消與安排時段。", tag: "BOOKING" },
+              { href: "/frontdesk/handover", title: "交班", desc: "整理本班摘要，完成交接。", tag: "SHIFT" },
             ] as ActionCard[],
           }
         : {
@@ -61,7 +73,25 @@ export default function FrontdeskPortalPage() {
   );
 
   return (
-    <main className="fdGlassScene">
+    <main
+      ref={sceneRef}
+      className="fdGlassScene"
+      onMouseMove={(e) => {
+        const el = sceneRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        el.style.setProperty("--fd-mx", `${x}px`);
+        el.style.setProperty("--fd-my", `${y}px`);
+      }}
+      onMouseLeave={() => {
+        const el = sceneRef.current;
+        if (!el) return;
+        el.style.setProperty("--fd-mx", "50%");
+        el.style.setProperty("--fd-my", "40%");
+      }}
+    >
       <section className="fdGlassBackdrop fdEnter">
         <div className="fdGlassTop">
           <article className="fdGlassPanel fdGlassTall">
@@ -119,12 +149,7 @@ export default function FrontdeskPortalPage() {
         <section style={{ marginTop: 14 }}>
           <div className="fdActionGrid">
             {t.cards.map((card, idx) => (
-              <a
-                key={card.href}
-                href={card.href}
-                className="fdActionCard fdEnter"
-                style={{ animationDelay: `${120 + idx * 60}ms` }}
-              >
+              <a key={card.href} href={card.href} className="fdActionCard fdEnter" style={{ animationDelay: `${120 + idx * 60}ms` }}>
                 <div className="fdActionHead">
                   <span className="kvLabel">{card.tag}</span>
                   <span className="fdArrow">{">>"}</span>
@@ -141,3 +166,4 @@ export default function FrontdeskPortalPage() {
     </main>
   );
 }
+

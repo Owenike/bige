@@ -111,7 +111,7 @@ export default function FrontdeskMemberSearchPage() {
   }
 
   return (
-    <main className="container fdGlassScene">
+    <main className="fdGlassScene">
       <section className="fdGlassBackdrop">
         <section className="hero" style={{ paddingTop: 0 }}>
           <div className="fdGlassPanel">
