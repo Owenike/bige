@@ -21,6 +21,15 @@ function Invoke-Status([string]$Url) {
   }
 }
 
+function Normalize-Location([object]$Location) {
+  if ($null -eq $Location) { return $null }
+  if ($Location -is [System.Array]) {
+    if ($Location.Length -eq 0) { return $null }
+    return [string]$Location[0]
+  }
+  return [string]$Location
+}
+
 $devPort = 3000
 $devUrl = "http://localhost:$devPort"
 $proc = $null
@@ -42,15 +51,25 @@ try {
 
   $member = Invoke-Status "$devUrl/member"
   Assert-Status -Actual $member.status -Allowed @(307, 308) -Label "GET /member (unauthenticated redirect)"
+  $memberLocation = Normalize-Location $member.location
+  $memberLocationText = if ($memberLocation) { $memberLocation } else { "<null>" }
+  Write-Host ("[INFO] /member redirect raw location -> " + $memberLocationText)
   $isLoginRedirect = $false
-  if ($member.location) {
-    $loc = [string]$member.location
-    $isLoginRedirect = ($loc -like "/login*") -or ($loc -like "*/login*")
+  if ($memberLocation) {
+    $loc = $memberLocation
+    if ($loc -like "/login*" -or $loc -like "*/login*") {
+      $isLoginRedirect = $true
+    } else {
+      try {
+        $uri = [Uri]$loc
+        if ($uri.AbsolutePath -eq "/login") { $isLoginRedirect = $true }
+      } catch {}
+    }
   }
   if (-not $isLoginRedirect) {
     throw "[FAIL] /member redirect location is not /login*"
   }
-  Write-Host ("[OK]   /member redirect location -> " + $member.location) -ForegroundColor Green
+  Write-Host ("[OK]   /member redirect location -> " + $memberLocation) -ForegroundColor Green
 
   $frontdesk = Invoke-Status "$devUrl/frontdesk/checkin"
   Assert-Status -Actual $frontdesk.status -Allowed @(307, 308) -Label "GET /frontdesk/checkin (unauthenticated redirect)"
