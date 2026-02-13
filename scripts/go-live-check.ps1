@@ -4,6 +4,16 @@ function Header([string]$t) { Write-Host ""; Write-Host ("=== " + $t + " ===") }
 function Ok([string]$t) { Write-Host ("[OK]   " + $t) -ForegroundColor Green }
 function Warn([string]$t) { Write-Host ("[WARN] " + $t) -ForegroundColor Yellow }
 function Fail([string]$t) { Write-Host ("[FAIL] " + $t) -ForegroundColor Red }
+$rgCmd = Get-Command rg -ErrorAction SilentlyContinue
+
+function Search-Repo([string]$pattern, [string]$path) {
+  if ($rgCmd) {
+    return rg -n $pattern -S $path 2>$null
+  }
+  if (-not (Test-Path $path)) { return @() }
+  $files = Get-ChildItem -Path $path -Recurse -Force -File -ErrorAction SilentlyContinue
+  return $files | Select-String -Pattern $pattern -ErrorAction SilentlyContinue
+}
 
 Header "Git"
 $st = git status -sb 2>$null
@@ -29,7 +39,6 @@ try { npm run ui:check-cards | Out-Host; Ok "ui:check-cards passed" } catch { Fa
 try { npm run test:smoke | Out-Host; Ok "test:smoke passed" } catch { Fail "test:smoke failed"; throw }
 
 Header "Testing and CI Presence"
-$rgCmd = Get-Command rg -ErrorAction SilentlyContinue
 if ($rgCmd) {
   $testFiles = rg --files | rg "(test|spec|__tests__|playwright|cypress|jest|vitest)" 2>$null
 } else {
@@ -123,16 +132,16 @@ if (-not (Test-Path $migDir)) { Fail "Missing supabase/migrations"; exit 1 }
 $migs = Get-ChildItem -Recurse -Force -File $migDir -Filter *.sql | Select-Object -ExpandProperty FullName
 Ok ("migrations found: " + $migs.Count)
 
-$rlsHits = rg -n "enable row level security|create policy" -S $migDir 2>$null
+$rlsHits = Search-Repo "enable row level security|create policy" $migDir
 if (-not $rlsHits) { Warn "No RLS/policy hits found (unexpected)."; } else { Ok "RLS/policy statements found." }
 
-$jtiUnique = rg -n "create unique index.*checkins.*jti|checkins.*jti.*unique|jti text primary key" -S $migDir 2>$null
+$jtiUnique = Search-Repo "create unique index.*checkins.*jti|checkins.*jti.*unique|jti text primary key" $migDir
 if (-not $jtiUnique) { Fail "Missing checkins.jti uniqueness strategy"; } else { Ok "checkins.jti uniqueness strategy found." }
 
-$verifyFn = rg -n "create function.*verify_entry_scan|verify_entry_scan" -S $migDir 2>$null
+$verifyFn = Search-Repo "create function.*verify_entry_scan|verify_entry_scan" $migDir
 if (-not $verifyFn) { Fail "Missing verify_entry_scan function in migrations"; } else { Ok "verify_entry_scan found in migrations." }
 
-$redemptionUnique = rg -n "session_redemptions_booking_unique|unique.*booking_id" -S $migDir 2>$null
+$redemptionUnique = Search-Repo "session_redemptions_booking_unique|unique.*booking_id" $migDir
 if (-not $redemptionUnique) { Warn "No booking-level uniqueness detected for redemptions (review)"; } else { Ok "Redemption/booking uniqueness constraint found." }
 
 Header "Entry Verify (anti-passback / RPC / rate limit)"
