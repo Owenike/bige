@@ -31,11 +31,11 @@ export default function FrontdeskPortalPage() {
       lang === "zh"
         ? {
             badge: "FRONTDESK",
-            title: "櫃檯作業中樞",
-            sub: "集中處理報到、建檔、收款與交班，讓班務更穩定。",
+            title: "櫃檯工作台",
+            sub: "統一處理報到、建檔、收款與交班，保持流程清楚且穩定。",
             primary: "開始報到掃碼",
             secondary: "會員查詢 / 建檔",
-            statusTitle: "當前班務",
+            statusTitle: "今日班務",
             statusOpen: "班別狀態",
             statusOpenValue: "已開班",
             statusTasks: "待處理",
@@ -51,11 +51,11 @@ export default function FrontdeskPortalPage() {
           }
         : {
             badge: "FRONTDESK",
-            title: "Frontdesk Operations Hub",
-            sub: "Handle check-in, member onboarding, payment, and handover from one place.",
+            title: "Frontdesk Workspace",
+            sub: "Handle check-in, member onboarding, payment, and handover with clear flow.",
             primary: "Start Check-in Scanner",
             secondary: "Member Search / Create",
-            statusTitle: "Current Shift",
+            statusTitle: "Today Shift",
             statusOpen: "Shift State",
             statusOpenValue: "Open",
             statusTasks: "Pending",

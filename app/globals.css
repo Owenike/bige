@@ -234,22 +234,13 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   padding: 16px 22px;
 }
 
-/* Frontdesk luxe tokens + components */
+/* Frontdesk liquid-light UI */
 :root{
-  --fd-panel: #fffdfa;
-  --fd-panel-2: #f7f3ec;
-  --fd-border: rgba(50, 42, 34, 0.12);
-  --fd-border-strong: rgba(50, 42, 34, 0.22);
-  --fd-ink-soft: #2e2a25;
-  --fd-gold: #b18954;
-  --fd-gold-soft: rgba(177, 137, 84, 0.18);
-  --fd-shadow: 0 18px 45px rgba(39, 30, 20, 0.08);
-}
-
-.fdShell{
-  background:
-    radial-gradient(900px 320px at 0% -14%, rgba(177,137,84,.14), transparent 60%),
-    radial-gradient(700px 280px at 100% 0%, rgba(127,185,173,.14), transparent 58%);
+  --fd-bg: #e9edf2;
+  --fd-ink: #1c2430;
+  --fd-text: #4f5968;
+  --fd-line: rgba(255,255,255,.65);
+  --fd-line-soft: rgba(194,203,217,.68);
 }
 .fdGlassScene{
   position: relative;
@@ -259,7 +250,6 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   padding: 0;
   --fd-scroll: 0px;
   font-family: "SF Pro Display", "SF Pro Text", "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif;
-  letter-spacing: 0.01em;
 }
 .fdGlassBackdrop{
   position: relative;
@@ -268,23 +258,20 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   padding: 20px 24px 24px;
   min-height: calc(100vh - 116px);
   background:
-    linear-gradient(135deg, rgba(73, 48, 37, .78), rgba(106, 69, 49, .62)),
-    url("/frontdesk-glass-bg.svg");
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-position:
-    0 0,
-    center calc(var(--fd-scroll) * -0.04);
-  box-shadow: 0 32px 70px rgba(25, 14, 10, .36);
+    radial-gradient(700px 260px at 12% 10%, rgba(159, 212, 255, .32), transparent 60%),
+    radial-gradient(600px 240px at 90% 22%, rgba(216, 179, 255, .24), transparent 62%),
+    radial-gradient(620px 260px at 66% 84%, rgba(161, 241, 194, .20), transparent 64%),
+    linear-gradient(180deg, #f2f5f9 0%, #e5e9ef 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55);
 }
 .fdGlassBackdrop::before{
   content: "";
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(640px 180px at 70% 95%, rgba(248, 157, 70, .20), transparent 70%),
-    radial-gradient(620px 200px at 20% 4%, rgba(255, 236, 208, .24), transparent 66%);
+    radial-gradient(240px 120px at 26% 34%, rgba(255,255,255,.58), transparent 72%),
+    radial-gradient(280px 140px at 76% 58%, rgba(255,255,255,.52), transparent 72%),
+    radial-gradient(180px 92px at 44% 80%, rgba(189, 243, 220, .30), transparent 72%);
   pointer-events: none;
 }
 .fdGlassTop{
@@ -298,43 +285,42 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   position: relative;
   overflow: hidden;
   min-height: 280px;
-  border-radius: 28px;
-  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 24px;
+  border: 1px solid var(--fd-line);
   background:
-    linear-gradient(135deg, rgba(255,255,255,.28), rgba(255,255,255,.12) 44%, rgba(255,255,255,.08)),
-    linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.05));
-  backdrop-filter: saturate(1.45) blur(24px);
-  -webkit-backdrop-filter: saturate(1.45) blur(24px);
+    linear-gradient(135deg, rgba(255,255,255,.78), rgba(255,255,255,.40) 45%, rgba(255,255,255,.30)),
+    linear-gradient(180deg, rgba(255,255,255,.55), rgba(240,244,250,.36));
+  backdrop-filter: saturate(1.15) blur(14px);
+  -webkit-backdrop-filter: saturate(1.15) blur(14px);
   padding: 16px;
-  color: #f7eee6;
+  color: var(--fd-ink);
   box-shadow:
-    inset 0 .5px 0 rgba(255,255,255,.46),
-    inset 0 -8px 18px rgba(255,255,255,.05),
-    0 14px 30px rgba(22, 11, 8, .18);
+    inset 0 .5px 0 rgba(255,255,255,.90),
+    0 12px 24px rgba(130,145,168,.20);
 }
 .fdGlassSubPanel{
   position: relative;
   overflow: hidden;
-  border-radius: 22px;
-  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 18px;
+  border: 1px solid var(--fd-line-soft);
   background:
-    linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.08) 48%, rgba(255,255,255,.05)),
-    linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.03));
-  backdrop-filter: saturate(1.28) blur(16px);
-  -webkit-backdrop-filter: saturate(1.28) blur(16px);
+    linear-gradient(140deg, rgba(255,255,255,.72), rgba(255,255,255,.42) 52%, rgba(255,255,255,.26)),
+    linear-gradient(180deg, rgba(255,255,255,.48), rgba(236,241,248,.28));
+  backdrop-filter: saturate(1.1) blur(12px);
+  -webkit-backdrop-filter: saturate(1.1) blur(12px);
   box-shadow:
-    inset 0 .5px 0 rgba(255,255,255,.36),
-    0 10px 22px rgba(22, 11, 8, .14);
+    inset 0 .5px 0 rgba(255,255,255,.88),
+    0 8px 18px rgba(141,157,181,.18);
 }
 .fdGlassPanel::after{
   content: "";
   position: absolute;
-  left: 10px;
-  right: 10px;
-  top: 10px;
-  height: 34%;
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(255,255,255,.26), rgba(255,255,255,0));
+  left: 8px;
+  right: 8px;
+  top: 8px;
+  height: 38%;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.48), rgba(255,255,255,0));
   pointer-events: none;
 }
 .fdGlassTall{ min-height: 420px; }
@@ -346,29 +332,31 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdChip{
   border-radius: 999px;
   padding: 7px 11px;
-  border: 1px solid rgba(255,255,255,.28);
-  background: rgba(36, 18, 14, .18);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(201, 212, 227, .72);
+  background: rgba(248,250,254,.78);
+  color: #5a6677;
   font-size: 12px;
 }
 .fdChipActive{
-  color: #36231b;
-  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,233,213,.92));
+  color: #2b3646;
+  background:
+    radial-gradient(120% 140% at 10% 30%, rgba(167, 224, 255, .46), rgba(255,255,255,.85)),
+    linear-gradient(180deg, rgba(255,255,255,.88), rgba(233,240,250,.75));
+  box-shadow: 0 6px 14px rgba(114, 176, 236, .28);
 }
 .fdGlassTitle{
   margin: 14px 0 0;
-  font-family: "SF Pro Display", "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif;
   font-size: clamp(30px, 2.5vw, 40px);
   line-height: 1.08;
   letter-spacing: -.01em;
   font-weight: 620;
+  color: var(--fd-ink);
 }
 .fdGlassText{
   margin-top: 10px;
-  color: rgba(255,241,229,.92);
+  color: var(--fd-text);
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.68;
 }
 .fdPillActions{
   margin-top: 16px;
@@ -378,23 +366,27 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdPillBtn{
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.30);
-  background: rgba(35,18,14,.20);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: #fff6ee;
+  border: 1px solid rgba(202, 214, 230, .82);
+  background: rgba(249,251,255,.78);
+  color: #38465a;
   padding: 10px 14px;
   font-size: 13px;
-  transition: transform .15s ease, background .15s ease;
+  box-shadow: 0 6px 14px rgba(132,149,176,.18);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
 }
 .fdPillBtn:hover{
   text-decoration: none;
   transform: translateY(-1px);
-  background: rgba(20,10,8,.38);
+  border-color: rgba(176, 198, 222, .92);
+  box-shadow: 0 8px 16px rgba(126,149,185,.20);
 }
 .fdPillBtnPrimary{
-  background: linear-gradient(135deg, rgba(255,252,248,.98), rgba(249,233,211,.92));
-  color: #422a1f;
+  background:
+    radial-gradient(130% 140% at 20% 30%, rgba(126, 196, 255, .55), rgba(229, 241, 255, .90)),
+    linear-gradient(180deg, rgba(255,255,255,.92), rgba(231,241,255,.80));
+  border-color: rgba(139, 188, 236, .92);
+  color: #23425f;
+  box-shadow: 0 0 0 1px rgba(187,224,255,.8), 0 12px 22px rgba(126, 176, 232, .30);
 }
 .fdGaugeWrap{
   position: relative;
@@ -406,9 +398,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   width: 100%;
   height: 100%;
   border-radius: 999px;
-  border: 2px solid rgba(255,255,255,.3);
-  border-top-color: rgba(255,244,229,.95);
-  border-right-color: rgba(255,244,229,.95);
+  border: 2px solid rgba(172,190,214,.62);
+  border-top-color: rgba(126, 196, 255, .86);
+  border-right-color: rgba(126, 196, 255, .86);
 }
 .fdGaugeValue{
   position: absolute;
@@ -417,14 +409,14 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   place-items: center;
   font-size: 38px;
   font-weight: 700;
+  color: #31445a;
 }
 .fdDial{
   width: 180px;
   height: 180px;
   margin: 18px auto 12px;
   border-radius: 999px;
-  background:
-    conic-gradient(from 220deg, rgba(145,228,233,.8), rgba(235,184,117,.9), rgba(145,228,233,.8));
+  background: conic-gradient(from 220deg, rgba(130,214,255,.7), rgba(178,215,255,.9), rgba(165, 247, 204, .7));
   display: grid;
   place-items: center;
 }
@@ -434,8 +426,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: rgba(248,240,232,.95);
-  color: #493026;
+  background: rgba(248,251,255,.95);
+  color: #34465a;
   font-weight: 700;
   font-size: 28px;
 }
@@ -443,52 +435,22 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   margin-top: 8px;
   display: flex;
   justify-content: space-between;
-  color: rgba(255,246,239,.94);
+  color: #5b697d;
 }
 .fdMetricLine strong{
-  color: #fff;
+  color: #2d3d50;
   font-weight: 700;
 }
-.fdHeroPanel{
-  padding: 20px;
-  background:
-    linear-gradient(160deg, rgba(255,255,255,.92), rgba(247,243,236,.9)),
-    var(--fd-panel);
-  border: 1px solid var(--fd-border);
-  box-shadow: var(--fd-shadow);
-}
 .fdEyebrow{
-  color: var(--fd-gold);
+  color: #6f7c90;
   font-size: 12px;
   letter-spacing: .12em;
   text-transform: uppercase;
-}
-.fdLead{
-  color: var(--fd-ink-soft);
-  max-width: 68ch;
 }
 .fdTwoCol{
   display:grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-}
-.fdMetricGrid{
-  display:grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.fdMetric{
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px solid var(--fd-border);
-  background: rgba(255,255,255,.92);
-}
-.fdMetricValue{
-  margin-top: 8px;
-  font-size: 26px;
-  line-height: 1.1;
-  font-weight: 700;
-  font-family: var(--font-serif, ui-serif, "Noto Serif TC", serif);
 }
 .fdActionGrid{
   display:grid;
@@ -497,7 +459,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdActionCard{
   padding: 16px;
-  color: #fff7ef;
+  color: var(--fd-ink);
   transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
 }
 .fdActionCard::before{
@@ -507,20 +469,20 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   right: 10px;
   top: 8px;
   height: 30%;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0));
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0));
   pointer-events: none;
 }
 .fdActionCard:hover{
   text-decoration: none;
   transform: translateY(-2px);
-  border-color: rgba(255,255,255,.40);
-  box-shadow: 0 22px 40px rgba(19, 9, 7, .26);
+  border-color: rgba(176, 198, 222, .95);
+  box-shadow: 0 16px 28px rgba(139,157,187,.22);
 }
 .fdActionCard:focus-visible{
   outline: none;
-  border-color: rgba(255,255,255,.4);
-  box-shadow: 0 0 0 4px rgba(255,255,255,.14), 0 22px 40px rgba(19, 9, 7, .28);
+  border-color: rgba(145, 192, 237, .95);
+  box-shadow: 0 0 0 4px rgba(186,221,255,.5), 0 16px 28px rgba(139,157,187,.22);
 }
 .fdActionHead{
   display:flex;
@@ -528,31 +490,26 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   justify-content: space-between;
 }
 .fdActionCard .kvLabel{
-  color: rgba(255,239,224,.78);
+  color: #6b778b;
 }
 .fdArrow{
-  color: var(--fd-gold);
+  color: #7da2cf;
   font-size: 13px;
 }
 .fdActionTitle{
   margin: 8px 0 0;
   font-size: 21px;
   line-height: 1.2;
-  font-family: "SF Pro Display", "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif;
   font-weight: 590;
+  color: #2c3d52;
 }
 .fdActionCard .sub{
-  color: rgba(255,239,224,.86);
+  color: #5b697d;
 }
 .fdDataGrid{
   display:grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 14px;
-}
-.fdSoftPanel{
-  padding: 14px;
-  border: 1px solid var(--fd-border);
-  background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(247,243,236,.68));
 }
 .fdEnter{
   animation: fdFadeUp .42s cubic-bezier(.2,.7,.2,1) both;
@@ -587,7 +544,6 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     font-size: 22px;
   }
   .fdTwoCol{ grid-template-columns: 1fr; }
-  .fdMetricGrid{ grid-template-columns: 1fr; }
   .fdActionGrid{ grid-template-columns: 1fr; }
   .fdDataGrid{ grid-template-columns: 1fr; }
 }
