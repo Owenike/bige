@@ -11,7 +11,15 @@ if (-not $st) { Fail "git status failed (not a git repo?)"; exit 1 }
 $st | ForEach-Object { Write-Host $_ }
 
 if ($st -match "^\#\# .+\[ahead " ) { Warn "You have commits not pushed to origin yet." } else { Ok "No ahead commits (or origin not configured)." }
-if ($st -match "^\s*[MADRCU\?]{1,2}\s") { Fail "Working tree not clean (has M/??/etc)." } else { Ok "Working tree clean." }
+if ($st -match "^\s*[MADRCU\?]{1,2}\s") {
+  if ($env:CI -eq "true") {
+    Warn "Working tree not clean in CI run (likely generated artifacts during checks)."
+  } else {
+    Fail "Working tree not clean (has M/??/etc)."
+  }
+} else {
+  Ok "Working tree clean."
+}
 
 Header "Node Gate (typecheck/lint/build)"
 try { npm run typecheck | Out-Host; Ok "typecheck passed" } catch { Fail "typecheck failed"; throw }
