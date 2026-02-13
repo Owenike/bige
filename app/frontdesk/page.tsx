@@ -73,25 +73,7 @@ export default function FrontdeskPortalPage() {
   );
 
   return (
-    <main
-      ref={sceneRef}
-      className="fdGlassScene"
-      onMouseMove={(e) => {
-        const el = sceneRef.current;
-        if (!el) return;
-        const rect = el.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        el.style.setProperty("--fd-mx", `${x}px`);
-        el.style.setProperty("--fd-my", `${y}px`);
-      }}
-      onMouseLeave={() => {
-        const el = sceneRef.current;
-        if (!el) return;
-        el.style.setProperty("--fd-mx", "50%");
-        el.style.setProperty("--fd-my", "40%");
-      }}
-    >
+    <main ref={sceneRef} className="fdGlassScene">
       <section className="fdGlassBackdrop fdEnter">
         <div className="fdGlassTop">
           <article className="fdGlassPanel fdGlassTall">
@@ -149,7 +131,12 @@ export default function FrontdeskPortalPage() {
         <section style={{ marginTop: 14 }}>
           <div className="fdActionGrid">
             {t.cards.map((card, idx) => (
-              <a key={card.href} href={card.href} className="fdActionCard fdEnter" style={{ animationDelay: `${120 + idx * 60}ms` }}>
+              <a
+                key={card.href}
+                href={card.href}
+                className="fdGlassSubPanel fdActionCard fdEnter"
+                style={{ animationDelay: `${120 + idx * 60}ms` }}
+              >
                 <div className="fdActionHead">
                   <span className="kvLabel">{card.tag}</span>
                   <span className="fdArrow">{">>"}</span>

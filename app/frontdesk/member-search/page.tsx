@@ -126,7 +126,7 @@ export default function FrontdeskMemberSearchPage() {
         {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
 
         <section className="fdTwoCol">
-          <div className="fdGlassPanel">
+          <div className="fdGlassSubPanel">
             <h2 className="sectionTitle">{t.findTitle}</h2>
             <p className="fdGlassText" style={{ marginTop: 6 }}>
               {t.findHint}
@@ -139,7 +139,7 @@ export default function FrontdeskMemberSearchPage() {
             </form>
           </div>
 
-          <div className="fdGlassPanel">
+          <div className="fdGlassSubPanel">
             <h2 className="sectionTitle">{t.createTitle}</h2>
             <form onSubmit={createMember} className="field">
               <label className="fdGlassText" style={{ marginTop: 0 }}>
@@ -159,12 +159,12 @@ export default function FrontdeskMemberSearchPage() {
           <h2 className="sectionTitle">{t.resultTitle}</h2>
           <div className="fdActionGrid">
             {items.length === 0 ? (
-              <div className="fdGlassPanel">
+              <div className="fdGlassSubPanel">
                 <div className="kvValue">{t.empty}</div>
               </div>
             ) : (
               items.map((item) => (
-                <article key={item.id} className="fdGlassPanel fdActionCard">
+                <article key={item.id} className="fdGlassSubPanel fdActionCard">
                   <h3 className="fdActionTitle" style={{ fontSize: 20 }}>
                     {item.full_name}
                   </h3>

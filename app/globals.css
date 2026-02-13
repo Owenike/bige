@@ -257,8 +257,6 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
   padding: 0;
-  --fd-mx: 50%;
-  --fd-my: 40%;
   --fd-scroll: 0px;
   font-family: "SF Pro Display", "SF Pro Text", "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif;
   letter-spacing: 0.01em;
@@ -270,13 +268,14 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   padding: 20px 24px 24px;
   min-height: calc(100vh - 116px);
   background:
-    radial-gradient(1100px 460px at 0% 0%, rgba(255, 228, 198, .36), transparent 58%),
-    radial-gradient(900px 520px at 100% 20%, rgba(170, 116, 86, .26), transparent 64%),
-    linear-gradient(135deg, #6b4a3b 0%, #a27a61 44%, #5f4438 100%);
+    linear-gradient(135deg, rgba(73, 48, 37, .78), rgba(106, 69, 49, .62)),
+    url("/frontdesk-glass-bg.svg");
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
   background-position:
-    0 calc(var(--fd-scroll) * -0.03),
-    0 calc(var(--fd-scroll) * -0.06),
-    0 0;
+    0 0,
+    center calc(var(--fd-scroll) * -0.04);
   box-shadow: 0 32px 70px rgba(25, 14, 10, .36);
 }
 .fdGlassBackdrop::before{
@@ -285,18 +284,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   inset: 0;
   background:
     radial-gradient(640px 180px at 70% 95%, rgba(248, 157, 70, .20), transparent 70%),
-    radial-gradient(620px 200px at 20% 4%, rgba(255, 236, 208, .24), transparent 66%),
-    radial-gradient(260px 180px at var(--fd-mx) var(--fd-my), rgba(255,255,255,.22), transparent 72%);
-  pointer-events: none;
-}
-.fdGlassBackdrop::after{
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(240px 140px at calc(var(--fd-mx) - 20px) calc(var(--fd-my) - 12px), rgba(146, 223, 255, .12), transparent 72%),
-    radial-gradient(260px 160px at calc(var(--fd-mx) + 22px) calc(var(--fd-my) + 14px), rgba(255, 188, 122, .12), transparent 74%);
-  mix-blend-mode: screen;
+    radial-gradient(620px 200px at 20% 4%, rgba(255, 236, 208, .24), transparent 66%);
   pointer-events: none;
 }
 .fdGlassTop{
@@ -323,6 +311,20 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     inset 0 .5px 0 rgba(255,255,255,.46),
     inset 0 -8px 18px rgba(255,255,255,.05),
     0 14px 30px rgba(22, 11, 8, .18);
+}
+.fdGlassSubPanel{
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,.22);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.08) 48%, rgba(255,255,255,.05)),
+    linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.03));
+  backdrop-filter: saturate(1.28) blur(16px);
+  -webkit-backdrop-filter: saturate(1.28) blur(16px);
+  box-shadow:
+    inset 0 .5px 0 rgba(255,255,255,.36),
+    0 10px 22px rgba(22, 11, 8, .14);
 }
 .fdGlassPanel::after{
   content: "";
@@ -494,16 +496,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 12px;
 }
 .fdActionCard{
-  position: relative;
-  overflow: hidden;
   padding: 16px;
-  border-radius: 24px;
-  border: 1px solid rgba(255,255,255,.28);
-  background:
-    linear-gradient(140deg, rgba(255,255,255,.25), rgba(255,255,255,.10) 50%, rgba(255,255,255,.06)),
-    linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.05));
-  backdrop-filter: saturate(1.35) blur(20px);
-  -webkit-backdrop-filter: saturate(1.35) blur(20px);
   color: #fff7ef;
   transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
 }

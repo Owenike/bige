@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useMemo, useState } from "react";
+import { useI18n } from "../../i18n-provider";
 
 interface MemberSearchItem {
   id: string;
@@ -23,7 +24,7 @@ interface ManualAllowResponse {
 function safeParseApiError(payload: any) {
   const raw = typeof payload?.error === "string" ? payload.error : "";
   if (!raw) return "Request failed";
-  if (raw === "reason_required") return "請輸入原因";
+  if (raw === "reason_required") return "reason is required";
   if (raw === "audit_logs_missing") return "Audit log table missing (server misconfigured)";
   if (raw === "Forbidden") return "Forbidden";
   if (raw === "Unauthorized") return "Unauthorized";
@@ -31,6 +32,9 @@ function safeParseApiError(payload: any) {
 }
 
 export function ManualAllowPanel() {
+  const { locale } = useI18n();
+  const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
+
   const [query, setQuery] = useState("");
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
@@ -43,6 +47,52 @@ export function ManualAllowPanel() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitOk, setSubmitOk] = useState<string | null>(null);
   const [result, setResult] = useState<ManualAllowResponse | null>(null);
+
+  const t = useMemo(
+    () =>
+      lang === "zh"
+        ? {
+            title: "手動放行",
+            hint: "僅限特殊情境，操作會寫入 audit log。",
+            searchPlaceholder: "姓名 / 電話",
+            searchBtn: "查詢會員",
+            searchBusy: "查詢中...",
+            memberSelect: "選擇會員",
+            deviceId: "deviceId（選填）",
+            reasonPlaceholder: "放行原因（必填）",
+            submit: "執行手動放行",
+            submitBusy: "送出中...",
+            success: "已完成手動放行與紀錄",
+            result: "處理結果",
+            membership: "會籍",
+            today: "今日",
+            reason: "原因",
+            unknown: "未知",
+            active: "有效",
+            inactive: "無效",
+          }
+        : {
+            title: "Manual Allow",
+            hint: "Use for exceptional cases only. Action will be written to audit log.",
+            searchPlaceholder: "name / phone",
+            searchBtn: "Search Member",
+            searchBusy: "Searching...",
+            memberSelect: "Select member",
+            deviceId: "deviceId (optional)",
+            reasonPlaceholder: "Reason (required)",
+            submit: "Run Manual Allow",
+            submitBusy: "Submitting...",
+            success: "Manual allow completed and logged",
+            result: "Result",
+            membership: "Membership",
+            today: "Today",
+            reason: "Reason",
+            unknown: "unknown",
+            active: "active",
+            inactive: "inactive",
+          },
+    [lang],
+  );
 
   const canSubmit = useMemo(() => !!memberId && !!reason.trim() && !submitLoading, [memberId, reason, submitLoading]);
 
@@ -82,7 +132,7 @@ export function ManualAllowPanel() {
       const payload = await res.json();
       if (!res.ok) throw new Error(safeParseApiError(payload));
       setResult(payload as ManualAllowResponse);
-      setSubmitOk("已手動放行並寫入稽核");
+      setSubmitOk(t.success);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Manual allow failed");
     } finally {
@@ -91,117 +141,83 @@ export function ManualAllowPanel() {
   }
 
   return (
-    <section className="mt-6 rounded-lg border p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">手動放行</h2>
-        <p className="text-xs text-gray-600">需要原因，並會寫入 audit log</p>
+    <section className="fdGlassSubPanel" style={{ marginTop: 14, padding: 14 }}>
+      <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
+        <h2 className="sectionTitle" style={{ margin: 0 }}>{t.title}</h2>
+        <p className="fdGlassText" style={{ marginTop: 0, fontSize: 12 }}>{t.hint}</p>
       </div>
 
-      {membersError ? <p className="mt-3 text-sm text-red-600">{membersError}</p> : null}
-      {submitError ? <p className="mt-3 text-sm text-red-600">{submitError}</p> : null}
-      {submitOk ? <p className="mt-3 text-sm text-green-700">{submitOk}</p> : null}
+      {membersError ? <p className="error" style={{ marginTop: 8 }}>{membersError}</p> : null}
+      {submitError ? <p className="error" style={{ marginTop: 8 }}>{submitError}</p> : null}
+      {submitOk ? <p className="fdGlassText" style={{ marginTop: 8, color: "#d9ffe0" }}>{submitOk}</p> : null}
 
-      <div className="mt-3 grid gap-2 md:grid-cols-3">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="電話 / 姓名"
-          className="rounded border px-3 py-2 text-sm md:col-span-2"
-        />
-        <button
-          type="button"
-          className="rounded border px-3 py-2 text-sm"
-          onClick={() => void searchMembers()}
-          disabled={membersLoading}
-        >
-          {membersLoading ? "搜尋中..." : "搜尋會員"}
-        </button>
+      <div className="fdTwoCol" style={{ marginTop: 8 }}>
+        <div style={{ display: "grid", gap: 8 }}>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t.searchPlaceholder}
+            className="input"
+          />
+          <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => void searchMembers()} disabled={membersLoading}>
+            {membersLoading ? t.searchBusy : t.searchBtn}
+          </button>
+        </div>
+        <div style={{ display: "grid", gap: 8 }}>
+          <select value={memberId} onChange={(e) => setMemberId(e.target.value)} className="input" required>
+            <option value="">{t.memberSelect}</option>
+            {options.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.full_name} | {m.phone || "-"} | {m.id.slice(0, 8)}
+              </option>
+            ))}
+          </select>
+          <input value={deviceId} onChange={(e) => setDeviceId(e.target.value)} placeholder={t.deviceId} className="input" />
+        </div>
       </div>
 
-      <div className="mt-3 grid gap-2 md:grid-cols-3">
-        <select
-          value={memberId}
-          onChange={(e) => setMemberId(e.target.value)}
-          className="rounded border px-3 py-2 text-sm md:col-span-2"
-          required
-        >
-          <option value="">選擇會員</option>
-          {options.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.full_name} | {m.phone || "-"} | {m.id.slice(0, 8)}
-            </option>
-          ))}
-        </select>
-        <input
-          value={deviceId}
-          onChange={(e) => setDeviceId(e.target.value)}
-          placeholder="deviceId (optional)"
-          className="rounded border px-3 py-2 text-sm"
-        />
-      </div>
-
-      <form className="mt-3" onSubmit={submit}>
+      <form style={{ marginTop: 8 }} onSubmit={submit}>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="手動放行原因 (必填)"
-          className="min-h-[84px] w-full rounded border px-3 py-2 text-sm"
+          placeholder={t.reasonPlaceholder}
+          className="input"
+          style={{ minHeight: 92 }}
           required
         />
-
-        <button type="submit" className="mt-3 rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50" disabled={!canSubmit}>
-          {submitLoading ? "提交中..." : "手動放行"}
+        <button type="submit" className="fdPillBtn" style={{ marginTop: 10 }} disabled={!canSubmit}>
+          {submitLoading ? t.submitBusy : t.submit}
         </button>
       </form>
 
       {result ? (
-        <div className="mt-4 rounded border bg-gray-50 p-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              {result.member.photoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={result.member.photoUrl} alt="member photo" className="h-12 w-12 rounded object-cover" />
-              ) : (
-                <div className="h-12 w-12 rounded bg-gray-200" />
-              )}
-              <div className="min-w-0">
-                <p className="truncate font-medium">{result.member.fullName || "(no name)"}</p>
-                <p className="mt-1 text-xs text-gray-600">phone last4: {result.member.phoneLast4 || "-"}</p>
-                <p className="mt-1 text-xs text-gray-600">
-                  memberId: <code>{result.member.id}</code>
-                </p>
-              </div>
+        <div className="fdTwoCol" style={{ marginTop: 12 }}>
+          <div className="fdGlassSubPanel" style={{ padding: 12 }}>
+            <div className="actions" style={{ marginTop: 0, justifyContent: "space-between" }}>
+              <strong>{t.result}</strong>
+              <strong>{result.result.result}</strong>
             </div>
-            <div className="text-right text-xs text-gray-700">
-              <p className="font-semibold">{result.result.result}</p>
-              <p className="mt-1 text-gray-600">method: {result.result.method}</p>
-            </div>
+            <p className="fdGlassText" style={{ marginTop: 6 }}>method: {result.result.method}</p>
+            <p className="fdGlassText" style={{ marginTop: 6 }}>
+              {result.member.fullName || "(no name)"} | {result.member.phoneLast4 || "-"}
+            </p>
+            <p className="fdGlassText" style={{ marginTop: 6 }}>
+              memberId: <code>{result.member.id}</code>
+            </p>
           </div>
 
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <div className="rounded border bg-white p-3">
-              <p className="text-xs font-semibold text-gray-700">Membership</p>
-              <p className="mt-2 text-sm">
-                monthly:{" "}
-                {result.membership.monthly.expiresAt ? new Date(result.membership.monthly.expiresAt).toLocaleDateString() : "-"}
-                {" | "}
-                {result.membership.monthly.isActive === null ? "unknown" : result.membership.monthly.isActive ? "active" : "inactive"}
-              </p>
-              <p className="mt-2 text-xs text-gray-600">passes: {result.membership.passes.length}</p>
-            </div>
-            <div className="rounded border bg-white p-3">
-              <p className="text-xs font-semibold text-gray-700">Today</p>
-              <p className="mt-2 text-sm">checkins: {result.today.count}</p>
-              <p className="mt-1 text-xs text-gray-600">
-                recent:{" "}
-                {result.recentCheckin ? new Date(result.recentCheckin.checkedAt).toLocaleString() : "-"}
-              </p>
-            </div>
-            <div className="rounded border bg-white p-3 md:col-span-2">
-              <p className="text-xs font-semibold text-gray-700">Reason</p>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-gray-800">{result.result.reason}</p>
-              {result.member.note ? <p className="mt-2 text-xs text-gray-600">note: {result.member.note}</p> : null}
-            </div>
+          <div className="fdGlassSubPanel" style={{ padding: 12 }}>
+            <p className="fdGlassText" style={{ marginTop: 0 }}>{t.membership}</p>
+            <p className="fdGlassText">
+              monthly: {result.membership.monthly.expiresAt ? new Date(result.membership.monthly.expiresAt).toLocaleDateString() : "-"}
+              {" | "}
+              {result.membership.monthly.isActive === null ? t.unknown : result.membership.monthly.isActive ? t.active : t.inactive}
+            </p>
+            <p className="fdGlassText">passes: {result.membership.passes.length}</p>
+            <p className="fdGlassText">{t.today}: {result.today.count}</p>
+            <p className="fdGlassText" style={{ marginTop: 8 }}>
+              {t.reason}: {result.result.reason}
+            </p>
           </div>
         </div>
       ) : null}

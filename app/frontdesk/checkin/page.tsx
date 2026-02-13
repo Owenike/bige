@@ -234,7 +234,7 @@ export default function FrontdeskCheckinPage() {
         </section>
 
         <section className="fdTwoCol">
-          <div className="fdGlassPanel">
+          <div className="fdGlassSubPanel">
             <h2 className="sectionTitle">{t.cameraTitle}</h2>
             <video ref={videoRef} className="input" style={{ marginTop: 8, minHeight: 260, background: "#111", borderColor: "rgba(255,255,255,.25)" }} muted playsInline />
             <p className="fdGlassText" style={{ marginTop: 8 }}>
@@ -243,7 +243,7 @@ export default function FrontdeskCheckinPage() {
             {cameraError ? <p className="error" style={{ marginTop: 8 }}>{cameraError}</p> : null}
           </div>
 
-          <div className="fdGlassPanel">
+          <div className="fdGlassSubPanel">
             <h2 className="sectionTitle">{t.manualTitle}</h2>
             <form
               className="field"
@@ -263,7 +263,7 @@ export default function FrontdeskCheckinPage() {
         <ManualAllowPanel />
 
       {result ? (
-        <section className="fdGlassPanel" style={{ marginTop: 14 }}>
+        <section className="fdGlassSubPanel" style={{ marginTop: 14 }}>
           <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
             <h2 className="sectionTitle" style={{ margin: 0 }}>
               {t.resultTitle}
