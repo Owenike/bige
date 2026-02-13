@@ -12,13 +12,16 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   const memberResult = await auth.supabase
     .from("members")
-    .select("id")
+    .select("id, store_id")
     .eq("id", id)
     .eq("tenant_id", auth.context.tenantId)
     .maybeSingle();
 
   if (memberResult.error) return NextResponse.json({ error: memberResult.error.message }, { status: 500 });
   if (!memberResult.data) return NextResponse.json({ error: "Member not found" }, { status: 404 });
+  if (auth.context.role === "frontdesk" && auth.context.branchId && String(memberResult.data.store_id || "") !== auth.context.branchId) {
+    return NextResponse.json({ error: "Forbidden member access for current branch" }, { status: 403 });
+  }
 
   const nowIso = new Date().toISOString();
   const { data, error } = await auth.supabase

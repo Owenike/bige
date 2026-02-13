@@ -1,25 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireProfile } from "../../../lib/auth-context";
 import { DEFAULT_SERVICES } from "../../../lib/services";
-import { createSupabaseServerClient } from "../../../lib/supabase/server";
 
 export async function GET(request: Request) {
-  const supabase = await createSupabaseServerClient(request);
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const profileResult = await supabase.from("profiles").select("tenant_id").eq("id", user.id).maybeSingle();
-  const tenantIdFromProfile = (profileResult.data as any)?.tenant_id ? String((profileResult.data as any).tenant_id) : null;
-
-  const memberResult = tenantIdFromProfile
-    ? { data: null as any, error: null as any }
-    : await supabase.from("members").select("tenant_id").eq("auth_user_id", user.id).maybeSingle();
-  const tenantIdFromMember = (memberResult.data as any)?.tenant_id ? String((memberResult.data as any).tenant_id) : null;
-
-  const tenantId = tenantIdFromProfile || tenantIdFromMember;
+  const auth = await requireProfile(["platform_admin", "manager", "frontdesk", "coach", "member"], request);
+  if (!auth.ok) return auth.response;
+  const supabase = auth.supabase;
+  const tenantId = auth.context.tenantId;
   if (!tenantId) return NextResponse.json({ items: DEFAULT_SERVICES });
 
   const { data, error: servicesError } = await supabase
@@ -46,4 +33,3 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ items: items.length ? items : DEFAULT_SERVICES });
 }
-

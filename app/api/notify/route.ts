@@ -23,6 +23,23 @@ export async function POST(request: Request) {
   if (!tenantId && auth.context.role !== "platform_admin") {
     return NextResponse.json({ error: "Missing tenant context" }, { status: 400 });
   }
+  if (auth.context.role === "frontdesk" && auth.context.branchId) {
+    if (!memberId) {
+      return NextResponse.json({ error: "memberId is required for frontdesk notifications" }, { status: 400 });
+    }
+    const memberResult = await auth.supabase
+      .from("members")
+      .select("id, store_id")
+      .eq("id", memberId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (memberResult.error || !memberResult.data) {
+      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
+    if (String(memberResult.data.store_id || "") !== auth.context.branchId) {
+      return NextResponse.json({ error: "Forbidden member access for current branch" }, { status: 403 });
+    }
+  }
 
   const notifyResult = await sendNotification({ channel, target, message, templateKey });
 

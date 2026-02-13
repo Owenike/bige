@@ -1,6 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createSupabaseServerClient } from "../../../../lib/supabase/server";
+import { requireProfile } from "../../../../lib/auth-context";
 
 const BodySchema = z
   .object({
@@ -31,13 +31,10 @@ function normalizeOptionalText(input: string): string | null {
 }
 
 export async function PATCH(request: Request) {
-  const supabase = await createSupabaseServerClient(request);
-
-  const authResult = await supabase.auth.getUser();
-  const user = authResult.data.user;
-  if (authResult.error || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireProfile(["member"], request);
+  if (!auth.ok) return auth.response;
+  const supabase = auth.supabase;
+  const userId = auth.context.userId;
 
   const raw: unknown = await request.json().catch(() => null);
   const parsed = BodySchema.safeParse(raw);
@@ -51,7 +48,7 @@ export async function PATCH(request: Request) {
     .select(
       "id, tenant_id, store_id, full_name, phone, photo_url, notes, consent_status, consent_signed_at, auth_user_id",
     )
-    .eq("auth_user_id", user.id)
+    .eq("auth_user_id", userId)
     .maybeSingle();
 
   if (memberResult.error || !memberResult.data) {
@@ -89,7 +86,7 @@ export async function PATCH(request: Request) {
   const updatedResult = await supabase
     .from("members")
     .update(update)
-    .eq("auth_user_id", user.id)
+    .eq("auth_user_id", userId)
     .select(
       "id, tenant_id, store_id, full_name, phone, photo_url, notes, consent_status, consent_signed_at, auth_user_id",
     )
@@ -101,4 +98,3 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json({ member: updatedResult.data });
 }
-

@@ -55,6 +55,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "memberId and tenant context are required" }, { status: 400 });
   }
 
+  if (auth.context.role === "frontdesk" && auth.context.branchId) {
+    const memberResult = await auth.supabase
+      .from("members")
+      .select("id, store_id")
+      .eq("id", memberId)
+      .eq("tenant_id", auth.context.tenantId)
+      .maybeSingle();
+    if (memberResult.error || !memberResult.data) {
+      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
+    if (String(memberResult.data.store_id || "") !== auth.context.branchId) {
+      return NextResponse.json({ error: "Forbidden member access for current branch" }, { status: 403 });
+    }
+  }
+
   const rpcResult = await auth.supabase.rpc("redeem_session", {
     p_tenant_id: auth.context.tenantId,
     p_booking_id: bookingId,

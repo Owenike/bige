@@ -41,8 +41,12 @@ export async function proxy(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
   if (!url || !anonKey) {
-    // Fail open here (pages will show API errors) rather than breaking the whole site at edge.
-    return response;
+    const misconfiguredUrl = request.nextUrl.clone();
+    misconfiguredUrl.pathname = "/forbidden";
+    misconfiguredUrl.search = "";
+    const redirect = NextResponse.redirect(misconfiguredUrl);
+    redirect.headers.set(REQUEST_ID_HEADER, requestId);
+    return redirect;
   }
 
   const supabase = createServerClient(url, anonKey, {

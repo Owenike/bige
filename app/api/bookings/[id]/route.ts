@@ -42,6 +42,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (auth.context.role === "coach") {
     query = query.eq("coach_id", auth.context.userId);
   }
+  if (auth.context.role === "frontdesk" && auth.context.branchId) {
+    query = query.eq("branch_id", auth.context.branchId);
+  }
 
   const { data, error } = await query.maybeSingle();
 

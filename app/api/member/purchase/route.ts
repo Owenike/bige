@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireProfile } from "../../../../lib/auth-context";
 import { getPurchasableProduct } from "../../../../lib/products";
-import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient(request);
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireProfile(["member"], request);
+  if (!auth.ok) return auth.response;
+  const supabase = auth.supabase;
+  const userId = auth.context.userId;
 
   const body = await request.json().catch(() => null);
   const productCode = typeof body?.productCode === "string" ? body.productCode : "";
@@ -23,7 +18,7 @@ export async function POST(request: Request) {
   const memberResult = await supabase
     .from("members")
     .select("id, tenant_id, store_id")
-    .eq("auth_user_id", user.id)
+    .eq("auth_user_id", userId)
     .maybeSingle();
 
   if (memberResult.error || !memberResult.data) {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { requireProfile } from "../../../../lib/auth-context";
 import { issueEntryToken } from "../../../../lib/entry-token";
 import { ENTRY_SCHEMA } from "../../../../lib/entry-schema";
-import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 import { httpLogBase, logEvent } from "../../../../lib/observability";
 import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
 
@@ -15,20 +15,17 @@ export async function POST(request: Request) {
   const t0 = Date.now();
   const base = httpLogBase(request);
 
-  const supabase = await createSupabaseServerClient(request);
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  const auth = await requireProfile(["member"], request);
+  if (!auth.ok) {
     logEvent("info", { type: "http", action: "entry_issue", ...base, status: 401, durationMs: Date.now() - t0 });
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return auth.response;
   }
+  const supabase = auth.supabase;
+  const userId = auth.context.userId;
 
   // Limit token issuance per user and per IP to reduce abuse.
   const ip = base.ip || "unknown";
-  const rlUser = rateLimitFixedWindow({ key: `entry_issue:user:${user.id}`, limit: 30, windowMs: 60 * 1000 });
+  const rlUser = rateLimitFixedWindow({ key: `entry_issue:user:${userId}`, limit: 30, windowMs: 60 * 1000 });
   const rlIp = rateLimitFixedWindow({ key: `entry_issue:ip:${ip}`, limit: 60, windowMs: 60 * 1000 });
   if (!rlUser.ok || !rlIp.ok) {
     const retryAfterSec = Math.max(rlUser.retryAfterSec, rlIp.retryAfterSec);
@@ -36,7 +33,7 @@ export async function POST(request: Request) {
       type: "rate_limit",
       action: "entry_issue",
       ...base,
-      userId: user.id,
+      userId,
       status: 429,
       durationMs: Date.now() - t0,
       retryAfterSec,
@@ -60,7 +57,7 @@ export async function POST(request: Request) {
   const { data: member, error: memberError } = await supabase
     .from(ENTRY_SCHEMA.membersTable)
     .select("id, tenant_id, store_id")
-    .eq(ENTRY_SCHEMA.authUserIdColumn, user.id)
+    .eq(ENTRY_SCHEMA.authUserIdColumn, userId)
     .maybeSingle();
 
   const typedMember = (member as MemberTokenSourceRow | null) ?? null;
@@ -69,7 +66,7 @@ export async function POST(request: Request) {
       type: "http",
       action: "entry_issue",
       ...base,
-      userId: user.id,
+      userId,
       status: 404,
       durationMs: Date.now() - t0,
     });
@@ -78,11 +75,11 @@ export async function POST(request: Request) {
 
   const storeId = requestedStoreId ?? typedMember.store_id;
   if (!storeId) {
-    logEvent("info", { type: "http", action: "entry_issue", ...base, userId: user.id, status: 400, durationMs: Date.now() - t0 });
+    logEvent("info", { type: "http", action: "entry_issue", ...base, userId, status: 400, durationMs: Date.now() - t0 });
     return NextResponse.json({ error: "Missing store_id" }, { status: 400 });
   }
   if (requestedStoreId && typedMember.store_id && requestedStoreId !== typedMember.store_id) {
-    logEvent("info", { type: "http", action: "entry_issue", ...base, userId: user.id, status: 403, durationMs: Date.now() - t0 });
+    logEvent("info", { type: "http", action: "entry_issue", ...base, userId, status: 403, durationMs: Date.now() - t0 });
     return NextResponse.json({ error: "Forbidden store_id" }, { status: 403 });
   }
 
@@ -96,7 +93,7 @@ export async function POST(request: Request) {
     type: "http",
     action: "entry_issue",
     ...base,
-    userId: user.id,
+    userId,
     tenantId: typedMember.tenant_id,
     status: 200,
     durationMs: Date.now() - t0,
@@ -104,4 +101,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json(token);
 }
-

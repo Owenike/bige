@@ -38,12 +38,15 @@ export async function POST(request: Request) {
 
   const { data: order, error: orderError } = await auth.supabase
     .from("orders")
-    .select("id, amount, status, member_id")
+    .select("id, amount, status, member_id, branch_id")
     .eq("id", orderId)
     .eq("tenant_id", auth.context.tenantId)
     .maybeSingle();
 
   if (orderError || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  if (auth.context.role === "frontdesk" && auth.context.branchId && String(order.branch_id || "") !== auth.context.branchId) {
+    return NextResponse.json({ error: "Forbidden order access for current branch" }, { status: 403 });
+  }
   if (order.status === "cancelled" || order.status === "refunded") {
     return NextResponse.json({ error: "Order is closed" }, { status: 400 });
   }

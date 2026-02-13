@@ -1,23 +1,18 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "../../../../../../lib/supabase/server";
+import { requireProfile } from "../../../../../../lib/auth-context";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  const supabase = await createSupabaseServerClient(request);
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireProfile(["member"], request);
+  if (!auth.ok) return auth.response;
+  const supabase = auth.supabase;
+  const userId = auth.context.userId;
 
   const { id } = await context.params;
 
   const memberResult = await supabase
     .from("members")
     .select("id, tenant_id")
-    .eq("auth_user_id", user.id)
+    .eq("auth_user_id", userId)
     .maybeSingle();
 
   if (memberResult.error || !memberResult.data) {

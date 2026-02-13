@@ -13,12 +13,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const { data: order, error: fetchError } = await auth.supabase
     .from("orders")
-    .select("id, status")
+    .select("id, status, branch_id")
     .eq("id", id)
     .eq("tenant_id", auth.context.tenantId)
     .maybeSingle();
 
   if (fetchError || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  if (auth.context.role === "frontdesk" && auth.context.branchId && String(order.branch_id || "") !== auth.context.branchId) {
+    return NextResponse.json({ error: "Forbidden order access for current branch" }, { status: 403 });
+  }
   if (order.status === "cancelled" || order.status === "refunded") {
     return NextResponse.json({ error: "Order already closed" }, { status: 400 });
   }
