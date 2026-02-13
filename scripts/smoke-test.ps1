@@ -42,7 +42,12 @@ try {
 
   $member = Invoke-Status "$devUrl/member"
   Assert-Status -Actual $member.status -Allowed @(307, 308) -Label "GET /member (unauthenticated redirect)"
-  if (-not $member.location -or -not ($member.location -like "/login*")) {
+  $isLoginRedirect = $false
+  if ($member.location) {
+    $loc = [string]$member.location
+    $isLoginRedirect = ($loc -like "/login*") -or ($loc -like "*/login*")
+  }
+  if (-not $isLoginRedirect) {
     throw "[FAIL] /member redirect location is not /login*"
   }
   Write-Host ("[OK]   /member redirect location -> " + $member.location) -ForegroundColor Green
