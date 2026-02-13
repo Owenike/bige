@@ -18,27 +18,27 @@ export default function FrontdeskPortalPage() {
     () =>
       lang === "zh"
         ? {
-            badge: "Frontdesk",
-            title: "櫃檯作業中樞",
-            sub: "集中處理報到、建檔、收款與交班，讓櫃檯流程更快更穩定。",
-            primary: "開始報到掃碼",
-            secondary: "會員查詢 / 建檔",
-            statusTitle: "當前班務",
-            statusOpen: "班別狀態",
-            statusOpenValue: "已開班",
-            statusTasks: "待處理",
-            statusTasksValue: "3 項",
-            statusTip: "建議先完成報到與收款，再進行交班。",
+            badge: "FRONTDESK",
+            title: "\u6ac3\u6aaf\u4f5c\u696d\u4e2d\u6a1e",
+            sub: "\u96c6\u4e2d\u8655\u7406\u5831\u5230\u3001\u5efa\u6a94\u3001\u6536\u6b3e\u8207\u4ea4\u73ed\uff0c\u8b93\u73ed\u52d9\u66f4\u7a69\u5b9a\u3002",
+            primary: "\u958b\u59cb\u5831\u5230\u6383\u78bc",
+            secondary: "\u6703\u54e1\u67e5\u8a62 / \u5efa\u6a94",
+            statusTitle: "\u7576\u524d\u73ed\u52d9",
+            statusOpen: "\u73ed\u5225\u72c0\u614b",
+            statusOpenValue: "\u5df2\u958b\u73ed",
+            statusTasks: "\u5f85\u8655\u7406",
+            statusTasksValue: "3 \u9805",
+            statusTip: "\u5efa\u8b70\u5148\u5b8c\u6210\u5831\u5230\u8207\u6536\u6b3e\uff0c\u518d\u9032\u884c\u4ea4\u73ed\u3002",
             cards: [
-              { href: "/frontdesk/checkin", title: "報到掃碼", desc: "掃描會員動態 QR，快速完成入場驗證。", tag: "ENTRY" },
-              { href: "/frontdesk/member-search", title: "會員查詢 / 建檔", desc: "搜尋會員資料，必要時直接建立新會員。", tag: "MEMBER" },
-              { href: "/frontdesk/orders/new", title: "新增訂單 + 收款", desc: "現場建立訂單並記錄付款流程。", tag: "PAYMENT" },
-              { href: "/frontdesk/bookings", title: "預約協助", desc: "協助修改、取消與安排時段。", tag: "BOOKING" },
-              { href: "/frontdesk/handover", title: "交班", desc: "整理班務摘要並完成交接。", tag: "SHIFT" },
+              { href: "/frontdesk/checkin", title: "\u5831\u5230\u6383\u78bc", desc: "\u6383\u63cf\u6703\u54e1\u52d5\u614b QR\uff0c\u5feb\u901f\u5b8c\u6210\u5165\u5834\u9a57\u8b49\u3002", tag: "ENTRY" },
+              { href: "/frontdesk/member-search", title: "\u6703\u54e1\u67e5\u8a62 / \u5efa\u6a94", desc: "\u67e5\u770b\u6703\u54e1\u8cc7\u6599\uff0c\u4e26\u53ef\u76f4\u63a5\u5efa\u7acb\u65b0\u6703\u54e1\u3002", tag: "MEMBER" },
+              { href: "/frontdesk/orders/new", title: "\u65b0\u589e\u8a02\u55ae + \u6536\u6b3e", desc: "\u73fe\u5834\u5efa\u7acb\u8a02\u55ae\u4e26\u8a18\u9304\u4ed8\u6b3e\u6d41\u7a0b\u3002", tag: "PAYMENT" },
+              { href: "/frontdesk/bookings", title: "\u9810\u7d04\u5354\u52a9", desc: "\u5354\u52a9\u8abf\u6574\u3001\u53d6\u6d88\u8207\u5b89\u6392\u6642\u6bb5\u3002", tag: "BOOKING" },
+              { href: "/frontdesk/handover", title: "\u4ea4\u73ed", desc: "\u6574\u7406\u672c\u73ed\u6458\u8981\uff0c\u5b8c\u6210\u4ea4\u63a5\u3002", tag: "SHIFT" },
             ] as ActionCard[],
           }
         : {
-            badge: "Frontdesk",
+            badge: "FRONTDESK",
             title: "Frontdesk Operations Hub",
             sub: "Handle check-in, member onboarding, payment, and handover from one place.",
             primary: "Start Check-in Scanner",
@@ -61,15 +61,15 @@ export default function FrontdeskPortalPage() {
   );
 
   return (
-    <main className="container">
+    <main className="container fdShell">
       <section className="hero">
         <div className="heroGrid">
-          <div className="card kv fdHero fdEnter">
-            <div className="kvLabel">{t.badge}</div>
+          <div className="card kv fdHeroPanel fdEnter">
+            <div className="fdEyebrow">{t.badge}</div>
             <h1 className="h1" style={{ marginTop: 10 }}>
               {t.title}
             </h1>
-            <p className="sub">{t.sub}</p>
+            <p className="sub fdLead">{t.sub}</p>
 
             <div className="actions">
               <a className="btn btnPrimary" href="/frontdesk/checkin">
@@ -81,18 +81,18 @@ export default function FrontdeskPortalPage() {
             </div>
           </div>
 
-          <div className="card kv fdStatus fdEnter">
+          <div className="card kv fdHeroPanel fdEnter">
             <h2 className="sectionTitle" style={{ marginBottom: 12 }}>
               {t.statusTitle}
             </h2>
-            <div className="fdStatusGrid">
-              <div className="card kv">
+            <div className="fdMetricGrid">
+              <div className="fdMetric">
                 <div className="kvLabel">{t.statusOpen}</div>
-                <div className="fdBig">{t.statusOpenValue}</div>
+                <div className="fdMetricValue">{t.statusOpenValue}</div>
               </div>
-              <div className="card kv">
+              <div className="fdMetric">
                 <div className="kvLabel">{t.statusTasks}</div>
-                <div className="fdBig">{t.statusTasksValue}</div>
+                <div className="fdMetricValue">{t.statusTasksValue}</div>
               </div>
             </div>
             <p className="sub" style={{ marginTop: 12 }}>
@@ -103,19 +103,19 @@ export default function FrontdeskPortalPage() {
       </section>
 
       <section style={{ marginTop: 8 }}>
-        <div className="fdCards">
+        <div className="fdActionGrid">
           {t.cards.map((card, idx) => (
             <a
               key={card.href}
               href={card.href}
-              className="card kv fdCard fdEnter"
+              className="card kv fdActionCard fdEnter"
               style={{ animationDelay: `${80 + idx * 60}ms` }}
             >
-              <div className="fdCardHead">
+              <div className="fdActionHead">
                 <span className="kvLabel">{card.tag}</span>
-                <span className="fdArrow">{"->"}</span>
+                <span className="fdArrow">{">>"}</span>
               </div>
-              <h3 className="fdCardTitle">{card.title}</h3>
+              <h3 className="fdActionTitle">{card.title}</h3>
               <p className="sub" style={{ marginTop: 8 }}>
                 {card.desc}
               </p>
@@ -123,93 +123,7 @@ export default function FrontdeskPortalPage() {
           ))}
         </div>
       </section>
-
-      <style jsx>{`
-        .fdHero {
-          padding: 20px;
-          background:
-            radial-gradient(360px 120px at 0% -10%, rgba(127, 185, 173, 0.2), transparent 65%),
-            radial-gradient(260px 90px at 100% 0%, rgba(202, 163, 106, 0.18), transparent 70%),
-            var(--surface);
-        }
-        .fdStatus {
-          padding: 20px;
-          background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 243, 238, 0.92));
-        }
-        .fdStatusGrid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 10px;
-        }
-        .fdBig {
-          margin-top: 8px;
-          font-size: 24px;
-          line-height: 1.1;
-          font-weight: 700;
-          font-family: var(--font-serif, ui-serif, "Noto Serif TC", serif);
-        }
-        .fdCards {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
-        }
-        .fdCard {
-          padding: 16px;
-          transition: transform 150ms ease, box-shadow 180ms ease, border-color 180ms ease;
-          text-decoration: none;
-        }
-        .fdCard:hover {
-          transform: translateY(-2px);
-          border-color: rgba(47, 122, 111, 0.28);
-          box-shadow: var(--shadow-1);
-          text-decoration: none;
-        }
-        .fdCard:focus-visible {
-          outline: none;
-          box-shadow: 0 0 0 4px rgba(127, 185, 173, 0.22), var(--shadow-1);
-          border-color: rgba(47, 122, 111, 0.35);
-        }
-        .fdCardHead {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        .fdArrow {
-          color: var(--muted);
-          font-size: 14px;
-          line-height: 1;
-        }
-        .fdCardTitle {
-          margin: 8px 0 0;
-          font-family: var(--font-serif, ui-serif, "Noto Serif TC", serif);
-          font-size: 22px;
-          line-height: 1.2;
-        }
-        .fdEnter {
-          animation: fdFadeUp 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-        }
-        @keyframes fdFadeUp {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @media (max-width: 900px) {
-          .fdCards {
-            grid-template-columns: 1fr;
-          }
-          .fdStatusGrid {
-            grid-template-columns: 1fr;
-          }
-          .fdCardTitle {
-            font-size: 20px;
-          }
-        }
-      `}</style>
     </main>
   );
 }
+

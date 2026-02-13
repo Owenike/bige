@@ -233,3 +233,122 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   font-size: 13px;
   padding: 16px 22px;
 }
+
+/* Frontdesk luxe tokens + components */
+:root{
+  --fd-panel: #fffdfa;
+  --fd-panel-2: #f7f3ec;
+  --fd-border: rgba(50, 42, 34, 0.12);
+  --fd-border-strong: rgba(50, 42, 34, 0.22);
+  --fd-ink-soft: #2e2a25;
+  --fd-gold: #b18954;
+  --fd-gold-soft: rgba(177, 137, 84, 0.18);
+  --fd-shadow: 0 18px 45px rgba(39, 30, 20, 0.08);
+}
+
+.fdShell{
+  background:
+    radial-gradient(900px 320px at 0% -14%, rgba(177,137,84,.14), transparent 60%),
+    radial-gradient(700px 280px at 100% 0%, rgba(127,185,173,.14), transparent 58%);
+}
+.fdHeroPanel{
+  padding: 20px;
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.92), rgba(247,243,236,.9)),
+    var(--fd-panel);
+  border: 1px solid var(--fd-border);
+  box-shadow: var(--fd-shadow);
+}
+.fdEyebrow{
+  color: var(--fd-gold);
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.fdLead{
+  color: var(--fd-ink-soft);
+  max-width: 68ch;
+}
+.fdTwoCol{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.fdMetricGrid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.fdMetric{
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--fd-border);
+  background: rgba(255,255,255,.92);
+}
+.fdMetricValue{
+  margin-top: 8px;
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 700;
+  font-family: var(--font-serif, ui-serif, "Noto Serif TC", serif);
+}
+.fdActionGrid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.fdActionCard{
+  padding: 16px;
+  border: 1px solid var(--fd-border);
+  background: var(--fd-panel);
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.fdActionCard:hover{
+  text-decoration: none;
+  transform: translateY(-2px);
+  border-color: var(--fd-border-strong);
+  box-shadow: var(--fd-shadow);
+}
+.fdActionCard:focus-visible{
+  outline: none;
+  border-color: rgba(47,122,111,.35);
+  box-shadow: 0 0 0 4px rgba(127,185,173,.2), var(--fd-shadow);
+}
+.fdActionHead{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+}
+.fdArrow{
+  color: var(--fd-gold);
+  font-size: 13px;
+}
+.fdActionTitle{
+  margin: 8px 0 0;
+  font-size: 22px;
+  line-height: 1.2;
+  font-family: var(--font-serif, ui-serif, "Noto Serif TC", serif);
+}
+.fdDataGrid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+.fdSoftPanel{
+  padding: 14px;
+  border: 1px solid var(--fd-border);
+  background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(247,243,236,.68));
+}
+.fdEnter{
+  animation: fdFadeUp .42s cubic-bezier(.2,.7,.2,1) both;
+}
+@keyframes fdFadeUp{
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 900px){
+  .fdTwoCol{ grid-template-columns: 1fr; }
+  .fdMetricGrid{ grid-template-columns: 1fr; }
+  .fdActionGrid{ grid-template-columns: 1fr; }
+  .fdDataGrid{ grid-template-columns: 1fr; }
+}

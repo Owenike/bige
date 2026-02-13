@@ -26,27 +26,26 @@ function membershipLabel(input: VerifyEntryResponse["membership"], lang: "zh" | 
   }
   switch (input.kind) {
     case "monthly":
-      return `月費會員 (到期: ${formatDateTime(input.monthlyExpiresAt)})`;
+      return `\u6708\u8cbb\u6703\u54e1 (\u5230\u671f: ${formatDateTime(input.monthlyExpiresAt)})`;
     case "single":
-      return `單堂方案 (剩餘: ${input.remainingSessions ?? 0})`;
+      return `\u55ae\u5802\u65b9\u6848 (\u5269\u9918: ${input.remainingSessions ?? 0})`;
     case "punch":
-      return `點數方案 (剩餘: ${input.remainingSessions ?? 0})`;
+      return `\u9ede\u6578\u65b9\u6848 (\u5269\u9918: ${input.remainingSessions ?? 0})`;
     default:
-      return "無有效會籍";
+      return "\u7121\u6709\u6548\u6703\u7c4d";
   }
 }
 
 function denyReasonLabel(reason: VerifyEntryResponse["reason"], lang: "zh" | "en") {
   if (!reason) return "-";
-
   const zh: Record<NonNullable<VerifyEntryResponse["reason"]>, string> = {
-    token_invalid: "QR 無效",
-    token_expired: "QR 已過期",
-    token_used: "QR 已使用",
-    rate_limited: "操作過於頻繁，請稍後再試",
-    member_not_found: "找不到會員",
-    already_checked_in_recently: "近期已完成報到",
-    no_valid_pass: "無可用會籍/堂數",
+    token_invalid: "QR \u7121\u6548",
+    token_expired: "QR \u5df2\u904e\u671f",
+    token_used: "QR \u5df2\u4f7f\u7528",
+    rate_limited: "\u64cd\u4f5c\u904e\u65bc\u983b\u7e41",
+    member_not_found: "\u627e\u4e0d\u5230\u6703\u54e1",
+    already_checked_in_recently: "\u8fd1\u671f\u5df2\u5831\u5230",
+    no_valid_pass: "\u7121\u53ef\u7528\u6703\u7c4d/\u5802\u6578",
   };
   const en: Record<NonNullable<VerifyEntryResponse["reason"]>, string> = {
     token_invalid: "Invalid QR token",
@@ -62,7 +61,7 @@ function denyReasonLabel(reason: VerifyEntryResponse["reason"], lang: "zh" | "en
 
 function decisionLabel(decision: VerifyEntryResponse["decision"], lang: "zh" | "en") {
   if (lang === "en") return decision === "allow" ? "Allow" : "Deny";
-  return decision === "allow" ? "放行" : "拒絕";
+  return decision === "allow" ? "\u653e\u884c" : "\u62d2\u7d55";
 }
 
 export default function FrontdeskCheckinPage() {
@@ -85,29 +84,29 @@ export default function FrontdeskCheckinPage() {
       lang === "zh"
         ? {
             badge: "ENTRY SCAN",
-            title: "櫃檯報到驗證",
-            sub: "掃描會員動態 QR，或手動貼上 token 進行驗證。",
-            cameraTitle: "鏡頭掃碼",
-            manualTitle: "手動驗證",
-            cameraReady: "鏡頭已就緒",
-            cameraPreparing: "正在初始化鏡頭...",
-            browserNotSupport: "目前瀏覽器不支援 BarcodeDetector，請改用手動貼 token 或使用新版 Chrome/Edge。",
-            cameraFailed: "無法啟用鏡頭。請確認權限、HTTPS 或 localhost 環境。",
-            manualPlaceholder: "貼上 token 後按 Enter",
-            manualBtn: "驗證",
-            manualBusy: "驗證中...",
-            resultTitle: "驗證結果",
-            memberName: "姓名",
-            phoneLast4: "電話末四碼",
-            membership: "會籍",
-            lastCheckin: "最近報到",
-            todayCount: "今日報到次數",
-            checkedAt: "驗證時間",
-            reason: "原因",
-            gate: "閘門",
-            noPhoto: "無照片",
-            gateOpen: "已開門",
-            gateClosed: "未開門",
+            title: "\u6ac3\u6aaf\u5831\u5230\u9a57\u8b49",
+            sub: "\u6383\u63cf\u6703\u54e1\u52d5\u614b QR\uff0c\u6216\u624b\u52d5\u8cbc\u4e0a token \u9032\u884c\u9a57\u8b49\u3002",
+            cameraTitle: "\u93e1\u982d\u6383\u78bc",
+            manualTitle: "\u624b\u52d5\u9a57\u8b49",
+            cameraReady: "\u93e1\u982d\u5c31\u7dd2",
+            cameraPreparing: "\u6b63\u5728\u521d\u59cb\u5316\u93e1\u982d...",
+            browserNotSupport: "\u76ee\u524d\u700f\u89bd\u5668\u4e0d\u652f\u63f4 BarcodeDetector\uff0c\u8acb\u6539\u7528\u624b\u52d5 token \u9a57\u8b49\u3002",
+            cameraFailed: "\u7121\u6cd5\u555f\u7528\u93e1\u982d\uff0c\u8acb\u78ba\u8a8d\u6b0a\u9650\u8207 HTTPS \u74b0\u5883\u3002",
+            manualPlaceholder: "\u8cbc\u4e0a token \u5f8c\u6309 Enter",
+            manualBtn: "\u9a57\u8b49",
+            manualBusy: "\u9a57\u8b49\u4e2d...",
+            resultTitle: "\u9a57\u8b49\u7d50\u679c",
+            memberName: "\u59d3\u540d",
+            phoneLast4: "\u96fb\u8a71\u672b\u56db\u78bc",
+            membership: "\u6703\u7c4d",
+            lastCheckin: "\u6700\u8fd1\u5831\u5230",
+            todayCount: "\u4eca\u65e5\u5831\u5230\u6b21\u6578",
+            checkedAt: "\u9a57\u8b49\u6642\u9593",
+            reason: "\u539f\u56e0",
+            gate: "\u9598\u9580",
+            noPhoto: "\u7121\u7167\u7247",
+            gateOpen: "\u5df2\u958b\u9580",
+            gateClosed: "\u672a\u958b\u9580",
           }
         : {
             badge: "ENTRY SCAN",
@@ -145,7 +144,6 @@ export default function FrontdeskCheckinPage() {
   const callVerify = useCallback(async (token: string) => {
     const trimmed = token.trim();
     if (!trimmed || busyRef.current) return;
-
     busyRef.current = true;
     setBusy(true);
 
@@ -155,7 +153,6 @@ export default function FrontdeskCheckinPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: trimmed }),
       });
-
       const payload = (await response.json()) as VerifyEntryResponse;
       setResult(payload);
     } catch {
@@ -186,14 +183,9 @@ export default function FrontdeskCheckinPage() {
         setCameraError(t.browserNotSupport);
         return;
       }
-
       try {
         const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
-          audio: false,
-        });
-
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
         streamRef.current = stream;
         if (!videoRef.current) return;
 
@@ -212,7 +204,6 @@ export default function FrontdeskCheckinPage() {
             void tick();
           }, 500);
         };
-
         void tick();
       } catch {
         setCameraError(t.cameraFailed);
@@ -230,19 +221,19 @@ export default function FrontdeskCheckinPage() {
   const decisionColor = result?.decision === "allow" ? "var(--brand)" : "#9b1c1c";
 
   return (
-    <main className="container">
+    <main className="container fdShell">
       <section className="hero">
-        <div className="card kv" style={{ padding: 18 }}>
-          <div className="kvLabel">{t.badge}</div>
+        <div className="card kv fdHeroPanel">
+          <div className="fdEyebrow">{t.badge}</div>
           <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
             {t.title}
           </h1>
-          <p className="sub">{t.sub}</p>
+          <p className="sub fdLead">{t.sub}</p>
         </div>
       </section>
 
-      <section className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <div className="card kv" style={{ padding: 14 }}>
+      <section className="fdTwoCol">
+        <div className="card kv fdSoftPanel">
           <h2 className="sectionTitle">{t.cameraTitle}</h2>
           <video ref={videoRef} className="input" style={{ marginTop: 8, minHeight: 260, background: "#111" }} muted playsInline />
           <p className="sub" style={{ marginTop: 8 }}>
@@ -251,7 +242,7 @@ export default function FrontdeskCheckinPage() {
           {cameraError ? <p className="error" style={{ marginTop: 8 }}>{cameraError}</p> : null}
         </div>
 
-        <div className="card kv" style={{ padding: 14 }}>
+        <div className="card kv fdSoftPanel">
           <h2 className="sectionTitle">{t.manualTitle}</h2>
           <form
             className="field"
@@ -260,13 +251,7 @@ export default function FrontdeskCheckinPage() {
               void callVerify(manualInput);
             }}
           >
-            <input
-              value={manualInput}
-              onChange={(event) => setManualInput(event.target.value)}
-              className="input"
-              placeholder={t.manualPlaceholder}
-              autoFocus
-            />
+            <input value={manualInput} onChange={(event) => setManualInput(event.target.value)} className="input" placeholder={t.manualPlaceholder} autoFocus />
             <button type="submit" disabled={busy || !manualInput.trim()} className="btn btnPrimary">
               {busy ? t.manualBusy : t.manualBtn}
             </button>
@@ -277,7 +262,7 @@ export default function FrontdeskCheckinPage() {
       <ManualAllowPanel />
 
       {result ? (
-        <section className="card kv" style={{ marginTop: 14, padding: 14 }}>
+        <section className="card kv fdSoftPanel" style={{ marginTop: 14 }}>
           <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
             <h2 className="sectionTitle" style={{ margin: 0 }}>
               {t.resultTitle}
@@ -303,8 +288,7 @@ export default function FrontdeskCheckinPage() {
                 </div>
               )}
             </div>
-
-            <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+            <div className="fdDataGrid">
               <p className="sub">
                 {t.memberName}: {result.member?.name ?? "-"}
               </p>
@@ -336,3 +320,4 @@ export default function FrontdeskCheckinPage() {
     </main>
   );
 }
+

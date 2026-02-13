@@ -27,24 +27,24 @@ export default function FrontdeskMemberSearchPage() {
       lang === "zh"
         ? {
             badge: "MEMBER DESK",
-            title: "會員查詢 / 建檔",
-            sub: "快速查詢會員資料，並在櫃台直接建立新會員。",
-            findTitle: "查詢會員",
-            findHint: "可用姓名或電話查詢",
-            findPlaceholder: "輸入姓名或電話",
-            findBtn: "開始查詢",
-            creatingBtn: "建立中...",
-            createTitle: "新增會員",
-            createName: "姓名",
-            createPhone: "電話",
-            createBtn: "建立會員",
-            searching: "查詢中...",
-            resultTitle: "查詢結果",
-            empty: "目前沒有資料",
-            searchFail: "查詢失敗",
-            createFail: "建立失敗",
-            memberId: "會員ID",
-            branch: "分店",
+            title: "\u6703\u54e1\u67e5\u8a62 / \u5efa\u6a94",
+            sub: "\u5feb\u901f\u67e5\u8a62\u6703\u54e1\u8cc7\u6599\uff0c\u4e26\u53ef\u5728\u6ac3\u6aaf\u76f4\u63a5\u65b0\u589e\u6703\u54e1\u3002",
+            findTitle: "\u67e5\u8a62\u6703\u54e1",
+            findHint: "\u53ef\u7528\u59d3\u540d\u6216\u96fb\u8a71\u67e5\u8a62",
+            findPlaceholder: "\u8f38\u5165\u59d3\u540d\u6216\u96fb\u8a71",
+            findBtn: "\u958b\u59cb\u67e5\u8a62",
+            creatingBtn: "\u5efa\u7acb\u4e2d...",
+            createTitle: "\u65b0\u589e\u6703\u54e1",
+            createName: "\u59d3\u540d",
+            createPhone: "\u96fb\u8a71",
+            createBtn: "\u5efa\u7acb\u6703\u54e1",
+            searching: "\u67e5\u8a62\u4e2d...",
+            resultTitle: "\u67e5\u8a62\u7d50\u679c",
+            empty: "\u76ee\u524d\u6c92\u6709\u8cc7\u6599",
+            searchFail: "\u67e5\u8a62\u5931\u6557",
+            createFail: "\u5efa\u7acb\u5931\u6557",
+            memberId: "\u6703\u54e1ID",
+            branch: "\u5206\u5e97",
           }
         : {
             badge: "MEMBER DESK",
@@ -111,43 +111,34 @@ export default function FrontdeskMemberSearchPage() {
   }
 
   return (
-    <main className="container">
+    <main className="container fdShell">
       <section className="hero">
-        <div className="card kv" style={{ padding: 18 }}>
-          <div className="kvLabel">{t.badge}</div>
+        <div className="card kv fdHeroPanel">
+          <div className="fdEyebrow">{t.badge}</div>
           <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
             {t.title}
           </h1>
-          <p className="sub">{t.sub}</p>
+          <p className="sub fdLead">{t.sub}</p>
         </div>
       </section>
 
-      {error ? (
-        <div className="error" style={{ marginBottom: 12 }}>
-          {error}
-        </div>
-      ) : null}
+      {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
 
-      <section className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <div className="card kv" style={{ padding: 16 }}>
+      <section className="fdTwoCol">
+        <div className="card kv fdSoftPanel">
           <h2 className="sectionTitle">{t.findTitle}</h2>
           <p className="sub" style={{ marginTop: 6 }}>
             {t.findHint}
           </p>
           <form onSubmit={search} className="field">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder={t.findPlaceholder}
-              className="input"
-            />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.findPlaceholder} className="input" />
             <button type="submit" className="btn btnPrimary" disabled={loading}>
               {loading ? t.searching : t.findBtn}
             </button>
           </form>
         </div>
 
-        <div className="card kv" style={{ padding: 16 }}>
+        <div className="card kv fdSoftPanel">
           <h2 className="sectionTitle">{t.createTitle}</h2>
           <form onSubmit={createMember} className="field">
             <label className="sub" style={{ marginTop: 0 }}>
@@ -165,15 +156,17 @@ export default function FrontdeskMemberSearchPage() {
 
       <section style={{ marginTop: 14 }}>
         <h2 className="sectionTitle">{t.resultTitle}</h2>
-        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="fdActionGrid">
           {items.length === 0 ? (
-            <div className="card kv">
+            <div className="card kv fdSoftPanel">
               <div className="kvValue">{t.empty}</div>
             </div>
           ) : (
             items.map((item) => (
-              <article key={item.id} className="card kv" style={{ padding: 14 }}>
-                <h3 style={{ margin: 0, fontSize: 20 }}>{item.full_name}</h3>
+              <article key={item.id} className="card kv fdActionCard">
+                <h3 className="fdActionTitle" style={{ fontSize: 20 }}>
+                  {item.full_name}
+                </h3>
                 <p className="sub">{item.phone || "-"}</p>
                 <p className="sub" style={{ marginTop: 8 }}>
                   {t.memberId}: <code>{item.id}</code>
