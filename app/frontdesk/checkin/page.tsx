@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useI18n } from "../../i18n-provider";
 import type { VerifyEntryResponse } from "../../../types/entry";
 import { ManualAllowPanel } from "./ManualAllowPanel";
 
@@ -10,45 +11,64 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
-function membershipLabel(input: VerifyEntryResponse["membership"]) {
+function membershipLabel(input: VerifyEntryResponse["membership"], lang: "zh" | "en") {
+  if (lang === "en") {
+    switch (input.kind) {
+      case "monthly":
+        return `Monthly (expires: ${formatDateTime(input.monthlyExpiresAt)})`;
+      case "single":
+        return `Single Session (remaining: ${input.remainingSessions ?? 0})`;
+      case "punch":
+        return `Punch Pass (remaining: ${input.remainingSessions ?? 0})`;
+      default:
+        return "No valid membership";
+    }
+  }
   switch (input.kind) {
     case "monthly":
-      return `月費 (到期: ${formatDateTime(input.monthlyExpiresAt)})`;
+      return `月費會員 (到期: ${formatDateTime(input.monthlyExpiresAt)})`;
     case "single":
-      return `單次票 (剩餘: ${input.remainingSessions ?? 0})`;
+      return `單堂方案 (剩餘: ${input.remainingSessions ?? 0})`;
     case "punch":
-      return `次數票 (剩餘: ${input.remainingSessions ?? 0})`;
+      return `點數方案 (剩餘: ${input.remainingSessions ?? 0})`;
     default:
-      return "無有效方案";
+      return "無有效會籍";
   }
 }
 
-function denyReasonLabel(reason: VerifyEntryResponse["reason"]) {
-  switch (reason) {
-    case "token_invalid":
-      return "QR 無效";
-    case "token_expired":
-      return "QR 已過期";
-    case "token_used":
-      return "QR 已使用";
-    case "rate_limited":
-      return "請稍後再試 (掃碼過於頻繁)";
-    case "member_not_found":
-      return "找不到會員";
-    case "already_checked_in_recently":
-      return "短時間內已入場 (防回刷)";
-    case "no_valid_pass":
-      return "無有效票券或會籍";
-    default:
-      return "-";
-  }
+function denyReasonLabel(reason: VerifyEntryResponse["reason"], lang: "zh" | "en") {
+  if (!reason) return "-";
+
+  const zh: Record<NonNullable<VerifyEntryResponse["reason"]>, string> = {
+    token_invalid: "QR 無效",
+    token_expired: "QR 已過期",
+    token_used: "QR 已使用",
+    rate_limited: "操作過於頻繁，請稍後再試",
+    member_not_found: "找不到會員",
+    already_checked_in_recently: "近期已完成報到",
+    no_valid_pass: "無可用會籍/堂數",
+  };
+  const en: Record<NonNullable<VerifyEntryResponse["reason"]>, string> = {
+    token_invalid: "Invalid QR token",
+    token_expired: "Token expired",
+    token_used: "Token already used",
+    rate_limited: "Too many requests",
+    member_not_found: "Member not found",
+    already_checked_in_recently: "Recently checked in",
+    no_valid_pass: "No valid pass",
+  };
+  return lang === "en" ? en[reason] : zh[reason];
 }
 
-function decisionLabel(decision: VerifyEntryResponse["decision"]) {
+function decisionLabel(decision: VerifyEntryResponse["decision"], lang: "zh" | "en") {
+  if (lang === "en") return decision === "allow" ? "Allow" : "Deny";
   return decision === "allow" ? "放行" : "拒絕";
 }
 
 export default function FrontdeskCheckinPage() {
+  const { locale } = useI18n();
+  const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -59,6 +79,64 @@ export default function FrontdeskCheckinPage() {
   const [manualInput, setManualInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<VerifyEntryResponse | null>(null);
+
+  const t = useMemo(
+    () =>
+      lang === "zh"
+        ? {
+            badge: "ENTRY SCAN",
+            title: "櫃檯報到驗證",
+            sub: "掃描會員動態 QR，或手動貼上 token 進行驗證。",
+            cameraTitle: "鏡頭掃碼",
+            manualTitle: "手動驗證",
+            cameraReady: "鏡頭已就緒",
+            cameraPreparing: "正在初始化鏡頭...",
+            browserNotSupport: "目前瀏覽器不支援 BarcodeDetector，請改用手動貼 token 或使用新版 Chrome/Edge。",
+            cameraFailed: "無法啟用鏡頭。請確認權限、HTTPS 或 localhost 環境。",
+            manualPlaceholder: "貼上 token 後按 Enter",
+            manualBtn: "驗證",
+            manualBusy: "驗證中...",
+            resultTitle: "驗證結果",
+            memberName: "姓名",
+            phoneLast4: "電話末四碼",
+            membership: "會籍",
+            lastCheckin: "最近報到",
+            todayCount: "今日報到次數",
+            checkedAt: "驗證時間",
+            reason: "原因",
+            gate: "閘門",
+            noPhoto: "無照片",
+            gateOpen: "已開門",
+            gateClosed: "未開門",
+          }
+        : {
+            badge: "ENTRY SCAN",
+            title: "Frontdesk Entry Verification",
+            sub: "Scan member dynamic QR or paste token manually for verification.",
+            cameraTitle: "Camera Scanner",
+            manualTitle: "Manual Verify",
+            cameraReady: "Camera ready",
+            cameraPreparing: "Initializing camera...",
+            browserNotSupport: "BarcodeDetector is not supported here. Use manual token input or latest Chrome/Edge.",
+            cameraFailed: "Cannot access camera. Check permission and HTTPS or localhost.",
+            manualPlaceholder: "Paste token and press Enter",
+            manualBtn: "Verify",
+            manualBusy: "Verifying...",
+            resultTitle: "Verification Result",
+            memberName: "Name",
+            phoneLast4: "Phone Last 4",
+            membership: "Membership",
+            lastCheckin: "Latest Check-in",
+            todayCount: "Today Count",
+            checkedAt: "Checked At",
+            reason: "Reason",
+            gate: "Gate",
+            noPhoto: "No photo",
+            gateOpen: "Opened",
+            gateClosed: "Not opened",
+          },
+    [lang],
+  );
 
   useEffect(() => {
     busyRef.current = busy;
@@ -85,19 +163,11 @@ export default function FrontdeskCheckinPage() {
         decision: "deny",
         reason: "token_invalid",
         member: null,
-        membership: {
-          kind: "none",
-          monthlyExpiresAt: null,
-          remainingSessions: null,
-        },
+        membership: { kind: "none", monthlyExpiresAt: null, remainingSessions: null },
         latestCheckinAt: null,
         todayCheckinCount: 0,
         checkedAt: new Date().toISOString(),
-        gate: {
-          attempted: false,
-          opened: false,
-          message: "Verify request failed",
-        },
+        gate: { attempted: false, opened: false, message: "Verify request failed" },
       });
     } finally {
       busyRef.current = false;
@@ -106,17 +176,14 @@ export default function FrontdeskCheckinPage() {
     }
   }, []);
 
-  const canUseBarcodeDetector = useMemo(
-    () => typeof window !== "undefined" && "BarcodeDetector" in window,
-    [],
-  );
+  const canUseBarcodeDetector = useMemo(() => typeof window !== "undefined" && "BarcodeDetector" in window, []);
 
   useEffect(() => {
     let mounted = true;
 
     async function startCameraScanner() {
       if (!canUseBarcodeDetector) {
-        setCameraError("此瀏覽器不支援 BarcodeDetector。請改用手動輸入 token，或使用 Chrome/Edge。");
+        setCameraError(t.browserNotSupport);
         return;
       }
 
@@ -128,23 +195,19 @@ export default function FrontdeskCheckinPage() {
         });
 
         streamRef.current = stream;
-
         if (!videoRef.current) return;
+
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         setScannerReady(true);
 
         const tick = async () => {
           if (!mounted || !videoRef.current) return;
-
           if (!busyRef.current) {
             const codes = await detector.detect(videoRef.current);
             const value = codes?.[0]?.rawValue;
-            if (value) {
-              await callVerify(value);
-            }
+            if (value) await callVerify(value);
           }
-
           timerRef.current = window.setTimeout(() => {
             void tick();
           }, 500);
@@ -152,40 +215,46 @@ export default function FrontdeskCheckinPage() {
 
         void tick();
       } catch {
-        setCameraError("無法啟用相機掃碼。請確認已允許相機權限，且使用 HTTPS 或 localhost。");
+        setCameraError(t.cameraFailed);
       }
     }
 
     void startCameraScanner();
-
     return () => {
       mounted = false;
       if (timerRef.current) clearTimeout(timerRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
     };
-  }, [callVerify, canUseBarcodeDetector]);
+  }, [callVerify, canUseBarcodeDetector, t.browserNotSupport, t.cameraFailed]);
 
-  const decisionColor = result?.decision === "allow" ? "text-green-700" : "text-red-700";
+  const decisionColor = result?.decision === "allow" ? "var(--brand)" : "#9b1c1c";
 
   return (
-    <main className="mx-auto max-w-4xl p-6">
-      <h1 className="text-2xl font-bold">櫃台掃碼入場</h1>
-      <p className="mt-2 text-sm text-gray-600">
-        掃會員動態 QR，或貼上 token 手動驗證。驗證會呼叫 <code>/api/entry/verify</code>。
-      </p>
+    <main className="container">
+      <section className="hero">
+        <div className="card kv" style={{ padding: 18 }}>
+          <div className="kvLabel">{t.badge}</div>
+          <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
+            {t.title}
+          </h1>
+          <p className="sub">{t.sub}</p>
+        </div>
+      </section>
 
-      <section className="mt-6 grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border p-4">
-          <h2 className="font-semibold">相機掃碼</h2>
-          <video ref={videoRef} className="mt-3 aspect-video w-full rounded bg-black" muted playsInline />
-          <p className="mt-2 text-sm text-gray-600">{scannerReady ? "相機已啟用" : "相機初始化中..."}</p>
-          {cameraError ? <p className="mt-2 text-sm text-red-600">{cameraError}</p> : null}
+      <section className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="card kv" style={{ padding: 14 }}>
+          <h2 className="sectionTitle">{t.cameraTitle}</h2>
+          <video ref={videoRef} className="input" style={{ marginTop: 8, minHeight: 260, background: "#111" }} muted playsInline />
+          <p className="sub" style={{ marginTop: 8 }}>
+            {scannerReady ? t.cameraReady : t.cameraPreparing}
+          </p>
+          {cameraError ? <p className="error" style={{ marginTop: 8 }}>{cameraError}</p> : null}
         </div>
 
-        <div className="rounded-lg border p-4">
-          <h2 className="font-semibold">手動驗證</h2>
+        <div className="card kv" style={{ padding: 14 }}>
+          <h2 className="sectionTitle">{t.manualTitle}</h2>
           <form
-            className="mt-3 space-y-3"
+            className="field"
             onSubmit={(event) => {
               event.preventDefault();
               void callVerify(manualInput);
@@ -194,16 +263,12 @@ export default function FrontdeskCheckinPage() {
             <input
               value={manualInput}
               onChange={(event) => setManualInput(event.target.value)}
-              className="w-full rounded border px-3 py-2 font-mono text-sm"
-              placeholder="貼上 token 後按 Enter"
+              className="input"
+              placeholder={t.manualPlaceholder}
               autoFocus
             />
-            <button
-              type="submit"
-              disabled={busy || !manualInput.trim()}
-              className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-            >
-              {busy ? "驗證中..." : "驗證"}
+            <button type="submit" disabled={busy || !manualInput.trim()} className="btn btnPrimary">
+              {busy ? t.manualBusy : t.manualBtn}
             </button>
           </form>
         </div>
@@ -212,17 +277,20 @@ export default function FrontdeskCheckinPage() {
       <ManualAllowPanel />
 
       {result ? (
-        <section className="mt-6 rounded-lg border p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold">驗證結果</h2>
-            <span className={`font-semibold ${decisionColor}`}>{decisionLabel(result.decision)}</span>
+        <section className="card kv" style={{ marginTop: 14, padding: 14 }}>
+          <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
+            <h2 className="sectionTitle" style={{ margin: 0 }}>
+              {t.resultTitle}
+            </h2>
+            <strong style={{ color: decisionColor }}>{decisionLabel(result.decision, lang)}</strong>
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-[120px_1fr]">
+          <div style={{ marginTop: 10, display: "grid", gap: 14, gridTemplateColumns: "112px 1fr" }}>
             <div>
               {result.member?.photoUrl ? (
                 <Image
-                  className="h-28 w-28 rounded object-cover"
+                  className="card"
+                  style={{ width: 112, height: 112, objectFit: "cover" }}
                   src={result.member.photoUrl}
                   alt={`${result.member.name} photo`}
                   width={112}
@@ -230,37 +298,36 @@ export default function FrontdeskCheckinPage() {
                   unoptimized
                 />
               ) : (
-                <div className="flex h-28 w-28 items-center justify-center rounded border bg-gray-50 text-xs text-gray-500">
-                  No photo
+                <div className="card" style={{ width: 112, height: 112, display: "grid", placeItems: "center", color: "var(--muted)", fontSize: 12 }}>
+                  {t.noPhoto}
                 </div>
               )}
             </div>
 
-            <div className="grid gap-2 text-sm">
-              <p>
-                <span className="text-gray-600">姓名:</span> {result.member?.name ?? "-"}
+            <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              <p className="sub">
+                {t.memberName}: {result.member?.name ?? "-"}
               </p>
-              <p>
-                <span className="text-gray-600">電話後四碼:</span> {result.member?.phoneLast4 ?? "-"}
+              <p className="sub">
+                {t.phoneLast4}: {result.member?.phoneLast4 ?? "-"}
               </p>
-              <p>
-                <span className="text-gray-600">方案:</span> {membershipLabel(result.membership)}
+              <p className="sub">
+                {t.membership}: {membershipLabel(result.membership, lang)}
               </p>
-              <p>
-                <span className="text-gray-600">最近入場:</span> {formatDateTime(result.latestCheckinAt)}
+              <p className="sub">
+                {t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}
               </p>
-              <p>
-                <span className="text-gray-600">今日入場次數:</span> {result.todayCheckinCount}
+              <p className="sub">
+                {t.todayCount}: {result.todayCheckinCount}
               </p>
-              <p>
-                <span className="text-gray-600">本次驗證時間:</span> {formatDateTime(result.checkedAt)}
+              <p className="sub">
+                {t.checkedAt}: {formatDateTime(result.checkedAt)}
               </p>
-              <p>
-                <span className="text-gray-600">原因:</span> {denyReasonLabel(result.reason)}
+              <p className="sub">
+                {t.reason}: {denyReasonLabel(result.reason, lang)}
               </p>
-              <p>
-                <span className="text-gray-600">閘門:</span>{" "}
-                {result.gate ? `${result.gate.opened ? "已開門" : "未開門"} (${result.gate.message})` : "-"}
+              <p className="sub">
+                {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
               </p>
             </div>
           </div>
