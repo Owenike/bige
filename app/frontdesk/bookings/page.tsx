@@ -178,18 +178,43 @@ export default function FrontdeskBookingsPage() {
           <form onSubmit={createBooking} className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{zh ? "\u5efa\u7acb\u9810\u7d04" : "Create Booking"}</h2>
             <div style={{ display: "grid", gap: 8 }}>
-              <input value={memberId} onChange={(e) => setMemberId(e.target.value)} placeholder="memberId" className="input" required />
-              <input value={coachId} onChange={(e) => setCoachId(e.target.value)} placeholder={zh ? "coachId（選填）" : "coachId (optional)"} className="input" />
+              <input
+                value={memberId}
+                onChange={(e) => setMemberId(e.target.value)}
+                placeholder={zh ? "會員 ID" : "memberId"}
+                className="input"
+                required
+              />
+              <input
+                value={coachId}
+                onChange={(e) => setCoachId(e.target.value)}
+                placeholder={zh ? "教練 ID（選填）" : "coachId (optional)"}
+                className="input"
+              />
               <select value={serviceName} onChange={(e) => setServiceName(e.target.value)} className="input" required>
                 <option value="">{zh ? "\u9078\u64c7\u670d\u52d9" : "Select service"}</option>
                 {services.map((s) => (
                   <option key={s.code} value={s.code}>
-                    {s.name} ({s.durationMinutes}m / cap {s.capacity})
+                    {zh
+                      ? `${s.name}（${s.durationMinutes} 分鐘 / 容量 ${s.capacity}）`
+                      : `${s.name} (${s.durationMinutes}m / cap ${s.capacity})`}
                   </option>
                 ))}
               </select>
-              <input value={startsAt} onChange={(e) => setStartsAt(e.target.value)} placeholder={zh ? "startsAt（ISO）" : "startsAt (ISO)"} className="input" required />
-              <input value={endsAt} onChange={(e) => setEndsAt(e.target.value)} placeholder={zh ? "endsAt（ISO）" : "endsAt (ISO)"} className="input" required />
+              <input
+                value={startsAt}
+                onChange={(e) => setStartsAt(e.target.value)}
+                placeholder={zh ? "開始時間（ISO）" : "startsAt (ISO)"}
+                className="input"
+                required
+              />
+              <input
+                value={endsAt}
+                onChange={(e) => setEndsAt(e.target.value)}
+                placeholder={zh ? "結束時間（ISO）" : "endsAt (ISO)"}
+                className="input"
+                required
+              />
               <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={zh ? "\u5099\u8a3b" : "note"} className="input" />
             </div>
             <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }} disabled={creating}>
@@ -200,7 +225,13 @@ export default function FrontdeskBookingsPage() {
           <form onSubmit={updateBooking} className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{zh ? "\u53d6\u6d88 / \u66f4\u65b0\u9810\u7d04" : "Cancel / Update Booking"}</h2>
             <div style={{ display: "grid", gap: 8 }}>
-              <input value={updateId} onChange={(e) => setUpdateId(e.target.value)} placeholder="bookingId" className="input" required />
+              <input
+                value={updateId}
+                onChange={(e) => setUpdateId(e.target.value)}
+                placeholder={zh ? "預約 ID" : "bookingId"}
+                className="input"
+                required
+              />
               <select value={updateStatus} onChange={(e) => setUpdateStatus(e.target.value)} className="input">
                 <option value="cancelled">{bookingStatusLabel("cancelled")}</option>
                 <option value="no_show">{bookingStatusLabel("no_show")}</option>
@@ -239,7 +270,7 @@ export default function FrontdeskBookingsPage() {
                     <p className="sub" style={{ marginTop: 0 }}>{zh ? "\u6559\u7df4" : "coach"}: {item.coach_id || "-"}</p>
                     <p className="sub" style={{ marginTop: 0 }}>{zh ? "\u958b\u59cb" : "start"}: {fmtDate(item.starts_at)}</p>
                     <p className="sub" style={{ marginTop: 0 }}>{zh ? "\u7d50\u675f" : "end"}: {fmtDate(item.ends_at)}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>bookingId: {item.id}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "預約 ID" : "bookingId"}: {item.id}</p>
                     <p className="sub" style={{ marginTop: 0 }}>{zh ? "\u5099\u8a3b" : "note"}: {item.note || "-"}</p>
                   </div>
                 </article>

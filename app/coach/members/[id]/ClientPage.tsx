@@ -108,7 +108,7 @@ export default function CoachMemberOverviewPage({ id }: { id: string }) {
     <main style={{ padding: 16, maxWidth: 980, margin: "0 auto" }}>
       <div className="card" style={{ padding: 16 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{zh ? "\u6703\u54e1\u6982\u89bd" : "Member Overview"}</h1>
-        <p style={{ opacity: 0.8, marginTop: 8 }}>{zh ? "\u6703\u54e1 ID" : "member_id"}: {memberId}</p>
+        <p style={{ opacity: 0.8, marginTop: 8 }}>{zh ? "\u6703\u54e1\u7de8\u865f" : "member_id"}: {memberId}</p>
 
         {loading ? <p style={{ marginTop: 12 }}>{zh ? "\u8f09\u5165\u4e2d..." : "Loading..."}</p> : null}
         {error ? <p style={{ marginTop: 12, color: "crimson" }}>{error}</p> : null}
@@ -139,7 +139,7 @@ export default function CoachMemberOverviewPage({ id }: { id: string }) {
                 <ul style={{ marginTop: 10, paddingLeft: 18 }}>
                   {data.passes.map((pass) => (
                     <li key={pass.id} style={{ marginBottom: 8 }}>
-                      {passTypeLabel(pass.passType)} | {zh ? "\u5269\u9918" : "remain"} {pass.remaining ?? "-"} | {zh ? "\u5230\u671f" : "expires"} {formatDateTime(pass.expiresAt)} | {zh ? "\u72c0\u614b" : "status"} {statusLabel(pass.status)}
+                      {passTypeLabel(pass.passType)} | {zh ? "\u5269\u9918\u5802\u6578" : "remain"} {pass.remaining ?? "-"} | {zh ? "\u5230\u671f" : "expires"} {formatDateTime(pass.expiresAt)} | {zh ? "\u72c0\u614b" : "status"} {statusLabel(pass.status)}
                     </li>
                   ))}
                 </ul>

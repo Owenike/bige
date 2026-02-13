@@ -64,7 +64,7 @@ function statusLabel(value: string, lang: "zh" | "en") {
     checked_in: { zh: "已報到", en: "Checked In" },
     cancelled: { zh: "已取消", en: "Cancelled" },
     completed: { zh: "已完成", en: "Completed" },
-    no_show: { zh: "未到場", en: "No Show" },
+    no_show: { zh: "未出席", en: "No Show" },
   };
   return map[value]?.[lang] ?? value;
 }
@@ -87,13 +87,13 @@ export default function MemberBookingsPage() {
       lang === "zh"
         ? {
             title: "我的預約",
-            desc: `可依狀態篩選，並可取消或改期（需填 reason；距離開始 ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} 分鐘內不可修改）。`,
-            backMember: "返回會員中心",
+            desc: `可依狀態篩選，並可取消或改期（需填原因；距離開始 ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} 分鐘內不可修改）。`,
+            backMember: "返回會員首頁",
             profile: "個人資料",
-            reload: "重新整理",
+            reload: "重新載入",
             filter: "狀態篩選",
             loading: "載入中...",
-            noData: "目前沒有預約資料",
+            noData: "尚無預約資料",
             booking: "預約",
             service: "服務",
             startsAt: "開始時間",
@@ -101,7 +101,7 @@ export default function MemberBookingsPage() {
             status: "狀態",
             note: "備註",
             canModify: "可修改",
-            cannotModify: `不可修改（距開始少於 ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} 分鐘）`,
+            cannotModify: `不可修改（距離開始少於 ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} 分鐘）`,
             reason: "原因（必填）",
             reasonPh: "請輸入原因",
             cancel: "取消預約",
@@ -109,14 +109,14 @@ export default function MemberBookingsPage() {
             saving: "處理中...",
             startAt: "新開始時間",
             endAt: "新結束時間",
-            lockTip: `距開始少於 ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} 分鐘不可操作`,
+            lockTip: `開始前 ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} 分鐘內不可修改`,
             reasonTip: "請先填寫原因",
             loadFail: "載入預約失敗",
             updateFail: "更新失敗",
-            invalidResponse: "預約資料格式錯誤",
-            requireReason: "reason is required",
-            requireTime: "startsAt and endsAt are required",
-            endAfterStart: "endsAt must be after startsAt",
+            invalidResponse: "預約資料回應格式錯誤",
+            requireReason: "請填寫原因",
+            requireTime: "請填寫開始與結束時間",
+            endAfterStart: "結束時間必須晚於開始時間",
           }
         : {
             title: "My Bookings",
@@ -286,7 +286,7 @@ export default function MemberBookingsPage() {
     <main className="container">
       <section className="hero">
         <div className="card" style={{ padding: 18 }}>
-          <div className="kvLabel">{lang === "zh" ? "\u9810\u7d04" : "BOOKINGS"}</div>
+          <div className="kvLabel">{lang === "zh" ? "預約" : "BOOKINGS"}</div>
           <h1 className="h1" style={{ marginTop: 10, fontSize: 34 }}>
             {t.title}
           </h1>
@@ -355,7 +355,7 @@ export default function MemberBookingsPage() {
                 <div key={b.id} className="card" style={{ padding: 14 }}>
                   <div className="kvLabel">{t.booking}</div>
                   <div className="sub" style={{ marginTop: 6 }}>
-                    {lang === "zh" ? "ID" : "id"}: {b.id}
+                    {lang === "zh" ? "編號" : "id"}: {b.id}
                   </div>
                   <div className="sub">
                     {t.service}: {b.service_name ?? "-"}

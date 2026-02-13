@@ -93,7 +93,7 @@ export default function MemberEntryQrPage() {
 
         <div className="mt-4 space-y-1 text-sm">
           <p>{zh ? "更新倒數：" : "Refresh in:"} {countdown} {zh ? "秒" : "seconds"}</p>
-          <p>{zh ? "Token 到期時間：" : "Token expires at:"} {formatTime(payload?.expiresAt)}</p>
+          <p>{zh ? "憑證到期時間：" : "Token expires at:"} {formatTime(payload?.expiresAt)}</p>
           {error ? <p className="text-red-600">{zh ? "更新失敗：" : "Refresh failed:"} {error}</p> : null}
           {!error && !loading ? <p className="text-green-600">{zh ? "QR 已就緒" : "QR is ready"}</p> : null}
         </div>
@@ -109,9 +109,9 @@ export default function MemberEntryQrPage() {
       </section>
 
       <details className="mt-4 text-xs text-gray-500">
-        <summary>{zh ? "Token 預覽" : "Token preview"}</summary>
+        <summary>{zh ? "憑證預覽" : "Token preview"}</summary>
         <pre className="mt-2 overflow-auto rounded bg-gray-100 p-2">
-          {payload?.token ? `${payload.token.slice(0, 64)}...` : zh ? "(無 token)" : "(no token)"}
+          {payload?.token ? `${payload.token.slice(0, 64)}...` : zh ? "（無憑證）" : "(no token)"}
         </pre>
       </details>
     </main>

@@ -30,23 +30,24 @@ export default function FrontdeskPortalPage() {
     () =>
       lang === "zh"
         ? {
-            badge: "FRONTDESK",
+            badge: "櫃檯中心",
             title: "櫃檯工作台",
-            sub: "統一處理報到、建檔、收款與交班，保持流程清楚且穩定。",
-            primary: "開始報到掃碼",
-            secondary: "會員查詢 / 建檔",
-            statusTitle: "今日班務",
-            statusOpen: "班別狀態",
-            statusOpenValue: "已開班",
-            statusTasks: "待處理",
+            sub: "整合入場驗證、會員查詢、收款與交班流程。",
+            primary: "開始掃碼入場",
+            secondary: "會員查詢 / 建立",
+            statusTitle: "今日班次",
+            statusOpen: "班次狀態",
+            statusOpenValue: "進行中",
+            statusTasks: "待辦",
             statusTasksValue: "3 項",
-            statusTip: "建議先完成報到與收款，再進行交班。",
+            statusTip: "先完成入場與收款，再進行交班結算。",
+            shiftOverview: "班次總覽",
             cards: [
-              { href: "/frontdesk/checkin", title: "報到掃碼", desc: "掃描會員動態 QR，快速完成入場驗證。", tag: "ENTRY" },
-              { href: "/frontdesk/member-search", title: "會員查詢 / 建檔", desc: "查看會員資料，並可直接建立新會員。", tag: "MEMBER" },
-              { href: "/frontdesk/orders/new", title: "新增訂單 + 收款", desc: "現場建立訂單並記錄付款流程。", tag: "PAYMENT" },
-              { href: "/frontdesk/bookings", title: "預約協助", desc: "協助調整、取消與安排時段。", tag: "BOOKING" },
-              { href: "/frontdesk/handover", title: "交班", desc: "整理本班摘要，完成交接。", tag: "SHIFT" },
+              { href: "/frontdesk/checkin", title: "入場驗證", desc: "掃描會員動態 QR，快速完成入場確認。", tag: "ENTRY" },
+              { href: "/frontdesk/member-search", title: "會員查詢 / 建立", desc: "查找既有會員，必要時直接建立新會員。", tag: "MEMBER" },
+              { href: "/frontdesk/orders/new", title: "新增訂單 + 收款", desc: "建立櫃檯訂單並記錄付款。", tag: "PAYMENT" },
+              { href: "/frontdesk/bookings", title: "預約管理", desc: "協助建立、取消與更新預約。", tag: "BOOKING" },
+              { href: "/frontdesk/handover", title: "交班", desc: "整理班次金流與備註，完成交接。", tag: "SHIFT" },
             ] as ActionCard[],
           }
         : {
@@ -61,6 +62,7 @@ export default function FrontdeskPortalPage() {
             statusTasks: "Pending",
             statusTasksValue: "3 items",
             statusTip: "Complete check-in and payments first, then finalize handover.",
+            shiftOverview: "Shift Overview",
             cards: [
               { href: "/frontdesk/checkin", title: "Check-in Scanner", desc: "Scan member dynamic QR and verify entry fast.", tag: "ENTRY" },
               { href: "/frontdesk/member-search", title: "Member Search / Create", desc: "Find member records and create new ones when needed.", tag: "MEMBER" },
@@ -95,7 +97,7 @@ export default function FrontdeskPortalPage() {
               <span className="fdChip">{t.statusTasksValue}</span>
             </div>
             <h2 className="fdGlassTitle" style={{ marginTop: 16 }}>
-              {lang === "zh" ? "Hi 櫃檯夥伴" : "Hi Frontdesk"}
+              {lang === "zh" ? "嗨，櫃檯夥伴" : "Hi Frontdesk"}
             </h2>
             <p className="fdGlassText">{t.statusTip}</p>
             <div className="fdPillActions">
@@ -113,7 +115,7 @@ export default function FrontdeskPortalPage() {
               <span className="fdChip fdChipActive">{t.statusOpen}</span>
               <span className="fdChip">{t.statusTasks}</span>
             </div>
-            <h2 className="fdGlassTitle">{lang === "zh" ? "班務概況" : "Shift Overview"}</h2>
+            <h2 className="fdGlassTitle">{t.shiftOverview}</h2>
             <div className="fdDial">
               <div className="fdDialInner">24°C</div>
             </div>
@@ -153,4 +155,3 @@ export default function FrontdeskPortalPage() {
     </main>
   );
 }
-

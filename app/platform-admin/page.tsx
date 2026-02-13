@@ -244,16 +244,16 @@ export default function PlatformAdminPage() {
               <input
                 value={userTenantId}
                 onChange={(e) => setUserTenantId(e.target.value)}
-                placeholder={zh ? "tenantId\uff08platform_admin \u53ef\u4e0d\u586b\uff09" : "tenantId (required unless platform_admin)"}
+                placeholder={zh ? "\u79df\u6236\u7de8\u865f\uff08\u5e73\u53f0\u7ba1\u7406\u54e1\u53ef\u4e0d\u586b\uff09" : "tenantId (required unless platform_admin)"}
                 className="input"
                 disabled={userRole === "platform_admin"}
               />
-              <input value={userBranchId} onChange={(e) => setUserBranchId(e.target.value)} placeholder={zh ? "branchId\uff08\u9078\u586b\uff09" : "branchId (optional)"} className="input" />
+              <input value={userBranchId} onChange={(e) => setUserBranchId(e.target.value)} placeholder={zh ? "\u5206\u9928\u7de8\u865f\uff08\u9078\u586b\uff09" : "branchId (optional)"} className="input" />
               <input value={userDisplayName} onChange={(e) => setUserDisplayName(e.target.value)} placeholder={zh ? "\u986f\u793a\u540d\u7a31\uff08\u9078\u586b\uff09" : "display name (optional)"} className="input" />
               {userRole === "member" ? (
                 <>
                   <label className="sub">
-                    <input type="checkbox" checked={createMember} onChange={(e) => setCreateMember(e.target.checked)} /> {zh ? "\u540c\u6b65\u5efa\u7acb members \u8cc7\u6599" : "create members row"}
+                    <input type="checkbox" checked={createMember} onChange={(e) => setCreateMember(e.target.checked)} /> {zh ? "\u540c\u6b65\u5efa\u7acb\u6703\u54e1\u8cc7\u6599\u5217" : "create members row"}
                   </label>
                   {createMember ? (
                     <>
@@ -285,7 +285,7 @@ export default function PlatformAdminPage() {
             </div>
             <form onSubmit={upsertFlag} style={{ marginTop: 10 }}>
               <div style={{ display: "grid", gap: 8 }}>
-                <input value={flagKey} onChange={(e) => setFlagKey(e.target.value)} placeholder={zh ? "\u65d7\u6a19 key" : "flag key"} className="input" required />
+                <input value={flagKey} onChange={(e) => setFlagKey(e.target.value)} placeholder={zh ? "\u65d7\u6a19\u9375\u503c" : "flag key"} className="input" required />
                 <label className="sub">
                   <input type="checkbox" checked={flagEnabled} onChange={(e) => setFlagEnabled(e.target.checked)} /> {zh ? "\u555f\u7528" : "enabled"}
                 </label>
@@ -303,14 +303,14 @@ export default function PlatformAdminPage() {
           </section>
 
           <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{zh ? "\u8a2d\u5b9a\u79df\u6236\u7684 Profile" : "Profiles (Selected Tenant)"}</h2>
+            <h2 className="sectionTitle">{zh ? "\u79df\u6236\u5e33\u865f\u6e05\u55ae" : "Profiles (Selected Tenant)"}</h2>
             <div className="fdDataGrid">
               {profiles.map((p) => (
                 <p key={p.id} className="sub" style={{ marginTop: 0 }}>
                   {roleLabel(p.role)} | {p.display_name || "-"} | {p.id}
                 </p>
               ))}
-              {profiles.length === 0 ? <p className="fdGlassText">{zh ? "\u627e\u4e0d\u5230 Profile\u3002" : "No profiles found."}</p> : null}
+              {profiles.length === 0 ? <p className="fdGlassText">{zh ? "\u627e\u4e0d\u5230\u5e33\u865f\u8cc7\u6599\u3002" : "No profiles found."}</p> : null}
             </div>
           </section>
         </section>

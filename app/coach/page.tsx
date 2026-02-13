@@ -106,13 +106,13 @@ function translateApiError(input: string, zh: boolean) {
         booking_not_found: "\u627e\u4e0d\u5230\u9810\u7d04",
         booking_not_modifiable: "\u9019\u7b46\u9810\u7d04\u7121\u6cd5\u4fee\u6539",
         booking_locked_for_modification: "\u9810\u7d04\u5df2\u9396\u5b9a\uff0c\u7121\u6cd5\u4fee\u6539",
-        reschedule_time_required: "\u6539\u671f\u9700\u8981 startsAt \u8207 endsAt",
+        reschedule_time_required: "\u6539\u671f\u9700\u8981\u958b\u59cb\u8207\u7d50\u675f\u6642\u9593",
         invalid_reschedule_range: "\u6539\u671f\u6642\u9593\u7bc4\u570d\u7121\u6548",
         reschedule_must_be_future: "\u6539\u671f\u6642\u9593\u5fc5\u9808\u662f\u672a\u4f86",
         booking_time_overlap: "\u8a72\u6642\u6bb5\u8207\u5176\u4ed6\u9810\u7d04\u885d\u7a81",
         invalid_redemption_input: "\u6838\u92b7\u53c3\u6578\u7121\u6548",
         invalid_redeemed_kind: "\u6838\u92b7\u985e\u578b\u7121\u6548",
-        pass_id_required: "\u7968\u5238\u6838\u92b7\u9700\u8981 passId",
+        pass_id_required: "\u7968\u5238\u6838\u92b7\u9700\u8981\u7968\u5238\u7de8\u865f",
         pass_not_found: "\u627e\u4e0d\u5230\u7968\u5238",
         insufficient_remaining_sessions: "\u5269\u9918\u5802\u6578\u4e0d\u8db3",
         "Booking already redeemed": "\u9019\u7b46\u9810\u7d04\u5df2\u6838\u92b7",
@@ -604,7 +604,7 @@ function CoachPortalContent() {
           <input
             value={scheduleQuery}
             onChange={(e) => setScheduleQuery(e.target.value)}
-            placeholder={zh ? "\u641c\u5c0b\u670d\u52d9/memberId/\u5099\u8a3b/bookingId" : "Search service/memberId/note/bookingId"}
+            placeholder={zh ? "\u641c\u5c0b\u670d\u52d9/\u6703\u54e1\u7de8\u865f/\u5099\u8a3b/\u9810\u7d04\u7de8\u865f" : "Search service/memberId/note/bookingId"}
             className="rounded border px-3 py-2 text-sm"
           />
           <select
@@ -690,7 +690,7 @@ function CoachPortalContent() {
                               {zh ? "\u96fb\u8a71\u5f8c\u56db\u78bc" : "phone last4"}: {overview.member.phoneLast4 || "-"}
                             </p>
                             <p className="mt-1 text-xs text-gray-600">
-                              {zh ? "\u6703\u54e1 ID" : "memberId"}: <code>{overview.member.id}</code>
+                              {zh ? "\u6703\u54e1\u7de8\u865f" : "memberId"}: <code>{overview.member.id}</code>
                             </p>
                           </div>
                         </div>
@@ -710,13 +710,13 @@ function CoachPortalContent() {
                               ? zh ? "\u555f\u7528\u4e2d" : "active"
                               : zh ? "\u672a\u555f\u7528" : "inactive"}
                         </p>
-                        <p className="mt-2 text-xs text-gray-600">{zh ? "\u7968\u5238\u6578" : "passes"}: {overview.passes.length}</p>
+                        <p className="mt-2 text-xs text-gray-600">{zh ? "\u7968\u5238\u6578\u91cf" : "passes"}: {overview.passes.length}</p>
                         {overview.passes.length ? (
                           <ul className="mt-2 space-y-1 text-xs text-gray-700">
                             {overview.passes.slice(0, 5).map((p) => (
                               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded border px-2 py-1">
                                 <span className="truncate">
-                                  {passTypeLabel(p.passType)} | {zh ? "\u5269\u9918" : "remain"} {p.remaining ?? "-"}
+                                  {passTypeLabel(p.passType)} | {zh ? "\u5269\u9918\u5802\u6578" : "remain"} {p.remaining ?? "-"}
                                 </span>
                                 <span className="text-gray-600">
                                   {zh ? "\u5230\u671f" : "exp"} {p.expiresAt ? new Date(p.expiresAt).toLocaleDateString() : "-"}
@@ -802,7 +802,7 @@ function CoachPortalContent() {
             <input
               value={updateBookingId}
               onChange={(e) => setUpdateBookingId(e.target.value)}
-              placeholder={zh ? "\u9810\u7d04 ID" : "bookingId"}
+              placeholder={zh ? "\u9810\u7d04\u7de8\u865f" : "bookingId"}
               className="w-full rounded border px-3 py-2 font-mono text-sm"
               required
             />
@@ -876,14 +876,14 @@ function CoachPortalContent() {
               ))}
             </select>
           </p>
-          <p className="mt-1 text-xs text-gray-600">{zh ? "\u6703\u54e1 ID" : "memberId"}: {memberId || "-"}</p>
+          <p className="mt-1 text-xs text-gray-600">{zh ? "\u6703\u54e1\u7de8\u865f" : "memberId"}: {memberId || "-"}</p>
           <p className="mt-2">
             <select
               value={bookingId}
               onChange={(e) => setBookingId(e.target.value)}
               className="w-full rounded border px-3 py-2 text-sm"
             >
-              <option value="">{zh ? "\u4e0d\u7d81\u5b9a booking\uff08\u9078\u586b\uff09" : "No booking link (optional)"}</option>
+              <option value="">{zh ? "\u4e0d\u7d81\u5b9a\u9810\u7d04\uff08\u9078\u586b\uff09" : "No booking link (optional)"}</option>
               {memberBookingOptions.map((item) => (
                 <option key={item.id} value={item.id}>
                   {new Date(item.starts_at).toLocaleString()} | {item.service_name} | {bookingStatusLabel(item.status)}
@@ -902,7 +902,7 @@ function CoachPortalContent() {
               {zh ? "\u50c5\u986f\u793a\u53ef\u6838\u92b7\u9810\u7d04\uff08\u5df2\u9810\u7d04 / \u5df2\u5831\u5230\uff09" : "Only show redeemable bookings (booked / checked_in)"}
             </label>
           </p>
-          <p className="mt-1 text-xs text-gray-600">{zh ? "\u9810\u7d04 ID" : "bookingId"}: {bookingId || "-"}</p>
+          <p className="mt-1 text-xs text-gray-600">{zh ? "\u9810\u7d04\u7de8\u865f" : "bookingId"}: {bookingId || "-"}</p>
           <p className="mt-2">
             <select
               value={redeemedKind}
@@ -928,7 +928,7 @@ function CoachPortalContent() {
                   </option>
                   {passOptions.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {passTypeLabel(item.pass_type)} | {zh ? "\u5269\u9918" : "remain"} {item.remaining} | {zh ? "\u5230\u671f" : "exp"}{" "}
+                      {passTypeLabel(item.pass_type)} | {zh ? "\u5269\u9918\u5802\u6578" : "remain"} {item.remaining} | {zh ? "\u5230\u671f" : "exp"}{" "}
                       {item.expires_at ? new Date(item.expires_at).toLocaleDateString() : "-"}
                     </option>
                   ))}

@@ -64,24 +64,24 @@ export default function MemberProfilePage() {
       lang === "zh"
         ? {
             profile: "個人資料",
-            backMember: "返回會員中心",
+            backMember: "返回會員首頁",
             myBookings: "我的預約",
             loading: "載入中...",
             loadFail: "載入會員資料失敗",
-            invalidResponse: "會員資料格式錯誤",
+            invalidResponse: "會員資料回應格式錯誤",
             updateFail: "更新失敗",
             updated: "已更新",
-            current: "現況",
-            edit: "編輯",
+            current: "目前資料",
+            edit: "編輯資料",
             fullName: "姓名",
             phone: "電話",
-            photoUrl: "照片 URL",
+            photoUrl: "照片網址",
             notes: "備註",
             consentStatus: "同意狀態",
-            consentSignedAt: "同意簽署時間",
+            consentSignedAt: "同意時間",
             agree: "我同意會員條款",
-            alreadyAgreed: "(已同意，無須重複勾選)",
-            agreeHint: "勾選後會將 consent_status 設為 agreed，並寫入 consent_signed_at。",
+            alreadyAgreed: "（已同意）",
+            agreeHint: "勾選後會把同意狀態設為 agreed，並寫入同意時間。",
             save: "儲存",
             refresh: "重新載入",
             saving: "儲存中...",
@@ -198,7 +198,7 @@ export default function MemberProfilePage() {
     <main className="container">
       <section className="hero">
         <div className="card" style={{ padding: 18 }}>
-          <div className="kvLabel">{lang === "zh" ? "\u500b\u4eba\u8cc7\u6599" : "PROFILE"}</div>
+          <div className="kvLabel">{lang === "zh" ? "個人資料" : "PROFILE"}</div>
           <h1 className="h1" style={{ marginTop: 10, fontSize: 34 }}>
             {t.profile}
           </h1>
@@ -272,7 +272,7 @@ export default function MemberProfilePage() {
                   className="input"
                   value={form.full_name}
                   onChange={(ev) => setForm((s) => ({ ...s, full_name: ev.target.value }))}
-                  placeholder={lang === "zh" ? "\u59d3\u540d" : "full_name"}
+                  placeholder={lang === "zh" ? "姓名" : "full_name"}
                 />
 
                 <label className="sub" style={{ display: "block", marginTop: 10 }}>
@@ -282,7 +282,7 @@ export default function MemberProfilePage() {
                   className="input"
                   value={form.phone}
                   onChange={(ev) => setForm((s) => ({ ...s, phone: ev.target.value }))}
-                  placeholder={lang === "zh" ? "\u96fb\u8a71" : "phone"}
+                  placeholder={lang === "zh" ? "電話" : "phone"}
                 />
 
                 <label className="sub" style={{ display: "block", marginTop: 10 }}>
@@ -292,7 +292,7 @@ export default function MemberProfilePage() {
                   className="input"
                   value={form.photo_url}
                   onChange={(ev) => setForm((s) => ({ ...s, photo_url: ev.target.value }))}
-                  placeholder={lang === "zh" ? "\u7167\u7247 URL" : "photo_url"}
+                  placeholder={lang === "zh" ? "照片網址" : "photo_url"}
                 />
 
                 <label className="sub" style={{ display: "block", marginTop: 10 }}>
@@ -302,7 +302,7 @@ export default function MemberProfilePage() {
                   className="input"
                   value={form.notes}
                   onChange={(ev) => setForm((s) => ({ ...s, notes: ev.target.value }))}
-                  placeholder={lang === "zh" ? "\u5099\u8a3b" : "notes"}
+                  placeholder={lang === "zh" ? "備註" : "notes"}
                   rows={4}
                 />
 
