@@ -61,7 +61,7 @@ export default function FrontdeskPortalPage() {
   );
 
   return (
-    <main className="container fdGlassScene">
+    <main className="fdGlassScene">
       <section className="fdGlassBackdrop fdEnter">
         <div className="fdGlassTop">
           <article className="fdGlassPanel fdGlassTall">
@@ -122,7 +122,7 @@ export default function FrontdeskPortalPage() {
               <a
                 key={card.href}
                 href={card.href}
-                className="card kv fdActionCard fdEnter"
+                className="fdActionCard fdEnter"
                 style={{ animationDelay: `${120 + idx * 60}ms` }}
               >
                 <div className="fdActionHead">
