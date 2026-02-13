@@ -61,69 +61,83 @@ export default function FrontdeskPortalPage() {
   );
 
   return (
-    <main className="container fdShell">
-      <section className="hero">
-        <div className="heroGrid">
-          <div className="card kv fdHeroPanel fdEnter">
-            <div className="fdEyebrow">{t.badge}</div>
-            <h1 className="h1" style={{ marginTop: 10 }}>
-              {t.title}
-            </h1>
-            <p className="sub fdLead">{t.sub}</p>
+    <main className="container fdGlassScene">
+      <section className="fdGlassBackdrop fdEnter">
+        <div className="fdGlassTop">
+          <article className="fdGlassPanel fdGlassTall">
+            <div className="fdChipRow">
+              <span className="fdChip fdChipActive">{t.badge}</span>
+              <span className="fdChip">{t.statusOpenValue}</span>
+            </div>
+            <h2 className="fdGlassTitle">{t.title}</h2>
+            <p className="fdGlassText">{t.sub}</p>
+            <div className="fdGaugeWrap">
+              <div className="fdGaugeRing" />
+              <div className="fdGaugeValue">64%</div>
+            </div>
+          </article>
 
-            <div className="actions">
-              <a className="btn btnPrimary" href="/frontdesk/checkin">
+          <article className="fdGlassPanel">
+            <div className="fdChipRow">
+              <span className="fdChip fdChipActive">{t.statusTitle}</span>
+              <span className="fdChip">{t.statusTasksValue}</span>
+            </div>
+            <h2 className="fdGlassTitle" style={{ marginTop: 16 }}>
+              {lang === "zh" ? "Hi 櫃檯夥伴" : "Hi Frontdesk"}
+            </h2>
+            <p className="fdGlassText">{t.statusTip}</p>
+            <div className="fdPillActions">
+              <a className="fdPillBtn fdPillBtnPrimary" href="/frontdesk/checkin">
                 {t.primary}
               </a>
-              <a className="btn" href="/frontdesk/member-search">
+              <a className="fdPillBtn" href="/frontdesk/member-search">
                 {t.secondary}
               </a>
             </div>
-          </div>
+          </article>
 
-          <div className="card kv fdHeroPanel fdEnter">
-            <h2 className="sectionTitle" style={{ marginBottom: 12 }}>
-              {t.statusTitle}
-            </h2>
-            <div className="fdMetricGrid">
-              <div className="fdMetric">
-                <div className="kvLabel">{t.statusOpen}</div>
-                <div className="fdMetricValue">{t.statusOpenValue}</div>
-              </div>
-              <div className="fdMetric">
-                <div className="kvLabel">{t.statusTasks}</div>
-                <div className="fdMetricValue">{t.statusTasksValue}</div>
-              </div>
+          <article className="fdGlassPanel fdGlassTall">
+            <div className="fdChipRow">
+              <span className="fdChip fdChipActive">{t.statusOpen}</span>
+              <span className="fdChip">{t.statusTasks}</span>
             </div>
-            <p className="sub" style={{ marginTop: 12 }}>
-              {t.statusTip}
-            </p>
-          </div>
+            <h2 className="fdGlassTitle">{lang === "zh" ? "班務概況" : "Shift Overview"}</h2>
+            <div className="fdDial">
+              <div className="fdDialInner">24°C</div>
+            </div>
+            <div className="fdMetricLine">
+              <span>{t.statusOpen}</span>
+              <strong>{t.statusOpenValue}</strong>
+            </div>
+            <div className="fdMetricLine">
+              <span>{t.statusTasks}</span>
+              <strong>{t.statusTasksValue}</strong>
+            </div>
+          </article>
         </div>
-      </section>
 
-      <section style={{ marginTop: 8 }}>
-        <div className="fdActionGrid">
-          {t.cards.map((card, idx) => (
-            <a
-              key={card.href}
-              href={card.href}
-              className="card kv fdActionCard fdEnter"
-              style={{ animationDelay: `${80 + idx * 60}ms` }}
-            >
-              <div className="fdActionHead">
-                <span className="kvLabel">{card.tag}</span>
-                <span className="fdArrow">{">>"}</span>
-              </div>
-              <h3 className="fdActionTitle">{card.title}</h3>
-              <p className="sub" style={{ marginTop: 8 }}>
-                {card.desc}
-              </p>
-            </a>
-          ))}
-        </div>
+        <section style={{ marginTop: 14 }}>
+          <div className="fdActionGrid">
+            {t.cards.map((card, idx) => (
+              <a
+                key={card.href}
+                href={card.href}
+                className="card kv fdActionCard fdEnter"
+                style={{ animationDelay: `${120 + idx * 60}ms` }}
+              >
+                <div className="fdActionHead">
+                  <span className="kvLabel">{card.tag}</span>
+                  <span className="fdArrow">{">>"}</span>
+                </div>
+                <h3 className="fdActionTitle">{card.title}</h3>
+                <p className="sub" style={{ marginTop: 8 }}>
+                  {card.desc}
+                </p>
+              </a>
+            ))}
+          </div>
+        </section>
       </section>
     </main>
   );
 }
-

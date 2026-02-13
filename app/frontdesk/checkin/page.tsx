@@ -221,48 +221,49 @@ export default function FrontdeskCheckinPage() {
   const decisionColor = result?.decision === "allow" ? "var(--brand)" : "#9b1c1c";
 
   return (
-    <main className="container fdShell">
-      <section className="hero">
-        <div className="card kv fdHeroPanel">
-          <div className="fdEyebrow">{t.badge}</div>
-          <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
-            {t.title}
-          </h1>
-          <p className="sub fdLead">{t.sub}</p>
-        </div>
-      </section>
+    <main className="container fdGlassScene">
+      <section className="fdGlassBackdrop">
+        <section className="hero" style={{ paddingTop: 0 }}>
+          <div className="fdGlassPanel">
+            <div className="fdEyebrow">{t.badge}</div>
+            <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
+              {t.title}
+            </h1>
+            <p className="fdGlassText">{t.sub}</p>
+          </div>
+        </section>
 
-      <section className="fdTwoCol">
-        <div className="card kv fdSoftPanel">
-          <h2 className="sectionTitle">{t.cameraTitle}</h2>
-          <video ref={videoRef} className="input" style={{ marginTop: 8, minHeight: 260, background: "#111" }} muted playsInline />
-          <p className="sub" style={{ marginTop: 8 }}>
-            {scannerReady ? t.cameraReady : t.cameraPreparing}
-          </p>
-          {cameraError ? <p className="error" style={{ marginTop: 8 }}>{cameraError}</p> : null}
-        </div>
+        <section className="fdTwoCol">
+          <div className="fdGlassPanel">
+            <h2 className="sectionTitle">{t.cameraTitle}</h2>
+            <video ref={videoRef} className="input" style={{ marginTop: 8, minHeight: 260, background: "#111", borderColor: "rgba(255,255,255,.25)" }} muted playsInline />
+            <p className="fdGlassText" style={{ marginTop: 8 }}>
+              {scannerReady ? t.cameraReady : t.cameraPreparing}
+            </p>
+            {cameraError ? <p className="error" style={{ marginTop: 8 }}>{cameraError}</p> : null}
+          </div>
 
-        <div className="card kv fdSoftPanel">
-          <h2 className="sectionTitle">{t.manualTitle}</h2>
-          <form
-            className="field"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void callVerify(manualInput);
-            }}
-          >
-            <input value={manualInput} onChange={(event) => setManualInput(event.target.value)} className="input" placeholder={t.manualPlaceholder} autoFocus />
-            <button type="submit" disabled={busy || !manualInput.trim()} className="btn btnPrimary">
-              {busy ? t.manualBusy : t.manualBtn}
-            </button>
-          </form>
-        </div>
-      </section>
+          <div className="fdGlassPanel">
+            <h2 className="sectionTitle">{t.manualTitle}</h2>
+            <form
+              className="field"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void callVerify(manualInput);
+              }}
+            >
+              <input value={manualInput} onChange={(event) => setManualInput(event.target.value)} className="input" placeholder={t.manualPlaceholder} autoFocus />
+              <button type="submit" disabled={busy || !manualInput.trim()} className="fdPillBtn fdPillBtnPrimary">
+                {busy ? t.manualBusy : t.manualBtn}
+              </button>
+            </form>
+          </div>
+        </section>
 
-      <ManualAllowPanel />
+        <ManualAllowPanel />
 
       {result ? (
-        <section className="card kv fdSoftPanel" style={{ marginTop: 14 }}>
+        <section className="fdGlassPanel" style={{ marginTop: 14 }}>
           <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
             <h2 className="sectionTitle" style={{ margin: 0 }}>
               {t.resultTitle}
@@ -317,7 +318,7 @@ export default function FrontdeskCheckinPage() {
           </div>
         </section>
       ) : null}
+      </section>
     </main>
   );
 }
-

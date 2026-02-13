@@ -111,75 +111,76 @@ export default function FrontdeskMemberSearchPage() {
   }
 
   return (
-    <main className="container fdShell">
-      <section className="hero">
-        <div className="card kv fdHeroPanel">
-          <div className="fdEyebrow">{t.badge}</div>
-          <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
-            {t.title}
-          </h1>
-          <p className="sub fdLead">{t.sub}</p>
-        </div>
-      </section>
+    <main className="container fdGlassScene">
+      <section className="fdGlassBackdrop">
+        <section className="hero" style={{ paddingTop: 0 }}>
+          <div className="fdGlassPanel">
+            <div className="fdEyebrow">{t.badge}</div>
+            <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
+              {t.title}
+            </h1>
+            <p className="fdGlassText">{t.sub}</p>
+          </div>
+        </section>
 
-      {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
+        {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
 
-      <section className="fdTwoCol">
-        <div className="card kv fdSoftPanel">
-          <h2 className="sectionTitle">{t.findTitle}</h2>
-          <p className="sub" style={{ marginTop: 6 }}>
-            {t.findHint}
-          </p>
-          <form onSubmit={search} className="field">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.findPlaceholder} className="input" />
-            <button type="submit" className="btn btnPrimary" disabled={loading}>
-              {loading ? t.searching : t.findBtn}
-            </button>
-          </form>
-        </div>
+        <section className="fdTwoCol">
+          <div className="fdGlassPanel">
+            <h2 className="sectionTitle">{t.findTitle}</h2>
+            <p className="fdGlassText" style={{ marginTop: 6 }}>
+              {t.findHint}
+            </p>
+            <form onSubmit={search} className="field">
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.findPlaceholder} className="input" />
+              <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={loading}>
+                {loading ? t.searching : t.findBtn}
+              </button>
+            </form>
+          </div>
 
-        <div className="card kv fdSoftPanel">
-          <h2 className="sectionTitle">{t.createTitle}</h2>
-          <form onSubmit={createMember} className="field">
-            <label className="sub" style={{ marginTop: 0 }}>
-              {t.createName}
-            </label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.createName} className="input" required />
-            <label className="sub">{t.createPhone}</label>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.createPhone} className="input" />
-            <button type="submit" className="btn" disabled={creating}>
-              {creating ? t.creatingBtn : t.createBtn}
-            </button>
-          </form>
-        </div>
-      </section>
+          <div className="fdGlassPanel">
+            <h2 className="sectionTitle">{t.createTitle}</h2>
+            <form onSubmit={createMember} className="field">
+              <label className="fdGlassText" style={{ marginTop: 0 }}>
+                {t.createName}
+              </label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.createName} className="input" required />
+              <label className="fdGlassText">{t.createPhone}</label>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.createPhone} className="input" />
+              <button type="submit" className="fdPillBtn" disabled={creating}>
+                {creating ? t.creatingBtn : t.createBtn}
+              </button>
+            </form>
+          </div>
+        </section>
 
-      <section style={{ marginTop: 14 }}>
-        <h2 className="sectionTitle">{t.resultTitle}</h2>
-        <div className="fdActionGrid">
-          {items.length === 0 ? (
-            <div className="card kv fdSoftPanel">
-              <div className="kvValue">{t.empty}</div>
-            </div>
-          ) : (
-            items.map((item) => (
-              <article key={item.id} className="card kv fdActionCard">
-                <h3 className="fdActionTitle" style={{ fontSize: 20 }}>
-                  {item.full_name}
-                </h3>
-                <p className="sub">{item.phone || "-"}</p>
-                <p className="sub" style={{ marginTop: 8 }}>
-                  {t.memberId}: <code>{item.id}</code>
-                </p>
-                <p className="sub" style={{ marginTop: 4 }}>
-                  {t.branch}: {item.store_id || "-"}
-                </p>
-              </article>
-            ))
-          )}
-        </div>
+        <section style={{ marginTop: 14 }}>
+          <h2 className="sectionTitle">{t.resultTitle}</h2>
+          <div className="fdActionGrid">
+            {items.length === 0 ? (
+              <div className="fdGlassPanel">
+                <div className="kvValue">{t.empty}</div>
+              </div>
+            ) : (
+              items.map((item) => (
+                <article key={item.id} className="fdGlassPanel fdActionCard">
+                  <h3 className="fdActionTitle" style={{ fontSize: 20 }}>
+                    {item.full_name}
+                  </h3>
+                  <p className="fdGlassText">{item.phone || "-"}</p>
+                  <p className="fdGlassText" style={{ marginTop: 8 }}>
+                    {t.memberId}: <code>{item.id}</code>
+                  </p>
+                  <p className="fdGlassText" style={{ marginTop: 4 }}>
+                    {t.branch}: {item.store_id || "-"}
+                  </p>
+                </article>
+              ))
+            )}
+          </div>
+        </section>
       </section>
     </main>
   );
 }
-

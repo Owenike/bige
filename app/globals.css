@@ -251,6 +251,154 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     radial-gradient(900px 320px at 0% -14%, rgba(177,137,84,.14), transparent 60%),
     radial-gradient(700px 280px at 100% 0%, rgba(127,185,173,.14), transparent 58%);
 }
+.fdGlassScene{
+  position: relative;
+}
+.fdGlassBackdrop{
+  position: relative;
+  overflow: hidden;
+  border-radius: 36px;
+  padding: 20px;
+  background:
+    radial-gradient(1100px 460px at 0% 0%, rgba(255, 194, 133, .28), transparent 58%),
+    radial-gradient(900px 520px at 100% 20%, rgba(149, 70, 17, .34), transparent 64%),
+    linear-gradient(135deg, #4f2f24 0%, #80553a 44%, #3d261f 100%);
+  box-shadow: 0 32px 70px rgba(25, 14, 10, .36);
+}
+.fdGlassBackdrop::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(640px 180px at 70% 95%, rgba(248, 157, 70, .22), transparent 70%),
+    radial-gradient(620px 200px at 20% 4%, rgba(243, 213, 170, .18), transparent 66%);
+  pointer-events: none;
+}
+.fdGlassTop{
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1.05fr 1.25fr 1fr;
+  gap: 12px;
+}
+.fdGlassPanel{
+  min-height: 280px;
+  border-radius: 30px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 16px;
+  color: #f7eee6;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 14px 30px rgba(22, 11, 8, .18);
+}
+.fdGlassTall{ min-height: 420px; }
+.fdChipRow{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fdChip{
+  border-radius: 999px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255,255,255,.22);
+  background: rgba(20, 10, 8, .22);
+  font-size: 12px;
+}
+.fdChipActive{
+  color: #36231b;
+  background: rgba(255,255,255,.92);
+}
+.fdGlassTitle{
+  margin: 14px 0 0;
+  font-family: var(--font-serif, ui-serif, "Noto Serif TC", serif);
+  font-size: clamp(28px, 2.6vw, 42px);
+  line-height: 1.06;
+  letter-spacing: .01em;
+}
+.fdGlassText{
+  margin-top: 10px;
+  color: rgba(255,241,229,.92);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.fdPillActions{
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fdPillBtn{
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.25);
+  background: rgba(20,10,8,.28);
+  color: #fff6ee;
+  padding: 10px 14px;
+  font-size: 13px;
+  transition: transform .15s ease, background .15s ease;
+}
+.fdPillBtn:hover{
+  text-decoration: none;
+  transform: translateY(-1px);
+  background: rgba(20,10,8,.38);
+}
+.fdPillBtnPrimary{
+  background: linear-gradient(135deg, rgba(255,250,245,.94), rgba(248,227,201,.9));
+  color: #422a1f;
+}
+.fdGaugeWrap{
+  position: relative;
+  margin-top: 24px;
+  width: 210px;
+  height: 210px;
+}
+.fdGaugeRing{
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: rgba(255,244,229,.95);
+  border-right-color: rgba(255,244,229,.95);
+}
+.fdGaugeValue{
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 38px;
+  font-weight: 700;
+}
+.fdDial{
+  width: 180px;
+  height: 180px;
+  margin: 18px auto 12px;
+  border-radius: 999px;
+  background:
+    conic-gradient(from 220deg, rgba(145,228,233,.8), rgba(235,184,117,.9), rgba(145,228,233,.8));
+  display: grid;
+  place-items: center;
+}
+.fdDialInner{
+  width: 130px;
+  height: 130px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(248,240,232,.95);
+  color: #493026;
+  font-weight: 700;
+  font-size: 28px;
+}
+.fdMetricLine{
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  color: rgba(255,246,239,.94);
+}
+.fdMetricLine strong{
+  color: #fff;
+  font-weight: 700;
+}
 .fdHeroPanel{
   padding: 20px;
   background:
@@ -347,6 +495,22 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   to { opacity: 1; transform: translateY(0); }
 }
 @media (max-width: 900px){
+  .fdGlassTop{ grid-template-columns: 1fr; }
+  .fdGlassPanel{ min-height: 260px; }
+  .fdGlassTall{ min-height: 320px; }
+  .fdGaugeWrap{
+    width: 170px;
+    height: 170px;
+  }
+  .fdDial{
+    width: 140px;
+    height: 140px;
+  }
+  .fdDialInner{
+    width: 100px;
+    height: 100px;
+    font-size: 22px;
+  }
   .fdTwoCol{ grid-template-columns: 1fr; }
   .fdMetricGrid{ grid-template-columns: 1fr; }
   .fdActionGrid{ grid-template-columns: 1fr; }
