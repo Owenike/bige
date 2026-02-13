@@ -41,7 +41,17 @@ function formatDateTime(iso: string | null | undefined) {
   return d.toLocaleString();
 }
 
+function useLang(): "zh" | "en" {
+  const [lang, setLang] = useState<"zh" | "en">("zh");
+  useEffect(() => {
+    const htmlLang = (document.documentElement.lang || "").toLowerCase();
+    setLang(htmlLang.startsWith("en") ? "en" : "zh");
+  }, []);
+  return lang;
+}
+
 export default function MemberProfilePage() {
+  const lang = useLang();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +65,60 @@ export default function MemberProfilePage() {
     notes: "",
     consentAgree: false,
   });
+
+  const t = useMemo(
+    () =>
+      lang === "zh"
+        ? {
+            profile: "個人資料",
+            backMember: "返回會員中心",
+            myBookings: "我的預約",
+            loading: "載入中...",
+            loadFail: "載入會員資料失敗",
+            invalidResponse: "會員資料格式錯誤",
+            updateFail: "更新失敗",
+            updated: "已更新",
+            current: "現況",
+            edit: "編輯",
+            fullName: "姓名",
+            phone: "電話",
+            photoUrl: "照片 URL",
+            notes: "備註",
+            consentStatus: "同意狀態",
+            consentSignedAt: "同意簽署時間",
+            agree: "我同意會員條款",
+            alreadyAgreed: "(已同意，無須重複勾選)",
+            agreeHint: "勾選後會將 consent_status 設為 agreed，並寫入 consent_signed_at。",
+            save: "儲存",
+            refresh: "重新載入",
+            saving: "儲存中...",
+          }
+        : {
+            profile: "Profile",
+            backMember: "Back to Member",
+            myBookings: "My Bookings",
+            loading: "Loading...",
+            loadFail: "Failed to load member profile",
+            invalidResponse: "Invalid /api/member/me response",
+            updateFail: "Update failed",
+            updated: "Updated",
+            current: "Current",
+            edit: "Edit",
+            fullName: "Full Name",
+            phone: "Phone",
+            photoUrl: "Photo URL",
+            notes: "Notes",
+            consentStatus: "Consent Status",
+            consentSignedAt: "Consent Signed At",
+            agree: "I agree to member terms",
+            alreadyAgreed: "(Already agreed)",
+            agreeHint: "Checking this sets consent_status=agreed and writes consent_signed_at.",
+            save: "Save",
+            refresh: "Refresh",
+            saving: "Saving...",
+          },
+    [lang],
+  );
 
   const consentAgreed = useMemo(() => {
     return (member?.consent_status ?? "").toLowerCase() === "agreed";
@@ -71,12 +135,12 @@ export default function MemberProfilePage() {
         const msg =
           typeof json === "object" && json && "error" in json && typeof (json as { error?: unknown }).error === "string"
             ? (json as { error: string }).error
-            : "Failed to load member profile";
+            : t.loadFail;
         throw new Error(msg);
       }
 
       const parsed = MeResponseSchema.safeParse(json);
-      if (!parsed.success) throw new Error("Invalid /api/member/me response");
+      if (!parsed.success) throw new Error(t.invalidResponse);
 
       const m = parsed.data.member;
       setMember(m);
@@ -88,11 +152,11 @@ export default function MemberProfilePage() {
         consentAgree: false,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load member profile");
+      setError(e instanceof Error ? e.message : t.loadFail);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t.invalidResponse, t.loadFail]);
 
   useEffect(() => {
     void fetchMe();
@@ -124,14 +188,14 @@ export default function MemberProfilePage() {
         const msg =
           typeof json === "object" && json && "error" in json && typeof (json as { error?: unknown }).error === "string"
             ? (json as { error: string }).error
-            : "Update failed";
+            : t.updateFail;
         throw new Error(msg);
       }
 
-      setSuccess("已儲存");
+      setSuccess(t.updated);
       await fetchMe();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Update failed");
+      setError(e instanceof Error ? e.message : t.updateFail);
     } finally {
       setSaving(false);
     }
@@ -143,21 +207,21 @@ export default function MemberProfilePage() {
         <div className="card" style={{ padding: 18 }}>
           <div className="kvLabel">PROFILE</div>
           <h1 className="h1" style={{ marginTop: 10, fontSize: 34 }}>
-            個人資料
+            {t.profile}
           </h1>
 
           <div className="actions" style={{ marginTop: 10 }}>
             <a className="btn" href="/member">
-              返回會員中心
+              {t.backMember}
             </a>
             <a className="btn btnPrimary" href="/member/bookings">
-              我的預約
+              {t.myBookings}
             </a>
           </div>
 
           {loading ? (
             <p className="sub" style={{ marginTop: 12 }}>
-              載入中...
+              {t.loading}
             </p>
           ) : null}
 
@@ -179,15 +243,25 @@ export default function MemberProfilePage() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
                   <div>
                     <div className="kvLabel" style={{ marginBottom: 6 }}>
-                      現況
+                      {t.current}
                     </div>
-                    <div className="sub">full_name: {toText(member.full_name) || "-"}</div>
-                    <div className="sub">phone: {toText(member.phone) || "-"}</div>
-                    <div className="sub">photo_url: {toText(member.photo_url) || "-"}</div>
-                    <div className="sub">notes: {toText(member.notes) || "-"}</div>
-                    <div className="sub">consent_status: {toText(member.consent_status) || "-"}</div>
                     <div className="sub">
-                      consent_signed_at: {formatDateTime(member.consent_signed_at) || "-"}
+                      {t.fullName}: {toText(member.full_name) || "-"}
+                    </div>
+                    <div className="sub">
+                      {t.phone}: {toText(member.phone) || "-"}
+                    </div>
+                    <div className="sub">
+                      {t.photoUrl}: {toText(member.photo_url) || "-"}
+                    </div>
+                    <div className="sub">
+                      {t.notes}: {toText(member.notes) || "-"}
+                    </div>
+                    <div className="sub">
+                      {t.consentStatus}: {toText(member.consent_status) || "-"}
+                    </div>
+                    <div className="sub">
+                      {t.consentSignedAt}: {formatDateTime(member.consent_signed_at) || "-"}
                     </div>
                   </div>
                 </div>
@@ -195,11 +269,11 @@ export default function MemberProfilePage() {
 
               <form onSubmit={onSubmit} className="card" style={{ marginTop: 14, padding: 14 }}>
                 <div className="kvLabel" style={{ marginBottom: 10 }}>
-                  編輯
+                  {t.edit}
                 </div>
 
                 <label className="sub" style={{ display: "block", marginTop: 10 }}>
-                  姓名
+                  {t.fullName}
                 </label>
                 <input
                   className="input"
@@ -209,7 +283,7 @@ export default function MemberProfilePage() {
                 />
 
                 <label className="sub" style={{ display: "block", marginTop: 10 }}>
-                  電話
+                  {t.phone}
                 </label>
                 <input
                   className="input"
@@ -219,7 +293,7 @@ export default function MemberProfilePage() {
                 />
 
                 <label className="sub" style={{ display: "block", marginTop: 10 }}>
-                  照片 URL
+                  {t.photoUrl}
                 </label>
                 <input
                   className="input"
@@ -229,7 +303,7 @@ export default function MemberProfilePage() {
                 />
 
                 <label className="sub" style={{ display: "block", marginTop: 10 }}>
-                  備註
+                  {t.notes}
                 </label>
                 <textarea
                   className="input"
@@ -247,26 +321,26 @@ export default function MemberProfilePage() {
                       disabled={consentAgreed}
                       onChange={(ev) => setForm((s) => ({ ...s, consentAgree: ev.target.checked }))}
                     />
-                    我已閱讀並同意
+                    {t.agree}
                     {consentAgreed ? (
                       <span className="sub" style={{ opacity: 0.8 }}>
-                        (已同意，無法變更)
+                        {t.alreadyAgreed}
                       </span>
                     ) : null}
                   </label>
                   {!consentAgreed ? (
                     <div className="sub" style={{ marginTop: 6, opacity: 0.8 }}>
-                      勾選後儲存會將 consent_status 設為 agreed，並將 consent_signed_at 設為目前時間。
+                      {t.agreeHint}
                     </div>
                   ) : null}
                 </div>
 
                 <div className="actions" style={{ marginTop: 12 }}>
                   <button className="btn btnPrimary" type="submit" disabled={saving}>
-                    {saving ? "儲存中..." : "儲存"}
+                    {saving ? t.saving : t.save}
                   </button>
                   <button className="btn" type="button" onClick={() => void fetchMe()} disabled={saving}>
-                    重新載入
+                    {t.refresh}
                   </button>
                 </div>
               </form>
@@ -277,4 +351,3 @@ export default function MemberProfilePage() {
     </main>
   );
 }
-

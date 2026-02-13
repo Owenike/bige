@@ -56,10 +56,32 @@ function fmt(iso: string) {
   return d.toLocaleString();
 }
 
+function useLang(): "zh" | "en" {
+  const [lang, setLang] = useState<"zh" | "en">("zh");
+  useEffect(() => {
+    const htmlLang = (document.documentElement.lang || "").toLowerCase();
+    setLang(htmlLang.startsWith("en") ? "en" : "zh");
+  }, []);
+  return lang;
+}
+
+function statusLabel(value: string, lang: "zh" | "en") {
+  const map: Record<string, { zh: string; en: string }> = {
+    "": { zh: "全部", en: "All" },
+    booked: { zh: "已預約", en: "Booked" },
+    checked_in: { zh: "已報到", en: "Checked In" },
+    cancelled: { zh: "已取消", en: "Cancelled" },
+    completed: { zh: "已完成", en: "Completed" },
+    no_show: { zh: "未到場", en: "No Show" },
+  };
+  return map[value]?.[lang] ?? value;
+}
+
 export default function MemberBookingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const status = searchParams.get("status") ?? "";
+  const lang = useLang();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,52 +89,126 @@ export default function MemberBookingsPage() {
 
   const [edit, setEdit] = useState<Record<string, BookingEditState>>({});
 
-  const fetchList = useCallback(async (s: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const qs = s ? `?status=${encodeURIComponent(s)}` : "";
-      const res = await fetch(`/api/member/bookings${qs}`, { cache: "no-store" });
-      const json: unknown = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg =
-          typeof json === "object" && json && "error" in json && typeof (json as { error?: unknown }).error === "string"
-            ? (json as { error: string }).error
-            : "Failed to load bookings";
-        throw new Error(msg);
-      }
-      const parsed = ListSchema.safeParse(json);
-      if (!parsed.success) throw new Error("Invalid /api/member/bookings response");
-
-      setItems(parsed.data.items);
-      setEdit((prev) => {
-        const next: Record<string, BookingEditState> = { ...prev };
-        for (const b of parsed.data.items) {
-          if (!next[b.id]) {
-            next[b.id] = {
-              reason: "",
-              rescheduleStartsLocal: toLocalInputValue(b.starts_at),
-              rescheduleEndsLocal: toLocalInputValue(b.ends_at),
-              submitting: false,
-              error: null,
-            };
-          } else {
-            // Keep existing reason, but refresh default suggested times.
-            next[b.id] = {
-              ...next[b.id],
-              rescheduleStartsLocal: next[b.id].rescheduleStartsLocal || toLocalInputValue(b.starts_at),
-              rescheduleEndsLocal: next[b.id].rescheduleEndsLocal || toLocalInputValue(b.ends_at),
-            };
+  const t = useMemo(
+    () =>
+      lang === "zh"
+        ? {
+            title: "我的預約",
+            desc: `可依狀態篩選，並可取消或改期（需填 reason；距離開始 ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} 分鐘內不可修改）。`,
+            backMember: "返回會員中心",
+            profile: "個人資料",
+            reload: "重新整理",
+            filter: "狀態篩選",
+            loading: "載入中...",
+            noData: "目前沒有預約資料",
+            booking: "預約",
+            service: "服務",
+            startsAt: "開始時間",
+            endsAt: "結束時間",
+            status: "狀態",
+            note: "備註",
+            canModify: "可修改",
+            cannotModify: `不可修改（距開始少於 ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} 分鐘）`,
+            reason: "原因（必填）",
+            reasonPh: "請輸入原因",
+            cancel: "取消預約",
+            reschedule: "改期",
+            saving: "處理中...",
+            startAt: "新開始時間",
+            endAt: "新結束時間",
+            lockTip: `距開始少於 ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} 分鐘不可操作`,
+            reasonTip: "請先填寫原因",
+            loadFail: "載入預約失敗",
+            updateFail: "更新失敗",
+            invalidResponse: "預約資料格式錯誤",
+            requireReason: "reason is required",
+            requireTime: "startsAt and endsAt are required",
+            endAfterStart: "endsAt must be after startsAt",
           }
+        : {
+            title: "My Bookings",
+            desc: `Filter by status and cancel/reschedule (reason required; cannot modify within ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} minutes before start).`,
+            backMember: "Back to Member",
+            profile: "Profile",
+            reload: "Reload",
+            filter: "Status Filter",
+            loading: "Loading...",
+            noData: "No bookings",
+            booking: "Booking",
+            service: "Service",
+            startsAt: "Starts At",
+            endsAt: "Ends At",
+            status: "Status",
+            note: "Note",
+            canModify: "Can modify",
+            cannotModify: `Cannot modify (< ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} mins before start)`,
+            reason: "Reason (required)",
+            reasonPh: "Enter reason",
+            cancel: "Cancel",
+            reschedule: "Reschedule",
+            saving: "Processing...",
+            startAt: "New startsAt",
+            endAt: "New endsAt",
+            lockTip: `Cannot modify within ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} minutes`,
+            reasonTip: "Reason is required",
+            loadFail: "Failed to load bookings",
+            updateFail: "Update failed",
+            invalidResponse: "Invalid /api/member/bookings response",
+            requireReason: "reason is required",
+            requireTime: "startsAt and endsAt are required",
+            endAfterStart: "endsAt must be after startsAt",
+          },
+    [lang],
+  );
+
+  const fetchList = useCallback(
+    async (s: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const qs = s ? `?status=${encodeURIComponent(s)}` : "";
+        const res = await fetch(`/api/member/bookings${qs}`, { cache: "no-store" });
+        const json: unknown = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg =
+            typeof json === "object" && json && "error" in json && typeof (json as { error?: unknown }).error === "string"
+              ? (json as { error: string }).error
+              : t.loadFail;
+          throw new Error(msg);
         }
-        return next;
-      });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load bookings");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        const parsed = ListSchema.safeParse(json);
+        if (!parsed.success) throw new Error(t.invalidResponse);
+
+        setItems(parsed.data.items);
+        setEdit((prev) => {
+          const next: Record<string, BookingEditState> = { ...prev };
+          for (const b of parsed.data.items) {
+            if (!next[b.id]) {
+              next[b.id] = {
+                reason: "",
+                rescheduleStartsLocal: toLocalInputValue(b.starts_at),
+                rescheduleEndsLocal: toLocalInputValue(b.ends_at),
+                submitting: false,
+                error: null,
+              };
+            } else {
+              next[b.id] = {
+                ...next[b.id],
+                rescheduleStartsLocal: next[b.id].rescheduleStartsLocal || toLocalInputValue(b.starts_at),
+                rescheduleEndsLocal: next[b.id].rescheduleEndsLocal || toLocalInputValue(b.ends_at),
+              };
+            }
+          }
+          return next;
+        });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t.loadFail);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [t.invalidResponse, t.loadFail],
+  );
 
   useEffect(() => {
     void fetchList(status);
@@ -120,14 +216,14 @@ export default function MemberBookingsPage() {
 
   const statusOptions = useMemo(
     () => [
-      { value: "", label: "全部" },
-      { value: "booked", label: "booked" },
-      { value: "checked_in", label: "checked_in" },
-      { value: "cancelled", label: "cancelled" },
-      { value: "completed", label: "completed" },
-      { value: "no_show", label: "no_show" },
+      { value: "", label: statusLabel("", lang) },
+      { value: "booked", label: statusLabel("booked", lang) },
+      { value: "checked_in", label: statusLabel("checked_in", lang) },
+      { value: "cancelled", label: statusLabel("cancelled", lang) },
+      { value: "completed", label: statusLabel("completed", lang) },
+      { value: "no_show", label: statusLabel("no_show", lang) },
     ],
-    [],
+    [lang],
   );
 
   async function patchBooking(id: string, body: { action: "cancel" | "reschedule"; reason: string; startsAt?: string; endsAt?: string }) {
@@ -141,7 +237,7 @@ export default function MemberBookingsPage() {
       const msg =
         typeof json === "object" && json && "error" in json && typeof (json as { error?: unknown }).error === "string"
           ? (json as { error: string }).error
-          : "Update failed";
+          : t.updateFail;
       throw new Error(msg);
     }
   }
@@ -151,14 +247,14 @@ export default function MemberBookingsPage() {
     const reason = st?.reason?.trim() ?? "";
     setEdit((p) => ({ ...p, [id]: { ...(p[id] ?? defaultEdit()), submitting: true, error: null } }));
     try {
-      if (!reason) throw new Error("reason is required");
+      if (!reason) throw new Error(t.requireReason);
       await patchBooking(id, { action: "cancel", reason });
       await fetchList(status);
       setEdit((p) => ({ ...p, [id]: { ...(p[id] ?? defaultEdit()), submitting: false, error: null, reason: "" } }));
     } catch (e) {
       setEdit((p) => ({
         ...p,
-        [id]: { ...(p[id] ?? defaultEdit()), submitting: false, error: e instanceof Error ? e.message : "Cancel failed" },
+        [id]: { ...(p[id] ?? defaultEdit()), submitting: false, error: e instanceof Error ? e.message : t.updateFail },
       }));
     }
   }
@@ -171,9 +267,9 @@ export default function MemberBookingsPage() {
 
     setEdit((p) => ({ ...p, [id]: { ...(p[id] ?? defaultEdit()), submitting: true, error: null } }));
     try {
-      if (!reason) throw new Error("reason is required");
-      if (!startsIso || !endsIso) throw new Error("startsAt and endsAt are required");
-      if (new Date(endsIso).getTime() <= new Date(startsIso).getTime()) throw new Error("endsAt must be after startsAt");
+      if (!reason) throw new Error(t.requireReason);
+      if (!startsIso || !endsIso) throw new Error(t.requireTime);
+      if (new Date(endsIso).getTime() <= new Date(startsIso).getTime()) throw new Error(t.endAfterStart);
       await patchBooking(id, { action: "reschedule", reason, startsAt: startsIso, endsAt: endsIso });
       await fetchList(status);
       setEdit((p) => ({ ...p, [id]: { ...(p[id] ?? defaultEdit()), submitting: false, error: null, reason: "" } }));
@@ -183,7 +279,7 @@ export default function MemberBookingsPage() {
         [id]: {
           ...(p[id] ?? defaultEdit()),
           submitting: false,
-          error: e instanceof Error ? e.message : "Reschedule failed",
+          error: e instanceof Error ? e.message : t.updateFail,
         },
       }));
     }
@@ -199,25 +295,25 @@ export default function MemberBookingsPage() {
         <div className="card" style={{ padding: 18 }}>
           <div className="kvLabel">BOOKINGS</div>
           <h1 className="h1" style={{ marginTop: 10, fontSize: 34 }}>
-            我的預約
+            {t.title}
           </h1>
-          <p className="sub">可依狀態篩選，並可取消或改期（需填 reason；距離開始 120 分鐘內不可修改）。</p>
+          <p className="sub">{t.desc}</p>
 
           <div className="actions" style={{ marginTop: 10 }}>
             <a className="btn" href="/member">
-              返回會員中心
+              {t.backMember}
             </a>
             <a className="btn" href="/member/profile">
-              個人資料
+              {t.profile}
             </a>
             <button className="btn btnPrimary" type="button" onClick={() => void fetchList(status)} disabled={loading}>
-              重新整理
+              {t.reload}
             </button>
           </div>
 
           <div className="card" style={{ marginTop: 12, padding: 12 }}>
             <label className="sub" style={{ display: "block", marginBottom: 6 }}>
-              status filter
+              {t.filter}
             </label>
             <select
               className="input"
@@ -240,7 +336,7 @@ export default function MemberBookingsPage() {
 
           {loading ? (
             <p className="sub" style={{ marginTop: 12 }}>
-              載入中...
+              {t.loading}
             </p>
           ) : null}
 
@@ -252,7 +348,7 @@ export default function MemberBookingsPage() {
 
           {!loading && items.length === 0 ? (
             <p className="sub" style={{ marginTop: 12 }}>
-              目前沒有預約。
+              {t.noData}
             </p>
           ) : null}
 
@@ -264,22 +360,32 @@ export default function MemberBookingsPage() {
 
               return (
                 <div key={b.id} className="card" style={{ padding: 14 }}>
-                  <div className="kvLabel">BOOKING</div>
+                  <div className="kvLabel">{t.booking}</div>
                   <div className="sub" style={{ marginTop: 6 }}>
                     id: {b.id}
                   </div>
-                  <div className="sub">service: {b.service_name ?? "-"}</div>
-                  <div className="sub">starts_at: {fmt(b.starts_at)}</div>
-                  <div className="sub">ends_at: {fmt(b.ends_at)}</div>
-                  <div className="sub">status: {b.status ?? "-"}</div>
-                  <div className="sub">note: {b.note ?? "-"}</div>
+                  <div className="sub">
+                    {t.service}: {b.service_name ?? "-"}
+                  </div>
+                  <div className="sub">
+                    {t.startsAt}: {fmt(b.starts_at)}
+                  </div>
+                  <div className="sub">
+                    {t.endsAt}: {fmt(b.ends_at)}
+                  </div>
+                  <div className="sub">
+                    {t.status}: {statusLabel(b.status ?? "", lang)}
+                  </div>
+                  <div className="sub">
+                    {t.note}: {b.note ?? "-"}
+                  </div>
                   <div className="sub" style={{ marginTop: 6, opacity: 0.85 }}>
-                    可修改: {editable ? "是" : `否（距離開始 < ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} 分鐘）`}
+                    {editable ? t.canModify : t.cannotModify}
                   </div>
 
                   <div className="card" style={{ marginTop: 10, padding: 12 }}>
                     <label className="sub" style={{ display: "block", marginBottom: 6 }}>
-                      reason (必填)
+                      {t.reason}
                     </label>
                     <input
                       className="input"
@@ -290,7 +396,7 @@ export default function MemberBookingsPage() {
                           [b.id]: { ...(p[b.id] ?? defaultEdit()), reason: ev.target.value, error: null },
                         }))
                       }
-                      placeholder="請輸入原因"
+                      placeholder={t.reasonPh}
                     />
                     {st.error ? (
                       <div className="sub" style={{ marginTop: 8, color: "var(--danger, #b00020)" }}>
@@ -305,18 +411,18 @@ export default function MemberBookingsPage() {
                       type="button"
                       disabled={!editable || !reasonOk || st.submitting}
                       onClick={() => void onCancel(b.id)}
-                      title={!editable ? "距離開始 120 分鐘內不可取消" : !reasonOk ? "請先填 reason" : ""}
+                      title={!editable ? t.lockTip : !reasonOk ? t.reasonTip : ""}
                     >
-                      {st.submitting ? "處理中..." : "取消"}
+                      {st.submitting ? t.saving : t.cancel}
                     </button>
                   </div>
 
                   <div className="card" style={{ marginTop: 10, padding: 12 }}>
                     <div className="kvLabel" style={{ marginBottom: 8 }}>
-                      改期
+                      {t.reschedule}
                     </div>
                     <label className="sub" style={{ display: "block", marginBottom: 6 }}>
-                      startsAt
+                      {t.startAt}
                     </label>
                     <input
                       className="input"
@@ -335,7 +441,7 @@ export default function MemberBookingsPage() {
                     />
 
                     <label className="sub" style={{ display: "block", marginTop: 10, marginBottom: 6 }}>
-                      endsAt
+                      {t.endAt}
                     </label>
                     <input
                       className="input"
@@ -355,9 +461,9 @@ export default function MemberBookingsPage() {
                         type="button"
                         disabled={!editable || !reasonOk || st.submitting}
                         onClick={() => void onReschedule(b.id)}
-                        title={!editable ? "距離開始 120 分鐘內不可改期" : !reasonOk ? "請先填 reason" : ""}
+                        title={!editable ? t.lockTip : !reasonOk ? t.reasonTip : ""}
                       >
-                        {st.submitting ? "處理中..." : "改期"}
+                        {st.submitting ? t.saving : t.reschedule}
                       </button>
                     </div>
                   </div>
@@ -370,4 +476,3 @@ export default function MemberBookingsPage() {
     </main>
   );
 }
-
