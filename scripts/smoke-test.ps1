@@ -54,20 +54,20 @@ try {
   $memberLocation = Normalize-Location $member.location
   $memberLocationText = if ($memberLocation) { $memberLocation } else { "<null>" }
   Write-Host ("[INFO] /member redirect raw location -> " + $memberLocationText)
-  $isLoginRedirect = $false
+  $isAllowedProtectedRedirect = $false
   if ($memberLocation) {
     $loc = $memberLocation
-    if ($loc -like "/login*" -or $loc -like "*/login*") {
-      $isLoginRedirect = $true
+    if ($loc -like "/login*" -or $loc -like "*/login*" -or $loc -eq "/forbidden" -or $loc -like "*/forbidden") {
+      $isAllowedProtectedRedirect = $true
     } else {
       try {
         $uri = [Uri]$loc
-        if ($uri.AbsolutePath -eq "/login") { $isLoginRedirect = $true }
+        if ($uri.AbsolutePath -eq "/login" -or $uri.AbsolutePath -eq "/forbidden") { $isAllowedProtectedRedirect = $true }
       } catch {}
     }
   }
-  if (-not $isLoginRedirect) {
-    throw "[FAIL] /member redirect location is not /login*"
+  if (-not $isAllowedProtectedRedirect) {
+    throw "[FAIL] /member redirect location is not /login* or /forbidden"
   }
   Write-Host ("[OK]   /member redirect location -> " + $memberLocation) -ForegroundColor Green
 
