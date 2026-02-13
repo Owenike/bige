@@ -41,47 +41,48 @@ export default function ManagerStaffPage() {
 
   return (
     <main style={{ padding: 24 }}>
-      <h1>Staff</h1>
-      <p>
-        <a href="/manager">Back to dashboard</a>
-      </p>
-
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-
-      <section style={{ marginTop: 16 }}>
-        <h2>Filters</h2>
+      <div className="card" style={{ padding: 16 }}>
+        <h1>Staff</h1>
         <p>
-          <select value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="all">all</option>
-            <option value="manager">manager</option>
-            <option value="frontdesk">frontdesk</option>
-            <option value="coach">coach</option>
-            <option value="member">member</option>
-          </select>
-          {" "}
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="display name search" />
-          {" "}
-          <label>
-            <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} /> activeOnly
-          </label>
-          {" "}
-          <button type="button" onClick={() => void load()}>
-            Load
-          </button>
+          <a href="/manager">Back to dashboard</a>
         </p>
-      </section>
 
-      <section style={{ marginTop: 16 }}>
-        <h2>Staff List</h2>
-        <ul>
-          {items.map((p) => (
-            <li key={p.id}>
-              {p.role} | {p.display_name || "-"} | active {p.is_active ? "1" : "0"} | branch {p.branch_id || "-"} | id {p.id}
-            </li>
-          ))}
-        </ul>
-      </section>
+        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+
+        <section style={{ marginTop: 16 }}>
+          <h2>Filters</h2>
+          <p>
+            <select value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="all">all</option>
+              <option value="manager">manager</option>
+              <option value="frontdesk">frontdesk</option>
+              <option value="coach">coach</option>
+              <option value="member">member</option>
+            </select>
+            {" "}
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="display name search" />
+            {" "}
+            <label>
+              <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} /> activeOnly
+            </label>
+            {" "}
+            <button type="button" onClick={() => void load()}>
+              Load
+            </button>
+          </p>
+        </section>
+
+        <section style={{ marginTop: 16 }}>
+          <h2>Staff List</h2>
+          <ul>
+            {items.map((p) => (
+              <li key={p.id}>
+                {p.role} | {p.display_name || "-"} | active {p.is_active ? "1" : "0"} | branch {p.branch_id || "-"} | id {p.id}
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
     </main>
   );
 }
-

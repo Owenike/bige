@@ -100,62 +100,64 @@ export default function ManagerProductsPage() {
 
   return (
     <main style={{ padding: 24 }}>
-      <h1>Products</h1>
-      <p>
-        <a href="/manager">Back to dashboard</a>
-      </p>
+      <div className="card" style={{ padding: 16 }}>
+        <h1>Products</h1>
+        <p>
+          <a href="/manager">Back to dashboard</a>
+        </p>
 
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      {message ? <p style={{ color: "green" }}>{message}</p> : null}
+        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+        {message ? <p style={{ color: "green" }}>{message}</p> : null}
 
-      <section style={{ marginTop: 16 }}>
-        <h2>Upsert Product</h2>
-        <form onSubmit={upsertProduct}>
-          <p>
-            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="code" required />
-          </p>
-          <p>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="title" required />
-          </p>
-          <p>
-            <select value={itemType} onChange={(e) => setItemType(e.target.value as any)}>
-              <option value="entry_pass">entry_pass</option>
-              <option value="subscription">subscription</option>
-              <option value="product">product</option>
-            </select>
-          </p>
-          <p>
-            <input type="number" min="0" step="1" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} placeholder="unitPrice" />
-          </p>
-          <p>
-            <input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="quantity" />
-          </p>
-          <p>
-            <input type="number" step="1" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} placeholder="sortOrder" />
-          </p>
-          <p>
-            <label>
-              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> isActive
-            </label>
-          </p>
-          <button type="submit">{codeToExisting.has(code) ? "Update" : "Create"}</button>
-          <button type="button" onClick={() => void reload()} style={{ marginLeft: 8 }}>
-            Reload
-          </button>
-        </form>
-      </section>
-
-      <ul>
-        {items.map((p) => (
-          <li key={p.code}>
-            <button type="button" onClick={() => loadIntoForm(p)} style={{ marginRight: 8 }}>
-              Edit
+        <section style={{ marginTop: 16 }}>
+          <h2>Upsert Product</h2>
+          <form onSubmit={upsertProduct}>
+            <p>
+              <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="code" required />
+            </p>
+            <p>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="title" required />
+            </p>
+            <p>
+              <select value={itemType} onChange={(e) => setItemType(e.target.value as any)}>
+                <option value="entry_pass">entry_pass</option>
+                <option value="subscription">subscription</option>
+                <option value="product">product</option>
+              </select>
+            </p>
+            <p>
+              <input type="number" min="0" step="1" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} placeholder="unitPrice" />
+            </p>
+            <p>
+              <input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="quantity" />
+            </p>
+            <p>
+              <input type="number" step="1" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} placeholder="sortOrder" />
+            </p>
+            <p>
+              <label>
+                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> isActive
+              </label>
+            </p>
+            <button type="submit">{codeToExisting.has(code) ? "Update" : "Create"}</button>
+            <button type="button" onClick={() => void reload()} style={{ marginLeft: 8 }}>
+              Reload
             </button>
-            {p.code} | {p.title} | {p.itemType} | NT${p.unitPrice} | active {p.isActive === false ? "0" : "1"} | sort{" "}
-            {p.sortOrder ?? 0}
-          </li>
-        ))}
-      </ul>
+          </form>
+        </section>
+
+        <ul>
+          {items.map((p) => (
+            <li key={p.code}>
+              <button type="button" onClick={() => loadIntoForm(p)} style={{ marginRight: 8 }}>
+                Edit
+              </button>
+              {p.code} | {p.title} | {p.itemType} | NT${p.unitPrice} | active {p.isActive === false ? "0" : "1"} | sort{" "}
+              {p.sortOrder ?? 0}
+            </li>
+          ))}
+        </ul>
+      </div>
     </main>
   );
 }

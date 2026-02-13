@@ -80,71 +80,72 @@ export default function ManagerServicesPage() {
 
   return (
     <main style={{ padding: 24 }}>
-      <h1>Services (Course Templates)</h1>
-      <p>
-        <a href="/manager">Back to dashboard</a>
-      </p>
+      <div className="card" style={{ padding: 16 }}>
+        <h1>Services (Course Templates)</h1>
+        <p>
+          <a href="/manager">Back to dashboard</a>
+        </p>
 
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      {message ? <p style={{ color: "green" }}>{message}</p> : null}
+        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+        {message ? <p style={{ color: "green" }}>{message}</p> : null}
 
-      <section style={{ marginTop: 16 }}>
-        <h2>Upsert Service</h2>
-        <form onSubmit={upsert}>
-          <p>
-            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="code" required />
-          </p>
-          <p>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="name" required />
-          </p>
-          <p>
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={durationMinutes}
-              onChange={(e) => setDurationMinutes(e.target.value)}
-              placeholder="durationMinutes"
-              required
-            />
-          </p>
-          <p>
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={capacity}
-              onChange={(e) => setCapacity(e.target.value)}
-              placeholder="capacity"
-              required
-            />
-          </p>
-          <p>
-            <label>
-              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> isActive
-            </label>
-          </p>
-          <button type="submit">{codeToExisting.has(code) ? "Update" : "Create"}</button>
-          <button type="button" onClick={() => void load()} style={{ marginLeft: 8 }}>
-            Reload
-          </button>
-        </form>
-      </section>
+        <section style={{ marginTop: 16 }}>
+          <h2>Upsert Service</h2>
+          <form onSubmit={upsert}>
+            <p>
+              <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="code" required />
+            </p>
+            <p>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="name" required />
+            </p>
+            <p>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={durationMinutes}
+                onChange={(e) => setDurationMinutes(e.target.value)}
+                placeholder="durationMinutes"
+                required
+              />
+            </p>
+            <p>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={capacity}
+                onChange={(e) => setCapacity(e.target.value)}
+                placeholder="capacity"
+                required
+              />
+            </p>
+            <p>
+              <label>
+                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> isActive
+              </label>
+            </p>
+            <button type="submit">{codeToExisting.has(code) ? "Update" : "Create"}</button>
+            <button type="button" onClick={() => void load()} style={{ marginLeft: 8 }}>
+              Reload
+            </button>
+          </form>
+        </section>
 
-      <section style={{ marginTop: 16 }}>
-        <h2>Service List</h2>
-        <ul>
-          {items.map((s) => (
-            <li key={s.code}>
-              <button type="button" onClick={() => loadIntoForm(s)} style={{ marginRight: 8 }}>
-                Edit
-              </button>
-              {s.code} | {s.name} | {s.durationMinutes}m | cap {s.capacity} | active {s.isActive ? "1" : "0"}
-            </li>
-          ))}
-        </ul>
-      </section>
+        <section style={{ marginTop: 16 }}>
+          <h2>Service List</h2>
+          <ul>
+            {items.map((s) => (
+              <li key={s.code}>
+                <button type="button" onClick={() => loadIntoForm(s)} style={{ marginRight: 8 }}>
+                  Edit
+                </button>
+                {s.code} | {s.name} | {s.durationMinutes}m | cap {s.capacity} | active {s.isActive ? "1" : "0"}
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
     </main>
   );
 }
-

@@ -146,120 +146,122 @@ export default function PlatformAdminPage() {
 
   return (
     <main style={{ padding: 24 }}>
-      <h1>Platform Admin</h1>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+      <div className="card" style={{ padding: 16 }}>
+        <h1>Platform Admin</h1>
+        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
 
-      <section>
-        <h2>Create Tenant</h2>
-        <form onSubmit={createTenant}>
-          <p><input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder="tenant name" required /></p>
-          <p>
-            <select value={tenantStatus} onChange={(e) => setTenantStatus(e.target.value)}>
-              <option value="active">active</option>
-              <option value="suspended">suspended</option>
-              <option value="disabled">disabled</option>
-            </select>
-          </p>
-          <button type="submit">Create Tenant</button>
-        </form>
-      </section>
+        <section>
+          <h2>Create Tenant</h2>
+          <form onSubmit={createTenant}>
+            <p><input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder="tenant name" required /></p>
+            <p>
+              <select value={tenantStatus} onChange={(e) => setTenantStatus(e.target.value)}>
+                <option value="active">active</option>
+                <option value="suspended">suspended</option>
+                <option value="disabled">disabled</option>
+              </select>
+            </p>
+            <button type="submit">Create Tenant</button>
+          </form>
+        </section>
 
-      <section>
-        <h2>Create User</h2>
-        <form onSubmit={createUser}>
-          <p><input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="email" required /></p>
-          <p><input value={userPassword} onChange={(e) => setUserPassword(e.target.value)} placeholder="password" required /></p>
-          <p>
-            <select value={userRole} onChange={(e) => setUserRole(e.target.value)}>
-              <option value="platform_admin">platform_admin</option>
-              <option value="manager">manager</option>
-              <option value="frontdesk">frontdesk</option>
-              <option value="coach">coach</option>
-              <option value="member">member</option>
-            </select>
-          </p>
-          <p>
-            <input
-              value={userTenantId}
-              onChange={(e) => setUserTenantId(e.target.value)}
-              placeholder="tenantId (required unless platform_admin)"
-              disabled={userRole === "platform_admin"}
-            />
-          </p>
-          <p>
-            <input value={userBranchId} onChange={(e) => setUserBranchId(e.target.value)} placeholder="branchId (optional)" />
-          </p>
-          <p>
-            <input value={userDisplayName} onChange={(e) => setUserDisplayName(e.target.value)} placeholder="display name (optional)" />
-          </p>
-          {userRole === "member" ? (
-            <>
-              <p>
-                <label>
-                  <input type="checkbox" checked={createMember} onChange={(e) => setCreateMember(e.target.checked)} /> create members row
-                </label>
-              </p>
-              {createMember ? (
-                <>
-                  <p><input value={memberFullName} onChange={(e) => setMemberFullName(e.target.value)} placeholder="member full name" required /></p>
-                  <p><input value={memberPhone} onChange={(e) => setMemberPhone(e.target.value)} placeholder="member phone (optional)" /></p>
-                </>
-              ) : null}
-            </>
-          ) : null}
-          <button type="submit">Create User</button>
-        </form>
-      </section>
+        <section>
+          <h2>Create User</h2>
+          <form onSubmit={createUser}>
+            <p><input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="email" required /></p>
+            <p><input value={userPassword} onChange={(e) => setUserPassword(e.target.value)} placeholder="password" required /></p>
+            <p>
+              <select value={userRole} onChange={(e) => setUserRole(e.target.value)}>
+                <option value="platform_admin">platform_admin</option>
+                <option value="manager">manager</option>
+                <option value="frontdesk">frontdesk</option>
+                <option value="coach">coach</option>
+                <option value="member">member</option>
+              </select>
+            </p>
+            <p>
+              <input
+                value={userTenantId}
+                onChange={(e) => setUserTenantId(e.target.value)}
+                placeholder="tenantId (required unless platform_admin)"
+                disabled={userRole === "platform_admin"}
+              />
+            </p>
+            <p>
+              <input value={userBranchId} onChange={(e) => setUserBranchId(e.target.value)} placeholder="branchId (optional)" />
+            </p>
+            <p>
+              <input value={userDisplayName} onChange={(e) => setUserDisplayName(e.target.value)} placeholder="display name (optional)" />
+            </p>
+            {userRole === "member" ? (
+              <>
+                <p>
+                  <label>
+                    <input type="checkbox" checked={createMember} onChange={(e) => setCreateMember(e.target.checked)} /> create members row
+                  </label>
+                </p>
+                {createMember ? (
+                  <>
+                    <p><input value={memberFullName} onChange={(e) => setMemberFullName(e.target.value)} placeholder="member full name" required /></p>
+                    <p><input value={memberPhone} onChange={(e) => setMemberPhone(e.target.value)} placeholder="member phone (optional)" /></p>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+            <button type="submit">Create User</button>
+          </form>
+        </section>
 
-      <section>
-        <h2>Profiles (Selected Tenant)</h2>
-        <ul>
-          {profiles.map((p) => (
-            <li key={p.id}>
-              {p.role} | {p.display_name || "-"} | {p.id}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section>
-        <h2>Feature Flags</h2>
-        <p>
-          <select value={tenantIdForFlags} onChange={(e) => setTenantIdForFlags(e.target.value)}>
-            {tenants.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} ({t.status})
-              </option>
+        <section>
+          <h2>Profiles (Selected Tenant)</h2>
+          <ul>
+            {profiles.map((p) => (
+              <li key={p.id}>
+                {p.role} | {p.display_name || "-"} | {p.id}
+              </li>
             ))}
-          </select>
-          <button type="button" onClick={() => void load()} style={{ marginLeft: 8 }}>Load</button>
-        </p>
-        <form onSubmit={upsertFlag}>
-          <p><input value={flagKey} onChange={(e) => setFlagKey(e.target.value)} placeholder="flag key" required /></p>
-          <p><label><input type="checkbox" checked={flagEnabled} onChange={(e) => setFlagEnabled(e.target.checked)} /> enabled</label></p>
-          <button type="submit">Save Flag</button>
-        </form>
-        <ul>
-          {flags.map((flag) => (
-            <li key={flag.id}>
-              {flag.key}: {flag.enabled ? "on" : "off"}
-            </li>
-          ))}
-        </ul>
-      </section>
+          </ul>
+        </section>
 
-      <section>
-        <h2>Audit (Selected Tenant)</h2>
-        <ul>
-          {audit.map((row) => (
-            <li key={row.id}>
-              {row.action}
-              {" -> "}
-              {row.target_type}
-            </li>
-          ))}
-        </ul>
-      </section>
+        <section>
+          <h2>Feature Flags</h2>
+          <p>
+            <select value={tenantIdForFlags} onChange={(e) => setTenantIdForFlags(e.target.value)}>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.status})
+                </option>
+              ))}
+            </select>
+            <button type="button" onClick={() => void load()} style={{ marginLeft: 8 }}>Load</button>
+          </p>
+          <form onSubmit={upsertFlag}>
+            <p><input value={flagKey} onChange={(e) => setFlagKey(e.target.value)} placeholder="flag key" required /></p>
+            <p><label><input type="checkbox" checked={flagEnabled} onChange={(e) => setFlagEnabled(e.target.checked)} /> enabled</label></p>
+            <button type="submit">Save Flag</button>
+          </form>
+          <ul>
+            {flags.map((flag) => (
+              <li key={flag.id}>
+                {flag.key}: {flag.enabled ? "on" : "off"}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section>
+          <h2>Audit (Selected Tenant)</h2>
+          <ul>
+            {audit.map((row) => (
+              <li key={row.id}>
+                {row.action}
+                {" -> "}
+                {row.target_type}
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
     </main>
   );
 }

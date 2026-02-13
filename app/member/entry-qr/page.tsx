@@ -6,10 +6,11 @@ import type { IssueEntryTokenResponse } from "../../../types/entry";
 
 const FALLBACK_REFRESH_SECONDS = 60;
 
-function secondsLeft(targetIso: string | null): number {
-  if (!targetIso) return 0;
-  const diff = Math.ceil((new Date(targetIso).getTime() - Date.now()) / 1000);
-  return Math.max(0, diff);
+function formatTime(input: string | null | undefined) {
+  if (!input) return "-";
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return String(input);
+  return d.toLocaleTimeString();
 }
 
 export default function MemberEntryQrPage() {
@@ -48,7 +49,7 @@ export default function MemberEntryQrPage() {
       refreshAtRef.current = Date.now() + refreshInSeconds * 1000;
       setCountdown(refreshInSeconds);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "無法更新入場 QR，請檢查網路後重試。");
+      setError(err instanceof Error ? err.message : "Failed to refresh entry QR token");
     } finally {
       setLoading(false);
     }
@@ -73,23 +74,23 @@ export default function MemberEntryQrPage() {
 
   return (
     <main className="mx-auto max-w-lg p-6">
-      <h1 className="text-2xl font-bold">會員入場 QR</h1>
-      <p className="mt-2 text-sm text-gray-600">QR 每 60 秒自動更新，Token TTL 為 90 秒。</p>
+      <h1 className="text-2xl font-bold">Entry QR</h1>
+      <p className="mt-2 text-sm text-gray-600">Present this QR at front desk. It auto refreshes before expiry.</p>
 
-      <section className="mt-6 rounded-lg border p-4">
+      <section className="card mt-6 rounded-lg border p-4">
         {qrImageSrc ? (
           <Image src={qrImageSrc} alt="Entry QR" className="mx-auto h-72 w-72 rounded bg-white p-2" width={288} height={288} unoptimized />
         ) : (
           <div className="mx-auto flex h-72 w-72 items-center justify-center rounded border bg-gray-50 text-sm text-gray-500">
-            {loading ? "載入中..." : "尚未取得 QR"}
+            {loading ? "Generating QR..." : "QR unavailable"}
           </div>
         )}
 
         <div className="mt-4 space-y-1 text-sm">
-          <p>下次更新倒數: {countdown} 秒</p>
-          <p>本次到期時間: {payload?.expiresAt ? new Date(payload.expiresAt).toLocaleTimeString() : "-"}</p>
-          {error ? <p className="text-red-600">更新失敗: {error}</p> : null}
-          {!error && !loading ? <p className="text-green-600">狀態: QR 已更新</p> : null}
+          <p>Refresh in: {countdown} seconds</p>
+          <p>Token expires at: {formatTime(payload?.expiresAt)}</p>
+          {error ? <p className="text-red-600">Refresh failed: {error}</p> : null}
+          {!error && !loading ? <p className="text-green-600">QR is ready</p> : null}
         </div>
 
         <button
@@ -98,12 +99,12 @@ export default function MemberEntryQrPage() {
           className="mt-4 rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
           disabled={loading}
         >
-          {loading ? "更新中..." : "立即更新"}
+          {loading ? "Refreshing..." : "Refresh Now"}
         </button>
       </section>
 
       <details className="mt-4 text-xs text-gray-500">
-        <summary>除錯資訊</summary>
+        <summary>Token preview</summary>
         <pre className="mt-2 overflow-auto rounded bg-gray-100 p-2">
           {payload?.token ? `${payload.token.slice(0, 64)}...` : "(no token)"}
         </pre>
@@ -111,5 +112,3 @@ export default function MemberEntryQrPage() {
     </main>
   );
 }
-
-

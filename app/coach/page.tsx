@@ -499,7 +499,7 @@ function CoachPortalContent() {
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       {message ? <p className="mt-3 text-sm text-green-700">{message}</p> : null}
 
-      <section className="mt-6 rounded-lg border p-4">
+      <section className="card mt-6 rounded-lg border p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">My Schedule</h2>
           <div className="flex flex-wrap gap-2">
@@ -750,7 +750,7 @@ function CoachPortalContent() {
         </ul>
       </section>
 
-      <section className="mt-6 grid gap-4 lg:grid-cols-2">
+      <section className="card mt-6 grid gap-4 lg:grid-cols-2 p-4">
         <form className="rounded-lg border p-4" onSubmit={updateBooking}>
           <h2 className="text-lg font-semibold">Class Status & Notes</h2>
           <p className="mt-2">

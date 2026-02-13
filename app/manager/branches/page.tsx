@@ -66,49 +66,50 @@ export default function ManagerBranchesPage() {
 
   return (
     <main style={{ padding: 24 }}>
-      <h1>Branches</h1>
-      <p>
-        <a href="/manager">Back to dashboard</a>
-      </p>
+      <div className="card" style={{ padding: 16 }}>
+        <h1>Branches</h1>
+        <p>
+          <a href="/manager">Back to dashboard</a>
+        </p>
 
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      {message ? <p style={{ color: "green" }}>{message}</p> : null}
+        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+        {message ? <p style={{ color: "green" }}>{message}</p> : null}
 
-      <section style={{ marginTop: 16 }}>
-        <h2>Create Branch</h2>
-        <form onSubmit={create}>
-          <p>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="name" required />
-          </p>
-          <p>
-            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="code (optional)" />
-          </p>
-          <p>
-            <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="address (optional)" />
-          </p>
-          <p>
-            <label>
-              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> isActive
-            </label>
-          </p>
-          <button type="submit">Create</button>
-          <button type="button" onClick={() => void load()} style={{ marginLeft: 8 }}>
-            Reload
-          </button>
-        </form>
-      </section>
+        <section style={{ marginTop: 16 }}>
+          <h2>Create Branch</h2>
+          <form onSubmit={create}>
+            <p>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="name" required />
+            </p>
+            <p>
+              <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="code (optional)" />
+            </p>
+            <p>
+              <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="address (optional)" />
+            </p>
+            <p>
+              <label>
+                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> isActive
+              </label>
+            </p>
+            <button type="submit">Create</button>
+            <button type="button" onClick={() => void load()} style={{ marginLeft: 8 }}>
+              Reload
+            </button>
+          </form>
+        </section>
 
-      <section style={{ marginTop: 16 }}>
-        <h2>Branch List</h2>
-        <ul>
-          {items.map((b) => (
-            <li key={b.id}>
-              {b.name} | {b.code || "-"} | active {b.is_active ? "1" : "0"} | id {b.id}
-            </li>
-          ))}
-        </ul>
-      </section>
+        <section style={{ marginTop: 16 }}>
+          <h2>Branch List</h2>
+          <ul>
+            {items.map((b) => (
+              <li key={b.id}>
+                {b.name} | {b.code || "-"} | active {b.is_active ? "1" : "0"} | id {b.id}
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
     </main>
   );
 }
-

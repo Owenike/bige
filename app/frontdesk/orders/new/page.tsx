@@ -79,43 +79,45 @@ export default function FrontdeskNewOrderPage() {
 
   return (
     <main style={{ padding: 24 }}>
-      <h1>Frontdesk New Order</h1>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      {message ? <p style={{ color: "green" }}>{message}</p> : null}
+      <div className="card" style={{ padding: 16 }}>
+        <h1>Frontdesk New Order</h1>
+        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+        {message ? <p style={{ color: "green" }}>{message}</p> : null}
 
-      <form onSubmit={createOrder}>
-        <h2>Create Order</h2>
-        <p><input value={memberId} onChange={(e) => setMemberId(e.target.value)} placeholder="memberId (optional)" /></p>
-        <p><input type="number" min="1" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="amount" required /></p>
-        <p><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="note" /></p>
-        <button type="submit">Create Order</button>
-      </form>
+        <form onSubmit={createOrder}>
+          <h2>Create Order</h2>
+          <p><input value={memberId} onChange={(e) => setMemberId(e.target.value)} placeholder="memberId (optional)" /></p>
+          <p><input type="number" min="1" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="amount" required /></p>
+          <p><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="note" /></p>
+          <button type="submit">Create Order</button>
+        </form>
 
-      <form onSubmit={payOrder} style={{ marginTop: 24 }}>
-        <h2>Take Payment</h2>
-        <p><input value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="orderId" required /></p>
-        <p>
-          <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-            <option value="cash">cash</option>
-            <option value="card">card</option>
-            <option value="transfer">transfer</option>
-            <option value="newebpay">newebpay</option>
-            <option value="manual">manual</option>
-          </select>
-        </p>
-        <button type="submit">Record Payment</button>
-      </form>
-
-      <form onSubmit={initNewebpay} style={{ marginTop: 24 }}>
-        <h2>Newebpay Checkout</h2>
-        <p><input value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="orderId" required /></p>
-        <button type="submit">Initialize Checkout</button>
-        {checkoutUrl ? (
+        <form onSubmit={payOrder} style={{ marginTop: 24 }}>
+          <h2>Take Payment</h2>
+          <p><input value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="orderId" required /></p>
           <p>
-            Checkout URL: <a href={checkoutUrl} target="_blank" rel="noreferrer">{checkoutUrl}</a>
+            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+              <option value="cash">cash</option>
+              <option value="card">card</option>
+              <option value="transfer">transfer</option>
+              <option value="newebpay">newebpay</option>
+              <option value="manual">manual</option>
+            </select>
           </p>
-        ) : null}
-      </form>
+          <button type="submit">Record Payment</button>
+        </form>
+
+        <form onSubmit={initNewebpay} style={{ marginTop: 24 }}>
+          <h2>Newebpay Checkout</h2>
+          <p><input value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="orderId" required /></p>
+          <button type="submit">Initialize Checkout</button>
+          {checkoutUrl ? (
+            <p>
+              Checkout URL: <a href={checkoutUrl} target="_blank" rel="noreferrer">{checkoutUrl}</a>
+            </p>
+          ) : null}
+        </form>
+      </div>
     </main>
   );
 }

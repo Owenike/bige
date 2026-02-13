@@ -22,9 +22,10 @@ export default function LogoutPage() {
 
   return (
     <main style={{ padding: 24 }}>
-      <h1>Signing out...</h1>
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+      <div className="card" style={{ padding: 16 }}>
+        <h1>Signing out...</h1>
+        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+      </div>
     </main>
   );
 }
-
