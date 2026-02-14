@@ -3,12 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n-provider";
 
-type ActionCard = {
-  href: string;
-  title: string;
-  desc: string;
-  tag: string;
-};
 type CapabilityStatus = "ready" | "building" | "planned";
 type CapabilityCard = {
   href: string;
@@ -241,11 +235,6 @@ export default function FrontdeskPortalPage() {
             minutes: "分鐘",
             dueSoon: "即將開始",
             normal: "一般",
-            cards: [
-              { href: "/frontdesk/orders/new", title: "新增訂單 + 收款", desc: "建立櫃檯訂單並完成付款流程。", tag: "PAYMENT" },
-              { href: "/frontdesk/bookings", title: "預約協助", desc: "協助建立、改期與取消預約。", tag: "BOOKING" },
-              { href: "/frontdesk/handover", title: "交班結算", desc: "完成班次收尾與交接。", tag: "SHIFT" },
-            ] as ActionCard[],
             capabilityTitle: "櫃檯能力地圖",
             capabilitySub: "A~K 全模組進度：優先完成可營運與高風險稽核。",
             ready: "已上線",
@@ -282,11 +271,6 @@ export default function FrontdeskPortalPage() {
             minutes: "min",
             dueSoon: "Starting Soon",
             normal: "Normal",
-            cards: [
-              { href: "/frontdesk/orders/new", title: "New Order + Payment", desc: "Create desk orders and complete payment flow.", tag: "PAYMENT" },
-              { href: "/frontdesk/bookings", title: "Booking Assist", desc: "Create, reschedule, and cancel bookings quickly.", tag: "BOOKING" },
-              { href: "/frontdesk/handover", title: "Shift Handover", desc: "Close shift with clean financial handoff.", tag: "SHIFT" },
-            ] as ActionCard[],
             capabilityTitle: "Frontdesk Capability Map",
             capabilitySub: "A-K module progress with operations-first and audit-first rollout.",
             ready: "Ready",
@@ -416,37 +400,15 @@ export default function FrontdeskPortalPage() {
           </article>
         </div>
 
-        <section style={{ marginTop: 14 }}>
-          <div className="fdActionGrid">
-            {t.cards.map((card, idx) => (
-              <a
-                key={card.href}
-                href={card.href}
-                className="fdGlassSubPanel fdActionCard fdEnter"
-                style={{ animationDelay: `${120 + idx * 60}ms` }}
-              >
-                <div className="fdActionHead">
-                  <span className="kvLabel">{card.tag}</span>
-                  <span className="fdArrow">{">>"}</span>
-                </div>
-                <h3 className="fdActionTitle">{card.title}</h3>
-                <p className="sub" style={{ marginTop: 8 }}>
-                  {card.desc}
-                </p>
-              </a>
-            ))}
-          </div>
-        </section>
-
         <section className="fdGlassSubPanel" style={{ marginTop: 14, padding: 14 }}>
           <h2 className="sectionTitle">{t.capabilityTitle}</h2>
           <p className="fdGlassText" style={{ marginTop: 8 }}>{t.capabilitySub}</p>
-          <div className="fdActionGrid" style={{ marginTop: 10 }}>
+          <div className="fdCapabilityGrid" style={{ marginTop: 10 }}>
             {capabilityCards.map((item, idx) => (
               <a
                 key={item.title}
                 href={item.href}
-                className="fdGlassSubPanel fdActionCard fdEnter"
+                className="fdGlassSubPanel fdCapabilityCard fdEnter"
                 style={{ animationDelay: `${180 + idx * 35}ms` }}
               >
                 <div className="fdActionHead">
@@ -465,7 +427,7 @@ export default function FrontdeskPortalPage() {
         <section className="fdTwoCol" style={{ marginTop: 14 }}>
           <article className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{t.unpaidTitle}</h2>
-            <div className="fdDataGrid" style={{ marginTop: 8 }}>
+            <div className="fdListStack" style={{ marginTop: 8 }}>
               {unpaidOrderList.map((item) => {
                 const ageMin = minutesSince(item.created_at);
                 const isOverdue = ageMin >= 15;
@@ -494,7 +456,7 @@ export default function FrontdeskPortalPage() {
 
           <article className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{t.upcomingTitle}</h2>
-            <div className="fdDataGrid" style={{ marginTop: 8 }}>
+            <div className="fdListStack" style={{ marginTop: 8 }}>
               {upcomingBookingList.map((item) => {
                 const mins = minutesUntil(item.starts_at);
                 const isSoon = mins <= 15;

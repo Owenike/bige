@@ -521,6 +521,27 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+.fdCapabilityGrid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.fdCapabilityCard{
+  padding: 12px;
+  min-height: 132px;
+}
+.fdCapabilityCard .fdActionTitle{
+  font-size: 18px;
+}
+.fdCapabilityCard .sub{
+  font-size: 13px;
+  line-height: 1.5;
+}
+.fdListStack{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
 .fdActionCard{
   padding: 16px;
   color: var(--fd-ink);
@@ -614,5 +635,6 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   }
   .fdTwoCol{ grid-template-columns: 1fr; }
   .fdActionGrid{ grid-template-columns: 1fr; }
+  .fdCapabilityGrid{ grid-template-columns: 1fr; }
   .fdDataGrid{ grid-template-columns: 1fr; }
 }
