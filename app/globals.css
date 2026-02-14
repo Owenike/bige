@@ -529,6 +529,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdCapabilityCard{
   padding: 12px;
   min-height: 132px;
+  display: flex;
+  flex-direction: column;
 }
 .fdCapabilityCard .fdActionTitle{
   font-size: 18px;
@@ -536,6 +538,48 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdCapabilityCard .sub{
   font-size: 13px;
   line-height: 1.5;
+}
+.fdCapabilityDesc{
+  margin-bottom: 0;
+}
+.fdCapabilityFooter{
+  margin-top: auto;
+  padding-top: 10px;
+}
+.fdCapabilityBtn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(139, 188, 236, .92);
+  background:
+    radial-gradient(130% 140% at 20% 30%, rgba(126, 196, 255, .48), rgba(229, 241, 255, .90)),
+    linear-gradient(180deg, rgba(255,255,255,.92), rgba(231,241,255,.80));
+  color: #23425f;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow:
+    0 0 0 1px rgba(187,224,255,.7),
+    inset 6px 6px 10px rgba(255,255,255,.28),
+    inset -6px -6px 12px rgba(124, 176, 236, .16),
+    0 10px 16px rgba(126, 176, 232, .24);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.fdCapabilityBtn:hover{
+  text-decoration: none;
+  transform: translateY(-1px);
+  border-color: rgba(112, 173, 232, .95);
+  box-shadow:
+    0 0 0 1px rgba(187,224,255,.9),
+    0 12px 20px rgba(126, 176, 232, .28);
+}
+.fdCapabilityBtn:active{
+  transform: translateY(0);
+  box-shadow:
+    0 0 0 1px rgba(187,224,255,.7),
+    inset 4px 4px 8px rgba(121,164,214,.18);
 }
 .fdListStack{
   display: grid;
