@@ -237,7 +237,7 @@ export default function FrontdeskPortalPage() {
             normal: "一般",
             capabilityTitle: "櫃檯能力地圖",
             capabilitySub: "A~K 全模組進度：優先完成可營運與高風險稽核。",
-            capabilityGo: "前往功能",
+            capabilityGo: "點此進入",
             ready: "已上線",
             building: "建置中",
             planned: "規劃中",
@@ -274,7 +274,7 @@ export default function FrontdeskPortalPage() {
             normal: "Normal",
             capabilityTitle: "Frontdesk Capability Map",
             capabilitySub: "A-K module progress with operations-first and audit-first rollout.",
-            capabilityGo: "Open",
+            capabilityGo: "Tap to open",
             ready: "Ready",
             building: "Building",
             planned: "Planned",
@@ -407,8 +407,9 @@ export default function FrontdeskPortalPage() {
           <p className="fdGlassText" style={{ marginTop: 8 }}>{t.capabilitySub}</p>
           <div className="fdCapabilityGrid" style={{ marginTop: 10 }}>
             {capabilityCards.map((item, idx) => (
-              <article
+              <a
                 key={item.title}
+                href={item.href}
                 className="fdGlassSubPanel fdCapabilityCard fdEnter"
                 style={{ animationDelay: `${180 + idx * 35}ms` }}
               >
@@ -421,11 +422,9 @@ export default function FrontdeskPortalPage() {
                 <h3 className="fdActionTitle">{item.title}</h3>
                 <p className="sub fdCapabilityDesc" style={{ marginTop: 8 }}>{item.desc}</p>
                 <div className="fdCapabilityFooter">
-                  <a className="fdCapabilityBtn" href={item.href}>
-                    {t.capabilityGo}
-                  </a>
+                  <span className="fdCapabilityCta">{t.capabilityGo}</span>
                 </div>
-              </article>
+              </a>
             ))}
           </div>
         </section>
