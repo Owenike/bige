@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../lib/auth-context";
 
 export async function GET(request: Request) {
@@ -28,6 +28,20 @@ export async function POST(request: Request) {
   }
 
   if (action === "open") {
+    const openShiftQuery = await auth.supabase
+      .from("frontdesk_shifts")
+      .select("id, status, opened_at")
+      .eq("tenant_id", auth.context.tenantId)
+      .eq("status", "open")
+      .order("opened_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (openShiftQuery.error) return NextResponse.json({ error: openShiftQuery.error.message }, { status: 500 });
+    if (openShiftQuery.data) {
+      return NextResponse.json({ error: "An open shift already exists", shift: openShiftQuery.data }, { status: 409 });
+    }
+
     const { data, error } = await auth.supabase
       .from("frontdesk_shifts")
       .insert({

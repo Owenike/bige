@@ -1,11 +1,13 @@
 ﻿"use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useI18n } from "../../../i18n-provider";
 
 export default function FrontdeskNewOrderPage() {
   const { locale } = useI18n();
   const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
+  const searchParams = useSearchParams();
 
   const t = useMemo(
     () =>
@@ -20,7 +22,9 @@ export default function FrontdeskNewOrderPage() {
             note: "備註",
             creating: "建立中...",
             takePayment: "記錄付款",
-            orderId: "訂單編號",
+            selectedOrder: "目前處理訂單",
+            noOrder: "請先建立訂單",
+            paymentAmount: "付款金額",
             recording: "記錄中...",
             recordPayment: "記錄付款",
             checkout: "藍新金流結帳",
@@ -33,6 +37,7 @@ export default function FrontdeskNewOrderPage() {
             orderCreated: "訂單已建立",
             paymentRecorded: "付款已記錄",
             checkoutInitialized: "藍新結帳已初始化",
+            clearOrder: "清除目前訂單",
             cash: "現金",
             card: "刷卡",
             transfer: "轉帳",
@@ -49,7 +54,9 @@ export default function FrontdeskNewOrderPage() {
             note: "note",
             creating: "Creating...",
             takePayment: "Take Payment",
-            orderId: "orderId",
+            selectedOrder: "Current Order",
+            noOrder: "Create an order first",
+            paymentAmount: "payment amount",
             recording: "Recording...",
             recordPayment: "Record Payment",
             checkout: "Newebpay Checkout",
@@ -62,6 +69,7 @@ export default function FrontdeskNewOrderPage() {
             orderCreated: "Order created",
             paymentRecorded: "Payment recorded",
             checkoutInitialized: "Newebpay checkout initialized",
+            clearOrder: "Clear current order",
             cash: "cash",
             card: "card",
             transfer: "transfer",
@@ -73,6 +81,7 @@ export default function FrontdeskNewOrderPage() {
 
   const [memberId, setMemberId] = useState("");
   const [amount, setAmount] = useState("0");
+  const [paymentAmount, setPaymentAmount] = useState("0");
   const [note, setNote] = useState("");
   const [orderId, setOrderId] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -83,6 +92,12 @@ export default function FrontdeskNewOrderPage() {
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState(false);
   const [initializing, setInitializing] = useState(false);
+
+  useEffect(() => {
+    const queryOrderId = searchParams.get("orderId") || "";
+    if (!queryOrderId) return;
+    setOrderId((prev) => prev || queryOrderId);
+  }, [searchParams]);
 
   async function createOrder(event: FormEvent) {
     event.preventDefault();
@@ -108,6 +123,7 @@ export default function FrontdeskNewOrderPage() {
       }
       const newOrderId = String(payload.order?.id || "");
       setOrderId(newOrderId);
+      setPaymentAmount(amount);
       setMessage(`${t.orderCreated}: ${newOrderId}`);
     } finally {
       setCreating(false);
@@ -116,6 +132,10 @@ export default function FrontdeskNewOrderPage() {
 
   async function payOrder(event: FormEvent) {
     event.preventDefault();
+    if (!orderId) {
+      setError(t.noOrder);
+      return;
+    }
     setPaying(true);
     setError(null);
     setMessage(null);
@@ -125,7 +145,7 @@ export default function FrontdeskNewOrderPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId,
-          amount: Number(amount),
+          amount: Number(paymentAmount),
           method: paymentMethod,
         }),
       });
@@ -142,6 +162,10 @@ export default function FrontdeskNewOrderPage() {
 
   async function initNewebpay(event: FormEvent) {
     event.preventDefault();
+    if (!orderId) {
+      setError(t.noOrder);
+      return;
+    }
     setInitializing(true);
     setError(null);
     setMessage(null);
@@ -205,7 +229,19 @@ export default function FrontdeskNewOrderPage() {
           <form onSubmit={payOrder} className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{t.takePayment}</h2>
             <div style={{ display: "grid", gap: 8 }}>
-              <input value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder={t.orderId} className="input" required />
+              <div className="input" style={{ display: "flex", alignItems: "center" }}>
+                {t.selectedOrder}: {orderId || t.noOrder}
+              </div>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+                placeholder={t.paymentAmount}
+                className="input"
+                required
+              />
               <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="input">
                 <option value="cash">{t.cash}</option>
                 <option value="card">{t.card}</option>
@@ -214,7 +250,7 @@ export default function FrontdeskNewOrderPage() {
                 <option value="manual">{t.manual}</option>
               </select>
             </div>
-            <button type="submit" className="fdPillBtn" style={{ marginTop: 10 }} disabled={paying}>
+            <button type="submit" className="fdPillBtn" style={{ marginTop: 10 }} disabled={paying || !orderId}>
               {paying ? t.recording : t.recordPayment}
             </button>
           </form>
@@ -222,11 +258,24 @@ export default function FrontdeskNewOrderPage() {
 
         <section style={{ marginTop: 14 }}>
           <form onSubmit={initNewebpay} className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{t.checkout}</h2>
-            <div style={{ display: "grid", gap: 8 }}>
-              <input value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder={t.orderId} className="input" required />
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+              <h2 className="sectionTitle" style={{ margin: 0 }}>{t.checkout}</h2>
+              <button
+                type="button"
+                className="fdPillBtn"
+                onClick={() => {
+                  setOrderId("");
+                  setCheckoutUrl("");
+                  setMessage(null);
+                }}
+              >
+                {t.clearOrder}
+              </button>
             </div>
-            <button type="submit" className="fdPillBtn" style={{ marginTop: 10 }} disabled={initializing}>
+            <p className="sub" style={{ marginTop: 10 }}>
+              {t.selectedOrder}: {orderId || t.noOrder}
+            </p>
+            <button type="submit" className="fdPillBtn" style={{ marginTop: 10 }} disabled={initializing || !orderId}>
               {initializing ? t.initializing : t.initCheckout}
             </button>
             {checkoutUrl ? (

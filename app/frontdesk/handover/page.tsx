@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../i18n-provider";
@@ -27,37 +27,40 @@ export default function FrontdeskHandoverPage() {
 
   const [items, setItems] = useState<ShiftItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   const [openNote, setOpenNote] = useState("");
   const [closeNote, setCloseNote] = useState("");
-  const [shiftId, setShiftId] = useState("");
   const [cashTotal, setCashTotal] = useState("0");
   const [cardTotal, setCardTotal] = useState("0");
   const [transferTotal, setTransferTotal] = useState("0");
   const [opening, setOpening] = useState(false);
   const [closing, setClosing] = useState(false);
 
+  const activeShift = useMemo(() => items.find((item) => item.status === "open") || null, [items]);
+
   const t = useMemo(
     () =>
       lang === "zh"
         ? {
             badge: "SHIFT HANDOVER",
-            title: "櫃台交班",
+            title: "櫃檯交班",
             sub: "管理開班與結班紀錄，並保留可追溯的金額彙總。",
             openTitle: "開班",
             openNote: "開班備註",
-            openBtn: "開班",
+            openBtn: "開始開班",
             opening: "開班中...",
             closeTitle: "結班",
-            shiftId: "班次 ID",
+            activeShift: "目前開班",
+            noActiveShift: "目前沒有開班中的班次。",
             cash: "現金總額",
             card: "刷卡總額",
             transfer: "轉帳總額",
             closeNote: "結班備註",
-            closeBtn: "結班",
+            closeBtn: "執行結班",
             closing: "結班中...",
-            recent: "最近班次",
-            noData: "目前沒有班次資料",
+            recent: "近期班次",
+            noData: "尚無班次資料",
             status: "狀態",
             openedAt: "開班時間",
             closedAt: "結班時間",
@@ -65,6 +68,9 @@ export default function FrontdeskHandoverPage() {
             loadFail: "載入失敗",
             openFail: "開班失敗",
             closeFail: "結班失敗",
+            openSuccess: "已開班",
+            closeSuccess: "已結班",
+            alreadyOpen: "已有開班中的班次，請先結班。",
           }
         : {
             badge: "SHIFT HANDOVER",
@@ -72,15 +78,16 @@ export default function FrontdeskHandoverPage() {
             sub: "Manage open/close shift records with traceable summaries.",
             openTitle: "Open Shift",
             openNote: "Opening Note",
-            openBtn: "Open",
+            openBtn: "Open Shift",
             opening: "Opening...",
             closeTitle: "Close Shift",
-            shiftId: "Shift ID",
+            activeShift: "Active Shift",
+            noActiveShift: "No active shift.",
             cash: "Cash Total",
             card: "Card Total",
             transfer: "Transfer Total",
             closeNote: "Closing Note",
-            closeBtn: "Close",
+            closeBtn: "Close Shift",
             closing: "Closing...",
             recent: "Recent Shifts",
             noData: "No shift data yet",
@@ -91,6 +98,9 @@ export default function FrontdeskHandoverPage() {
             loadFail: "Load failed",
             openFail: "Open shift failed",
             closeFail: "Close shift failed",
+            openSuccess: "Shift opened",
+            closeSuccess: "Shift closed",
+            alreadyOpen: "An active shift already exists. Close it first.",
           },
     [lang],
   );
@@ -112,8 +122,13 @@ export default function FrontdeskHandoverPage() {
 
   async function openShift(event: FormEvent) {
     event.preventDefault();
+    if (activeShift) {
+      setError(t.alreadyOpen);
+      return;
+    }
     setOpening(true);
     setError(null);
+    setMessage(null);
     try {
       const res = await fetch("/api/frontdesk/handover", {
         method: "POST",
@@ -126,6 +141,7 @@ export default function FrontdeskHandoverPage() {
         return;
       }
       setOpenNote("");
+      setMessage(`${t.openSuccess}: ${String(payload?.shift?.id || "").slice(0, 8)}`);
       await load();
     } finally {
       setOpening(false);
@@ -134,15 +150,20 @@ export default function FrontdeskHandoverPage() {
 
   async function closeShift(event: FormEvent) {
     event.preventDefault();
+    if (!activeShift) {
+      setError(t.noActiveShift);
+      return;
+    }
     setClosing(true);
     setError(null);
+    setMessage(null);
     try {
       const res = await fetch("/api/frontdesk/handover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "close",
-          shiftId,
+          shiftId: activeShift.id,
           cashTotal: Number(cashTotal),
           cardTotal: Number(cardTotal),
           transferTotal: Number(transferTotal),
@@ -155,6 +176,7 @@ export default function FrontdeskHandoverPage() {
         return;
       }
       setCloseNote("");
+      setMessage(`${t.closeSuccess}: ${String(payload?.shift?.id || activeShift.id).slice(0, 8)}`);
       await load();
     } finally {
       setClosing(false);
@@ -175,6 +197,7 @@ export default function FrontdeskHandoverPage() {
         </section>
 
         {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
+        {message ? <div className="sub" style={{ marginBottom: 12, color: "var(--brand)" }}>{message}</div> : null}
 
         <section className="fdTwoCol">
           <form onSubmit={openShift} className="fdGlassSubPanel" style={{ padding: 14 }}>
@@ -185,7 +208,7 @@ export default function FrontdeskHandoverPage() {
               placeholder={t.openNote}
               className="input"
             />
-            <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }} disabled={opening}>
+            <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }} disabled={opening || Boolean(activeShift)}>
               {opening ? t.opening : t.openBtn}
             </button>
           </form>
@@ -193,13 +216,15 @@ export default function FrontdeskHandoverPage() {
           <form onSubmit={closeShift} className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{t.closeTitle}</h2>
             <div style={{ display: "grid", gap: 8 }}>
-              <input value={shiftId} onChange={(e) => setShiftId(e.target.value)} placeholder={t.shiftId} className="input" required />
+              <div className="input" style={{ display: "flex", alignItems: "center" }}>
+                {t.activeShift}: {activeShift ? activeShift.id.slice(0, 8) : t.noActiveShift}
+              </div>
               <input type="number" value={cashTotal} onChange={(e) => setCashTotal(e.target.value)} placeholder={t.cash} className="input" />
               <input type="number" value={cardTotal} onChange={(e) => setCardTotal(e.target.value)} placeholder={t.card} className="input" />
               <input type="number" value={transferTotal} onChange={(e) => setTransferTotal(e.target.value)} placeholder={t.transfer} className="input" />
               <input value={closeNote} onChange={(e) => setCloseNote(e.target.value)} placeholder={t.closeNote} className="input" />
             </div>
-            <button type="submit" className="fdPillBtn" style={{ marginTop: 10 }} disabled={closing}>
+            <button type="submit" className="fdPillBtn" style={{ marginTop: 10 }} disabled={closing || !activeShift}>
               {closing ? t.closing : t.closeBtn}
             </button>
           </form>
@@ -234,4 +259,3 @@ export default function FrontdeskHandoverPage() {
     </main>
   );
 }
-

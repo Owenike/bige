@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../i18n-provider";
@@ -27,6 +27,13 @@ function fmtDate(value: string) {
   return date.toLocaleString();
 }
 
+function localDatetimeToIso(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString();
+}
+
 export default function FrontdeskBookingsPage() {
   const { locale } = useI18n();
   const zh = locale !== "en";
@@ -41,8 +48,8 @@ export default function FrontdeskBookingsPage() {
   const [memberId, setMemberId] = useState("");
   const [coachId, setCoachId] = useState("");
   const [serviceName, setServiceName] = useState("");
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
+  const [startsLocal, setStartsLocal] = useState("");
+  const [endsLocal, setEndsLocal] = useState("");
   const [note, setNote] = useState("");
 
   const [updateId, setUpdateId] = useState("");
@@ -51,11 +58,11 @@ export default function FrontdeskBookingsPage() {
 
   function bookingStatusLabel(status: string) {
     if (!zh) return status;
-    if (status === "booked") return "\u5df2\u9810\u7d04";
-    if (status === "checked_in") return "\u5df2\u5831\u5230";
-    if (status === "completed") return "\u5df2\u5b8c\u6210";
-    if (status === "cancelled") return "\u5df2\u53d6\u6d88";
-    if (status === "no_show") return "\u672a\u51fa\u5e2d";
+    if (status === "booked") return "已預約";
+    if (status === "checked_in") return "已報到";
+    if (status === "completed") return "已完成";
+    if (status === "cancelled") return "已取消";
+    if (status === "no_show") return "未出席";
     return status;
   }
 
@@ -72,12 +79,12 @@ export default function FrontdeskBookingsPage() {
     const servicesPayload = await servicesRes.json();
 
     if (!bookingsRes.ok) {
-      setError(bookingsPayload?.error || (zh ? "\u8f09\u5165\u9810\u7d04\u5931\u6557" : "Load bookings failed"));
+      setError(bookingsPayload?.error || (zh ? "載入預約失敗" : "Load bookings failed"));
       setLoading(false);
       return;
     }
     if (!servicesRes.ok) {
-      setError(servicesPayload?.error || (zh ? "\u8f09\u5165\u670d\u52d9\u5931\u6557" : "Load services failed"));
+      setError(servicesPayload?.error || (zh ? "載入服務失敗" : "Load services failed"));
       setLoading(false);
       return;
     }
@@ -93,6 +100,18 @@ export default function FrontdeskBookingsPage() {
 
   async function createBooking(event: FormEvent) {
     event.preventDefault();
+    const startsAt = localDatetimeToIso(startsLocal);
+    const endsAt = localDatetimeToIso(endsLocal);
+
+    if (!startsAt || !endsAt) {
+      setError(zh ? "請輸入有效的開始/結束時間" : "Please enter valid start/end time");
+      return;
+    }
+    if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+      setError(zh ? "結束時間必須晚於開始時間" : "End time must be after start time");
+      return;
+    }
+
     setCreating(true);
     setError(null);
     setMessage(null);
@@ -111,16 +130,16 @@ export default function FrontdeskBookingsPage() {
       });
       const payload = await res.json();
       if (!res.ok) {
-        setError(payload?.error || "Create booking failed");
+        setError(payload?.error || (zh ? "建立預約失敗" : "Create booking failed"));
         return;
       }
       setMemberId("");
       setCoachId("");
       setServiceName("");
-      setStartsAt("");
-      setEndsAt("");
+      setStartsLocal("");
+      setEndsLocal("");
       setNote("");
-      setMessage(`${zh ? "\u9810\u7d04\u5df2\u5efa\u7acb" : "Booking created"}: ${payload?.booking?.id || "success"}`);
+      setMessage(`${zh ? "預約已建立" : "Booking created"}: ${payload?.booking?.id || "success"}`);
       await load();
     } finally {
       setCreating(false);
@@ -143,11 +162,11 @@ export default function FrontdeskBookingsPage() {
       });
       const payload = await res.json();
       if (!res.ok) {
-        setError(payload?.error || (zh ? "\u66f4\u65b0\u9810\u7d04\u5931\u6557" : "Update booking failed"));
+        setError(payload?.error || (zh ? "更新預約失敗" : "Update booking failed"));
         return;
       }
       setUpdateReason("");
-      setMessage(`${zh ? "\u9810\u7d04\u5df2\u66f4\u65b0" : "Booking updated"}: ${updateId}`);
+      setMessage(`${zh ? "預約已更新" : "Booking updated"}: ${updateId}`);
       await load();
     } finally {
       setUpdating(false);
@@ -159,13 +178,13 @@ export default function FrontdeskBookingsPage() {
       <section className="fdGlassBackdrop">
         <section className="hero" style={{ paddingTop: 0 }}>
           <div className="fdGlassPanel">
-            <div className="fdEyebrow">{zh ? "\u9810\u7d04\u5de5\u4f5c\u53f0" : "BOOKING ASSIST"}</div>
+            <div className="fdEyebrow">{zh ? "預約工作台" : "BOOKING ASSIST"}</div>
             <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
-              {zh ? "\u6ac3\u6aaf\u9810\u7d04" : "Frontdesk Bookings"}
+              {zh ? "櫃檯預約" : "Frontdesk Bookings"}
             </h1>
             <p className="fdGlassText">
               {zh
-                ? "\u5728\u540c\u4e00\u500b\u9801\u9762\u5efa\u7acb\u9810\u7d04\u3001\u66f4\u65b0\u72c0\u614b\u4e26\u8ffd\u8e64\u6700\u65b0\u8a18\u9304\u3002"
+                ? "在同一個頁面建立預約、更新狀態並追蹤最新記錄。"
                 : "Create bookings, apply status updates, and track the latest reservations from one workspace."}
             </p>
           </div>
@@ -176,7 +195,7 @@ export default function FrontdeskBookingsPage() {
 
         <section className="fdTwoCol">
           <form onSubmit={createBooking} className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{zh ? "\u5efa\u7acb\u9810\u7d04" : "Create Booking"}</h2>
+            <h2 className="sectionTitle">{zh ? "建立預約" : "Create Booking"}</h2>
             <div style={{ display: "grid", gap: 8 }}>
               <input
                 value={memberId}
@@ -192,7 +211,7 @@ export default function FrontdeskBookingsPage() {
                 className="input"
               />
               <select value={serviceName} onChange={(e) => setServiceName(e.target.value)} className="input" required>
-                <option value="">{zh ? "\u9078\u64c7\u670d\u52d9" : "Select service"}</option>
+                <option value="">{zh ? "選擇服務" : "Select service"}</option>
                 {services.map((s) => (
                   <option key={s.code} value={s.code}>
                     {zh
@@ -202,28 +221,28 @@ export default function FrontdeskBookingsPage() {
                 ))}
               </select>
               <input
-                value={startsAt}
-                onChange={(e) => setStartsAt(e.target.value)}
-                placeholder={zh ? "開始時間（ISO）" : "startsAt (ISO)"}
+                type="datetime-local"
+                value={startsLocal}
+                onChange={(e) => setStartsLocal(e.target.value)}
                 className="input"
                 required
               />
               <input
-                value={endsAt}
-                onChange={(e) => setEndsAt(e.target.value)}
-                placeholder={zh ? "結束時間（ISO）" : "endsAt (ISO)"}
+                type="datetime-local"
+                value={endsLocal}
+                onChange={(e) => setEndsLocal(e.target.value)}
                 className="input"
                 required
               />
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={zh ? "\u5099\u8a3b" : "note"} className="input" />
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={zh ? "備註" : "note"} className="input" />
             </div>
             <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }} disabled={creating}>
-              {creating ? (zh ? "\u5efa\u7acb\u4e2d..." : "Creating...") : zh ? "\u5efa\u7acb" : "Create"}
+              {creating ? (zh ? "建立中..." : "Creating...") : zh ? "建立" : "Create"}
             </button>
           </form>
 
           <form onSubmit={updateBooking} className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{zh ? "\u53d6\u6d88 / \u66f4\u65b0\u9810\u7d04" : "Cancel / Update Booking"}</h2>
+            <h2 className="sectionTitle">{zh ? "取消 / 更新預約" : "Cancel / Update Booking"}</h2>
             <div style={{ display: "grid", gap: 8 }}>
               <input
                 value={updateId}
@@ -239,25 +258,25 @@ export default function FrontdeskBookingsPage() {
                 <option value="checked_in">{bookingStatusLabel("checked_in")}</option>
                 <option value="completed">{bookingStatusLabel("completed")}</option>
               </select>
-              <input value={updateReason} onChange={(e) => setUpdateReason(e.target.value)} placeholder={zh ? "\u539f\u56e0\uff08\u5fc5\u586b\uff09" : "reason (required)"} className="input" required />
+              <input value={updateReason} onChange={(e) => setUpdateReason(e.target.value)} placeholder={zh ? "原因（必填）" : "reason (required)"} className="input" required />
             </div>
             <button type="submit" className="fdPillBtn" style={{ marginTop: 10 }} disabled={updating}>
-              {updating ? (zh ? "\u66f4\u65b0\u4e2d..." : "Updating...") : zh ? "\u66f4\u65b0" : "Update"}
+              {updating ? (zh ? "更新中..." : "Updating...") : zh ? "更新" : "Update"}
             </button>
           </form>
         </section>
 
         <section style={{ marginTop: 14 }}>
-          <h2 className="sectionTitle">{zh ? "\u9810\u7d04\u6e05\u55ae" : "Booking List"}</h2>
+          <h2 className="sectionTitle">{zh ? "預約清單" : "Booking List"}</h2>
           <div className="fdActionGrid">
             {loading ? (
               <div className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <p className="fdGlassText" style={{ marginTop: 0 }}>{zh ? "\u8f09\u5165\u9810\u7d04\u4e2d..." : "Loading bookings..."}</p>
+                <p className="fdGlassText" style={{ marginTop: 0 }}>{zh ? "載入預約中..." : "Loading bookings..."}</p>
               </div>
             ) : null}
             {!loading && sortedItems.length === 0 ? (
               <div className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <p className="fdGlassText" style={{ marginTop: 0 }}>{zh ? "\u5c1a\u7121\u9810\u7d04\u8cc7\u6599\u3002" : "No bookings yet."}</p>
+                <p className="fdGlassText" style={{ marginTop: 0 }}>{zh ? "尚無預約資料。" : "No bookings yet."}</p>
               </div>
             ) : null}
             {!loading &&
@@ -265,13 +284,13 @@ export default function FrontdeskBookingsPage() {
                 <article key={item.id} className="fdGlassSubPanel fdActionCard" style={{ padding: 14 }}>
                   <h3 className="fdActionTitle" style={{ fontSize: 18 }}>{item.service_name}</h3>
                   <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "\u72c0\u614b" : "status"}: {bookingStatusLabel(item.status)}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "\u6703\u54e1" : "member"}: {item.member_id}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "\u6559\u7df4" : "coach"}: {item.coach_id || "-"}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "\u958b\u59cb" : "start"}: {fmtDate(item.starts_at)}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "\u7d50\u675f" : "end"}: {fmtDate(item.ends_at)}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "狀態" : "status"}: {bookingStatusLabel(item.status)}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "會員" : "member"}: {item.member_id}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "教練" : "coach"}: {item.coach_id || "-"}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "開始" : "start"}: {fmtDate(item.starts_at)}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "結束" : "end"}: {fmtDate(item.ends_at)}</p>
                     <p className="sub" style={{ marginTop: 0 }}>{zh ? "預約 ID" : "bookingId"}: {item.id}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "\u5099\u8a3b" : "note"}: {item.note || "-"}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{zh ? "備註" : "note"}: {item.note || "-"}</p>
                   </div>
                 </article>
               ))}
