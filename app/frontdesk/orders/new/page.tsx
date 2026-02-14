@@ -4,6 +4,10 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useI18n } from "../../../i18n-provider";
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 export default function FrontdeskNewOrderPage() {
   const { locale } = useI18n();
   const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
@@ -32,6 +36,7 @@ export default function FrontdeskNewOrderPage() {
             initCheckout: "初始化結帳",
             checkoutUrl: "結帳連結",
             createFail: "建立訂單失敗",
+            invalidMemberId: "會員編號格式錯誤，請輸入 UUID 或留空",
             paymentFail: "付款失敗",
             newebpayInitFail: "藍新初始化失敗",
             orderCreated: "訂單已建立",
@@ -64,6 +69,7 @@ export default function FrontdeskNewOrderPage() {
             initCheckout: "Initialize Checkout",
             checkoutUrl: "Checkout URL",
             createFail: "Create order failed",
+            invalidMemberId: "Invalid memberId format. Use UUID or leave blank.",
             paymentFail: "Payment failed",
             newebpayInitFail: "Newebpay init failed",
             orderCreated: "Order created",
@@ -101,6 +107,12 @@ export default function FrontdeskNewOrderPage() {
 
   async function createOrder(event: FormEvent) {
     event.preventDefault();
+    const normalizedMemberId = memberId.trim();
+    if (normalizedMemberId && !isUuid(normalizedMemberId)) {
+      setError(t.invalidMemberId);
+      setMessage(null);
+      return;
+    }
     setCreating(true);
     setError(null);
     setMessage(null);
@@ -110,7 +122,7 @@ export default function FrontdeskNewOrderPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          memberId: memberId || null,
+          memberId: normalizedMemberId || null,
           amount: Number(amount),
           channel: "frontdesk",
           note: note || null,
