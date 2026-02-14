@@ -19,8 +19,10 @@ export default function FrontdeskMemberSearchPage() {
   const [phone, setPhone] = useState("");
   const [items, setItems] = useState<MemberItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [recentCreatedId, setRecentCreatedId] = useState<string | null>(null);
 
   const t = useMemo(
     () =>
@@ -43,8 +45,14 @@ export default function FrontdeskMemberSearchPage() {
             empty: "\u76ee\u524d\u6c92\u6709\u8cc7\u6599",
             searchFail: "\u67e5\u8a62\u5931\u6557",
             createFail: "\u5efa\u7acb\u5931\u6557",
+            created: "\u6703\u54e1\u5df2\u5efa\u7acb",
             memberId: "\u6703\u54e1ID",
             branch: "\u5206\u5e97",
+            continueHint: "\u53ef\u4ee5\u76f4\u63a5\u7528\u6b64\u6703\u54e1\u524d\u5f80\u6536\u6b3e\u3001\u9810\u7d04\u6216\u5165\u5834\u6383\u78bc\u3002",
+            quickActions: "\u5feb\u901f\u4e0b\u4e00\u6b65",
+            goOrder: "\u65b0\u589e\u8a02\u55ae",
+            goBooking: "\u5efa\u7acb\u9810\u7d04",
+            goCheckin: "\u5165\u5834\u6383\u78bc",
           }
         : {
             badge: "MEMBER DESK",
@@ -64,18 +72,26 @@ export default function FrontdeskMemberSearchPage() {
             empty: "No records yet",
             searchFail: "Search failed",
             createFail: "Create failed",
+            created: "Member created",
             memberId: "Member ID",
             branch: "Branch",
+            continueHint: "You can continue with this member for payment, booking, or check-in.",
+            quickActions: "Quick Actions",
+            goOrder: "New Order",
+            goBooking: "New Booking",
+            goCheckin: "Check-in",
           },
     [lang],
   );
 
   async function search(event?: FormEvent) {
     event?.preventDefault();
+    const keyword = q.trim();
     setError(null);
+    setMessage(null);
     setLoading(true);
     try {
-      const res = await fetch(`/api/members?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`/api/members?q=${encodeURIComponent(keyword)}`);
       const payload = await res.json();
       if (!res.ok) {
         setError(payload?.error || t.searchFail);
@@ -90,6 +106,7 @@ export default function FrontdeskMemberSearchPage() {
   async function createMember(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setMessage(null);
     setCreating(true);
     try {
       const res = await fetch("/api/members", {
@@ -102,8 +119,12 @@ export default function FrontdeskMemberSearchPage() {
         setError(payload?.error || t.createFail);
         return;
       }
+      const createdId = String(payload?.member?.id || "");
       setName("");
       setPhone("");
+      setRecentCreatedId(createdId || null);
+      setQ(payload?.member?.full_name || "");
+      setMessage(`${t.created}: ${createdId}`);
       await search();
     } finally {
       setCreating(false);
@@ -124,9 +145,10 @@ export default function FrontdeskMemberSearchPage() {
         </section>
 
         {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
+        {message ? <div className="sub" style={{ marginBottom: 12, color: "var(--brand)" }}>{message}</div> : null}
 
-        <section className="fdTwoCol">
-          <div className="fdGlassSubPanel">
+        <section className="fdTwoCol" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
+          <div className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{t.findTitle}</h2>
             <p className="fdGlassText" style={{ marginTop: 6 }}>
               {t.findHint}
@@ -139,7 +161,7 @@ export default function FrontdeskMemberSearchPage() {
             </form>
           </div>
 
-          <div className="fdGlassSubPanel">
+          <div className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{t.createTitle}</h2>
             <form onSubmit={createMember} className="field">
               <label className="fdGlassText" style={{ marginTop: 0 }}>
@@ -152,19 +174,39 @@ export default function FrontdeskMemberSearchPage() {
                 {creating ? t.creatingBtn : t.createBtn}
               </button>
             </form>
+            <p className="fdGlassText" style={{ marginTop: 10, fontSize: 12 }}>{t.continueHint}</p>
           </div>
         </section>
 
         <section style={{ marginTop: 14 }}>
+          {recentCreatedId ? (
+            <div className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 12 }}>
+              <h2 className="sectionTitle" style={{ marginBottom: 8 }}>{t.quickActions}</h2>
+              <div className="actions" style={{ marginTop: 0 }}>
+                <a className="fdPillBtn fdPillBtnPrimary" href={`/frontdesk/orders/new?memberId=${encodeURIComponent(recentCreatedId)}`}>{t.goOrder}</a>
+                <a className="fdPillBtn" href={`/frontdesk/bookings?memberId=${encodeURIComponent(recentCreatedId)}`}>{t.goBooking}</a>
+                <a className="fdPillBtn" href="/frontdesk/checkin">{t.goCheckin}</a>
+              </div>
+            </div>
+          ) : null}
+
           <h2 className="sectionTitle">{t.resultTitle}</h2>
-          <div className="fdActionGrid">
+          <div className="fdActionGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
             {items.length === 0 ? (
-              <div className="fdGlassSubPanel">
+              <div className="fdGlassSubPanel" style={{ padding: 14 }}>
                 <div className="kvValue">{t.empty}</div>
               </div>
             ) : (
               items.map((item) => (
-                <article key={item.id} className="fdGlassSubPanel fdActionCard">
+                <article
+                  key={item.id}
+                  className="fdGlassSubPanel fdActionCard"
+                  style={{
+                    padding: 14,
+                    borderColor: item.id === recentCreatedId ? "rgba(116, 182, 241, .9)" : undefined,
+                    boxShadow: item.id === recentCreatedId ? "0 0 0 2px rgba(159, 212, 255, .45)" : undefined,
+                  }}
+                >
                   <h3 className="fdActionTitle" style={{ fontSize: 20 }}>
                     {item.full_name}
                   </h3>

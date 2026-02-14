@@ -105,6 +105,12 @@ export default function FrontdeskNewOrderPage() {
     setOrderId((prev) => prev || queryOrderId);
   }, [searchParams]);
 
+  useEffect(() => {
+    const queryMemberId = (searchParams.get("memberId") || "").trim();
+    if (!queryMemberId) return;
+    setMemberId((prev) => prev || queryMemberId);
+  }, [searchParams]);
+
   async function createOrder(event: FormEvent) {
     event.preventDefault();
     const normalizedMemberId = memberId.trim();

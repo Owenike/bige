@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useI18n } from "../../i18n-provider";
 
 interface BookingItem {
@@ -35,6 +36,7 @@ function localDatetimeToIso(value: string) {
 }
 
 export default function FrontdeskBookingsPage() {
+  const searchParams = useSearchParams();
   const { locale } = useI18n();
   const zh = locale !== "en";
   const [items, setItems] = useState<BookingItem[]>([]);
@@ -97,6 +99,12 @@ export default function FrontdeskBookingsPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    const queryMemberId = (searchParams.get("memberId") || "").trim();
+    if (!queryMemberId) return;
+    setMemberId((prev) => prev || queryMemberId);
+  }, [searchParams]);
 
   async function createBooking(event: FormEvent) {
     event.preventDefault();
