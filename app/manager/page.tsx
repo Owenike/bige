@@ -8,6 +8,17 @@ export default function ManagerDashboardPage() {
   const zh = locale !== "en";
   const [orders, setOrders] = useState<Array<{ id: string; status: string; amount: number }>>([]);
   const [audit, setAudit] = useState<Array<{ id: string; action: string; reason: string | null }>>([]);
+  const [approvals, setApprovals] = useState<
+    Array<{
+      id: string;
+      action: string;
+      target_type: string;
+      target_id: string;
+      reason: string;
+      status: string;
+      created_at: string;
+    }>
+  >([]);
   const [reportFrom, setReportFrom] = useState(new Date().toISOString().slice(0, 10));
   const [reportTo, setReportTo] = useState(new Date().toISOString().slice(0, 10));
   const [report, setReport] = useState<{
@@ -66,25 +77,36 @@ export default function ManagerDashboardPage() {
     return action;
   }
 
+  function approvalActionLabel(action: string) {
+    if (!zh) return action === "order_void" ? "Order Void" : action === "payment_refund" ? "Payment Refund" : action;
+    if (action === "order_void") return "\u8a02\u55ae\u4f5c\u5ee2";
+    if (action === "payment_refund") return "\u4ed8\u6b3e\u9000\u6b3e";
+    return action;
+  }
+
   async function load() {
     setLoading(true);
     setError(null);
-    const [ordersRes, auditRes, reportRes] = await Promise.all([
+    const [ordersRes, auditRes, reportRes, approvalsRes] = await Promise.all([
       fetch("/api/orders"),
       fetch("/api/platform/audit?limit=30"),
       fetch(`/api/manager/reports/summary?from=${encodeURIComponent(reportFrom)}&to=${encodeURIComponent(reportTo)}`),
+      fetch("/api/approvals?status=pending&limit=30"),
     ]);
     const ordersPayload = await ordersRes.json();
     const auditPayload = await auditRes.json();
     const reportPayload = await reportRes.json();
+    const approvalsPayload = await approvalsRes.json();
 
     if (!ordersRes.ok) setError(ordersPayload?.error || (zh ? "\u8f09\u5165\u8a02\u55ae\u5931\u6557" : "Load orders failed"));
     if (!auditRes.ok) setError(auditPayload?.error || (zh ? "\u8f09\u5165\u7a3d\u6838\u5931\u6557" : "Load audit failed"));
     if (!reportRes.ok) setError(reportPayload?.error || (zh ? "\u8f09\u5165\u5831\u8868\u5931\u6557" : "Load report failed"));
+    if (!approvalsRes.ok) setError(approvalsPayload?.error || (zh ? "\u8f09\u5165\u5f85\u5be9\u5931\u6557" : "Load approvals failed"));
 
     if (ordersRes.ok) setOrders(ordersPayload.items || []);
     if (auditRes.ok) setAudit(auditPayload.items || []);
     if (reportRes.ok) setReport(reportPayload);
+    if (approvalsRes.ok) setApprovals(approvalsPayload.items || []);
     setLoading(false);
   }
 
@@ -141,6 +163,31 @@ export default function ManagerDashboardPage() {
       return;
     }
     setMessage(`${zh ? "\u7968\u5238\u5df2\u8abf\u6574" : "Adjusted pass"}: ${payload.adjustment?.pass_id || passId}`);
+    await load();
+  }
+
+  async function decideApproval(requestId: string, decision: "approve" | "reject") {
+    setMessage(null);
+    setError(null);
+    const res = await fetch(`/api/approvals/${encodeURIComponent(requestId)}/decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    const payload = await res.json();
+    if (!res.ok) {
+      setError(payload?.error || (zh ? "\u5be9\u6838\u5931\u6557" : "Approval action failed"));
+      return;
+    }
+    setMessage(
+      decision === "approve"
+        ? zh
+          ? "\u5df2\u6838\u51c6\u7533\u8acb"
+          : "Approval request approved"
+        : zh
+          ? "\u5df2\u99c1\u56de\u7533\u8acb"
+          : "Approval request rejected",
+    );
     await load();
   }
 
@@ -253,6 +300,29 @@ export default function ManagerDashboardPage() {
               {orders.length === 0 ? <p className="fdGlassText">{zh ? "\u627e\u4e0d\u5230\u8a02\u55ae\u3002" : "No orders found."}</p> : null}
             </div>
           </section>
+        </section>
+
+        <section className="fdGlassSubPanel" style={{ padding: 14, marginTop: 14 }}>
+          <h2 className="sectionTitle">{zh ? "\u9ad8\u98a8\u96aa\u5f85\u5be9" : "Pending High-Risk Approvals"}</h2>
+          <div className="fdDataGrid">
+            {approvals.map((item) => (
+              <div key={item.id} className="fdGlassSubPanel" style={{ padding: 10 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  {approvalActionLabel(item.action)} | {item.target_type}:{item.target_id}
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>{zh ? "\u539f\u56e0" : "Reason"}: {item.reason}</p>
+                <div className="actions" style={{ marginTop: 8 }}>
+                  <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => void decideApproval(item.id, "approve")}>
+                    {zh ? "\u6838\u51c6" : "Approve"}
+                  </button>
+                  <button type="button" className="fdPillBtn" onClick={() => void decideApproval(item.id, "reject")}>
+                    {zh ? "\u99c1\u56de" : "Reject"}
+                  </button>
+                </div>
+              </div>
+            ))}
+            {approvals.length === 0 ? <p className="fdGlassText">{zh ? "\u76ee\u524d\u7121\u5f85\u5be9\u7533\u8acb\u3002" : "No pending approval requests."}</p> : null}
+          </div>
         </section>
 
         <section className="fdGlassSubPanel" style={{ padding: 14, marginTop: 14 }}>

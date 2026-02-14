@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../../lib/auth-context";
+import { executeOrderVoid } from "../../../../../lib/high-risk-actions";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireProfile(["manager", "frontdesk"], request);
   if (!auth.ok) return auth.response;
+
+  if (!auth.context.tenantId) {
+    return NextResponse.json({ error: "Invalid tenant context" }, { status: 400 });
+  }
 
   const body = await request.json().catch(() => null);
   const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
@@ -11,40 +16,59 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   if (!reason) return NextResponse.json({ error: "reason is required" }, { status: 400 });
 
-  const { data: order, error: fetchError } = await auth.supabase
-    .from("orders")
-    .select("id, status, branch_id")
-    .eq("id", id)
-    .eq("tenant_id", auth.context.tenantId)
-    .maybeSingle();
+  if (auth.context.role === "frontdesk") {
+    const { data, error } = await auth.supabase
+      .from("high_risk_action_requests")
+      .insert({
+        tenant_id: auth.context.tenantId,
+        branch_id: auth.context.branchId,
+        requested_by: auth.context.userId,
+        action: "order_void",
+        target_type: "order",
+        target_id: id,
+        reason,
+        payload: {},
+      })
+      .select("id, status, created_at")
+      .maybeSingle();
 
-  if (fetchError || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-  if (auth.context.role === "frontdesk" && auth.context.branchId && String(order.branch_id || "") !== auth.context.branchId) {
-    return NextResponse.json({ error: "Forbidden order access for current branch" }, { status: 403 });
+    if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json({ error: "A pending approval request already exists for this order" }, { status: 409 });
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    await auth.supabase.from("audit_logs").insert({
+      tenant_id: auth.context.tenantId,
+      actor_id: auth.context.userId,
+      action: "high_risk_request_created",
+      target_type: "order",
+      target_id: id,
+      reason,
+      payload: { requestId: data?.id, action: "order_void" },
+    });
+
+    return NextResponse.json(
+      {
+        request: data,
+        pendingApproval: true,
+        message: "Void request submitted for manager approval",
+      },
+      { status: 202 },
+    );
   }
-  if (order.status === "cancelled" || order.status === "refunded") {
-    return NextResponse.json({ error: "Order already closed" }, { status: 400 });
-  }
 
-  const { data, error } = await auth.supabase
-    .from("orders")
-    .update({ status: "cancelled", updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("tenant_id", auth.context.tenantId)
-    .select("id, status, updated_at")
-    .maybeSingle();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  await auth.supabase.from("audit_logs").insert({
-    tenant_id: auth.context.tenantId,
-    actor_id: auth.context.userId,
-    action: "order_void",
-    target_type: "order",
-    target_id: id,
+  const result = await executeOrderVoid({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    actorId: auth.context.userId,
+    role: "manager",
+    branchId: auth.context.branchId,
+    orderId: id,
     reason,
-    payload: { previousStatus: order.status },
   });
 
-  return NextResponse.json({ order: data });
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+  return NextResponse.json({ order: result.order });
 }

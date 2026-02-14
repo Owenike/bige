@@ -1,44 +1,72 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../../lib/auth-context";
-
-function mapRefundRpcError(message: string) {
-  if (message.includes("reason_required")) return { status: 400, error: "reason is required" };
-  if (message.includes("payment_not_found")) return { status: 404, error: "Payment not found" };
-  if (message.includes("payment_not_refundable")) {
-    return { status: 400, error: "Only paid payments can be refunded" };
-  }
-  return { status: 500, error: message };
-}
+import { executePaymentRefund } from "../../../../../lib/high-risk-actions";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireProfile(["manager"], request);
+  const auth = await requireProfile(["manager", "frontdesk"], request);
   if (!auth.ok) return auth.response;
+
+  if (!auth.context.tenantId) {
+    return NextResponse.json({ error: "Invalid tenant context" }, { status: 400 });
+  }
 
   const body = await request.json().catch(() => null);
   const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
   const { id } = await context.params;
 
-  const rpcResult = await auth.supabase.rpc("refund_payment", {
-    p_tenant_id: auth.context.tenantId,
-    p_payment_id: id,
-    p_reason: reason,
-    p_actor_id: auth.context.userId,
-  });
+  if (!reason) return NextResponse.json({ error: "reason is required" }, { status: 400 });
 
-  if (rpcResult.error) {
-    const mapped = mapRefundRpcError(rpcResult.error.message || "Refund failed");
-    return NextResponse.json({ error: mapped.error }, { status: mapped.status });
+  if (auth.context.role === "frontdesk") {
+    const { data, error } = await auth.supabase
+      .from("high_risk_action_requests")
+      .insert({
+        tenant_id: auth.context.tenantId,
+        branch_id: auth.context.branchId,
+        requested_by: auth.context.userId,
+        action: "payment_refund",
+        target_type: "payment",
+        target_id: id,
+        reason,
+        payload: {},
+      })
+      .select("id, status, created_at")
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json({ error: "A pending approval request already exists for this payment" }, { status: 409 });
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    await auth.supabase.from("audit_logs").insert({
+      tenant_id: auth.context.tenantId,
+      actor_id: auth.context.userId,
+      action: "high_risk_request_created",
+      target_type: "payment",
+      target_id: id,
+      reason,
+      payload: { requestId: data?.id, action: "payment_refund" },
+    });
+
+    return NextResponse.json(
+      {
+        request: data,
+        pendingApproval: true,
+        message: "Refund request submitted for manager approval",
+      },
+      { status: 202 },
+    );
   }
 
-  const row = Array.isArray(rpcResult.data) ? rpcResult.data[0] : rpcResult.data;
-  if (!row?.payment_id) return NextResponse.json({ error: "Refund failed" }, { status: 500 });
-
-  return NextResponse.json({
-    payment: {
-      id: row.payment_id,
-      order_id: row.order_id,
-      status: row.payment_status,
-      updated_at: row.updated_at,
-    },
+  const result = await executePaymentRefund({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    actorId: auth.context.userId,
+    paymentId: id,
+    reason,
   });
+
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+  return NextResponse.json({ payment: result.payment });
 }
