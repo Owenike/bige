@@ -563,23 +563,6 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdCapabilityDesc{
   margin-bottom: 0;
 }
-.fdCapabilityFooter{
-  margin-top: auto;
-  padding-top: 10px;
-}
-.fdCapabilityCta{
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 30px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px dashed rgba(139, 188, 236, .82);
-  color: #4b6480;
-  font-size: 12px;
-  font-weight: 600;
-  background: rgba(236,245,255,.55);
-}
 .fdListStack{
   display: grid;
   grid-template-columns: 1fr;
