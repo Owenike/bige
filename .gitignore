@@ -13,3 +13,5 @@ tsconfig.tsbuildinfo
 # local audit outputs
 commercial_audit.*
 
+.vercel
+.env*.local
