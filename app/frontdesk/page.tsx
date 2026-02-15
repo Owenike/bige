@@ -83,6 +83,24 @@ function playNotificationTone() {
   }
 }
 
+function FrontdeskFeatureFrame({ src, title }: { src: string; title: string }) {
+  return (
+    <div className="fdGlassSubPanel" style={{ marginTop: 10, padding: 0, overflow: "hidden" }}>
+      <iframe
+        src={src}
+        title={title}
+        style={{
+          width: "100%",
+          height: "min(78vh, 820px)",
+          border: "0",
+          display: "block",
+          background: "transparent",
+        }}
+      />
+    </div>
+  );
+}
+
 export default function FrontdeskPortalPage() {
   const { locale } = useI18n();
   const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
@@ -558,20 +576,10 @@ export default function FrontdeskPortalPage() {
                     </div>
                   ) : null}
                 </div>
+              ) : modalType === "entry" ? (
+                <FrontdeskFeatureFrame src="/frontdesk/checkin" title={t.entryModalTitle} />
               ) : (
-                <div className="fdGlassSubPanel" style={{ marginTop: 10, padding: 14 }}>
-                  <p className="fdGlassText" style={{ marginTop: 0 }}>
-                    {modalType === "entry" ? t.entryModalDesc : t.memberModalDesc}
-                  </p>
-                  <p className="sub" style={{ marginTop: 8 }}>
-                    {modalType === "entry" ? t.entryModalHint : t.memberModalHint}
-                  </p>
-                  <div className="fdPillActions" style={{ marginTop: 12 }}>
-                    <a className="fdPillBtn fdPillBtnPrimary" href={modalType === "entry" ? "/frontdesk/checkin" : "/frontdesk/member-search"}>
-                      {modalType === "entry" ? t.openCheckinPage : t.openMemberPage}
-                    </a>
-                  </div>
-                </div>
+                <FrontdeskFeatureFrame src="/frontdesk/member-search" title={t.memberModalTitle} />
               )}
             </div>
           </div>
