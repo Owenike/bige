@@ -221,9 +221,9 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   const decisionColor = result?.decision === "allow" ? "var(--brand)" : "#9b1c1c";
 
   return (
-    <main className="fdGlassScene" style={embedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
+    <main className={embedded ? "fdEmbedScene" : "fdGlassScene"} style={embedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
       <section
-        className="fdGlassBackdrop"
+        className={embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"}
         style={embedded ? { minHeight: "auto", height: "auto", padding: 12 } : undefined}
       >
         {!embedded ? (

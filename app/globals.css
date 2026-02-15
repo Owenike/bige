@@ -317,6 +317,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   --fd-scroll: 0px;
   font-family: "SF Pro Display", "SF Pro Text", "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif;
 }
+.fdEmbedScene{
+  position: relative;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
 .fdGlassBackdrop{
   position: relative;
   overflow: hidden;
@@ -329,6 +335,19 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     radial-gradient(720px 380px at 84% 90%, rgba(216, 170, 255, .09), transparent 70%),
     linear-gradient(165deg, #f4f7fc 0%, #edf2f9 44%, #e8eef7 100%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
+}
+.fdEmbedBackdrop{
+  position: relative;
+  overflow: visible;
+  border-radius: 0;
+  padding: 12px;
+  min-height: auto;
+  background: linear-gradient(180deg, rgba(247,250,255,.84), rgba(241,246,253,.84));
+  box-shadow: none;
+}
+.fdEmbedBackdrop::before,
+.fdEmbedBackdrop::after{
+  display: none;
 }
 .fdGlassBackdrop::before{
   content: "";
@@ -691,6 +710,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdModalBackdropFeature{
   place-items: start center;
   padding: 8px;
+  background: rgba(236, 240, 247, .68);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .fdModal{
   width: min(1080px, calc(100vw - 36px));
@@ -723,7 +745,20 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  contain: content;
   padding-right: 2px;
+}
+.fdModalFeatureBody .fdGlassPanel,
+.fdModalFeatureBody .fdGlassSubPanel,
+.fdModalFeatureBody .card{
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 6px 14px rgba(43, 57, 84, .08);
+}
+.fdModalFeatureBody .fdGlassSubPanel::before,
+.fdModalFeatureBody .fdGlassSubPanel::after,
+.fdModalFeatureBody .fdGlassPanel::after{
+  display: none;
 }
 .fdModalLayout{
   display: grid;
