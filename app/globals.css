@@ -66,6 +66,43 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 16px;
 }
 
+@media (hover: hover) and (pointer: fine){
+  .topbar{
+    z-index: 30;
+    max-height: 10px;
+    overflow: hidden;
+    transition: max-height .22s ease, box-shadow .22s ease, background .22s ease;
+  }
+  .topbar::after{
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 2px;
+    transform: translateX(-50%);
+    width: 88px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(123, 141, 167, .32);
+    pointer-events: none;
+  }
+  .topbar .nav{
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .topbar:hover,
+  .topbar:focus-within{
+    max-height: 120px;
+    box-shadow: 0 12px 24px rgba(114, 132, 160, .16);
+    background: rgba(244,248,255,.86);
+  }
+  .topbar:hover .nav,
+  .topbar:focus-within .nav{
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .brand{
   display:flex;
   align-items:baseline;
