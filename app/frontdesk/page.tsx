@@ -350,12 +350,12 @@ export default function FrontdeskPortalPage() {
 
   function statusStyle(status: CapabilityStatus) {
     if (status === "ready") {
-      return { background: "rgba(16,185,129,.16)", borderColor: "rgba(16,185,129,.45)", color: "#bbf7d0" };
+      return { background: "rgba(34,184,166,.10)", borderColor: "rgba(34,184,166,.45)", color: "#137a6d" };
     }
     if (status === "building") {
-      return { background: "rgba(59,130,246,.16)", borderColor: "rgba(59,130,246,.45)", color: "#bfdbfe" };
+      return { background: "rgba(255,255,255,.62)", borderColor: "rgba(164,176,194,.44)", color: "rgba(71,83,102,.86)" };
     }
-    return { background: "rgba(234,179,8,.16)", borderColor: "rgba(234,179,8,.45)", color: "#fde68a" };
+    return { background: "rgba(255,255,255,.62)", borderColor: "rgba(164,176,194,.44)", color: "rgba(71,83,102,.86)" };
   }
 
   return (
