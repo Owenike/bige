@@ -69,32 +69,42 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 @media (hover: hover) and (pointer: fine){
   .topbar{
     z-index: 30;
-    max-height: 10px;
     overflow: hidden;
-    transition: max-height .22s ease, box-shadow .22s ease, background .22s ease;
+    transform: translateY(calc(-100% + 24px));
+    transition: transform .28s cubic-bezier(.22,.8,.22,1), box-shadow .24s ease, background .24s ease;
+    will-change: transform;
   }
   .topbar::after{
     content: "";
     position: absolute;
     left: 50%;
-    top: 2px;
+    top: 8px;
     transform: translateX(-50%);
-    width: 88px;
-    height: 4px;
+    width: 108px;
+    height: 5px;
     border-radius: 999px;
-    background: rgba(123, 141, 167, .32);
+    background: rgba(123, 141, 167, .40);
     pointer-events: none;
   }
+  .topbar::before{
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -14px;
+    height: 14px;
+    background: transparent;
+  }
   .topbar .nav{
-    opacity: 0;
-    transform: translateY(-8px);
-    transition: opacity .18s ease, transform .18s ease;
+    opacity: .08;
+    transform: translateY(-6px);
+    transition: opacity .22s ease, transform .22s ease;
   }
   .topbar:hover,
   .topbar:focus-within{
-    max-height: 120px;
+    transform: translateY(0);
     box-shadow: 0 12px 24px rgba(114, 132, 160, .16);
-    background: rgba(244,248,255,.86);
+    background: rgba(244,248,255,.92);
   }
   .topbar:hover .nav,
   .topbar:focus-within .nav{
@@ -634,8 +644,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(16, 24, 40, .36);
-  backdrop-filter: blur(4px);
+  background: rgba(16, 24, 40, .28);
+  backdrop-filter: blur(5px);
   display: grid;
   place-items: center;
   padding: 20px;
@@ -647,10 +657,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   display: flex;
   flex-direction: column;
   border-radius: 18px;
-  border: 1px solid var(--fd-line-soft);
+  border: 1px solid rgba(194,203,217,.52);
   background:
-    linear-gradient(140deg, rgba(255,255,255,.90), rgba(255,255,255,.72) 52%, rgba(255,255,255,.62)),
-    linear-gradient(180deg, rgba(255,255,255,.70), rgba(236,241,248,.48));
+    linear-gradient(140deg, rgba(255,255,255,.78), rgba(255,255,255,.60) 52%, rgba(255,255,255,.50)),
+    linear-gradient(180deg, rgba(255,255,255,.56), rgba(236,241,248,.38));
   box-shadow: 0 22px 56px rgba(13, 21, 34, .35);
   padding: 14px;
 }
@@ -667,17 +677,17 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   grid-template-columns: 1fr;
   gap: 10px;
   max-height: none;
+  height: 100%;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   padding-right: 4px;
 }
 .fdModalDetail{
   padding: 12px;
   min-height: 0;
-  height: 100%;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .fdModalHead{
   flex: 0 0 auto;
