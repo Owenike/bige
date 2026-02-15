@@ -224,8 +224,11 @@ export default function FrontdeskCheckinPage() {
   const decisionColor = result?.decision === "allow" ? "var(--brand)" : "#9b1c1c";
 
   return (
-    <main className="fdGlassScene">
-      <section className="fdGlassBackdrop" style={isEmbedded ? { minHeight: "100%", padding: 12 } : undefined}>
+    <main className="fdGlassScene" style={isEmbedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
+      <section
+        className="fdGlassBackdrop"
+        style={isEmbedded ? { minHeight: "auto", height: "100%", padding: 12, overflowY: "auto" } : undefined}
+      >
         {!isEmbedded ? (
           <section className="hero" style={{ paddingTop: 0 }}>
             <div className="fdGlassPanel">

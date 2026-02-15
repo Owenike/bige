@@ -89,6 +89,8 @@ function FrontdeskFeatureFrame({ src, title }: { src: string; title: string }) {
       <iframe
         src={src.includes("?") ? `${src}&embed=1` : `${src}?embed=1`}
         title={title}
+        allow="camera; microphone"
+        loading="eager"
         style={{
           width: "100%",
           height: "100%",
@@ -528,7 +530,7 @@ export default function FrontdeskPortalPage() {
         </section>
 
         {capabilityOpen ? (
-          <div className="fdModalBackdrop" onClick={() => setCapabilityOpen(false)} role="presentation">
+          <div className={`fdModalBackdrop ${modalType === "capability" ? "" : "fdModalBackdropFeature"}`} onClick={() => setCapabilityOpen(false)} role="presentation">
             <div className={`fdModal ${modalType === "capability" ? "" : "fdModalFeature"}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.capabilityModalTitle}>
               <div className="fdModalHead">
                 <h2 className="sectionTitle" style={{ margin: 0 }}>
