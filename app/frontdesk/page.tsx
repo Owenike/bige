@@ -102,6 +102,11 @@ export default function FrontdeskPortalPage() {
   const [capabilityOpen, setCapabilityOpen] = useState(false);
   const [selectedCapabilityId, setSelectedCapabilityId] = useState<string>("member");
 
+  const openCapabilityModal = useCallback((id: string) => {
+    setSelectedCapabilityId(id);
+    setCapabilityOpen(true);
+  }, []);
+
   useEffect(() => {
     const onScroll = () => {
       if (!sceneRef.current) return;
@@ -374,12 +379,12 @@ export default function FrontdeskPortalPage() {
             </h2>
             <p className="fdGlassText">{t.statusTip}</p>
             <div className="fdPillActions">
-              <a className="fdPillBtn fdPillBtnPrimary" href="/frontdesk/checkin">
+              <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => openCapabilityModal("entry")}>
                 {t.primary}
-              </a>
-              <a className="fdPillBtn fdPillBtnGhost" href="/frontdesk/member-search">
+              </button>
+              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => openCapabilityModal("member")}>
                 {t.secondary}
-              </a>
+              </button>
               <button
                 type="button"
                 className="fdPillBtn fdPillBtnGhost"
@@ -490,7 +495,7 @@ export default function FrontdeskPortalPage() {
             <div className="fdModal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.capabilityModalTitle}>
               <div className="fdModalHead">
                 <h2 className="sectionTitle" style={{ margin: 0 }}>{t.capabilityModalTitle}</h2>
-                <button type="button" className="fdPillBtn" onClick={() => setCapabilityOpen(false)}>
+                <button type="button" className="fdPillBtn fdPillBtnGhost fdModalCloseBtn" onClick={() => setCapabilityOpen(false)}>
                   {t.close}
                 </button>
               </div>

@@ -523,6 +523,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   border-color: rgba(34,184,166,.46);
   transform: translateY(0) scale(.98);
 }
+.fdModalCloseBtn:hover{
+  background: rgba(34,184,166,.18);
+  border-color: rgba(34,184,166,.50);
+  color: #1f4f5a;
+}
 .fdGaugeWrap{
   position: relative;
   margin-top: 24px;
