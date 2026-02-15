@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useI18n } from "../../i18n-provider";
 
 interface MemberItem {
@@ -36,6 +37,8 @@ function toCustomFields(rows: CustomFieldRow[]) {
 export default function FrontdeskMemberSearchPage() {
   const { locale } = useI18n();
   const zh = locale !== "en";
+  const searchParams = useSearchParams();
+  const isEmbedded = searchParams.get("embed") === "1";
 
   const [q, setQ] = useState("");
   const [name, setName] = useState("");
@@ -239,14 +242,21 @@ export default function FrontdeskMemberSearchPage() {
 
   return (
     <main className="fdGlassScene">
-      <section className="fdGlassBackdrop">
-        <section className="hero" style={{ paddingTop: 0 }}>
-          <div className="fdGlassPanel">
-            <div className="fdEyebrow">{t.badge}</div>
-            <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>{t.title}</h1>
-            <p className="fdGlassText">{t.sub}</p>
+      <section className="fdGlassBackdrop" style={isEmbedded ? { minHeight: "100%", padding: 12 } : undefined}>
+        {!isEmbedded ? (
+          <section className="hero" style={{ paddingTop: 0 }}>
+            <div className="fdGlassPanel">
+              <div className="fdEyebrow">{t.badge}</div>
+              <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>{t.title}</h1>
+              <p className="fdGlassText">{t.sub}</p>
+            </div>
+          </section>
+        ) : (
+          <div className="fdGlassSubPanel" style={{ padding: 12, marginBottom: 12 }}>
+            <h2 className="sectionTitle" style={{ marginBottom: 2 }}>{t.title}</h2>
+            <p className="fdGlassText" style={{ marginTop: 0 }}>{t.sub}</p>
           </div>
-        </section>
+        )}
 
         {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
         {message ? <div className="sub" style={{ marginBottom: 12, color: "var(--brand)" }}>{message}</div> : null}

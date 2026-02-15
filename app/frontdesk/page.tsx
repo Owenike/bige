@@ -85,13 +85,13 @@ function playNotificationTone() {
 
 function FrontdeskFeatureFrame({ src, title }: { src: string; title: string }) {
   return (
-    <div className="fdGlassSubPanel" style={{ marginTop: 10, padding: 0, overflow: "hidden" }}>
+    <div className="fdGlassSubPanel" style={{ marginTop: 10, padding: 0, overflow: "hidden", flex: 1, minHeight: 0 }}>
       <iframe
-        src={src}
+        src={src.includes("?") ? `${src}&embed=1` : `${src}?embed=1`}
         title={title}
         style={{
           width: "100%",
-          height: "min(78vh, 820px)",
+          height: "100%",
           border: "0",
           display: "block",
           background: "transparent",
@@ -529,7 +529,7 @@ export default function FrontdeskPortalPage() {
 
         {capabilityOpen ? (
           <div className="fdModalBackdrop" onClick={() => setCapabilityOpen(false)} role="presentation">
-            <div className="fdModal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.capabilityModalTitle}>
+            <div className={`fdModal ${modalType === "capability" ? "" : "fdModalFeature"}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.capabilityModalTitle}>
               <div className="fdModalHead">
                 <h2 className="sectionTitle" style={{ margin: 0 }}>
                   {modalType === "entry" ? t.entryModalTitle : modalType === "member" ? t.memberModalTitle : t.capabilityModalTitle}

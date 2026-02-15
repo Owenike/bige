@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useI18n } from "../../i18n-provider";
 import type { VerifyEntryResponse } from "../../../types/entry";
 import { ManualAllowPanel } from "./ManualAllowPanel";
@@ -67,6 +68,8 @@ function decisionLabel(decision: VerifyEntryResponse["decision"], lang: "zh" | "
 export default function FrontdeskCheckinPage() {
   const { locale } = useI18n();
   const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
+  const searchParams = useSearchParams();
+  const isEmbedded = searchParams.get("embed") === "1";
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -222,16 +225,23 @@ export default function FrontdeskCheckinPage() {
 
   return (
     <main className="fdGlassScene">
-      <section className="fdGlassBackdrop">
-        <section className="hero" style={{ paddingTop: 0 }}>
-          <div className="fdGlassPanel">
-            <div className="fdEyebrow">{t.badge}</div>
-            <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
-              {t.title}
-            </h1>
-            <p className="fdGlassText">{t.sub}</p>
+      <section className="fdGlassBackdrop" style={isEmbedded ? { minHeight: "100%", padding: 12 } : undefined}>
+        {!isEmbedded ? (
+          <section className="hero" style={{ paddingTop: 0 }}>
+            <div className="fdGlassPanel">
+              <div className="fdEyebrow">{t.badge}</div>
+              <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
+                {t.title}
+              </h1>
+              <p className="fdGlassText">{t.sub}</p>
+            </div>
+          </section>
+        ) : (
+          <div className="fdGlassSubPanel" style={{ padding: 12, marginBottom: 12 }}>
+            <h2 className="sectionTitle" style={{ marginBottom: 2 }}>{t.title}</h2>
+            <p className="fdGlassText" style={{ marginTop: 0 }}>{t.sub}</p>
           </div>
-        </section>
+        )}
 
         <section className="fdTwoCol">
           <div className="fdGlassSubPanel">

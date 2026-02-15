@@ -49,6 +49,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   display: flex;
   flex-direction: column;
 }
+.shellEmbedded{
+  min-height: 100%;
+}
 
 .topbar{
   position: sticky;
@@ -698,6 +701,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     linear-gradient(180deg, rgba(255,255,255,.74), rgba(236,241,248,.56));
   box-shadow: 0 20px 46px rgba(49, 62, 89, .14);
   padding: 14px;
+}
+.fdModalFeature{
+  width: min(1420px, calc(100vw - 24px));
+  height: min(94vh, 940px);
 }
 .fdModalLayout{
   display: grid;
