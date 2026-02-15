@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n-provider";
+import { FrontdeskCheckinView } from "./checkin/CheckinView";
+import { FrontdeskMemberSearchView } from "./member-search/MemberSearchView";
 
 type CapabilityStatus = "ready" | "building" | "planned";
 type FrontdeskModalType = "capability" | "entry" | "member";
@@ -81,26 +83,6 @@ function playNotificationTone() {
   } catch {
     // Browser may block autoplay audio until user interaction.
   }
-}
-
-function FrontdeskFeatureFrame({ src, title }: { src: string; title: string }) {
-  return (
-    <div className="fdGlassSubPanel" style={{ marginTop: 10, padding: 0, overflow: "hidden", flex: 1, minHeight: 0 }}>
-      <iframe
-        src={src.includes("?") ? `${src}&embed=1` : `${src}?embed=1`}
-        title={title}
-        allow="camera; microphone"
-        loading="eager"
-        style={{
-          width: "100%",
-          height: "100%",
-          border: "0",
-          display: "block",
-          background: "transparent",
-        }}
-      />
-    </div>
-  );
 }
 
 export default function FrontdeskPortalPage() {
@@ -578,10 +560,10 @@ export default function FrontdeskPortalPage() {
                     </div>
                   ) : null}
                 </div>
-              ) : modalType === "entry" ? (
-                <FrontdeskFeatureFrame src="/frontdesk/checkin" title={t.entryModalTitle} />
               ) : (
-                <FrontdeskFeatureFrame src="/frontdesk/member-search" title={t.memberModalTitle} />
+                <div className="fdModalFeatureBody">
+                  {modalType === "entry" ? <FrontdeskCheckinView embedded /> : <FrontdeskMemberSearchView embedded />}
+                </div>
               )}
             </div>
           </div>
