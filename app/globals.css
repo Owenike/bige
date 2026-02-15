@@ -492,10 +492,36 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     inset 0 .6px 0 rgba(255,255,255,.28),
     0 12px 20px rgba(27, 135, 128, .24);
 }
+.fdPillBtnPrimary:hover{
+  background: linear-gradient(180deg, #34d5c2 0%, #23b8a7 100%);
+  border-color: rgba(53, 196, 178, .95);
+  box-shadow:
+    0 0 0 1px rgba(89, 217, 199, .40),
+    inset 0 .6px 0 rgba(255,255,255,.30),
+    0 14px 24px rgba(27, 135, 128, .28);
+}
+.fdPillBtnPrimary:active{
+  background: linear-gradient(180deg, #1fb5a3 0%, #1aa998 100%);
+  border-color: rgba(34, 160, 146, .95);
+  transform: translateY(0) scale(.98);
+  box-shadow:
+    0 0 0 1px rgba(79, 190, 174, .30),
+    inset 0 .6px 0 rgba(255,255,255,.24),
+    0 8px 14px rgba(24, 119, 113, .20);
+}
 .fdPillBtnGhost{
   background: rgba(255,255,255,.56);
   border: 1px solid rgba(255,255,255,.42);
   color: #2f3e55;
+}
+.fdPillBtnGhost:hover{
+  background: rgba(34,184,166,.14);
+  border-color: rgba(34,184,166,.38);
+}
+.fdPillBtnGhost:active{
+  background: rgba(34,184,166,.20);
+  border-color: rgba(34,184,166,.46);
+  transform: translateY(0) scale(.98);
 }
 .fdGaugeWrap{
   position: relative;
