@@ -5,9 +5,10 @@ import { useI18n } from "../i18n-provider";
 
 type CapabilityStatus = "ready" | "building" | "planned";
 type CapabilityCard = {
-  href: string;
+  id: string;
   title: string;
   desc: string;
+  detail: string;
   area: string;
   status: CapabilityStatus;
 };
@@ -98,6 +99,8 @@ export default function FrontdeskPortalPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [unpaidOrderList, setUnpaidOrderList] = useState<OrderItem[]>([]);
   const [upcomingBookingList, setUpcomingBookingList] = useState<BookingItem[]>([]);
+  const [capabilityOpen, setCapabilityOpen] = useState(false);
+  const [selectedCapabilityId, setSelectedCapabilityId] = useState<string>("member");
 
   useEffect(() => {
     const onScroll = () => {
@@ -197,11 +200,6 @@ export default function FrontdeskPortalPage() {
     return () => window.clearInterval(timer);
   }, [loadDashboard]);
 
-  const completionRate = useMemo(() => {
-    if (!ordersToday) return 0;
-    return Math.min(100, Math.round((paidToday / ordersToday) * 100));
-  }, [ordersToday, paidToday]);
-
   const t = useMemo(
     () =>
       lang === "zh"
@@ -237,6 +235,10 @@ export default function FrontdeskPortalPage() {
             normal: "一般",
             capabilityTitle: "櫃檯能力地圖",
             capabilitySub: "A~K 全模組進度：優先完成可營運與高風險稽核。",
+            capabilityOpenBtn: "開啟能力地圖",
+            capabilityModalTitle: "櫃檯能力地圖（A~K）",
+            capabilityDetailTitle: "模組說明",
+            close: "關閉",
             ready: "已上線",
             building: "建置中",
             planned: "規劃中",
@@ -273,6 +275,10 @@ export default function FrontdeskPortalPage() {
             normal: "Normal",
             capabilityTitle: "Frontdesk Capability Map",
             capabilitySub: "A-K module progress with operations-first and audit-first rollout.",
+            capabilityOpenBtn: "Open Capability Map",
+            capabilityModalTitle: "Frontdesk Capability Map (A-K)",
+            capabilityDetailTitle: "Module Detail",
+            close: "Close",
             ready: "Ready",
             building: "Building",
             planned: "Planned",
@@ -284,33 +290,46 @@ export default function FrontdeskPortalPage() {
     (): CapabilityCard[] =>
       lang === "zh"
         ? [
-            { href: "/frontdesk/checkin", title: "A. 入場 / 放行", desc: "掃碼、人工放行、取消誤刷、原因碼與稽核。", area: "ENTRY", status: "building" },
-            { href: "/frontdesk/member-search", title: "B. 會員查詢 / 建檔", desc: "防重複建檔、自訂欄位、快速下一步。", area: "MEMBER", status: "ready" },
-            { href: "/frontdesk/orders/new", title: "C. 收銀 / POS / 發票", desc: "訂單收款、退費/作廢送審、結帳流程。", area: "POS", status: "building" },
-            { href: "/frontdesk/bookings", title: "D. 預約 / 課務", desc: "建立即時預約與課務調整。", area: "BOOKING", status: "ready" },
-            { href: "/manager", title: "E. 置物櫃 / 租借", desc: "置物櫃租用與租借物管理（下一批）。", area: "LOCKER", status: "planned" },
-            { href: "/manager", title: "F. 商品 / 庫存 / 銷售", desc: "前台銷售與庫存追蹤。", area: "INVENTORY", status: "building" },
-            { href: "/manager", title: "G. 客服 / 事件紀錄", desc: "客訴與事件工單（含附件與追蹤）。", area: "CS", status: "planned" },
-            { href: "/manager", title: "H. 線索 / 參觀導覽", desc: "Lead 建檔、轉會員、追蹤轉換。", area: "LEAD", status: "planned" },
-            { href: "/manager/branches", title: "I. 跨店規則", desc: "跨店可用範圍、停權/黑名單同步。", area: "CHAIN", status: "building" },
-            { href: "/manager", title: "J. 報表 / 即時監控", desc: "今日營收、到期、欠費、No-show、待辦。", area: "REPORT", status: "building" },
-            { href: "/manager", title: "K. 權限 / 稽核", desc: "高風險送審、角色權限、完整稽核軌跡。", area: "AUDIT", status: "ready" },
+            { id: "entry", title: "A. 入場 / 放行", desc: "掃碼、人工放行、取消誤刷、原因碼與稽核。", detail: "支援會員卡 / QR / 人工例外放行，並要求原因碼與備註，完整寫入稽核。", area: "ENTRY", status: "building" },
+            { id: "member", title: "B. 會員查詢 / 建檔", desc: "防重複建檔、自訂欄位、快速下一步。", detail: "支援電話/姓名搜尋、防重複建立、補資料與自訂欄位，櫃檯可直接接續收款與預約。", area: "MEMBER", status: "ready" },
+            { id: "pos", title: "C. 收銀 / POS / 發票", desc: "訂單收款、退費/作廢送審、結帳流程。", detail: "包含櫃檯收款、多付款方式、退費與作廢送審流程，並保留稽核軌跡。", area: "POS", status: "building" },
+            { id: "booking", title: "D. 預約 / 課務", desc: "建立即時預約與課務調整。", detail: "可建立、改期、取消課務預約，支援現場快速調整時段。", area: "BOOKING", status: "ready" },
+            { id: "locker", title: "E. 置物櫃 / 租借", desc: "置物櫃租用與租借物管理（下一批）。", detail: "規劃中：置物櫃租期、押金、逾期與租借物品生命週期管理。", area: "LOCKER", status: "planned" },
+            { id: "inventory", title: "F. 商品 / 庫存 / 銷售", desc: "前台銷售與庫存追蹤。", detail: "建置中：商品銷售、庫存扣減、低庫存提醒與追溯。", area: "INVENTORY", status: "building" },
+            { id: "cs", title: "G. 客服 / 事件紀錄", desc: "客訴與事件工單（含附件與追蹤）。", detail: "規劃中：客訴工單、現場事件與後續追蹤，支援附件紀錄。", area: "CS", status: "planned" },
+            { id: "lead", title: "H. 線索 / 參觀導覽", desc: "Lead 建檔、轉會員、追蹤轉換。", detail: "規劃中：潛在客建檔、導覽排程與轉會員流程。", area: "LEAD", status: "planned" },
+            { id: "chain", title: "I. 跨店規則", desc: "跨店可用範圍、停權/黑名單同步。", detail: "建置中：跨店入場規則、停權同步、可用店範圍控制。", area: "CHAIN", status: "building" },
+            { id: "report", title: "J. 報表 / 即時監控", desc: "今日營收、到期、欠費、No-show、待辦。", detail: "建置中：櫃檯今日營運看板與交接待辦彙總。", area: "REPORT", status: "building" },
+            { id: "audit", title: "K. 權限 / 稽核", desc: "高風險送審、角色權限、完整稽核軌跡。", detail: "已上線：高風險動作送審、管理者核准/駁回、完整 Audit Log。", area: "AUDIT", status: "ready" },
           ]
         : [
-            { href: "/frontdesk/checkin", title: "A. Entry / Allow", desc: "Scan, exception pass, undo, reason code with audit.", area: "ENTRY", status: "building" },
-            { href: "/frontdesk/member-search", title: "B. Member Search / Create", desc: "Duplicate prevention, custom fields, quick actions.", area: "MEMBER", status: "ready" },
-            { href: "/frontdesk/orders/new", title: "C. POS / Invoice", desc: "Order payment, refund/void approval flow.", area: "POS", status: "building" },
-            { href: "/frontdesk/bookings", title: "D. Booking / Classes", desc: "Booking creation and class schedule handling.", area: "BOOKING", status: "ready" },
-            { href: "/manager", title: "E. Locker / Rental", desc: "Locker contracts and rental item lifecycle (next).", area: "LOCKER", status: "planned" },
-            { href: "/manager", title: "F. Product / Inventory", desc: "Frontdesk selling and inventory traceability.", area: "INVENTORY", status: "building" },
-            { href: "/manager", title: "G. Service / Incidents", desc: "Complaint and on-site incident ticket handling.", area: "CS", status: "planned" },
-            { href: "/manager", title: "H. Lead / Tours", desc: "Lead intake, visit scheduling, conversion.", area: "LEAD", status: "planned" },
-            { href: "/manager/branches", title: "I. Multi-Branch Rules", desc: "Cross-branch policy and blacklist sync.", area: "CHAIN", status: "building" },
-            { href: "/manager", title: "J. Reports / Live Monitor", desc: "Revenue, due list, no-show, handover TODO.", area: "REPORT", status: "building" },
-            { href: "/manager", title: "K. Role / Audit", desc: "Approval workflow, role control, full audit logs.", area: "AUDIT", status: "ready" },
+            { id: "entry", title: "A. Entry / Allow", desc: "Scan, exception pass, undo, reason code with audit.", detail: "Supports card/QR/manual exception pass with reason code and full audit trail.", area: "ENTRY", status: "building" },
+            { id: "member", title: "B. Member Search / Create", desc: "Duplicate prevention, custom fields, quick actions.", detail: "Search/create with duplicate prevention and configurable custom fields.", area: "MEMBER", status: "ready" },
+            { id: "pos", title: "C. POS / Invoice", desc: "Order payment, refund/void approval flow.", detail: "Desk payment, multi-method checkout, and approved high-risk refund/void flow.", area: "POS", status: "building" },
+            { id: "booking", title: "D. Booking / Classes", desc: "Booking creation and class schedule handling.", detail: "Create, reschedule, and cancel class bookings from desk operations.", area: "BOOKING", status: "ready" },
+            { id: "locker", title: "E. Locker / Rental", desc: "Locker contracts and rental item lifecycle (next).", detail: "Planned: locker rental, deposit, overdue and rental lifecycle.", area: "LOCKER", status: "planned" },
+            { id: "inventory", title: "F. Product / Inventory", desc: "Frontdesk selling and inventory traceability.", detail: "Building: product checkout, stock movement, and low-stock warnings.", area: "INVENTORY", status: "building" },
+            { id: "cs", title: "G. Service / Incidents", desc: "Complaint and on-site incident ticket handling.", detail: "Planned: complaint tickets and on-site incident records with attachments.", area: "CS", status: "planned" },
+            { id: "lead", title: "H. Lead / Tours", desc: "Lead intake, visit scheduling, conversion.", detail: "Planned: lead management, visit schedule, and conversion tracking.", area: "LEAD", status: "planned" },
+            { id: "chain", title: "I. Multi-Branch Rules", desc: "Cross-branch policy and blacklist sync.", detail: "Building: cross-branch entry policies and blacklist synchronization.", area: "CHAIN", status: "building" },
+            { id: "report", title: "J. Reports / Live Monitor", desc: "Revenue, due list, no-show, handover TODO.", detail: "Building: desk operational dashboards and handover task monitor.", area: "REPORT", status: "building" },
+            { id: "audit", title: "K. Role / Audit", desc: "Approval workflow, role control, full audit logs.", detail: "Ready: approval workflow, role-based controls, and audit logs.", area: "AUDIT", status: "ready" },
           ],
     [lang],
   );
+
+  const selectedCapability = useMemo(
+    () => capabilityCards.find((item) => item.id === selectedCapabilityId) ?? capabilityCards[0],
+    [capabilityCards, selectedCapabilityId],
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCapabilityOpen(false);
+    };
+    if (capabilityOpen) window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [capabilityOpen]);
 
   function statusLabel(status: CapabilityStatus) {
     if (status === "ready") return t.ready;
@@ -334,20 +353,6 @@ export default function FrontdeskPortalPage() {
         {error ? <div className="error">{error}</div> : null}
 
         <div className="fdGlassTop">
-          <article className="fdGlassPanel fdGlassTall">
-            <div className="fdChipRow">
-              <span className="fdChip fdChipActive">{t.badge}</span>
-              <span className="fdChip">{t.statusOpenValue}</span>
-            </div>
-            <h2 className="fdGlassTitle">{t.title}</h2>
-            <p className="fdGlassText">{t.sub}</p>
-            <div className="fdGaugeWrap">
-              <div className="fdGaugeRing" />
-              <div className="fdGaugeValue">{loading ? "..." : `${completionRate}%`}</div>
-            </div>
-            <p className="fdGlassText" style={{ marginTop: 8 }}>{t.completion}</p>
-          </article>
-
           <article className="fdGlassPanel">
             <div className="fdChipRow">
               <span className="fdChip fdChipActive">{t.statusTitle}</span>
@@ -403,25 +408,9 @@ export default function FrontdeskPortalPage() {
         <section className="fdGlassSubPanel" style={{ marginTop: 14, padding: 14 }}>
           <h2 className="sectionTitle">{t.capabilityTitle}</h2>
           <p className="fdGlassText" style={{ marginTop: 8 }}>{t.capabilitySub}</p>
-          <div className="fdCapabilityGrid" style={{ marginTop: 10 }}>
-            {capabilityCards.map((item, idx) => (
-              <a
-                key={item.title}
-                href={item.href}
-                className="fdGlassSubPanel fdCapabilityCard fdEnter"
-                style={{ animationDelay: `${180 + idx * 35}ms` }}
-              >
-                <div className="fdActionHead">
-                  <span className="kvLabel">{item.area}</span>
-                  <span className="fdChip" style={statusStyle(item.status)}>
-                    {statusLabel(item.status)}
-                  </span>
-                </div>
-                <h3 className="fdActionTitle">{item.title}</h3>
-                <p className="sub fdCapabilityDesc" style={{ marginTop: 8 }}>{item.desc}</p>
-              </a>
-            ))}
-          </div>
+          <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => setCapabilityOpen(true)}>
+            {t.capabilityOpenBtn}
+          </button>
         </section>
 
         <section className="fdTwoCol" style={{ marginTop: 14 }}>
@@ -484,6 +473,45 @@ export default function FrontdeskPortalPage() {
             </div>
           </article>
         </section>
+
+        {capabilityOpen ? (
+          <div className="fdModalBackdrop" onClick={() => setCapabilityOpen(false)} role="presentation">
+            <div className="fdModal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.capabilityModalTitle}>
+              <div className="fdModalHead">
+                <h2 className="sectionTitle" style={{ margin: 0 }}>{t.capabilityModalTitle}</h2>
+                <button type="button" className="fdPillBtn" onClick={() => setCapabilityOpen(false)}>
+                  {t.close}
+                </button>
+              </div>
+              <div className="fdCapabilityGrid" style={{ marginTop: 10 }}>
+                {capabilityCards.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`fdGlassSubPanel fdCapabilityCard ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
+                    onClick={() => setSelectedCapabilityId(item.id)}
+                  >
+                    <div className="fdActionHead">
+                      <span className="kvLabel">{item.area}</span>
+                      <span className="fdChip" style={statusStyle(item.status)}>
+                        {statusLabel(item.status)}
+                      </span>
+                    </div>
+                    <h3 className="fdActionTitle">{item.title}</h3>
+                    <p className="sub fdCapabilityDesc" style={{ marginTop: 8 }}>{item.desc}</p>
+                  </button>
+                ))}
+              </div>
+              {selectedCapability ? (
+                <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 12 }}>
+                  <div className="kvLabel">{t.capabilityDetailTitle}</div>
+                  <h3 className="fdActionTitle" style={{ marginTop: 8 }}>{selectedCapability.title}</h3>
+                  <p className="sub" style={{ marginTop: 8 }}>{selectedCapability.detail}</p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );

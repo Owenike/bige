@@ -299,7 +299,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 1.05fr 1.25fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 .fdGlassPanel{
@@ -527,12 +527,25 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 10px;
 }
 .fdCapabilityCard{
+  appearance: none;
   padding: 12px;
   min-height: 132px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
   transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.fdCapabilityCardActive{
+  border-color: rgba(145, 192, 237, .95);
+  box-shadow:
+    inset 0 .6px 0 rgba(255,255,255,.95),
+    inset 10px 10px 14px rgba(255,255,255,.20),
+    inset -10px -10px 16px rgba(176,195,220,.16),
+    0 16px 26px rgba(139,157,187,.24);
 }
 .fdCapabilityCard:hover{
   text-decoration: none;
@@ -562,6 +575,39 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdCapabilityDesc{
   margin-bottom: 0;
+}
+.fdModalBackdrop{
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(16, 24, 40, .36);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.fdModal{
+  width: min(1200px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid var(--fd-line-soft);
+  background:
+    linear-gradient(140deg, rgba(255,255,255,.90), rgba(255,255,255,.72) 52%, rgba(255,255,255,.62)),
+    linear-gradient(180deg, rgba(255,255,255,.70), rgba(236,241,248,.48));
+  box-shadow: 0 22px 56px rgba(13, 21, 34, .35);
+  padding: 14px;
+}
+.fdModalHead{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  background: linear-gradient(180deg, rgba(245,248,253,.96), rgba(245,248,253,.8));
 }
 .fdListStack{
   display: grid;
@@ -663,4 +709,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .fdActionGrid{ grid-template-columns: 1fr; }
   .fdCapabilityGrid{ grid-template-columns: 1fr; }
   .fdDataGrid{ grid-template-columns: 1fr; }
+  .fdModal{
+    width: calc(100vw - 12px);
+    max-height: calc(100vh - 12px);
+    padding: 10px;
+  }
 }
