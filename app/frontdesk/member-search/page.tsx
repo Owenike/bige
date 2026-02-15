@@ -5,5 +5,9 @@ import { FrontdeskMemberSearchView } from "./MemberSearchView";
 
 export default function FrontdeskMemberSearchPage() {
   const searchParams = useSearchParams();
-  return <FrontdeskMemberSearchView embedded={searchParams.get("embed") === "1"} />;
+  return (
+    <div className="card" style={{ display: "contents" }}>
+      <FrontdeskMemberSearchView embedded={searchParams.get("embed") === "1"} />
+    </div>
+  );
 }
