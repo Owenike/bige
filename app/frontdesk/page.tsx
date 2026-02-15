@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n-provider";
 
 type CapabilityStatus = "ready" | "building" | "planned";
+type FrontdeskModalType = "capability" | "entry" | "member";
 type CapabilityCard = {
   id: string;
   title: string;
@@ -100,9 +101,11 @@ export default function FrontdeskPortalPage() {
   const [unpaidOrderList, setUnpaidOrderList] = useState<OrderItem[]>([]);
   const [upcomingBookingList, setUpcomingBookingList] = useState<BookingItem[]>([]);
   const [capabilityOpen, setCapabilityOpen] = useState(false);
+  const [modalType, setModalType] = useState<FrontdeskModalType>("capability");
   const [selectedCapabilityId, setSelectedCapabilityId] = useState<string>("member");
 
-  const openCapabilityModal = useCallback((id: string) => {
+  const openCapabilityModal = useCallback((id: string, type: FrontdeskModalType = "capability") => {
+    setModalType(type);
     setSelectedCapabilityId(id);
     setCapabilityOpen(true);
   }, []);
@@ -244,6 +247,14 @@ export default function FrontdeskPortalPage() {
             capabilityModalTitle: "櫃檯能力地圖（A~K）",
             capabilityDetailTitle: "模組說明",
             capabilityCurrent: "目前選擇",
+            entryModalTitle: "入場放行",
+            entryModalDesc: "快速進入入場流程，支援掃碼驗證與人工放行。",
+            entryModalHint: "建議：尖峰時段優先使用掃碼入場，例外情境再用人工放行。",
+            memberModalTitle: "會員查詢 / 建檔",
+            memberModalDesc: "快速查詢既有會員或建立新會員，並支援防重複建檔。",
+            memberModalHint: "建議：先查詢再建檔，避免重複資料。",
+            openCheckinPage: "開啟入場作業頁",
+            openMemberPage: "開啟會員作業頁",
             close: "關閉",
             ready: "已上線",
             building: "建置中",
@@ -285,6 +296,14 @@ export default function FrontdeskPortalPage() {
             capabilityModalTitle: "Frontdesk Capability Map (A-K)",
             capabilityDetailTitle: "Module Detail",
             capabilityCurrent: "Current",
+            entryModalTitle: "Entry Access",
+            entryModalDesc: "Open check-in flow with scanner and exception handling.",
+            entryModalHint: "Tip: Use scanner first during peak hours, then manual allow for exceptions.",
+            memberModalTitle: "Member Search / Create",
+            memberModalDesc: "Search existing members or create new profiles with duplicate prevention.",
+            memberModalHint: "Tip: Search first before create to avoid duplicates.",
+            openCheckinPage: "Open Check-in Workspace",
+            openMemberPage: "Open Member Workspace",
             close: "Close",
             ready: "Ready",
             building: "Building",
@@ -379,10 +398,10 @@ export default function FrontdeskPortalPage() {
             </h2>
             <p className="fdGlassText">{t.statusTip}</p>
             <div className="fdPillActions">
-              <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => openCapabilityModal("entry")}>
+              <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => openCapabilityModal("entry", "entry")}>
                 {t.primary}
               </button>
-              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => openCapabilityModal("member")}>
+              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => openCapabilityModal("member", "member")}>
                 {t.secondary}
               </button>
               <button
@@ -424,7 +443,7 @@ export default function FrontdeskPortalPage() {
         <section className="fdGlassSubPanel" style={{ marginTop: 14, padding: 14 }}>
           <h2 className="sectionTitle">{t.capabilityTitle}</h2>
           <p className="fdGlassText" style={{ marginTop: 8 }}>{t.capabilitySub}</p>
-          <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => setCapabilityOpen(true)}>
+          <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => openCapabilityModal("member", "capability")}>
             {t.capabilityOpenBtn}
           </button>
         </section>
@@ -494,48 +513,66 @@ export default function FrontdeskPortalPage() {
           <div className="fdModalBackdrop" onClick={() => setCapabilityOpen(false)} role="presentation">
             <div className="fdModal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.capabilityModalTitle}>
               <div className="fdModalHead">
-                <h2 className="sectionTitle" style={{ margin: 0 }}>{t.capabilityModalTitle}</h2>
+                <h2 className="sectionTitle" style={{ margin: 0 }}>
+                  {modalType === "entry" ? t.entryModalTitle : modalType === "member" ? t.memberModalTitle : t.capabilityModalTitle}
+                </h2>
                 <button type="button" className="fdPillBtn fdPillBtnGhost fdModalCloseBtn" onClick={() => setCapabilityOpen(false)}>
                   {t.close}
                 </button>
               </div>
-              <div className="fdModalLayout" style={{ marginTop: 10 }}>
-                <div className="fdModalList">
-                  {capabilityCards.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`fdGlassSubPanel fdCapabilityCard fdModalCapabilityItem ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
-                      onClick={() => setSelectedCapabilityId(item.id)}
-                    >
+              {modalType === "capability" ? (
+                <div className="fdModalLayout" style={{ marginTop: 10 }}>
+                  <div className="fdModalList">
+                    {capabilityCards.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`fdGlassSubPanel fdCapabilityCard fdModalCapabilityItem ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
+                        onClick={() => setSelectedCapabilityId(item.id)}
+                      >
+                        <div className="fdActionHead">
+                          <span className="kvLabel">{item.area}</span>
+                          <span className="fdChip" style={statusStyle(item.status)}>
+                            {statusLabel(item.status)}
+                          </span>
+                        </div>
+                        <h3 className="fdActionTitle">{item.title}</h3>
+                        <p className="sub fdCapabilityDesc" style={{ marginTop: 8 }}>{item.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                  {selectedCapability ? (
+                    <div className="fdGlassSubPanel fdModalDetail">
                       <div className="fdActionHead">
-                        <span className="kvLabel">{item.area}</span>
-                        <span className="fdChip" style={statusStyle(item.status)}>
-                          {statusLabel(item.status)}
+                        <span className="kvLabel">{t.capabilityCurrent}</span>
+                        <span className="fdChip" style={statusStyle(selectedCapability.status)}>
+                          {statusLabel(selectedCapability.status)}
                         </span>
                       </div>
-                      <h3 className="fdActionTitle">{item.title}</h3>
-                      <p className="sub fdCapabilityDesc" style={{ marginTop: 8 }}>{item.desc}</p>
-                    </button>
-                  ))}
+                      <h3 className="fdActionTitle" style={{ marginTop: 8 }}>{selectedCapability.title}</h3>
+                      <p className="sub" style={{ marginTop: 8 }}>{selectedCapability.detail}</p>
+                      <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10 }}>
+                        <div className="kvLabel">{t.capabilityDetailTitle}</div>
+                        <p className="sub" style={{ marginTop: 6 }}>{selectedCapability.desc}</p>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-                {selectedCapability ? (
-                  <div className="fdGlassSubPanel fdModalDetail">
-                    <div className="fdActionHead">
-                      <span className="kvLabel">{t.capabilityCurrent}</span>
-                      <span className="fdChip" style={statusStyle(selectedCapability.status)}>
-                        {statusLabel(selectedCapability.status)}
-                      </span>
-                    </div>
-                    <h3 className="fdActionTitle" style={{ marginTop: 8 }}>{selectedCapability.title}</h3>
-                    <p className="sub" style={{ marginTop: 8 }}>{selectedCapability.detail}</p>
-                    <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10 }}>
-                      <div className="kvLabel">{t.capabilityDetailTitle}</div>
-                      <p className="sub" style={{ marginTop: 6 }}>{selectedCapability.desc}</p>
-                    </div>
+              ) : (
+                <div className="fdGlassSubPanel" style={{ marginTop: 10, padding: 14 }}>
+                  <p className="fdGlassText" style={{ marginTop: 0 }}>
+                    {modalType === "entry" ? t.entryModalDesc : t.memberModalDesc}
+                  </p>
+                  <p className="sub" style={{ marginTop: 8 }}>
+                    {modalType === "entry" ? t.entryModalHint : t.memberModalHint}
+                  </p>
+                  <div className="fdPillActions" style={{ marginTop: 12 }}>
+                    <a className="fdPillBtn fdPillBtnPrimary" href={modalType === "entry" ? "/frontdesk/checkin" : "/frontdesk/member-search"}>
+                      {modalType === "entry" ? t.openCheckinPage : t.openMemberPage}
+                    </a>
                   </div>
-                ) : null}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         ) : null}
