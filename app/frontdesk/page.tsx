@@ -419,7 +419,7 @@ export default function FrontdeskPortalPage() {
         <section className="fdGlassSubPanel" style={{ marginTop: 14, padding: 14 }}>
           <h2 className="sectionTitle">{t.capabilityTitle}</h2>
           <p className="fdGlassText" style={{ marginTop: 8 }}>{t.capabilitySub}</p>
-          <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => setCapabilityOpen(true)}>
+          <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => setCapabilityOpen(true)}>
             {t.capabilityOpenBtn}
           </button>
         </section>
