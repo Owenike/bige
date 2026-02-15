@@ -377,12 +377,12 @@ export default function FrontdeskPortalPage() {
               <a className="fdPillBtn fdPillBtnPrimary" href="/frontdesk/checkin">
                 {t.primary}
               </a>
-              <a className="fdPillBtn" href="/frontdesk/member-search">
+              <a className="fdPillBtn fdPillBtnGhost" href="/frontdesk/member-search">
                 {t.secondary}
               </a>
               <button
                 type="button"
-                className="fdPillBtn"
+                className="fdPillBtn fdPillBtnGhost"
                 onClick={() => setSoundEnabled((prev) => !prev)}
               >
                 {soundEnabled ? t.soundOn : t.soundOff}
@@ -397,20 +397,20 @@ export default function FrontdeskPortalPage() {
             </div>
             <h2 className="fdGlassTitle">{t.opsTitle}</h2>
             <div className="fdMetricLine">
-              <span>{t.statusOpen}</span>
-              <strong>{t.statusOpenValue}</strong>
+              <span className="fdMetricLabel">{t.statusOpen}</span>
+              <strong className="fdMetricValue">{t.statusOpenValue}</strong>
             </div>
             <div className="fdMetricLine">
-              <span>{t.orders}</span>
-              <strong>{loading ? "-" : ordersToday}</strong>
+              <span className="fdMetricLabel">{t.orders}</span>
+              <strong className="fdMetricValue">{loading ? "-" : ordersToday}</strong>
             </div>
             <div className="fdMetricLine">
-              <span>{t.paid}</span>
-              <strong>{loading ? "-" : paidToday}</strong>
+              <span className="fdMetricLabel">{t.paid}</span>
+              <strong className="fdMetricValue">{loading ? "-" : paidToday}</strong>
             </div>
             <div className="fdMetricLine">
-              <span>{t.revenue}</span>
-              <strong>{loading ? "-" : revenueToday}</strong>
+              <span className="fdMetricLabel">{t.revenue}</span>
+              <strong className="fdMetricValue">{loading ? "-" : revenueToday}</strong>
             </div>
             <p className="fdGlassText" style={{ marginTop: 10, fontSize: 12 }}>{t.refresh}</p>
           </article>
