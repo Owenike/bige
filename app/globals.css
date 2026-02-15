@@ -540,15 +540,21 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
 }
 .fdModalCapabilityItem{
-  min-height: 108px;
-  padding: 10px;
+  min-height: 88px;
+  padding: 10px 11px;
 }
 .fdModalCapabilityItem .fdActionTitle{
-  font-size: 16px;
+  font-size: 15px;
+  margin-top: 6px;
 }
 .fdModalCapabilityItem .sub{
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.35;
+  margin-top: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .fdCapabilityCardActive{
   border-color: rgba(145, 192, 237, .95);
@@ -611,13 +617,13 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdModalLayout{
   display: grid;
-  grid-template-columns: minmax(420px, 1fr) minmax(320px, .75fr);
+  grid-template-columns: minmax(380px, 460px) minmax(420px, 1fr);
   gap: 12px;
   align-items: start;
 }
 .fdModalList{
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
   max-height: calc(100vh - 170px);
   overflow: auto;
