@@ -638,12 +638,14 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   backdrop-filter: blur(4px);
   display: grid;
   place-items: center;
-  padding: 16px;
+  padding: 20px;
 }
 .fdModal{
-  width: min(1240px, calc(100vw - 24px));
-  max-height: calc(100vh - 24px);
-  overflow: auto;
+  width: min(1080px, calc(100vw - 36px));
+  height: min(78vh, 760px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   border-radius: 18px;
   border: 1px solid var(--fd-line-soft);
   background:
@@ -657,29 +659,35 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   grid-template-columns: minmax(380px, 460px) minmax(420px, 1fr);
   gap: 12px;
   align-items: start;
+  flex: 1;
+  min-height: 0;
 }
 .fdModalList{
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
-  max-height: calc(100vh - 170px);
+  max-height: none;
+  min-height: 0;
   overflow: auto;
   padding-right: 4px;
 }
 .fdModalDetail{
   padding: 12px;
-  position: sticky;
-  top: 54px;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 .fdModalHead{
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
   padding-bottom: 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(194,203,217,.55);
   background: linear-gradient(180deg, rgba(245,248,253,.96), rgba(245,248,253,.8));
 }
 .fdListStack{
@@ -796,8 +804,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     top: auto;
   }
   .fdModal{
-    width: calc(100vw - 12px);
-    max-height: calc(100vh - 12px);
+    width: calc(100vw - 10px);
+    height: calc(100vh - 14px);
     padding: 10px;
   }
 }
