@@ -539,6 +539,17 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   color: inherit;
   transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
 }
+.fdModalCapabilityItem{
+  min-height: 108px;
+  padding: 10px;
+}
+.fdModalCapabilityItem .fdActionTitle{
+  font-size: 16px;
+}
+.fdModalCapabilityItem .sub{
+  font-size: 12px;
+  line-height: 1.45;
+}
 .fdCapabilityCardActive{
   border-color: rgba(145, 192, 237, .95);
   box-shadow:
@@ -587,7 +598,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   padding: 16px;
 }
 .fdModal{
-  width: min(1200px, calc(100vw - 24px));
+  width: min(1240px, calc(100vw - 24px));
   max-height: calc(100vh - 24px);
   overflow: auto;
   border-radius: 18px;
@@ -597,6 +608,25 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     linear-gradient(180deg, rgba(255,255,255,.70), rgba(236,241,248,.48));
   box-shadow: 0 22px 56px rgba(13, 21, 34, .35);
   padding: 14px;
+}
+.fdModalLayout{
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) minmax(320px, .75fr);
+  gap: 12px;
+  align-items: start;
+}
+.fdModalList{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-height: calc(100vh - 170px);
+  overflow: auto;
+  padding-right: 4px;
+}
+.fdModalDetail{
+  padding: 12px;
+  position: sticky;
+  top: 54px;
 }
 .fdModalHead{
   position: sticky;
@@ -709,6 +739,19 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .fdActionGrid{ grid-template-columns: 1fr; }
   .fdCapabilityGrid{ grid-template-columns: 1fr; }
   .fdDataGrid{ grid-template-columns: 1fr; }
+  .fdModalLayout{
+    grid-template-columns: 1fr;
+  }
+  .fdModalList{
+    grid-template-columns: 1fr;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+  .fdModalDetail{
+    position: static;
+    top: auto;
+  }
   .fdModal{
     width: calc(100vw - 12px);
     max-height: calc(100vh - 12px);

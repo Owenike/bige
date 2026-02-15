@@ -238,6 +238,7 @@ export default function FrontdeskPortalPage() {
             capabilityOpenBtn: "開啟能力地圖",
             capabilityModalTitle: "櫃檯能力地圖（A~K）",
             capabilityDetailTitle: "模組說明",
+            capabilityCurrent: "目前選擇",
             close: "關閉",
             ready: "已上線",
             building: "建置中",
@@ -278,6 +279,7 @@ export default function FrontdeskPortalPage() {
             capabilityOpenBtn: "Open Capability Map",
             capabilityModalTitle: "Frontdesk Capability Map (A-K)",
             capabilityDetailTitle: "Module Detail",
+            capabilityCurrent: "Current",
             close: "Close",
             ready: "Ready",
             building: "Building",
@@ -331,6 +333,15 @@ export default function FrontdeskPortalPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [capabilityOpen]);
 
+  useEffect(() => {
+    if (!capabilityOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [capabilityOpen]);
+
   function statusLabel(status: CapabilityStatus) {
     if (status === "ready") return t.ready;
     if (status === "building") return t.building;
@@ -379,7 +390,7 @@ export default function FrontdeskPortalPage() {
             </div>
           </article>
 
-          <article className="fdGlassPanel fdGlassTall">
+          <article className="fdGlassPanel">
             <div className="fdChipRow">
               <span className="fdChip fdChipActive">{t.statusOpen}</span>
               <span className="fdChip">{t.statusTasks}</span>
@@ -483,32 +494,43 @@ export default function FrontdeskPortalPage() {
                   {t.close}
                 </button>
               </div>
-              <div className="fdCapabilityGrid" style={{ marginTop: 10 }}>
-                {capabilityCards.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`fdGlassSubPanel fdCapabilityCard ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
-                    onClick={() => setSelectedCapabilityId(item.id)}
-                  >
+              <div className="fdModalLayout" style={{ marginTop: 10 }}>
+                <div className="fdModalList">
+                  {capabilityCards.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`fdGlassSubPanel fdCapabilityCard fdModalCapabilityItem ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
+                      onClick={() => setSelectedCapabilityId(item.id)}
+                    >
+                      <div className="fdActionHead">
+                        <span className="kvLabel">{item.area}</span>
+                        <span className="fdChip" style={statusStyle(item.status)}>
+                          {statusLabel(item.status)}
+                        </span>
+                      </div>
+                      <h3 className="fdActionTitle">{item.title}</h3>
+                      <p className="sub fdCapabilityDesc" style={{ marginTop: 8 }}>{item.desc}</p>
+                    </button>
+                  ))}
+                </div>
+                {selectedCapability ? (
+                  <div className="fdGlassSubPanel fdModalDetail">
                     <div className="fdActionHead">
-                      <span className="kvLabel">{item.area}</span>
-                      <span className="fdChip" style={statusStyle(item.status)}>
-                        {statusLabel(item.status)}
+                      <span className="kvLabel">{t.capabilityCurrent}</span>
+                      <span className="fdChip" style={statusStyle(selectedCapability.status)}>
+                        {statusLabel(selectedCapability.status)}
                       </span>
                     </div>
-                    <h3 className="fdActionTitle">{item.title}</h3>
-                    <p className="sub fdCapabilityDesc" style={{ marginTop: 8 }}>{item.desc}</p>
-                  </button>
-                ))}
+                    <h3 className="fdActionTitle" style={{ marginTop: 8 }}>{selectedCapability.title}</h3>
+                    <p className="sub" style={{ marginTop: 8 }}>{selectedCapability.detail}</p>
+                    <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10 }}>
+                      <div className="kvLabel">{t.capabilityDetailTitle}</div>
+                      <p className="sub" style={{ marginTop: 6 }}>{selectedCapability.desc}</p>
+                    </div>
+                  </div>
+                ) : null}
               </div>
-              {selectedCapability ? (
-                <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 12 }}>
-                  <div className="kvLabel">{t.capabilityDetailTitle}</div>
-                  <h3 className="fdActionTitle" style={{ marginTop: 8 }}>{selectedCapability.title}</h3>
-                  <p className="sub" style={{ marginTop: 8 }}>{selectedCapability.detail}</p>
-                </div>
-              ) : null}
             </div>
           </div>
         ) : null}
