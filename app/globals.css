@@ -854,6 +854,37 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     inset 0 .6px 0 rgba(255,255,255,.18),
     0 8px 16px rgba(8, 14, 26, .08);
 }
+.fdModal:not(.fdModalFeature) .fdModalCapabilityItem{
+  background: linear-gradient(180deg, rgba(246,250,255,.96), rgba(241,246,253,.92));
+  border-color: rgba(186,200,222,.74);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.96),
+    0 8px 18px rgba(38, 52, 79, .12);
+}
+.fdModal:not(.fdModalFeature) .fdModalCapabilityItem .kvLabel{
+  color: rgba(106, 121, 144, .9);
+}
+.fdModal:not(.fdModalFeature) .fdModalCapabilityItem .fdActionTitle{
+  color: #2a3550;
+}
+.fdModal:not(.fdModalFeature) .fdModalCapabilityItem .sub{
+  color: rgba(78, 92, 114, .9);
+}
+.fdModal:not(.fdModalFeature) .fdModalCapabilityItem:hover{
+  border-color: rgba(161, 181, 211, .88);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.98),
+    0 12px 24px rgba(38, 52, 79, .16);
+}
+.fdModal:not(.fdModalFeature) .fdModalCapabilityItem.fdCapabilityCardActive{
+  border-color: rgba(34,184,166,.62);
+  box-shadow:
+    inset 3px 0 0 rgba(34,184,166,.90),
+    inset 0 1px 0 rgba(255,255,255,.98),
+    0 14px 26px rgba(32, 58, 88, .18);
+}
 .fdListStack{
   display: grid;
   grid-template-columns: 1fr;
