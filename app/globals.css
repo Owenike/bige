@@ -320,7 +320,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   will-change: filter, transform;
 }
 .fdSceneBlurred{
-  filter: blur(10px) saturate(1.06) brightness(1);
+  filter: saturate(1.08) brightness(.9);
   transform: scale(.985);
   transform-origin: center top;
 }
@@ -708,9 +708,13 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(12, 18, 30, .08);
-  backdrop-filter: blur(40px) saturate(215%) brightness(.98);
-  -webkit-backdrop-filter: blur(40px) saturate(215%) brightness(.98);
+  background:
+    radial-gradient(900px 520px at 14% 14%, rgba(88, 208, 222, .12), transparent 64%),
+    radial-gradient(980px 560px at 86% 16%, rgba(166, 154, 255, .14), transparent 66%),
+    radial-gradient(1100px 620px at 50% 86%, rgba(82, 129, 255, .10), transparent 70%),
+    rgba(9, 14, 26, .20);
+  backdrop-filter: blur(36px) saturate(180%) brightness(.82);
+  -webkit-backdrop-filter: blur(36px) saturate(180%) brightness(.82);
   display: grid;
   place-items: center;
   padding: 20px;
@@ -721,17 +725,21 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(1200px 700px at 50% 45%, rgba(255,255,255,.08), rgba(255,255,255,0) 64%),
-    radial-gradient(1500px 900px at 50% 60%, rgba(0,0,0,.02), rgba(0,0,0,.08) 70%);
+    radial-gradient(1200px 700px at 50% 45%, rgba(255,255,255,.06), rgba(255,255,255,0) 64%),
+    radial-gradient(1500px 900px at 50% 60%, rgba(0,0,0,.04), rgba(0,0,0,.16) 70%);
 }
 .fdModalBackdropFeature{
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding: 4px 8px 8px;
-  background: rgba(12, 18, 30, .09);
-  backdrop-filter: blur(44px) saturate(225%) brightness(.98);
-  -webkit-backdrop-filter: blur(44px) saturate(225%) brightness(.98);
+  background:
+    radial-gradient(900px 520px at 14% 14%, rgba(88, 208, 222, .14), transparent 64%),
+    radial-gradient(980px 560px at 86% 16%, rgba(166, 154, 255, .16), transparent 66%),
+    radial-gradient(1100px 620px at 50% 86%, rgba(82, 129, 255, .11), transparent 70%),
+    rgba(9, 14, 26, .24);
+  backdrop-filter: blur(38px) saturate(186%) brightness(.78);
+  -webkit-backdrop-filter: blur(38px) saturate(186%) brightness(.78);
 }
 .fdModal{
   width: min(1080px, calc(100vw - 36px));
@@ -741,10 +749,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   flex-direction: column;
   position: relative;
   border-radius: 34px;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  background: rgba(255, 255, 255, 0.02);
-  -webkit-backdrop-filter: blur(34px) saturate(210%);
-  backdrop-filter: blur(34px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  background: rgba(255, 255, 255, 0.018);
+  -webkit-backdrop-filter: blur(32px) saturate(192%);
+  backdrop-filter: blur(32px) saturate(192%);
   box-shadow:
     0 32px 84px rgba(0, 0, 0, 0.34),
     0 14px 28px rgba(0, 0, 0, 0.24),
@@ -758,11 +766,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
   background: linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0.08),
-    rgba(255, 255, 255, 0.018) 18%,
+    rgba(255, 255, 255, 0.10),
+    rgba(255, 255, 255, 0.02) 18%,
     rgba(255, 255, 255, 0.00) 55%
   );
 }
@@ -841,17 +849,17 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 10px;
   padding-bottom: 10px;
   margin-bottom: 6px;
-  border-bottom: 1px solid rgba(255,255,255,.22);
-  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0));
+  border-bottom: 1px solid rgba(255,255,255,.20);
+  background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,0));
 }
 .fdModal:not(.fdModalFeature) .fdGlassSubPanel{
-  background: linear-gradient(140deg, rgba(255,255,255,.05), rgba(255,255,255,.028) 60%, rgba(255,255,255,.015));
-  border-color: rgba(255,255,255,.26);
-  backdrop-filter: blur(24px) saturate(185%);
-  -webkit-backdrop-filter: blur(24px) saturate(185%);
+  background: linear-gradient(140deg, rgba(255,255,255,.03), rgba(255,255,255,.018) 60%, rgba(255,255,255,.01));
+  border-color: rgba(255,255,255,.24);
+  backdrop-filter: blur(20px) saturate(165%);
+  -webkit-backdrop-filter: blur(20px) saturate(165%);
   box-shadow:
-    inset 0 .6px 0 rgba(255,255,255,.34),
-    0 8px 16px rgba(8, 14, 26, .08);
+    inset 0 .6px 0 rgba(255,255,255,.26),
+    0 8px 16px rgba(8, 14, 26, .10);
 }
 .fdListStack{
   display: grid;
