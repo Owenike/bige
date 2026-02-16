@@ -320,7 +320,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   will-change: filter, transform;
 }
 .fdSceneBlurred{
-  filter: blur(14px) saturate(1.1) brightness(.82);
+  filter: blur(18px) saturate(1.06) brightness(.96);
   transform: scale(.985);
   transform-origin: center top;
 }
@@ -708,7 +708,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(10, 14, 24, .08);
+  background: rgba(10, 14, 24, .01);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   display: grid;
@@ -720,10 +720,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(900px 560px at 14% 14%, rgba(98, 218, 228, .08), rgba(98, 218, 228, 0) 62%),
-    radial-gradient(1000px 600px at 86% 16%, rgba(176, 164, 255, .10), rgba(176, 164, 255, 0) 64%),
-    radial-gradient(1500px 900px at 50% 60%, rgba(0,0,0,.01), rgba(0,0,0,.06) 74%);
+  background: none;
 }
 .fdModalBackdropFeature{
   display: flex;
@@ -752,6 +749,18 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     inset 0 1px 0 rgba(255, 255, 255, 0.30),
     inset 0 -1px 0 rgba(0, 0, 0, 0.16);
   padding: 14px;
+}
+.fdModal:not(.fdModalFeature){
+  background: rgba(255, 255, 255, 0.015);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.fdModal:not(.fdModalFeature)::before{
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.20);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+}
+.fdModal:not(.fdModalFeature)::after{
+  display: none;
 }
 .fdModal::before{
   content: "";
