@@ -4,11 +4,18 @@ import { requireProfile } from "../../../../lib/auth-context";
 export async function GET(request: Request) {
   const auth = await requireProfile(["frontdesk", "manager"], request);
   if (!auth.ok) return auth.response;
+  if (!auth.context.tenantId) {
+    return NextResponse.json({ error: "Missing tenant context" }, { status: 400 });
+  }
+  if (!auth.context.branchId) {
+    return NextResponse.json({ error: "Missing branch context" }, { status: 400 });
+  }
 
   const { data, error } = await auth.supabase
     .from("frontdesk_shifts")
-    .select("id, opened_at, closed_at, status, cash_total, card_total, transfer_total, note")
+    .select("id, branch_id, opened_at, closed_at, status, cash_total, card_total, transfer_total, note")
     .eq("tenant_id", auth.context.tenantId)
+    .eq("branch_id", auth.context.branchId)
     .order("opened_at", { ascending: false })
     .limit(20);
 
@@ -26,12 +33,16 @@ export async function POST(request: Request) {
   if (!auth.context.tenantId) {
     return NextResponse.json({ error: "Missing tenant context" }, { status: 400 });
   }
+  if (!auth.context.branchId) {
+    return NextResponse.json({ error: "Missing branch context" }, { status: 400 });
+  }
 
   if (action === "open") {
     const openShiftQuery = await auth.supabase
       .from("frontdesk_shifts")
-      .select("id, status, opened_at")
+      .select("id, branch_id, status, opened_at")
       .eq("tenant_id", auth.context.tenantId)
+      .eq("branch_id", auth.context.branchId)
       .eq("status", "open")
       .order("opened_at", { ascending: false })
       .limit(1)
@@ -49,8 +60,9 @@ export async function POST(request: Request) {
         branch_id: auth.context.branchId,
         opened_by: auth.context.userId,
         note: typeof body?.note === "string" ? body.note : null,
+        status: "open",
       })
-      .select("id, status, opened_at")
+      .select("id, branch_id, status, opened_at")
       .maybeSingle();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -80,8 +92,9 @@ export async function POST(request: Request) {
     })
     .eq("id", shiftId)
     .eq("tenant_id", auth.context.tenantId)
+    .eq("branch_id", auth.context.branchId)
     .eq("status", "open")
-    .select("id, status, closed_at, cash_total, card_total, transfer_total")
+    .select("id, branch_id, status, closed_at, cash_total, card_total, transfer_total")
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
