@@ -391,7 +391,7 @@ export default function FrontdeskPortalPage() {
   }
 
   return (
-    <main ref={sceneRef} className="fdGlassScene">
+    <main ref={sceneRef} className={`fdGlassScene ${capabilityOpen ? "fdSceneBlurred" : ""}`}>
       <section className="fdGlassBackdrop fdEnter">
         {error ? <div className="error">{error}</div> : null}
 
