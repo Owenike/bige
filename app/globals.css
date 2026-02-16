@@ -701,8 +701,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(236, 240, 247, .42);
-  backdrop-filter: blur(10px);
+  background: rgba(24, 30, 42, .18);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
   display: grid;
   place-items: center;
   padding: 20px;
@@ -712,9 +713,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   align-items: flex-start;
   justify-content: center;
   padding: 4px 8px 8px;
-  background: rgba(236, 240, 247, .68);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  background: rgba(24, 30, 42, .22);
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
 }
 .fdModal{
   width: min(1080px, calc(100vw - 36px));
@@ -722,13 +723,32 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  border-radius: 18px;
-  border: 1px solid rgba(255,255,255,.36);
-  background:
-    linear-gradient(140deg, rgba(255,255,255,.84), rgba(255,255,255,.76) 52%, rgba(255,255,255,.72)),
-    linear-gradient(180deg, rgba(255,255,255,.74), rgba(236,241,248,.56));
-  box-shadow: 0 20px 46px rgba(49, 62, 89, .14);
+  position: relative;
+  border-radius: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.18);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.25),
+    0 10px 22px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12);
   padding: 14px;
+}
+.fdModal::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.16),
+    rgba(255, 255, 255, 0.04) 18%,
+    rgba(255, 255, 255, 0.00) 55%
+  );
 }
 .fdModalFeature{
   width: min(1480px, calc(100vw - 12px));
@@ -795,8 +815,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 10px;
   padding-bottom: 10px;
   margin-bottom: 6px;
-  border-bottom: 1px solid rgba(194,203,217,.55);
-  background: linear-gradient(180deg, rgba(245,248,253,.96), rgba(245,248,253,.8));
+  border-bottom: 1px solid rgba(255,255,255,.24);
+  background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.06));
 }
 .fdListStack{
   display: grid;

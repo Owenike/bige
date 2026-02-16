@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "../i18n-provider";
 import { FrontdeskCheckinView } from "./checkin/CheckinView";
 import { FrontdeskMemberSearchView } from "./member-search/MemberSearchView";
@@ -103,6 +104,7 @@ export default function FrontdeskPortalPage() {
   const [unpaidOrderList, setUnpaidOrderList] = useState<OrderItem[]>([]);
   const [upcomingBookingList, setUpcomingBookingList] = useState<BookingItem[]>([]);
   const [capabilityOpen, setCapabilityOpen] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
   const [modalType, setModalType] = useState<FrontdeskModalType>("capability");
   const [selectedCapabilityId, setSelectedCapabilityId] = useState<string>("member");
 
@@ -126,6 +128,10 @@ export default function FrontdeskPortalPage() {
   useEffect(() => {
     const saved = window.localStorage.getItem("frontdesk_sound_enabled");
     if (saved === "0") setSoundEnabled(false);
+  }, []);
+
+  useEffect(() => {
+    setPortalReady(true);
   }, []);
 
   useEffect(() => {
@@ -511,7 +517,7 @@ export default function FrontdeskPortalPage() {
           </article>
         </section>
 
-        {capabilityOpen ? (
+        {capabilityOpen && portalReady ? createPortal((
           <div className={`fdModalBackdrop ${modalType === "capability" ? "" : "fdModalBackdropFeature"}`} onClick={() => setCapabilityOpen(false)} role="presentation">
             <div className={`fdModal ${modalType === "capability" ? "" : "fdModalFeature"}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.capabilityModalTitle}>
               <div className="fdModalHead">
@@ -567,7 +573,7 @@ export default function FrontdeskPortalPage() {
               )}
             </div>
           </div>
-        ) : null}
+        ), document.body) : null}
       </section>
     </main>
   );
