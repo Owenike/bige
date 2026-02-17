@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useMemo, useState } from "react";
 import { useI18n } from "../../i18n-provider";
@@ -58,13 +58,13 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
 
   const t = useMemo(
     () =>
-      zh
+            zh
         ? {
             badge: "MEMBER DESK",
             title: "會員查詢 / 建檔",
-            sub: "快速查詢會員、避免重複建檔，並在櫃檯建立完整會員資料。",
+            sub: "快速查詢會員、避免重複建檔，並在櫃檯完成完整會員資料建立。",
             findTitle: "查詢會員",
-            findHint: "可用姓名、電話、Email 查詢",
+            findHint: "可用姓名、電話或 Email 查詢",
             findPlaceholder: "輸入姓名 / 電話 / Email",
             findBtn: "開始查詢",
             searching: "查詢中...",
@@ -88,21 +88,21 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             empty: "目前沒有資料",
             searchFail: "查詢失敗",
             createFail: "建立失敗",
-            created: "會員已建立",
-            invalidPhone: "電話格式不正確，請重新輸入。",
+            created: "會員建立成功",
+            invalidPhone: "電話格式錯誤，請輸入有效電話。",
             duplicateTitle: "偵測到重複會員",
-            duplicateDesc: "此電話或 Email 已綁定既有會員，請選擇下一步。",
+            duplicateDesc: "此電話或 Email 已存在，請選擇下一步操作。",
             useExisting: "使用既有會員",
-            editAndRetry: "修改資料後重試",
+            editAndRetry: "返回修改後重試",
             usingExisting: "已切換為既有會員",
             continueHint: "可直接用此會員前往收款、預約或入場掃碼。",
             quickActions: "快速下一步",
             goOrder: "新增訂單",
             goBooking: "建立預約",
             goCheckin: "入場掃碼",
-            customInfo: "自訂資料",
+            customInfo: "自訂資訊",
             status: "狀態",
-            active: "有效",
+            active: "啟用",
           }
         : {
             badge: "MEMBER DESK",
@@ -413,3 +413,4 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     </main>
   );
 }
+

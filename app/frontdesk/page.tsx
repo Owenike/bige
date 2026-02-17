@@ -1,13 +1,13 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../i18n-provider";
 import { FrontdeskCheckinView } from "./checkin/CheckinView";
 import { FrontdeskMemberSearchView } from "./member-search/MemberSearchView";
 
 type CapabilityStatus = "ready" | "building" | "planned";
-type FrontdeskModalType = "capability" | "entry" | "member";
+type FrontdeskModalType = "capability" | "entry" | "member" | "handover";
 type CapabilityCard = {
   id: string;
   title: string;
@@ -66,6 +66,11 @@ function minutesUntil(value: string) {
   return Math.floor((ts - Date.now()) / 60000);
 }
 
+function parseAmount(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
 function playNotificationTone() {
   if (typeof window === "undefined") return;
   const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -96,6 +101,8 @@ export default function FrontdeskPortalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [shiftState, setShiftState] = useState<"open" | "closed">("closed");
+  const [activeShift, setActiveShift] = useState<ShiftItem | null>(null);
+  const [shiftActionError, setShiftActionError] = useState<string | null>(null);
   const [pendingItems, setPendingItems] = useState(0);
   const [ordersToday, setOrdersToday] = useState(0);
   const [paidToday, setPaidToday] = useState(0);
@@ -107,6 +114,15 @@ export default function FrontdeskPortalPage() {
   const [portalReady, setPortalReady] = useState(false);
   const [modalType, setModalType] = useState<FrontdeskModalType>("capability");
   const [selectedCapabilityId, setSelectedCapabilityId] = useState<string>("member");
+  const [toolbarQuery, setToolbarQuery] = useState("");
+  const [openingCash, setOpeningCash] = useState("0");
+  const [openingNote, setOpeningNote] = useState("");
+  const [openingShift, setOpeningShift] = useState(false);
+  const [closingShift, setClosingShift] = useState(false);
+  const [closeCashTotal, setCloseCashTotal] = useState("0");
+  const [closeCardTotal, setCloseCardTotal] = useState("0");
+  const [closeTransferTotal, setCloseTransferTotal] = useState("0");
+  const [closeNote, setCloseNote] = useState("");
 
   const openCapabilityModal = useCallback((id: string, type: FrontdeskModalType = "capability") => {
     setModalType(type);
@@ -193,6 +209,7 @@ export default function FrontdeskPortalPage() {
       overdueOrderIdsRef.current = currentOverdueIds;
 
       setShiftState(openShift ? "open" : "closed");
+      setActiveShift(openShift || null);
       setPendingItems(unpaidOrders.length + upcomingBookings.length);
       setOrdersToday(todayOrders.length);
       setPaidToday(todayPaidOrders.length);
@@ -231,6 +248,26 @@ export default function FrontdeskPortalPage() {
             statusTasks: "待處理",
             statusTasksValue: `${pendingItems} 項`,
             statusTip: "先完成入場與收款，再執行交班結算。",
+            modeClosed: "未開班",
+            modeOpen: "開班中",
+            startShiftTitle: "開始開班",
+            openingCash: "零用金",
+            openingNote: "備註",
+            openingNotePlaceholder: "可填寫本班次交接提醒",
+            startShiftAction: "開班",
+            startingShiftAction: "開班中...",
+            openShiftFirst: "請先開班",
+            openShiftDisabledHint: "工具列與常用操作已停用，請先開班。",
+            openedAt: "開班時間",
+            handoverAction: "交班",
+            handoverModalTitle: "交班結算",
+            closeCashTotal: "現金總額",
+            closeCardTotal: "刷卡總額",
+            closeTransferTotal: "轉帳總額",
+            closeNote: "交班備註",
+            closeShiftAction: "送出交班",
+            closingShiftAction: "交班送出中...",
+            invalidAmount: "金額格式錯誤，請輸入數字。",
             opsTitle: "今日營運",
             completion: "收款完成率",
             orders: "今日訂單",
@@ -264,6 +301,8 @@ export default function FrontdeskPortalPage() {
             openCheckinPage: "開啟入場作業頁",
             openMemberPage: "開啟會員作業頁",
             close: "關閉",
+            openShiftFail: "開班失敗",
+            closeShiftFail: "交班失敗",
             ready: "已上線",
             building: "建置中",
             planned: "規劃中",
@@ -280,6 +319,26 @@ export default function FrontdeskPortalPage() {
             statusTasks: "Pending",
             statusTasksValue: `${pendingItems} items`,
             statusTip: "Finish check-ins and payments first, then run shift handover.",
+            modeClosed: "Closed",
+            modeOpen: "Open",
+            startShiftTitle: "Start Shift",
+            openingCash: "Opening Cash",
+            openingNote: "Note",
+            openingNotePlaceholder: "Optional handover reminder for this shift",
+            startShiftAction: "Open Shift",
+            startingShiftAction: "Opening...",
+            openShiftFirst: "Please open shift first",
+            openShiftDisabledHint: "Toolbar and common actions are disabled until shift opens.",
+            openedAt: "Opened At",
+            handoverAction: "Handover",
+            handoverModalTitle: "Shift Handover",
+            closeCashTotal: "Cash Total",
+            closeCardTotal: "Card Total",
+            closeTransferTotal: "Transfer Total",
+            closeNote: "Handover Note",
+            closeShiftAction: "Submit Close",
+            closingShiftAction: "Closing...",
+            invalidAmount: "Invalid amount format.",
             opsTitle: "Today Operations",
             completion: "Payment Completion",
             orders: "Orders Today",
@@ -313,12 +372,104 @@ export default function FrontdeskPortalPage() {
             openCheckinPage: "Open Check-in Workspace",
             openMemberPage: "Open Member Workspace",
             close: "Close",
+            openShiftFail: "Open shift failed",
+            closeShiftFail: "Close shift failed",
             ready: "Ready",
             building: "Building",
             planned: "Planned",
           },
     [lang, pendingItems, shiftState],
   );
+
+  const shiftOpen = shiftState === "open";
+  const actionsDisabled = !shiftOpen;
+  const isFeatureModal = modalType === "entry" || modalType === "member";
+
+  const handleOpenShift = useCallback(async () => {
+    const openingCashAmount = parseAmount(openingCash);
+    if (Number.isNaN(openingCashAmount)) {
+      setShiftActionError(t.invalidAmount);
+      return;
+    }
+
+    setOpeningShift(true);
+    setShiftActionError(null);
+    try {
+      const res = await fetch("/api/frontdesk/handover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "open",
+          openingCash: openingCashAmount,
+          note: openingNote.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.openShiftFail);
+      await loadDashboard(false);
+      setOpeningNote("");
+      setCloseNote("");
+    } catch (err) {
+      setShiftActionError(err instanceof Error ? err.message : t.openShiftFail);
+    } finally {
+      setOpeningShift(false);
+    }
+  }, [loadDashboard, openingCash, openingNote, t.invalidAmount, t.openShiftFail]);
+
+  const handleCloseShift = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!activeShift?.id) {
+      setShiftActionError(t.closeShiftFail);
+      return;
+    }
+
+    const cashTotal = parseAmount(closeCashTotal);
+    const cardTotal = parseAmount(closeCardTotal);
+    const transferTotal = parseAmount(closeTransferTotal);
+    if (Number.isNaN(cashTotal) || Number.isNaN(cardTotal) || Number.isNaN(transferTotal)) {
+      setShiftActionError(t.invalidAmount);
+      return;
+    }
+
+    setClosingShift(true);
+    setShiftActionError(null);
+    try {
+      const res = await fetch("/api/frontdesk/handover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "close",
+          shiftId: activeShift.id,
+          cashTotal,
+          cardTotal,
+          transferTotal,
+          note: closeNote.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.closeShiftFail);
+      setCapabilityOpen(false);
+      setModalType("capability");
+      setCloseCashTotal("0");
+      setCloseCardTotal("0");
+      setCloseTransferTotal("0");
+      setCloseNote("");
+      await loadDashboard(false);
+    } catch (err) {
+      setShiftActionError(err instanceof Error ? err.message : t.closeShiftFail);
+    } finally {
+      setClosingShift(false);
+    }
+  }, [
+    activeShift?.id,
+    closeCardTotal,
+    closeCashTotal,
+    closeNote,
+    closeTransferTotal,
+    loadDashboard,
+    t.closeShiftFail,
+    t.invalidAmount,
+  ]);
 
   const capabilityCards = useMemo(
     (): CapabilityCard[] =>
@@ -394,32 +545,82 @@ export default function FrontdeskPortalPage() {
     <main ref={sceneRef} className={`fdGlassScene ${capabilityOpen ? "fdSceneBlurred" : ""}`}>
       <section className="fdGlassBackdrop fdEnter">
         {error ? <div className="error">{error}</div> : null}
+        {shiftActionError ? <div className="error" style={{ marginTop: error ? 10 : 0 }}>{shiftActionError}</div> : null}
 
         <div className="fdGlassTop">
           <article className="fdGlassPanel">
             <div className="fdChipRow">
-              <span className="fdChip fdChipActive">{t.statusTitle}</span>
-              <span className="fdChip">{t.statusTasksValue}</span>
+              <span className={`fdChip ${shiftOpen ? "" : "fdChipActive"}`}>{t.modeClosed}</span>
+              <span className={`fdChip ${shiftOpen ? "fdChipActive" : ""}`}>{t.modeOpen}</span>
             </div>
-            <h2 className="fdGlassTitle" style={{ marginTop: 16 }}>
-              {lang === "zh" ? "櫃檯作業" : "Frontdesk Ops"}
-            </h2>
-            <p className="fdGlassText">{t.statusTip}</p>
-            <div className="fdPillActions">
-              <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => openCapabilityModal("entry", "entry")}>
-                {t.primary}
-              </button>
-              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => openCapabilityModal("member", "member")}>
-                {t.secondary}
-              </button>
-              <button
-                type="button"
-                className="fdPillBtn fdPillBtnGhost"
-                onClick={() => setSoundEnabled((prev) => !prev)}
-              >
-                {soundEnabled ? t.soundOn : t.soundOff}
-              </button>
-            </div>
+            {!shiftOpen ? (
+              <>
+                <h2 className="fdGlassTitle" style={{ marginTop: 16 }}>{t.startShiftTitle}</h2>
+                <p className="fdGlassText">{t.openShiftDisabledHint}</p>
+                <div className="field" style={{ marginTop: 8 }}>
+                  <label className="kvLabel">{t.openingCash}</label>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={openingCash}
+                    onChange={(e) => setOpeningCash(e.target.value)}
+                  />
+                  <label className="kvLabel">{t.openingNote}</label>
+                  <textarea
+                    className="input"
+                    rows={3}
+                    value={openingNote}
+                    onChange={(e) => setOpeningNote(e.target.value)}
+                    placeholder={t.openingNotePlaceholder}
+                  />
+                  <button
+                    type="button"
+                    className="fdPillBtn fdPillBtnPrimary"
+                    onClick={() => void handleOpenShift()}
+                    disabled={openingShift}
+                    style={openingShift ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+                  >
+                    {openingShift ? t.startingShiftAction : t.startShiftAction}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                  <h2 className="fdGlassTitle" style={{ marginTop: 16 }}>
+                    {lang === "zh" ? "櫃檯作業" : "Frontdesk Ops"}
+                  </h2>
+                  <div style={{ display: "grid", justifyItems: "end", gap: 6, marginTop: 10 }}>
+                    {activeShift?.opened_at ? (
+                      <span className="fdChip">{t.openedAt}: {fmtDateTime(activeShift.opened_at)}</span>
+                    ) : null}
+                    <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => {
+                      setModalType("handover");
+                      setCapabilityOpen(true);
+                    }}>
+                      {t.handoverAction}
+                    </button>
+                  </div>
+                </div>
+                <p className="fdGlassText">{t.statusTip}</p>
+                <div className="fdPillActions">
+                  <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => openCapabilityModal("entry", "entry")} disabled={actionsDisabled}>
+                    {t.primary}
+                  </button>
+                  <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => openCapabilityModal("member", "member")} disabled={actionsDisabled}>
+                    {t.secondary}
+                  </button>
+                  <button
+                    type="button"
+                    className="fdPillBtn fdPillBtnGhost"
+                    onClick={() => setSoundEnabled((prev) => !prev)}
+                    disabled={actionsDisabled}
+                  >
+                    {soundEnabled ? t.soundOn : t.soundOff}
+                  </button>
+                </div>
+              </>
+            )}
           </article>
 
           <article className="fdGlassPanel">
@@ -428,35 +629,53 @@ export default function FrontdeskPortalPage() {
               <span className="fdChip">{t.statusTasks}</span>
             </div>
             <h2 className="fdGlassTitle">{t.opsTitle}</h2>
-            <div className="fdMetricLine">
-              <span className="fdMetricLabel">{t.statusOpen}</span>
-              <strong className="fdMetricValue">{t.statusOpenValue}</strong>
-            </div>
-            <div className="fdMetricLine">
-              <span className="fdMetricLabel">{t.orders}</span>
-              <strong className="fdMetricValue">{loading ? "-" : ordersToday}</strong>
-            </div>
-            <div className="fdMetricLine">
-              <span className="fdMetricLabel">{t.paid}</span>
-              <strong className="fdMetricValue">{loading ? "-" : paidToday}</strong>
-            </div>
-            <div className="fdMetricLine">
-              <span className="fdMetricLabel">{t.revenue}</span>
-              <strong className="fdMetricValue">{loading ? "-" : revenueToday}</strong>
-            </div>
-            <p className="fdGlassText" style={{ marginTop: 10, fontSize: 12 }}>{t.refresh}</p>
+            {shiftOpen ? (
+              <>
+                <div className="fdMetricLine">
+                  <span className="fdMetricLabel">{t.statusOpen}</span>
+                  <strong className="fdMetricValue">{t.statusOpenValue}</strong>
+                </div>
+                <div className="fdMetricLine">
+                  <span className="fdMetricLabel">{t.orders}</span>
+                  <strong className="fdMetricValue">{loading ? "-" : ordersToday}</strong>
+                </div>
+                <div className="fdMetricLine">
+                  <span className="fdMetricLabel">{t.paid}</span>
+                  <strong className="fdMetricValue">{loading ? "-" : paidToday}</strong>
+                </div>
+                <div className="fdMetricLine">
+                  <span className="fdMetricLabel">{t.revenue}</span>
+                  <strong className="fdMetricValue">{loading ? "-" : revenueToday}</strong>
+                </div>
+                <p className="fdGlassText" style={{ marginTop: 10, fontSize: 12 }}>{t.refresh}</p>
+              </>
+            ) : (
+              <p className="fdGlassText" style={{ marginTop: 10 }}>{t.openShiftFirst}</p>
+            )}
           </article>
         </div>
 
         <section className="fdGlassSubPanel" style={{ marginTop: 14, padding: 14 }}>
           <h2 className="sectionTitle">{t.capabilityTitle}</h2>
           <p className="fdGlassText" style={{ marginTop: 8 }}>{t.capabilitySub}</p>
-          <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => openCapabilityModal("member", "capability")}>
+          <button
+            type="button"
+            className="fdPillBtn fdPillBtnGhost"
+            onClick={() => openCapabilityModal("member", "capability")}
+            disabled={actionsDisabled}
+            style={actionsDisabled ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+          >
             {t.capabilityOpenBtn}
           </button>
+          {actionsDisabled ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.openShiftFirst}</p> : null}
         </section>
 
         <section className="fdTwoCol" style={{ marginTop: 14 }}>
+          {actionsDisabled ? (
+            <p className="fdGlassText" style={{ gridColumn: "1 / -1", marginTop: 0 }}>
+              {t.openShiftFirst}
+            </p>
+          ) : null}
           <article className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{t.unpaidTitle}</h2>
             <div className="fdListStack" style={{ marginTop: 8 }}>
@@ -476,7 +695,15 @@ export default function FrontdeskPortalPage() {
                       </span>
                     </div>
                     <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
-                    <a className="fdPillBtn" style={{ marginTop: 8, display: "inline-flex" }} href={`/frontdesk/orders/new?orderId=${encodeURIComponent(item.id)}`}>
+                    <a
+                      className="fdPillBtn"
+                      style={actionsDisabled ? { marginTop: 8, display: "inline-flex", opacity: 0.7, pointerEvents: "none" } : { marginTop: 8, display: "inline-flex" }}
+                      href={`/frontdesk/orders/new?orderId=${encodeURIComponent(item.id)}`}
+                      aria-disabled={actionsDisabled}
+                      onClick={(event) => {
+                        if (actionsDisabled) event.preventDefault();
+                      }}
+                    >
                       {t.collectAction}
                     </a>
                   </div>
@@ -506,7 +733,15 @@ export default function FrontdeskPortalPage() {
                     </div>
                     <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.starts_at)}</p>
                     <p className="sub" style={{ marginTop: 4 }}>#{item.member_id}</p>
-                    <a className="fdPillBtn" style={{ marginTop: 8, display: "inline-flex" }} href="/frontdesk/bookings">
+                    <a
+                      className="fdPillBtn"
+                      style={actionsDisabled ? { marginTop: 8, display: "inline-flex", opacity: 0.7, pointerEvents: "none" } : { marginTop: 8, display: "inline-flex" }}
+                      href="/frontdesk/bookings"
+                      aria-disabled={actionsDisabled}
+                      onClick={(event) => {
+                        if (actionsDisabled) event.preventDefault();
+                      }}
+                    >
                       {t.bookingAction}
                     </a>
                   </div>
@@ -518,11 +753,23 @@ export default function FrontdeskPortalPage() {
         </section>
 
         {capabilityOpen && portalReady ? createPortal((
-          <div className={`fdModalBackdrop ${modalType === "capability" ? "" : "fdModalBackdropFeature"}`} onClick={() => setCapabilityOpen(false)} role="presentation">
-            <div className={`fdModal ${modalType === "capability" ? "" : "fdModalFeature"}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.capabilityModalTitle}>
+          <div className={`fdModalBackdrop ${isFeatureModal ? "fdModalBackdropFeature" : ""}`} onClick={() => setCapabilityOpen(false)} role="presentation">
+            <div
+              className={`fdModal ${isFeatureModal ? "fdModalFeature" : ""}`}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label={modalType === "handover" ? t.handoverModalTitle : t.capabilityModalTitle}
+            >
               <div className="fdModalHead">
                 <h2 className="sectionTitle" style={{ margin: 0 }}>
-                  {modalType === "entry" ? t.entryModalTitle : modalType === "member" ? t.memberModalTitle : t.capabilityModalTitle}
+                  {modalType === "entry"
+                    ? t.entryModalTitle
+                    : modalType === "member"
+                      ? t.memberModalTitle
+                      : modalType === "handover"
+                        ? t.handoverModalTitle
+                        : t.capabilityModalTitle}
                 </h2>
                 <button type="button" className="fdPillBtn fdPillBtnGhost fdModalCloseBtn" onClick={() => setCapabilityOpen(false)}>
                   {t.close}
@@ -566,6 +813,52 @@ export default function FrontdeskPortalPage() {
                     </div>
                   ) : null}
                 </div>
+              ) : modalType === "handover" ? (
+                <form onSubmit={handleCloseShift} className="fdGlassSubPanel" style={{ padding: 14 }}>
+                  <div className="field" style={{ marginTop: 0 }}>
+                    <label className="kvLabel">{t.closeCashTotal}</label>
+                    <input
+                      className="input"
+                      inputMode="decimal"
+                      value={closeCashTotal}
+                      onChange={(e) => setCloseCashTotal(e.target.value)}
+                      disabled={closingShift}
+                    />
+                    <label className="kvLabel">{t.closeCardTotal}</label>
+                    <input
+                      className="input"
+                      inputMode="decimal"
+                      value={closeCardTotal}
+                      onChange={(e) => setCloseCardTotal(e.target.value)}
+                      disabled={closingShift}
+                    />
+                    <label className="kvLabel">{t.closeTransferTotal}</label>
+                    <input
+                      className="input"
+                      inputMode="decimal"
+                      value={closeTransferTotal}
+                      onChange={(e) => setCloseTransferTotal(e.target.value)}
+                      disabled={closingShift}
+                    />
+                    <label className="kvLabel">{t.closeNote}</label>
+                    <textarea
+                      className="input"
+                      rows={3}
+                      value={closeNote}
+                      onChange={(e) => setCloseNote(e.target.value)}
+                      disabled={closingShift}
+                      placeholder={t.openingNotePlaceholder}
+                    />
+                    <button
+                      type="submit"
+                      className="fdPillBtn fdPillBtnPrimary"
+                      disabled={closingShift}
+                      style={closingShift ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+                    >
+                      {closingShift ? t.closingShiftAction : t.closeShiftAction}
+                    </button>
+                  </div>
+                </form>
               ) : (
                 <div className="fdModalFeatureBody">
                   {modalType === "entry" ? <FrontdeskCheckinView embedded /> : <FrontdeskMemberSearchView embedded />}
