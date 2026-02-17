@@ -261,6 +261,7 @@ export default function FrontdeskPortalPage() {
             openedAt: "開班時間",
             handoverAction: "交班",
             handoverModalTitle: "交班結算",
+            handoverHint: "請確認三種收款總額，送出後班次將關閉。",
             closeCashTotal: "現金總額",
             closeCardTotal: "刷卡總額",
             closeTransferTotal: "轉帳總額",
@@ -332,6 +333,7 @@ export default function FrontdeskPortalPage() {
             openedAt: "Opened At",
             handoverAction: "Handover",
             handoverModalTitle: "Shift Handover",
+            handoverHint: "Confirm all totals before submit. The shift will be closed.",
             closeCashTotal: "Cash Total",
             closeCardTotal: "Card Total",
             closeTransferTotal: "Transfer Total",
@@ -755,7 +757,7 @@ export default function FrontdeskPortalPage() {
         {capabilityOpen && portalReady ? createPortal((
           <div className={`fdModalBackdrop ${isFeatureModal ? "fdModalBackdropFeature" : ""}`} onClick={() => setCapabilityOpen(false)} role="presentation">
             <div
-              className={`fdModal ${isFeatureModal ? "fdModalFeature" : ""}`}
+              className={`fdModal ${isFeatureModal ? "fdModalFeature" : ""} ${modalType === "handover" ? "fdModalHandover" : ""}`}
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
@@ -814,33 +816,47 @@ export default function FrontdeskPortalPage() {
                   ) : null}
                 </div>
               ) : modalType === "handover" ? (
-                <form onSubmit={handleCloseShift} className="fdGlassSubPanel" style={{ padding: 14 }}>
-                  <div className="field" style={{ marginTop: 0 }}>
-                    <label className="kvLabel">{t.closeCashTotal}</label>
-                    <input
-                      className="input"
-                      inputMode="decimal"
-                      value={closeCashTotal}
-                      onChange={(e) => setCloseCashTotal(e.target.value)}
-                      disabled={closingShift}
-                    />
-                    <label className="kvLabel">{t.closeCardTotal}</label>
-                    <input
-                      className="input"
-                      inputMode="decimal"
-                      value={closeCardTotal}
-                      onChange={(e) => setCloseCardTotal(e.target.value)}
-                      disabled={closingShift}
-                    />
-                    <label className="kvLabel">{t.closeTransferTotal}</label>
-                    <input
-                      className="input"
-                      inputMode="decimal"
-                      value={closeTransferTotal}
-                      onChange={(e) => setCloseTransferTotal(e.target.value)}
-                      disabled={closingShift}
-                    />
-                    <label className="kvLabel">{t.closeNote}</label>
+                <form onSubmit={handleCloseShift} className="fdHandoverForm">
+                  <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 10 }}>{t.handoverHint}</p>
+                  {activeShift?.opened_at ? (
+                    <div className="fdChip" style={{ marginBottom: 12, display: "inline-flex" }}>
+                      {t.openedAt}: {fmtDateTime(activeShift.opened_at)}
+                    </div>
+                  ) : null}
+                  <div className="fdHandoverGrid">
+                    <label className="fdHandoverField">
+                      <span className="kvLabel">{t.closeCashTotal}</span>
+                      <input
+                        className="input"
+                        inputMode="decimal"
+                        value={closeCashTotal}
+                        onChange={(e) => setCloseCashTotal(e.target.value)}
+                        disabled={closingShift}
+                      />
+                    </label>
+                    <label className="fdHandoverField">
+                      <span className="kvLabel">{t.closeCardTotal}</span>
+                      <input
+                        className="input"
+                        inputMode="decimal"
+                        value={closeCardTotal}
+                        onChange={(e) => setCloseCardTotal(e.target.value)}
+                        disabled={closingShift}
+                      />
+                    </label>
+                    <label className="fdHandoverField">
+                      <span className="kvLabel">{t.closeTransferTotal}</span>
+                      <input
+                        className="input"
+                        inputMode="decimal"
+                        value={closeTransferTotal}
+                        onChange={(e) => setCloseTransferTotal(e.target.value)}
+                        disabled={closingShift}
+                      />
+                    </label>
+                  </div>
+                  <label className="fdHandoverField fdHandoverNote">
+                    <span className="kvLabel">{t.closeNote}</span>
                     <textarea
                       className="input"
                       rows={3}
@@ -849,15 +865,15 @@ export default function FrontdeskPortalPage() {
                       disabled={closingShift}
                       placeholder={t.openingNotePlaceholder}
                     />
-                    <button
-                      type="submit"
-                      className="fdPillBtn fdPillBtnPrimary"
-                      disabled={closingShift}
-                      style={closingShift ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
-                    >
-                      {closingShift ? t.closingShiftAction : t.closeShiftAction}
-                    </button>
-                  </div>
+                  </label>
+                  <button
+                    type="submit"
+                    className="fdPillBtn fdPillBtnPrimary"
+                    disabled={closingShift}
+                    style={closingShift ? { marginTop: 6, width: "100%", opacity: 0.7, cursor: "not-allowed" } : { marginTop: 6, width: "100%" }}
+                  >
+                    {closingShift ? t.closingShiftAction : t.closeShiftAction}
+                  </button>
                 </form>
               ) : (
                 <div className="fdModalFeatureBody">
