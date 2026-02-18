@@ -302,6 +302,7 @@ export default function FrontdeskPortalPage() {
             openCheckinPage: "開啟入場作業頁",
             openMemberPage: "開啟會員作業頁",
             close: "關閉",
+            cancel: "取消",
             openShiftFail: "開班失敗",
             closeShiftFail: "交班失敗",
             ready: "已上線",
@@ -374,6 +375,7 @@ export default function FrontdeskPortalPage() {
             openCheckinPage: "Open Check-in Workspace",
             openMemberPage: "Open Member Workspace",
             close: "Close",
+            cancel: "Cancel",
             openShiftFail: "Open shift failed",
             closeShiftFail: "Close shift failed",
             ready: "Ready",
@@ -755,7 +757,11 @@ export default function FrontdeskPortalPage() {
         </section>
 
         {capabilityOpen && portalReady ? createPortal((
-          <div className={`fdModalBackdrop ${isFeatureModal ? "fdModalBackdropFeature" : ""}`} onClick={() => setCapabilityOpen(false)} role="presentation">
+          <div
+            className={`fdModalBackdrop ${isFeatureModal ? "fdModalBackdropFeature" : ""} ${modalType === "handover" ? "fdModalBackdropHandover" : ""}`}
+            onClick={() => setCapabilityOpen(false)}
+            role="presentation"
+          >
             <div
               className={`fdModal ${isFeatureModal ? "fdModalFeature" : ""} ${modalType === "handover" ? "fdModalHandover" : ""}`}
               onClick={(e) => e.stopPropagation()}
@@ -773,9 +779,22 @@ export default function FrontdeskPortalPage() {
                         ? t.handoverModalTitle
                         : t.capabilityModalTitle}
                 </h2>
-                <button type="button" className="fdPillBtn fdPillBtnGhost fdModalCloseBtn" onClick={() => setCapabilityOpen(false)}>
-                  {t.close}
-                </button>
+                {modalType === "handover" ? (
+                  <button
+                    type="button"
+                    className="fdModalIconBtn"
+                    aria-label={t.close}
+                    onClick={() => setCapabilityOpen(false)}
+                  >
+                    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+                      <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button type="button" className="fdPillBtn fdPillBtnGhost fdModalCloseBtn" onClick={() => setCapabilityOpen(false)}>
+                    {t.close}
+                  </button>
+                )}
               </div>
               {modalType === "capability" ? (
                 <div className="fdModalLayout" style={{ marginTop: 10 }}>
@@ -817,63 +836,81 @@ export default function FrontdeskPortalPage() {
                 </div>
               ) : modalType === "handover" ? (
                 <form onSubmit={handleCloseShift} className="fdHandoverForm">
-                  <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 10 }}>{t.handoverHint}</p>
-                  {activeShift?.opened_at ? (
-                    <div className="fdChip" style={{ marginBottom: 12, display: "inline-flex" }}>
-                      {t.openedAt}: {fmtDateTime(activeShift.opened_at)}
+                  <div className="fdHandoverSection">
+                    <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 10 }}>{t.handoverHint}</p>
+                    {activeShift?.opened_at ? (
+                      <div className="fdChip" style={{ marginBottom: 12, display: "inline-flex" }}>
+                        {t.openedAt}: {fmtDateTime(activeShift.opened_at)}
+                      </div>
+                    ) : null}
+                    <div className="fdHandoverGrid">
+                      <label className="fdHandoverField">
+                        <span className="kvLabel">{t.closeCashTotal}</span>
+                        <div className="fdAmountInputWrap">
+                          <span className="fdAmountPrefix">NT$</span>
+                          <input
+                            className="input fdAmountInput"
+                            inputMode="decimal"
+                            value={closeCashTotal}
+                            onChange={(e) => setCloseCashTotal(e.target.value)}
+                            disabled={closingShift}
+                          />
+                        </div>
+                      </label>
+                      <label className="fdHandoverField">
+                        <span className="kvLabel">{t.closeCardTotal}</span>
+                        <div className="fdAmountInputWrap">
+                          <span className="fdAmountPrefix">NT$</span>
+                          <input
+                            className="input fdAmountInput"
+                            inputMode="decimal"
+                            value={closeCardTotal}
+                            onChange={(e) => setCloseCardTotal(e.target.value)}
+                            disabled={closingShift}
+                          />
+                        </div>
+                      </label>
+                      <label className="fdHandoverField">
+                        <span className="kvLabel">{t.closeTransferTotal}</span>
+                        <div className="fdAmountInputWrap">
+                          <span className="fdAmountPrefix">NT$</span>
+                          <input
+                            className="input fdAmountInput"
+                            inputMode="decimal"
+                            value={closeTransferTotal}
+                            onChange={(e) => setCloseTransferTotal(e.target.value)}
+                            disabled={closingShift}
+                          />
+                        </div>
+                      </label>
                     </div>
-                  ) : null}
-                  <div className="fdHandoverGrid">
-                    <label className="fdHandoverField">
-                      <span className="kvLabel">{t.closeCashTotal}</span>
-                      <input
-                        className="input"
-                        inputMode="decimal"
-                        value={closeCashTotal}
-                        onChange={(e) => setCloseCashTotal(e.target.value)}
+                  </div>
+                  <div className="fdHandoverSection">
+                    <label className="fdHandoverField fdHandoverNote">
+                      <span className="kvLabel">{t.closeNote}</span>
+                      <textarea
+                        className="input fdHandoverTextarea"
+                        rows={3}
+                        value={closeNote}
+                        onChange={(e) => setCloseNote(e.target.value)}
                         disabled={closingShift}
-                      />
-                    </label>
-                    <label className="fdHandoverField">
-                      <span className="kvLabel">{t.closeCardTotal}</span>
-                      <input
-                        className="input"
-                        inputMode="decimal"
-                        value={closeCardTotal}
-                        onChange={(e) => setCloseCardTotal(e.target.value)}
-                        disabled={closingShift}
-                      />
-                    </label>
-                    <label className="fdHandoverField">
-                      <span className="kvLabel">{t.closeTransferTotal}</span>
-                      <input
-                        className="input"
-                        inputMode="decimal"
-                        value={closeTransferTotal}
-                        onChange={(e) => setCloseTransferTotal(e.target.value)}
-                        disabled={closingShift}
+                        placeholder={t.openingNotePlaceholder}
                       />
                     </label>
                   </div>
-                  <label className="fdHandoverField fdHandoverNote">
-                    <span className="kvLabel">{t.closeNote}</span>
-                    <textarea
-                      className="input"
-                      rows={3}
-                      value={closeNote}
-                      onChange={(e) => setCloseNote(e.target.value)}
+                  <div className="fdHandoverFooter">
+                    <button type="button" className="fdHandoverBtn fdHandoverBtnGhost" onClick={() => setCapabilityOpen(false)}>
+                      {t.cancel}
+                    </button>
+                    <button
+                      type="submit"
+                      className="fdHandoverBtn fdHandoverBtnPrimary"
                       disabled={closingShift}
-                      placeholder={t.openingNotePlaceholder}
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    className="fdPillBtn fdPillBtnPrimary"
-                    disabled={closingShift}
-                    style={closingShift ? { marginTop: 6, width: "100%", opacity: 0.7, cursor: "not-allowed" } : { marginTop: 6, width: "100%" }}
-                  >
-                    {closingShift ? t.closingShiftAction : t.closeShiftAction}
-                  </button>
+                      style={closingShift ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+                    >
+                      {closingShift ? t.closingShiftAction : t.closeShiftAction}
+                    </button>
+                  </div>
                 </form>
               ) : (
                 <div className="fdModalFeatureBody">
