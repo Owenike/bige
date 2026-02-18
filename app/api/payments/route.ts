@@ -8,6 +8,18 @@ export async function GET(request: Request) {
 
   const orderId = new URL(request.url).searchParams.get("orderId");
   if (!orderId) return NextResponse.json({ error: "orderId is required" }, { status: 400 });
+  if (!auth.context.tenantId) return NextResponse.json({ error: "Invalid tenant context" }, { status: 400 });
+
+  const orderResult = await auth.supabase
+    .from("orders")
+    .select("id, branch_id")
+    .eq("tenant_id", auth.context.tenantId)
+    .eq("id", orderId)
+    .maybeSingle();
+  if (orderResult.error || !orderResult.data) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  if (auth.context.role === "frontdesk" && auth.context.branchId && String(orderResult.data.branch_id || "") !== auth.context.branchId) {
+    return NextResponse.json({ error: "Forbidden order access for current branch" }, { status: 403 });
+  }
 
   const { data, error } = await auth.supabase
     .from("payments")
@@ -109,6 +121,34 @@ export async function POST(request: Request) {
       memberId: String(order.member_id || ""),
     });
   }
+
+  if (shiftGuard.shift?.id) {
+    await auth.supabase.from("frontdesk_shift_items").insert({
+      tenant_id: auth.context.tenantId,
+      shift_id: shiftGuard.shift.id,
+      kind: "payment",
+      ref_id: String(data?.id || ""),
+      amount,
+      summary: `payment:${orderId}:${method}`,
+    });
+  }
+
+  await auth.supabase.from("audit_logs").insert({
+    tenant_id: auth.context.tenantId,
+    actor_id: auth.context.userId,
+    action: "payment_recorded",
+    target_type: "payment",
+    target_id: data?.id ? String(data.id) : null,
+    reason: null,
+    payload: {
+      orderId,
+      amount,
+      method,
+      remainingBefore,
+      remainingAfter,
+      nextOrderStatus,
+    },
+  });
 
   return NextResponse.json({ payment: data }, { status: 201 });
 }

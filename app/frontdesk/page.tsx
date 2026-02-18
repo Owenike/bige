@@ -41,6 +41,66 @@ type OrderItem = {
   created_at: string;
 };
 
+type PosOrderItem = {
+  id: string;
+  member_id: string | null;
+  status: string;
+  amount: number;
+  channel: string;
+  note?: string | null;
+  created_at: string;
+  updated_at?: string;
+  branch_id?: string | null;
+};
+
+type PosPaymentItem = {
+  id: string;
+  order_id: string;
+  amount: number;
+  status: string;
+  method: string;
+  gateway_ref?: string | null;
+  paid_at?: string | null;
+};
+
+type PosApprovalItem = {
+  id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  reason: string;
+  status: string;
+  decision_note?: string | null;
+  created_at: string;
+  resolved_at?: string | null;
+};
+
+type PosAuditItem = {
+  id: string;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  reason: string | null;
+  created_at: string;
+};
+
+type PosInvoiceEvent = {
+  id: string;
+  action: string;
+  target_id: string;
+  reason: string | null;
+  payload?: {
+    invoiceNo?: string;
+    amount?: number;
+    carrier?: string | null;
+    taxId?: string | null;
+    buyerName?: string | null;
+    allowanceAmount?: number;
+    [key: string]: unknown;
+  };
+  created_at: string;
+};
+
 type LockerRentalItem = {
   id: string;
   lockerCode: string;
@@ -200,15 +260,35 @@ export default function FrontdeskPortalPage() {
   const [closeTransferTotal, setCloseTransferTotal] = useState("0");
   const [closeNote, setCloseNote] = useState("");
   const [posMemberId, setPosMemberId] = useState("");
-  const [posAmount, setPosAmount] = useState("0");
+  const [posSubtotal, setPosSubtotal] = useState("0");
+  const [posDiscountAmount, setPosDiscountAmount] = useState("0");
+  const [posDiscountNote, setPosDiscountNote] = useState("");
+  const [posManagerOverride, setPosManagerOverride] = useState(false);
   const [posNote, setPosNote] = useState("");
   const [posOrderId, setPosOrderId] = useState("");
   const [posPaymentAmount, setPosPaymentAmount] = useState("0");
   const [posPaymentMethod, setPosPaymentMethod] = useState("cash");
   const [posCheckoutUrl, setPosCheckoutUrl] = useState("");
+  const [posOrders, setPosOrders] = useState<PosOrderItem[]>([]);
+  const [posPayments, setPosPayments] = useState<PosPaymentItem[]>([]);
+  const [posApprovals, setPosApprovals] = useState<PosApprovalItem[]>([]);
+  const [posAudit, setPosAudit] = useState<PosAuditItem[]>([]);
+  const [posInvoices, setPosInvoices] = useState<PosInvoiceEvent[]>([]);
+  const [posInvoiceTaxId, setPosInvoiceTaxId] = useState("");
+  const [posInvoiceCarrier, setPosInvoiceCarrier] = useState("");
+  const [posInvoiceBuyerName, setPosInvoiceBuyerName] = useState("");
+  const [posInvoiceNo, setPosInvoiceNo] = useState("");
+  const [posAllowanceAmount, setPosAllowanceAmount] = useState("0");
+  const [posVoidReason, setPosVoidReason] = useState("");
+  const [posRefundPaymentId, setPosRefundPaymentId] = useState("");
+  const [posRefundReason, setPosRefundReason] = useState("");
+  const [posInvoiceReason, setPosInvoiceReason] = useState("");
+  const [posLoading, setPosLoading] = useState(false);
   const [posCreatingOrder, setPosCreatingOrder] = useState(false);
   const [posPayingOrder, setPosPayingOrder] = useState(false);
   const [posInitializingCheckout, setPosInitializingCheckout] = useState(false);
+  const [posSubmittingRisk, setPosSubmittingRisk] = useState(false);
+  const [posSubmittingInvoice, setPosSubmittingInvoice] = useState(false);
   const [posError, setPosError] = useState<string | null>(null);
   const [posMessage, setPosMessage] = useState<string | null>(null);
   const [lockerRentals, setLockerRentals] = useState<LockerRentalItem[]>([]);
@@ -435,11 +515,24 @@ export default function FrontdeskPortalPage() {
             posCreateSection: "建立訂單",
             posPaymentSection: "記錄付款",
             posCheckoutSection: "藍新金流結帳",
+            posVoidSection: "作廢送審",
+            posRefundSection: "退費送審",
+            posApprovalsSection: "送審狀態",
+            posAuditSection: "稽核紀錄",
+            posInvoiceSection: "發票作業",
+            posOrdersSection: "訂單列表",
+            posPaymentsSection: "付款明細",
             posMemberIdOptional: "會員 ID（UUID，選填）",
             posAmountLabel: "訂單金額",
+            posSubtotalLabel: "原價",
+            posDiscountLabel: "折扣",
+            posDiscountNoteLabel: "折扣原因",
+            posManagerOverrideLabel: "主管同意高折扣（>=20% 或 >=500）",
+            posManagerOverrideRequired: "高折扣需主管同意",
             posNoteLabel: "備註（選填）",
             posCurrentOrder: "目前訂單",
             posNoOrder: "尚未選擇訂單",
+            posRemainingLabel: "尚未收款",
             posPaymentAmountLabel: "付款金額",
             posPaymentMethodLabel: "付款方式",
             posCreateAction: "建立訂單",
@@ -451,15 +544,52 @@ export default function FrontdeskPortalPage() {
             posClearOrderAction: "清除目前訂單",
             posCheckoutUrlLabel: "結帳連結",
             posUseOrderAction: "使用此訂單",
+            posVoidAction: "送出作廢",
+            posRefundAction: "送出退費",
+            posIssueInvoiceAction: "開立發票",
+            posVoidInvoiceAction: "作廢發票",
+            posAllowanceInvoiceAction: "開立折讓",
+            posPrintReceiptAction: "列印收據",
+            posOpenEntryAction: "付款後入場",
+            posOpenMemberAction: "會員資料",
+            posOpenBookingAction: "預約作業",
+            posReloadAction: "重新整理",
             posOrderCreated: "訂單已建立",
             posPaymentRecorded: "付款已記錄",
             posCheckoutInitialized: "藍新結帳已初始化",
             posCreateFail: "建立訂單失敗",
             posPaymentFail: "付款失敗",
             posCheckoutFail: "藍新初始化失敗",
+            posVoidFail: "作廢送審失敗",
+            posRefundFail: "退費送審失敗",
+            posInvoiceFail: "發票操作失敗",
             posInvalidMemberId: "會員 ID 格式錯誤，請輸入 UUID 或留空",
             posInvalidAmount: "金額格式錯誤",
             posOrderRequired: "請先建立或選擇訂單",
+            posReasonRequired: "請輸入原因",
+            posRefundPaymentIdLabel: "付款 ID",
+            posInvoiceNoRequired: "請先輸入發票號碼",
+            posInvoiceIssued: "發票已開立",
+            posInvoiceVoided: "發票已作廢",
+            posInvoiceAllowanceIssued: "折讓已建立",
+            posOrderVoided: "訂單已作廢",
+            posPaymentRefunded: "付款已退費",
+            posNoPayments: "目前沒有付款紀錄。",
+            posNoApprovals: "目前沒有送審紀錄。",
+            posNoAudit: "目前沒有稽核紀錄。",
+            posNoInvoices: "目前沒有發票紀錄。",
+            posNoOrders: "目前沒有訂單資料。",
+            posRequestSubmitted: "已送審，待主管處理",
+            posInvoiceNoLabel: "發票號碼",
+            posInvoiceTaxIdLabel: "統編（選填）",
+            posInvoiceCarrierLabel: "載具（選填）",
+            posInvoiceBuyerLabel: "買受人（選填）",
+            posAllowanceAmountLabel: "折讓金額",
+            posReasonLabel: "原因",
+            posStatusPending: "待審",
+            posStatusApproved: "已核准",
+            posStatusRejected: "已駁回",
+            posStatusCancelled: "已取消",
             posPendingTitle: "待收款訂單",
             posNoPending: "目前沒有待收款訂單。",
             lockerTitle: "置物櫃租借作業",
@@ -647,11 +777,24 @@ export default function FrontdeskPortalPage() {
             posCreateSection: "Create Order",
             posPaymentSection: "Capture Payment",
             posCheckoutSection: "Newebpay Checkout",
+            posVoidSection: "Void Request",
+            posRefundSection: "Refund Request",
+            posApprovalsSection: "Approval Status",
+            posAuditSection: "Audit Logs",
+            posInvoiceSection: "Invoice",
+            posOrdersSection: "Orders",
+            posPaymentsSection: "Payments",
             posMemberIdOptional: "Member ID (UUID, optional)",
             posAmountLabel: "Order Amount",
+            posSubtotalLabel: "Subtotal",
+            posDiscountLabel: "Discount",
+            posDiscountNoteLabel: "Discount Reason",
+            posManagerOverrideLabel: "Manager override for high discount (>=20% or >=500)",
+            posManagerOverrideRequired: "High discount requires manager override",
             posNoteLabel: "Note (optional)",
             posCurrentOrder: "Current Order",
             posNoOrder: "No order selected",
+            posRemainingLabel: "Remaining",
             posPaymentAmountLabel: "Payment Amount",
             posPaymentMethodLabel: "Payment Method",
             posCreateAction: "Create Order",
@@ -663,15 +806,52 @@ export default function FrontdeskPortalPage() {
             posClearOrderAction: "Clear Current Order",
             posCheckoutUrlLabel: "Checkout URL",
             posUseOrderAction: "Use Order",
+            posVoidAction: "Submit Void",
+            posRefundAction: "Submit Refund",
+            posIssueInvoiceAction: "Issue Invoice",
+            posVoidInvoiceAction: "Void Invoice",
+            posAllowanceInvoiceAction: "Create Allowance",
+            posPrintReceiptAction: "Print Receipt",
+            posOpenEntryAction: "Go Check-in",
+            posOpenMemberAction: "Open Member",
+            posOpenBookingAction: "Open Booking",
+            posReloadAction: "Reload",
             posOrderCreated: "Order created",
             posPaymentRecorded: "Payment recorded",
             posCheckoutInitialized: "Checkout initialized",
             posCreateFail: "Create order failed",
             posPaymentFail: "Payment failed",
             posCheckoutFail: "Newebpay init failed",
+            posVoidFail: "Void request failed",
+            posRefundFail: "Refund request failed",
+            posInvoiceFail: "Invoice action failed",
             posInvalidMemberId: "Invalid member ID format. Use UUID or leave empty.",
             posInvalidAmount: "Invalid amount format",
             posOrderRequired: "Please create or select an order first",
+            posReasonRequired: "Please enter reason",
+            posRefundPaymentIdLabel: "Payment ID",
+            posInvoiceNoRequired: "Please enter invoice number",
+            posInvoiceIssued: "Invoice issued",
+            posInvoiceVoided: "Invoice voided",
+            posInvoiceAllowanceIssued: "Allowance created",
+            posOrderVoided: "Order voided",
+            posPaymentRefunded: "Payment refunded",
+            posNoPayments: "No payment records yet.",
+            posNoApprovals: "No approval requests yet.",
+            posNoAudit: "No audit records yet.",
+            posNoInvoices: "No invoice records yet.",
+            posNoOrders: "No orders yet.",
+            posRequestSubmitted: "Submitted for manager approval",
+            posInvoiceNoLabel: "Invoice No.",
+            posInvoiceTaxIdLabel: "Tax ID (optional)",
+            posInvoiceCarrierLabel: "Carrier (optional)",
+            posInvoiceBuyerLabel: "Buyer Name (optional)",
+            posAllowanceAmountLabel: "Allowance Amount",
+            posReasonLabel: "Reason",
+            posStatusPending: "Pending",
+            posStatusApproved: "Approved",
+            posStatusRejected: "Rejected",
+            posStatusCancelled: "Cancelled",
             posPendingTitle: "Pending Payments",
             posNoPending: "No unpaid orders right now.",
             lockerTitle: "Locker Rental Desk",
@@ -819,6 +999,18 @@ export default function FrontdeskPortalPage() {
       .filter((item) => item.reason === "sale" && isSameLocalDay(item.createdAt, now))
       .reduce((sum, item) => sum + Math.max(0, -Number(item.delta || 0)), 0);
   }, [inventoryMoves]);
+  const selectedPosOrder = useMemo(
+    () => posOrders.find((item) => item.id === posOrderId) || null,
+    [posOrderId, posOrders],
+  );
+  const posPaidTotal = useMemo(
+    () => posPayments.filter((item) => item.status === "paid").reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    [posPayments],
+  );
+  const posRemaining = useMemo(
+    () => Math.max(0, Number(selectedPosOrder?.amount || 0) - posPaidTotal),
+    [posPaidTotal, selectedPosOrder?.amount],
+  );
 
   const handleOpenShift = useCallback(async () => {
     const openingCashAmount = parseAmount(openingCash);
@@ -906,17 +1098,94 @@ export default function FrontdeskPortalPage() {
     t.invalidAmount,
   ]);
 
+  const loadPosOrders = useCallback(async () => {
+    const res = await fetch("/api/orders");
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload?.error || t.posCreateFail);
+    setPosOrders((payload.items || []) as PosOrderItem[]);
+    return (payload.items || []) as PosOrderItem[];
+  }, [t.posCreateFail]);
+
+  const loadPosPayments = useCallback(async (orderId: string) => {
+    if (!orderId) {
+      setPosPayments([]);
+      return [] as PosPaymentItem[];
+    }
+    const res = await fetch(`/api/payments?orderId=${encodeURIComponent(orderId)}`);
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload?.error || t.posPaymentFail);
+    const items = (payload.items || []) as PosPaymentItem[];
+    setPosPayments(items);
+    return items;
+  }, [t.posPaymentFail]);
+
+  const loadPosApprovals = useCallback(async () => {
+    const res = await fetch("/api/approvals?status=all&limit=20");
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload?.error || t.posReloadAction);
+    setPosApprovals((payload.items || []) as PosApprovalItem[]);
+  }, [t.posReloadAction]);
+
+  const loadPosAudit = useCallback(async (targetId?: string) => {
+    const query = targetId
+      ? `/api/frontdesk/audit?limit=20&targetType=order&targetId=${encodeURIComponent(targetId)}`
+      : "/api/frontdesk/audit?limit=20";
+    const res = await fetch(query);
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload?.error || t.posReloadAction);
+    setPosAudit((payload.items || []) as PosAuditItem[]);
+  }, [t.posReloadAction]);
+
+  const loadPosInvoices = useCallback(async (orderId: string) => {
+    if (!orderId) {
+      setPosInvoices([]);
+      return;
+    }
+    const res = await fetch(`/api/frontdesk/invoices?orderId=${encodeURIComponent(orderId)}`);
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload?.error || t.posInvoiceFail);
+    setPosInvoices((payload.items || []) as PosInvoiceEvent[]);
+  }, [t.posInvoiceFail]);
+
+  const handlePosSelectOrder = useCallback(async (orderId: string, amount?: number) => {
+    setPosOrderId(orderId);
+    setPosPaymentAmount(amount !== undefined ? String(amount) : posPaymentAmount);
+    setPosCheckoutUrl("");
+    setPosError(null);
+    setPosMessage(null);
+    setPosLoading(true);
+    try {
+      await Promise.all([
+        loadPosPayments(orderId),
+        loadPosInvoices(orderId),
+        loadPosAudit(orderId),
+      ]);
+    } catch (err) {
+      setPosError(err instanceof Error ? err.message : t.posReloadAction);
+    } finally {
+      setPosLoading(false);
+    }
+  }, [loadPosAudit, loadPosInvoices, loadPosPayments, posPaymentAmount, t.posReloadAction]);
+
   const handlePosCreateOrder = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedMemberId = posMemberId.trim();
-    const amount = Number(posAmount);
+    const subtotal = Number(posSubtotal);
+    const discountAmount = Number(posDiscountAmount);
+    const amount = Number((subtotal - discountAmount).toFixed(2));
     if (normalizedMemberId && !isUuid(normalizedMemberId)) {
       setPosError(t.posInvalidMemberId);
       setPosMessage(null);
       return;
     }
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!Number.isFinite(subtotal) || subtotal <= 0 || !Number.isFinite(discountAmount) || discountAmount < 0 || discountAmount > subtotal) {
       setPosError(t.posInvalidAmount);
+      setPosMessage(null);
+      return;
+    }
+    const highDiscount = discountAmount > 0 && (discountAmount >= 500 || discountAmount / subtotal >= 0.2);
+    if (highDiscount && !posManagerOverride) {
+      setPosError(t.posManagerOverrideRequired);
       setPosMessage(null);
       return;
     }
@@ -931,6 +1200,10 @@ export default function FrontdeskPortalPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           memberId: normalizedMemberId || null,
+          subtotal,
+          discountAmount,
+          discountNote: posDiscountNote.trim() || null,
+          managerOverride: highDiscount ? posManagerOverride : false,
           amount,
           channel: "frontdesk",
           note: posNote.trim() || null,
@@ -942,13 +1215,29 @@ export default function FrontdeskPortalPage() {
       setPosOrderId(newOrderId);
       setPosPaymentAmount(String(amount));
       setPosMessage(`${t.posOrderCreated}: ${newOrderId}`);
-      await loadDashboard(true);
+      await Promise.all([loadDashboard(true), loadPosOrders(), handlePosSelectOrder(newOrderId, amount), loadPosApprovals()]);
     } catch (err) {
       setPosError(err instanceof Error ? err.message : t.posCreateFail);
     } finally {
       setPosCreatingOrder(false);
     }
-  }, [loadDashboard, posAmount, posMemberId, posNote, t.posCreateFail, t.posInvalidAmount, t.posInvalidMemberId, t.posOrderCreated]);
+  }, [
+    handlePosSelectOrder,
+    loadDashboard,
+    loadPosApprovals,
+    loadPosOrders,
+    posDiscountAmount,
+    posDiscountNote,
+    posManagerOverride,
+    posMemberId,
+    posNote,
+    posSubtotal,
+    t.posCreateFail,
+    t.posInvalidAmount,
+    t.posInvalidMemberId,
+    t.posManagerOverrideRequired,
+    t.posOrderCreated,
+  ]);
 
   const handlePosPayOrder = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -959,6 +1248,11 @@ export default function FrontdeskPortalPage() {
       return;
     }
     if (!Number.isFinite(amount) || amount <= 0) {
+      setPosError(t.posInvalidAmount);
+      setPosMessage(null);
+      return;
+    }
+    if (amount > posRemaining + 0.01) {
       setPosError(t.posInvalidAmount);
       setPosMessage(null);
       return;
@@ -980,13 +1274,31 @@ export default function FrontdeskPortalPage() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || t.posPaymentFail);
       setPosMessage(`${t.posPaymentRecorded}: ${payload?.payment?.id || "-"}`);
-      await loadDashboard(true);
+      await Promise.all([
+        loadDashboard(true),
+        loadPosOrders(),
+        loadPosPayments(posOrderId),
+        loadPosAudit(posOrderId),
+      ]);
     } catch (err) {
       setPosError(err instanceof Error ? err.message : t.posPaymentFail);
     } finally {
       setPosPayingOrder(false);
     }
-  }, [loadDashboard, posOrderId, posPaymentAmount, posPaymentMethod, t.posInvalidAmount, t.posOrderRequired, t.posPaymentFail, t.posPaymentRecorded]);
+  }, [
+    loadDashboard,
+    loadPosAudit,
+    loadPosOrders,
+    loadPosPayments,
+    posOrderId,
+    posPaymentAmount,
+    posPaymentMethod,
+    posRemaining,
+    t.posInvalidAmount,
+    t.posOrderRequired,
+    t.posPaymentFail,
+    t.posPaymentRecorded,
+  ]);
 
   const handlePosInitCheckout = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1015,6 +1327,232 @@ export default function FrontdeskPortalPage() {
       setPosInitializingCheckout(false);
     }
   }, [posOrderId, t.posCheckoutFail, t.posCheckoutInitialized, t.posOrderRequired]);
+
+  const handlePosVoidOrder = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!posOrderId) {
+      setPosError(t.posOrderRequired);
+      setPosMessage(null);
+      return;
+    }
+    if (!posVoidReason.trim()) {
+      setPosError(t.posReasonRequired);
+      setPosMessage(null);
+      return;
+    }
+    setPosSubmittingRisk(true);
+    setPosError(null);
+    setPosMessage(null);
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(posOrderId)}/void`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: posVoidReason.trim() }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.posVoidFail);
+      setPosMessage(res.status === 202 ? t.posRequestSubmitted : t.posOrderVoided);
+      setPosVoidReason("");
+      await Promise.all([loadPosOrders(), loadPosApprovals(), loadPosAudit(posOrderId), loadDashboard(true)]);
+    } catch (err) {
+      setPosError(err instanceof Error ? err.message : t.posVoidFail);
+    } finally {
+      setPosSubmittingRisk(false);
+    }
+  }, [loadDashboard, loadPosApprovals, loadPosAudit, loadPosOrders, posOrderId, posVoidReason, t.posOrderRequired, t.posOrderVoided, t.posReasonRequired, t.posRequestSubmitted, t.posVoidFail]);
+
+  const handlePosRefundPayment = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!posRefundPaymentId.trim()) {
+      setPosError(t.posRefundPaymentIdLabel);
+      setPosMessage(null);
+      return;
+    }
+    if (!posRefundReason.trim()) {
+      setPosError(t.posReasonRequired);
+      setPosMessage(null);
+      return;
+    }
+    setPosSubmittingRisk(true);
+    setPosError(null);
+    setPosMessage(null);
+    try {
+      const res = await fetch(`/api/payments/${encodeURIComponent(posRefundPaymentId.trim())}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: posRefundReason.trim() }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.posRefundFail);
+      setPosMessage(res.status === 202 ? t.posRequestSubmitted : t.posPaymentRefunded);
+      setPosRefundReason("");
+      await Promise.all([loadPosApprovals(), loadPosAudit(posOrderId), loadDashboard(true)]);
+      if (posOrderId) await loadPosPayments(posOrderId);
+    } catch (err) {
+      setPosError(err instanceof Error ? err.message : t.posRefundFail);
+    } finally {
+      setPosSubmittingRisk(false);
+    }
+  }, [loadDashboard, loadPosApprovals, loadPosAudit, loadPosPayments, posOrderId, posRefundPaymentId, posRefundReason, t.posPaymentRefunded, t.posReasonRequired, t.posRefundFail, t.posRefundPaymentIdLabel, t.posRequestSubmitted]);
+
+  const handlePosIssueInvoice = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!posOrderId) {
+      setPosError(t.posOrderRequired);
+      setPosMessage(null);
+      return;
+    }
+    setPosSubmittingInvoice(true);
+    setPosError(null);
+    setPosMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "issue",
+          orderId: posOrderId,
+          invoiceNo: posInvoiceNo.trim() || null,
+          taxId: posInvoiceTaxId.trim() || null,
+          carrier: posInvoiceCarrier.trim() || null,
+          buyerName: posInvoiceBuyerName.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.posInvoiceFail);
+      setPosMessage(t.posInvoiceIssued);
+      const invoiceNo = String(payload?.invoiceEvent?.payload?.invoiceNo || posInvoiceNo || "");
+      if (invoiceNo) setPosInvoiceNo(invoiceNo);
+      await loadPosInvoices(posOrderId);
+      await loadPosAudit(posOrderId);
+    } catch (err) {
+      setPosError(err instanceof Error ? err.message : t.posInvoiceFail);
+    } finally {
+      setPosSubmittingInvoice(false);
+    }
+  }, [loadPosAudit, loadPosInvoices, posInvoiceBuyerName, posInvoiceCarrier, posInvoiceNo, posInvoiceTaxId, posOrderId, t.posInvoiceFail, t.posInvoiceIssued, t.posOrderRequired]);
+
+  const handlePosVoidInvoice = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!posOrderId) {
+      setPosError(t.posOrderRequired);
+      setPosMessage(null);
+      return;
+    }
+    if (!posInvoiceNo.trim()) {
+      setPosError(t.posInvoiceNoRequired);
+      setPosMessage(null);
+      return;
+    }
+    if (!posInvoiceReason.trim()) {
+      setPosError(t.posReasonRequired);
+      setPosMessage(null);
+      return;
+    }
+    setPosSubmittingInvoice(true);
+    setPosError(null);
+    setPosMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "void",
+          orderId: posOrderId,
+          invoiceNo: posInvoiceNo.trim(),
+          reason: posInvoiceReason.trim(),
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.posInvoiceFail);
+      setPosMessage(t.posInvoiceVoided);
+      await loadPosInvoices(posOrderId);
+      await loadPosAudit(posOrderId);
+    } catch (err) {
+      setPosError(err instanceof Error ? err.message : t.posInvoiceFail);
+    } finally {
+      setPosSubmittingInvoice(false);
+    }
+  }, [loadPosAudit, loadPosInvoices, posInvoiceNo, posInvoiceReason, posOrderId, t.posInvoiceFail, t.posInvoiceNoRequired, t.posInvoiceVoided, t.posOrderRequired, t.posReasonRequired]);
+
+  const handlePosAllowanceInvoice = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!posOrderId) {
+      setPosError(t.posOrderRequired);
+      setPosMessage(null);
+      return;
+    }
+    if (!posInvoiceNo.trim()) {
+      setPosError(t.posInvoiceNoRequired);
+      setPosMessage(null);
+      return;
+    }
+    if (!posInvoiceReason.trim()) {
+      setPosError(t.posReasonRequired);
+      setPosMessage(null);
+      return;
+    }
+    const allowanceAmount = Number(posAllowanceAmount);
+    if (!Number.isFinite(allowanceAmount) || allowanceAmount <= 0) {
+      setPosError(t.posInvalidAmount);
+      setPosMessage(null);
+      return;
+    }
+    setPosSubmittingInvoice(true);
+    setPosError(null);
+    setPosMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "allowance",
+          orderId: posOrderId,
+          invoiceNo: posInvoiceNo.trim(),
+          allowanceAmount,
+          reason: posInvoiceReason.trim(),
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.posInvoiceFail);
+      setPosMessage(t.posInvoiceAllowanceIssued);
+      await loadPosInvoices(posOrderId);
+      await loadPosAudit(posOrderId);
+    } catch (err) {
+      setPosError(err instanceof Error ? err.message : t.posInvoiceFail);
+    } finally {
+      setPosSubmittingInvoice(false);
+    }
+  }, [loadPosAudit, loadPosInvoices, posAllowanceAmount, posInvoiceNo, posInvoiceReason, posOrderId, t.posInvalidAmount, t.posInvoiceAllowanceIssued, t.posInvoiceFail, t.posInvoiceNoRequired, t.posOrderRequired, t.posReasonRequired]);
+
+  const handlePosPrintReceipt = useCallback(() => {
+    if (!selectedPosOrder) {
+      setPosError(t.posOrderRequired);
+      setPosMessage(null);
+      return;
+    }
+    const win = window.open("", "_blank", "noopener,noreferrer,width=720,height=900");
+    if (!win) return;
+    const paidRows = posPayments
+      .map((item) => `<tr><td>${item.id}</td><td>${item.method}</td><td>${item.status}</td><td>${item.amount}</td><td>${item.paid_at ? fmtDateTime(item.paid_at) : "-"}</td></tr>`)
+      .join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8" /><title>Receipt ${selectedPosOrder.id}</title></head><body>
+      <h2>Frontdesk Receipt</h2>
+      <p>Order: ${selectedPosOrder.id}</p>
+      <p>Amount: ${selectedPosOrder.amount}</p>
+      <p>Status: ${selectedPosOrder.status}</p>
+      <p>Member: ${selectedPosOrder.member_id || "-"}</p>
+      <p>Printed At: ${new Date().toLocaleString()}</p>
+      <table border="1" cellspacing="0" cellpadding="6">
+        <thead><tr><th>Payment ID</th><th>Method</th><th>Status</th><th>Amount</th><th>Paid At</th></tr></thead>
+        <tbody>${paidRows || "<tr><td colspan='5'>No payments</td></tr>"}</tbody>
+      </table>
+    </body></html>`;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+  }, [posPayments, selectedPosOrder, t.posOrderRequired]);
 
   const loadLockerRentals = useCallback(async () => {
     setLockerLoading(true);
@@ -1441,6 +1979,34 @@ export default function FrontdeskPortalPage() {
   }, [capabilityOpen, loadInventoryModule, modalType, selectedCapabilityId]);
 
   useEffect(() => {
+    if (!capabilityOpen || modalType !== "capability" || selectedCapabilityId !== "pos") return;
+    setPosLoading(true);
+    setPosError(null);
+    void Promise.all([
+      loadPosOrders(),
+      loadPosApprovals(),
+      loadPosAudit(posOrderId || undefined),
+      posOrderId ? loadPosPayments(posOrderId) : Promise.resolve([] as PosPaymentItem[]),
+      posOrderId ? loadPosInvoices(posOrderId) : Promise.resolve(),
+    ])
+      .catch((err) => {
+        setPosError(err instanceof Error ? err.message : t.posReloadAction);
+      })
+      .finally(() => setPosLoading(false));
+  }, [
+    capabilityOpen,
+    loadPosApprovals,
+    loadPosAudit,
+    loadPosInvoices,
+    loadPosOrders,
+    loadPosPayments,
+    modalType,
+    posOrderId,
+    selectedCapabilityId,
+    t.posReloadAction,
+  ]);
+
+  useEffect(() => {
     if (lockerRentalTerm !== "custom" && lockerDueAt) {
       setLockerDueAt("");
     }
@@ -1488,6 +2054,32 @@ export default function FrontdeskPortalPage() {
     if (reason === "sale") return t.inventoryMoveSale;
     if (reason === "restock") return t.inventoryMoveRestock;
     return t.inventoryMoveAdjust;
+  }
+
+  function posApprovalStatusLabel(status: string) {
+    if (status === "pending") return t.posStatusPending;
+    if (status === "approved") return t.posStatusApproved;
+    if (status === "rejected") return t.posStatusRejected;
+    return t.posStatusCancelled;
+  }
+
+  function posApprovalStatusStyle(status: string) {
+    if (status === "approved") {
+      return { background: "rgba(16,185,129,.14)", borderColor: "rgba(16,185,129,.42)", color: "#047857" };
+    }
+    if (status === "rejected") {
+      return { background: "rgba(239,68,68,.12)", borderColor: "rgba(239,68,68,.42)", color: "#b91c1c" };
+    }
+    if (status === "cancelled") {
+      return { background: "rgba(107,114,128,.14)", borderColor: "rgba(107,114,128,.36)", color: "#374151" };
+    }
+    return { background: "rgba(234,179,8,.16)", borderColor: "rgba(234,179,8,.46)", color: "#92400e" };
+  }
+
+  function posRiskActionLabel(action: string) {
+    if (action === "order_void") return t.posVoidSection;
+    if (action === "payment_refund") return t.posRefundSection;
+    return action;
   }
 
   const lockerAutoDueAt = useMemo(
@@ -1800,6 +2392,50 @@ export default function FrontdeskPortalPage() {
                           <p className="fdGlassText" style={{ marginTop: 6 }}>{t.posModuleSub}</p>
                           {posError ? <div className="error" style={{ marginTop: 8 }}>{posError}</div> : null}
                           {posMessage ? <p className="sub" style={{ marginTop: 8, color: "var(--brand)" }}>{posMessage}</p> : null}
+                          {actionsDisabled ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.openShiftFirst}</p> : null}
+
+                          <div className="fdPillActions" style={{ marginTop: 10 }}>
+                            <button
+                              type="button"
+                              className="fdPillBtn"
+                              onClick={() => {
+                                setPosLoading(true);
+                                setPosError(null);
+                                void Promise.all([
+                                  loadPosOrders(),
+                                  loadPosApprovals(),
+                                  loadPosAudit(posOrderId || undefined),
+                                  posOrderId ? loadPosPayments(posOrderId) : Promise.resolve([] as PosPaymentItem[]),
+                                  posOrderId ? loadPosInvoices(posOrderId) : Promise.resolve(),
+                                ])
+                                  .catch((err) => setPosError(err instanceof Error ? err.message : t.posReloadAction))
+                                  .finally(() => setPosLoading(false));
+                              }}
+                              disabled={actionsDisabled || posLoading || posCreatingOrder || posPayingOrder || posInitializingCheckout || posSubmittingRisk || posSubmittingInvoice}
+                            >
+                              {t.posReloadAction}
+                            </button>
+                            <button type="button" className="fdPillBtn" onClick={handlePosPrintReceipt} disabled={actionsDisabled || !posOrderId}>
+                              {t.posPrintReceiptAction}
+                            </button>
+                            <button type="button" className="fdPillBtn" onClick={() => openCapabilityModal("entry", "entry")} disabled={actionsDisabled}>
+                              {t.posOpenEntryAction}
+                            </button>
+                            <button type="button" className="fdPillBtn" onClick={() => openCapabilityModal("member", "member")} disabled={actionsDisabled}>
+                              {t.posOpenMemberAction}
+                            </button>
+                            <a
+                              className="fdPillBtn"
+                              href="/frontdesk/bookings"
+                              style={actionsDisabled ? { opacity: 0.7, pointerEvents: "none" } : undefined}
+                              aria-disabled={actionsDisabled}
+                              onClick={(event) => {
+                                if (actionsDisabled) event.preventDefault();
+                              }}
+                            >
+                              {t.posOpenBookingAction}
+                            </a>
+                          </div>
 
                           <div className="fdInventoryFormGrid" style={{ marginTop: 10 }}>
                             <form onSubmit={handlePosCreateOrder} className="fdGlassSubPanel fdInventoryFormBlock">
@@ -1815,15 +2451,55 @@ export default function FrontdeskPortalPage() {
                                 />
                               </label>
                               <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posAmountLabel}</span>
+                                <span className="kvLabel">{t.posSubtotalLabel}</span>
                                 <input
                                   className="input"
                                   inputMode="decimal"
-                                  value={posAmount}
-                                  onChange={(event) => setPosAmount(event.target.value)}
-                                  placeholder={t.posAmountLabel}
+                                  value={posSubtotal}
+                                  onChange={(event) => setPosSubtotal(event.target.value)}
+                                  placeholder={t.posSubtotalLabel}
                                   disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
                                 />
+                              </label>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.posDiscountLabel}</span>
+                                  <input
+                                    className="input"
+                                    inputMode="decimal"
+                                    value={posDiscountAmount}
+                                    onChange={(event) => setPosDiscountAmount(event.target.value)}
+                                    placeholder={t.posDiscountLabel}
+                                    disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                  />
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.posAmountLabel}</span>
+                                  <div className="input">
+                                    {Number.isFinite(Number(posSubtotal) - Number(posDiscountAmount))
+                                      ? Math.max(0, Number(posSubtotal) - Number(posDiscountAmount))
+                                      : "-"}
+                                  </div>
+                                </label>
+                              </div>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posDiscountNoteLabel}</span>
+                                <input
+                                  className="input"
+                                  value={posDiscountNote}
+                                  onChange={(event) => setPosDiscountNote(event.target.value)}
+                                  placeholder={t.posDiscountNoteLabel}
+                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                />
+                              </label>
+                              <label className="fdInventoryField" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                <input
+                                  type="checkbox"
+                                  checked={posManagerOverride}
+                                  onChange={(event) => setPosManagerOverride(event.target.checked)}
+                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                />
+                                <span className="sub" style={{ marginTop: 0 }}>{t.posManagerOverrideLabel}</span>
                               </label>
                               <label className="fdInventoryField">
                                 <span className="kvLabel">{t.posNoteLabel}</span>
@@ -1847,6 +2523,10 @@ export default function FrontdeskPortalPage() {
                               <label className="fdInventoryField">
                                 <span className="kvLabel">{t.posCurrentOrder}</span>
                                 <div className="input">{posOrderId || t.posNoOrder}</div>
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posRemainingLabel}</span>
+                                <div className="input">{posOrderId ? posRemaining : "-"}</div>
                               </label>
                               <label className="fdInventoryField">
                                 <span className="kvLabel">{t.posPaymentAmountLabel}</span>
@@ -1892,6 +2572,8 @@ export default function FrontdeskPortalPage() {
                                     setPosCheckoutUrl("");
                                     setPosError(null);
                                     setPosMessage(null);
+                                    setPosPayments([]);
+                                    setPosInvoices([]);
                                   }}
                                   disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
                                 >
@@ -1929,11 +2611,7 @@ export default function FrontdeskPortalPage() {
                                   style={{ marginTop: 8, display: "inline-flex", opacity: actionsDisabled ? 0.7 : 1 }}
                                   disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
                                   onClick={() => {
-                                    setPosOrderId(item.id);
-                                    setPosPaymentAmount(String(item.amount));
-                                    setPosCheckoutUrl("");
-                                    setPosError(null);
-                                    setPosMessage(null);
+                                    void handlePosSelectOrder(item.id, Number(item.amount || 0));
                                   }}
                                 >
                                   {t.posUseOrderAction}
@@ -1941,6 +2619,296 @@ export default function FrontdeskPortalPage() {
                               </div>
                             ))}
                             {!loading && unpaidOrderList.length === 0 ? <p className="fdGlassText">{t.posNoPending}</p> : null}
+                          </div>
+
+                          <div className="fdInventoryListGrid" style={{ marginTop: 10 }}>
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{t.posOrdersSection}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {posOrders.map((item) => (
+                                  <div key={item.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{item.id.slice(0, 8)}</strong>
+                                      <span className="fdChip">{item.status}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>NT${item.amount}</p>
+                                    <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
+                                    {item.note ? <p className="sub" style={{ marginTop: 4 }}>{item.note}</p> : null}
+                                    <button
+                                      type="button"
+                                      className="fdPillBtn"
+                                      style={{ marginTop: 8 }}
+                                      onClick={() => void handlePosSelectOrder(item.id, Number(item.amount || 0))}
+                                      disabled={actionsDisabled || posLoading || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                    >
+                                      {t.posUseOrderAction}
+                                    </button>
+                                  </div>
+                                ))}
+                                {!posLoading && posOrders.length === 0 ? <p className="fdGlassText">{t.posNoOrders}</p> : null}
+                              </div>
+                            </div>
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{t.posPaymentsSection}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {posPayments.map((item) => (
+                                  <div key={item.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{item.id.slice(0, 8)}</strong>
+                                      <span className="fdChip">{item.method}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>NT${item.amount}</p>
+                                    <p className="sub" style={{ marginTop: 4 }}>{item.paid_at ? fmtDateTime(item.paid_at) : "-"}</p>
+                                    <button
+                                      type="button"
+                                      className="fdPillBtn"
+                                      style={{ marginTop: 8 }}
+                                      disabled={actionsDisabled || posSubmittingRisk}
+                                      onClick={() => {
+                                        setPosRefundPaymentId(item.id);
+                                        setPosRefundReason("");
+                                      }}
+                                    >
+                                      {t.posRefundAction}
+                                    </button>
+                                  </div>
+                                ))}
+                                {!posLoading && posPayments.length === 0 ? <p className="fdGlassText">{t.posNoPayments}</p> : null}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="fdInventoryFormGrid" style={{ marginTop: 10 }}>
+                            <form onSubmit={handlePosVoidOrder} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posVoidSection}</h5>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posCurrentOrder}</span>
+                                <div className="input">{posOrderId || t.posNoOrder}</div>
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posReasonLabel}</span>
+                                <input
+                                  className="input"
+                                  value={posVoidReason}
+                                  onChange={(event) => setPosVoidReason(event.target.value)}
+                                  placeholder={t.posReasonLabel}
+                                  disabled={actionsDisabled || posSubmittingRisk}
+                                />
+                              </label>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posSubmittingRisk || !posOrderId}>
+                                  {t.posVoidAction}
+                                </button>
+                              </div>
+                            </form>
+                            <form onSubmit={handlePosRefundPayment} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posRefundSection}</h5>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posRefundPaymentIdLabel}</span>
+                                <input
+                                  className="input"
+                                  value={posRefundPaymentId}
+                                  onChange={(event) => setPosRefundPaymentId(event.target.value)}
+                                  placeholder={t.posRefundPaymentIdLabel}
+                                  disabled={actionsDisabled || posSubmittingRisk}
+                                />
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posReasonLabel}</span>
+                                <input
+                                  className="input"
+                                  value={posRefundReason}
+                                  onChange={(event) => setPosRefundReason(event.target.value)}
+                                  placeholder={t.posReasonLabel}
+                                  disabled={actionsDisabled || posSubmittingRisk}
+                                />
+                              </label>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posSubmittingRisk}>
+                                  {t.posRefundAction}
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+
+                          <div className="fdInventoryFormGrid" style={{ marginTop: 10 }}>
+                            <form onSubmit={handlePosIssueInvoice} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posInvoiceSection}</h5>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posCurrentOrder}</span>
+                                <div className="input">{posOrderId || t.posNoOrder}</div>
+                              </label>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.posInvoiceNoLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={posInvoiceNo}
+                                    onChange={(event) => setPosInvoiceNo(event.target.value)}
+                                    placeholder={t.posInvoiceNoLabel}
+                                    disabled={actionsDisabled || posSubmittingInvoice}
+                                  />
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.posInvoiceTaxIdLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={posInvoiceTaxId}
+                                    onChange={(event) => setPosInvoiceTaxId(event.target.value)}
+                                    placeholder={t.posInvoiceTaxIdLabel}
+                                    disabled={actionsDisabled || posSubmittingInvoice}
+                                  />
+                                </label>
+                              </div>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.posInvoiceCarrierLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={posInvoiceCarrier}
+                                    onChange={(event) => setPosInvoiceCarrier(event.target.value)}
+                                    placeholder={t.posInvoiceCarrierLabel}
+                                    disabled={actionsDisabled || posSubmittingInvoice}
+                                  />
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.posInvoiceBuyerLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={posInvoiceBuyerName}
+                                    onChange={(event) => setPosInvoiceBuyerName(event.target.value)}
+                                    placeholder={t.posInvoiceBuyerLabel}
+                                    disabled={actionsDisabled || posSubmittingInvoice}
+                                  />
+                                </label>
+                              </div>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posSubmittingInvoice || !posOrderId}>
+                                  {t.posIssueInvoiceAction}
+                                </button>
+                              </div>
+                            </form>
+                            <form onSubmit={handlePosVoidInvoice} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posVoidInvoiceAction}</h5>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posInvoiceNoLabel}</span>
+                                <input
+                                  className="input"
+                                  value={posInvoiceNo}
+                                  onChange={(event) => setPosInvoiceNo(event.target.value)}
+                                  placeholder={t.posInvoiceNoLabel}
+                                  disabled={actionsDisabled || posSubmittingInvoice}
+                                />
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posReasonLabel}</span>
+                                <input
+                                  className="input"
+                                  value={posInvoiceReason}
+                                  onChange={(event) => setPosInvoiceReason(event.target.value)}
+                                  placeholder={t.posReasonLabel}
+                                  disabled={actionsDisabled || posSubmittingInvoice}
+                                />
+                              </label>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posSubmittingInvoice || !posOrderId}>
+                                  {t.posVoidInvoiceAction}
+                                </button>
+                              </div>
+                            </form>
+                            <form onSubmit={handlePosAllowanceInvoice} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posAllowanceInvoiceAction}</h5>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posInvoiceNoLabel}</span>
+                                <input
+                                  className="input"
+                                  value={posInvoiceNo}
+                                  onChange={(event) => setPosInvoiceNo(event.target.value)}
+                                  placeholder={t.posInvoiceNoLabel}
+                                  disabled={actionsDisabled || posSubmittingInvoice}
+                                />
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posAllowanceAmountLabel}</span>
+                                <input
+                                  className="input"
+                                  inputMode="decimal"
+                                  value={posAllowanceAmount}
+                                  onChange={(event) => setPosAllowanceAmount(event.target.value)}
+                                  placeholder={t.posAllowanceAmountLabel}
+                                  disabled={actionsDisabled || posSubmittingInvoice}
+                                />
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posReasonLabel}</span>
+                                <input
+                                  className="input"
+                                  value={posInvoiceReason}
+                                  onChange={(event) => setPosInvoiceReason(event.target.value)}
+                                  placeholder={t.posReasonLabel}
+                                  disabled={actionsDisabled || posSubmittingInvoice}
+                                />
+                              </label>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posSubmittingInvoice || !posOrderId}>
+                                  {t.posAllowanceInvoiceAction}
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+
+                          <div className="fdInventoryListGrid" style={{ marginTop: 10 }}>
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{t.posApprovalsSection}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {posApprovals.map((item) => (
+                                  <div key={item.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{posRiskActionLabel(item.action)}</strong>
+                                      <span className="fdChip" style={posApprovalStatusStyle(item.status)}>{posApprovalStatusLabel(item.status)}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>{item.target_type}:{item.target_id}</p>
+                                    <p className="sub" style={{ marginTop: 4 }}>{item.reason}</p>
+                                    <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
+                                  </div>
+                                ))}
+                                {!posLoading && posApprovals.length === 0 ? <p className="fdGlassText">{t.posNoApprovals}</p> : null}
+                              </div>
+                            </div>
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{t.posInvoiceSection}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {posInvoices.map((item) => (
+                                  <div key={item.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{item.payload?.invoiceNo || "-"}</strong>
+                                      <span className="fdChip">{item.action}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>{item.reason || "-"}</p>
+                                    <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
+                                  </div>
+                                ))}
+                                {!posLoading && posInvoices.length === 0 ? <p className="fdGlassText">{t.posNoInvoices}</p> : null}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="fdGlassSubPanel" style={{ marginTop: 10, padding: 10 }}>
+                            <div className="kvLabel">{t.posAuditSection}</div>
+                            <div className="fdListStack" style={{ marginTop: 8 }}>
+                              {posAudit.map((item) => (
+                                <div key={item.id} className="card" style={{ padding: 10 }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                    <strong>{item.action}</strong>
+                                    <span className="fdChip">{item.target_type}</span>
+                                  </div>
+                                  <p className="sub" style={{ marginTop: 4 }}>{item.target_id || "-"}</p>
+                                  <p className="sub" style={{ marginTop: 4 }}>{item.reason || "-"}</p>
+                                  <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
+                                </div>
+                              ))}
+                              {!posLoading && posAudit.length === 0 ? <p className="fdGlassText">{t.posNoAudit}</p> : null}
+                            </div>
                           </div>
                         </div>
                       ) : null}
