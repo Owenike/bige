@@ -1121,6 +1121,43 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 8px;
   margin-top: 10px;
 }
+.fdModal:not(.fdModalFeature) .fdLockerPanel{
+  border-color: #d8e1ee;
+  background: #f8fbff;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.96),
+    0 10px 22px rgba(46, 64, 96, .10);
+}
+.fdModal:not(.fdModalFeature) .fdLockerPanel .fdLockerSummaryItem,
+.fdModal:not(.fdModalFeature) .fdLockerPanel .fdLockerListGrid > .fdGlassSubPanel{
+  border-color: #dce5f2;
+  background: #ffffff;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 6px 14px rgba(46, 64, 96, .08);
+}
+.fdModal:not(.fdModalFeature) .fdLockerPanel .kvLabel{
+  color: #60708a;
+}
+.fdModal:not(.fdModalFeature) .fdLockerPanel .input{
+  background: #ffffff;
+  border-color: #ccd7e8;
+}
+.fdModal:not(.fdModalFeature) .fdLockerPanel .input:focus{
+  border-color: #9fc2ef;
+  box-shadow: 0 0 0 3px rgba(178, 210, 246, .38);
+}
+.fdModal:not(.fdModalFeature) .fdLockerPanel .fdLockerDueHint{
+  background: #eef5ff;
+  color: #415776;
+}
+.fdModal:not(.fdModalFeature) .fdLockerPanel .card{
+  background: #ffffff;
+  border-color: #dde6f2;
+  box-shadow: 0 4px 10px rgba(47, 66, 99, .08);
+}
 .fdActionCard{
   padding: 16px;
   color: var(--fd-ink);
