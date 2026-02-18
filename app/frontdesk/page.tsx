@@ -41,6 +41,24 @@ type OrderItem = {
   created_at: string;
 };
 
+type LockerRentalItem = {
+  id: string;
+  lockerCode: string;
+  memberId: string | null;
+  renterName: string;
+  phone: string;
+  depositAmount: number;
+  note: string;
+  status: "active" | "returned" | "cancelled" | string;
+  rentedAt: string;
+  dueAt: string | null;
+  returnedAt: string | null;
+};
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function isSameLocalDay(iso: string, now: Date) {
   const date = new Date(iso);
   return (
@@ -71,6 +89,13 @@ function minutesUntil(value: string) {
 function parseAmount(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function parseDateTimeInput(value: string) {
+  if (!value.trim()) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
 }
 
 function playNotificationTone() {
@@ -125,6 +150,18 @@ export default function FrontdeskPortalPage() {
   const [closeCardTotal, setCloseCardTotal] = useState("0");
   const [closeTransferTotal, setCloseTransferTotal] = useState("0");
   const [closeNote, setCloseNote] = useState("");
+  const [lockerRentals, setLockerRentals] = useState<LockerRentalItem[]>([]);
+  const [lockerLoading, setLockerLoading] = useState(false);
+  const [lockerSubmitting, setLockerSubmitting] = useState(false);
+  const [lockerError, setLockerError] = useState<string | null>(null);
+  const [lockerMessage, setLockerMessage] = useState<string | null>(null);
+  const [lockerCode, setLockerCode] = useState("");
+  const [lockerMemberId, setLockerMemberId] = useState("");
+  const [lockerRenterName, setLockerRenterName] = useState("");
+  const [lockerPhone, setLockerPhone] = useState("");
+  const [lockerDeposit, setLockerDeposit] = useState("0");
+  const [lockerDueAt, setLockerDueAt] = useState("");
+  const [lockerNote, setLockerNote] = useState("");
 
   const openCapabilityModal = useCallback((id: string, type: FrontdeskModalType = "capability") => {
     setModalType(type);
@@ -306,6 +343,37 @@ export default function FrontdeskPortalPage() {
             openCheckinPage: "開啟入場作業頁",
             openMemberPage: "開啟會員作業頁",
             openPosPage: "開啟收銀作業頁",
+            lockerTitle: "置物櫃租借作業",
+            lockerSub: "現場快速登記租借與歸還，並保留操作紀錄。",
+            lockerCodeLabel: "置物櫃編號",
+            lockerMemberIdLabel: "會員 ID（選填）",
+            lockerRenterLabel: "租借人",
+            lockerPhoneLabel: "電話（選填）",
+            lockerDepositLabel: "押金",
+            lockerDueAtLabel: "到期時間（選填）",
+            lockerNoteLabel: "備註（選填）",
+            lockerRentAction: "登記租借",
+            lockerRentingAction: "登記中...",
+            lockerReload: "重新整理",
+            lockerActiveList: "使用中",
+            lockerRecentList: "近期歸還",
+            lockerNoneActive: "目前沒有使用中的置物櫃。",
+            lockerNoneRecent: "目前沒有近期歸還紀錄。",
+            lockerReturnAction: "登記歸還",
+            lockerReturningAction: "處理中...",
+            lockerRentSuccess: "已完成租借登記",
+            lockerReturnSuccess: "已完成歸還登記",
+            lockerCodeRequired: "請輸入置物櫃編號",
+            lockerIdentifierRequired: "請至少填寫會員 ID、租借人或電話其中一項",
+            lockerMemberIdInvalid: "會員 ID 格式錯誤",
+            lockerDepositInvalid: "押金格式錯誤，請輸入數字",
+            lockerDueAtInvalid: "到期時間格式錯誤",
+            lockerLoadFail: "載入置物櫃資料失敗",
+            lockerRentFail: "租借登記失敗",
+            lockerReturnFail: "歸還登記失敗",
+            lockerInUse: "此置物櫃目前使用中",
+            lockerStatusActive: "使用中",
+            lockerStatusReturned: "已歸還",
             close: "關閉",
             cancel: "取消",
             openShiftFail: "開班失敗",
@@ -382,6 +450,37 @@ export default function FrontdeskPortalPage() {
             openCheckinPage: "Open Check-in Workspace",
             openMemberPage: "Open Member Workspace",
             openPosPage: "Open POS Workspace",
+            lockerTitle: "Locker Rental Desk",
+            lockerSub: "Register locker rent/return quickly with audit trail.",
+            lockerCodeLabel: "Locker Code",
+            lockerMemberIdLabel: "Member ID (optional)",
+            lockerRenterLabel: "Renter Name",
+            lockerPhoneLabel: "Phone (optional)",
+            lockerDepositLabel: "Deposit",
+            lockerDueAtLabel: "Due At (optional)",
+            lockerNoteLabel: "Note (optional)",
+            lockerRentAction: "Rent Locker",
+            lockerRentingAction: "Saving...",
+            lockerReload: "Reload",
+            lockerActiveList: "Active Lockers",
+            lockerRecentList: "Recently Returned",
+            lockerNoneActive: "No active locker rentals.",
+            lockerNoneRecent: "No recent returns.",
+            lockerReturnAction: "Mark Returned",
+            lockerReturningAction: "Processing...",
+            lockerRentSuccess: "Locker rental created",
+            lockerReturnSuccess: "Locker return recorded",
+            lockerCodeRequired: "lockerCode is required",
+            lockerIdentifierRequired: "Provide memberId, renter name, or phone",
+            lockerMemberIdInvalid: "Invalid memberId format",
+            lockerDepositInvalid: "Invalid deposit amount",
+            lockerDueAtInvalid: "Invalid dueAt format",
+            lockerLoadFail: "Load locker data failed",
+            lockerRentFail: "Create locker rental failed",
+            lockerReturnFail: "Return locker failed",
+            lockerInUse: "Locker is already in use",
+            lockerStatusActive: "Active",
+            lockerStatusReturned: "Returned",
             close: "Close",
             cancel: "Cancel",
             openShiftFail: "Open shift failed",
@@ -397,6 +496,14 @@ export default function FrontdeskPortalPage() {
   const shiftOpen = shiftState === "open";
   const actionsDisabled = !shiftResolved || !shiftOpen;
   const isFeatureModal = modalType === "entry" || modalType === "member";
+  const lockerActiveItems = useMemo(
+    () => lockerRentals.filter((item) => item.status === "active"),
+    [lockerRentals],
+  );
+  const lockerRecentReturnedItems = useMemo(
+    () => lockerRentals.filter((item) => item.status === "returned").slice(0, 8),
+    [lockerRentals],
+  );
 
   const handleOpenShift = useCallback(async () => {
     const openingCashAmount = parseAmount(openingCash);
@@ -484,6 +591,137 @@ export default function FrontdeskPortalPage() {
     t.invalidAmount,
   ]);
 
+  const loadLockerRentals = useCallback(async () => {
+    setLockerLoading(true);
+    setLockerError(null);
+    try {
+      const res = await fetch("/api/frontdesk/lockers");
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.lockerLoadFail);
+      setLockerRentals((payload.items || []) as LockerRentalItem[]);
+    } catch (err) {
+      setLockerError(err instanceof Error ? err.message : t.lockerLoadFail);
+    } finally {
+      setLockerLoading(false);
+    }
+  }, [t.lockerLoadFail]);
+
+  const handleCreateLockerRental = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedLockerCode = lockerCode.trim().toUpperCase();
+    const normalizedMemberId = lockerMemberId.trim();
+    const normalizedRenter = lockerRenterName.trim();
+    const normalizedPhone = lockerPhone.trim();
+    const depositAmount = parseAmount(lockerDeposit);
+    const dueAt = parseDateTimeInput(lockerDueAt);
+
+    if (!normalizedLockerCode) {
+      setLockerError(t.lockerCodeRequired);
+      setLockerMessage(null);
+      return;
+    }
+    if (normalizedMemberId && !isUuid(normalizedMemberId)) {
+      setLockerError(t.lockerMemberIdInvalid);
+      setLockerMessage(null);
+      return;
+    }
+    if (!normalizedMemberId && !normalizedRenter && !normalizedPhone) {
+      setLockerError(t.lockerIdentifierRequired);
+      setLockerMessage(null);
+      return;
+    }
+    if (Number.isNaN(depositAmount)) {
+      setLockerError(t.lockerDepositInvalid);
+      setLockerMessage(null);
+      return;
+    }
+    if (lockerDueAt.trim() && !dueAt) {
+      setLockerError(t.lockerDueAtInvalid);
+      setLockerMessage(null);
+      return;
+    }
+
+    setLockerSubmitting(true);
+    setLockerError(null);
+    setLockerMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/lockers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "rent",
+          lockerCode: normalizedLockerCode,
+          memberId: normalizedMemberId || null,
+          renterName: normalizedRenter || null,
+          phone: normalizedPhone || null,
+          depositAmount,
+          dueAt,
+          note: lockerNote.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        if (res.status === 409) throw new Error(payload?.error || t.lockerInUse);
+        throw new Error(payload?.error || t.lockerRentFail);
+      }
+
+      setLockerCode("");
+      setLockerMemberId("");
+      setLockerRenterName("");
+      setLockerPhone("");
+      setLockerDeposit("0");
+      setLockerDueAt("");
+      setLockerNote("");
+      setLockerMessage(t.lockerRentSuccess);
+      await loadLockerRentals();
+    } catch (err) {
+      setLockerError(err instanceof Error ? err.message : t.lockerRentFail);
+    } finally {
+      setLockerSubmitting(false);
+    }
+  }, [
+    loadLockerRentals,
+    lockerCode,
+    lockerDeposit,
+    lockerDueAt,
+    lockerMemberId,
+    lockerNote,
+    lockerPhone,
+    lockerRenterName,
+    t.lockerCodeRequired,
+    t.lockerDepositInvalid,
+    t.lockerDueAtInvalid,
+    t.lockerIdentifierRequired,
+    t.lockerInUse,
+    t.lockerMemberIdInvalid,
+    t.lockerRentFail,
+    t.lockerRentSuccess,
+  ]);
+
+  const handleReturnLockerRental = useCallback(async (rentalId: string) => {
+    setLockerSubmitting(true);
+    setLockerError(null);
+    setLockerMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/lockers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "return",
+          rentalId,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.lockerReturnFail);
+      setLockerMessage(t.lockerReturnSuccess);
+      await loadLockerRentals();
+    } catch (err) {
+      setLockerError(err instanceof Error ? err.message : t.lockerReturnFail);
+    } finally {
+      setLockerSubmitting(false);
+    }
+  }, [loadLockerRentals, t.lockerReturnFail, t.lockerReturnSuccess]);
+
   const capabilityCards = useMemo(
     (): CapabilityCard[] =>
       lang === "zh"
@@ -492,7 +730,7 @@ export default function FrontdeskPortalPage() {
             { id: "member", title: "B. 會員查詢 / 建檔", desc: "防重複建檔、自訂欄位、快速下一步。", detail: "支援電話/姓名搜尋、防重複建立、補資料與自訂欄位，櫃檯可直接接續收款與預約。", area: "MEMBER", status: "ready" },
             { id: "pos", title: "C. 收銀 / POS / 發票", desc: "訂單收款、退費/作廢送審、結帳流程。", detail: "包含櫃檯收款、多付款方式、退費與作廢送審流程，並保留稽核軌跡。", area: "POS", status: "ready" },
             { id: "booking", title: "D. 預約 / 課務", desc: "建立即時預約與課務調整。", detail: "可建立、改期、取消課務預約，支援現場快速調整時段。", area: "BOOKING", status: "ready" },
-            { id: "locker", title: "E. 置物櫃 / 租借", desc: "置物櫃租用與租借物管理（下一批）。", detail: "規劃中：置物櫃租期、押金、逾期與租借物品生命週期管理。", area: "LOCKER", status: "planned" },
+            { id: "locker", title: "E. 置物櫃 / 租借", desc: "置物櫃租借登記、歸還與押金管理。", detail: "可直接登記租借與歸還，包含押金、到期時間與備註，並保留完整操作軌跡。", area: "LOCKER", status: "ready" },
             { id: "inventory", title: "F. 商品 / 庫存 / 銷售", desc: "前台銷售與庫存追蹤。", detail: "建置中：商品銷售、庫存扣減、低庫存提醒與追溯。", area: "INVENTORY", status: "building" },
             { id: "cs", title: "G. 客服 / 事件紀錄", desc: "客訴與事件工單（含附件與追蹤）。", detail: "規劃中：客訴工單、現場事件與後續追蹤，支援附件紀錄。", area: "CS", status: "planned" },
             { id: "lead", title: "H. 線索 / 參觀導覽", desc: "Lead 建檔、轉會員、追蹤轉換。", detail: "規劃中：潛在客建檔、導覽排程與轉會員流程。", area: "LEAD", status: "planned" },
@@ -505,7 +743,7 @@ export default function FrontdeskPortalPage() {
             { id: "member", title: "B. Member Search / Create", desc: "Duplicate prevention, custom fields, quick actions.", detail: "Search/create with duplicate prevention and configurable custom fields.", area: "MEMBER", status: "ready" },
             { id: "pos", title: "C. POS / Invoice", desc: "Order payment, refund/void approval flow.", detail: "Desk payment, multi-method checkout, and approved high-risk refund/void flow.", area: "POS", status: "ready" },
             { id: "booking", title: "D. Booking / Classes", desc: "Booking creation and class schedule handling.", detail: "Create, reschedule, and cancel class bookings from desk operations.", area: "BOOKING", status: "ready" },
-            { id: "locker", title: "E. Locker / Rental", desc: "Locker contracts and rental item lifecycle (next).", detail: "Planned: locker rental, deposit, overdue and rental lifecycle.", area: "LOCKER", status: "planned" },
+            { id: "locker", title: "E. Locker / Rental", desc: "Locker rent/return with deposit handling.", detail: "Register rental and return with deposit, due time, and operation audit trail.", area: "LOCKER", status: "ready" },
             { id: "inventory", title: "F. Product / Inventory", desc: "Frontdesk selling and inventory traceability.", detail: "Building: product checkout, stock movement, and low-stock warnings.", area: "INVENTORY", status: "building" },
             { id: "cs", title: "G. Service / Incidents", desc: "Complaint and on-site incident ticket handling.", detail: "Planned: complaint tickets and on-site incident records with attachments.", area: "CS", status: "planned" },
             { id: "lead", title: "H. Lead / Tours", desc: "Lead intake, visit scheduling, conversion.", detail: "Planned: lead management, visit schedule, and conversion tracking.", area: "LEAD", status: "planned" },
@@ -537,6 +775,11 @@ export default function FrontdeskPortalPage() {
       document.body.style.overflow = prevOverflow;
     };
   }, [capabilityOpen]);
+
+  useEffect(() => {
+    if (!capabilityOpen || modalType !== "capability" || selectedCapabilityId !== "locker") return;
+    void loadLockerRentals();
+  }, [capabilityOpen, loadLockerRentals, modalType, selectedCapabilityId]);
 
   function statusLabel(status: CapabilityStatus) {
     if (status === "ready") return t.ready;
@@ -826,13 +1069,7 @@ export default function FrontdeskPortalPage() {
                         key={item.id}
                         type="button"
                         className={`fdGlassSubPanel fdCapabilityCard fdModalCapabilityItem ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
-                        onClick={() => {
-                          if (item.id === "pos") {
-                            window.location.href = "/frontdesk/orders/new";
-                            return;
-                          }
-                          setSelectedCapabilityId(item.id);
-                        }}
+                        onClick={() => setSelectedCapabilityId(item.id)}
                       >
                         <div className="fdActionHead">
                           <span className="kvLabel">{item.area}</span>
@@ -859,15 +1096,132 @@ export default function FrontdeskPortalPage() {
                         <div className="kvLabel">{t.capabilityDetailTitle}</div>
                         <p className="sub" style={{ marginTop: 6 }}>{selectedCapability.desc}</p>
                       </div>
-                      {selectedCapability.id === "entry" ? (
-                        <a className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 12, display: "inline-flex" }} href="/frontdesk/checkin">
-                          {t.openCheckinPage}
-                        </a>
-                      ) : null}
-                      {selectedCapability.id === "pos" ? (
-                        <a className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 12, display: "inline-flex" }} href="/frontdesk/orders/new">
-                          {t.openPosPage}
-                        </a>
+                      {selectedCapability.id === "locker" ? (
+                        <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10 }}>
+                          <h4 className="sectionTitle" style={{ margin: 0 }}>{t.lockerTitle}</h4>
+                          <p className="fdGlassText" style={{ marginTop: 6 }}>{t.lockerSub}</p>
+                          {lockerError ? <div className="error" style={{ marginTop: 8 }}>{lockerError}</div> : null}
+                          {lockerMessage ? <p className="sub" style={{ marginTop: 8, color: "var(--brand)" }}>{lockerMessage}</p> : null}
+
+                          <form onSubmit={handleCreateLockerRental} style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                            <input
+                              className="input"
+                              value={lockerCode}
+                              onChange={(event) => setLockerCode(event.target.value)}
+                              placeholder={t.lockerCodeLabel}
+                              disabled={lockerSubmitting}
+                            />
+                            <input
+                              className="input"
+                              value={lockerMemberId}
+                              onChange={(event) => setLockerMemberId(event.target.value)}
+                              placeholder={t.lockerMemberIdLabel}
+                              disabled={lockerSubmitting}
+                            />
+                            <input
+                              className="input"
+                              value={lockerRenterName}
+                              onChange={(event) => setLockerRenterName(event.target.value)}
+                              placeholder={t.lockerRenterLabel}
+                              disabled={lockerSubmitting}
+                            />
+                            <input
+                              className="input"
+                              value={lockerPhone}
+                              onChange={(event) => setLockerPhone(event.target.value)}
+                              placeholder={t.lockerPhoneLabel}
+                              disabled={lockerSubmitting}
+                            />
+                            <div className="fdTwoCol" style={{ marginTop: 0, gap: 8 }}>
+                              <input
+                                className="input"
+                                inputMode="decimal"
+                                value={lockerDeposit}
+                                onChange={(event) => setLockerDeposit(event.target.value)}
+                                placeholder={t.lockerDepositLabel}
+                                disabled={lockerSubmitting}
+                              />
+                              <input
+                                className="input"
+                                type="datetime-local"
+                                value={lockerDueAt}
+                                onChange={(event) => setLockerDueAt(event.target.value)}
+                                aria-label={t.lockerDueAtLabel}
+                                disabled={lockerSubmitting}
+                              />
+                            </div>
+                            <textarea
+                              className="input"
+                              rows={2}
+                              value={lockerNote}
+                              onChange={(event) => setLockerNote(event.target.value)}
+                              placeholder={t.lockerNoteLabel}
+                              disabled={lockerSubmitting}
+                            />
+                            <div className="actions" style={{ marginTop: 0 }}>
+                              <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={lockerSubmitting}>
+                                {lockerSubmitting ? t.lockerRentingAction : t.lockerRentAction}
+                              </button>
+                              <button type="button" className="fdPillBtn" onClick={() => void loadLockerRentals()} disabled={lockerLoading || lockerSubmitting}>
+                                {t.lockerReload}
+                              </button>
+                            </div>
+                          </form>
+
+                          <div className="fdTwoCol" style={{ marginTop: 10, gap: 8 }}>
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{t.lockerActiveList}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {lockerActiveItems.map((item) => (
+                                  <div key={item.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                                      <strong>{item.lockerCode}</strong>
+                                      <span className="fdChip">{t.lockerStatusActive}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>
+                                      {item.renterName || item.phone || item.memberId || "-"}
+                                    </p>
+                                    <p className="sub" style={{ marginTop: 4 }}>
+                                      {fmtDateTime(item.rentedAt)}
+                                      {item.dueAt ? ` | ${fmtDateTime(item.dueAt)}` : ""}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      className="fdPillBtn"
+                                      style={{ marginTop: 8 }}
+                                      onClick={() => void handleReturnLockerRental(item.id)}
+                                      disabled={lockerSubmitting}
+                                    >
+                                      {lockerSubmitting ? t.lockerReturningAction : t.lockerReturnAction}
+                                    </button>
+                                  </div>
+                                ))}
+                                {!lockerLoading && lockerActiveItems.length === 0 ? <p className="fdGlassText">{t.lockerNoneActive}</p> : null}
+                              </div>
+                            </div>
+
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{t.lockerRecentList}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {lockerRecentReturnedItems.map((item) => (
+                                  <div key={item.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                                      <strong>{item.lockerCode}</strong>
+                                      <span className="fdChip">{t.lockerStatusReturned}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>
+                                      {item.renterName || item.phone || item.memberId || "-"}
+                                    </p>
+                                    <p className="sub" style={{ marginTop: 4 }}>
+                                      {item.returnedAt ? fmtDateTime(item.returnedAt) : fmtDateTime(item.rentedAt)}
+                                    </p>
+                                  </div>
+                                ))}
+                                {!lockerLoading && lockerRecentReturnedItems.length === 0 ? <p className="fdGlassText">{t.lockerNoneRecent}</p> : null}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       ) : null}
                     </div>
                   ) : null}
