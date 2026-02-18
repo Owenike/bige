@@ -1065,6 +1065,62 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   grid-template-columns: 1fr;
   gap: 10px;
 }
+.fdLockerPanel{
+  border-color: rgba(186,200,222,.72);
+  background: linear-gradient(180deg, rgba(248,251,255,.96), rgba(244,248,255,.92));
+}
+.fdLockerSummary{
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.fdLockerSummaryItem{
+  padding: 10px;
+  border-radius: 12px;
+}
+.fdLockerSummaryValue{
+  display: block;
+  margin-top: 6px;
+  font-size: 20px;
+  color: #1f2a3d;
+}
+.fdLockerForm{
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+.fdLockerGrid2{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.fdLockerField{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fdLockerDueHint{
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.62);
+}
+.fdLockerNote{
+  resize: none;
+}
+.fdLockerActions{
+  margin-top: 2px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.fdLockerListGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
 .fdActionCard{
   padding: 16px;
   color: var(--fd-ink);
@@ -1160,6 +1216,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .fdActionGrid{ grid-template-columns: 1fr; }
   .fdCapabilityGrid{ grid-template-columns: 1fr; }
   .fdDataGrid{ grid-template-columns: 1fr; }
+  .fdLockerSummary{ grid-template-columns: 1fr; }
+  .fdLockerGrid2{ grid-template-columns: 1fr; }
+  .fdLockerListGrid{ grid-template-columns: 1fr; }
   .fdModalLayout{
     grid-template-columns: 1fr;
   }

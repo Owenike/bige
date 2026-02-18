@@ -560,6 +560,14 @@ export default function FrontdeskPortalPage() {
     () => lockerRentals.filter((item) => item.status === "returned").slice(0, 8),
     [lockerRentals],
   );
+  const lockerHeldDepositTotal = useMemo(
+    () => lockerActiveItems.reduce((sum, item) => sum + Number(item.depositAmount || 0), 0),
+    [lockerActiveItems],
+  );
+  const lockerReturnedDepositTotal = useMemo(
+    () => lockerRecentReturnedItems.reduce((sum, item) => sum + Number(item.depositAmount || 0), 0),
+    [lockerRecentReturnedItems],
+  );
 
   const handleOpenShift = useCallback(async () => {
     const openingCashAmount = parseAmount(openingCash);
@@ -1183,87 +1191,126 @@ export default function FrontdeskPortalPage() {
                         <p className="sub" style={{ marginTop: 6 }}>{selectedCapability.desc}</p>
                       </div>
                       {selectedCapability.id === "locker" ? (
-                        <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10 }}>
+                        <div className="fdGlassSubPanel fdLockerPanel" style={{ marginTop: 12, padding: 10 }}>
                           <h4 className="sectionTitle" style={{ margin: 0 }}>{t.lockerTitle}</h4>
                           <p className="fdGlassText" style={{ marginTop: 6 }}>{t.lockerSub}</p>
                           {lockerError ? <div className="error" style={{ marginTop: 8 }}>{lockerError}</div> : null}
                           {lockerMessage ? <p className="sub" style={{ marginTop: 8, color: "var(--brand)" }}>{lockerMessage}</p> : null}
 
-                          <form onSubmit={handleCreateLockerRental} style={{ display: "grid", gap: 8, marginTop: 10 }}>
-                            <input
-                              className="input"
-                              value={lockerCode}
-                              onChange={(event) => setLockerCode(event.target.value)}
-                              placeholder={t.lockerCodeLabel}
-                              disabled={lockerSubmitting}
-                            />
-                            <input
-                              className="input"
-                              value={lockerMemberId}
-                              onChange={(event) => setLockerMemberId(event.target.value)}
-                              placeholder={t.lockerMemberIdLabel}
-                              disabled={lockerSubmitting}
-                            />
-                            <input
-                              className="input"
-                              value={lockerRenterName}
-                              onChange={(event) => setLockerRenterName(event.target.value)}
-                              placeholder={t.lockerRenterLabel}
-                              disabled={lockerSubmitting}
-                            />
-                            <input
-                              className="input"
-                              value={lockerPhone}
-                              onChange={(event) => setLockerPhone(event.target.value)}
-                              placeholder={t.lockerPhoneLabel}
-                              disabled={lockerSubmitting}
-                            />
-                            <div className="fdTwoCol" style={{ marginTop: 0, gap: 8 }}>
-                              <input
-                                className="input"
-                                inputMode="decimal"
-                                value={lockerDeposit}
-                                onChange={(event) => setLockerDeposit(event.target.value)}
-                                placeholder={t.lockerDepositLabel}
-                                disabled={lockerSubmitting}
-                              />
-                              <select
-                                className="input"
-                                value={lockerRentalTerm}
-                                onChange={(event) => setLockerRentalTerm(event.target.value as LockerRentalTerm)}
-                                aria-label={t.lockerRentalTermLabel}
-                                disabled={lockerSubmitting}
-                              >
-                                <option value="daily">{t.lockerTermDaily}</option>
-                                <option value="monthly">{t.lockerTermMonthly}</option>
-                                <option value="half_year">{t.lockerTermHalfYear}</option>
-                                <option value="yearly">{t.lockerTermYearly}</option>
-                                <option value="custom">{t.lockerTermCustom}</option>
-                              </select>
+                          <div className="fdLockerSummary">
+                            <div className="fdGlassSubPanel fdLockerSummaryItem">
+                              <div className="kvLabel">{t.lockerDepositHeld}</div>
+                              <strong className="fdLockerSummaryValue">NT${lockerHeldDepositTotal}</strong>
+                            </div>
+                            <div className="fdGlassSubPanel fdLockerSummaryItem">
+                              <div className="kvLabel">{t.lockerDepositReturned}</div>
+                              <strong className="fdLockerSummaryValue">NT${lockerReturnedDepositTotal}</strong>
+                            </div>
+                          </div>
+
+                          <form onSubmit={handleCreateLockerRental} className="fdLockerForm">
+                            <div className="fdLockerGrid2">
+                              <label className="fdLockerField">
+                                <span className="kvLabel">{t.lockerCodeLabel}</span>
+                                <input
+                                  className="input"
+                                  value={lockerCode}
+                                  onChange={(event) => setLockerCode(event.target.value)}
+                                  placeholder={t.lockerCodeLabel}
+                                  disabled={lockerSubmitting}
+                                />
+                              </label>
+                              <label className="fdLockerField">
+                                <span className="kvLabel">{t.lockerMemberIdLabel}</span>
+                                <input
+                                  className="input"
+                                  value={lockerMemberId}
+                                  onChange={(event) => setLockerMemberId(event.target.value)}
+                                  placeholder={t.lockerMemberIdLabel}
+                                  disabled={lockerSubmitting}
+                                />
+                              </label>
+                            </div>
+                            <div className="fdLockerGrid2">
+                              <label className="fdLockerField">
+                                <span className="kvLabel">{t.lockerRenterLabel}</span>
+                                <input
+                                  className="input"
+                                  value={lockerRenterName}
+                                  onChange={(event) => setLockerRenterName(event.target.value)}
+                                  placeholder={t.lockerRenterLabel}
+                                  disabled={lockerSubmitting}
+                                />
+                              </label>
+                              <label className="fdLockerField">
+                                <span className="kvLabel">{t.lockerPhoneLabel}</span>
+                                <input
+                                  className="input"
+                                  value={lockerPhone}
+                                  onChange={(event) => setLockerPhone(event.target.value)}
+                                  placeholder={t.lockerPhoneLabel}
+                                  disabled={lockerSubmitting}
+                                />
+                              </label>
+                            </div>
+                            <div className="fdLockerGrid2">
+                              <label className="fdLockerField">
+                                <span className="kvLabel">{t.lockerDepositLabel}</span>
+                                <input
+                                  className="input"
+                                  inputMode="decimal"
+                                  value={lockerDeposit}
+                                  onChange={(event) => setLockerDeposit(event.target.value)}
+                                  placeholder={t.lockerDepositLabel}
+                                  disabled={lockerSubmitting}
+                                />
+                              </label>
+                              <label className="fdLockerField">
+                                <span className="kvLabel">{t.lockerRentalTermLabel}</span>
+                                <select
+                                  className="input"
+                                  value={lockerRentalTerm}
+                                  onChange={(event) => setLockerRentalTerm(event.target.value as LockerRentalTerm)}
+                                  aria-label={t.lockerRentalTermLabel}
+                                  disabled={lockerSubmitting}
+                                >
+                                  <option value="daily">{t.lockerTermDaily}</option>
+                                  <option value="monthly">{t.lockerTermMonthly}</option>
+                                  <option value="half_year">{t.lockerTermHalfYear}</option>
+                                  <option value="yearly">{t.lockerTermYearly}</option>
+                                  <option value="custom">{t.lockerTermCustom}</option>
+                                </select>
+                              </label>
                             </div>
                             {lockerRentalTerm === "custom" ? (
-                              <input
-                                className="input"
-                                type="datetime-local"
-                                value={lockerDueAt}
-                                onChange={(event) => setLockerDueAt(event.target.value)}
-                                aria-label={t.lockerDueAtLabel}
-                                disabled={lockerSubmitting}
-                              />
+                              <label className="fdLockerField">
+                                <span className="kvLabel">{t.lockerDueAtLabel}</span>
+                                <input
+                                  className="input"
+                                  type="datetime-local"
+                                  value={lockerDueAt}
+                                  onChange={(event) => setLockerDueAt(event.target.value)}
+                                  aria-label={t.lockerDueAtLabel}
+                                  disabled={lockerSubmitting}
+                                />
+                              </label>
                             ) : lockerAutoDueAt ? (
-                              <p className="sub" style={{ marginTop: 0 }}>
+                              <p className="sub fdLockerDueHint">
                                 {t.lockerDueAutoHint} {fmtDateTime(lockerAutoDueAt)}
                               </p>
                             ) : null}
-                            <textarea
-                              className="input"
-                              rows={2}
-                              value={lockerNote}
-                              onChange={(event) => setLockerNote(event.target.value)}
-                              placeholder={t.lockerNoteLabel}
-                              disabled={lockerSubmitting}
-                            />
-                            <div className="actions" style={{ marginTop: 0 }}>
+                            <label className="fdLockerField">
+                              <span className="kvLabel">{t.lockerNoteLabel}</span>
+                              <textarea
+                                className="input fdLockerNote"
+                                rows={2}
+                                value={lockerNote}
+                                onChange={(event) => setLockerNote(event.target.value)}
+                                placeholder={t.lockerNoteLabel}
+                                disabled={lockerSubmitting}
+                              />
+                            </label>
+                            <div className="fdLockerActions">
                               <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={lockerSubmitting}>
                                 {lockerSubmitting ? t.lockerRentingAction : t.lockerRentAction}
                               </button>
@@ -1273,7 +1320,7 @@ export default function FrontdeskPortalPage() {
                             </div>
                           </form>
 
-                          <div className="fdTwoCol" style={{ marginTop: 10, gap: 8 }}>
+                          <div className="fdLockerListGrid">
                             <div className="fdGlassSubPanel" style={{ padding: 10 }}>
                               <div className="kvLabel">{t.lockerActiveList}</div>
                               <div className="fdListStack" style={{ marginTop: 8 }}>
