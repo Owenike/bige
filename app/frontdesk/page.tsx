@@ -414,6 +414,10 @@ export default function FrontdeskPortalPage() {
             openCheckinPage: "開啟入場作業頁",
             openMemberPage: "開啟會員作業頁",
             openPosPage: "開啟收銀作業頁",
+            posModuleTitle: "收銀作業",
+            posModuleSub: "快速建立訂單、記錄付款，並處理待收款訂單。",
+            posPendingTitle: "待收款訂單",
+            posNoPending: "目前沒有待收款訂單。",
             lockerTitle: "置物櫃租借作業",
             lockerSub: "現場快速登記租借與歸還，並保留操作紀錄。",
             lockerCodeLabel: "置物櫃編號",
@@ -594,6 +598,10 @@ export default function FrontdeskPortalPage() {
             openCheckinPage: "Open Check-in Workspace",
             openMemberPage: "Open Member Workspace",
             openPosPage: "Open POS Workspace",
+            posModuleTitle: "POS Workspace",
+            posModuleSub: "Quickly create orders, capture payments, and process unpaid orders.",
+            posPendingTitle: "Pending Payments",
+            posNoPending: "No unpaid orders right now.",
             lockerTitle: "Locker Rental Desk",
             lockerSub: "Register locker rent/return quickly with audit trail.",
             lockerCodeLabel: "Locker Code",
@@ -1604,6 +1612,50 @@ export default function FrontdeskPortalPage() {
                         <div className="kvLabel">{t.capabilityDetailTitle}</div>
                         <p className="sub" style={{ marginTop: 6 }}>{selectedCapability.desc}</p>
                       </div>
+                      {selectedCapability.id === "pos" ? (
+                        <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10 }}>
+                          <h4 className="sectionTitle" style={{ margin: 0 }}>{t.posModuleTitle}</h4>
+                          <p className="fdGlassText" style={{ marginTop: 6 }}>{t.posModuleSub}</p>
+                          <div className="fdPillActions" style={{ marginTop: 10 }}>
+                            <a
+                              className="fdPillBtn fdPillBtnPrimary"
+                              href="/frontdesk/orders/new"
+                              style={actionsDisabled ? { opacity: 0.7, pointerEvents: "none" } : undefined}
+                              aria-disabled={actionsDisabled}
+                              onClick={(event) => {
+                                if (actionsDisabled) event.preventDefault();
+                              }}
+                            >
+                              {t.openPosPage}
+                            </a>
+                          </div>
+                          <div className="kvLabel" style={{ marginTop: 8 }}>{t.posPendingTitle}</div>
+                          <div className="fdListStack" style={{ marginTop: 8 }}>
+                            {unpaidOrderList.slice(0, 4).map((item) => (
+                              <div key={item.id} className="card" style={{ padding: 10 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                  <strong>{item.id.slice(0, 8)}</strong>
+                                  <span className="fdChip">{item.status}</span>
+                                </div>
+                                <p className="sub" style={{ marginTop: 4 }}>NT${item.amount}</p>
+                                <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
+                                <a
+                                  className="fdPillBtn"
+                                  style={actionsDisabled ? { marginTop: 8, display: "inline-flex", opacity: 0.7, pointerEvents: "none" } : { marginTop: 8, display: "inline-flex" }}
+                                  href={`/frontdesk/orders/new?orderId=${encodeURIComponent(item.id)}`}
+                                  aria-disabled={actionsDisabled}
+                                  onClick={(event) => {
+                                    if (actionsDisabled) event.preventDefault();
+                                  }}
+                                >
+                                  {t.collectAction}
+                                </a>
+                              </div>
+                            ))}
+                            {!loading && unpaidOrderList.length === 0 ? <p className="fdGlassText">{t.posNoPending}</p> : null}
+                          </div>
+                        </div>
+                      ) : null}
                       {selectedCapability.id === "locker" ? (
                         <div className="fdGlassSubPanel fdLockerPanel" style={{ marginTop: 12, padding: 10 }}>
                           <h4 className="sectionTitle" style={{ margin: 0 }}>{t.lockerTitle}</h4>
