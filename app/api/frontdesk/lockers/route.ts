@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireOpenShift, requireProfile } from "../../../../lib/auth-context";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const LOCKER_RENTAL_TERMS = ["daily", "monthly", "half_year", "yearly", "custom"] as const;
+type LockerRentalTerm = (typeof LOCKER_RENTAL_TERMS)[number];
 
 function parseAmount(input: unknown) {
   const n = Number(input);
@@ -20,6 +22,39 @@ function parseIso(input: unknown) {
   return date.toISOString();
 }
 
+function parseRentalTerm(input: unknown): LockerRentalTerm | null {
+  if (typeof input !== "string") return "daily";
+  const term = input.trim();
+  if ((LOCKER_RENTAL_TERMS as readonly string[]).includes(term)) return term as LockerRentalTerm;
+  return null;
+}
+
+function addMonths(base: Date, months: number) {
+  const date = new Date(base);
+  const dayOfMonth = date.getDate();
+  date.setMonth(date.getMonth() + months);
+  if (date.getDate() < dayOfMonth) {
+    date.setDate(0);
+  }
+  return date;
+}
+
+function calcDueAtByTerm(term: LockerRentalTerm) {
+  const now = new Date();
+  if (term === "daily") {
+    return new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  }
+  if (term === "monthly") return addMonths(now, 1).toISOString();
+  if (term === "half_year") return addMonths(now, 6).toISOString();
+  if (term === "yearly") return addMonths(now, 12).toISOString();
+  return null;
+}
+
+function isLockerTableMissing(message: string) {
+  return message.includes('relation "frontdesk_locker_rentals" does not exist')
+    || message.includes("Could not find the table 'public.frontdesk_locker_rentals' in the schema cache");
+}
+
 function rowToItem(row: any) {
   return {
     id: String(row.id),
@@ -30,6 +65,7 @@ function rowToItem(row: any) {
     depositAmount: Number(row.deposit_amount ?? 0),
     note: row.note ? String(row.note) : "",
     status: String(row.status || "active"),
+    rentalTerm: String(row.rental_term || "daily"),
     rentedAt: row.rented_at,
     dueAt: row.due_at,
     returnedAt: row.returned_at,
@@ -49,7 +85,7 @@ export async function GET(request: Request) {
 
   const list = await auth.supabase
     .from("frontdesk_locker_rentals")
-    .select("id, locker_code, member_id, renter_name, phone, deposit_amount, note, status, rented_at, due_at, returned_at")
+    .select("id, locker_code, member_id, renter_name, phone, deposit_amount, note, status, rental_term, rented_at, due_at, returned_at")
     .eq("tenant_id", auth.context.tenantId)
     .eq("branch_id", auth.context.branchId)
     .order("status", { ascending: true })
@@ -57,7 +93,7 @@ export async function GET(request: Request) {
     .limit(100);
 
   if (list.error) {
-    if (list.error.message.includes('relation "frontdesk_locker_rentals" does not exist')) {
+    if (isLockerTableMissing(list.error.message)) {
       return NextResponse.json({ error: "lockers table missing. Apply migrations first." }, { status: 501 });
     }
     return NextResponse.json({ error: list.error.message }, { status: 500 });
@@ -106,11 +142,11 @@ export async function POST(request: Request) {
       .eq("branch_id", auth.context.branchId)
       .eq("id", rentalId)
       .eq("status", "active")
-      .select("id, locker_code, member_id, renter_name, phone, deposit_amount, note, status, rented_at, due_at, returned_at")
+      .select("id, locker_code, member_id, renter_name, phone, deposit_amount, note, status, rental_term, rented_at, due_at, returned_at")
       .maybeSingle();
 
     if (updateResult.error) {
-      if (updateResult.error.message.includes('relation "frontdesk_locker_rentals" does not exist')) {
+      if (isLockerTableMissing(updateResult.error.message)) {
         return NextResponse.json({ error: "lockers table missing. Apply migrations first." }, { status: 501 });
       }
       return NextResponse.json({ error: updateResult.error.message }, { status: 500 });
@@ -139,7 +175,9 @@ export async function POST(request: Request) {
   const renterName = typeof body?.renterName === "string" ? body.renterName.trim() : "";
   const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
   const depositAmount = parseAmount(body?.depositAmount ?? 0);
-  const dueAt = parseIso(body?.dueAt);
+  const rentalTerm = parseRentalTerm(body?.rentalTerm);
+  const explicitDueAt = parseIso(body?.dueAt);
+  const dueAt = rentalTerm === "custom" ? explicitDueAt : (rentalTerm ? calcDueAtByTerm(rentalTerm) : null);
   const note = typeof body?.note === "string" ? body.note.trim() : "";
 
   if (!lockerCode) {
@@ -157,7 +195,13 @@ export async function POST(request: Request) {
   if (!Number.isFinite(depositAmount) || depositAmount < 0) {
     return NextResponse.json({ error: "Invalid depositAmount" }, { status: 400 });
   }
-  if (typeof body?.dueAt === "string" && body.dueAt.trim() && !dueAt) {
+  if (!rentalTerm) {
+    return NextResponse.json({ error: "Invalid rentalTerm" }, { status: 400 });
+  }
+  if (rentalTerm === "custom" && !dueAt) {
+    return NextResponse.json({ error: "dueAt is required for custom rentalTerm" }, { status: 400 });
+  }
+  if (typeof body?.dueAt === "string" && body.dueAt.trim() && !explicitDueAt) {
     return NextResponse.json({ error: "Invalid dueAt" }, { status: 400 });
   }
 
@@ -171,7 +215,7 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (existingActive.error) {
-    if (existingActive.error.message.includes('relation "frontdesk_locker_rentals" does not exist')) {
+    if (isLockerTableMissing(existingActive.error.message)) {
       return NextResponse.json({ error: "lockers table missing. Apply migrations first." }, { status: 501 });
     }
     return NextResponse.json({ error: existingActive.error.message }, { status: 500 });
@@ -193,15 +237,16 @@ export async function POST(request: Request) {
       deposit_amount: depositAmount,
       note: note || null,
       status: "active",
+      rental_term: rentalTerm,
       rented_by: auth.context.userId,
       due_at: dueAt,
       updated_at: updatedAt,
     })
-    .select("id, locker_code, member_id, renter_name, phone, deposit_amount, note, status, rented_at, due_at, returned_at")
+    .select("id, locker_code, member_id, renter_name, phone, deposit_amount, note, status, rental_term, rented_at, due_at, returned_at")
     .maybeSingle();
 
   if (insertResult.error) {
-    if (insertResult.error.message.includes('relation "frontdesk_locker_rentals" does not exist')) {
+    if (isLockerTableMissing(insertResult.error.message)) {
       return NextResponse.json({ error: "lockers table missing. Apply migrations first." }, { status: 501 });
     }
     return NextResponse.json({ error: insertResult.error.message }, { status: 500 });
@@ -220,6 +265,7 @@ export async function POST(request: Request) {
       renterName: renterName || null,
       phone: phone || null,
       depositAmount,
+      rentalTerm,
       dueAt,
     },
   });

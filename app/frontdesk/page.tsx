@@ -50,10 +50,13 @@ type LockerRentalItem = {
   depositAmount: number;
   note: string;
   status: "active" | "returned" | "cancelled" | string;
+  rentalTerm: "daily" | "monthly" | "half_year" | "yearly" | "custom" | string;
   rentedAt: string;
   dueAt: string | null;
   returnedAt: string | null;
 };
+
+type LockerRentalTerm = "daily" | "monthly" | "half_year" | "yearly" | "custom";
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -96,6 +99,25 @@ function parseDateTimeInput(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toISOString();
+}
+
+function addMonths(base: Date, months: number) {
+  const date = new Date(base);
+  const dayOfMonth = date.getDate();
+  date.setMonth(date.getMonth() + months);
+  if (date.getDate() < dayOfMonth) {
+    date.setDate(0);
+  }
+  return date;
+}
+
+function calcLockerDueAtByTerm(term: LockerRentalTerm) {
+  const now = new Date();
+  if (term === "daily") return new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  if (term === "monthly") return addMonths(now, 1).toISOString();
+  if (term === "half_year") return addMonths(now, 6).toISOString();
+  if (term === "yearly") return addMonths(now, 12).toISOString();
+  return null;
 }
 
 function playNotificationTone() {
@@ -160,6 +182,7 @@ export default function FrontdeskPortalPage() {
   const [lockerRenterName, setLockerRenterName] = useState("");
   const [lockerPhone, setLockerPhone] = useState("");
   const [lockerDeposit, setLockerDeposit] = useState("0");
+  const [lockerRentalTerm, setLockerRentalTerm] = useState<LockerRentalTerm>("daily");
   const [lockerDueAt, setLockerDueAt] = useState("");
   const [lockerNote, setLockerNote] = useState("");
 
@@ -350,7 +373,14 @@ export default function FrontdeskPortalPage() {
             lockerRenterLabel: "租借人",
             lockerPhoneLabel: "電話（選填）",
             lockerDepositLabel: "押金",
+            lockerRentalTermLabel: "租借方案",
+            lockerTermDaily: "當日租借",
+            lockerTermMonthly: "單月租借",
+            lockerTermHalfYear: "半年租借",
+            lockerTermYearly: "一年租借",
+            lockerTermCustom: "自訂到期",
             lockerDueAtLabel: "到期時間（選填）",
+            lockerDueAutoHint: "系統自動計算到期：",
             lockerNoteLabel: "備註（選填）",
             lockerRentAction: "登記租借",
             lockerRentingAction: "登記中...",
@@ -368,12 +398,14 @@ export default function FrontdeskPortalPage() {
             lockerMemberIdInvalid: "會員 ID 格式錯誤",
             lockerDepositInvalid: "押金格式錯誤，請輸入數字",
             lockerDueAtInvalid: "到期時間格式錯誤",
+            lockerDueAtRequired: "選擇自訂到期時，請填寫到期時間",
             lockerLoadFail: "載入置物櫃資料失敗",
             lockerRentFail: "租借登記失敗",
             lockerReturnFail: "歸還登記失敗",
             lockerInUse: "此置物櫃目前使用中",
             lockerStatusActive: "使用中",
             lockerStatusReturned: "已歸還",
+            lockerTermTag: "租期",
             close: "關閉",
             cancel: "取消",
             openShiftFail: "開班失敗",
@@ -457,7 +489,14 @@ export default function FrontdeskPortalPage() {
             lockerRenterLabel: "Renter Name",
             lockerPhoneLabel: "Phone (optional)",
             lockerDepositLabel: "Deposit",
+            lockerRentalTermLabel: "Rental Term",
+            lockerTermDaily: "Daily",
+            lockerTermMonthly: "Monthly",
+            lockerTermHalfYear: "Half-Year",
+            lockerTermYearly: "Yearly",
+            lockerTermCustom: "Custom Due",
             lockerDueAtLabel: "Due At (optional)",
+            lockerDueAutoHint: "Auto due time:",
             lockerNoteLabel: "Note (optional)",
             lockerRentAction: "Rent Locker",
             lockerRentingAction: "Saving...",
@@ -475,12 +514,14 @@ export default function FrontdeskPortalPage() {
             lockerMemberIdInvalid: "Invalid memberId format",
             lockerDepositInvalid: "Invalid deposit amount",
             lockerDueAtInvalid: "Invalid dueAt format",
+            lockerDueAtRequired: "dueAt is required for custom rental term",
             lockerLoadFail: "Load locker data failed",
             lockerRentFail: "Create locker rental failed",
             lockerReturnFail: "Return locker failed",
             lockerInUse: "Locker is already in use",
             lockerStatusActive: "Active",
             lockerStatusReturned: "Returned",
+            lockerTermTag: "Term",
             close: "Close",
             cancel: "Cancel",
             openShiftFail: "Open shift failed",
@@ -613,7 +654,7 @@ export default function FrontdeskPortalPage() {
     const normalizedRenter = lockerRenterName.trim();
     const normalizedPhone = lockerPhone.trim();
     const depositAmount = parseAmount(lockerDeposit);
-    const dueAt = parseDateTimeInput(lockerDueAt);
+    const dueAt = lockerRentalTerm === "custom" ? parseDateTimeInput(lockerDueAt) : calcLockerDueAtByTerm(lockerRentalTerm);
 
     if (!normalizedLockerCode) {
       setLockerError(t.lockerCodeRequired);
@@ -635,7 +676,12 @@ export default function FrontdeskPortalPage() {
       setLockerMessage(null);
       return;
     }
-    if (lockerDueAt.trim() && !dueAt) {
+    if (lockerRentalTerm === "custom" && !lockerDueAt.trim()) {
+      setLockerError(t.lockerDueAtRequired);
+      setLockerMessage(null);
+      return;
+    }
+    if (lockerRentalTerm === "custom" && lockerDueAt.trim() && !dueAt) {
       setLockerError(t.lockerDueAtInvalid);
       setLockerMessage(null);
       return;
@@ -655,6 +701,7 @@ export default function FrontdeskPortalPage() {
           renterName: normalizedRenter || null,
           phone: normalizedPhone || null,
           depositAmount,
+          rentalTerm: lockerRentalTerm,
           dueAt,
           note: lockerNote.trim() || null,
         }),
@@ -670,6 +717,7 @@ export default function FrontdeskPortalPage() {
       setLockerRenterName("");
       setLockerPhone("");
       setLockerDeposit("0");
+      setLockerRentalTerm("daily");
       setLockerDueAt("");
       setLockerNote("");
       setLockerMessage(t.lockerRentSuccess);
@@ -687,10 +735,12 @@ export default function FrontdeskPortalPage() {
     lockerMemberId,
     lockerNote,
     lockerPhone,
+    lockerRentalTerm,
     lockerRenterName,
     t.lockerCodeRequired,
     t.lockerDepositInvalid,
     t.lockerDueAtInvalid,
+    t.lockerDueAtRequired,
     t.lockerIdentifierRequired,
     t.lockerInUse,
     t.lockerMemberIdInvalid,
@@ -781,6 +831,12 @@ export default function FrontdeskPortalPage() {
     void loadLockerRentals();
   }, [capabilityOpen, loadLockerRentals, modalType, selectedCapabilityId]);
 
+  useEffect(() => {
+    if (lockerRentalTerm !== "custom" && lockerDueAt) {
+      setLockerDueAt("");
+    }
+  }, [lockerDueAt, lockerRentalTerm]);
+
   function statusLabel(status: CapabilityStatus) {
     if (status === "ready") return t.ready;
     if (status === "building") return t.building;
@@ -796,6 +852,19 @@ export default function FrontdeskPortalPage() {
     }
     return { background: "rgba(255,255,255,.62)", borderColor: "rgba(164,176,194,.44)", color: "rgba(71,83,102,.86)" };
   }
+
+  function lockerTermLabel(term: string) {
+    if (term === "daily") return t.lockerTermDaily;
+    if (term === "monthly") return t.lockerTermMonthly;
+    if (term === "half_year") return t.lockerTermHalfYear;
+    if (term === "yearly") return t.lockerTermYearly;
+    return t.lockerTermCustom;
+  }
+
+  const lockerAutoDueAt = useMemo(
+    () => (lockerRentalTerm === "custom" ? null : calcLockerDueAtByTerm(lockerRentalTerm)),
+    [lockerRentalTerm],
+  );
 
   return (
     <main ref={sceneRef} className={`fdGlassScene ${capabilityOpen ? "fdSceneBlurred" : ""}`}>
@@ -1141,6 +1210,21 @@ export default function FrontdeskPortalPage() {
                                 placeholder={t.lockerDepositLabel}
                                 disabled={lockerSubmitting}
                               />
+                              <select
+                                className="input"
+                                value={lockerRentalTerm}
+                                onChange={(event) => setLockerRentalTerm(event.target.value as LockerRentalTerm)}
+                                aria-label={t.lockerRentalTermLabel}
+                                disabled={lockerSubmitting}
+                              >
+                                <option value="daily">{t.lockerTermDaily}</option>
+                                <option value="monthly">{t.lockerTermMonthly}</option>
+                                <option value="half_year">{t.lockerTermHalfYear}</option>
+                                <option value="yearly">{t.lockerTermYearly}</option>
+                                <option value="custom">{t.lockerTermCustom}</option>
+                              </select>
+                            </div>
+                            {lockerRentalTerm === "custom" ? (
                               <input
                                 className="input"
                                 type="datetime-local"
@@ -1149,7 +1233,11 @@ export default function FrontdeskPortalPage() {
                                 aria-label={t.lockerDueAtLabel}
                                 disabled={lockerSubmitting}
                               />
-                            </div>
+                            ) : lockerAutoDueAt ? (
+                              <p className="sub" style={{ marginTop: 0 }}>
+                                {t.lockerDueAutoHint} {fmtDateTime(lockerAutoDueAt)}
+                              </p>
+                            ) : null}
                             <textarea
                               className="input"
                               rows={2}
@@ -1182,6 +1270,9 @@ export default function FrontdeskPortalPage() {
                                       {item.renterName || item.phone || item.memberId || "-"}
                                     </p>
                                     <p className="sub" style={{ marginTop: 4 }}>
+                                      {t.lockerTermTag}: {lockerTermLabel(item.rentalTerm)}
+                                    </p>
+                                    <p className="sub" style={{ marginTop: 4 }}>
                                       {fmtDateTime(item.rentedAt)}
                                       {item.dueAt ? ` | ${fmtDateTime(item.dueAt)}` : ""}
                                     </p>
@@ -1211,6 +1302,9 @@ export default function FrontdeskPortalPage() {
                                     </div>
                                     <p className="sub" style={{ marginTop: 4 }}>
                                       {item.renterName || item.phone || item.memberId || "-"}
+                                    </p>
+                                    <p className="sub" style={{ marginTop: 4 }}>
+                                      {t.lockerTermTag}: {lockerTermLabel(item.rentalTerm)}
                                     </p>
                                     <p className="sub" style={{ marginTop: 4 }}>
                                       {item.returnedAt ? fmtDateTime(item.returnedAt) : fmtDateTime(item.rentedAt)}
