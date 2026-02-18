@@ -984,9 +984,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   display: grid;
   grid-template-columns: minmax(380px, 460px) minmax(420px, 1fr);
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
+  grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 .fdModalList{
   display: grid;
@@ -1002,7 +1004,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdModalDetail{
   padding: 12px;
   min-height: 0;
+  height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-gutter: stable;
 }
 .fdModalHead{
