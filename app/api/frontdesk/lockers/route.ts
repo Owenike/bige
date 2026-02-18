@@ -4,6 +4,7 @@ import { requireOpenShift, requireProfile } from "../../../../lib/auth-context";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LOCKER_RENTAL_TERMS = ["daily", "monthly", "half_year", "yearly", "custom"] as const;
 type LockerRentalTerm = (typeof LOCKER_RENTAL_TERMS)[number];
+const MEMBER_CODE_RE = /^\d{1,4}$/;
 
 function parseAmount(input: unknown) {
   const n = Number(input);
@@ -29,6 +30,11 @@ function parseRentalTerm(input: unknown): LockerRentalTerm | null {
   return null;
 }
 
+function normalizeMemberCode(input: unknown) {
+  if (typeof input !== "string") return "";
+  return input.trim();
+}
+
 function addMonths(base: Date, months: number) {
   const date = new Date(base);
   const dayOfMonth = date.getDate();
@@ -52,7 +58,9 @@ function calcDueAtByTerm(term: LockerRentalTerm) {
 
 function isLockerTableMissing(message: string) {
   return message.includes('relation "frontdesk_locker_rentals" does not exist')
-    || message.includes("Could not find the table 'public.frontdesk_locker_rentals' in the schema cache");
+    || message.includes("Could not find the table 'public.frontdesk_locker_rentals' in the schema cache")
+    || message.includes('column frontdesk_locker_rentals.member_code does not exist')
+    || message.includes('column frontdesk_locker_rentals.rental_term does not exist');
 }
 
 function rowToItem(row: any) {
@@ -60,6 +68,7 @@ function rowToItem(row: any) {
     id: String(row.id),
     lockerCode: String(row.locker_code || ""),
     memberId: row.member_id ? String(row.member_id) : null,
+    memberCode: row.member_code ? String(row.member_code) : "",
     renterName: row.renter_name ? String(row.renter_name) : "",
     phone: row.phone ? String(row.phone) : "",
     depositAmount: Number(row.deposit_amount ?? 0),
@@ -85,7 +94,7 @@ export async function GET(request: Request) {
 
   const list = await auth.supabase
     .from("frontdesk_locker_rentals")
-    .select("id, locker_code, member_id, renter_name, phone, deposit_amount, note, status, rental_term, rented_at, due_at, returned_at")
+    .select("id, locker_code, member_id, member_code, renter_name, phone, deposit_amount, note, status, rental_term, rented_at, due_at, returned_at")
     .eq("tenant_id", auth.context.tenantId)
     .eq("branch_id", auth.context.branchId)
     .order("status", { ascending: true })
@@ -142,7 +151,7 @@ export async function POST(request: Request) {
       .eq("branch_id", auth.context.branchId)
       .eq("id", rentalId)
       .eq("status", "active")
-      .select("id, locker_code, member_id, renter_name, phone, deposit_amount, note, status, rental_term, rented_at, due_at, returned_at")
+      .select("id, locker_code, member_id, member_code, renter_name, phone, deposit_amount, note, status, rental_term, rented_at, due_at, returned_at")
       .maybeSingle();
 
     if (updateResult.error) {
@@ -171,7 +180,7 @@ export async function POST(request: Request) {
   }
 
   const lockerCode = normalizeLockerCode(body?.lockerCode);
-  const memberId = typeof body?.memberId === "string" ? body.memberId.trim() : "";
+  const memberCodeInput = normalizeMemberCode(body?.memberId);
   const renterName = typeof body?.renterName === "string" ? body.renterName.trim() : "";
   const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
   const depositAmount = parseAmount(body?.depositAmount ?? 0);
@@ -186,10 +195,16 @@ export async function POST(request: Request) {
   if (lockerCode.length > 32) {
     return NextResponse.json({ error: "lockerCode too long" }, { status: 400 });
   }
-  if (memberId && !UUID_RE.test(memberId)) {
-    return NextResponse.json({ error: "Invalid memberId" }, { status: 400 });
+  if (memberCodeInput) {
+    if (!MEMBER_CODE_RE.test(memberCodeInput)) {
+      return NextResponse.json({ error: "Invalid memberId format. Use 1-9999." }, { status: 400 });
+    }
+    const memberCodeNum = Number(memberCodeInput);
+    if (!Number.isInteger(memberCodeNum) || memberCodeNum < 1 || memberCodeNum > 9999) {
+      return NextResponse.json({ error: "Invalid memberId format. Use 1-9999." }, { status: 400 });
+    }
   }
-  if (!memberId && !renterName && !phone) {
+  if (!memberCodeInput && !renterName && !phone) {
     return NextResponse.json({ error: "memberId, renterName, or phone is required" }, { status: 400 });
   }
   if (!Number.isFinite(depositAmount) || depositAmount < 0) {
@@ -203,6 +218,30 @@ export async function POST(request: Request) {
   }
   if (typeof body?.dueAt === "string" && body.dueAt.trim() && !explicitDueAt) {
     return NextResponse.json({ error: "Invalid dueAt" }, { status: 400 });
+  }
+
+  let memberId: string | null = null;
+  let memberCode: string | null = null;
+  if (memberCodeInput) {
+    const normalizedCode = String(Number(memberCodeInput));
+    const candidates = Array.from(new Set([memberCodeInput, normalizedCode]));
+    const memberResult = await auth.supabase
+      .from("members")
+      .select("id, member_code")
+      .eq("tenant_id", auth.context.tenantId)
+      .in("member_code", candidates)
+      .limit(1)
+      .maybeSingle();
+
+    if (memberResult.error) {
+      return NextResponse.json({ error: memberResult.error.message }, { status: 500 });
+    }
+    if (!memberResult.data || !memberResult.data.id) {
+      return NextResponse.json({ error: "Member not found by memberId" }, { status: 404 });
+    }
+
+    memberId = String(memberResult.data.id);
+    memberCode = memberResult.data.member_code ? String(memberResult.data.member_code) : normalizedCode;
   }
 
   const existingActive = await auth.supabase
@@ -232,6 +271,7 @@ export async function POST(request: Request) {
       branch_id: auth.context.branchId,
       locker_code: lockerCode,
       member_id: memberId || null,
+      member_code: memberCode || null,
       renter_name: renterName || null,
       phone: phone || null,
       deposit_amount: depositAmount,
@@ -242,7 +282,7 @@ export async function POST(request: Request) {
       due_at: dueAt,
       updated_at: updatedAt,
     })
-    .select("id, locker_code, member_id, renter_name, phone, deposit_amount, note, status, rental_term, rented_at, due_at, returned_at")
+    .select("id, locker_code, member_id, member_code, renter_name, phone, deposit_amount, note, status, rental_term, rented_at, due_at, returned_at")
     .maybeSingle();
 
   if (insertResult.error) {
@@ -262,6 +302,7 @@ export async function POST(request: Request) {
     payload: {
       lockerCode,
       memberId: memberId || null,
+      memberCode: memberCode || null,
       renterName: renterName || null,
       phone: phone || null,
       depositAmount,

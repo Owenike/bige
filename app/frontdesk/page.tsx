@@ -45,6 +45,7 @@ type LockerRentalItem = {
   id: string;
   lockerCode: string;
   memberId: string | null;
+  memberCode: string;
   renterName: string;
   phone: string;
   depositAmount: number;
@@ -58,8 +59,10 @@ type LockerRentalItem = {
 
 type LockerRentalTerm = "daily" | "monthly" | "half_year" | "yearly" | "custom";
 
-function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+function isMemberCode(value: string) {
+  if (!/^\d{1,4}$/.test(value)) return false;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= 9999;
 }
 
 function isSameLocalDay(iso: string, now: Date) {
@@ -369,7 +372,7 @@ export default function FrontdeskPortalPage() {
             lockerTitle: "置物櫃租借作業",
             lockerSub: "現場快速登記租借與歸還，並保留操作紀錄。",
             lockerCodeLabel: "置物櫃編號",
-            lockerMemberIdLabel: "會員 ID（選填）",
+            lockerMemberIdLabel: "會員 ID（1~9999，選填）",
             lockerRenterLabel: "租借人",
             lockerPhoneLabel: "電話（選填）",
             lockerDepositLabel: "押金",
@@ -395,7 +398,8 @@ export default function FrontdeskPortalPage() {
             lockerReturnSuccess: "已完成歸還登記",
             lockerCodeRequired: "請輸入置物櫃編號",
             lockerIdentifierRequired: "請至少填寫會員 ID、租借人或電話其中一項",
-            lockerMemberIdInvalid: "會員 ID 格式錯誤",
+            lockerMemberIdInvalid: "會員 ID 格式錯誤，請輸入 1~9999",
+            lockerMemberNotFound: "找不到此會員編號",
             lockerDepositInvalid: "押金格式錯誤，請輸入數字",
             lockerDueAtInvalid: "到期時間格式錯誤",
             lockerDueAtRequired: "選擇自訂到期時，請填寫到期時間",
@@ -485,7 +489,7 @@ export default function FrontdeskPortalPage() {
             lockerTitle: "Locker Rental Desk",
             lockerSub: "Register locker rent/return quickly with audit trail.",
             lockerCodeLabel: "Locker Code",
-            lockerMemberIdLabel: "Member ID (optional)",
+            lockerMemberIdLabel: "Member ID (1-9999, optional)",
             lockerRenterLabel: "Renter Name",
             lockerPhoneLabel: "Phone (optional)",
             lockerDepositLabel: "Deposit",
@@ -511,7 +515,8 @@ export default function FrontdeskPortalPage() {
             lockerReturnSuccess: "Locker return recorded",
             lockerCodeRequired: "lockerCode is required",
             lockerIdentifierRequired: "Provide memberId, renter name, or phone",
-            lockerMemberIdInvalid: "Invalid memberId format",
+            lockerMemberIdInvalid: "Invalid memberId format. Use 1-9999.",
+            lockerMemberNotFound: "Member not found by memberId",
             lockerDepositInvalid: "Invalid deposit amount",
             lockerDueAtInvalid: "Invalid dueAt format",
             lockerDueAtRequired: "dueAt is required for custom rental term",
@@ -661,7 +666,7 @@ export default function FrontdeskPortalPage() {
       setLockerMessage(null);
       return;
     }
-    if (normalizedMemberId && !isUuid(normalizedMemberId)) {
+    if (normalizedMemberId && !isMemberCode(normalizedMemberId)) {
       setLockerError(t.lockerMemberIdInvalid);
       setLockerMessage(null);
       return;
@@ -708,6 +713,7 @@ export default function FrontdeskPortalPage() {
       });
       const payload = await res.json();
       if (!res.ok) {
+        if (res.status === 404) throw new Error(payload?.error || t.lockerMemberNotFound);
         if (res.status === 409) throw new Error(payload?.error || t.lockerInUse);
         throw new Error(payload?.error || t.lockerRentFail);
       }
@@ -744,6 +750,7 @@ export default function FrontdeskPortalPage() {
     t.lockerIdentifierRequired,
     t.lockerInUse,
     t.lockerMemberIdInvalid,
+    t.lockerMemberNotFound,
     t.lockerRentFail,
     t.lockerRentSuccess,
   ]);
@@ -1267,7 +1274,7 @@ export default function FrontdeskPortalPage() {
                                       <span className="fdChip">{t.lockerStatusActive}</span>
                                     </div>
                                     <p className="sub" style={{ marginTop: 4 }}>
-                                      {item.renterName || item.phone || item.memberId || "-"}
+                                      {item.renterName || item.phone || (item.memberCode ? `#${item.memberCode}` : item.memberId) || "-"}
                                     </p>
                                     <p className="sub" style={{ marginTop: 4 }}>
                                       {t.lockerTermTag}: {lockerTermLabel(item.rentalTerm)}
@@ -1301,7 +1308,7 @@ export default function FrontdeskPortalPage() {
                                       <span className="fdChip">{t.lockerStatusReturned}</span>
                                     </div>
                                     <p className="sub" style={{ marginTop: 4 }}>
-                                      {item.renterName || item.phone || item.memberId || "-"}
+                                      {item.renterName || item.phone || (item.memberCode ? `#${item.memberCode}` : item.memberId) || "-"}
                                     </p>
                                     <p className="sub" style={{ marginTop: 4 }}>
                                       {t.lockerTermTag}: {lockerTermLabel(item.rentalTerm)}
