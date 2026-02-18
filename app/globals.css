@@ -1121,6 +1121,85 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 8px;
   margin-top: 10px;
 }
+.fdInventoryPanel{
+  margin-top: 12px;
+  border-color: #d8e1ee;
+  background: #f8fbff;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.96),
+    0 10px 22px rgba(46, 64, 96, .10);
+}
+.fdInventorySummary{
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.fdInventorySummaryItem{
+  padding: 10px;
+  border-radius: 12px;
+  border-color: #dce5f2 !important;
+  background: #ffffff !important;
+  box-shadow: 0 6px 14px rgba(46, 64, 96, .08) !important;
+}
+.fdInventorySummaryValue{
+  display: block;
+  margin-top: 6px;
+  font-size: 20px;
+  color: #1f2a3d;
+}
+.fdInventoryFormGrid{
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.fdInventoryFormBlock{
+  padding: 10px;
+  border-color: #dce5f2 !important;
+  background: #ffffff !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 6px 14px rgba(46, 64, 96, .08) !important;
+}
+.fdInventoryField{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.fdInventoryGrid2{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.fdInventoryActions{
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.fdInventoryListGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.fdInventoryCardActions{
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+.fdInventoryPanel .input{
+  background: #ffffff;
+  border-color: #ccd7e8;
+}
+.fdInventoryPanel .input:focus{
+  border-color: #9fc2ef;
+  box-shadow: 0 0 0 3px rgba(178, 210, 246, .38);
+}
 .fdModal:not(.fdModalFeature) .fdLockerPanel{
   border-color: #d8e1ee;
   background: #f8fbff;
@@ -1256,6 +1335,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .fdLockerSummary{ grid-template-columns: 1fr; }
   .fdLockerGrid2{ grid-template-columns: 1fr; }
   .fdLockerListGrid{ grid-template-columns: 1fr; }
+  .fdInventorySummary{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fdInventoryFormGrid{ grid-template-columns: 1fr; }
+  .fdInventoryGrid2{ grid-template-columns: 1fr; }
+  .fdInventoryListGrid{ grid-template-columns: 1fr; }
   .fdModalLayout{
     grid-template-columns: 1fr;
   }

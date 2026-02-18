@@ -59,6 +59,26 @@ type LockerRentalItem = {
 
 type LockerRentalTerm = "daily" | "monthly" | "half_year" | "yearly" | "custom";
 
+type InventoryProductItem = {
+  code: string;
+  title: string;
+  unitPrice: number;
+  unitQuantity: number;
+  onHand: number;
+  safetyStock: number;
+  isLowStock: boolean;
+};
+
+type InventoryMoveItem = {
+  id: string;
+  productCode: string;
+  delta: number;
+  reason: string;
+  note: string;
+  orderId: string | null;
+  createdAt: string;
+};
+
 function isMemberCode(value: string) {
   if (!/^\d{1,4}$/.test(value)) return false;
   const n = Number(value);
@@ -188,6 +208,20 @@ export default function FrontdeskPortalPage() {
   const [lockerRentalTerm, setLockerRentalTerm] = useState<LockerRentalTerm>("daily");
   const [lockerDueAt, setLockerDueAt] = useState("");
   const [lockerNote, setLockerNote] = useState("");
+  const [inventoryItems, setInventoryItems] = useState<InventoryProductItem[]>([]);
+  const [inventoryMoves, setInventoryMoves] = useState<InventoryMoveItem[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventorySubmitting, setInventorySubmitting] = useState(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+  const [inventoryMessage, setInventoryMessage] = useState<string | null>(null);
+  const [saleProductCode, setSaleProductCode] = useState("");
+  const [saleQty, setSaleQty] = useState("1");
+  const [saleMemberCode, setSaleMemberCode] = useState("");
+  const [salePaymentMethod, setSalePaymentMethod] = useState("cash");
+  const [saleNote, setSaleNote] = useState("");
+  const [adjustProductCode, setAdjustProductCode] = useState("");
+  const [adjustDelta, setAdjustDelta] = useState("1");
+  const [adjustNote, setAdjustNote] = useState("");
 
   const openCapabilityModal = useCallback((id: string, type: FrontdeskModalType = "capability") => {
     setModalType(type);
@@ -350,6 +384,11 @@ export default function FrontdeskPortalPage() {
             emptyUpcoming: "目前沒有即將到店預約。",
             collectAction: "去收款",
             bookingAction: "看預約",
+            cash: "現金",
+            card: "刷卡",
+            transfer: "轉帳",
+            newebpay: "藍新",
+            manual: "手動",
             overdue: "逾時",
             minutes: "分鐘",
             dueSoon: "即將開始",
@@ -415,6 +454,42 @@ export default function FrontdeskPortalPage() {
             lockerRentedAt: "租借時間",
             lockerReturnedAt: "歸還時間",
             lockerTermTag: "租期",
+            inventoryTitle: "商品 / 庫存 / 銷售",
+            inventorySub: "在櫃檯直接完成商品銷售入帳與庫存調整。",
+            inventorySummarySkus: "上架品項",
+            inventorySummaryLow: "低庫存",
+            inventorySummaryOnHand: "總庫存",
+            inventorySummarySold: "今日售出",
+            inventorySalesSection: "銷售入帳",
+            inventoryAdjustSection: "庫存調整",
+            inventoryProductLabel: "商品",
+            inventoryQtyLabel: "數量",
+            inventoryMemberCodeLabel: "會員編號（1~9999，選填）",
+            inventoryPaymentMethodLabel: "收款方式",
+            inventoryAdjustDeltaLabel: "庫存變動（+補貨 / -盤損）",
+            inventoryNoteLabel: "備註（選填）",
+            inventorySaleAction: "送出銷售",
+            inventorySellingAction: "銷售入帳中...",
+            inventoryAdjustAction: "送出調整",
+            inventoryAdjustingAction: "調整中...",
+            inventoryReloadAction: "重新整理",
+            inventoryProductsList: "商品庫存",
+            inventoryMovesList: "最近異動",
+            inventoryNoProducts: "目前沒有可販售商品。",
+            inventoryNoMoves: "目前沒有庫存異動紀錄。",
+            inventoryOnHandTag: "庫存",
+            inventoryLowTag: "低庫存",
+            inventorySaleSuccess: "商品銷售已入帳",
+            inventoryAdjustSuccess: "庫存調整完成",
+            inventoryLoadFail: "載入商品庫存失敗",
+            inventorySaleFail: "銷售入帳失敗",
+            inventoryAdjustFail: "庫存調整失敗",
+            inventoryProductRequired: "請先選擇商品",
+            inventoryQtyInvalid: "數量格式錯誤",
+            inventoryDeltaInvalid: "庫存變動格式錯誤",
+            inventoryMoveSale: "銷售",
+            inventoryMoveAdjust: "調整",
+            inventoryMoveRestock: "補貨",
             close: "關閉",
             cancel: "取消",
             openShiftFail: "開班失敗",
@@ -472,6 +547,11 @@ export default function FrontdeskPortalPage() {
             emptyUpcoming: "No upcoming bookings.",
             collectAction: "Collect",
             bookingAction: "View",
+            cash: "cash",
+            card: "card",
+            transfer: "transfer",
+            newebpay: "newebpay",
+            manual: "manual",
             overdue: "Overdue",
             minutes: "min",
             dueSoon: "Starting Soon",
@@ -537,6 +617,42 @@ export default function FrontdeskPortalPage() {
             lockerRentedAt: "Rented At",
             lockerReturnedAt: "Returned At",
             lockerTermTag: "Term",
+            inventoryTitle: "Product / Inventory / Sales",
+            inventorySub: "Complete product sales and stock adjustments directly at frontdesk.",
+            inventorySummarySkus: "SKUs",
+            inventorySummaryLow: "Low Stock",
+            inventorySummaryOnHand: "Total On Hand",
+            inventorySummarySold: "Sold Today",
+            inventorySalesSection: "Sales Entry",
+            inventoryAdjustSection: "Stock Adjustment",
+            inventoryProductLabel: "Product",
+            inventoryQtyLabel: "Quantity",
+            inventoryMemberCodeLabel: "Member Code (1-9999, optional)",
+            inventoryPaymentMethodLabel: "Payment Method",
+            inventoryAdjustDeltaLabel: "Stock Delta (+restock / -shrink)",
+            inventoryNoteLabel: "Note (optional)",
+            inventorySaleAction: "Submit Sale",
+            inventorySellingAction: "Posting Sale...",
+            inventoryAdjustAction: "Submit Adjustment",
+            inventoryAdjustingAction: "Adjusting...",
+            inventoryReloadAction: "Reload",
+            inventoryProductsList: "Product Inventory",
+            inventoryMovesList: "Recent Movements",
+            inventoryNoProducts: "No sellable products found.",
+            inventoryNoMoves: "No inventory movement yet.",
+            inventoryOnHandTag: "On Hand",
+            inventoryLowTag: "Low Stock",
+            inventorySaleSuccess: "Product sale posted",
+            inventoryAdjustSuccess: "Inventory adjusted",
+            inventoryLoadFail: "Load inventory failed",
+            inventorySaleFail: "Product sale failed",
+            inventoryAdjustFail: "Inventory adjustment failed",
+            inventoryProductRequired: "Please select product",
+            inventoryQtyInvalid: "Invalid quantity format",
+            inventoryDeltaInvalid: "Invalid stock delta format",
+            inventoryMoveSale: "Sale",
+            inventoryMoveAdjust: "Adjustment",
+            inventoryMoveRestock: "Restock",
             close: "Close",
             cancel: "Cancel",
             openShiftFail: "Open shift failed",
@@ -568,6 +684,21 @@ export default function FrontdeskPortalPage() {
     () => lockerRecentReturnedItems.reduce((sum, item) => sum + Number(item.depositAmount || 0), 0),
     [lockerRecentReturnedItems],
   );
+  const inventorySkuCount = inventoryItems.length;
+  const inventoryLowStockCount = useMemo(
+    () => inventoryItems.filter((item) => item.isLowStock).length,
+    [inventoryItems],
+  );
+  const inventoryTotalOnHand = useMemo(
+    () => inventoryItems.reduce((sum, item) => sum + Number(item.onHand || 0), 0),
+    [inventoryItems],
+  );
+  const inventorySoldToday = useMemo(() => {
+    const now = new Date();
+    return inventoryMoves
+      .filter((item) => item.reason === "sale" && isSameLocalDay(item.createdAt, now))
+      .reduce((sum, item) => sum + Math.max(0, -Number(item.delta || 0)), 0);
+  }, [inventoryMoves]);
 
   const handleOpenShift = useCallback(async () => {
     const openingCashAmount = parseAmount(openingCash);
@@ -797,6 +928,132 @@ export default function FrontdeskPortalPage() {
     }
   }, [loadLockerRentals, t.lockerReturnFail, t.lockerReturnSuccess]);
 
+  const loadInventoryModule = useCallback(async () => {
+    setInventoryLoading(true);
+    setInventoryError(null);
+    try {
+      const res = await fetch("/api/frontdesk/inventory");
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.inventoryLoadFail);
+      const nextItems = (payload.items || []) as InventoryProductItem[];
+      const nextMoves = (payload.moves || []) as InventoryMoveItem[];
+      setInventoryItems(nextItems);
+      setInventoryMoves(nextMoves);
+      if (nextItems.length > 0) {
+        setSaleProductCode((prev) => prev || nextItems[0].code);
+        setAdjustProductCode((prev) => prev || nextItems[0].code);
+      }
+    } catch (err) {
+      setInventoryError(err instanceof Error ? err.message : t.inventoryLoadFail);
+    } finally {
+      setInventoryLoading(false);
+    }
+  }, [t.inventoryLoadFail]);
+
+  const handleInventorySale = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!saleProductCode) {
+      setInventoryError(t.inventoryProductRequired);
+      setInventoryMessage(null);
+      return;
+    }
+    const quantity = Number(saleQty);
+    if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
+      setInventoryError(t.inventoryQtyInvalid);
+      setInventoryMessage(null);
+      return;
+    }
+
+    setInventorySubmitting(true);
+    setInventoryError(null);
+    setInventoryMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sale",
+          productCode: saleProductCode,
+          quantity,
+          memberCode: saleMemberCode.trim() || null,
+          paymentMethod: salePaymentMethod,
+          note: saleNote.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.inventorySaleFail);
+      setInventoryMessage(`${t.inventorySaleSuccess}: #${payload?.order?.id || "-"}`);
+      setSaleQty("1");
+      setSaleNote("");
+      await loadInventoryModule();
+    } catch (err) {
+      setInventoryError(err instanceof Error ? err.message : t.inventorySaleFail);
+    } finally {
+      setInventorySubmitting(false);
+    }
+  }, [
+    loadInventoryModule,
+    saleMemberCode,
+    saleNote,
+    salePaymentMethod,
+    saleProductCode,
+    saleQty,
+    t.inventoryProductRequired,
+    t.inventoryQtyInvalid,
+    t.inventorySaleFail,
+    t.inventorySaleSuccess,
+  ]);
+
+  const handleInventoryAdjust = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!adjustProductCode) {
+      setInventoryError(t.inventoryProductRequired);
+      setInventoryMessage(null);
+      return;
+    }
+    const delta = Number(adjustDelta);
+    if (!Number.isFinite(delta) || !Number.isInteger(delta) || delta === 0) {
+      setInventoryError(t.inventoryDeltaInvalid);
+      setInventoryMessage(null);
+      return;
+    }
+
+    setInventorySubmitting(true);
+    setInventoryError(null);
+    setInventoryMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "adjust",
+          productCode: adjustProductCode,
+          delta,
+          note: adjustNote.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.inventoryAdjustFail);
+      setInventoryMessage(`${t.inventoryAdjustSuccess}: ${adjustProductCode} (${delta > 0 ? "+" : ""}${delta})`);
+      setAdjustDelta("1");
+      setAdjustNote("");
+      await loadInventoryModule();
+    } catch (err) {
+      setInventoryError(err instanceof Error ? err.message : t.inventoryAdjustFail);
+    } finally {
+      setInventorySubmitting(false);
+    }
+  }, [
+    adjustDelta,
+    adjustNote,
+    adjustProductCode,
+    loadInventoryModule,
+    t.inventoryAdjustFail,
+    t.inventoryAdjustSuccess,
+    t.inventoryDeltaInvalid,
+    t.inventoryProductRequired,
+  ]);
+
   const capabilityCards = useMemo(
     (): CapabilityCard[] =>
       lang === "zh"
@@ -806,7 +1063,7 @@ export default function FrontdeskPortalPage() {
             { id: "pos", title: "C. 收銀 / POS / 發票", desc: "訂單收款、退費/作廢送審、結帳流程。", detail: "包含櫃檯收款、多付款方式、退費與作廢送審流程，並保留稽核軌跡。", area: "POS", status: "ready" },
             { id: "booking", title: "D. 預約 / 課務", desc: "建立即時預約與課務調整。", detail: "可建立、改期、取消課務預約，支援現場快速調整時段。", area: "BOOKING", status: "ready" },
             { id: "locker", title: "E. 置物櫃 / 租借", desc: "置物櫃租借登記、歸還與押金管理。", detail: "可直接登記租借與歸還，包含押金、到期時間與備註，並保留完整操作軌跡。", area: "LOCKER", status: "ready" },
-            { id: "inventory", title: "F. 商品 / 庫存 / 銷售", desc: "前台銷售與庫存追蹤。", detail: "建置中：商品銷售、庫存扣減、低庫存提醒與追溯。", area: "INVENTORY", status: "building" },
+            { id: "inventory", title: "F. 商品 / 庫存 / 銷售", desc: "前台銷售、庫存調整、低庫存提醒。", detail: "可直接在櫃檯完成商品銷售入帳、庫存扣減與補貨/盤損調整，並保留異動紀錄。", area: "INVENTORY", status: "ready" },
             { id: "cs", title: "G. 客服 / 事件紀錄", desc: "客訴與事件工單（含附件與追蹤）。", detail: "規劃中：客訴工單、現場事件與後續追蹤，支援附件紀錄。", area: "CS", status: "planned" },
             { id: "lead", title: "H. 線索 / 參觀導覽", desc: "Lead 建檔、轉會員、追蹤轉換。", detail: "規劃中：潛在客建檔、導覽排程與轉會員流程。", area: "LEAD", status: "planned" },
             { id: "chain", title: "I. 跨店規則", desc: "跨店可用範圍、停權/黑名單同步。", detail: "建置中：跨店入場規則、停權同步、可用店範圍控制。", area: "CHAIN", status: "building" },
@@ -819,7 +1076,7 @@ export default function FrontdeskPortalPage() {
             { id: "pos", title: "C. POS / Invoice", desc: "Order payment, refund/void approval flow.", detail: "Desk payment, multi-method checkout, and approved high-risk refund/void flow.", area: "POS", status: "ready" },
             { id: "booking", title: "D. Booking / Classes", desc: "Booking creation and class schedule handling.", detail: "Create, reschedule, and cancel class bookings from desk operations.", area: "BOOKING", status: "ready" },
             { id: "locker", title: "E. Locker / Rental", desc: "Locker rent/return with deposit handling.", detail: "Register rental and return with deposit, due time, and operation audit trail.", area: "LOCKER", status: "ready" },
-            { id: "inventory", title: "F. Product / Inventory", desc: "Frontdesk selling and inventory traceability.", detail: "Building: product checkout, stock movement, and low-stock warnings.", area: "INVENTORY", status: "building" },
+            { id: "inventory", title: "F. Product / Inventory", desc: "Desk sales, stock adjustments, low-stock alerts.", detail: "Complete product sales posting, stock deduction, restock/adjustment, and movement history in frontdesk.", area: "INVENTORY", status: "ready" },
             { id: "cs", title: "G. Service / Incidents", desc: "Complaint and on-site incident ticket handling.", detail: "Planned: complaint tickets and on-site incident records with attachments.", area: "CS", status: "planned" },
             { id: "lead", title: "H. Lead / Tours", desc: "Lead intake, visit scheduling, conversion.", detail: "Planned: lead management, visit schedule, and conversion tracking.", area: "LEAD", status: "planned" },
             { id: "chain", title: "I. Multi-Branch Rules", desc: "Cross-branch policy and blacklist sync.", detail: "Building: cross-branch entry policies and blacklist synchronization.", area: "CHAIN", status: "building" },
@@ -857,10 +1114,29 @@ export default function FrontdeskPortalPage() {
   }, [capabilityOpen, loadLockerRentals, modalType, selectedCapabilityId]);
 
   useEffect(() => {
+    if (!capabilityOpen || modalType !== "capability" || selectedCapabilityId !== "inventory") return;
+    void loadInventoryModule();
+  }, [capabilityOpen, loadInventoryModule, modalType, selectedCapabilityId]);
+
+  useEffect(() => {
     if (lockerRentalTerm !== "custom" && lockerDueAt) {
       setLockerDueAt("");
     }
   }, [lockerDueAt, lockerRentalTerm]);
+
+  useEffect(() => {
+    if (inventoryItems.length === 0) {
+      setSaleProductCode("");
+      setAdjustProductCode("");
+      return;
+    }
+    if (!saleProductCode || !inventoryItems.some((item) => item.code === saleProductCode)) {
+      setSaleProductCode(inventoryItems[0].code);
+    }
+    if (!adjustProductCode || !inventoryItems.some((item) => item.code === adjustProductCode)) {
+      setAdjustProductCode(inventoryItems[0].code);
+    }
+  }, [adjustProductCode, inventoryItems, saleProductCode]);
 
   function statusLabel(status: CapabilityStatus) {
     if (status === "ready") return t.ready;
@@ -884,6 +1160,12 @@ export default function FrontdeskPortalPage() {
     if (term === "half_year") return t.lockerTermHalfYear;
     if (term === "yearly") return t.lockerTermYearly;
     return t.lockerTermCustom;
+  }
+
+  function inventoryMoveReasonLabel(reason: string) {
+    if (reason === "sale") return t.inventoryMoveSale;
+    if (reason === "restock") return t.inventoryMoveRestock;
+    return t.inventoryMoveAdjust;
   }
 
   const lockerAutoDueAt = useMemo(
@@ -1385,6 +1667,206 @@ export default function FrontdeskPortalPage() {
                                   </div>
                                 ))}
                                 {!lockerLoading && lockerRecentReturnedItems.length === 0 ? <p className="fdGlassText">{t.lockerNoneRecent}</p> : null}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                      {selectedCapability.id === "inventory" ? (
+                        <div className="fdGlassSubPanel fdInventoryPanel" style={{ marginTop: 12, padding: 10 }}>
+                          <h4 className="sectionTitle" style={{ margin: 0 }}>{t.inventoryTitle}</h4>
+                          <p className="fdGlassText" style={{ marginTop: 6 }}>{t.inventorySub}</p>
+                          {inventoryError ? <div className="error" style={{ marginTop: 8 }}>{inventoryError}</div> : null}
+                          {inventoryMessage ? <p className="sub" style={{ marginTop: 8, color: "var(--brand)" }}>{inventoryMessage}</p> : null}
+
+                          <div className="fdInventorySummary">
+                            <div className="fdGlassSubPanel fdInventorySummaryItem">
+                              <div className="kvLabel">{t.inventorySummarySkus}</div>
+                              <strong className="fdInventorySummaryValue">{inventorySkuCount}</strong>
+                            </div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem">
+                              <div className="kvLabel">{t.inventorySummaryLow}</div>
+                              <strong className="fdInventorySummaryValue">{inventoryLowStockCount}</strong>
+                            </div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem">
+                              <div className="kvLabel">{t.inventorySummaryOnHand}</div>
+                              <strong className="fdInventorySummaryValue">{inventoryTotalOnHand}</strong>
+                            </div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem">
+                              <div className="kvLabel">{t.inventorySummarySold}</div>
+                              <strong className="fdInventorySummaryValue">{inventorySoldToday}</strong>
+                            </div>
+                          </div>
+
+                          <div className="fdInventoryFormGrid">
+                            <form onSubmit={handleInventorySale} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.inventorySalesSection}</h5>
+                              <div className="fdInventoryField">
+                                <span className="kvLabel">{t.inventoryProductLabel}</span>
+                                <select
+                                  className="input"
+                                  value={saleProductCode}
+                                  onChange={(event) => setSaleProductCode(event.target.value)}
+                                  disabled={inventorySubmitting}
+                                >
+                                  {inventoryItems.map((item) => (
+                                    <option key={item.code} value={item.code}>
+                                      {item.title} ({item.code}) | NT${item.unitPrice} | {t.inventoryOnHandTag}:{item.onHand}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.inventoryQtyLabel}</span>
+                                  <input
+                                    className="input"
+                                    inputMode="numeric"
+                                    value={saleQty}
+                                    onChange={(event) => setSaleQty(event.target.value)}
+                                    placeholder={t.inventoryQtyLabel}
+                                    disabled={inventorySubmitting}
+                                  />
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.inventoryMemberCodeLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={saleMemberCode}
+                                    onChange={(event) => setSaleMemberCode(event.target.value)}
+                                    placeholder={t.inventoryMemberCodeLabel}
+                                    disabled={inventorySubmitting}
+                                  />
+                                </label>
+                              </div>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.inventoryPaymentMethodLabel}</span>
+                                  <select
+                                    className="input"
+                                    value={salePaymentMethod}
+                                    onChange={(event) => setSalePaymentMethod(event.target.value)}
+                                    disabled={inventorySubmitting}
+                                  >
+                                    <option value="cash">{t.cash}</option>
+                                    <option value="card">{t.card}</option>
+                                    <option value="transfer">{t.transfer}</option>
+                                    <option value="manual">{t.manual}</option>
+                                    <option value="newebpay">{t.newebpay}</option>
+                                  </select>
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.inventoryNoteLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={saleNote}
+                                    onChange={(event) => setSaleNote(event.target.value)}
+                                    placeholder={t.inventoryNoteLabel}
+                                    disabled={inventorySubmitting}
+                                  />
+                                </label>
+                              </div>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={inventorySubmitting || inventoryItems.length === 0}>
+                                  {inventorySubmitting ? t.inventorySellingAction : t.inventorySaleAction}
+                                </button>
+                                <button type="button" className="fdPillBtn" onClick={() => void loadInventoryModule()} disabled={inventoryLoading || inventorySubmitting}>
+                                  {t.inventoryReloadAction}
+                                </button>
+                              </div>
+                            </form>
+
+                            <form onSubmit={handleInventoryAdjust} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.inventoryAdjustSection}</h5>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.inventoryProductLabel}</span>
+                                <select
+                                  className="input"
+                                  value={adjustProductCode}
+                                  onChange={(event) => setAdjustProductCode(event.target.value)}
+                                  disabled={inventorySubmitting}
+                                >
+                                  {inventoryItems.map((item) => (
+                                    <option key={item.code} value={item.code}>
+                                      {item.title} ({item.code}) | {t.inventoryOnHandTag}:{item.onHand}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.inventoryAdjustDeltaLabel}</span>
+                                <input
+                                  className="input"
+                                  value={adjustDelta}
+                                  onChange={(event) => setAdjustDelta(event.target.value)}
+                                  placeholder={t.inventoryAdjustDeltaLabel}
+                                  disabled={inventorySubmitting}
+                                />
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.inventoryNoteLabel}</span>
+                                <input
+                                  className="input"
+                                  value={adjustNote}
+                                  onChange={(event) => setAdjustNote(event.target.value)}
+                                  placeholder={t.inventoryNoteLabel}
+                                  disabled={inventorySubmitting}
+                                />
+                              </label>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={inventorySubmitting || inventoryItems.length === 0}>
+                                  {inventorySubmitting ? t.inventoryAdjustingAction : t.inventoryAdjustAction}
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+
+                          <div className="fdInventoryListGrid">
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{t.inventoryProductsList}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {inventoryItems.map((item) => (
+                                  <div key={item.code} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{item.title}</strong>
+                                      <span className="fdChip">{item.code}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>NT${item.unitPrice}</p>
+                                    <p className="sub" style={{ marginTop: 4 }}>{t.inventoryOnHandTag}: {item.onHand}</p>
+                                    <p className="sub" style={{ marginTop: 4 }}>
+                                      {item.isLowStock ? t.inventoryLowTag : "-"}
+                                    </p>
+                                    <div className="fdInventoryCardActions">
+                                      <button type="button" className="fdPillBtn" onClick={() => {
+                                        setSaleProductCode(item.code);
+                                        setAdjustProductCode(item.code);
+                                      }}>
+                                        {t.inventoryProductLabel}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                                {!inventoryLoading && inventoryItems.length === 0 ? <p className="fdGlassText">{t.inventoryNoProducts}</p> : null}
+                              </div>
+                            </div>
+
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{t.inventoryMovesList}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {inventoryMoves.map((item) => (
+                                  <div key={item.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{item.productCode}</strong>
+                                      <span className="fdChip">{inventoryMoveReasonLabel(item.reason)}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>
+                                      {item.delta > 0 ? `+${item.delta}` : item.delta}
+                                    </p>
+                                    <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.createdAt)}</p>
+                                    {item.note ? <p className="sub" style={{ marginTop: 4 }}>{item.note}</p> : null}
+                                  </div>
+                                ))}
+                                {!inventoryLoading && inventoryMoves.length === 0 ? <p className="fdGlassText">{t.inventoryNoMoves}</p> : null}
                               </div>
                             </div>
                           </div>
