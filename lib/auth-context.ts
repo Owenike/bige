@@ -19,6 +19,12 @@ interface ProfileRow {
   is_active: boolean;
 }
 
+interface OpenShiftRow {
+  id: string;
+  opened_at: string;
+  opened_by: string | null;
+}
+
 export function jsonError(status: number, error: string) {
   return NextResponse.json({ error }, { status });
 }
@@ -82,4 +88,41 @@ export async function requireProfile(allowedRoles?: AppRole[], request?: Request
   };
 
   return { ok: true as const, context, supabase };
+}
+
+export async function requireOpenShift(params: {
+  supabase: any;
+  context: ProfileContext;
+  enforceRoles?: AppRole[];
+}) {
+  const roles = params.enforceRoles ?? ["frontdesk"];
+  if (!roles.includes(params.context.role)) {
+    return { ok: true as const, shift: null };
+  }
+
+  if (!params.context.tenantId) {
+    return { ok: false as const, response: jsonError(400, "Missing tenant context") };
+  }
+  if (!params.context.branchId) {
+    return { ok: false as const, response: jsonError(400, "Missing branch context") };
+  }
+
+  const openShiftResult = await params.supabase
+    .from("frontdesk_shifts")
+    .select("id, opened_at, opened_by")
+    .eq("tenant_id", params.context.tenantId)
+    .eq("branch_id", params.context.branchId)
+    .eq("status", "open")
+    .order("opened_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (openShiftResult.error) {
+    return { ok: false as const, response: jsonError(500, openShiftResult.error.message) };
+  }
+  if (!openShiftResult.data) {
+    return { ok: false as const, response: jsonError(409, "Shift is not open") };
+  }
+
+  return { ok: true as const, shift: openShiftResult.data as OpenShiftRow };
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireProfile } from "../../../lib/auth-context";
+import { requireOpenShift, requireProfile } from "../../../lib/auth-context";
 import { fulfillOrderEntitlements } from "../../../lib/order-fulfillment";
 
 export async function GET(request: Request) {
@@ -23,6 +23,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await requireProfile(["manager", "frontdesk"], request);
   if (!auth.ok) return auth.response;
+
+  const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
+  if (!shiftGuard.ok) return shiftGuard.response;
 
   const body = await request.json().catch(() => null);
   const orderId = typeof body?.orderId === "string" ? body.orderId : "";

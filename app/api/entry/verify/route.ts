@@ -10,7 +10,7 @@ import { verifyEntryToken } from "../../../../lib/entry-token";
 import { ENTRY_SCHEMA } from "../../../../lib/entry-schema";
 import { openGate } from "../../../../lib/integrations/gate";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
-import { requireProfile } from "../../../../lib/auth-context";
+import { requireOpenShift, requireProfile } from "../../../../lib/auth-context";
 import { httpLogBase, logEvent } from "../../../../lib/observability";
 import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
 
@@ -141,6 +141,22 @@ export async function POST(request: Request) {
       durationMs: Date.now() - t0,
     });
     return auth.response;
+  }
+
+  const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
+  if (!shiftGuard.ok) {
+    logEvent("info", {
+      type: "http",
+      action: "entry_verify",
+      ...base,
+      userId: auth.context.userId,
+      tenantId: auth.context.tenantId,
+      status: shiftGuard.response.status,
+      durationMs: Date.now() - t0,
+      decision: "deny",
+      reason: "shift_not_open",
+    });
+    return shiftGuard.response;
   }
 
   // Generous limit: scanning should be fast, but still guarded against abuse.

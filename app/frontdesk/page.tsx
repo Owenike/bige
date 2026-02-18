@@ -21,6 +21,8 @@ type ShiftItem = {
   id: string;
   status: string;
   opened_at: string;
+  opened_by?: string | null;
+  opened_by_name?: string | null;
 };
 
 type BookingItem = {
@@ -260,6 +262,7 @@ export default function FrontdeskPortalPage() {
             openShiftDisabledHint: "工具列與常用操作已停用，請先開班。",
             loadingState: "載入中",
             openedAt: "開班時間",
+            shiftOperator: "當班人員",
             handoverAction: "交班",
             handoverModalTitle: "交班結算",
             handoverHint: "請確認三種收款總額，送出後班次將關閉。",
@@ -334,6 +337,7 @@ export default function FrontdeskPortalPage() {
             openShiftDisabledHint: "Toolbar and common actions are disabled until shift opens.",
             loadingState: "Loading",
             openedAt: "Opened At",
+            shiftOperator: "Operator",
             handoverAction: "Handover",
             handoverModalTitle: "Shift Handover",
             handoverHint: "Confirm all totals before submit. The shift will be closed.",
@@ -608,6 +612,9 @@ export default function FrontdeskPortalPage() {
                   <div style={{ display: "grid", justifyItems: "end", gap: 6, marginTop: 10 }}>
                     {activeShift?.opened_at ? (
                       <span className="fdChip">{t.openedAt}: {fmtDateTime(activeShift.opened_at)}</span>
+                    ) : null}
+                    {activeShift?.opened_by_name || activeShift?.opened_by ? (
+                      <span className="fdChip">{t.shiftOperator}: {activeShift.opened_by_name || activeShift.opened_by}</span>
                     ) : null}
                     <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => {
                       setModalType("handover");

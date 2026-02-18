@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireProfile } from "../../../lib/auth-context";
+import { requireOpenShift, requireProfile } from "../../../lib/auth-context";
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -23,6 +23,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await requireProfile(["manager", "frontdesk"], request);
   if (!auth.ok) return auth.response;
+
+  const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
+  if (!shiftGuard.ok) return shiftGuard.response;
 
   const body = await request.json().catch(() => null);
   const rawMemberId = typeof body?.memberId === "string" ? body.memberId.trim() : "";

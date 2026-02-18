@@ -13,14 +13,34 @@ export async function GET(request: Request) {
 
   const { data, error } = await auth.supabase
     .from("frontdesk_shifts")
-    .select("id, branch_id, opened_at, closed_at, status, cash_total, card_total, transfer_total, note")
+    .select("id, branch_id, opened_by, opened_at, closed_at, status, cash_total, card_total, transfer_total, note")
     .eq("tenant_id", auth.context.tenantId)
     .eq("branch_id", auth.context.branchId)
     .order("opened_at", { ascending: false })
     .limit(20);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: data ?? [] });
+
+  const shifts = (data ?? []) as Array<{ opened_by: string | null } & Record<string, unknown>>;
+  const openerIds = Array.from(new Set(shifts.map((item) => item.opened_by).filter((id): id is string => Boolean(id))));
+  const openerNameById = new Map<string, string>();
+  if (openerIds.length > 0) {
+    const profileResult = await auth.supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", openerIds);
+    if (profileResult.error) return NextResponse.json({ error: profileResult.error.message }, { status: 500 });
+    for (const row of (profileResult.data ?? []) as Array<{ id: string; display_name: string | null }>) {
+      openerNameById.set(row.id, row.display_name || row.id);
+    }
+  }
+
+  return NextResponse.json({
+    items: shifts.map((item) => ({
+      ...item,
+      opened_by_name: item.opened_by ? (openerNameById.get(item.opened_by) ?? item.opened_by) : null,
+    })),
+  });
 }
 
 export async function POST(request: Request) {

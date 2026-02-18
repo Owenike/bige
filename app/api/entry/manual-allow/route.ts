@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { requireProfile } from "../../../../lib/auth-context";
+import { requireOpenShift, requireProfile } from "../../../../lib/auth-context";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +43,9 @@ function jsonError(status: number, error: string) {
 export async function POST(request: Request) {
   const auth = await requireProfile(["frontdesk", "manager"], request);
   if (!auth.ok) return auth.response;
+
+  const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
+  if (!shiftGuard.ok) return shiftGuard.response;
 
   const body = await request.json().catch(() => null);
   const memberId = typeof body?.memberId === "string" ? body.memberId : "";
@@ -275,4 +278,3 @@ export async function POST(request: Request) {
     },
   });
 }
-

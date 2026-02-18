@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../lib/auth-context";
+import { requireOpenShift, requireProfile } from "../../../../lib/auth-context";
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireProfile(["manager", "frontdesk", "coach"], request);
   if (!auth.ok) return auth.response;
+
+  const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
+  if (!shiftGuard.ok) return shiftGuard.response;
 
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
