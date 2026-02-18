@@ -100,7 +100,7 @@ export default function FrontdeskPortalPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [shiftState, setShiftState] = useState<"open" | "closed">("closed");
+  const [shiftState, setShiftState] = useState<"open" | "closed" | "unknown">("unknown");
   const [activeShift, setActiveShift] = useState<ShiftItem | null>(null);
   const [shiftActionError, setShiftActionError] = useState<string | null>(null);
   const [pendingItems, setPendingItems] = useState(0);
@@ -244,7 +244,7 @@ export default function FrontdeskPortalPage() {
             secondary: "會員查詢 / 建立",
             statusTitle: "今日班次",
             statusOpen: "班次狀態",
-            statusOpenValue: shiftState === "open" ? "進行中" : "未開班",
+            statusOpenValue: shiftState === "open" ? "進行中" : shiftState === "closed" ? "未開班" : "載入中",
             statusTasks: "待處理",
             statusTasksValue: `${pendingItems} 項`,
             statusTip: "先完成入場與收款，再執行交班結算。",
@@ -258,6 +258,7 @@ export default function FrontdeskPortalPage() {
             startingShiftAction: "開班中...",
             openShiftFirst: "請先開班",
             openShiftDisabledHint: "工具列與常用操作已停用，請先開班。",
+            loadingState: "載入中",
             openedAt: "開班時間",
             handoverAction: "交班",
             handoverModalTitle: "交班結算",
@@ -317,7 +318,7 @@ export default function FrontdeskPortalPage() {
             secondary: "Member Search / Create",
             statusTitle: "Today Shift",
             statusOpen: "Shift State",
-            statusOpenValue: shiftState === "open" ? "Open" : "Closed",
+            statusOpenValue: shiftState === "open" ? "Open" : shiftState === "closed" ? "Closed" : "Loading",
             statusTasks: "Pending",
             statusTasksValue: `${pendingItems} items`,
             statusTip: "Finish check-ins and payments first, then run shift handover.",
@@ -331,6 +332,7 @@ export default function FrontdeskPortalPage() {
             startingShiftAction: "Opening...",
             openShiftFirst: "Please open shift first",
             openShiftDisabledHint: "Toolbar and common actions are disabled until shift opens.",
+            loadingState: "Loading",
             openedAt: "Opened At",
             handoverAction: "Handover",
             handoverModalTitle: "Shift Handover",
@@ -385,8 +387,9 @@ export default function FrontdeskPortalPage() {
     [lang, pendingItems, shiftState],
   );
 
+  const shiftResolved = shiftState !== "unknown";
   const shiftOpen = shiftState === "open";
-  const actionsDisabled = !shiftOpen;
+  const actionsDisabled = !shiftResolved || !shiftOpen;
   const isFeatureModal = modalType === "entry" || modalType === "member";
 
   const handleOpenShift = useCallback(async () => {
@@ -554,10 +557,18 @@ export default function FrontdeskPortalPage() {
         <div className="fdGlassTop">
           <article className="fdGlassPanel">
             <div className="fdChipRow">
-              <span className={`fdChip ${shiftOpen ? "" : "fdChipActive"}`}>{t.modeClosed}</span>
-              <span className={`fdChip ${shiftOpen ? "fdChipActive" : ""}`}>{t.modeOpen}</span>
+              <span className={`fdChip ${shiftState === "closed" ? "fdChipActive" : ""}`}>{t.modeClosed}</span>
+              <span className={`fdChip ${shiftState === "open" ? "fdChipActive" : ""}`}>{t.modeOpen}</span>
+              {!shiftResolved ? <span className="fdChip fdChipActive">{t.loadingState}</span> : null}
             </div>
-            {!shiftOpen ? (
+            {!shiftResolved ? (
+              <>
+                <h2 className="fdGlassTitle" style={{ marginTop: 16 }}>
+                  {lang === "zh" ? "櫃檯作業" : "Frontdesk Ops"}
+                </h2>
+                <p className="fdGlassText">{t.loadingState}...</p>
+              </>
+            ) : !shiftOpen ? (
               <>
                 <h2 className="fdGlassTitle" style={{ marginTop: 16 }}>{t.startShiftTitle}</h2>
                 <p className="fdGlassText">{t.openShiftDisabledHint}</p>
@@ -633,7 +644,9 @@ export default function FrontdeskPortalPage() {
               <span className="fdChip">{t.statusTasks}</span>
             </div>
             <h2 className="fdGlassTitle">{t.opsTitle}</h2>
-            {shiftOpen ? (
+            {!shiftResolved ? (
+              <p className="fdGlassText" style={{ marginTop: 10 }}>{t.loadingState}...</p>
+            ) : shiftOpen ? (
               <>
                 <div className="fdMetricLine">
                   <span className="fdMetricLabel">{t.statusOpen}</span>
@@ -671,11 +684,11 @@ export default function FrontdeskPortalPage() {
           >
             {t.capabilityOpenBtn}
           </button>
-          {actionsDisabled ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.openShiftFirst}</p> : null}
+          {shiftResolved && actionsDisabled ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.openShiftFirst}</p> : null}
         </section>
 
         <section className="fdTwoCol" style={{ marginTop: 14 }}>
-          {actionsDisabled ? (
+          {shiftResolved && actionsDisabled ? (
             <p className="fdGlassText" style={{ gridColumn: "1 / -1", marginTop: 0 }}>
               {t.openShiftFirst}
             </p>
