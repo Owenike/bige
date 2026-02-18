@@ -3,6 +3,7 @@ import { requireOpenShift, requireProfile } from "../../../../lib/auth-context";
 
 const MEMBER_CODE_RE = /^\d{1,4}$/;
 const PAYMENT_METHODS = ["cash", "card", "transfer", "manual", "newebpay"] as const;
+const PRODUCT_CODE_RE = /^[a-z0-9_]+$/i;
 
 function parseIntSafe(input: unknown) {
   const n = Number(input);
@@ -137,7 +138,118 @@ export async function POST(request: Request) {
   if (!shiftGuard.ok) return shiftGuard.response;
 
   const body = await request.json().catch(() => null);
-  const action = body?.action === "adjust" ? "adjust" : "sale";
+  const action = body?.action === "adjust"
+    ? "adjust"
+    : body?.action === "create_product"
+      ? "create_product"
+      : "sale";
+
+  if (action === "create_product") {
+    const productCode = typeof body?.productCode === "string" ? body.productCode.trim() : "";
+    const title = typeof body?.title === "string" ? body.title.trim() : "";
+    const unitPrice = parseNumberSafe(body?.unitPrice);
+    const openingOnHand = parseIntSafe(body?.openingOnHand);
+    const safetyStock = parseIntSafe(body?.safetyStock);
+    const sortOrder = Number.isFinite(parseIntSafe(body?.sortOrder)) ? parseIntSafe(body?.sortOrder) : 0;
+
+    if (!productCode || !PRODUCT_CODE_RE.test(productCode)) {
+      return NextResponse.json({ error: "Invalid productCode format" }, { status: 400 });
+    }
+    if (!title) {
+      return NextResponse.json({ error: "title is required" }, { status: 400 });
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      return NextResponse.json({ error: "Invalid unitPrice" }, { status: 400 });
+    }
+    if (!Number.isFinite(openingOnHand) || openingOnHand < 0) {
+      return NextResponse.json({ error: "Invalid openingOnHand" }, { status: 400 });
+    }
+    if (!Number.isFinite(safetyStock) || safetyStock < 0) {
+      return NextResponse.json({ error: "Invalid safetyStock" }, { status: 400 });
+    }
+
+    const now = new Date().toISOString();
+    const productUpsert = await auth.supabase
+      .from("products")
+      .upsert({
+        tenant_id: auth.context.tenantId,
+        code: productCode,
+        title,
+        item_type: "product",
+        unit_price: unitPrice,
+        quantity: 1,
+        is_active: true,
+        sort_order: sortOrder,
+        updated_at: now,
+      }, { onConflict: "tenant_id,code" })
+      .select("code, title, unit_price, item_type, sort_order, updated_at")
+      .maybeSingle();
+
+    if (productUpsert.error) {
+      if (isProductsTableMissing(productUpsert.error.message)) {
+        return NextResponse.json({ error: "products table missing. Apply migrations first." }, { status: 501 });
+      }
+      return NextResponse.json({ error: productUpsert.error.message }, { status: 500 });
+    }
+    if (!productUpsert.data) {
+      return NextResponse.json({ error: "Create product failed" }, { status: 500 });
+    }
+
+    const inventoryUpsert = await auth.supabase
+      .from("frontdesk_product_inventory")
+      .upsert({
+        tenant_id: auth.context.tenantId,
+        branch_id: auth.context.branchId,
+        product_code: productCode,
+        on_hand: openingOnHand,
+        safety_stock: safetyStock,
+        updated_by: auth.context.userId,
+        updated_at: now,
+      }, { onConflict: "tenant_id,branch_id,product_code" })
+      .select("product_code, on_hand, safety_stock, updated_at")
+      .maybeSingle();
+
+    if (inventoryUpsert.error) {
+      if (isInventoryTableMissing(inventoryUpsert.error.message)) {
+        return NextResponse.json({ error: "inventory table missing. Apply migrations first." }, { status: 501 });
+      }
+      return NextResponse.json({ error: inventoryUpsert.error.message }, { status: 500 });
+    }
+
+    await auth.supabase.from("audit_logs").insert({
+      tenant_id: auth.context.tenantId,
+      actor_id: auth.context.userId,
+      action: "frontdesk_product_upsert",
+      target_type: "product",
+      target_id: productCode,
+      reason: "frontdesk_inventory_create_product",
+      payload: {
+        code: productCode,
+        title,
+        unitPrice,
+        openingOnHand,
+        safetyStock,
+        sortOrder,
+      },
+    });
+
+    return NextResponse.json({
+      product: {
+        code: String(productUpsert.data.code),
+        title: String(productUpsert.data.title || productCode),
+        unitPrice: Number(productUpsert.data.unit_price ?? unitPrice),
+        sortOrder: Number(productUpsert.data.sort_order ?? sortOrder),
+        updatedAt: productUpsert.data.updated_at || now,
+      },
+      inventory: {
+        productCode: String(inventoryUpsert.data?.product_code || productCode),
+        onHand: Number(inventoryUpsert.data?.on_hand ?? openingOnHand),
+        safetyStock: Number(inventoryUpsert.data?.safety_stock ?? safetyStock),
+        updatedAt: inventoryUpsert.data?.updated_at || now,
+      },
+    }, { status: 201 });
+  }
+
   const productCode = typeof body?.productCode === "string" ? body.productCode.trim() : "";
   if (!productCode) {
     return NextResponse.json({ error: "productCode is required" }, { status: 400 });

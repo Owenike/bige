@@ -214,6 +214,12 @@ export default function FrontdeskPortalPage() {
   const [inventorySubmitting, setInventorySubmitting] = useState(false);
   const [inventoryError, setInventoryError] = useState<string | null>(null);
   const [inventoryMessage, setInventoryMessage] = useState<string | null>(null);
+  const [createProductCode, setCreateProductCode] = useState("");
+  const [createProductTitle, setCreateProductTitle] = useState("");
+  const [createProductUnitPrice, setCreateProductUnitPrice] = useState("0");
+  const [createProductOnHand, setCreateProductOnHand] = useState("0");
+  const [createProductSafetyStock, setCreateProductSafetyStock] = useState("5");
+  const [createProductSortOrder, setCreateProductSortOrder] = useState("0");
   const [saleProductCode, setSaleProductCode] = useState("");
   const [saleQty, setSaleQty] = useState("1");
   const [saleMemberCode, setSaleMemberCode] = useState("");
@@ -460,6 +466,13 @@ export default function FrontdeskPortalPage() {
             inventorySummaryLow: "低庫存",
             inventorySummaryOnHand: "總庫存",
             inventorySummarySold: "今日售出",
+            inventoryCreateSection: "新增商品",
+            inventoryCreateCodeLabel: "商品代碼（英文 / 數字 / 底線）",
+            inventoryCreateTitleLabel: "商品名稱",
+            inventoryCreateUnitPriceLabel: "單價",
+            inventoryCreateOnHandLabel: "期初庫存",
+            inventoryCreateSafetyStockLabel: "安全庫存",
+            inventoryCreateSortOrderLabel: "排序",
             inventorySalesSection: "銷售入帳",
             inventoryAdjustSection: "庫存調整",
             inventoryProductLabel: "商品",
@@ -468,6 +481,8 @@ export default function FrontdeskPortalPage() {
             inventoryPaymentMethodLabel: "收款方式",
             inventoryAdjustDeltaLabel: "庫存變動（+補貨 / -盤損）",
             inventoryNoteLabel: "備註（選填）",
+            inventoryCreateAction: "新增商品",
+            inventoryCreatingAction: "新增中...",
             inventorySaleAction: "送出銷售",
             inventorySellingAction: "銷售入帳中...",
             inventoryAdjustAction: "送出調整",
@@ -479,11 +494,19 @@ export default function FrontdeskPortalPage() {
             inventoryNoMoves: "目前沒有庫存異動紀錄。",
             inventoryOnHandTag: "庫存",
             inventoryLowTag: "低庫存",
+            inventoryCreateSuccess: "商品已新增",
             inventorySaleSuccess: "商品銷售已入帳",
             inventoryAdjustSuccess: "庫存調整完成",
             inventoryLoadFail: "載入商品庫存失敗",
+            inventoryCreateFail: "新增商品失敗",
             inventorySaleFail: "銷售入帳失敗",
             inventoryAdjustFail: "庫存調整失敗",
+            inventoryCreateCodeInvalid: "商品代碼格式錯誤（僅可英文、數字、底線）",
+            inventoryCreateTitleRequired: "請輸入商品名稱",
+            inventoryCreateUnitPriceInvalid: "單價格式錯誤",
+            inventoryCreateOnHandInvalid: "期初庫存格式錯誤",
+            inventoryCreateSafetyStockInvalid: "安全庫存格式錯誤",
+            inventoryCreateSortOrderInvalid: "排序格式錯誤",
             inventoryProductRequired: "請先選擇商品",
             inventoryQtyInvalid: "數量格式錯誤",
             inventoryDeltaInvalid: "庫存變動格式錯誤",
@@ -623,6 +646,13 @@ export default function FrontdeskPortalPage() {
             inventorySummaryLow: "Low Stock",
             inventorySummaryOnHand: "Total On Hand",
             inventorySummarySold: "Sold Today",
+            inventoryCreateSection: "Create Product",
+            inventoryCreateCodeLabel: "Code (letters / numbers / underscore)",
+            inventoryCreateTitleLabel: "Title",
+            inventoryCreateUnitPriceLabel: "Unit Price",
+            inventoryCreateOnHandLabel: "Opening Stock",
+            inventoryCreateSafetyStockLabel: "Safety Stock",
+            inventoryCreateSortOrderLabel: "Sort Order",
             inventorySalesSection: "Sales Entry",
             inventoryAdjustSection: "Stock Adjustment",
             inventoryProductLabel: "Product",
@@ -631,6 +661,8 @@ export default function FrontdeskPortalPage() {
             inventoryPaymentMethodLabel: "Payment Method",
             inventoryAdjustDeltaLabel: "Stock Delta (+restock / -shrink)",
             inventoryNoteLabel: "Note (optional)",
+            inventoryCreateAction: "Create Product",
+            inventoryCreatingAction: "Creating...",
             inventorySaleAction: "Submit Sale",
             inventorySellingAction: "Posting Sale...",
             inventoryAdjustAction: "Submit Adjustment",
@@ -642,11 +674,19 @@ export default function FrontdeskPortalPage() {
             inventoryNoMoves: "No inventory movement yet.",
             inventoryOnHandTag: "On Hand",
             inventoryLowTag: "Low Stock",
+            inventoryCreateSuccess: "Product created",
             inventorySaleSuccess: "Product sale posted",
             inventoryAdjustSuccess: "Inventory adjusted",
             inventoryLoadFail: "Load inventory failed",
+            inventoryCreateFail: "Create product failed",
             inventorySaleFail: "Product sale failed",
             inventoryAdjustFail: "Inventory adjustment failed",
+            inventoryCreateCodeInvalid: "Invalid code format. Use letters, numbers, underscore only.",
+            inventoryCreateTitleRequired: "Please enter product title",
+            inventoryCreateUnitPriceInvalid: "Invalid unit price format",
+            inventoryCreateOnHandInvalid: "Invalid opening stock format",
+            inventoryCreateSafetyStockInvalid: "Invalid safety stock format",
+            inventoryCreateSortOrderInvalid: "Invalid sort order format",
             inventoryProductRequired: "Please select product",
             inventoryQtyInvalid: "Invalid quantity format",
             inventoryDeltaInvalid: "Invalid stock delta format",
@@ -949,6 +989,98 @@ export default function FrontdeskPortalPage() {
       setInventoryLoading(false);
     }
   }, [t.inventoryLoadFail]);
+
+  const handleInventoryCreateProduct = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const code = createProductCode.trim();
+    const title = createProductTitle.trim();
+    const unitPrice = Number(createProductUnitPrice);
+    const openingOnHand = Number(createProductOnHand);
+    const safetyStock = Number(createProductSafetyStock);
+    const sortOrder = Number(createProductSortOrder);
+
+    if (!/^[a-z0-9_]+$/i.test(code)) {
+      setInventoryError(t.inventoryCreateCodeInvalid);
+      setInventoryMessage(null);
+      return;
+    }
+    if (!title) {
+      setInventoryError(t.inventoryCreateTitleRequired);
+      setInventoryMessage(null);
+      return;
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      setInventoryError(t.inventoryCreateUnitPriceInvalid);
+      setInventoryMessage(null);
+      return;
+    }
+    if (!Number.isFinite(openingOnHand) || !Number.isInteger(openingOnHand) || openingOnHand < 0) {
+      setInventoryError(t.inventoryCreateOnHandInvalid);
+      setInventoryMessage(null);
+      return;
+    }
+    if (!Number.isFinite(safetyStock) || !Number.isInteger(safetyStock) || safetyStock < 0) {
+      setInventoryError(t.inventoryCreateSafetyStockInvalid);
+      setInventoryMessage(null);
+      return;
+    }
+    if (!Number.isFinite(sortOrder) || !Number.isInteger(sortOrder)) {
+      setInventoryError(t.inventoryCreateSortOrderInvalid);
+      setInventoryMessage(null);
+      return;
+    }
+
+    setInventorySubmitting(true);
+    setInventoryError(null);
+    setInventoryMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_product",
+          productCode: code,
+          title,
+          unitPrice,
+          openingOnHand,
+          safetyStock,
+          sortOrder,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.inventoryCreateFail);
+      setInventoryMessage(`${t.inventoryCreateSuccess}: ${payload?.product?.code || code}`);
+      setCreateProductCode("");
+      setCreateProductTitle("");
+      setCreateProductUnitPrice("0");
+      setCreateProductOnHand("0");
+      setCreateProductSafetyStock("5");
+      setCreateProductSortOrder("0");
+      await loadInventoryModule();
+      setSaleProductCode(code);
+      setAdjustProductCode(code);
+    } catch (err) {
+      setInventoryError(err instanceof Error ? err.message : t.inventoryCreateFail);
+    } finally {
+      setInventorySubmitting(false);
+    }
+  }, [
+    createProductCode,
+    createProductOnHand,
+    createProductSafetyStock,
+    createProductSortOrder,
+    createProductTitle,
+    createProductUnitPrice,
+    loadInventoryModule,
+    t.inventoryCreateCodeInvalid,
+    t.inventoryCreateFail,
+    t.inventoryCreateOnHandInvalid,
+    t.inventoryCreateSafetyStockInvalid,
+    t.inventoryCreateSortOrderInvalid,
+    t.inventoryCreateSuccess,
+    t.inventoryCreateTitleRequired,
+    t.inventoryCreateUnitPriceInvalid,
+  ]);
 
   const handleInventorySale = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1699,6 +1831,85 @@ export default function FrontdeskPortalPage() {
                           </div>
 
                           <div className="fdInventoryFormGrid">
+                            <form onSubmit={handleInventoryCreateProduct} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.inventoryCreateSection}</h5>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.inventoryCreateCodeLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={createProductCode}
+                                    onChange={(event) => setCreateProductCode(event.target.value)}
+                                    placeholder={t.inventoryCreateCodeLabel}
+                                    disabled={inventorySubmitting}
+                                  />
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.inventoryCreateTitleLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={createProductTitle}
+                                    onChange={(event) => setCreateProductTitle(event.target.value)}
+                                    placeholder={t.inventoryCreateTitleLabel}
+                                    disabled={inventorySubmitting}
+                                  />
+                                </label>
+                              </div>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.inventoryCreateUnitPriceLabel}</span>
+                                  <input
+                                    className="input"
+                                    inputMode="decimal"
+                                    value={createProductUnitPrice}
+                                    onChange={(event) => setCreateProductUnitPrice(event.target.value)}
+                                    placeholder={t.inventoryCreateUnitPriceLabel}
+                                    disabled={inventorySubmitting}
+                                  />
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.inventoryCreateOnHandLabel}</span>
+                                  <input
+                                    className="input"
+                                    inputMode="numeric"
+                                    value={createProductOnHand}
+                                    onChange={(event) => setCreateProductOnHand(event.target.value)}
+                                    placeholder={t.inventoryCreateOnHandLabel}
+                                    disabled={inventorySubmitting}
+                                  />
+                                </label>
+                              </div>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.inventoryCreateSafetyStockLabel}</span>
+                                  <input
+                                    className="input"
+                                    inputMode="numeric"
+                                    value={createProductSafetyStock}
+                                    onChange={(event) => setCreateProductSafetyStock(event.target.value)}
+                                    placeholder={t.inventoryCreateSafetyStockLabel}
+                                    disabled={inventorySubmitting}
+                                  />
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.inventoryCreateSortOrderLabel}</span>
+                                  <input
+                                    className="input"
+                                    inputMode="numeric"
+                                    value={createProductSortOrder}
+                                    onChange={(event) => setCreateProductSortOrder(event.target.value)}
+                                    placeholder={t.inventoryCreateSortOrderLabel}
+                                    disabled={inventorySubmitting}
+                                  />
+                                </label>
+                              </div>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={inventorySubmitting}>
+                                  {inventorySubmitting ? t.inventoryCreatingAction : t.inventoryCreateAction}
+                                </button>
+                              </div>
+                            </form>
+
                             <form onSubmit={handleInventorySale} className="fdGlassSubPanel fdInventoryFormBlock">
                               <h5 className="sectionTitle" style={{ margin: 0 }}>{t.inventorySalesSection}</h5>
                               <div className="fdInventoryField">
