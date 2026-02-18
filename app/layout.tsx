@@ -9,6 +9,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={locale}>
       <body
+        className="appAuroraSurface"
         style={{
           margin: 0,
           fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Noto Sans TC, sans-serif",
