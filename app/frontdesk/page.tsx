@@ -139,6 +139,37 @@ type InventoryMoveItem = {
   createdAt: string;
 };
 
+type CsIncidentEventItem = {
+  id: string;
+  action: string;
+  note: string;
+  actorId: string | null;
+  actorName: string | null;
+  createdAt: string;
+};
+
+type CsIncidentItem = {
+  id: string;
+  incidentNo: string;
+  incidentType: string;
+  priority: string;
+  status: string;
+  source: string;
+  memberId: string | null;
+  memberCode: string;
+  memberName: string;
+  contactPhone: string;
+  title: string;
+  detail: string;
+  happenedAt: string | null;
+  dueAt: string | null;
+  resolutionNote: string;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  events: CsIncidentEventItem[];
+};
+
 function isMemberCode(value: string) {
   if (!/^\d{1,4}$/.test(value)) return false;
   const n = Number(value);
@@ -324,6 +355,27 @@ export default function FrontdeskPortalPage() {
   const [adjustProductCode, setAdjustProductCode] = useState("");
   const [adjustDelta, setAdjustDelta] = useState("1");
   const [adjustNote, setAdjustNote] = useState("");
+  const [csIncidents, setCsIncidents] = useState<CsIncidentItem[]>([]);
+  const [csLoading, setCsLoading] = useState(false);
+  const [csSubmitting, setCsSubmitting] = useState(false);
+  const [csError, setCsError] = useState<string | null>(null);
+  const [csMessage, setCsMessage] = useState<string | null>(null);
+  const [csFilterStatus, setCsFilterStatus] = useState<"all" | "open" | "in_progress" | "resolved" | "closed">("all");
+  const [csIncidentType, setCsIncidentType] = useState("complaint");
+  const [csPriority, setCsPriority] = useState("normal");
+  const [csSource, setCsSource] = useState("frontdesk");
+  const [csMemberCode, setCsMemberCode] = useState("");
+  const [csMemberName, setCsMemberName] = useState("");
+  const [csContactPhone, setCsContactPhone] = useState("");
+  const [csCaseTitle, setCsCaseTitle] = useState("");
+  const [csCaseDetail, setCsCaseDetail] = useState("");
+  const [csHappenedAt, setCsHappenedAt] = useState("");
+  const [csDueAt, setCsDueAt] = useState("");
+  const [csSelectedIncidentId, setCsSelectedIncidentId] = useState("");
+  const [csStatusTo, setCsStatusTo] = useState<"open" | "in_progress" | "resolved" | "closed">("in_progress");
+  const [csStatusNote, setCsStatusNote] = useState("");
+  const [csFollowupNote, setCsFollowupNote] = useState("");
+  const [csResolveNote, setCsResolveNote] = useState("");
 
   const openCapabilityModal = useCallback((id: string, type: FrontdeskModalType = "capability") => {
     setModalType(type);
@@ -691,6 +743,88 @@ export default function FrontdeskPortalPage() {
             inventoryMoveSale: "銷售",
             inventoryMoveAdjust: "調整",
             inventoryMoveRestock: "補貨",
+            csTitle: "客服 / 事件紀錄",
+            csSub: "建立客訴與現場事件工單，追蹤處理進度並保留完整記錄。",
+            csSummaryOpen: "開啟中",
+            csSummaryInProgress: "處理中",
+            csSummaryResolved: "已結案",
+            csSummaryOverdue: "逾期待處理",
+            csCreateSection: "建立事件工單",
+            csOperateSection: "工單操作",
+            csListSection: "事件列表",
+            csEventsSection: "事件追蹤",
+            csFilterStatusLabel: "狀態篩選",
+            csIncidentTypeLabel: "事件類型",
+            csPriorityLabel: "優先等級",
+            csSourceLabel: "來源",
+            csMemberCodeLabel: "會員編號（1~9999，選填）",
+            csMemberNameLabel: "會員姓名（選填）",
+            csContactPhoneLabel: "聯絡電話（選填）",
+            csCaseTitleLabel: "事件標題",
+            csCaseDetailLabel: "事件內容",
+            csHappenedAtLabel: "發生時間（選填）",
+            csDueAtLabel: "處理期限（選填）",
+            csSelectIncidentLabel: "選擇工單",
+            csStatusToLabel: "更新狀態",
+            csStatusNoteLabel: "狀態備註（選填）",
+            csFollowupNoteLabel: "追蹤紀錄",
+            csResolveNoteLabel: "結案說明",
+            csCreateAction: "建立工單",
+            csCreatingAction: "建立中...",
+            csReloadAction: "重新整理",
+            csUpdateStatusAction: "更新狀態",
+            csAddFollowupAction: "新增追蹤",
+            csResolveAction: "送出結案",
+            csActioning: "處理中...",
+            csNoIncidents: "目前沒有事件工單。",
+            csNoEvents: "目前沒有追蹤紀錄。",
+            csLoadFail: "載入事件工單失敗",
+            csCreateFail: "建立事件工單失敗",
+            csUpdateFail: "更新狀態失敗",
+            csFollowupFail: "新增追蹤失敗",
+            csResolveFail: "結案失敗",
+            csCreateSuccess: "事件工單已建立",
+            csUpdateSuccess: "狀態更新完成",
+            csFollowupSuccess: "追蹤紀錄已新增",
+            csResolveSuccess: "事件已結案",
+            csCaseTitleRequired: "請輸入事件標題",
+            csCaseDetailRequired: "請輸入事件內容",
+            csIncidentRequired: "請先選擇工單",
+            csNoteRequired: "請輸入內容",
+            csMemberCodeInvalid: "會員編號格式錯誤，請輸入 1~9999",
+            csDateInvalid: "日期時間格式錯誤",
+            csStatusOpen: "開啟中",
+            csStatusInProgress: "處理中",
+            csStatusResolved: "已結案",
+            csStatusClosed: "已關閉",
+            csStatusAll: "全部",
+            csTypeComplaint: "客訴",
+            csTypeFacility: "設備",
+            csTypeSafety: "安全",
+            csTypeBilling: "帳務",
+            csTypeMember: "會員資料",
+            csTypeOther: "其他",
+            csPriorityLow: "低",
+            csPriorityNormal: "中",
+            csPriorityHigh: "高",
+            csPriorityUrgent: "緊急",
+            csSourceFrontdesk: "櫃檯",
+            csSourcePhone: "電話",
+            csSourceLine: "LINE",
+            csSourceEmail: "Email",
+            csSourceWalkin: "現場",
+            csSourceOther: "其他",
+            csEventCreated: "建立",
+            csEventStatusChanged: "狀態更新",
+            csEventFollowup: "追蹤紀錄",
+            csEventResolved: "結案",
+            csEventReopened: "重新開單",
+            csEventAssigned: "指派",
+            csResolutionTag: "結案說明",
+            csUseIncidentAction: "使用此工單",
+            csCreatedAt: "建立時間",
+            csUpdatedAt: "更新時間",
+            csDueAt: "期限",
             close: "關閉",
             cancel: "取消",
             openShiftFail: "開班失敗",
@@ -953,6 +1087,88 @@ export default function FrontdeskPortalPage() {
             inventoryMoveSale: "Sale",
             inventoryMoveAdjust: "Adjustment",
             inventoryMoveRestock: "Restock",
+            csTitle: "Service / Incident Log",
+            csSub: "Create complaint/on-site incident tickets, track progress, and keep full records.",
+            csSummaryOpen: "Open",
+            csSummaryInProgress: "In Progress",
+            csSummaryResolved: "Resolved",
+            csSummaryOverdue: "Overdue",
+            csCreateSection: "Create Ticket",
+            csOperateSection: "Ticket Actions",
+            csListSection: "Incident List",
+            csEventsSection: "Incident Timeline",
+            csFilterStatusLabel: "Status Filter",
+            csIncidentTypeLabel: "Type",
+            csPriorityLabel: "Priority",
+            csSourceLabel: "Source",
+            csMemberCodeLabel: "Member Code (1-9999, optional)",
+            csMemberNameLabel: "Member Name (optional)",
+            csContactPhoneLabel: "Contact Phone (optional)",
+            csCaseTitleLabel: "Title",
+            csCaseDetailLabel: "Detail",
+            csHappenedAtLabel: "Happened At (optional)",
+            csDueAtLabel: "Due At (optional)",
+            csSelectIncidentLabel: "Select Ticket",
+            csStatusToLabel: "Set Status",
+            csStatusNoteLabel: "Status Note (optional)",
+            csFollowupNoteLabel: "Follow-up Note",
+            csResolveNoteLabel: "Resolution Note",
+            csCreateAction: "Create Ticket",
+            csCreatingAction: "Creating...",
+            csReloadAction: "Reload",
+            csUpdateStatusAction: "Update Status",
+            csAddFollowupAction: "Add Follow-up",
+            csResolveAction: "Resolve Ticket",
+            csActioning: "Processing...",
+            csNoIncidents: "No incident tickets yet.",
+            csNoEvents: "No timeline records yet.",
+            csLoadFail: "Load incidents failed",
+            csCreateFail: "Create incident failed",
+            csUpdateFail: "Update status failed",
+            csFollowupFail: "Add follow-up failed",
+            csResolveFail: "Resolve incident failed",
+            csCreateSuccess: "Incident ticket created",
+            csUpdateSuccess: "Status updated",
+            csFollowupSuccess: "Follow-up added",
+            csResolveSuccess: "Incident resolved",
+            csCaseTitleRequired: "Please enter incident title",
+            csCaseDetailRequired: "Please enter incident detail",
+            csIncidentRequired: "Please select an incident first",
+            csNoteRequired: "Please enter note",
+            csMemberCodeInvalid: "Invalid member code format. Use 1-9999.",
+            csDateInvalid: "Invalid date time format",
+            csStatusOpen: "Open",
+            csStatusInProgress: "In Progress",
+            csStatusResolved: "Resolved",
+            csStatusClosed: "Closed",
+            csStatusAll: "All",
+            csTypeComplaint: "Complaint",
+            csTypeFacility: "Facility",
+            csTypeSafety: "Safety",
+            csTypeBilling: "Billing",
+            csTypeMember: "Member",
+            csTypeOther: "Other",
+            csPriorityLow: "Low",
+            csPriorityNormal: "Normal",
+            csPriorityHigh: "High",
+            csPriorityUrgent: "Urgent",
+            csSourceFrontdesk: "Frontdesk",
+            csSourcePhone: "Phone",
+            csSourceLine: "LINE",
+            csSourceEmail: "Email",
+            csSourceWalkin: "Walk-in",
+            csSourceOther: "Other",
+            csEventCreated: "Created",
+            csEventStatusChanged: "Status Updated",
+            csEventFollowup: "Follow-up",
+            csEventResolved: "Resolved",
+            csEventReopened: "Reopened",
+            csEventAssigned: "Assigned",
+            csResolutionTag: "Resolution",
+            csUseIncidentAction: "Use This Ticket",
+            csCreatedAt: "Created At",
+            csUpdatedAt: "Updated At",
+            csDueAt: "Due At",
             close: "Close",
             cancel: "Cancel",
             openShiftFail: "Open shift failed",
@@ -999,6 +1215,31 @@ export default function FrontdeskPortalPage() {
       .filter((item) => item.reason === "sale" && isSameLocalDay(item.createdAt, now))
       .reduce((sum, item) => sum + Math.max(0, -Number(item.delta || 0)), 0);
   }, [inventoryMoves]);
+  const csOpenCount = useMemo(
+    () => csIncidents.filter((item) => item.status === "open").length,
+    [csIncidents],
+  );
+  const csInProgressCount = useMemo(
+    () => csIncidents.filter((item) => item.status === "in_progress").length,
+    [csIncidents],
+  );
+  const csResolvedCount = useMemo(
+    () => csIncidents.filter((item) => item.status === "resolved" || item.status === "closed").length,
+    [csIncidents],
+  );
+  const csOverdueCount = useMemo(() => {
+    const nowMs = Date.now();
+    return csIncidents.filter((item) => {
+      if (!item.dueAt) return false;
+      if (item.status === "resolved" || item.status === "closed") return false;
+      const dueAtMs = new Date(item.dueAt).getTime();
+      return Number.isFinite(dueAtMs) && dueAtMs < nowMs;
+    }).length;
+  }, [csIncidents]);
+  const csSelectedIncident = useMemo(
+    () => csIncidents.find((item) => item.id === csSelectedIncidentId) || null,
+    [csIncidents, csSelectedIncidentId],
+  );
   const selectedPosOrder = useMemo(
     () => posOrders.find((item) => item.id === posOrderId) || null,
     [posOrderId, posOrders],
@@ -1914,6 +2155,228 @@ export default function FrontdeskPortalPage() {
     t.inventoryProductRequired,
   ]);
 
+  const loadCsModule = useCallback(async () => {
+    setCsLoading(true);
+    setCsError(null);
+    try {
+      const res = await fetch(`/api/frontdesk/incidents?status=${encodeURIComponent(csFilterStatus)}&limit=50`);
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.csLoadFail);
+      const nextItems = (payload.items || []) as CsIncidentItem[];
+      setCsIncidents(nextItems);
+      setCsSelectedIncidentId((prev) => {
+        if (prev && nextItems.some((item) => item.id === prev)) return prev;
+        return nextItems[0]?.id || "";
+      });
+    } catch (err) {
+      setCsError(err instanceof Error ? err.message : t.csLoadFail);
+    } finally {
+      setCsLoading(false);
+    }
+  }, [csFilterStatus, t.csLoadFail]);
+
+  const handleCsCreateIncident = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const memberCode = csMemberCode.trim();
+    const title = csCaseTitle.trim();
+    const detail = csCaseDetail.trim();
+    const happenedAt = parseDateTimeInput(csHappenedAt);
+    const dueAt = parseDateTimeInput(csDueAt);
+
+    if (!title) {
+      setCsError(t.csCaseTitleRequired);
+      setCsMessage(null);
+      return;
+    }
+    if (!detail) {
+      setCsError(t.csCaseDetailRequired);
+      setCsMessage(null);
+      return;
+    }
+    if (memberCode && !isMemberCode(memberCode)) {
+      setCsError(t.csMemberCodeInvalid);
+      setCsMessage(null);
+      return;
+    }
+    if (csHappenedAt.trim() && !happenedAt) {
+      setCsError(t.csDateInvalid);
+      setCsMessage(null);
+      return;
+    }
+    if (csDueAt.trim() && !dueAt) {
+      setCsError(t.csDateInvalid);
+      setCsMessage(null);
+      return;
+    }
+
+    setCsSubmitting(true);
+    setCsError(null);
+    setCsMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/incidents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          incidentType: csIncidentType,
+          priority: csPriority,
+          source: csSource,
+          memberCode: memberCode || null,
+          memberName: csMemberName.trim() || null,
+          contactPhone: csContactPhone.trim() || null,
+          title,
+          detail,
+          happenedAt,
+          dueAt,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.csCreateFail);
+      setCsCaseTitle("");
+      setCsCaseDetail("");
+      setCsMemberCode("");
+      setCsMemberName("");
+      setCsContactPhone("");
+      setCsHappenedAt("");
+      setCsDueAt("");
+      const incidentNo = String(payload?.incident?.incidentNo || "");
+      setCsMessage(incidentNo ? `${t.csCreateSuccess}: ${incidentNo}` : t.csCreateSuccess);
+      await loadCsModule();
+    } catch (err) {
+      setCsError(err instanceof Error ? err.message : t.csCreateFail);
+    } finally {
+      setCsSubmitting(false);
+    }
+  }, [
+    csCaseDetail,
+    csCaseTitle,
+    csContactPhone,
+    csDueAt,
+    csHappenedAt,
+    csIncidentType,
+    csMemberCode,
+    csMemberName,
+    csPriority,
+    csSource,
+    loadCsModule,
+    t.csCaseDetailRequired,
+    t.csCaseTitleRequired,
+    t.csCreateFail,
+    t.csCreateSuccess,
+    t.csDateInvalid,
+    t.csMemberCodeInvalid,
+  ]);
+
+  const handleCsUpdateStatus = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!csSelectedIncidentId) {
+      setCsError(t.csIncidentRequired);
+      setCsMessage(null);
+      return;
+    }
+    setCsSubmitting(true);
+    setCsError(null);
+    setCsMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/incidents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_status",
+          incidentId: csSelectedIncidentId,
+          status: csStatusTo,
+          note: csStatusNote.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.csUpdateFail);
+      setCsMessage(t.csUpdateSuccess);
+      setCsStatusNote("");
+      await loadCsModule();
+    } catch (err) {
+      setCsError(err instanceof Error ? err.message : t.csUpdateFail);
+    } finally {
+      setCsSubmitting(false);
+    }
+  }, [csSelectedIncidentId, csStatusNote, csStatusTo, loadCsModule, t.csIncidentRequired, t.csUpdateFail, t.csUpdateSuccess]);
+
+  const handleCsAddFollowup = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!csSelectedIncidentId) {
+      setCsError(t.csIncidentRequired);
+      setCsMessage(null);
+      return;
+    }
+    const note = csFollowupNote.trim();
+    if (!note) {
+      setCsError(t.csNoteRequired);
+      setCsMessage(null);
+      return;
+    }
+    setCsSubmitting(true);
+    setCsError(null);
+    setCsMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/incidents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "followup",
+          incidentId: csSelectedIncidentId,
+          note,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.csFollowupFail);
+      setCsMessage(t.csFollowupSuccess);
+      setCsFollowupNote("");
+      await loadCsModule();
+    } catch (err) {
+      setCsError(err instanceof Error ? err.message : t.csFollowupFail);
+    } finally {
+      setCsSubmitting(false);
+    }
+  }, [csFollowupNote, csSelectedIncidentId, loadCsModule, t.csFollowupFail, t.csFollowupSuccess, t.csIncidentRequired, t.csNoteRequired]);
+
+  const handleCsResolve = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!csSelectedIncidentId) {
+      setCsError(t.csIncidentRequired);
+      setCsMessage(null);
+      return;
+    }
+    const resolutionNote = csResolveNote.trim();
+    if (!resolutionNote) {
+      setCsError(t.csNoteRequired);
+      setCsMessage(null);
+      return;
+    }
+    setCsSubmitting(true);
+    setCsError(null);
+    setCsMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/incidents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "resolve",
+          incidentId: csSelectedIncidentId,
+          resolutionNote,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.csResolveFail);
+      setCsMessage(t.csResolveSuccess);
+      setCsResolveNote("");
+      setCsStatusTo("resolved");
+      await loadCsModule();
+    } catch (err) {
+      setCsError(err instanceof Error ? err.message : t.csResolveFail);
+    } finally {
+      setCsSubmitting(false);
+    }
+  }, [csResolveNote, csSelectedIncidentId, loadCsModule, t.csIncidentRequired, t.csNoteRequired, t.csResolveFail, t.csResolveSuccess]);
+
   const capabilityCards = useMemo(
     (): CapabilityCard[] =>
       lang === "zh"
@@ -1924,7 +2387,7 @@ export default function FrontdeskPortalPage() {
             { id: "booking", title: "D. 預約 / 課務", desc: "建立即時預約與課務調整。", detail: "可建立、改期、取消課務預約，支援現場快速調整時段。", area: "BOOKING", status: "ready" },
             { id: "locker", title: "E. 置物櫃 / 租借", desc: "置物櫃租借登記、歸還與押金管理。", detail: "可直接登記租借與歸還，包含押金、到期時間與備註，並保留完整操作軌跡。", area: "LOCKER", status: "ready" },
             { id: "inventory", title: "F. 商品 / 庫存 / 銷售", desc: "前台銷售、庫存調整、低庫存提醒。", detail: "可直接在櫃檯完成商品銷售入帳、庫存扣減與補貨/盤損調整，並保留異動紀錄。", area: "INVENTORY", status: "ready" },
-            { id: "cs", title: "G. 客服 / 事件紀錄", desc: "客訴與事件工單（含附件與追蹤）。", detail: "規劃中：客訴工單、現場事件與後續追蹤，支援附件紀錄。", area: "CS", status: "planned" },
+            { id: "cs", title: "G. 客服 / 事件紀錄", desc: "客訴與現場事件工單，含進度追蹤與結案。", detail: "可建立客服/事件工單、更新處理狀態、追加追蹤紀錄與結案說明，並保留完整操作軌跡。", area: "CS", status: "ready" },
             { id: "lead", title: "H. 線索 / 參觀導覽", desc: "Lead 建檔、轉會員、追蹤轉換。", detail: "規劃中：潛在客建檔、導覽排程與轉會員流程。", area: "LEAD", status: "planned" },
             { id: "chain", title: "I. 跨店規則", desc: "跨店可用範圍、停權/黑名單同步。", detail: "建置中：跨店入場規則、停權同步、可用店範圍控制。", area: "CHAIN", status: "building" },
             { id: "report", title: "J. 報表 / 即時監控", desc: "今日營收、到期、欠費、No-show、待辦。", detail: "建置中：櫃檯今日營運看板與交接待辦彙總。", area: "REPORT", status: "building" },
@@ -1937,7 +2400,7 @@ export default function FrontdeskPortalPage() {
             { id: "booking", title: "D. Booking / Classes", desc: "Booking creation and class schedule handling.", detail: "Create, reschedule, and cancel class bookings from desk operations.", area: "BOOKING", status: "ready" },
             { id: "locker", title: "E. Locker / Rental", desc: "Locker rent/return with deposit handling.", detail: "Register rental and return with deposit, due time, and operation audit trail.", area: "LOCKER", status: "ready" },
             { id: "inventory", title: "F. Product / Inventory", desc: "Desk sales, stock adjustments, low-stock alerts.", detail: "Complete product sales posting, stock deduction, restock/adjustment, and movement history in frontdesk.", area: "INVENTORY", status: "ready" },
-            { id: "cs", title: "G. Service / Incidents", desc: "Complaint and on-site incident ticket handling.", detail: "Planned: complaint tickets and on-site incident records with attachments.", area: "CS", status: "planned" },
+            { id: "cs", title: "G. Service / Incidents", desc: "Complaint and on-site incident tickets with workflow.", detail: "Create incident tickets, update status, add follow-up notes, and close with resolution records.", area: "CS", status: "ready" },
             { id: "lead", title: "H. Lead / Tours", desc: "Lead intake, visit scheduling, conversion.", detail: "Planned: lead management, visit schedule, and conversion tracking.", area: "LEAD", status: "planned" },
             { id: "chain", title: "I. Multi-Branch Rules", desc: "Cross-branch policy and blacklist sync.", detail: "Building: cross-branch entry policies and blacklist synchronization.", area: "CHAIN", status: "building" },
             { id: "report", title: "J. Reports / Live Monitor", desc: "Revenue, due list, no-show, handover TODO.", detail: "Building: desk operational dashboards and handover task monitor.", area: "REPORT", status: "building" },
@@ -1979,6 +2442,11 @@ export default function FrontdeskPortalPage() {
   }, [capabilityOpen, loadInventoryModule, modalType, selectedCapabilityId]);
 
   useEffect(() => {
+    if (!capabilityOpen || modalType !== "capability" || selectedCapabilityId !== "cs") return;
+    void loadCsModule();
+  }, [capabilityOpen, loadCsModule, modalType, selectedCapabilityId]);
+
+  useEffect(() => {
     if (!capabilityOpen || modalType !== "capability" || selectedCapabilityId !== "pos") return;
     setPosLoading(true);
     setPosError(null);
@@ -2005,6 +2473,16 @@ export default function FrontdeskPortalPage() {
     selectedCapabilityId,
     t.posReloadAction,
   ]);
+
+  useEffect(() => {
+    if (csIncidents.length === 0) {
+      if (csSelectedIncidentId) setCsSelectedIncidentId("");
+      return;
+    }
+    if (!csSelectedIncidentId || !csIncidents.some((item) => item.id === csSelectedIncidentId)) {
+      setCsSelectedIncidentId(csIncidents[0].id);
+    }
+  }, [csIncidents, csSelectedIncidentId]);
 
   useEffect(() => {
     if (lockerRentalTerm !== "custom" && lockerDueAt) {
@@ -2080,6 +2558,60 @@ export default function FrontdeskPortalPage() {
     if (action === "order_void") return t.posVoidSection;
     if (action === "payment_refund") return t.posRefundSection;
     return action;
+  }
+
+  function csStatusLabel(status: string) {
+    if (status === "open") return t.csStatusOpen;
+    if (status === "in_progress") return t.csStatusInProgress;
+    if (status === "resolved") return t.csStatusResolved;
+    return t.csStatusClosed;
+  }
+
+  function csStatusStyle(status: string) {
+    if (status === "resolved") {
+      return { background: "rgba(16,185,129,.14)", borderColor: "rgba(16,185,129,.42)", color: "#047857" };
+    }
+    if (status === "in_progress") {
+      return { background: "rgba(59,130,246,.14)", borderColor: "rgba(59,130,246,.4)", color: "#1d4ed8" };
+    }
+    if (status === "closed") {
+      return { background: "rgba(107,114,128,.14)", borderColor: "rgba(107,114,128,.36)", color: "#374151" };
+    }
+    return { background: "rgba(234,179,8,.16)", borderColor: "rgba(234,179,8,.46)", color: "#92400e" };
+  }
+
+  function csTypeLabel(type: string) {
+    if (type === "complaint") return t.csTypeComplaint;
+    if (type === "facility") return t.csTypeFacility;
+    if (type === "safety") return t.csTypeSafety;
+    if (type === "billing") return t.csTypeBilling;
+    if (type === "member") return t.csTypeMember;
+    return t.csTypeOther;
+  }
+
+  function csPriorityLabel(priority: string) {
+    if (priority === "low") return t.csPriorityLow;
+    if (priority === "high") return t.csPriorityHigh;
+    if (priority === "urgent") return t.csPriorityUrgent;
+    return t.csPriorityNormal;
+  }
+
+  function csSourceLabel(source: string) {
+    if (source === "phone") return t.csSourcePhone;
+    if (source === "line") return t.csSourceLine;
+    if (source === "email") return t.csSourceEmail;
+    if (source === "walkin") return t.csSourceWalkin;
+    if (source === "other") return t.csSourceOther;
+    return t.csSourceFrontdesk;
+  }
+
+  function csEventActionLabel(action: string) {
+    if (action === "created") return t.csEventCreated;
+    if (action === "status_changed") return t.csEventStatusChanged;
+    if (action === "resolved") return t.csEventResolved;
+    if (action === "reopened") return t.csEventReopened;
+    if (action === "assigned") return t.csEventAssigned;
+    return t.csEventFollowup;
   }
 
   const lockerAutoDueAt = useMemo(
@@ -3386,6 +3918,371 @@ export default function FrontdeskPortalPage() {
                                   </div>
                                 ))}
                                 {!inventoryLoading && inventoryMoves.length === 0 ? <p className="fdGlassText">{t.inventoryNoMoves}</p> : null}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                      {selectedCapability.id === "cs" ? (
+                        <div className="fdGlassSubPanel fdInventoryPanel" style={{ marginTop: 12, padding: 10 }}>
+                          <h4 className="sectionTitle" style={{ margin: 0 }}>{t.csTitle}</h4>
+                          <p className="fdGlassText" style={{ marginTop: 6 }}>{t.csSub}</p>
+                          {csError ? <div className="error" style={{ marginTop: 8 }}>{csError}</div> : null}
+                          {csMessage ? <p className="sub" style={{ marginTop: 8, color: "var(--brand)" }}>{csMessage}</p> : null}
+
+                          <div className="fdInventorySummary">
+                            <div className="fdGlassSubPanel fdInventorySummaryItem">
+                              <div className="kvLabel">{t.csSummaryOpen}</div>
+                              <strong className="fdInventorySummaryValue">{csOpenCount}</strong>
+                            </div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem">
+                              <div className="kvLabel">{t.csSummaryInProgress}</div>
+                              <strong className="fdInventorySummaryValue">{csInProgressCount}</strong>
+                            </div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem">
+                              <div className="kvLabel">{t.csSummaryResolved}</div>
+                              <strong className="fdInventorySummaryValue">{csResolvedCount}</strong>
+                            </div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem">
+                              <div className="kvLabel">{t.csSummaryOverdue}</div>
+                              <strong className="fdInventorySummaryValue">{csOverdueCount}</strong>
+                            </div>
+                          </div>
+
+                          <div className="fdInventoryFormGrid">
+                            <form onSubmit={handleCsCreateIncident} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.csCreateSection}</h5>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csIncidentTypeLabel}</span>
+                                  <select
+                                    className="input"
+                                    value={csIncidentType}
+                                    onChange={(event) => setCsIncidentType(event.target.value)}
+                                    disabled={csSubmitting}
+                                  >
+                                    <option value="complaint">{t.csTypeComplaint}</option>
+                                    <option value="facility">{t.csTypeFacility}</option>
+                                    <option value="safety">{t.csTypeSafety}</option>
+                                    <option value="billing">{t.csTypeBilling}</option>
+                                    <option value="member">{t.csTypeMember}</option>
+                                    <option value="other">{t.csTypeOther}</option>
+                                  </select>
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csPriorityLabel}</span>
+                                  <select
+                                    className="input"
+                                    value={csPriority}
+                                    onChange={(event) => setCsPriority(event.target.value)}
+                                    disabled={csSubmitting}
+                                  >
+                                    <option value="low">{t.csPriorityLow}</option>
+                                    <option value="normal">{t.csPriorityNormal}</option>
+                                    <option value="high">{t.csPriorityHigh}</option>
+                                    <option value="urgent">{t.csPriorityUrgent}</option>
+                                  </select>
+                                </label>
+                              </div>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csSourceLabel}</span>
+                                  <select
+                                    className="input"
+                                    value={csSource}
+                                    onChange={(event) => setCsSource(event.target.value)}
+                                    disabled={csSubmitting}
+                                  >
+                                    <option value="frontdesk">{t.csSourceFrontdesk}</option>
+                                    <option value="phone">{t.csSourcePhone}</option>
+                                    <option value="line">{t.csSourceLine}</option>
+                                    <option value="email">{t.csSourceEmail}</option>
+                                    <option value="walkin">{t.csSourceWalkin}</option>
+                                    <option value="other">{t.csSourceOther}</option>
+                                  </select>
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csMemberCodeLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={csMemberCode}
+                                    onChange={(event) => setCsMemberCode(event.target.value)}
+                                    placeholder={t.csMemberCodeLabel}
+                                    disabled={csSubmitting}
+                                  />
+                                </label>
+                              </div>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csMemberNameLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={csMemberName}
+                                    onChange={(event) => setCsMemberName(event.target.value)}
+                                    placeholder={t.csMemberNameLabel}
+                                    disabled={csSubmitting}
+                                  />
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csContactPhoneLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={csContactPhone}
+                                    onChange={(event) => setCsContactPhone(event.target.value)}
+                                    placeholder={t.csContactPhoneLabel}
+                                    disabled={csSubmitting}
+                                  />
+                                </label>
+                              </div>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.csCaseTitleLabel}</span>
+                                <input
+                                  className="input"
+                                  value={csCaseTitle}
+                                  onChange={(event) => setCsCaseTitle(event.target.value)}
+                                  placeholder={t.csCaseTitleLabel}
+                                  disabled={csSubmitting}
+                                />
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.csCaseDetailLabel}</span>
+                                <textarea
+                                  className="input"
+                                  rows={3}
+                                  value={csCaseDetail}
+                                  onChange={(event) => setCsCaseDetail(event.target.value)}
+                                  placeholder={t.csCaseDetailLabel}
+                                  disabled={csSubmitting}
+                                />
+                              </label>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csHappenedAtLabel}</span>
+                                  <input
+                                    className="input"
+                                    type="datetime-local"
+                                    value={csHappenedAt}
+                                    onChange={(event) => setCsHappenedAt(event.target.value)}
+                                    aria-label={t.csHappenedAtLabel}
+                                    disabled={csSubmitting}
+                                  />
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csDueAtLabel}</span>
+                                  <input
+                                    className="input"
+                                    type="datetime-local"
+                                    value={csDueAt}
+                                    onChange={(event) => setCsDueAt(event.target.value)}
+                                    aria-label={t.csDueAtLabel}
+                                    disabled={csSubmitting}
+                                  />
+                                </label>
+                              </div>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={csSubmitting}>
+                                  {csSubmitting ? t.csCreatingAction : t.csCreateAction}
+                                </button>
+                                <button type="button" className="fdPillBtn" onClick={() => void loadCsModule()} disabled={csLoading || csSubmitting}>
+                                  {t.csReloadAction}
+                                </button>
+                              </div>
+                            </form>
+
+                            <div className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.csOperateSection}</h5>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csFilterStatusLabel}</span>
+                                  <select
+                                    className="input"
+                                    value={csFilterStatus}
+                                    onChange={(event) => setCsFilterStatus(event.target.value as "all" | "open" | "in_progress" | "resolved" | "closed")}
+                                    disabled={csSubmitting}
+                                  >
+                                    <option value="all">{t.csStatusAll}</option>
+                                    <option value="open">{t.csStatusOpen}</option>
+                                    <option value="in_progress">{t.csStatusInProgress}</option>
+                                    <option value="resolved">{t.csStatusResolved}</option>
+                                    <option value="closed">{t.csStatusClosed}</option>
+                                  </select>
+                                </label>
+                                <div className="fdInventoryActions" style={{ justifyContent: "flex-start", alignItems: "end" }}>
+                                  <button type="button" className="fdPillBtn" onClick={() => void loadCsModule()} disabled={csLoading || csSubmitting}>
+                                    {t.csReloadAction}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <form onSubmit={handleCsUpdateStatus}>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csSelectIncidentLabel}</span>
+                                  <select
+                                    className="input"
+                                    value={csSelectedIncidentId}
+                                    onChange={(event) => setCsSelectedIncidentId(event.target.value)}
+                                    disabled={csSubmitting}
+                                  >
+                                    {csIncidents.map((item) => (
+                                      <option key={item.id} value={item.id}>
+                                        {item.incidentNo} | {item.title}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <div className="fdInventoryGrid2">
+                                  <label className="fdInventoryField">
+                                    <span className="kvLabel">{t.csStatusToLabel}</span>
+                                    <select
+                                      className="input"
+                                      value={csStatusTo}
+                                      onChange={(event) => setCsStatusTo(event.target.value as "open" | "in_progress" | "resolved" | "closed")}
+                                      disabled={csSubmitting}
+                                    >
+                                      <option value="open">{t.csStatusOpen}</option>
+                                      <option value="in_progress">{t.csStatusInProgress}</option>
+                                      <option value="resolved">{t.csStatusResolved}</option>
+                                      <option value="closed">{t.csStatusClosed}</option>
+                                    </select>
+                                  </label>
+                                  <label className="fdInventoryField">
+                                    <span className="kvLabel">{t.csStatusNoteLabel}</span>
+                                    <input
+                                      className="input"
+                                      value={csStatusNote}
+                                      onChange={(event) => setCsStatusNote(event.target.value)}
+                                      placeholder={t.csStatusNoteLabel}
+                                      disabled={csSubmitting}
+                                    />
+                                  </label>
+                                </div>
+                                <div className="fdInventoryActions">
+                                  <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={csSubmitting || csIncidents.length === 0}>
+                                    {csSubmitting ? t.csActioning : t.csUpdateStatusAction}
+                                  </button>
+                                </div>
+                              </form>
+
+                              <form onSubmit={handleCsAddFollowup} style={{ marginTop: 10 }}>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csFollowupNoteLabel}</span>
+                                  <textarea
+                                    className="input"
+                                    rows={2}
+                                    value={csFollowupNote}
+                                    onChange={(event) => setCsFollowupNote(event.target.value)}
+                                    placeholder={t.csFollowupNoteLabel}
+                                    disabled={csSubmitting}
+                                  />
+                                </label>
+                                <div className="fdInventoryActions">
+                                  <button type="submit" className="fdPillBtn" disabled={csSubmitting || csIncidents.length === 0}>
+                                    {csSubmitting ? t.csActioning : t.csAddFollowupAction}
+                                  </button>
+                                </div>
+                              </form>
+
+                              <form onSubmit={handleCsResolve} style={{ marginTop: 10 }}>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.csResolveNoteLabel}</span>
+                                  <textarea
+                                    className="input"
+                                    rows={2}
+                                    value={csResolveNote}
+                                    onChange={(event) => setCsResolveNote(event.target.value)}
+                                    placeholder={t.csResolveNoteLabel}
+                                    disabled={csSubmitting}
+                                  />
+                                </label>
+                                <div className="fdInventoryActions">
+                                  <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={csSubmitting || csIncidents.length === 0}>
+                                    {csSubmitting ? t.csActioning : t.csResolveAction}
+                                  </button>
+                                </div>
+                              </form>
+                            </div>
+                          </div>
+
+                          <div className="fdInventoryListGrid">
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{t.csListSection}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {csIncidents.map((item) => (
+                                  <div
+                                    key={item.id}
+                                    className="card"
+                                    style={{
+                                      padding: 10,
+                                      borderColor: csSelectedIncidentId === item.id ? "rgba(34,184,166,.45)" : undefined,
+                                    }}
+                                  >
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{item.incidentNo}</strong>
+                                      <span className="fdChip" style={csStatusStyle(item.status)}>{csStatusLabel(item.status)}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>{item.title}</p>
+                                    <p className="sub" style={{ marginTop: 4 }}>
+                                      {csTypeLabel(item.incidentType)} | {csPriorityLabel(item.priority)} | {csSourceLabel(item.source)}
+                                    </p>
+                                    {(item.memberCode || item.memberName || item.contactPhone) ? (
+                                      <p className="sub" style={{ marginTop: 4 }}>
+                                        {item.memberCode ? `#${item.memberCode}` : "-"}
+                                        {item.memberName ? ` | ${item.memberName}` : ""}
+                                        {item.contactPhone ? ` | ${item.contactPhone}` : ""}
+                                      </p>
+                                    ) : null}
+                                    <p className="sub" style={{ marginTop: 4 }}>
+                                      {t.csCreatedAt}: {fmtDateTime(item.createdAt)}
+                                    </p>
+                                    <p className="sub" style={{ marginTop: 4 }}>
+                                      {t.csUpdatedAt}: {fmtDateTime(item.updatedAt)}
+                                    </p>
+                                    {item.dueAt ? (
+                                      <p className="sub" style={{ marginTop: 4 }}>
+                                        {t.csDueAt}: {fmtDateTime(item.dueAt)}
+                                      </p>
+                                    ) : null}
+                                    <p className="sub" style={{ marginTop: 4 }}>{item.detail}</p>
+                                    {item.resolutionNote ? (
+                                      <p className="sub" style={{ marginTop: 4 }}>
+                                        {t.csResolutionTag}: {item.resolutionNote}
+                                      </p>
+                                    ) : null}
+                                    <div className="fdInventoryCardActions">
+                                      <button
+                                        type="button"
+                                        className="fdPillBtn"
+                                        onClick={() => {
+                                          const status = item.status === "open" || item.status === "in_progress" || item.status === "resolved" || item.status === "closed"
+                                            ? item.status
+                                            : "in_progress";
+                                          setCsSelectedIncidentId(item.id);
+                                          setCsStatusTo(status);
+                                        }}
+                                      >
+                                        {t.csUseIncidentAction}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                                {!csLoading && csIncidents.length === 0 ? <p className="fdGlassText">{t.csNoIncidents}</p> : null}
+                              </div>
+                            </div>
+
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{t.csEventsSection}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {(csSelectedIncident?.events || []).map((eventItem) => (
+                                  <div key={eventItem.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{csEventActionLabel(eventItem.action)}</strong>
+                                      <span className="fdChip">{eventItem.actorName || "-"}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(eventItem.createdAt)}</p>
+                                    {eventItem.note ? <p className="sub" style={{ marginTop: 4 }}>{eventItem.note}</p> : null}
+                                  </div>
+                                ))}
+                                {!csLoading && (csSelectedIncident?.events || []).length === 0 ? <p className="fdGlassText">{t.csNoEvents}</p> : null}
                               </div>
                             </div>
                           </div>
