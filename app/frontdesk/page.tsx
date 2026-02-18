@@ -758,19 +758,19 @@ export default function FrontdeskPortalPage() {
 
         {capabilityOpen && portalReady ? createPortal((
           <div
-            className={`fdModalBackdrop ${isFeatureModal ? "fdModalBackdropFeature" : ""} ${modalType === "handover" ? "fdModalBackdropHandover appModalBackdrop" : ""}`}
+            className={`fdModalBackdrop ${isFeatureModal ? "fdModalBackdropFeature" : ""} ${modalType === "handover" ? "fdModalBackdropHandover" : ""}`}
             onClick={() => setCapabilityOpen(false)}
             role="presentation"
           >
             <div
-              className={`fdModal ${isFeatureModal ? "fdModalFeature" : ""} ${modalType === "handover" ? "fdModalHandover appModalContainer" : ""}`}
+              className={`fdModal ${isFeatureModal ? "fdModalFeature" : ""} ${modalType === "handover" ? "fdModalHandover" : ""}`}
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
               aria-label={modalType === "handover" ? t.handoverModalTitle : t.capabilityModalTitle}
             >
-              <div className={`fdModalHead ${modalType === "handover" ? "appModalHeader" : ""}`}>
-                <h2 className={`sectionTitle ${modalType === "handover" ? "appModalTitle" : ""}`} style={{ margin: 0 }}>
+              <div className="fdModalHead">
+                <h2 className="sectionTitle" style={{ margin: 0 }}>
                   {modalType === "entry"
                     ? t.entryModalTitle
                     : modalType === "member"
@@ -782,7 +782,7 @@ export default function FrontdeskPortalPage() {
                 {modalType === "handover" ? (
                   <button
                     type="button"
-                    className="fdModalIconBtn appModalClose"
+                    className="fdModalIconBtn"
                     aria-label={t.close}
                     onClick={() => setCapabilityOpen(false)}
                   >
@@ -835,9 +835,9 @@ export default function FrontdeskPortalPage() {
                   ) : null}
                 </div>
               ) : modalType === "handover" ? (
-                <form onSubmit={handleCloseShift} className="fdHandoverForm appModalBody">
-                  <div className="fdHandoverSection appModalSection">
-                    <p className="fdGlassText appFormHelp" style={{ marginTop: 0, marginBottom: 10 }}>{t.handoverHint}</p>
+                <form onSubmit={handleCloseShift} className="fdHandoverForm">
+                  <div className="fdHandoverSection">
+                    <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 10 }}>{t.handoverHint}</p>
                     {activeShift?.opened_at ? (
                       <div className="fdChip" style={{ marginBottom: 12, display: "inline-flex" }}>
                         {t.openedAt}: {fmtDateTime(activeShift.opened_at)}
@@ -845,7 +845,7 @@ export default function FrontdeskPortalPage() {
                     ) : null}
                     <div className="fdHandoverGrid">
                       <label className="fdHandoverField">
-                        <span className="kvLabel appFormLabel">{t.closeCashTotal}</span>
+                        <span className="kvLabel">{t.closeCashTotal}</span>
                         <div className="fdAmountInputWrap">
                           <span className="fdAmountPrefix">NT$</span>
                           <input
@@ -858,7 +858,7 @@ export default function FrontdeskPortalPage() {
                         </div>
                       </label>
                       <label className="fdHandoverField">
-                        <span className="kvLabel appFormLabel">{t.closeCardTotal}</span>
+                        <span className="kvLabel">{t.closeCardTotal}</span>
                         <div className="fdAmountInputWrap">
                           <span className="fdAmountPrefix">NT$</span>
                           <input
@@ -871,7 +871,7 @@ export default function FrontdeskPortalPage() {
                         </div>
                       </label>
                       <label className="fdHandoverField">
-                        <span className="kvLabel appFormLabel">{t.closeTransferTotal}</span>
+                        <span className="kvLabel">{t.closeTransferTotal}</span>
                         <div className="fdAmountInputWrap">
                           <span className="fdAmountPrefix">NT$</span>
                           <input
@@ -885,9 +885,9 @@ export default function FrontdeskPortalPage() {
                       </label>
                     </div>
                   </div>
-                  <div className="fdHandoverSection appModalSection">
+                  <div className="fdHandoverSection">
                     <label className="fdHandoverField fdHandoverNote">
-                      <span className="kvLabel appFormLabel">{t.closeNote}</span>
+                      <span className="kvLabel">{t.closeNote}</span>
                       <textarea
                         className="input fdHandoverTextarea"
                         rows={3}
@@ -898,13 +898,13 @@ export default function FrontdeskPortalPage() {
                       />
                     </label>
                   </div>
-                  <div className="fdHandoverFooter appModalFooter">
-                    <button type="button" className="fdHandoverBtn fdHandoverBtnGhost appModalBtn appModalBtnGhost" onClick={() => setCapabilityOpen(false)}>
+                  <div className="fdHandoverFooter">
+                    <button type="button" className="fdHandoverBtn fdHandoverBtnGhost" onClick={() => setCapabilityOpen(false)}>
                       {t.cancel}
                     </button>
                     <button
                       type="submit"
-                      className="fdHandoverBtn fdHandoverBtnPrimary appModalBtn appModalBtnPrimary"
+                      className="fdHandoverBtn fdHandoverBtnPrimary"
                       disabled={closingShift}
                       style={closingShift ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
                     >
