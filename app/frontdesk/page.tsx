@@ -305,6 +305,7 @@ export default function FrontdeskPortalPage() {
             memberModalHint: "建議：先查詢再建檔，避免重複資料。",
             openCheckinPage: "開啟入場作業頁",
             openMemberPage: "開啟會員作業頁",
+            openPosPage: "開啟收銀作業頁",
             close: "關閉",
             cancel: "取消",
             openShiftFail: "開班失敗",
@@ -380,6 +381,7 @@ export default function FrontdeskPortalPage() {
             memberModalHint: "Tip: Search first before create to avoid duplicates.",
             openCheckinPage: "Open Check-in Workspace",
             openMemberPage: "Open Member Workspace",
+            openPosPage: "Open POS Workspace",
             close: "Close",
             cancel: "Cancel",
             openShiftFail: "Open shift failed",
@@ -488,7 +490,7 @@ export default function FrontdeskPortalPage() {
         ? [
             { id: "entry", title: "A. 入場 / 放行", desc: "掃碼、人工放行、取消誤刷、原因碼與稽核。", detail: "支援會員卡 / QR / 人工例外放行，並要求原因碼與備註，完整寫入稽核。", area: "ENTRY", status: "building" },
             { id: "member", title: "B. 會員查詢 / 建檔", desc: "防重複建檔、自訂欄位、快速下一步。", detail: "支援電話/姓名搜尋、防重複建立、補資料與自訂欄位，櫃檯可直接接續收款與預約。", area: "MEMBER", status: "ready" },
-            { id: "pos", title: "C. 收銀 / POS / 發票", desc: "訂單收款、退費/作廢送審、結帳流程。", detail: "包含櫃檯收款、多付款方式、退費與作廢送審流程，並保留稽核軌跡。", area: "POS", status: "building" },
+            { id: "pos", title: "C. 收銀 / POS / 發票", desc: "訂單收款、退費/作廢送審、結帳流程。", detail: "包含櫃檯收款、多付款方式、退費與作廢送審流程，並保留稽核軌跡。", area: "POS", status: "ready" },
             { id: "booking", title: "D. 預約 / 課務", desc: "建立即時預約與課務調整。", detail: "可建立、改期、取消課務預約，支援現場快速調整時段。", area: "BOOKING", status: "ready" },
             { id: "locker", title: "E. 置物櫃 / 租借", desc: "置物櫃租用與租借物管理（下一批）。", detail: "規劃中：置物櫃租期、押金、逾期與租借物品生命週期管理。", area: "LOCKER", status: "planned" },
             { id: "inventory", title: "F. 商品 / 庫存 / 銷售", desc: "前台銷售與庫存追蹤。", detail: "建置中：商品銷售、庫存扣減、低庫存提醒與追溯。", area: "INVENTORY", status: "building" },
@@ -501,7 +503,7 @@ export default function FrontdeskPortalPage() {
         : [
             { id: "entry", title: "A. Entry / Allow", desc: "Scan, exception pass, undo, reason code with audit.", detail: "Supports card/QR/manual exception pass with reason code and full audit trail.", area: "ENTRY", status: "building" },
             { id: "member", title: "B. Member Search / Create", desc: "Duplicate prevention, custom fields, quick actions.", detail: "Search/create with duplicate prevention and configurable custom fields.", area: "MEMBER", status: "ready" },
-            { id: "pos", title: "C. POS / Invoice", desc: "Order payment, refund/void approval flow.", detail: "Desk payment, multi-method checkout, and approved high-risk refund/void flow.", area: "POS", status: "building" },
+            { id: "pos", title: "C. POS / Invoice", desc: "Order payment, refund/void approval flow.", detail: "Desk payment, multi-method checkout, and approved high-risk refund/void flow.", area: "POS", status: "ready" },
             { id: "booking", title: "D. Booking / Classes", desc: "Booking creation and class schedule handling.", detail: "Create, reschedule, and cancel class bookings from desk operations.", area: "BOOKING", status: "ready" },
             { id: "locker", title: "E. Locker / Rental", desc: "Locker contracts and rental item lifecycle (next).", detail: "Planned: locker rental, deposit, overdue and rental lifecycle.", area: "LOCKER", status: "planned" },
             { id: "inventory", title: "F. Product / Inventory", desc: "Frontdesk selling and inventory traceability.", detail: "Building: product checkout, stock movement, and low-stock warnings.", area: "INVENTORY", status: "building" },
@@ -824,7 +826,13 @@ export default function FrontdeskPortalPage() {
                         key={item.id}
                         type="button"
                         className={`fdGlassSubPanel fdCapabilityCard fdModalCapabilityItem ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
-                        onClick={() => setSelectedCapabilityId(item.id)}
+                        onClick={() => {
+                          if (item.id === "pos") {
+                            window.location.href = "/frontdesk/orders/new";
+                            return;
+                          }
+                          setSelectedCapabilityId(item.id);
+                        }}
                       >
                         <div className="fdActionHead">
                           <span className="kvLabel">{item.area}</span>
@@ -851,6 +859,16 @@ export default function FrontdeskPortalPage() {
                         <div className="kvLabel">{t.capabilityDetailTitle}</div>
                         <p className="sub" style={{ marginTop: 6 }}>{selectedCapability.desc}</p>
                       </div>
+                      {selectedCapability.id === "entry" ? (
+                        <a className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 12, display: "inline-flex" }} href="/frontdesk/checkin">
+                          {t.openCheckinPage}
+                        </a>
+                      ) : null}
+                      {selectedCapability.id === "pos" ? (
+                        <a className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 12, display: "inline-flex" }} href="/frontdesk/orders/new">
+                          {t.openPosPage}
+                        </a>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
