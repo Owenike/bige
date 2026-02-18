@@ -11,7 +11,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isEmbedded = searchParams.get("embed") === "1";
 
   return (
-    <div className={`shell ${isEmbedded ? "shellEmbedded" : ""}`}>
+    <div className={`shell appAuroraSurface ${isEmbedded ? "shellEmbedded" : ""}`}>
       {!isEmbedded ? (
         <header className="topbar">
           <div className="container nav">

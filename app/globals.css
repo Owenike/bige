@@ -20,6 +20,26 @@
   --shadow-2: 0 8px 18px rgba(129,145,172,.16);
 
   --container: 1100px;
+
+  /* aurora app surface */
+  --app-bg-base: #f3f6fb;
+  --app-aurora-blue: rgba(143, 180, 247, .24);
+  --app-aurora-mint: rgba(152, 220, 204, .20);
+  --app-aurora-violet: rgba(197, 178, 242, .20);
+  --app-aurora-pink: rgba(233, 196, 228, .16);
+  --app-vignette: rgba(22, 30, 45, .06);
+
+  /* modal system */
+  --app-modal-backdrop: rgba(17, 24, 39, .38);
+  --app-modal-bg: rgba(255, 255, 255, .96);
+  --app-modal-border: #e4e4e7;
+  --app-modal-title: #18181b;
+  --app-modal-text: #52525b;
+  --app-modal-muted: #71717a;
+  --app-modal-section: #fafafa;
+  --app-modal-shadow: 0 24px 56px rgba(15, 23, 42, .24);
+  --app-modal-primary: #14b8a6;
+  --app-modal-primary-hover: #0d9488;
 }
 
 *{ box-sizing: border-box; }
@@ -27,12 +47,36 @@ html,body{ height:100%; }
 body{
   margin:0;
   color: var(--ink);
+  background-color: var(--app-bg-base);
   background:
-    radial-gradient(900px 380px at 8% -6%, rgba(160,214,255,.34), transparent 62%),
-    radial-gradient(800px 420px at 92% 2%, rgba(205,177,255,.24), transparent 64%),
-    radial-gradient(720px 360px at 52% 100%, rgba(173,241,205,.18), transparent 68%),
-    linear-gradient(180deg, #f3f6fb 0%, var(--bg) 100%);
+    radial-gradient(1200px 560px at 8% -12%, var(--app-aurora-blue), transparent 68%),
+    radial-gradient(980px 520px at 92% -6%, var(--app-aurora-violet), transparent 70%),
+    radial-gradient(920px 500px at 14% 90%, var(--app-aurora-mint), transparent 72%),
+    radial-gradient(860px 460px at 86% 86%, var(--app-aurora-pink), transparent 72%),
+    radial-gradient(140% 105% at 50% -18%, rgba(255,255,255,.70) 0%, rgba(255,255,255,0) 56%, var(--app-vignette) 100%),
+    linear-gradient(180deg, #f8fafd 0%, var(--app-bg-base) 100%);
   font-family: "SF Pro Display", "SF Pro Text", "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif;
+}
+
+.appAuroraSurface{
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(1200px 540px at 6% -14%, rgba(142, 180, 248, .10), transparent 68%),
+    radial-gradient(980px 520px at 94% -8%, rgba(196, 176, 239, .10), transparent 68%),
+    radial-gradient(840px 420px at 16% 88%, rgba(146, 214, 197, .09), transparent 72%),
+    linear-gradient(180deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,0) 48%);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --app-modal-bg: #09090b;
+    --app-modal-border: #27272a;
+    --app-modal-title: #f4f4f5;
+    --app-modal-text: #d4d4d8;
+    --app-modal-muted: #a1a1aa;
+    --app-modal-section: #18181b;
+    --app-modal-shadow: 0 28px 60px rgba(0, 0, 0, .45);
+  }
 }
 
 a{ color: inherit; text-decoration: none; }
@@ -337,10 +381,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   padding: 20px 24px 24px;
   min-height: calc(100vh - 116px);
   background:
-    radial-gradient(820px 420px at 12% 10%, rgba(78, 221, 205, .11), transparent 66%),
-    radial-gradient(760px 400px at 88% 14%, rgba(154, 156, 255, .10), transparent 67%),
-    radial-gradient(720px 380px at 84% 90%, rgba(216, 170, 255, .09), transparent 70%),
-    linear-gradient(165deg, #f4f7fc 0%, #edf2f9 44%, #e8eef7 100%);
+    radial-gradient(940px 500px at 8% -8%, rgba(142, 180, 248, .16), transparent 70%),
+    radial-gradient(840px 460px at 92% -6%, rgba(197, 178, 242, .14), transparent 72%),
+    radial-gradient(760px 420px at 16% 94%, rgba(152, 220, 204, .12), transparent 72%),
+    radial-gradient(700px 380px at 88% 90%, rgba(233, 196, 228, .10), transparent 72%),
+    linear-gradient(165deg, #f7f9fd 0%, #f1f4fa 48%, #edf2f9 100%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
 }
 .fdEmbedBackdrop{
@@ -703,6 +748,105 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdCapabilityDesc{
   margin-bottom: 0;
+}
+
+/* App modal design system */
+.appModalBackdrop{
+  background: var(--app-modal-backdrop);
+  -webkit-backdrop-filter: saturate(115%) blur(6px);
+  backdrop-filter: saturate(115%) blur(6px);
+}
+.appModalContainer{
+  background: var(--app-modal-bg);
+  border: 1px solid var(--app-modal-border);
+  border-radius: 16px;
+  color: var(--app-modal-text);
+  box-shadow: var(--app-modal-shadow);
+}
+.appModalHeader{
+  padding: 14px 16px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--app-modal-border);
+  background: transparent;
+}
+.appModalTitle{
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--app-modal-title);
+}
+.appModalClose{
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--app-modal-border);
+  background: transparent;
+  color: var(--app-modal-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.appModalClose:hover{
+  background: rgba(24, 24, 27, .04);
+}
+.appModalBody{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  min-height: 0;
+}
+.appModalSection{
+  border-radius: 12px;
+  border: 1px solid var(--app-modal-border);
+  background: var(--app-modal-section);
+  padding: 12px;
+}
+.appModalFooter{
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-modal-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.appModalBtn{
+  min-width: 110px;
+  height: 46px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid #d4d4d8;
+  background: #ffffff;
+  color: #27272a;
+  font-weight: 600;
+}
+.appModalBtnGhost{
+  background: transparent;
+}
+.appModalBtnPrimary{
+  border-color: var(--app-modal-primary);
+  background: var(--app-modal-primary);
+  color: #ffffff;
+}
+.appModalBtnPrimary:hover{
+  border-color: var(--app-modal-primary-hover);
+  background: var(--app-modal-primary-hover);
+}
+.appModalBody textarea{
+  resize: none;
+}
+.appFormLabel{
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--app-modal-muted);
+}
+.appFormHelp{
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--app-modal-text);
 }
 .fdModalBackdrop{
   position: fixed;
