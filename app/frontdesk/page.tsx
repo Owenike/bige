@@ -376,6 +376,7 @@ export default function FrontdeskPortalPage() {
             lockerRenterLabel: "租借人",
             lockerPhoneLabel: "電話（選填）",
             lockerDepositLabel: "押金",
+            lockerDepositTag: "押金",
             lockerRentalTermLabel: "租借方案",
             lockerTermDaily: "當日租借",
             lockerTermMonthly: "單月租借",
@@ -390,6 +391,8 @@ export default function FrontdeskPortalPage() {
             lockerReload: "重新整理",
             lockerActiveList: "使用中",
             lockerRecentList: "近期歸還",
+            lockerDepositHeld: "在押總額",
+            lockerDepositReturned: "歸還總額（近期）",
             lockerNoneActive: "目前沒有使用中的置物櫃。",
             lockerNoneRecent: "目前沒有近期歸還紀錄。",
             lockerReturnAction: "登記歸還",
@@ -409,6 +412,8 @@ export default function FrontdeskPortalPage() {
             lockerInUse: "此置物櫃目前使用中",
             lockerStatusActive: "使用中",
             lockerStatusReturned: "已歸還",
+            lockerRentedAt: "租借時間",
+            lockerReturnedAt: "歸還時間",
             lockerTermTag: "租期",
             close: "關閉",
             cancel: "取消",
@@ -493,6 +498,7 @@ export default function FrontdeskPortalPage() {
             lockerRenterLabel: "Renter Name",
             lockerPhoneLabel: "Phone (optional)",
             lockerDepositLabel: "Deposit",
+            lockerDepositTag: "Deposit",
             lockerRentalTermLabel: "Rental Term",
             lockerTermDaily: "Daily",
             lockerTermMonthly: "Monthly",
@@ -507,6 +513,8 @@ export default function FrontdeskPortalPage() {
             lockerReload: "Reload",
             lockerActiveList: "Active Lockers",
             lockerRecentList: "Recently Returned",
+            lockerDepositHeld: "Held Deposit Total",
+            lockerDepositReturned: "Returned Deposit Total (Recent)",
             lockerNoneActive: "No active locker rentals.",
             lockerNoneRecent: "No recent returns.",
             lockerReturnAction: "Mark Returned",
@@ -526,6 +534,8 @@ export default function FrontdeskPortalPage() {
             lockerInUse: "Locker is already in use",
             lockerStatusActive: "Active",
             lockerStatusReturned: "Returned",
+            lockerRentedAt: "Rented At",
+            lockerReturnedAt: "Returned At",
             lockerTermTag: "Term",
             close: "Close",
             cancel: "Cancel",
@@ -1277,6 +1287,9 @@ export default function FrontdeskPortalPage() {
                                       {item.renterName || item.phone || (item.memberCode ? `#${item.memberCode}` : item.memberId) || "-"}
                                     </p>
                                     <p className="sub" style={{ marginTop: 4 }}>
+                                      {t.lockerDepositTag}: NT${item.depositAmount}
+                                    </p>
+                                    <p className="sub" style={{ marginTop: 4 }}>
                                       {t.lockerTermTag}: {lockerTermLabel(item.rentalTerm)}
                                     </p>
                                     <p className="sub" style={{ marginTop: 4 }}>
@@ -1311,10 +1324,16 @@ export default function FrontdeskPortalPage() {
                                       {item.renterName || item.phone || (item.memberCode ? `#${item.memberCode}` : item.memberId) || "-"}
                                     </p>
                                     <p className="sub" style={{ marginTop: 4 }}>
+                                      {t.lockerDepositTag}: NT${item.depositAmount}
+                                    </p>
+                                    <p className="sub" style={{ marginTop: 4 }}>
                                       {t.lockerTermTag}: {lockerTermLabel(item.rentalTerm)}
                                     </p>
                                     <p className="sub" style={{ marginTop: 4 }}>
-                                      {item.returnedAt ? fmtDateTime(item.returnedAt) : fmtDateTime(item.rentedAt)}
+                                      {t.lockerRentedAt}: {fmtDateTime(item.rentedAt)}
+                                    </p>
+                                    <p className="sub" style={{ marginTop: 4 }}>
+                                      {t.lockerReturnedAt}: {item.returnedAt ? fmtDateTime(item.returnedAt) : "-"}
                                     </p>
                                   </div>
                                 ))}
