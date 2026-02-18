@@ -85,6 +85,10 @@ function isMemberCode(value: string) {
   return Number.isInteger(n) && n >= 1 && n <= 9999;
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function isSameLocalDay(iso: string, now: Date) {
   const date = new Date(iso);
   return (
@@ -195,6 +199,18 @@ export default function FrontdeskPortalPage() {
   const [closeCardTotal, setCloseCardTotal] = useState("0");
   const [closeTransferTotal, setCloseTransferTotal] = useState("0");
   const [closeNote, setCloseNote] = useState("");
+  const [posMemberId, setPosMemberId] = useState("");
+  const [posAmount, setPosAmount] = useState("0");
+  const [posNote, setPosNote] = useState("");
+  const [posOrderId, setPosOrderId] = useState("");
+  const [posPaymentAmount, setPosPaymentAmount] = useState("0");
+  const [posPaymentMethod, setPosPaymentMethod] = useState("cash");
+  const [posCheckoutUrl, setPosCheckoutUrl] = useState("");
+  const [posCreatingOrder, setPosCreatingOrder] = useState(false);
+  const [posPayingOrder, setPosPayingOrder] = useState(false);
+  const [posInitializingCheckout, setPosInitializingCheckout] = useState(false);
+  const [posError, setPosError] = useState<string | null>(null);
+  const [posMessage, setPosMessage] = useState<string | null>(null);
   const [lockerRentals, setLockerRentals] = useState<LockerRentalItem[]>([]);
   const [lockerLoading, setLockerLoading] = useState(false);
   const [lockerSubmitting, setLockerSubmitting] = useState(false);
@@ -416,6 +432,34 @@ export default function FrontdeskPortalPage() {
             openPosPage: "開啟收銀作業頁",
             posModuleTitle: "收銀作業",
             posModuleSub: "快速建立訂單、記錄付款，並處理待收款訂單。",
+            posCreateSection: "建立訂單",
+            posPaymentSection: "記錄付款",
+            posCheckoutSection: "藍新金流結帳",
+            posMemberIdOptional: "會員 ID（UUID，選填）",
+            posAmountLabel: "訂單金額",
+            posNoteLabel: "備註（選填）",
+            posCurrentOrder: "目前訂單",
+            posNoOrder: "尚未選擇訂單",
+            posPaymentAmountLabel: "付款金額",
+            posPaymentMethodLabel: "付款方式",
+            posCreateAction: "建立訂單",
+            posCreatingAction: "建立中...",
+            posPayAction: "記錄付款",
+            posPayingAction: "記錄中...",
+            posInitCheckoutAction: "初始化結帳",
+            posInitializingCheckoutAction: "初始化中...",
+            posClearOrderAction: "清除目前訂單",
+            posCheckoutUrlLabel: "結帳連結",
+            posUseOrderAction: "使用此訂單",
+            posOrderCreated: "訂單已建立",
+            posPaymentRecorded: "付款已記錄",
+            posCheckoutInitialized: "藍新結帳已初始化",
+            posCreateFail: "建立訂單失敗",
+            posPaymentFail: "付款失敗",
+            posCheckoutFail: "藍新初始化失敗",
+            posInvalidMemberId: "會員 ID 格式錯誤，請輸入 UUID 或留空",
+            posInvalidAmount: "金額格式錯誤",
+            posOrderRequired: "請先建立或選擇訂單",
             posPendingTitle: "待收款訂單",
             posNoPending: "目前沒有待收款訂單。",
             lockerTitle: "置物櫃租借作業",
@@ -600,6 +644,34 @@ export default function FrontdeskPortalPage() {
             openPosPage: "Open POS Workspace",
             posModuleTitle: "POS Workspace",
             posModuleSub: "Quickly create orders, capture payments, and process unpaid orders.",
+            posCreateSection: "Create Order",
+            posPaymentSection: "Capture Payment",
+            posCheckoutSection: "Newebpay Checkout",
+            posMemberIdOptional: "Member ID (UUID, optional)",
+            posAmountLabel: "Order Amount",
+            posNoteLabel: "Note (optional)",
+            posCurrentOrder: "Current Order",
+            posNoOrder: "No order selected",
+            posPaymentAmountLabel: "Payment Amount",
+            posPaymentMethodLabel: "Payment Method",
+            posCreateAction: "Create Order",
+            posCreatingAction: "Creating...",
+            posPayAction: "Record Payment",
+            posPayingAction: "Recording...",
+            posInitCheckoutAction: "Initialize Checkout",
+            posInitializingCheckoutAction: "Initializing...",
+            posClearOrderAction: "Clear Current Order",
+            posCheckoutUrlLabel: "Checkout URL",
+            posUseOrderAction: "Use Order",
+            posOrderCreated: "Order created",
+            posPaymentRecorded: "Payment recorded",
+            posCheckoutInitialized: "Checkout initialized",
+            posCreateFail: "Create order failed",
+            posPaymentFail: "Payment failed",
+            posCheckoutFail: "Newebpay init failed",
+            posInvalidMemberId: "Invalid member ID format. Use UUID or leave empty.",
+            posInvalidAmount: "Invalid amount format",
+            posOrderRequired: "Please create or select an order first",
             posPendingTitle: "Pending Payments",
             posNoPending: "No unpaid orders right now.",
             lockerTitle: "Locker Rental Desk",
@@ -833,6 +905,116 @@ export default function FrontdeskPortalPage() {
     t.closeShiftFail,
     t.invalidAmount,
   ]);
+
+  const handlePosCreateOrder = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedMemberId = posMemberId.trim();
+    const amount = Number(posAmount);
+    if (normalizedMemberId && !isUuid(normalizedMemberId)) {
+      setPosError(t.posInvalidMemberId);
+      setPosMessage(null);
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setPosError(t.posInvalidAmount);
+      setPosMessage(null);
+      return;
+    }
+
+    setPosCreatingOrder(true);
+    setPosError(null);
+    setPosMessage(null);
+    setPosCheckoutUrl("");
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memberId: normalizedMemberId || null,
+          amount,
+          channel: "frontdesk",
+          note: posNote.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.posCreateFail);
+      const newOrderId = String(payload?.order?.id || "");
+      setPosOrderId(newOrderId);
+      setPosPaymentAmount(String(amount));
+      setPosMessage(`${t.posOrderCreated}: ${newOrderId}`);
+      await loadDashboard(true);
+    } catch (err) {
+      setPosError(err instanceof Error ? err.message : t.posCreateFail);
+    } finally {
+      setPosCreatingOrder(false);
+    }
+  }, [loadDashboard, posAmount, posMemberId, posNote, t.posCreateFail, t.posInvalidAmount, t.posInvalidMemberId, t.posOrderCreated]);
+
+  const handlePosPayOrder = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const amount = Number(posPaymentAmount);
+    if (!posOrderId) {
+      setPosError(t.posOrderRequired);
+      setPosMessage(null);
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setPosError(t.posInvalidAmount);
+      setPosMessage(null);
+      return;
+    }
+
+    setPosPayingOrder(true);
+    setPosError(null);
+    setPosMessage(null);
+    try {
+      const res = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: posOrderId,
+          amount,
+          method: posPaymentMethod,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.posPaymentFail);
+      setPosMessage(`${t.posPaymentRecorded}: ${payload?.payment?.id || "-"}`);
+      await loadDashboard(true);
+    } catch (err) {
+      setPosError(err instanceof Error ? err.message : t.posPaymentFail);
+    } finally {
+      setPosPayingOrder(false);
+    }
+  }, [loadDashboard, posOrderId, posPaymentAmount, posPaymentMethod, t.posInvalidAmount, t.posOrderRequired, t.posPaymentFail, t.posPaymentRecorded]);
+
+  const handlePosInitCheckout = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!posOrderId) {
+      setPosError(t.posOrderRequired);
+      setPosMessage(null);
+      return;
+    }
+    setPosInitializingCheckout(true);
+    setPosError(null);
+    setPosMessage(null);
+    setPosCheckoutUrl("");
+    try {
+      const res = await fetch("/api/payments/newebpay/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: posOrderId }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || t.posCheckoutFail);
+      setPosCheckoutUrl(String(payload?.checkoutUrl || ""));
+      setPosMessage(t.posCheckoutInitialized);
+    } catch (err) {
+      setPosError(err instanceof Error ? err.message : t.posCheckoutFail);
+    } finally {
+      setPosInitializingCheckout(false);
+    }
+  }, [posOrderId, t.posCheckoutFail, t.posCheckoutInitialized, t.posOrderRequired]);
 
   const loadLockerRentals = useCallback(async () => {
     setLockerLoading(true);
@@ -1616,20 +1798,122 @@ export default function FrontdeskPortalPage() {
                         <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10 }}>
                           <h4 className="sectionTitle" style={{ margin: 0 }}>{t.posModuleTitle}</h4>
                           <p className="fdGlassText" style={{ marginTop: 6 }}>{t.posModuleSub}</p>
-                          <div className="fdPillActions" style={{ marginTop: 10 }}>
-                            <a
-                              className="fdPillBtn fdPillBtnPrimary"
-                              href="/frontdesk/orders/new"
-                              style={actionsDisabled ? { opacity: 0.7, pointerEvents: "none" } : undefined}
-                              aria-disabled={actionsDisabled}
-                              onClick={(event) => {
-                                if (actionsDisabled) event.preventDefault();
-                              }}
-                            >
-                              {t.openPosPage}
-                            </a>
+                          {posError ? <div className="error" style={{ marginTop: 8 }}>{posError}</div> : null}
+                          {posMessage ? <p className="sub" style={{ marginTop: 8, color: "var(--brand)" }}>{posMessage}</p> : null}
+
+                          <div className="fdInventoryFormGrid" style={{ marginTop: 10 }}>
+                            <form onSubmit={handlePosCreateOrder} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posCreateSection}</h5>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posMemberIdOptional}</span>
+                                <input
+                                  className="input"
+                                  value={posMemberId}
+                                  onChange={(event) => setPosMemberId(event.target.value)}
+                                  placeholder={t.posMemberIdOptional}
+                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                />
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posAmountLabel}</span>
+                                <input
+                                  className="input"
+                                  inputMode="decimal"
+                                  value={posAmount}
+                                  onChange={(event) => setPosAmount(event.target.value)}
+                                  placeholder={t.posAmountLabel}
+                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                />
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posNoteLabel}</span>
+                                <input
+                                  className="input"
+                                  value={posNote}
+                                  onChange={(event) => setPosNote(event.target.value)}
+                                  placeholder={t.posNoteLabel}
+                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                />
+                              </label>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}>
+                                  {posCreatingOrder ? t.posCreatingAction : t.posCreateAction}
+                                </button>
+                              </div>
+                            </form>
+
+                            <form onSubmit={handlePosPayOrder} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posPaymentSection}</h5>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posCurrentOrder}</span>
+                                <div className="input">{posOrderId || t.posNoOrder}</div>
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posPaymentAmountLabel}</span>
+                                <input
+                                  className="input"
+                                  inputMode="decimal"
+                                  value={posPaymentAmount}
+                                  onChange={(event) => setPosPaymentAmount(event.target.value)}
+                                  placeholder={t.posPaymentAmountLabel}
+                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                />
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{t.posPaymentMethodLabel}</span>
+                                <select
+                                  className="input"
+                                  value={posPaymentMethod}
+                                  onChange={(event) => setPosPaymentMethod(event.target.value)}
+                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                >
+                                  <option value="cash">{t.cash}</option>
+                                  <option value="card">{t.card}</option>
+                                  <option value="transfer">{t.transfer}</option>
+                                  <option value="manual">{t.manual}</option>
+                                  <option value="newebpay">{t.newebpay}</option>
+                                </select>
+                              </label>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout || !posOrderId}>
+                                  {posPayingOrder ? t.posPayingAction : t.posPayAction}
+                                </button>
+                              </div>
+                            </form>
+
+                            <form onSubmit={handlePosInitCheckout} className="fdGlassSubPanel fdInventoryFormBlock" style={{ gridColumn: "1 / -1" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posCheckoutSection}</h5>
+                                <button
+                                  type="button"
+                                  className="fdPillBtn"
+                                  onClick={() => {
+                                    setPosOrderId("");
+                                    setPosCheckoutUrl("");
+                                    setPosError(null);
+                                    setPosMessage(null);
+                                  }}
+                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                >
+                                  {t.posClearOrderAction}
+                                </button>
+                              </div>
+                              <p className="sub" style={{ marginTop: 8 }}>{t.posCurrentOrder}: {posOrderId || t.posNoOrder}</p>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout || !posOrderId}>
+                                  {posInitializingCheckout ? t.posInitializingCheckoutAction : t.posInitCheckoutAction}
+                                </button>
+                              </div>
+                              {posCheckoutUrl ? (
+                                <p className="sub" style={{ marginTop: 8 }}>
+                                  {t.posCheckoutUrlLabel}:{" "}
+                                  <a href={posCheckoutUrl} target="_blank" rel="noreferrer">{posCheckoutUrl}</a>
+                                </p>
+                              ) : null}
+                            </form>
                           </div>
-                          <div className="kvLabel" style={{ marginTop: 8 }}>{t.posPendingTitle}</div>
+
+                          <div className="kvLabel" style={{ marginTop: 10 }}>{t.posPendingTitle}</div>
                           <div className="fdListStack" style={{ marginTop: 8 }}>
                             {unpaidOrderList.slice(0, 4).map((item) => (
                               <div key={item.id} className="card" style={{ padding: 10 }}>
@@ -1639,17 +1923,21 @@ export default function FrontdeskPortalPage() {
                                 </div>
                                 <p className="sub" style={{ marginTop: 4 }}>NT${item.amount}</p>
                                 <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
-                                <a
+                                <button
+                                  type="button"
                                   className="fdPillBtn"
-                                  style={actionsDisabled ? { marginTop: 8, display: "inline-flex", opacity: 0.7, pointerEvents: "none" } : { marginTop: 8, display: "inline-flex" }}
-                                  href={`/frontdesk/orders/new?orderId=${encodeURIComponent(item.id)}`}
-                                  aria-disabled={actionsDisabled}
-                                  onClick={(event) => {
-                                    if (actionsDisabled) event.preventDefault();
+                                  style={{ marginTop: 8, display: "inline-flex", opacity: actionsDisabled ? 0.7 : 1 }}
+                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                  onClick={() => {
+                                    setPosOrderId(item.id);
+                                    setPosPaymentAmount(String(item.amount));
+                                    setPosCheckoutUrl("");
+                                    setPosError(null);
+                                    setPosMessage(null);
                                   }}
                                 >
-                                  {t.collectAction}
-                                </a>
+                                  {t.posUseOrderAction}
+                                </button>
                               </div>
                             ))}
                             {!loading && unpaidOrderList.length === 0 ? <p className="fdGlassText">{t.posNoPending}</p> : null}
