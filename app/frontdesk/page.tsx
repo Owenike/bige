@@ -1404,7 +1404,7 @@ export default function FrontdeskPortalPage() {
             role="presentation"
           >
             <div
-              className={`fdModal ${isFeatureModal ? "fdModalFeature" : ""} ${modalType === "handover" ? "fdModalHandover" : ""}`}
+              className={`fdModal ${isFeatureModal ? "fdModalFeature" : ""} ${modalType === "handover" ? "fdModalHandover" : ""} ${modalType === "capability" ? "fdModalCapability" : ""}`}
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
