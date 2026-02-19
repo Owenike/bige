@@ -40,5 +40,49 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await auth.supabase.from("audit_logs").insert({
+    tenant_id: tenantId,
+    actor_id: auth.context.userId,
+    action: "feature_flag_updated",
+    target_type: "feature_flag",
+    target_id: key,
+    reason: null,
+    payload: { key, enabled },
+  });
+
   return NextResponse.json({ flag: data });
+}
+
+export async function DELETE(request: Request) {
+  const auth = await requireProfile(["platform_admin"], request);
+  if (!auth.ok) return auth.response;
+
+  const params = new URL(request.url).searchParams;
+  const tenantId = params.get("tenantId") || "";
+  const key = params.get("key") || "";
+
+  if (!tenantId || !key) {
+    return NextResponse.json({ error: "tenantId and key are required" }, { status: 400 });
+  }
+
+  const { error } = await auth.supabase
+    .from("feature_flags")
+    .delete()
+    .eq("tenant_id", tenantId)
+    .eq("key", key);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await auth.supabase.from("audit_logs").insert({
+    tenant_id: tenantId,
+    actor_id: auth.context.userId,
+    action: "feature_flag_deleted",
+    target_type: "feature_flag",
+    target_id: key,
+    reason: null,
+    payload: { key },
+  });
+
+  return NextResponse.json({ ok: true });
 }
