@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../lib/auth-context";
 
+function normalizeOptionalText(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
 export async function GET(request: Request) {
   const auth = await requireProfile(["manager"], request);
   if (!auth.ok) return auth.response;
@@ -37,8 +43,8 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim() : "";
-  const code = typeof body?.code === "string" ? body.code.trim() : null;
-  const address = typeof body?.address === "string" ? body.address.trim() : null;
+  const code = normalizeOptionalText(body?.code);
+  const address = normalizeOptionalText(body?.address);
   const isActive = body?.isActive === false ? false : true;
 
   if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
@@ -55,7 +61,7 @@ export async function POST(request: Request) {
       created_at: now,
       updated_at: now,
     })
-    .select("id, name, code, address, is_active")
+    .select("id, tenant_id, name, code, address, is_active, created_at, updated_at")
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -73,3 +79,63 @@ export async function POST(request: Request) {
   return NextResponse.json({ branch: data }, { status: 201 });
 }
 
+export async function PATCH(request: Request) {
+  const auth = await requireProfile(["manager"], request);
+  if (!auth.ok) return auth.response;
+
+  if (!auth.context.tenantId) {
+    return NextResponse.json({ error: "Missing tenant context" }, { status: 400 });
+  }
+
+  const body = await request.json().catch(() => null);
+  const id = typeof body?.id === "string" ? body.id.trim() : "";
+  if (!id) {
+    return NextResponse.json({ error: "id is required" }, { status: 400 });
+  }
+
+  const updates: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (typeof body?.name === "string") {
+    const name = body.name.trim();
+    if (!name) return NextResponse.json({ error: "name cannot be empty" }, { status: 400 });
+    updates.name = name;
+  }
+  if ("code" in (body || {})) {
+    updates.code = normalizeOptionalText(body?.code);
+  }
+  if ("address" in (body || {})) {
+    updates.address = normalizeOptionalText(body?.address);
+  }
+  if (typeof body?.isActive === "boolean") {
+    updates.is_active = body.isActive;
+  }
+
+  if (Object.keys(updates).length === 1) {
+    return NextResponse.json({ error: "no updates provided" }, { status: 400 });
+  }
+
+  const { data, error } = await auth.supabase
+    .from("branches")
+    .update(updates)
+    .eq("tenant_id", auth.context.tenantId)
+    .eq("id", id)
+    .select("id, tenant_id, name, code, address, is_active, created_at, updated_at")
+    .maybeSingle();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: "Branch not found" }, { status: 404 });
+
+  await auth.supabase.from("audit_logs").insert({
+    tenant_id: auth.context.tenantId,
+    actor_id: auth.context.userId,
+    action: "branch_update",
+    target_type: "branch",
+    target_id: id,
+    reason: "manager_update",
+    payload: updates,
+  });
+
+  return NextResponse.json({ branch: data });
+}
