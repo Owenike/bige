@@ -1,198 +1,288 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n-provider";
 
-interface TenantItem {
-  id: string;
-  name: string;
-  status: string;
-}
+type AppRole = "platform_admin" | "manager" | "frontdesk" | "coach" | "member";
 
-interface FlagItem {
+type TenantItem = { id: string; name: string; status: string };
+type FlagItem = { id: string; tenant_id: string; key: string; enabled: boolean };
+type AuditItem = { id: string; action: string; target_type: string; target_id: string | null; created_at: string };
+type ProfileItem = {
   id: string;
-  key: string;
-  enabled: boolean;
-  tenant_id: string;
+  tenant_id: string | null;
+  branch_id: string | null;
+  role: AppRole;
+  display_name: string | null;
+  is_active: boolean;
+};
+
+type ErrorPayload = { error?: string };
+
+async function jsonSafe<T>(res: Response): Promise<T | null> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
 }
 
 export default function PlatformAdminPage() {
   const { locale } = useI18n();
   const zh = locale !== "en";
-  const [tenants, setTenants] = useState<TenantItem[]>([]);
-  const [flags, setFlags] = useState<FlagItem[]>([]);
-  const [audit, setAudit] = useState<Array<{ id: string; action: string; target_type: string }>>([]);
-  const [profiles, setProfiles] = useState<Array<{ id: string; role: string; tenant_id: string | null; display_name: string | null }>>([]);
+
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+
+  const [tenants, setTenants] = useState<TenantItem[]>([]);
+  const [tenantId, setTenantId] = useState("");
+  const [profiles, setProfiles] = useState<ProfileItem[]>([]);
+  const [flags, setFlags] = useState<FlagItem[]>([]);
+  const [audit, setAudit] = useState<AuditItem[]>([]);
 
   const [tenantName, setTenantName] = useState("");
   const [tenantStatus, setTenantStatus] = useState("active");
-  const [tenantIdForFlags, setTenantIdForFlags] = useState("");
-  const [flagKey, setFlagKey] = useState("");
-  const [flagEnabled, setFlagEnabled] = useState(true);
+  const [editTenantName, setEditTenantName] = useState("");
+  const [editTenantStatus, setEditTenantStatus] = useState("active");
 
   const [userEmail, setUserEmail] = useState("");
   const [userPassword, setUserPassword] = useState("");
-  const [userRole, setUserRole] = useState("manager");
+  const [userRole, setUserRole] = useState<AppRole>("manager");
   const [userTenantId, setUserTenantId] = useState("");
   const [userBranchId, setUserBranchId] = useState("");
   const [userDisplayName, setUserDisplayName] = useState("");
-  const [createMember, setCreateMember] = useState(false);
-  const [memberFullName, setMemberFullName] = useState("");
-  const [memberPhone, setMemberPhone] = useState("");
 
-  function tenantStatusLabel(status: string) {
-    if (!zh) return status;
-    if (status === "active") return "\u555f\u7528\u4e2d";
-    if (status === "suspended") return "\u5df2\u6697\u505c";
-    if (status === "disabled") return "\u5df2\u505c\u7528";
-    return status;
+  const [flagKey, setFlagKey] = useState("");
+  const [flagEnabled, setFlagEnabled] = useState(true);
+
+  const [selectedProfileId, setSelectedProfileId] = useState("");
+  const [editRole, setEditRole] = useState<AppRole>("manager");
+  const [editProfileTenantId, setEditProfileTenantId] = useState("");
+  const [editProfileBranchId, setEditProfileBranchId] = useState("");
+  const [editProfileDisplayName, setEditProfileDisplayName] = useState("");
+  const [editProfileActive, setEditProfileActive] = useState(true);
+
+  const selectedTenant = useMemo(() => tenants.find((t) => t.id === tenantId) || null, [tenants, tenantId]);
+  const selectedProfile = useMemo(() => profiles.find((p) => p.id === selectedProfileId) || null, [profiles, selectedProfileId]);
+
+  useEffect(() => {
+    if (!selectedTenant) return;
+    setEditTenantName(selectedTenant.name);
+    setEditTenantStatus(selectedTenant.status);
+  }, [selectedTenant]);
+
+  useEffect(() => {
+    if (!selectedProfile) return;
+    setEditRole(selectedProfile.role);
+    setEditProfileTenantId(selectedProfile.tenant_id || "");
+    setEditProfileBranchId(selectedProfile.branch_id || "");
+    setEditProfileDisplayName(selectedProfile.display_name || "");
+    setEditProfileActive(selectedProfile.is_active);
+  }, [selectedProfile]);
+
+  async function loadTenants() {
+    const res = await fetch("/api/platform/tenants");
+    const payload = (await jsonSafe<{ items?: TenantItem[] } & ErrorPayload>(res)) || {};
+    if (!res.ok) throw new Error(payload.error || "Load tenants failed");
+    const rows = payload.items || [];
+    setTenants(rows);
+    const nextTenantId = tenantId || rows[0]?.id || "";
+    setTenantId(nextTenantId);
+    setUserTenantId((prev) => prev || nextTenantId);
+    return nextTenantId;
   }
 
-  function roleLabel(role: string) {
-    if (!zh) return role;
-    if (role === "platform_admin") return "\u5e73\u53f0\u7ba1\u7406\u54e1";
-    if (role === "manager") return "\u7ba1\u7406\u8005";
-    if (role === "frontdesk") return "\u6ac3\u6aaf";
-    if (role === "coach") return "\u6559\u7df4";
-    if (role === "member") return "\u6703\u54e1";
-    return role;
+  async function loadProfiles(targetTenantId: string) {
+    const params = new URLSearchParams();
+    if (targetTenantId) params.set("tenantId", targetTenantId);
+    params.set("activeOnly", "1");
+    params.set("limit", "300");
+    const res = await fetch(`/api/platform/users?${params.toString()}`);
+    const payload = (await jsonSafe<{ items?: ProfileItem[] } & ErrorPayload>(res)) || {};
+    if (!res.ok) throw new Error(payload.error || "Load users failed");
+    const rows = payload.items || [];
+    setProfiles(rows);
+    setSelectedProfileId((prev) => (prev && rows.some((r) => r.id === prev) ? prev : rows[0]?.id || ""));
   }
 
-  function auditActionLabel(action: string) {
-    if (!zh) return action;
-    if (action === "tenant_created") return "\u79df\u6236\u5efa\u7acb";
-    if (action === "feature_flag_updated") return "\u65d7\u6a19\u66f4\u65b0";
-    if (action === "user_created") return "\u4f7f\u7528\u8005\u5efa\u7acb";
-    return action;
-  }
-
-  function auditTargetLabel(target: string) {
-    if (!zh) return target;
-    if (target === "tenant") return "\u79df\u6236";
-    if (target === "feature_flag") return "\u65d7\u6a19";
-    if (target === "profile") return "\u5e33\u865f";
-    return target;
-  }
-
-  async function load() {
-    setLoading(true);
-    setError(null);
-    const tenantsRes = await fetch("/api/platform/tenants");
-    const tenantsPayload = await tenantsRes.json();
-    if (!tenantsRes.ok) {
-      setError(tenantsPayload?.error || (zh ? "\u8f09\u5165\u79df\u6236\u5931\u6557" : "Load tenants failed"));
-      setLoading(false);
+  async function loadFlags(targetTenantId: string) {
+    if (!targetTenantId) {
+      setFlags([]);
       return;
     }
+    const res = await fetch(`/api/platform/feature-flags?tenantId=${encodeURIComponent(targetTenantId)}`);
+    const payload = (await jsonSafe<{ items?: FlagItem[] } & ErrorPayload>(res)) || {};
+    if (!res.ok) throw new Error(payload.error || "Load flags failed");
+    setFlags(payload.items || []);
+  }
 
-    const list = (tenantsPayload.items || []) as TenantItem[];
-    setTenants(list);
-    const selectedTenantId = tenantIdForFlags || list[0]?.id || "";
+  async function loadAudit(targetTenantId: string) {
+    const qs = targetTenantId ? `?tenantId=${encodeURIComponent(targetTenantId)}&limit=30` : "?limit=30";
+    const res = await fetch(`/api/platform/audit${qs}`);
+    const payload = (await jsonSafe<{ items?: AuditItem[] } & ErrorPayload>(res)) || {};
+    if (!res.ok) throw new Error(payload.error || "Load audit failed");
+    setAudit(payload.items || []);
+  }
 
-    if (selectedTenantId) {
-      const [flagsRes, auditRes, profilesRes] = await Promise.all([
-        fetch(`/api/platform/feature-flags?tenantId=${encodeURIComponent(selectedTenantId)}`),
-        fetch(`/api/platform/audit?tenantId=${encodeURIComponent(selectedTenantId)}&limit=20`),
-        fetch(`/api/platform/users?tenantId=${encodeURIComponent(selectedTenantId)}`),
-      ]);
-      const flagsPayload = await flagsRes.json();
-      const auditPayload = await auditRes.json();
-      const profilesPayload = await profilesRes.json();
-      if (flagsRes.ok) setFlags(flagsPayload.items || []);
-      if (auditRes.ok) setAudit(auditPayload.items || []);
-      if (profilesRes.ok) setProfiles(profilesPayload.items || []);
-      if (!flagsRes.ok) setError(flagsPayload?.error || (zh ? "\u8f09\u5165\u529f\u80fd\u65d7\u6a19\u5931\u6557" : "Load flags failed"));
-      if (!auditRes.ok) setError(auditPayload?.error || (zh ? "\u8f09\u5165\u7a3d\u6838\u5931\u6557" : "Load audit failed"));
-      if (!profilesRes.ok) setError(profilesPayload?.error || (zh ? "\u8f09\u5165\u4f7f\u7528\u8005\u5931\u6557" : "Load users failed"));
-      setTenantIdForFlags(selectedTenantId);
-      if (!userTenantId) setUserTenantId(selectedTenantId);
+  async function loadAll() {
+    setLoading(true);
+    setError(null);
+    try {
+      const targetTenantId = await loadTenants();
+      await Promise.all([loadProfiles(targetTenantId), loadFlags(targetTenantId), loadAudit(targetTenantId)]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Load failed");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   useEffect(() => {
-    void load();
+    void loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!tenantId) return;
+    void Promise.all([loadProfiles(tenantId), loadFlags(tenantId), loadAudit(tenantId)]).catch((err) => {
+      setError(err instanceof Error ? err.message : "Load failed");
+    });
+  }, [tenantId]);
+
   async function createTenant(event: FormEvent) {
     event.preventDefault();
+    setSaving(true);
+    setError(null);
     setMessage(null);
-    const res = await fetch("/api/platform/tenants", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: tenantName, status: tenantStatus }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setError(payload?.error || (zh ? "\u5efa\u7acb\u79df\u6236\u5931\u6557" : "Create tenant failed"));
-      return;
+    try {
+      const res = await fetch("/api/platform/tenants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: tenantName, status: tenantStatus }),
+      });
+      const payload = (await jsonSafe<{ tenant?: TenantItem } & ErrorPayload>(res)) || {};
+      if (!res.ok) throw new Error(payload.error || "Create tenant failed");
+      setTenantName("");
+      setMessage(zh ? "租戶已建立" : "Tenant created");
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Create tenant failed");
+    } finally {
+      setSaving(false);
     }
-    setTenantName("");
-    setMessage(`${zh ? "\u79df\u6236\u5df2\u5efa\u7acb" : "Tenant created"}: ${payload.tenant?.name || "success"}`);
-    await load();
   }
 
-  async function upsertFlag(event: FormEvent) {
+  async function updateTenant(event: FormEvent) {
     event.preventDefault();
-    setMessage(null);
-    const res = await fetch("/api/platform/feature-flags", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tenantId: tenantIdForFlags,
-        key: flagKey,
-        enabled: flagEnabled,
-      }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setError(payload?.error || (zh ? "\u66f4\u65b0\u65d7\u6a19\u5931\u6557" : "Update flag failed"));
-      return;
+    if (!tenantId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/platform/tenants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: tenantId, name: editTenantName, status: editTenantStatus }),
+      });
+      const payload = (await jsonSafe<{ tenant?: TenantItem } & ErrorPayload>(res)) || {};
+      if (!res.ok) throw new Error(payload.error || "Update tenant failed");
+      setMessage(zh ? "租戶已更新" : "Tenant updated");
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update tenant failed");
+    } finally {
+      setSaving(false);
     }
-    setFlagKey("");
-    setMessage(`${zh ? "\u65d7\u6a19\u5df2\u5132\u5b58" : "Flag saved"}: ${payload.flag?.key || "success"}`);
-    await load();
   }
 
   async function createUser(event: FormEvent) {
     event.preventDefault();
+    setSaving(true);
     setError(null);
-    setMessage(null);
-
-    const res = await fetch("/api/platform/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-        password: userPassword,
-        role: userRole,
-        tenantId: userRole === "platform_admin" ? null : userTenantId,
-        branchId: userBranchId || null,
-        displayName: userDisplayName || null,
-        isActive: true,
-        createMember: createMember && userRole === "member",
-        memberFullName: memberFullName || null,
-        memberPhone: memberPhone || null,
-      }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setError(payload?.error || (zh ? "\u5efa\u7acb\u4f7f\u7528\u8005\u5931\u6557" : "Create user failed"));
-      return;
+    try {
+      const res = await fetch("/api/platform/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: userEmail,
+          password: userPassword,
+          role: userRole,
+          tenantId: userRole === "platform_admin" ? null : userTenantId || null,
+          branchId: userBranchId || null,
+          displayName: userDisplayName || null,
+          isActive: true,
+        }),
+      });
+      const payload = (await jsonSafe<ErrorPayload>(res)) || {};
+      if (!res.ok) throw new Error(payload.error || "Create user failed");
+      setUserEmail("");
+      setUserPassword("");
+      setUserBranchId("");
+      setUserDisplayName("");
+      setMessage(zh ? "使用者已建立" : "User created");
+      await loadProfiles(tenantId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Create user failed");
+    } finally {
+      setSaving(false);
     }
-    setUserEmail("");
-    setUserPassword("");
-    setUserDisplayName("");
-    setCreateMember(false);
-    setMemberFullName("");
-    setMemberPhone("");
-    setMessage(`${zh ? "\u4f7f\u7528\u8005\u5df2\u5efa\u7acb" : "User created"}: ${payload.profile?.id || "success"}`);
-    await load();
+  }
+
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedProfileId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/platform/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profileId: selectedProfileId,
+          role: editRole,
+          tenantId: editRole === "platform_admin" ? null : editProfileTenantId || null,
+          branchId: editProfileBranchId || null,
+          displayName: editProfileDisplayName || null,
+          isActive: editProfileActive,
+        }),
+      });
+      const payload = (await jsonSafe<ErrorPayload>(res)) || {};
+      if (!res.ok) throw new Error(payload.error || "Save profile failed");
+      setMessage(zh ? "帳號已更新" : "Profile updated");
+      await loadProfiles(tenantId);
+      await loadAudit(tenantId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save profile failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveFlag(event: FormEvent) {
+    event.preventDefault();
+    if (!tenantId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/platform/feature-flags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, key: flagKey, enabled: flagEnabled }),
+      });
+      const payload = (await jsonSafe<ErrorPayload>(res)) || {};
+      if (!res.ok) throw new Error(payload.error || "Save flag failed");
+      setFlagKey("");
+      setMessage(zh ? "旗標已儲存" : "Flag saved");
+      await loadFlags(tenantId);
+      await loadAudit(tenantId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save flag failed");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -200,131 +290,69 @@ export default function PlatformAdminPage() {
       <section className="fdGlassBackdrop">
         <section className="hero" style={{ paddingTop: 0 }}>
           <div className="fdGlassPanel">
-            <div className="fdEyebrow">{zh ? "\u5e73\u53f0\u7ba1\u7406" : "PLATFORM ADMIN"}</div>
-            <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
-              {zh ? "\u79df\u6236\u8207\u4f7f\u7528\u8005\u63a7\u5236" : "Tenant and User Control"}
-            </h1>
-            <p className="fdGlassText">
-              {zh
-                ? "\u5efa\u7acb\u79df\u6236\u3001\u958b\u7acb\u5e33\u865f\u3001\u7ba1\u7406\u529f\u80fd\u65d7\u6a19\uff0c\u4e26\u641c\u8996\u7a3d\u6838\u8a18\u9304\u3002"
-                : "Create tenants, provision accounts, and manage feature flags with audit visibility."}
-            </p>
+            <div className="fdEyebrow">{zh ? "平台管理" : "PLATFORM ADMIN"}</div>
+            <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>{zh ? "租戶與帳號控制台" : "Tenant and Account Console"}</h1>
           </div>
         </section>
-
         {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
-        {message ? <div className="sub" style={{ marginBottom: 12, color: "var(--brand)" }}>{message}</div> : null}
+        {message ? <div className="ok" style={{ marginBottom: 12 }}>{message}</div> : null}
 
         <section className="fdTwoCol">
           <form onSubmit={createTenant} className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{zh ? "\u5efa\u7acb\u79df\u6236" : "Create Tenant"}</h2>
-            <div style={{ display: "grid", gap: 8 }}>
-              <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder={zh ? "\u79df\u6236\u540d\u7a31" : "tenant name"} className="input" required />
-              <select value={tenantStatus} onChange={(e) => setTenantStatus(e.target.value)} className="input">
-                <option value="active">{tenantStatusLabel("active")}</option>
-                <option value="suspended">{tenantStatusLabel("suspended")}</option>
-                <option value="disabled">{tenantStatusLabel("disabled")}</option>
-              </select>
-            </div>
-            <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }}>{zh ? "\u5efa\u7acb\u79df\u6236" : "Create Tenant"}</button>
+            <h2 className="sectionTitle">{zh ? "建立租戶" : "Create Tenant"}</h2>
+            <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder="name" className="input" required />
+            <select value={tenantStatus} onChange={(e) => setTenantStatus(e.target.value)} className="input"><option value="active">active</option><option value="suspended">suspended</option><option value="disabled">disabled</option></select>
+            <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }} disabled={saving}>{zh ? "建立" : "Create"}</button>
           </form>
-
-          <form onSubmit={createUser} className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{zh ? "\u5efa\u7acb\u4f7f\u7528\u8005" : "Create User"}</h2>
-            <div style={{ display: "grid", gap: 8 }}>
-              <input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder={zh ? "\u4fe1\u7bb1" : "email"} className="input" required />
-              <input value={userPassword} onChange={(e) => setUserPassword(e.target.value)} placeholder={zh ? "\u5bc6\u78bc" : "password"} className="input" required />
-              <select value={userRole} onChange={(e) => setUserRole(e.target.value)} className="input">
-                <option value="platform_admin">{roleLabel("platform_admin")}</option>
-                <option value="manager">{roleLabel("manager")}</option>
-                <option value="frontdesk">{roleLabel("frontdesk")}</option>
-                <option value="coach">{roleLabel("coach")}</option>
-                <option value="member">{roleLabel("member")}</option>
-              </select>
-              <input
-                value={userTenantId}
-                onChange={(e) => setUserTenantId(e.target.value)}
-                placeholder={zh ? "\u79df\u6236\u7de8\u865f\uff08\u5e73\u53f0\u7ba1\u7406\u54e1\u53ef\u4e0d\u586b\uff09" : "tenantId (required unless platform_admin)"}
-                className="input"
-                disabled={userRole === "platform_admin"}
-              />
-              <input value={userBranchId} onChange={(e) => setUserBranchId(e.target.value)} placeholder={zh ? "\u5206\u9928\u7de8\u865f\uff08\u9078\u586b\uff09" : "branchId (optional)"} className="input" />
-              <input value={userDisplayName} onChange={(e) => setUserDisplayName(e.target.value)} placeholder={zh ? "\u986f\u793a\u540d\u7a31\uff08\u9078\u586b\uff09" : "display name (optional)"} className="input" />
-              {userRole === "member" ? (
-                <>
-                  <label className="sub">
-                    <input type="checkbox" checked={createMember} onChange={(e) => setCreateMember(e.target.checked)} /> {zh ? "\u540c\u6b65\u5efa\u7acb\u6703\u54e1\u8cc7\u6599\u5217" : "create members row"}
-                  </label>
-                  {createMember ? (
-                    <>
-                      <input value={memberFullName} onChange={(e) => setMemberFullName(e.target.value)} placeholder={zh ? "\u6703\u54e1\u5168\u540d" : "member full name"} className="input" required />
-                      <input value={memberPhone} onChange={(e) => setMemberPhone(e.target.value)} placeholder={zh ? "\u6703\u54e1\u96fb\u8a71\uff08\u9078\u586b\uff09" : "member phone (optional)"} className="input" />
-                    </>
-                  ) : null}
-                </>
-              ) : null}
-            </div>
-            <button type="submit" className="fdPillBtn" style={{ marginTop: 10 }}>{zh ? "\u5efa\u7acb\u4f7f\u7528\u8005" : "Create User"}</button>
+          <form onSubmit={updateTenant} className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">{zh ? "編輯租戶" : "Edit Tenant"}</h2>
+            <select value={tenantId} onChange={(e) => setTenantId(e.target.value)} className="input">{tenants.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+            <input value={editTenantName} onChange={(e) => setEditTenantName(e.target.value)} placeholder="name" className="input" required />
+            <select value={editTenantStatus} onChange={(e) => setEditTenantStatus(e.target.value)} className="input"><option value="active">active</option><option value="suspended">suspended</option><option value="disabled">disabled</option></select>
+            <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }} disabled={saving}>{zh ? "儲存" : "Save"}</button>
           </form>
         </section>
 
         <section className="fdTwoCol" style={{ marginTop: 14 }}>
-          <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{zh ? "\u529f\u80fd\u65d7\u6a19" : "Feature Flags"}</h2>
-            <div className="actions" style={{ marginTop: 8 }}>
-              <select value={tenantIdForFlags} onChange={(e) => setTenantIdForFlags(e.target.value)} className="input">
-                {tenants.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({tenantStatusLabel(t.status)})
-                  </option>
-                ))}
-              </select>
-              <button type="button" className="fdPillBtn" onClick={() => void load()} disabled={loading}>
-                {loading ? (zh ? "\u8f09\u5165\u4e2d..." : "Loading...") : zh ? "\u8f09\u5165" : "Load"}
-              </button>
-            </div>
-            <form onSubmit={upsertFlag} style={{ marginTop: 10 }}>
-              <div style={{ display: "grid", gap: 8 }}>
-                <input value={flagKey} onChange={(e) => setFlagKey(e.target.value)} placeholder={zh ? "\u65d7\u6a19\u9375\u503c" : "flag key"} className="input" required />
-                <label className="sub">
-                  <input type="checkbox" checked={flagEnabled} onChange={(e) => setFlagEnabled(e.target.checked)} /> {zh ? "\u555f\u7528" : "enabled"}
-                </label>
-              </div>
-              <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }}>{zh ? "\u5132\u5b58\u65d7\u6a19" : "Save Flag"}</button>
-            </form>
-            <div className="fdDataGrid" style={{ marginTop: 10 }}>
-              {flags.map((flag) => (
-                <p key={flag.id} className="sub" style={{ marginTop: 0 }}>
-                  {flag.key}: {flag.enabled ? (zh ? "\u958b" : "on") : zh ? "\u95dc" : "off"}
-                </p>
-              ))}
-              {flags.length === 0 ? <p className="fdGlassText">{zh ? "\u627e\u4e0d\u5230\u65d7\u6a19\u3002" : "No flags found."}</p> : null}
-            </div>
-          </section>
-
-          <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{zh ? "\u79df\u6236\u5e33\u865f\u6e05\u55ae" : "Profiles (Selected Tenant)"}</h2>
-            <div className="fdDataGrid">
-              {profiles.map((p) => (
-                <p key={p.id} className="sub" style={{ marginTop: 0 }}>
-                  {roleLabel(p.role)} | {p.display_name || "-"} | {p.id}
-                </p>
-              ))}
-              {profiles.length === 0 ? <p className="fdGlassText">{zh ? "\u627e\u4e0d\u5230\u5e33\u865f\u8cc7\u6599\u3002" : "No profiles found."}</p> : null}
-            </div>
-          </section>
+          <form onSubmit={createUser} className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">{zh ? "建立使用者" : "Create User"}</h2>
+            <input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="email" className="input" required />
+            <input value={userPassword} onChange={(e) => setUserPassword(e.target.value)} placeholder="password" className="input" required />
+            <select value={userRole} onChange={(e) => setUserRole(e.target.value as AppRole)} className="input">{["platform_admin","manager","frontdesk","coach","member"].map((r)=><option key={r} value={r}>{r}</option>)}</select>
+            <input value={userTenantId} onChange={(e) => setUserTenantId(e.target.value)} placeholder="tenantId" className="input" disabled={userRole === "platform_admin"} />
+            <input value={userBranchId} onChange={(e) => setUserBranchId(e.target.value)} placeholder="branchId (optional)" className="input" />
+            <input value={userDisplayName} onChange={(e) => setUserDisplayName(e.target.value)} placeholder="display name (optional)" className="input" />
+            <button type="submit" className="fdPillBtn" style={{ marginTop: 10 }} disabled={saving}>{zh ? "建立帳號" : "Create user"}</button>
+          </form>
+          <form onSubmit={saveProfile} className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">{zh ? "編輯帳號" : "Edit Profile"}</h2>
+            <select value={selectedProfileId} onChange={(e) => setSelectedProfileId(e.target.value)} className="input">{profiles.map((p) => <option key={p.id} value={p.id}>{p.display_name || p.id}</option>)}</select>
+            <select value={editRole} onChange={(e) => setEditRole(e.target.value as AppRole)} className="input">{["platform_admin","manager","frontdesk","coach","member"].map((r)=><option key={r} value={r}>{r}</option>)}</select>
+            <input value={editProfileTenantId} onChange={(e) => setEditProfileTenantId(e.target.value)} placeholder="tenantId" className="input" disabled={editRole === "platform_admin"} />
+            <input value={editProfileBranchId} onChange={(e) => setEditProfileBranchId(e.target.value)} placeholder="branchId (optional)" className="input" />
+            <input value={editProfileDisplayName} onChange={(e) => setEditProfileDisplayName(e.target.value)} placeholder="display name" className="input" />
+            <label className="sub"><input type="checkbox" checked={editProfileActive} onChange={(e) => setEditProfileActive(e.target.checked)} /> active</label>
+            <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }} disabled={saving}>{zh ? "儲存帳號" : "Save profile"}</button>
+          </form>
         </section>
 
-        <section className="fdGlassSubPanel" style={{ padding: 14, marginTop: 14 }}>
-          <h2 className="sectionTitle">{zh ? "\u7a3d\u6838\u8a18\u9304\uff08\u79df\u6236\uff09" : "Audit (Selected Tenant)"}</h2>
-          <div className="fdDataGrid">
-            {audit.map((row) => (
-                <p key={row.id} className="sub" style={{ marginTop: 0 }}>
-                {auditActionLabel(row.action)} {"->"} {auditTargetLabel(row.target_type)}
-                </p>
-              ))}
-            {audit.length === 0 ? <p className="fdGlassText">{zh ? "\u7121\u7a3d\u6838\u8cc7\u6599\u3002" : "No audit rows found."}</p> : null}
-          </div>
+        <section className="fdTwoCol" style={{ marginTop: 14 }}>
+          <form onSubmit={saveFlag} className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">Feature Flags</h2>
+            <input value={flagKey} onChange={(e) => setFlagKey(e.target.value)} placeholder="flag key" className="input" required />
+            <label className="sub"><input type="checkbox" checked={flagEnabled} onChange={(e) => setFlagEnabled(e.target.checked)} /> enabled</label>
+            <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }} disabled={saving || !tenantId}>Save flag</button>
+            <div className="fdDataGrid" style={{ marginTop: 10 }}>{flags.map((f) => <p key={f.id} className="sub" style={{ marginTop: 0 }}>{f.key}: {f.enabled ? "ON" : "OFF"}</p>)}</div>
+          </form>
+          <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">{zh ? "稽核記錄" : "Audit Logs"}</h2>
+            <div className="fdDataGrid">{audit.map((a) => <p key={a.id} className="sub" style={{ marginTop: 0 }}>{new Date(a.created_at).toLocaleString()} | {a.action} | {a.target_type}:{a.target_id || "-"}</p>)}</div>
+            <div className="actions" style={{ marginTop: 8 }}>
+              <button type="button" className="fdPillBtn" onClick={() => void loadAll()} disabled={loading}>{loading ? "Loading..." : "Reload all"}</button>
+              <a className="fdPillBtn" href="/platform-admin/rbac">RBAC</a>
+              <a className="fdPillBtn" href="/platform-admin/audit">Audit Explorer</a>
+            </div>
+          </section>
         </section>
       </section>
     </main>

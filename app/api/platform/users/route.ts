@@ -9,15 +9,23 @@ export async function GET(request: Request) {
   const auth = await requireProfile(["platform_admin"], request);
   if (!auth.ok) return auth.response;
 
-  const tenantId = new URL(request.url).searchParams.get("tenantId");
+  const searchParams = new URL(request.url).searchParams;
+  const tenantId = searchParams.get("tenantId");
+  const role = (searchParams.get("role") || "").trim();
+  const activeOnly = searchParams.get("activeOnly");
+  const q = (searchParams.get("q") || "").trim();
+  const limit = Math.min(500, Math.max(1, Number(searchParams.get("limit") || 200)));
 
   let query = auth.supabase
     .from("profiles")
     .select("id, tenant_id, branch_id, role, display_name, is_active, created_at, updated_at")
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(limit);
 
   if (tenantId) query = query.eq("tenant_id", tenantId);
+  if (ROLES.includes(role as AppRole)) query = query.eq("role", role as AppRole);
+  if (activeOnly === "1") query = query.eq("is_active", true);
+  if (q) query = query.or(`display_name.ilike.%${q}%,id.ilike.%${q}%`);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

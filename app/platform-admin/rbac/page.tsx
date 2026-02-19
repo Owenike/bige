@@ -39,6 +39,9 @@ export default function PlatformRbacPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [activeOnly, setActiveOnly] = useState(true);
+  const [query, setQuery] = useState("");
 
   async function loadTenants() {
     const res = await fetch("/api/platform/tenants");
@@ -51,8 +54,13 @@ export default function PlatformRbacPage() {
 
   async function loadProfiles(nextTenantId?: string) {
     const target = nextTenantId ?? tenantId;
-    const qs = target ? `?tenantId=${encodeURIComponent(target)}` : "";
-    const res = await fetch(`/api/platform/users${qs}`);
+    const params = new URLSearchParams();
+    if (target) params.set("tenantId", target);
+    if (roleFilter !== "all") params.set("role", roleFilter);
+    if (activeOnly) params.set("activeOnly", "1");
+    if (query.trim()) params.set("q", query.trim());
+    params.set("limit", "300");
+    const res = await fetch(`/api/platform/users?${params.toString()}`);
     const payload = await res.json();
     if (!res.ok) throw new Error(payload?.error || (zh ? "\u8f09\u5165\u5e33\u865f\u5931\u6557" : "Load users failed"));
     const list = (payload.items || []) as ProfileItem[];
@@ -89,7 +97,7 @@ export default function PlatformRbacPage() {
       setError(err instanceof Error ? err.message : (zh ? "\u8f09\u5165\u5e33\u865f\u5931\u6557" : "Load users failed"));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId]);
+  }, [tenantId, roleFilter, activeOnly]);
 
   const selectedProfile = useMemo(
     () => profiles.find((item) => item.id === selectedProfileId) || null,
@@ -182,6 +190,26 @@ export default function PlatformRbacPage() {
             <a className="fdPillBtn" href="/platform-admin">
               {zh ? "\u5efa\u7acb\u65b0\u5e33\u865f" : "Create User"}
             </a>
+          </div>
+          <div className="actions" style={{ marginTop: 8 }}>
+            <select className="input" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
+              <option value="all">{zh ? "\u5168\u90e8\u89d2\u8272" : "all roles"}</option>
+              {ROLES.map((roleItem) => (
+                <option key={roleItem} value={roleItem}>{roleItem}</option>
+              ))}
+            </select>
+            <input
+              className="input"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={zh ? "\u986f\u793a\u540d\u7a31 / ID" : "display name / id"}
+            />
+            <label className="sub">
+              <input type="checkbox" checked={activeOnly} onChange={(event) => setActiveOnly(event.target.checked)} /> {zh ? "\u50c5\u555f\u7528" : "activeOnly"}
+            </label>
+            <button type="button" className="fdPillBtn" onClick={() => void loadProfiles(tenantId)} disabled={loading}>
+              {zh ? "\u5957\u7528\u7be9\u9078" : "Apply"}
+            </button>
           </div>
         </section>
 
