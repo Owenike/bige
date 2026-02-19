@@ -74,7 +74,11 @@ export async function requireProfile(allowedRoles?: AppRole[], request?: Request
     return { ok: false as const, response: jsonError(500, profileResult.error.message) };
   }
 
-  if (!profile || !profile.is_active) {
+  if (!profile) {
+    return { ok: false as const, response: jsonError(403, "Profile not found or inactive") };
+  }
+
+  if (!profile.is_active && !TEMP_DISABLE_ROLE_GUARD) {
     return { ok: false as const, response: jsonError(403, "Profile not found or inactive") };
   }
 

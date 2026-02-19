@@ -170,6 +170,54 @@ type CsIncidentItem = {
   events: CsIncidentEventItem[];
 };
 
+type LeadStatus = "new" | "tour_scheduled" | "converted" | "lost";
+
+type LeadEventItem = {
+  id: string;
+  action: string;
+  reason: string | null;
+  createdAt: string;
+};
+
+type LeadItem = {
+  id: string;
+  name: string;
+  phone: string | null;
+  source: string | null;
+  interest: string | null;
+  status: LeadStatus;
+  createdAt: string;
+  updatedAt: string;
+  tourAt: string | null;
+  memberId: string | null;
+  note: string | null;
+  lastReason: string | null;
+  events: LeadEventItem[];
+};
+
+type ChainRuleItem = {
+  allowCrossBranch: boolean;
+  requireManagerApproval: boolean;
+  suspensionSync: boolean;
+  guestPassEnabled: boolean;
+  maxEntryPerDay: number | null;
+  allowedBranchIds: string[];
+  note: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+};
+
+type ChainBlacklistItem = {
+  id: string;
+  name: string;
+  memberCode: string | null;
+  phone: string | null;
+  reason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string | null;
+};
+
 function isMemberCode(value: string) {
   if (!/^\d{1,4}$/.test(value)) return false;
   const n = Number(value);
@@ -376,6 +424,54 @@ export default function FrontdeskPortalPage() {
   const [csStatusNote, setCsStatusNote] = useState("");
   const [csFollowupNote, setCsFollowupNote] = useState("");
   const [csResolveNote, setCsResolveNote] = useState("");
+  const [leadItems, setLeadItems] = useState<LeadItem[]>([]);
+  const [leadLoading, setLeadLoading] = useState(false);
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadError, setLeadError] = useState<string | null>(null);
+  const [leadMessage, setLeadMessage] = useState<string | null>(null);
+  const [leadStatusFilter, setLeadStatusFilter] = useState<"all" | LeadStatus>("all");
+  const [leadName, setLeadName] = useState("");
+  const [leadPhone, setLeadPhone] = useState("");
+  const [leadSource, setLeadSource] = useState("walkin");
+  const [leadInterest, setLeadInterest] = useState("membership");
+  const [leadCreateNote, setLeadCreateNote] = useState("");
+  const [leadCreateTourAt, setLeadCreateTourAt] = useState("");
+  const [leadSelectedId, setLeadSelectedId] = useState("");
+  const [leadScheduleTourAt, setLeadScheduleTourAt] = useState("");
+  const [leadScheduleNote, setLeadScheduleNote] = useState("");
+  const [leadFollowupNote, setLeadFollowupNote] = useState("");
+  const [leadConvertMemberId, setLeadConvertMemberId] = useState("");
+  const [leadConvertNote, setLeadConvertNote] = useState("");
+  const [leadLostReason, setLeadLostReason] = useState("");
+  const [leadLostNote, setLeadLostNote] = useState("");
+  const [chainLoading, setChainLoading] = useState(false);
+  const [chainSubmitting, setChainSubmitting] = useState(false);
+  const [chainError, setChainError] = useState<string | null>(null);
+  const [chainMessage, setChainMessage] = useState<string | null>(null);
+  const [chainRule, setChainRule] = useState<ChainRuleItem>({
+    allowCrossBranch: true,
+    requireManagerApproval: true,
+    suspensionSync: true,
+    guestPassEnabled: false,
+    maxEntryPerDay: null,
+    allowedBranchIds: [],
+    note: null,
+    updatedAt: null,
+    updatedBy: null,
+  });
+  const [chainAllowedBranchText, setChainAllowedBranchText] = useState("");
+  const [chainMaxEntryPerDayText, setChainMaxEntryPerDayText] = useState("");
+  const [chainRuleNote, setChainRuleNote] = useState("");
+  const [chainBlacklistItems, setChainBlacklistItems] = useState<ChainBlacklistItem[]>([]);
+  const [chainBlacklistName, setChainBlacklistName] = useState("");
+  const [chainBlacklistMemberCode, setChainBlacklistMemberCode] = useState("");
+  const [chainBlacklistPhone, setChainBlacklistPhone] = useState("");
+  const [chainBlacklistReason, setChainBlacklistReason] = useState("");
+  const [chainBlacklistExpiresAt, setChainBlacklistExpiresAt] = useState("");
+  const [chainRemoveTargetId, setChainRemoveTargetId] = useState("");
+  const [chainRemoveReason, setChainRemoveReason] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const openCapabilityModal = useCallback((id: string, type: FrontdeskModalType = "capability") => {
     setModalType(type);
@@ -1180,6 +1276,168 @@ export default function FrontdeskPortalPage() {
     [lang, pendingItems, shiftState],
   );
 
+  const leadUi = lang === "zh"
+    ? {
+        title: "線索 / 參觀導覽",
+        sub: "建立潛在客線索、安排導覽、追蹤轉換與失單原因。",
+        summaryNew: "新線索",
+        summaryTour: "已排導覽",
+        summaryConverted: "已轉會員",
+        summaryLost: "已失單",
+        createSection: "新增線索",
+        actionSection: "線索操作",
+        listSection: "線索列表",
+        timelineSection: "追蹤紀錄",
+        reload: "重新整理",
+        creating: "建立中...",
+        createAction: "建立線索",
+        nameLabel: "姓名",
+        phoneLabel: "電話（選填）",
+        sourceLabel: "來源",
+        interestLabel: "興趣",
+        noteLabel: "備註（選填）",
+        tourAtLabel: "導覽時間（選填）",
+        selectLead: "選擇線索",
+        statusFilter: "狀態篩選",
+        scheduleTitle: "安排導覽",
+        scheduleAction: "送出導覽",
+        followupTitle: "追蹤紀錄",
+        followupAction: "新增追蹤",
+        convertTitle: "轉為會員",
+        convertAction: "送出轉換",
+        convertHint: "留空將嘗試以線索姓名/電話建立會員",
+        lostTitle: "標記失單",
+        lostAction: "標記失單",
+        reasonLabel: "原因",
+        noItems: "目前沒有線索。",
+        noEvents: "目前沒有追蹤紀錄。",
+        createdAt: "建立",
+        updatedAt: "更新",
+        useLead: "使用此線索",
+      }
+    : {
+        title: "Lead / Tour Desk",
+        sub: "Create leads, schedule tours, and track conversion/lost reasons.",
+        summaryNew: "New",
+        summaryTour: "Tour Scheduled",
+        summaryConverted: "Converted",
+        summaryLost: "Lost",
+        createSection: "Create Lead",
+        actionSection: "Lead Actions",
+        listSection: "Lead List",
+        timelineSection: "Timeline",
+        reload: "Reload",
+        creating: "Creating...",
+        createAction: "Create Lead",
+        nameLabel: "Name",
+        phoneLabel: "Phone (optional)",
+        sourceLabel: "Source",
+        interestLabel: "Interest",
+        noteLabel: "Note (optional)",
+        tourAtLabel: "Tour At (optional)",
+        selectLead: "Select Lead",
+        statusFilter: "Status Filter",
+        scheduleTitle: "Schedule Tour",
+        scheduleAction: "Save Tour",
+        followupTitle: "Follow-up",
+        followupAction: "Add Follow-up",
+        convertTitle: "Convert to Member",
+        convertAction: "Convert",
+        convertHint: "Leave empty to auto-create member from lead name/phone",
+        lostTitle: "Mark Lost",
+        lostAction: "Mark Lost",
+        reasonLabel: "Reason",
+        noItems: "No leads yet.",
+        noEvents: "No lead events yet.",
+        createdAt: "Created",
+        updatedAt: "Updated",
+        useLead: "Use Lead",
+      };
+
+  const chainUi = lang === "zh"
+    ? {
+        title: "跨店規則",
+        sub: "設定跨店放行規則與黑名單同步，避免門市規則不一致。",
+        settingsSection: "規則設定",
+        blacklistSection: "黑名單",
+        addBlacklistSection: "新增黑名單",
+        removeAction: "移除黑名單",
+        reload: "重新整理",
+        saveAction: "儲存規則",
+        saving: "儲存中...",
+        allowCrossBranch: "允許跨店入場",
+        requireManagerApproval: "例外跨店需主管覆核",
+        suspensionSync: "停權狀態跨店同步",
+        guestPass: "允許跨店訪客票",
+        maxEntryPerDay: "每日跨店次數上限（留空不限）",
+        allowedBranches: "允許分館代碼（逗號分隔）",
+        ruleNote: "規則備註（選填）",
+        blacklistName: "姓名",
+        blacklistMemberCode: "會員編號（選填）",
+        blacklistPhone: "電話（選填）",
+        blacklistReason: "原因",
+        blacklistExpiresAt: "到期時間（選填）",
+        noBlacklist: "目前沒有黑名單。",
+        activeCount: "生效名單",
+        updatedAt: "規則更新時間",
+      }
+    : {
+        title: "Multi-Branch Rules",
+        sub: "Configure cross-branch access policy and synced blacklist.",
+        settingsSection: "Rule Settings",
+        blacklistSection: "Blacklist",
+        addBlacklistSection: "Add Blacklist",
+        removeAction: "Remove",
+        reload: "Reload",
+        saveAction: "Save Rules",
+        saving: "Saving...",
+        allowCrossBranch: "Allow cross-branch entry",
+        requireManagerApproval: "Require manager approval for exceptions",
+        suspensionSync: "Sync suspension across branches",
+        guestPass: "Allow guest pass across branches",
+        maxEntryPerDay: "Daily cross-branch limit (blank = unlimited)",
+        allowedBranches: "Allowed branch codes (comma-separated)",
+        ruleNote: "Rule note (optional)",
+        blacklistName: "Name",
+        blacklistMemberCode: "Member Code (optional)",
+        blacklistPhone: "Phone (optional)",
+        blacklistReason: "Reason",
+        blacklistExpiresAt: "Expires At (optional)",
+        noBlacklist: "No blacklist records.",
+        activeCount: "Active",
+        updatedAt: "Last Updated",
+      };
+
+  const reportUi = lang === "zh"
+    ? {
+        title: "報表 / 即時監控",
+        sub: "櫃檯即時營運看板：班次、收款、待辦、工單、轉換。",
+        reload: "刷新看板",
+        shiftState: "班次狀態",
+        pendingApprovals: "待審送單",
+        overdueOrders: "逾時未收款",
+        upcomingBookings: "2 小時內到店",
+        unresolvedIncidents: "未結案事件",
+        convertedLeads: "已轉會員線索",
+        todoTitle: "待辦",
+        todoNone: "目前沒有待辦項目。",
+        auditTitle: "營運觀察",
+      }
+    : {
+        title: "Reports / Live Monitor",
+        sub: "Desk live board for shift, payments, tickets, and conversion.",
+        reload: "Refresh Board",
+        shiftState: "Shift",
+        pendingApprovals: "Pending Approvals",
+        overdueOrders: "Overdue Unpaid",
+        upcomingBookings: "Arriving in 2h",
+        unresolvedIncidents: "Open Incidents",
+        convertedLeads: "Converted Leads",
+        todoTitle: "Todo",
+        todoNone: "No pending tasks.",
+        auditTitle: "Ops Signals",
+      };
+
   const shiftResolved = shiftState !== "unknown";
   const shiftOpen = shiftState === "open";
   const actionsDisabled = !shiftResolved || !shiftOpen;
@@ -1252,6 +1510,54 @@ export default function FrontdeskPortalPage() {
     () => Math.max(0, Number(selectedPosOrder?.amount || 0) - posPaidTotal),
     [posPaidTotal, selectedPosOrder?.amount],
   );
+  const leadNewCount = useMemo(
+    () => leadItems.filter((item) => item.status === "new").length,
+    [leadItems],
+  );
+  const leadTourCount = useMemo(
+    () => leadItems.filter((item) => item.status === "tour_scheduled").length,
+    [leadItems],
+  );
+  const leadConvertedCount = useMemo(
+    () => leadItems.filter((item) => item.status === "converted").length,
+    [leadItems],
+  );
+  const leadLostCount = useMemo(
+    () => leadItems.filter((item) => item.status === "lost").length,
+    [leadItems],
+  );
+  const selectedLead = useMemo(
+    () => leadItems.find((item) => item.id === leadSelectedId) || null,
+    [leadItems, leadSelectedId],
+  );
+  const chainActiveBlacklistCount = chainBlacklistItems.length;
+  const reportPendingApprovalCount = useMemo(
+    () => posApprovals.filter((item) => item.status === "pending").length,
+    [posApprovals],
+  );
+  const reportOverdueOrderCount = useMemo(
+    () => unpaidOrderList.filter((item) => minutesSince(item.created_at) >= 15).length,
+    [unpaidOrderList],
+  );
+  const reportUpcomingCount = upcomingBookingList.length;
+  const reportUnresolvedIncidentCount = useMemo(
+    () => csIncidents.filter((item) => item.status !== "resolved" && item.status !== "closed").length,
+    [csIncidents],
+  );
+
+  const reportTodos = useMemo(() => {
+    const items: string[] = [];
+    if (reportPendingApprovalCount > 0) {
+      items.push(lang === "zh" ? `有 ${reportPendingApprovalCount} 筆待審核送單` : `${reportPendingApprovalCount} approval requests pending`);
+    }
+    if (reportOverdueOrderCount > 0) {
+      items.push(lang === "zh" ? `有 ${reportOverdueOrderCount} 筆逾時未收款訂單` : `${reportOverdueOrderCount} overdue unpaid orders`);
+    }
+    if (reportUnresolvedIncidentCount > 0) {
+      items.push(lang === "zh" ? `有 ${reportUnresolvedIncidentCount} 件事件工單尚未結案` : `${reportUnresolvedIncidentCount} unresolved incidents`);
+    }
+    return items;
+  }, [lang, reportOverdueOrderCount, reportPendingApprovalCount, reportUnresolvedIncidentCount]);
 
   const handleOpenShift = useCallback(async () => {
     const openingCashAmount = parseAmount(openingCash);
@@ -2377,6 +2683,452 @@ export default function FrontdeskPortalPage() {
     }
   }, [csResolveNote, csSelectedIncidentId, loadCsModule, t.csIncidentRequired, t.csNoteRequired, t.csResolveFail, t.csResolveSuccess]);
 
+  const loadLeadModule = useCallback(async () => {
+    setLeadLoading(true);
+    setLeadError(null);
+    try {
+      const res = await fetch(`/api/frontdesk/leads?status=${encodeURIComponent(leadStatusFilter)}&limit=80`);
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "載入線索失敗" : "Load leads failed"));
+      const items = (payload.items || []) as LeadItem[];
+      setLeadItems(items);
+      setLeadSelectedId((prev) => {
+        if (prev && items.some((item) => item.id === prev)) return prev;
+        return items[0]?.id || "";
+      });
+    } catch (err) {
+      setLeadError(err instanceof Error ? err.message : (lang === "zh" ? "載入線索失敗" : "Load leads failed"));
+    } finally {
+      setLeadLoading(false);
+    }
+  }, [lang, leadStatusFilter]);
+
+  const handleLeadCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = leadName.trim();
+    const phone = leadPhone.trim();
+    const note = leadCreateNote.trim();
+    const tourAt = parseDateTimeInput(leadCreateTourAt);
+
+    if (!name) {
+      setLeadError(lang === "zh" ? "請輸入姓名" : "Please enter lead name");
+      setLeadMessage(null);
+      return;
+    }
+    if (leadCreateTourAt.trim() && !tourAt) {
+      setLeadError(lang === "zh" ? "導覽時間格式錯誤" : "Invalid tour time");
+      setLeadMessage(null);
+      return;
+    }
+
+    setLeadSubmitting(true);
+    setLeadError(null);
+    setLeadMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          name,
+          phone: phone || null,
+          source: leadSource.trim() || null,
+          interest: leadInterest.trim() || null,
+          note: note || null,
+          tourAt,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "建立線索失敗" : "Create lead failed"));
+      setLeadName("");
+      setLeadPhone("");
+      setLeadCreateNote("");
+      setLeadCreateTourAt("");
+      const newLeadId = String(payload?.leadId || "");
+      setLeadMessage(lang === "zh" ? "線索已建立" : "Lead created");
+      await loadLeadModule();
+      if (newLeadId) setLeadSelectedId(newLeadId);
+    } catch (err) {
+      setLeadError(err instanceof Error ? err.message : (lang === "zh" ? "建立線索失敗" : "Create lead failed"));
+    } finally {
+      setLeadSubmitting(false);
+    }
+  }, [
+    lang,
+    leadCreateNote,
+    leadCreateTourAt,
+    leadInterest,
+    leadName,
+    leadPhone,
+    leadSource,
+    loadLeadModule,
+  ]);
+
+  const handleLeadScheduleTour = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!leadSelectedId) {
+      setLeadError(lang === "zh" ? "請先選擇線索" : "Please select a lead first");
+      setLeadMessage(null);
+      return;
+    }
+    const tourAt = parseDateTimeInput(leadScheduleTourAt);
+    if (!tourAt) {
+      setLeadError(lang === "zh" ? "請輸入有效導覽時間" : "Please enter a valid tour time");
+      setLeadMessage(null);
+      return;
+    }
+
+    setLeadSubmitting(true);
+    setLeadError(null);
+    setLeadMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "schedule_tour",
+          leadId: leadSelectedId,
+          tourAt,
+          note: leadScheduleNote.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "安排導覽失敗" : "Schedule tour failed"));
+      setLeadMessage(lang === "zh" ? "導覽時間已更新" : "Tour scheduled");
+      setLeadScheduleNote("");
+      await loadLeadModule();
+    } catch (err) {
+      setLeadError(err instanceof Error ? err.message : (lang === "zh" ? "安排導覽失敗" : "Schedule tour failed"));
+    } finally {
+      setLeadSubmitting(false);
+    }
+  }, [lang, leadScheduleNote, leadScheduleTourAt, leadSelectedId, loadLeadModule]);
+
+  const handleLeadFollowup = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!leadSelectedId) {
+      setLeadError(lang === "zh" ? "請先選擇線索" : "Please select a lead first");
+      setLeadMessage(null);
+      return;
+    }
+    const note = leadFollowupNote.trim();
+    if (!note) {
+      setLeadError(lang === "zh" ? "請輸入追蹤內容" : "Please enter follow-up note");
+      setLeadMessage(null);
+      return;
+    }
+
+    setLeadSubmitting(true);
+    setLeadError(null);
+    setLeadMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "followup",
+          leadId: leadSelectedId,
+          note,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "新增追蹤失敗" : "Add follow-up failed"));
+      setLeadMessage(lang === "zh" ? "已新增追蹤紀錄" : "Follow-up added");
+      setLeadFollowupNote("");
+      await loadLeadModule();
+    } catch (err) {
+      setLeadError(err instanceof Error ? err.message : (lang === "zh" ? "新增追蹤失敗" : "Add follow-up failed"));
+    } finally {
+      setLeadSubmitting(false);
+    }
+  }, [lang, leadFollowupNote, leadSelectedId, loadLeadModule]);
+
+  const handleLeadConvert = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!leadSelectedId) {
+      setLeadError(lang === "zh" ? "請先選擇線索" : "Please select a lead first");
+      setLeadMessage(null);
+      return;
+    }
+
+    let memberId = leadConvertMemberId.trim();
+    if (memberId && !isUuid(memberId)) {
+      setLeadError(lang === "zh" ? "會員 ID 格式錯誤，需為 UUID" : "Invalid member ID format");
+      setLeadMessage(null);
+      return;
+    }
+
+    setLeadSubmitting(true);
+    setLeadError(null);
+    setLeadMessage(null);
+    try {
+      if (!memberId) {
+        if (!selectedLead?.name || !selectedLead?.phone) {
+          throw new Error(lang === "zh"
+            ? "請填寫會員 ID，或先補齊線索姓名與電話"
+            : "Provide member ID or ensure lead has name and phone");
+        }
+        const memberRes = await fetch("/api/members", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName: selectedLead.name,
+            phone: selectedLead.phone,
+            leadSource: selectedLead.source || "frontdesk_lead",
+          }),
+        });
+        const memberPayload = await memberRes.json();
+        if (memberRes.status === 409 && memberPayload?.existingMember?.id) {
+          memberId = String(memberPayload.existingMember.id);
+        } else if (!memberRes.ok) {
+          throw new Error(memberPayload?.error || (lang === "zh" ? "建立會員失敗" : "Create member failed"));
+        } else {
+          memberId = String(memberPayload?.member?.id || "");
+        }
+      }
+
+      const res = await fetch("/api/frontdesk/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "convert",
+          leadId: leadSelectedId,
+          memberId: memberId || null,
+          note: leadConvertNote.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "轉會員失敗" : "Convert lead failed"));
+      setLeadMessage(lang === "zh" ? "已完成轉會員" : "Lead converted");
+      setLeadConvertMemberId(memberId || "");
+      setLeadConvertNote("");
+      await loadLeadModule();
+    } catch (err) {
+      setLeadError(err instanceof Error ? err.message : (lang === "zh" ? "轉會員失敗" : "Convert lead failed"));
+    } finally {
+      setLeadSubmitting(false);
+    }
+  }, [lang, leadConvertMemberId, leadConvertNote, leadSelectedId, loadLeadModule, selectedLead?.name, selectedLead?.phone, selectedLead?.source]);
+
+  const handleLeadMarkLost = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!leadSelectedId) {
+      setLeadError(lang === "zh" ? "請先選擇線索" : "Please select a lead first");
+      setLeadMessage(null);
+      return;
+    }
+    const reason = leadLostReason.trim();
+    if (!reason) {
+      setLeadError(lang === "zh" ? "請輸入失單原因" : "Please enter lost reason");
+      setLeadMessage(null);
+      return;
+    }
+
+    setLeadSubmitting(true);
+    setLeadError(null);
+    setLeadMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mark_lost",
+          leadId: leadSelectedId,
+          reason,
+          note: leadLostNote.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "標記失單失敗" : "Mark lost failed"));
+      setLeadMessage(lang === "zh" ? "線索已標記失單" : "Lead marked as lost");
+      setLeadLostReason("");
+      setLeadLostNote("");
+      await loadLeadModule();
+    } catch (err) {
+      setLeadError(err instanceof Error ? err.message : (lang === "zh" ? "標記失單失敗" : "Mark lost failed"));
+    } finally {
+      setLeadSubmitting(false);
+    }
+  }, [lang, leadLostNote, leadLostReason, leadSelectedId, loadLeadModule]);
+
+  const loadChainModule = useCallback(async () => {
+    setChainLoading(true);
+    setChainError(null);
+    try {
+      const res = await fetch("/api/frontdesk/chain-rules?limit=120");
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "載入跨店規則失敗" : "Load chain rules failed"));
+      const nextRule = (payload.rule || null) as ChainRuleItem | null;
+      const nextBlacklist = (payload.blacklist || []) as ChainBlacklistItem[];
+      if (nextRule) {
+        setChainRule(nextRule);
+        setChainAllowedBranchText((nextRule.allowedBranchIds || []).join(", "));
+        setChainMaxEntryPerDayText(nextRule.maxEntryPerDay === null || nextRule.maxEntryPerDay === undefined ? "" : String(nextRule.maxEntryPerDay));
+        setChainRuleNote(nextRule.note || "");
+      }
+      setChainBlacklistItems(nextBlacklist);
+      setChainRemoveTargetId((prev) => {
+        if (prev && nextBlacklist.some((item) => item.id === prev)) return prev;
+        return nextBlacklist[0]?.id || "";
+      });
+    } catch (err) {
+      setChainError(err instanceof Error ? err.message : (lang === "zh" ? "載入跨店規則失敗" : "Load chain rules failed"));
+    } finally {
+      setChainLoading(false);
+    }
+  }, [lang]);
+
+  const handleChainSaveRule = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const maxEntryPerDay = chainMaxEntryPerDayText.trim() ? Number(chainMaxEntryPerDayText.trim()) : null;
+    if (maxEntryPerDay !== null && (!Number.isFinite(maxEntryPerDay) || !Number.isInteger(maxEntryPerDay) || maxEntryPerDay <= 0)) {
+      setChainError(lang === "zh" ? "每日上限需為正整數" : "Daily limit must be a positive integer");
+      setChainMessage(null);
+      return;
+    }
+    const allowedBranchIds = chainAllowedBranchText
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    setChainSubmitting(true);
+    setChainError(null);
+    setChainMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/chain-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_rule",
+          allowCrossBranch: chainRule.allowCrossBranch,
+          requireManagerApproval: chainRule.requireManagerApproval,
+          suspensionSync: chainRule.suspensionSync,
+          guestPassEnabled: chainRule.guestPassEnabled,
+          maxEntryPerDay,
+          allowedBranchIds,
+          note: chainRuleNote.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "儲存跨店規則失敗" : "Save chain rules failed"));
+      setChainMessage(lang === "zh" ? "跨店規則已更新" : "Chain rules updated");
+      await loadChainModule();
+    } catch (err) {
+      setChainError(err instanceof Error ? err.message : (lang === "zh" ? "儲存跨店規則失敗" : "Save chain rules failed"));
+    } finally {
+      setChainSubmitting(false);
+    }
+  }, [chainAllowedBranchText, chainMaxEntryPerDayText, chainRule.allowCrossBranch, chainRule.guestPassEnabled, chainRule.requireManagerApproval, chainRule.suspensionSync, chainRuleNote, lang, loadChainModule]);
+
+  const handleChainAddBlacklist = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = chainBlacklistName.trim();
+    const reason = chainBlacklistReason.trim();
+    if (!name) {
+      setChainError(lang === "zh" ? "請輸入姓名" : "Please enter name");
+      setChainMessage(null);
+      return;
+    }
+    if (!reason) {
+      setChainError(lang === "zh" ? "請輸入原因" : "Please enter reason");
+      setChainMessage(null);
+      return;
+    }
+    if (chainBlacklistMemberCode.trim() && !isMemberCode(chainBlacklistMemberCode.trim())) {
+      setChainError(lang === "zh" ? "會員編號格式錯誤（1~9999）" : "Invalid member code format");
+      setChainMessage(null);
+      return;
+    }
+    const expiresAt = parseDateTimeInput(chainBlacklistExpiresAt);
+    if (chainBlacklistExpiresAt.trim() && !expiresAt) {
+      setChainError(lang === "zh" ? "到期時間格式錯誤" : "Invalid expires time");
+      setChainMessage(null);
+      return;
+    }
+
+    setChainSubmitting(true);
+    setChainError(null);
+    setChainMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/chain-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add_blacklist",
+          name,
+          memberCode: chainBlacklistMemberCode.trim() || null,
+          phone: chainBlacklistPhone.trim() || null,
+          reason,
+          expiresAt,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "新增黑名單失敗" : "Add blacklist failed"));
+      setChainMessage(lang === "zh" ? "黑名單已新增" : "Blacklist added");
+      setChainBlacklistName("");
+      setChainBlacklistMemberCode("");
+      setChainBlacklistPhone("");
+      setChainBlacklistReason("");
+      setChainBlacklistExpiresAt("");
+      await loadChainModule();
+    } catch (err) {
+      setChainError(err instanceof Error ? err.message : (lang === "zh" ? "新增黑名單失敗" : "Add blacklist failed"));
+    } finally {
+      setChainSubmitting(false);
+    }
+  }, [chainBlacklistExpiresAt, chainBlacklistMemberCode, chainBlacklistName, chainBlacklistPhone, chainBlacklistReason, lang, loadChainModule]);
+
+  const handleChainRemoveBlacklist = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!chainRemoveTargetId) {
+      setChainError(lang === "zh" ? "請先選擇黑名單項目" : "Please select blacklist record");
+      setChainMessage(null);
+      return;
+    }
+
+    setChainSubmitting(true);
+    setChainError(null);
+    setChainMessage(null);
+    try {
+      const res = await fetch("/api/frontdesk/chain-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "remove_blacklist",
+          entryId: chainRemoveTargetId,
+          reason: chainRemoveReason.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "移除黑名單失敗" : "Remove blacklist failed"));
+      setChainMessage(lang === "zh" ? "黑名單已移除" : "Blacklist removed");
+      setChainRemoveReason("");
+      await loadChainModule();
+    } catch (err) {
+      setChainError(err instanceof Error ? err.message : (lang === "zh" ? "移除黑名單失敗" : "Remove blacklist failed"));
+    } finally {
+      setChainSubmitting(false);
+    }
+  }, [chainRemoveReason, chainRemoveTargetId, lang, loadChainModule]);
+
+  const loadReportModule = useCallback(async () => {
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      await Promise.all([
+        loadDashboard(true),
+        loadPosOrders(),
+        loadPosApprovals(),
+        loadCsModule(),
+        loadLeadModule(),
+      ]);
+    } catch (err) {
+      setReportError(err instanceof Error ? err.message : (lang === "zh" ? "載入看板失敗" : "Load report board failed"));
+    } finally {
+      setReportLoading(false);
+    }
+  }, [lang, loadCsModule, loadDashboard, loadLeadModule, loadPosApprovals, loadPosOrders]);
+
   const capabilityCards = useMemo(
     (): CapabilityCard[] =>
       lang === "zh"
@@ -2388,9 +3140,9 @@ export default function FrontdeskPortalPage() {
             { id: "locker", title: "E. 置物櫃 / 租借", desc: "置物櫃租借登記、歸還與押金管理。", detail: "可直接登記租借與歸還，包含押金、到期時間與備註，並保留完整操作軌跡。", area: "LOCKER", status: "ready" },
             { id: "inventory", title: "F. 商品 / 庫存 / 銷售", desc: "前台銷售、庫存調整、低庫存提醒。", detail: "可直接在櫃檯完成商品銷售入帳、庫存扣減與補貨/盤損調整，並保留異動紀錄。", area: "INVENTORY", status: "ready" },
             { id: "cs", title: "G. 客服 / 事件紀錄", desc: "客訴與現場事件工單，含進度追蹤與結案。", detail: "可建立客服/事件工單、更新處理狀態、追加追蹤紀錄與結案說明，並保留完整操作軌跡。", area: "CS", status: "ready" },
-            { id: "lead", title: "H. 線索 / 參觀導覽", desc: "Lead 建檔、轉會員、追蹤轉換。", detail: "規劃中：潛在客建檔、導覽排程與轉會員流程。", area: "LEAD", status: "planned" },
-            { id: "chain", title: "I. 跨店規則", desc: "跨店可用範圍、停權/黑名單同步。", detail: "建置中：跨店入場規則、停權同步、可用店範圍控制。", area: "CHAIN", status: "building" },
-            { id: "report", title: "J. 報表 / 即時監控", desc: "今日營收、到期、欠費、No-show、待辦。", detail: "建置中：櫃檯今日營運看板與交接待辦彙總。", area: "REPORT", status: "building" },
+            { id: "lead", title: "H. 線索 / 參觀導覽", desc: "Lead 建檔、轉會員、追蹤轉換。", detail: "已上線：線索建檔、導覽排程、追蹤紀錄與轉會員/失單流程。", area: "LEAD", status: "ready" },
+            { id: "chain", title: "I. 跨店規則", desc: "跨店可用範圍、停權/黑名單同步。", detail: "已上線：跨店放行規則、例外覆核條件與黑名單同步維護。", area: "CHAIN", status: "ready" },
+            { id: "report", title: "J. 報表 / 即時監控", desc: "今日營收、到期、欠費、No-show、待辦。", detail: "已上線：櫃檯今日營運看板、待辦彙總與風險提示。", area: "REPORT", status: "ready" },
             { id: "audit", title: "K. 權限 / 稽核", desc: "高風險送審、角色權限、完整稽核軌跡。", detail: "已上線：高風險動作送審、管理者核准/駁回、完整 Audit Log。", area: "AUDIT", status: "ready" },
           ]
         : [
@@ -2401,9 +3153,9 @@ export default function FrontdeskPortalPage() {
             { id: "locker", title: "E. Locker / Rental", desc: "Locker rent/return with deposit handling.", detail: "Register rental and return with deposit, due time, and operation audit trail.", area: "LOCKER", status: "ready" },
             { id: "inventory", title: "F. Product / Inventory", desc: "Desk sales, stock adjustments, low-stock alerts.", detail: "Complete product sales posting, stock deduction, restock/adjustment, and movement history in frontdesk.", area: "INVENTORY", status: "ready" },
             { id: "cs", title: "G. Service / Incidents", desc: "Complaint and on-site incident tickets with workflow.", detail: "Create incident tickets, update status, add follow-up notes, and close with resolution records.", area: "CS", status: "ready" },
-            { id: "lead", title: "H. Lead / Tours", desc: "Lead intake, visit scheduling, conversion.", detail: "Planned: lead management, visit schedule, and conversion tracking.", area: "LEAD", status: "planned" },
-            { id: "chain", title: "I. Multi-Branch Rules", desc: "Cross-branch policy and blacklist sync.", detail: "Building: cross-branch entry policies and blacklist synchronization.", area: "CHAIN", status: "building" },
-            { id: "report", title: "J. Reports / Live Monitor", desc: "Revenue, due list, no-show, handover TODO.", detail: "Building: desk operational dashboards and handover task monitor.", area: "REPORT", status: "building" },
+            { id: "lead", title: "H. Lead / Tours", desc: "Lead intake, visit scheduling, conversion.", detail: "Ready: lead intake, tour scheduling, follow-up timeline, and conversion/lost flow.", area: "LEAD", status: "ready" },
+            { id: "chain", title: "I. Multi-Branch Rules", desc: "Cross-branch policy and blacklist sync.", detail: "Ready: cross-branch access rules, approval gates, and synced blacklist controls.", area: "CHAIN", status: "ready" },
+            { id: "report", title: "J. Reports / Live Monitor", desc: "Revenue, due list, no-show, handover TODO.", detail: "Ready: desk live operation board with pending tasks and risk indicators.", area: "REPORT", status: "ready" },
             { id: "audit", title: "K. Role / Audit", desc: "Approval workflow, role control, full audit logs.", detail: "Ready: approval workflow, role-based controls, and audit logs.", area: "AUDIT", status: "ready" },
           ],
     [lang],
@@ -2447,6 +3199,21 @@ export default function FrontdeskPortalPage() {
   }, [capabilityOpen, loadCsModule, modalType, selectedCapabilityId]);
 
   useEffect(() => {
+    if (!capabilityOpen || modalType !== "capability" || selectedCapabilityId !== "lead") return;
+    void loadLeadModule();
+  }, [capabilityOpen, loadLeadModule, modalType, selectedCapabilityId]);
+
+  useEffect(() => {
+    if (!capabilityOpen || modalType !== "capability" || selectedCapabilityId !== "chain") return;
+    void loadChainModule();
+  }, [capabilityOpen, loadChainModule, modalType, selectedCapabilityId]);
+
+  useEffect(() => {
+    if (!capabilityOpen || modalType !== "capability" || selectedCapabilityId !== "report") return;
+    void loadReportModule();
+  }, [capabilityOpen, loadReportModule, modalType, selectedCapabilityId]);
+
+  useEffect(() => {
     if (!capabilityOpen || modalType !== "capability" || selectedCapabilityId !== "pos") return;
     setPosLoading(true);
     setPosError(null);
@@ -2483,6 +3250,16 @@ export default function FrontdeskPortalPage() {
       setCsSelectedIncidentId(csIncidents[0].id);
     }
   }, [csIncidents, csSelectedIncidentId]);
+
+  useEffect(() => {
+    if (leadItems.length === 0) {
+      if (leadSelectedId) setLeadSelectedId("");
+      return;
+    }
+    if (!leadSelectedId || !leadItems.some((item) => item.id === leadSelectedId)) {
+      setLeadSelectedId(leadItems[0].id);
+    }
+  }, [leadItems, leadSelectedId]);
 
   useEffect(() => {
     if (lockerRentalTerm !== "custom" && lockerDueAt) {
@@ -2612,6 +3389,34 @@ export default function FrontdeskPortalPage() {
     if (action === "reopened") return t.csEventReopened;
     if (action === "assigned") return t.csEventAssigned;
     return t.csEventFollowup;
+  }
+
+  function leadStatusLabel(status: LeadStatus | string) {
+    if (status === "tour_scheduled") return lang === "zh" ? "已排導覽" : "Tour Scheduled";
+    if (status === "converted") return lang === "zh" ? "已轉會員" : "Converted";
+    if (status === "lost") return lang === "zh" ? "已失單" : "Lost";
+    return lang === "zh" ? "新線索" : "New";
+  }
+
+  function leadStatusStyle(status: LeadStatus | string) {
+    if (status === "tour_scheduled") {
+      return { background: "rgba(59,130,246,.14)", borderColor: "rgba(59,130,246,.4)", color: "#1d4ed8" };
+    }
+    if (status === "converted") {
+      return { background: "rgba(16,185,129,.14)", borderColor: "rgba(16,185,129,.42)", color: "#047857" };
+    }
+    if (status === "lost") {
+      return { background: "rgba(107,114,128,.14)", borderColor: "rgba(107,114,128,.36)", color: "#374151" };
+    }
+    return { background: "rgba(234,179,8,.16)", borderColor: "rgba(234,179,8,.46)", color: "#92400e" };
+  }
+
+  function leadEventActionLabel(action: string) {
+    if (action === "lead_created") return lang === "zh" ? "建立" : "Created";
+    if (action === "lead_tour_scheduled") return lang === "zh" ? "安排導覽" : "Tour Scheduled";
+    if (action === "lead_converted") return lang === "zh" ? "轉會員" : "Converted";
+    if (action === "lead_lost") return lang === "zh" ? "標記失單" : "Marked Lost";
+    return lang === "zh" ? "追蹤" : "Follow-up";
   }
 
   const lockerAutoDueAt = useMemo(
@@ -4283,6 +5088,311 @@ export default function FrontdeskPortalPage() {
                                   </div>
                                 ))}
                                 {!csLoading && (csSelectedIncident?.events || []).length === 0 ? <p className="fdGlassText">{t.csNoEvents}</p> : null}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                      {selectedCapability.id === "lead" ? (
+                        <div className="fdGlassSubPanel fdInventoryPanel" style={{ marginTop: 12, padding: 10 }}>
+                          <h4 className="sectionTitle" style={{ margin: 0 }}>{leadUi.title}</h4>
+                          <p className="fdGlassText" style={{ marginTop: 6 }}>{leadUi.sub}</p>
+                          {leadError ? <div className="error" style={{ marginTop: 8 }}>{leadError}</div> : null}
+                          {leadMessage ? <p className="sub" style={{ marginTop: 8, color: "var(--brand)" }}>{leadMessage}</p> : null}
+
+                          <div className="fdInventorySummary">
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{leadUi.summaryNew}</div><strong className="fdInventorySummaryValue">{leadNewCount}</strong></div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{leadUi.summaryTour}</div><strong className="fdInventorySummaryValue">{leadTourCount}</strong></div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{leadUi.summaryConverted}</div><strong className="fdInventorySummaryValue">{leadConvertedCount}</strong></div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{leadUi.summaryLost}</div><strong className="fdInventorySummaryValue">{leadLostCount}</strong></div>
+                          </div>
+
+                          <div className="fdInventoryFormGrid">
+                            <form onSubmit={handleLeadCreate} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{leadUi.createSection}</h5>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField"><span className="kvLabel">{leadUi.nameLabel}</span><input className="input" value={leadName} onChange={(event) => setLeadName(event.target.value)} disabled={leadSubmitting} /></label>
+                                <label className="fdInventoryField"><span className="kvLabel">{leadUi.phoneLabel}</span><input className="input" value={leadPhone} onChange={(event) => setLeadPhone(event.target.value)} disabled={leadSubmitting} /></label>
+                              </div>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{leadUi.sourceLabel}</span>
+                                  <select className="input" value={leadSource} onChange={(event) => setLeadSource(event.target.value)} disabled={leadSubmitting}>
+                                    <option value="walkin">{lang === "zh" ? "現場" : "Walk-in"}</option>
+                                    <option value="phone">{lang === "zh" ? "電話" : "Phone"}</option>
+                                    <option value="line">LINE</option>
+                                    <option value="ad">{lang === "zh" ? "廣告" : "Ads"}</option>
+                                    <option value="referral">{lang === "zh" ? "介紹" : "Referral"}</option>
+                                  </select>
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{leadUi.interestLabel}</span>
+                                  <select className="input" value={leadInterest} onChange={(event) => setLeadInterest(event.target.value)} disabled={leadSubmitting}>
+                                    <option value="membership">{lang === "zh" ? "會籍" : "Membership"}</option>
+                                    <option value="pt">{lang === "zh" ? "教練課" : "PT"}</option>
+                                    <option value="group_class">{lang === "zh" ? "團課" : "Group Class"}</option>
+                                    <option value="other">{lang === "zh" ? "其他" : "Other"}</option>
+                                  </select>
+                                </label>
+                              </div>
+                              <label className="fdInventoryField"><span className="kvLabel">{leadUi.noteLabel}</span><textarea className="input" rows={2} value={leadCreateNote} onChange={(event) => setLeadCreateNote(event.target.value)} disabled={leadSubmitting} /></label>
+                              <label className="fdInventoryField"><span className="kvLabel">{leadUi.tourAtLabel}</span><input className="input" type="datetime-local" value={leadCreateTourAt} onChange={(event) => setLeadCreateTourAt(event.target.value)} disabled={leadSubmitting} /></label>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={leadSubmitting}>{leadSubmitting ? leadUi.creating : leadUi.createAction}</button>
+                                <button type="button" className="fdPillBtn" onClick={() => void loadLeadModule()} disabled={leadLoading || leadSubmitting}>{leadUi.reload}</button>
+                              </div>
+                            </form>
+
+                            <div className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{leadUi.actionSection}</h5>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{leadUi.statusFilter}</span>
+                                  <select className="input" value={leadStatusFilter} onChange={(event) => setLeadStatusFilter(event.target.value as "all" | LeadStatus)} disabled={leadSubmitting}>
+                                    <option value="all">{lang === "zh" ? "全部" : "All"}</option>
+                                    <option value="new">{leadStatusLabel("new")}</option>
+                                    <option value="tour_scheduled">{leadStatusLabel("tour_scheduled")}</option>
+                                    <option value="converted">{leadStatusLabel("converted")}</option>
+                                    <option value="lost">{leadStatusLabel("lost")}</option>
+                                  </select>
+                                </label>
+                                <div className="fdInventoryActions" style={{ justifyContent: "flex-start", alignItems: "end" }}>
+                                  <button type="button" className="fdPillBtn" onClick={() => void loadLeadModule()} disabled={leadLoading || leadSubmitting}>{leadUi.reload}</button>
+                                </div>
+                              </div>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{leadUi.selectLead}</span>
+                                <select className="input" value={leadSelectedId} onChange={(event) => setLeadSelectedId(event.target.value)} disabled={leadSubmitting}>
+                                  {leadItems.map((item) => (<option key={item.id} value={item.id}>{item.name} | {leadStatusLabel(item.status)}</option>))}
+                                </select>
+                              </label>
+
+                              <form onSubmit={handleLeadScheduleTour}>
+                                <h6 className="kvLabel">{leadUi.scheduleTitle}</h6>
+                                <div className="fdInventoryGrid2">
+                                  <label className="fdInventoryField"><input className="input" type="datetime-local" value={leadScheduleTourAt} onChange={(event) => setLeadScheduleTourAt(event.target.value)} disabled={leadSubmitting} /></label>
+                                  <label className="fdInventoryField"><input className="input" value={leadScheduleNote} onChange={(event) => setLeadScheduleNote(event.target.value)} placeholder={leadUi.noteLabel} disabled={leadSubmitting} /></label>
+                                </div>
+                                <div className="fdInventoryActions"><button type="submit" className="fdPillBtn" disabled={leadSubmitting || leadItems.length === 0}>{leadUi.scheduleAction}</button></div>
+                              </form>
+
+                              <form onSubmit={handleLeadFollowup} style={{ marginTop: 10 }}>
+                                <h6 className="kvLabel">{leadUi.followupTitle}</h6>
+                                <label className="fdInventoryField"><textarea className="input" rows={2} value={leadFollowupNote} onChange={(event) => setLeadFollowupNote(event.target.value)} disabled={leadSubmitting} /></label>
+                                <div className="fdInventoryActions"><button type="submit" className="fdPillBtn" disabled={leadSubmitting || leadItems.length === 0}>{leadUi.followupAction}</button></div>
+                              </form>
+
+                              <form onSubmit={handleLeadConvert} style={{ marginTop: 10 }}>
+                                <h6 className="kvLabel">{leadUi.convertTitle}</h6>
+                                <label className="fdInventoryField"><input className="input" value={leadConvertMemberId} onChange={(event) => setLeadConvertMemberId(event.target.value)} placeholder={t.posMemberIdOptional} disabled={leadSubmitting} /></label>
+                                <label className="fdInventoryField"><input className="input" value={leadConvertNote} onChange={(event) => setLeadConvertNote(event.target.value)} placeholder={leadUi.noteLabel} disabled={leadSubmitting} /></label>
+                                <p className="sub">{leadUi.convertHint}</p>
+                                <div className="fdInventoryActions"><button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={leadSubmitting || leadItems.length === 0}>{leadUi.convertAction}</button></div>
+                              </form>
+
+                              <form onSubmit={handleLeadMarkLost} style={{ marginTop: 10 }}>
+                                <h6 className="kvLabel">{leadUi.lostTitle}</h6>
+                                <div className="fdInventoryGrid2">
+                                  <label className="fdInventoryField"><input className="input" value={leadLostReason} onChange={(event) => setLeadLostReason(event.target.value)} placeholder={leadUi.reasonLabel} disabled={leadSubmitting} /></label>
+                                  <label className="fdInventoryField"><input className="input" value={leadLostNote} onChange={(event) => setLeadLostNote(event.target.value)} placeholder={leadUi.noteLabel} disabled={leadSubmitting} /></label>
+                                </div>
+                                <div className="fdInventoryActions"><button type="submit" className="fdPillBtn" disabled={leadSubmitting || leadItems.length === 0}>{leadUi.lostAction}</button></div>
+                              </form>
+                            </div>
+                          </div>
+
+                          <div className="fdInventoryListGrid">
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{leadUi.listSection}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {leadItems.map((item) => (
+                                  <div key={item.id} className="card" style={{ padding: 10, borderColor: leadSelectedId === item.id ? "rgba(34,184,166,.45)" : undefined }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{item.name}</strong>
+                                      <span className="fdChip" style={leadStatusStyle(item.status)}>{leadStatusLabel(item.status)}</span>
+                                    </div>
+                                    {item.phone ? <p className="sub" style={{ marginTop: 4 }}>{item.phone}</p> : null}
+                                    <p className="sub" style={{ marginTop: 4 }}>{item.source || "-"} | {item.interest || "-"}</p>
+                                    {item.tourAt ? <p className="sub" style={{ marginTop: 4 }}>Tour: {fmtDateTime(item.tourAt)}</p> : null}
+                                    <p className="sub" style={{ marginTop: 4 }}>{leadUi.updatedAt}: {fmtDateTime(item.updatedAt)}</p>
+                                    <div className="fdInventoryCardActions"><button type="button" className="fdPillBtn" onClick={() => setLeadSelectedId(item.id)}>{leadUi.useLead}</button></div>
+                                  </div>
+                                ))}
+                                {!leadLoading && leadItems.length === 0 ? <p className="fdGlassText">{leadUi.noItems}</p> : null}
+                              </div>
+                            </div>
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{leadUi.timelineSection}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {(selectedLead?.events || []).map((eventItem) => (
+                                  <div key={eventItem.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{leadEventActionLabel(eventItem.action)}</strong>
+                                      <span className="fdChip">{fmtDateTime(eventItem.createdAt)}</span>
+                                    </div>
+                                    {eventItem.reason ? <p className="sub" style={{ marginTop: 4 }}>{eventItem.reason}</p> : null}
+                                  </div>
+                                ))}
+                                {!leadLoading && (selectedLead?.events || []).length === 0 ? <p className="fdGlassText">{leadUi.noEvents}</p> : null}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                      {selectedCapability.id === "chain" ? (
+                        <div className="fdGlassSubPanel fdInventoryPanel" style={{ marginTop: 12, padding: 10 }}>
+                          <h4 className="sectionTitle" style={{ margin: 0 }}>{chainUi.title}</h4>
+                          <p className="fdGlassText" style={{ marginTop: 6 }}>{chainUi.sub}</p>
+                          {chainError ? <div className="error" style={{ marginTop: 8 }}>{chainError}</div> : null}
+                          {chainMessage ? <p className="sub" style={{ marginTop: 8, color: "var(--brand)" }}>{chainMessage}</p> : null}
+
+                          <div className="fdInventorySummary">
+                            <div className="fdGlassSubPanel fdInventorySummaryItem">
+                              <div className="kvLabel">{chainUi.activeCount}</div>
+                              <strong className="fdInventorySummaryValue">{chainActiveBlacklistCount}</strong>
+                            </div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem">
+                              <div className="kvLabel">{chainUi.updatedAt}</div>
+                              <strong className="fdInventorySummaryValue" style={{ fontSize: 14 }}>{chainRule.updatedAt ? fmtDateTime(chainRule.updatedAt) : "-"}</strong>
+                            </div>
+                          </div>
+
+                          <div className="fdInventoryFormGrid">
+                            <form onSubmit={handleChainSaveRule} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{chainUi.settingsSection}</h5>
+                              <label className="fdInventoryField" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                <input type="checkbox" checked={chainRule.allowCrossBranch} onChange={(event) => setChainRule((prev) => ({ ...prev, allowCrossBranch: event.target.checked }))} disabled={chainSubmitting} />
+                                <span className="sub" style={{ marginTop: 0 }}>{chainUi.allowCrossBranch}</span>
+                              </label>
+                              <label className="fdInventoryField" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                <input type="checkbox" checked={chainRule.requireManagerApproval} onChange={(event) => setChainRule((prev) => ({ ...prev, requireManagerApproval: event.target.checked }))} disabled={chainSubmitting} />
+                                <span className="sub" style={{ marginTop: 0 }}>{chainUi.requireManagerApproval}</span>
+                              </label>
+                              <label className="fdInventoryField" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                <input type="checkbox" checked={chainRule.suspensionSync} onChange={(event) => setChainRule((prev) => ({ ...prev, suspensionSync: event.target.checked }))} disabled={chainSubmitting} />
+                                <span className="sub" style={{ marginTop: 0 }}>{chainUi.suspensionSync}</span>
+                              </label>
+                              <label className="fdInventoryField" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                <input type="checkbox" checked={chainRule.guestPassEnabled} onChange={(event) => setChainRule((prev) => ({ ...prev, guestPassEnabled: event.target.checked }))} disabled={chainSubmitting} />
+                                <span className="sub" style={{ marginTop: 0 }}>{chainUi.guestPass}</span>
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{chainUi.maxEntryPerDay}</span>
+                                <input className="input" inputMode="numeric" value={chainMaxEntryPerDayText} onChange={(event) => setChainMaxEntryPerDayText(event.target.value)} disabled={chainSubmitting} />
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{chainUi.allowedBranches}</span>
+                                <input className="input" value={chainAllowedBranchText} onChange={(event) => setChainAllowedBranchText(event.target.value)} disabled={chainSubmitting} />
+                              </label>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{chainUi.ruleNote}</span>
+                                <textarea className="input" rows={2} value={chainRuleNote} onChange={(event) => setChainRuleNote(event.target.value)} disabled={chainSubmitting} />
+                              </label>
+                              <div className="fdInventoryActions">
+                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={chainSubmitting}>{chainSubmitting ? chainUi.saving : chainUi.saveAction}</button>
+                                <button type="button" className="fdPillBtn" onClick={() => void loadChainModule()} disabled={chainLoading || chainSubmitting}>{chainUi.reload}</button>
+                              </div>
+                            </form>
+
+                            <form onSubmit={handleChainAddBlacklist} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{chainUi.addBlacklistSection}</h5>
+                              <label className="fdInventoryField"><span className="kvLabel">{chainUi.blacklistName}</span><input className="input" value={chainBlacklistName} onChange={(event) => setChainBlacklistName(event.target.value)} disabled={chainSubmitting} /></label>
+                              <div className="fdInventoryGrid2">
+                                <label className="fdInventoryField"><span className="kvLabel">{chainUi.blacklistMemberCode}</span><input className="input" value={chainBlacklistMemberCode} onChange={(event) => setChainBlacklistMemberCode(event.target.value)} disabled={chainSubmitting} /></label>
+                                <label className="fdInventoryField"><span className="kvLabel">{chainUi.blacklistPhone}</span><input className="input" value={chainBlacklistPhone} onChange={(event) => setChainBlacklistPhone(event.target.value)} disabled={chainSubmitting} /></label>
+                              </div>
+                              <label className="fdInventoryField"><span className="kvLabel">{chainUi.blacklistReason}</span><input className="input" value={chainBlacklistReason} onChange={(event) => setChainBlacklistReason(event.target.value)} disabled={chainSubmitting} /></label>
+                              <label className="fdInventoryField"><span className="kvLabel">{chainUi.blacklistExpiresAt}</span><input className="input" type="datetime-local" value={chainBlacklistExpiresAt} onChange={(event) => setChainBlacklistExpiresAt(event.target.value)} disabled={chainSubmitting} /></label>
+                              <div className="fdInventoryActions"><button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={chainSubmitting}>{chainUi.addBlacklistSection}</button></div>
+                            </form>
+
+                            <form onSubmit={handleChainRemoveBlacklist} className="fdGlassSubPanel fdInventoryFormBlock">
+                              <h5 className="sectionTitle" style={{ margin: 0 }}>{chainUi.blacklistSection}</h5>
+                              <label className="fdInventoryField">
+                                <span className="kvLabel">{chainUi.blacklistSection}</span>
+                                <select className="input" value={chainRemoveTargetId} onChange={(event) => setChainRemoveTargetId(event.target.value)} disabled={chainSubmitting}>
+                                  {chainBlacklistItems.map((item) => (<option key={item.id} value={item.id}>{item.name} | {item.reason || "-"}</option>))}
+                                </select>
+                              </label>
+                              <label className="fdInventoryField"><span className="kvLabel">{chainUi.ruleNote}</span><input className="input" value={chainRemoveReason} onChange={(event) => setChainRemoveReason(event.target.value)} disabled={chainSubmitting} /></label>
+                              <div className="fdInventoryActions"><button type="submit" className="fdPillBtn" disabled={chainSubmitting || chainBlacklistItems.length === 0}>{chainUi.removeAction}</button></div>
+                            </form>
+                          </div>
+
+                          <div className="fdInventoryListGrid">
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{chainUi.blacklistSection}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {chainBlacklistItems.map((item) => (
+                                  <div key={item.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{item.name}</strong>
+                                      <span className="fdChip">{item.memberCode || "-"}</span>
+                                    </div>
+                                    {item.phone ? <p className="sub" style={{ marginTop: 4 }}>{item.phone}</p> : null}
+                                    {item.reason ? <p className="sub" style={{ marginTop: 4 }}>{item.reason}</p> : null}
+                                    {item.expiresAt ? <p className="sub" style={{ marginTop: 4 }}>EXP: {fmtDateTime(item.expiresAt)}</p> : null}
+                                    <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.createdAt)}</p>
+                                  </div>
+                                ))}
+                                {!chainLoading && chainBlacklistItems.length === 0 ? <p className="fdGlassText">{chainUi.noBlacklist}</p> : null}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                      {selectedCapability.id === "report" ? (
+                        <div className="fdGlassSubPanel fdInventoryPanel" style={{ marginTop: 12, padding: 10 }}>
+                          <h4 className="sectionTitle" style={{ margin: 0 }}>{reportUi.title}</h4>
+                          <p className="fdGlassText" style={{ marginTop: 6 }}>{reportUi.sub}</p>
+                          {reportError ? <div className="error" style={{ marginTop: 8 }}>{reportError}</div> : null}
+
+                          <div className="fdInventorySummary">
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{reportUi.shiftState}</div><strong className="fdInventorySummaryValue">{t.statusOpenValue}</strong></div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{t.orders}</div><strong className="fdInventorySummaryValue">{ordersToday}</strong></div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{t.paid}</div><strong className="fdInventorySummaryValue">{paidToday}</strong></div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{t.revenue}</div><strong className="fdInventorySummaryValue">{revenueToday}</strong></div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{reportUi.pendingApprovals}</div><strong className="fdInventorySummaryValue">{reportPendingApprovalCount}</strong></div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{reportUi.overdueOrders}</div><strong className="fdInventorySummaryValue">{reportOverdueOrderCount}</strong></div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{reportUi.upcomingBookings}</div><strong className="fdInventorySummaryValue">{reportUpcomingCount}</strong></div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{reportUi.unresolvedIncidents}</div><strong className="fdInventorySummaryValue">{reportUnresolvedIncidentCount}</strong></div>
+                            <div className="fdGlassSubPanel fdInventorySummaryItem"><div className="kvLabel">{reportUi.convertedLeads}</div><strong className="fdInventorySummaryValue">{leadConvertedCount}</strong></div>
+                          </div>
+
+                          <div className="fdInventoryActions" style={{ marginTop: 10 }}>
+                            <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => void loadReportModule()} disabled={reportLoading}>
+                              {reportUi.reload}
+                            </button>
+                          </div>
+
+                          <div className="fdInventoryListGrid">
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{reportUi.todoTitle}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {reportTodos.map((item) => (
+                                  <div key={item} className="card" style={{ padding: 10 }}>
+                                    <p className="sub" style={{ marginTop: 0 }}>{item}</p>
+                                  </div>
+                                ))}
+                                {reportTodos.length === 0 ? <p className="fdGlassText">{reportUi.todoNone}</p> : null}
+                              </div>
+                            </div>
+                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <div className="kvLabel">{reportUi.auditTitle}</div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {posApprovals.filter((item) => item.status === "pending").slice(0, 6).map((item) => (
+                                  <div key={item.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{posRiskActionLabel(item.action)}</strong>
+                                      <span className="fdChip" style={posApprovalStatusStyle(item.status)}>{posApprovalStatusLabel(item.status)}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>{item.reason || "-"}</p>
+                                    <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
+                                  </div>
+                                ))}
+                                {posApprovals.filter((item) => item.status === "pending").length === 0 ? (
+                                  <p className="fdGlassText">{lang === "zh" ? "目前沒有待審核送單。" : "No pending approvals."}</p>
+                                ) : null}
                               </div>
                             </div>
                           </div>
