@@ -106,6 +106,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .topbar:hover,
   .topbar:focus-within{
     transform: translateY(0);
+    overflow: visible;
     box-shadow: 0 12px 24px rgba(114, 132, 160, .16);
     background: rgba(244,248,255,.92);
   }
@@ -150,6 +151,121 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .pill:hover{
   background: linear-gradient(135deg, rgba(255,255,255,.9), rgba(240,246,255,.7));
   text-decoration: none;
+}
+
+.navMenuWrap{
+  position: relative;
+}
+.navMenuTrigger{
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.navMenuPanel{
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: min(860px, 92vw);
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(189, 199, 214, .74);
+  background:
+    linear-gradient(140deg, rgba(255,255,255,.92), rgba(244,248,255,.88)),
+    rgba(255,255,255,.84);
+  box-shadow: 0 16px 28px rgba(109, 124, 151, .22);
+  backdrop-filter: blur(14px) saturate(1.08);
+  z-index: 60;
+}
+.navMenuGrid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.navMenuSection{
+  border: 1px solid rgba(195, 206, 224, .62);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(248, 251, 255, .84);
+}
+.navMenuSectionTitle{
+  margin: 0 0 8px;
+  font-size: 13px;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+.navMenuList{
+  display: grid;
+  gap: 7px;
+}
+.navMenuItem{
+  display: block;
+  border: 1px solid rgba(196, 207, 224, .72);
+  border-radius: 12px;
+  padding: 8px 9px;
+  background: rgba(255, 255, 255, .86);
+}
+.navMenuItem:hover{
+  text-decoration: none;
+  border-color: rgba(138, 186, 231, .78);
+  background: rgba(247, 251, 255, .94);
+}
+.navMenuItemStatic{
+  opacity: .9;
+}
+.navMenuItemTop{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.navMenuItem strong{
+  font-size: 13px;
+  line-height: 1.35;
+}
+.navMenuItem p{
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.navMenuState{
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.navMenuStateready{
+  color: #137a6d;
+  background: rgba(34,184,166,.12);
+  border-color: rgba(34,184,166,.4);
+}
+.navMenuStatebuilding{
+  color: #92400e;
+  background: rgba(234,179,8,.14);
+  border-color: rgba(234,179,8,.42);
+}
+.navMenuStateplanned{
+  color: #4b5563;
+  background: rgba(107,114,128,.12);
+  border-color: rgba(107,114,128,.35);
+}
+@media (max-width: 1100px){
+  .navMenuPanel{
+    position: fixed;
+    top: 76px;
+    right: 14px;
+    left: 14px;
+    width: auto;
+    max-height: calc(100vh - 100px);
+    overflow: auto;
+  }
+  .navMenuGrid{
+    grid-template-columns: 1fr;
+  }
 }
 
 .card{
