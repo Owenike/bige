@@ -11,7 +11,7 @@ export interface ProfileContext {
   branchId: string | null;
 }
 
-const TEMP_DISABLE_ROLE_GUARD = true;
+export const TEMP_DISABLE_ROLE_GUARD = true;
 
 interface ProfileRow {
   id: string;

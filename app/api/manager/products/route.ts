@@ -41,7 +41,10 @@ export async function GET(request: Request) {
 
   if (error) {
     if (error.message.includes('relation "products" does not exist')) {
-      return NextResponse.json({ error: "products table missing. Apply migrations first." }, { status: 501 });
+      return NextResponse.json({
+        items: [],
+        warning: "products table missing. Running in fallback mode with empty product list.",
+      });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

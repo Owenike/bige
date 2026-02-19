@@ -103,7 +103,10 @@ export async function GET(request: Request) {
 
   if (list.error) {
     if (isLockerTableMissing(list.error.message)) {
-      return NextResponse.json({ error: "lockers table missing. Apply migrations first." }, { status: 501 });
+      return NextResponse.json({
+        items: [],
+        warning: "lockers table missing. Running in fallback mode with empty locker list.",
+      });
     }
     return NextResponse.json({ error: list.error.message }, { status: 500 });
   }

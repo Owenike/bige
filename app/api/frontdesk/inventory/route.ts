@@ -33,6 +33,26 @@ function normalizeMemberCode(input: unknown) {
   return input.trim();
 }
 
+function buildInventoryItems(
+  products: any[],
+  inventoryByCode: Map<string, { on_hand: number; safety_stock: number; updated_at: string }> = new Map(),
+) {
+  return products.map((row: any) => {
+    const inventory = inventoryByCode.get(String(row.code));
+    const onHand = Number(inventory?.on_hand ?? 0);
+    const safetyStock = Number(inventory?.safety_stock ?? 5);
+    return {
+      code: String(row.code),
+      title: String(row.title || row.code),
+      unitPrice: Number(row.unit_price ?? 0),
+      unitQuantity: Number(row.quantity ?? 1),
+      onHand,
+      safetyStock,
+      isLowStock: onHand <= safetyStock,
+    };
+  });
+}
+
 export async function GET(request: Request) {
   const auth = await requireProfile(["frontdesk", "manager"], request);
   if (!auth.ok) return auth.response;
@@ -54,7 +74,11 @@ export async function GET(request: Request) {
 
   if (productsResult.error) {
     if (isProductsTableMissing(productsResult.error.message)) {
-      return NextResponse.json({ error: "products table missing. Apply migrations first." }, { status: 501 });
+      return NextResponse.json({
+        items: [],
+        moves: [],
+        warning: "products table missing. Running in fallback mode with empty inventory.",
+      });
     }
     return NextResponse.json({ error: productsResult.error.message }, { status: 500 });
   }
@@ -67,7 +91,11 @@ export async function GET(request: Request) {
 
   if (inventoryResult.error) {
     if (isInventoryTableMissing(inventoryResult.error.message)) {
-      return NextResponse.json({ error: "inventory table missing. Apply migrations first." }, { status: 501 });
+      return NextResponse.json({
+        items: buildInventoryItems(productsResult.data || []),
+        moves: [],
+        warning: "inventory table missing. Running in fallback mode with zero stock.",
+      });
     }
     return NextResponse.json({ error: inventoryResult.error.message }, { status: 500 });
   }
@@ -82,7 +110,19 @@ export async function GET(request: Request) {
 
   if (movesResult.error) {
     if (isInventoryTableMissing(movesResult.error.message)) {
-      return NextResponse.json({ error: "inventory table missing. Apply migrations first." }, { status: 501 });
+      const inventoryByCode = new Map<string, { on_hand: number; safety_stock: number; updated_at: string }>();
+      for (const row of (inventoryResult.data || []) as Array<{ product_code: string; on_hand: number; safety_stock: number; updated_at: string }>) {
+        inventoryByCode.set(String(row.product_code), {
+          on_hand: Number(row.on_hand ?? 0),
+          safety_stock: Number(row.safety_stock ?? 5),
+          updated_at: row.updated_at,
+        });
+      }
+      return NextResponse.json({
+        items: buildInventoryItems(productsResult.data || [], inventoryByCode),
+        moves: [],
+        warning: "inventory moves table missing. Running in fallback mode without movement history.",
+      });
     }
     return NextResponse.json({ error: movesResult.error.message }, { status: 500 });
   }
@@ -96,20 +136,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const items = (productsResult.data || []).map((row: any) => {
-    const inventory = inventoryByCode.get(String(row.code));
-    const onHand = Number(inventory?.on_hand ?? 0);
-    const safetyStock = Number(inventory?.safety_stock ?? 5);
-    return {
-      code: String(row.code),
-      title: String(row.title || row.code),
-      unitPrice: Number(row.unit_price ?? 0),
-      unitQuantity: Number(row.quantity ?? 1),
-      onHand,
-      safetyStock,
-      isLowStock: onHand <= safetyStock,
-    };
-  });
+  const items = buildInventoryItems(productsResult.data || [], inventoryByCode);
 
   const moves = (movesResult.data || []).map((row: any) => ({
     id: String(row.id),

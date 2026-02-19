@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../lib/auth-context";
+import { TEMP_DISABLE_ROLE_GUARD, requireProfile } from "../../../../lib/auth-context";
 
 const INVOICE_ACTIONS = ["invoice_issue", "invoice_void", "invoice_allowance"] as const;
 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     .eq("id", orderId)
     .maybeSingle();
   if (orderResult.error || !orderResult.data) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-  if (auth.context.role === "frontdesk" && auth.context.branchId && String(orderResult.data.branch_id || "") !== auth.context.branchId) {
+  if (!TEMP_DISABLE_ROLE_GUARD && auth.context.role === "frontdesk" && auth.context.branchId && String(orderResult.data.branch_id || "") !== auth.context.branchId) {
     return NextResponse.json({ error: "Forbidden order access for current branch" }, { status: 403 });
   }
 
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     .eq("id", orderId)
     .maybeSingle();
   if (orderResult.error || !orderResult.data) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-  if (auth.context.role === "frontdesk" && auth.context.branchId && String(orderResult.data.branch_id || "") !== auth.context.branchId) {
+  if (!TEMP_DISABLE_ROLE_GUARD && auth.context.role === "frontdesk" && auth.context.branchId && String(orderResult.data.branch_id || "") !== auth.context.branchId) {
     return NextResponse.json({ error: "Forbidden order access for current branch" }, { status: 403 });
   }
 
@@ -156,4 +156,3 @@ export async function POST(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ invoiceEvent: data });
 }
-

@@ -33,7 +33,10 @@ export async function GET(request: Request) {
 
   if (error) {
     if (error.message.includes('relation "services" does not exist')) {
-      return NextResponse.json({ error: "services table missing. Apply migrations first." }, { status: 501 });
+      return NextResponse.json({
+        items: [],
+        warning: "services table missing. Running in fallback mode with empty service list.",
+      });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -25,7 +25,10 @@ export async function GET(request: Request) {
   const { data, error } = await query;
   if (error) {
     if (error.message.includes('relation "coach_slots" does not exist')) {
-      return NextResponse.json({ error: "coach_slots table missing. Apply migrations first." }, { status: 501 });
+      return NextResponse.json({
+        items: [],
+        warning: "coach_slots table missing. Running in fallback mode with empty slot list.",
+      });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -110,4 +113,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ slot: data }, { status: 201 });
 }
-
