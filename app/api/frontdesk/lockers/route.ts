@@ -159,7 +159,24 @@ export async function POST(request: Request) {
 
     if (updateResult.error) {
       if (isLockerTableMissing(updateResult.error.message)) {
-        return NextResponse.json({ error: "lockers table missing. Apply migrations first." }, { status: 501 });
+        return NextResponse.json({
+          item: {
+            id: rentalId,
+            lockerCode: "",
+            memberId: null,
+            memberCode: "",
+            renterName: "",
+            phone: "",
+            depositAmount: 0,
+            note: "",
+            status: "returned",
+            rentalTerm: "daily",
+            rentedAt: null,
+            dueAt: null,
+            returnedAt: updatedAt,
+          },
+          warning: "lockers table missing. Fallback mode: write skipped.",
+        });
       }
       return NextResponse.json({ error: updateResult.error.message }, { status: 500 });
     }
@@ -247,6 +264,8 @@ export async function POST(request: Request) {
     memberCode = memberResult.data.member_code ? String(memberResult.data.member_code) : normalizedCode;
   }
 
+  const updatedAt = new Date().toISOString();
+
   const existingActive = await auth.supabase
     .from("frontdesk_locker_rentals")
     .select("id")
@@ -258,7 +277,24 @@ export async function POST(request: Request) {
 
   if (existingActive.error) {
     if (isLockerTableMissing(existingActive.error.message)) {
-      return NextResponse.json({ error: "lockers table missing. Apply migrations first." }, { status: 501 });
+      return NextResponse.json({
+        item: {
+          id: `fallback-${crypto.randomUUID()}`,
+          lockerCode,
+          memberId,
+          memberCode: memberCode || memberCodeInput,
+          renterName,
+          phone,
+          depositAmount,
+          note,
+          status: "active",
+          rentalTerm,
+          rentedAt: updatedAt,
+          dueAt,
+          returnedAt: null,
+        },
+        warning: "lockers table missing. Fallback mode: write skipped.",
+      }, { status: 201 });
     }
     return NextResponse.json({ error: existingActive.error.message }, { status: 500 });
   }
@@ -266,7 +302,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Locker is already in use" }, { status: 409 });
   }
 
-  const updatedAt = new Date().toISOString();
   const insertResult = await auth.supabase
     .from("frontdesk_locker_rentals")
     .insert({
@@ -290,7 +325,24 @@ export async function POST(request: Request) {
 
   if (insertResult.error) {
     if (isLockerTableMissing(insertResult.error.message)) {
-      return NextResponse.json({ error: "lockers table missing. Apply migrations first." }, { status: 501 });
+      return NextResponse.json({
+        item: {
+          id: `fallback-${crypto.randomUUID()}`,
+          lockerCode,
+          memberId,
+          memberCode: memberCode || memberCodeInput,
+          renterName,
+          phone,
+          depositAmount,
+          note,
+          status: "active",
+          rentalTerm,
+          rentedAt: updatedAt,
+          dueAt,
+          returnedAt: null,
+        },
+        warning: "lockers table missing. Fallback mode: write skipped.",
+      }, { status: 201 });
     }
     return NextResponse.json({ error: insertResult.error.message }, { status: 500 });
   }

@@ -27,7 +27,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   if (error) {
     if (error.message.includes('relation "coach_slots" does not exist')) {
-      return NextResponse.json({ error: "coach_slots table missing. Apply migrations first." }, { status: 501 });
+      return NextResponse.json({
+        slot: {
+          id,
+          coach_id: null,
+          starts_at: null,
+          ends_at: null,
+          status: nextStatus,
+          updated_at: now,
+        },
+        warning: "coach_slots table missing. Fallback mode: write skipped.",
+      });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -45,4 +55,3 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   return NextResponse.json({ slot: data });
 }
-

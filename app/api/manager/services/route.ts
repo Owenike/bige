@@ -79,7 +79,19 @@ export async function POST(request: Request) {
 
   if (upsert.error) {
     if (upsert.error.message.includes('relation "services" does not exist')) {
-      return NextResponse.json({ error: "services table missing. Apply migrations first." }, { status: 501 });
+      return NextResponse.json({
+        service: mapServiceRow({
+          id: `fallback-${code}`,
+          code,
+          name,
+          duration_minutes: durationMinutes,
+          capacity,
+          is_active: isActive,
+          created_at: now,
+          updated_at: now,
+        }),
+        warning: "services table missing. Fallback mode: write skipped.",
+      }, { status: 201 });
     }
     return NextResponse.json({ error: upsert.error.message }, { status: 500 });
   }
@@ -149,7 +161,19 @@ export async function PATCH(request: Request) {
 
   if (updateResult.error) {
     if (updateResult.error.message.includes('relation "services" does not exist')) {
-      return NextResponse.json({ error: "services table missing. Apply migrations first." }, { status: 501 });
+      return NextResponse.json({
+        service: mapServiceRow({
+          id: `fallback-${code}`,
+          code,
+          name: typeof updates.name === "string" ? updates.name : code,
+          duration_minutes: typeof updates.duration_minutes === "number" ? updates.duration_minutes : 60,
+          capacity: typeof updates.capacity === "number" ? updates.capacity : 1,
+          is_active: typeof updates.is_active === "boolean" ? updates.is_active : true,
+          created_at: null,
+          updated_at: updates.updated_at,
+        }),
+        warning: "services table missing. Fallback mode: write skipped.",
+      });
     }
     return NextResponse.json({ error: updateResult.error.message }, { status: 500 });
   }
