@@ -859,16 +859,16 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   overflow: visible;
 }
 .fdCapabilityRingStage{
-  --fd-cap-ring-radius: 420px;
   margin-top: 8px;
-  height: 360px;
+  height: 380px;
   position: relative;
   overflow: hidden;
   border-radius: 20px;
   background:
-    radial-gradient(80% 55% at 50% 46%, rgba(255,255,255,.56), rgba(255,255,255,.08) 70%, rgba(255,255,255,0) 100%),
-    linear-gradient(180deg, rgba(255,255,255,.24), rgba(255,255,255,.06));
+    radial-gradient(84% 64% at 50% 42%, rgba(255,255,255,.64), rgba(255,255,255,.10) 68%, rgba(255,255,255,0) 100%),
+    linear-gradient(180deg, rgba(255,255,255,.26), rgba(255,255,255,.08));
   perspective: 1700px;
+  perspective-origin: 50% 40%;
   cursor: grab;
   touch-action: pan-y;
 }
@@ -876,12 +876,21 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   content: "";
   position: absolute;
   left: 50%;
-  bottom: 28px;
-  width: 74%;
-  height: 30%;
+  bottom: 22px;
+  width: 78%;
+  height: 34%;
   transform: translateX(-50%);
   border-radius: 999px;
-  background: radial-gradient(ellipse at center, rgba(25, 36, 58, .18), rgba(25, 36, 58, 0) 70%);
+  background: radial-gradient(ellipse at center, rgba(25, 36, 58, .22), rgba(25, 36, 58, 0) 72%);
+  pointer-events: none;
+}
+.fdCapabilityRingStage::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(236, 242, 252, .92) 0%, rgba(236, 242, 252, 0) 16%, rgba(236, 242, 252, 0) 84%, rgba(236, 242, 252, .92) 100%);
   pointer-events: none;
 }
 .fdCapabilityRingStageDragging{
@@ -892,22 +901,33 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   user-select: none;
 }
 .fdCapabilityRingTrack{
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0;
-  height: 0;
+  position: relative;
+  width: 100%;
+  height: 100%;
   transform-style: preserve-3d;
-  transform: translate(-50%, -46%);
 }
 .fdCapabilityRingCard{
   position: absolute;
-  left: -112px;
-  top: -72px;
+  left: 50%;
+  top: 54%;
   width: 224px;
   min-height: 164px;
   transform-style: preserve-3d;
-  will-change: transform, opacity;
+  transform-origin: center center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform, opacity, filter;
+  transition: filter .22s ease, box-shadow .22s ease, border-color .22s ease;
+}
+.fdCapabilityRingCard:not(.fdCapabilityCardActive){
+  filter: saturate(.86);
+}
+.fdCapabilityRingCard.fdCapabilityCardActive{
+  filter: saturate(1.08);
+  box-shadow:
+    inset 3px 0 0 rgba(34, 184, 166, .92),
+    inset 0 .6px 0 rgba(255,255,255,.88),
+    0 20px 30px rgba(61, 79, 111, .22);
 }
 .fdCapabilityRingCard .fdActionTitle{
   font-size: 19px;
@@ -1633,12 +1653,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .fdActionGrid{ grid-template-columns: 1fr; }
   .fdCapabilityGrid{ grid-template-columns: 1fr; }
   .fdCapabilityRingStage{
-    --fd-cap-ring-radius: 300px;
-    height: 300px;
+    height: 320px;
   }
   .fdCapabilityRingCard{
-    left: -90px;
-    top: -64px;
+    left: 50%;
+    top: 56%;
     width: 180px;
     min-height: 142px;
   }
@@ -1694,9 +1713,6 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   }
 }
 @media (max-width: 1260px) and (min-width: 901px){
-  .fdCapabilityRingStage{
-    --fd-cap-ring-radius: 350px;
-  }
   .fdGlassTopFixed{
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

@@ -3637,18 +3637,27 @@ export default function FrontdeskPortalPage() {
             <div className="fdCapabilityRingTrack">
               {capabilityRingItems.map((item) => {
                 const angle = item.baseAngle + capabilityRingAngle;
-                const depth = Math.cos((angle * Math.PI) / 180);
-                const zIndex = Math.round((depth + 1) * 100);
-                const opacity = 0.42 + Math.max(0, depth) * 0.58;
+                const rad = (angle * Math.PI) / 180;
+                const depth = Math.cos(rad);
+                const orbitX = Math.sin(rad) * 420;
+                const orbitZ = depth * 300;
+                const tilt = -Math.sin(rad) * 14;
+                const scale = 0.58 + ((depth + 1) / 2) * 0.52;
+                const liftY = depth < 0 ? 62 : (1 - depth) * 32;
+                const visibility = (depth + 1) / 2;
+                const opacity = Math.max(0.06, Math.min(1, 0.14 + visibility * 0.9));
+                const interactive = visibility > 0.24;
+                const zIndex = Math.round((depth + 1) * 1000);
                 return (
                 <button
                   key={item.id}
                   type="button"
                   className={`fdGlassSubPanel fdCapabilityCard fdCapabilityRingCard ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
                   style={{
-                    transform: `rotateY(${angle}deg) translateZ(var(--fd-cap-ring-radius))`,
+                    transform: `translate3d(calc(-50% + ${orbitX}px), calc(-50% + ${liftY}px), ${orbitZ}px) rotateY(${tilt}deg) scale(${scale})`,
                     opacity,
                     zIndex,
+                    pointerEvents: interactive ? "auto" : "none",
                   }}
                   onDragStart={(event) => event.preventDefault()}
                   onClick={(event) => {
