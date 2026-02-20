@@ -249,12 +249,6 @@ function minutesSince(value: string) {
   return Math.max(0, Math.floor((Date.now() - ts) / 60000));
 }
 
-function minutesUntil(value: string) {
-  const ts = new Date(value).getTime();
-  if (Number.isNaN(ts)) return 0;
-  return Math.floor((ts - Date.now()) / 60000);
-}
-
 function parseAmount(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
@@ -312,12 +306,12 @@ export default function FrontdeskPortalPage() {
   const sceneRef = useRef<HTMLElement | null>(null);
   const overdueOrderIdsRef = useRef<Set<string> | null>(null);
   const loadingRef = useRef(false);
-  const capabilityRailRef = useRef<HTMLDivElement | null>(null);
+  const capabilityRingRef = useRef<HTMLDivElement | null>(null);
   const capabilityDragStateRef = useRef({
     active: false,
     pointerId: -1,
     startX: 0,
-    startLeft: 0,
+    startAngle: 0,
     moved: false,
   });
   const capabilitySuppressClickRef = useRef(false);
@@ -337,6 +331,7 @@ export default function FrontdeskPortalPage() {
   const [capabilityOpen, setCapabilityOpen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
   const [capabilityRailDragging, setCapabilityRailDragging] = useState(false);
+  const [capabilityRingAngle, setCapabilityRingAngle] = useState(0);
   const [modalType, setModalType] = useState<FrontdeskModalType>("capability");
   const [selectedCapabilityId, setSelectedCapabilityId] = useState<string>("member");
   const [toolbarQuery, setToolbarQuery] = useState("");
@@ -3206,44 +3201,43 @@ export default function FrontdeskPortalPage() {
     [capabilityCards, selectedCapabilityId],
   );
 
-  const capabilityArcItems = useMemo(() => {
-    const midpoint = (capabilityCards.length - 1) / 2;
+  const capabilityRingItems = useMemo(() => {
+    const step = 360 / capabilityCards.length;
     return capabilityCards.map((item, index) => {
       const letterMatch = /^([A-Z])\./i.exec(item.title);
       const letter = letterMatch ? letterMatch[1].toUpperCase() : item.area.charAt(0).toUpperCase();
       const moduleTitle = item.title.replace(/^[A-Z]\.\s*/i, "");
-      const depth = Math.max(0, 26 - Math.abs(index - midpoint) * 6);
-      return { ...item, letter, moduleTitle, depth };
+      return { ...item, letter, moduleTitle, baseAngle: index * step };
     });
   }, [capabilityCards]);
 
-  const handleCapabilityRailPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+  const handleCapabilityRingPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
-    const rail = capabilityRailRef.current;
-    if (!rail) return;
+    const ring = capabilityRingRef.current;
+    if (!ring) return;
     capabilityDragStateRef.current.active = true;
     capabilityDragStateRef.current.pointerId = event.pointerId;
     capabilityDragStateRef.current.startX = event.clientX;
-    capabilityDragStateRef.current.startLeft = rail.scrollLeft;
+    capabilityDragStateRef.current.startAngle = capabilityRingAngle;
     capabilityDragStateRef.current.moved = false;
     capabilitySuppressClickRef.current = false;
     setCapabilityRailDragging(true);
-    rail.setPointerCapture?.(event.pointerId);
-  }, []);
+    ring.setPointerCapture?.(event.pointerId);
+  }, [capabilityRingAngle]);
 
-  const handleCapabilityRailPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+  const handleCapabilityRingPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!capabilityDragStateRef.current.active) return;
-    const rail = capabilityRailRef.current;
-    if (!rail) return;
+    const ring = capabilityRingRef.current;
+    if (!ring) return;
     const delta = event.clientX - capabilityDragStateRef.current.startX;
-    rail.scrollLeft = capabilityDragStateRef.current.startLeft - delta;
+    setCapabilityRingAngle(capabilityDragStateRef.current.startAngle + delta * 0.32);
     if (Math.abs(delta) > 6) {
       capabilityDragStateRef.current.moved = true;
       capabilitySuppressClickRef.current = true;
     }
   }, []);
 
-  const handleCapabilityRailPointerUp = useCallback(() => {
+  const handleCapabilityRingPointerUp = useCallback(() => {
     capabilityDragStateRef.current.active = false;
     capabilityDragStateRef.current.pointerId = -1;
     setCapabilityRailDragging(false);
@@ -3631,23 +3625,31 @@ export default function FrontdeskPortalPage() {
               <h2 className="sectionTitle">{t.capabilityTitle}</h2>
               <p className="fdGlassText" style={{ marginTop: 6 }}>{t.capabilityArcHint}</p>
             </div>
-            <span className="fdChip">{t.capabilityDragHint}</span>
           </div>
           <div
-            ref={capabilityRailRef}
-            className={`fdCapabilityArcRail ${capabilityRailDragging ? "fdCapabilityArcRailDragging" : ""}`}
-            onPointerDown={handleCapabilityRailPointerDown}
-            onPointerMove={handleCapabilityRailPointerMove}
-            onPointerUp={handleCapabilityRailPointerUp}
-            onPointerCancel={handleCapabilityRailPointerUp}
+            ref={capabilityRingRef}
+            className={`fdCapabilityRingStage ${capabilityRailDragging ? "fdCapabilityRingStageDragging" : ""}`}
+            onPointerDown={handleCapabilityRingPointerDown}
+            onPointerMove={handleCapabilityRingPointerMove}
+            onPointerUp={handleCapabilityRingPointerUp}
+            onPointerCancel={handleCapabilityRingPointerUp}
           >
-            <div className="fdCapabilityArcTrack">
-              {capabilityArcItems.map((item) => (
+            <div className="fdCapabilityRingTrack">
+              {capabilityRingItems.map((item) => {
+                const angle = item.baseAngle + capabilityRingAngle;
+                const depth = Math.cos((angle * Math.PI) / 180);
+                const zIndex = Math.round((depth + 1) * 100);
+                const opacity = 0.42 + Math.max(0, depth) * 0.58;
+                return (
                 <button
                   key={item.id}
                   type="button"
-                  className={`fdGlassSubPanel fdCapabilityCard fdCapabilityArcCard ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
-                  style={{ transform: `translateY(${item.depth}px)` }}
+                  className={`fdGlassSubPanel fdCapabilityCard fdCapabilityRingCard ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
+                  style={{
+                    transform: `rotateY(${angle}deg) translateZ(var(--fd-cap-ring-radius))`,
+                    opacity,
+                    zIndex,
+                  }}
                   onDragStart={(event) => event.preventDefault()}
                   onClick={(event) => {
                     if (capabilitySuppressClickRef.current) {
@@ -3666,91 +3668,10 @@ export default function FrontdeskPortalPage() {
                   <h3 className="fdActionTitle">{item.moduleTitle}</h3>
                   <p className="sub fdCapabilityDesc" style={{ marginTop: 6 }}>{item.desc}</p>
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>
-        </section>
-
-        <section className="fdTwoCol" style={{ marginTop: 14 }}>
-          {shiftResolved && actionsDisabled ? (
-            <p className="fdGlassText" style={{ gridColumn: "1 / -1", marginTop: 0 }}>
-              {t.openShiftFirst}
-            </p>
-          ) : null}
-          <article className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{t.unpaidTitle}</h2>
-            <div className="fdListStack" style={{ marginTop: 8 }}>
-              {unpaidOrderList.map((item) => {
-                const ageMin = minutesSince(item.created_at);
-                const isOverdue = ageMin >= 15;
-                const badgeStyle = isOverdue
-                  ? { background: "rgba(190, 24, 93, 0.22)", borderColor: "rgba(190, 24, 93, 0.6)", color: "#fecdd3" }
-                  : { background: "rgba(234, 179, 8, 0.18)", borderColor: "rgba(234, 179, 8, 0.5)", color: "#fde68a" };
-
-                return (
-                  <div key={item.id} className="card" style={{ padding: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                      <p className="sub" style={{ marginTop: 0 }}>{item.id.slice(0, 8)} | {item.status} | {item.amount}</p>
-                      <span className="fdChip" style={badgeStyle}>
-                        {isOverdue ? `${t.overdue} ${ageMin}${t.minutes}` : `${ageMin}${t.minutes}`}
-                      </span>
-                    </div>
-                    <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
-                    <a
-                      className="fdPillBtn"
-                      style={actionsDisabled ? { marginTop: 8, display: "inline-flex", opacity: 0.7, pointerEvents: "none" } : { marginTop: 8, display: "inline-flex" }}
-                      href={`/frontdesk/orders/new?orderId=${encodeURIComponent(item.id)}`}
-                      aria-disabled={actionsDisabled}
-                      onClick={(event) => {
-                        if (actionsDisabled) event.preventDefault();
-                      }}
-                    >
-                      {t.collectAction}
-                    </a>
-                  </div>
-                );
-              })}
-              {!loading && unpaidOrderList.length === 0 ? <p className="fdGlassText">{t.emptyUnpaid}</p> : null}
-            </div>
-          </article>
-
-          <article className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{t.upcomingTitle}</h2>
-            <div className="fdListStack" style={{ marginTop: 8 }}>
-              {upcomingBookingList.map((item) => {
-                const mins = minutesUntil(item.starts_at);
-                const isSoon = mins <= 15;
-                const badgeStyle = isSoon
-                  ? { background: "rgba(37, 99, 235, 0.22)", borderColor: "rgba(37, 99, 235, 0.55)", color: "#bfdbfe" }
-                  : { background: "rgba(16, 185, 129, 0.18)", borderColor: "rgba(16, 185, 129, 0.45)", color: "#bbf7d0" };
-
-                return (
-                  <div key={item.id} className="card" style={{ padding: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                      <p className="sub" style={{ marginTop: 0 }}>{item.service_name || "-"}</p>
-                      <span className="fdChip" style={badgeStyle}>
-                        {isSoon ? `${t.dueSoon} (${Math.max(0, mins)}${t.minutes})` : t.normal}
-                      </span>
-                    </div>
-                    <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.starts_at)}</p>
-                    <p className="sub" style={{ marginTop: 4 }}>#{item.member_id}</p>
-                    <a
-                      className="fdPillBtn"
-                      style={actionsDisabled ? { marginTop: 8, display: "inline-flex", opacity: 0.7, pointerEvents: "none" } : { marginTop: 8, display: "inline-flex" }}
-                      href="/frontdesk/bookings"
-                      aria-disabled={actionsDisabled}
-                      onClick={(event) => {
-                        if (actionsDisabled) event.preventDefault();
-                      }}
-                    >
-                      {t.bookingAction}
-                    </a>
-                  </div>
-                );
-              })}
-              {!loading && upcomingBookingList.length === 0 ? <p className="fdGlassText">{t.emptyUpcoming}</p> : null}
-            </div>
-          </article>
         </section>
 
         {capabilityOpen && portalReady ? createPortal((
