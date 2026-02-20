@@ -23,15 +23,15 @@ interface ManualAllowResponse {
 
 function safeParseApiError(payload: any, lang: "zh" | "en") {
   const raw = typeof payload?.error === "string" ? payload.error : "";
-  if (!raw) return lang === "zh" ? "請求失敗" : "Request failed";
-  if (raw === "reason_required") return lang === "zh" ? "必須填寫原因" : "reason is required";
-  if (raw === "audit_logs_missing") return lang === "zh" ? "缺少稽核記錄資料表（伺服器設定異常）" : "Audit log table missing (server misconfigured)";
-  if (raw === "Forbidden") return lang === "zh" ? "無權限" : "Forbidden";
-  if (raw === "Unauthorized") return lang === "zh" ? "未授權" : "Unauthorized";
+  if (!raw) return lang === "zh" ? "\u8acb\u6c42\u5931\u6557" : "Request failed";
+  if (raw === "reason_required") return lang === "zh" ? "\u8acb\u8f38\u5165\u539f\u56e0" : "reason is required";
+  if (raw === "audit_logs_missing") return lang === "zh" ? "\u7a3d\u6838\u8cc7\u6599\u8868\u907a\u5931\uff08\u4f3a\u670d\u5668\u8a2d\u5b9a\u554f\u984c\uff09" : "Audit log table missing (server misconfigured)";
+  if (raw === "Forbidden") return lang === "zh" ? "\u7121\u6b0a\u9650" : "Forbidden";
+  if (raw === "Unauthorized") return lang === "zh" ? "\u672a\u767b\u5165" : "Unauthorized";
   return raw;
 }
 
-export function ManualAllowPanel() {
+export function ManualAllowPanel({ onDone }: { onDone?: () => void }) {
   const { locale } = useI18n();
   const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
 
@@ -52,24 +52,31 @@ export function ManualAllowPanel() {
     () =>
       lang === "zh"
         ? {
-            title: "人工放行",
-            hint: "僅用於例外情境，系統會寫入稽核記錄。",
-            searchPlaceholder: "姓名 / 電話",
-            searchBtn: "搜尋會員",
-            searchBusy: "搜尋中...",
-            memberSelect: "選擇會員",
-            deviceId: "裝置 ID（選填）",
-            reasonPlaceholder: "放行原因（必填）",
-            submit: "執行人工放行",
-            submitBusy: "提交中...",
-            success: "人工放行已完成並記錄",
-            result: "結果",
-            membership: "會員權益",
-            today: "今日",
-            reason: "原因",
-            unknown: "未知",
-            active: "啟用中",
-            inactive: "未啟用",
+            title: "\u4eba\u5de5\u653e\u884c",
+            hint: "\u50c5\u9650\u4f8b\u5916\u60c5\u5883\u4f7f\u7528\uff0c\u64cd\u4f5c\u6703\u5beb\u5165\u7a3d\u6838\u65e5\u8a8c\u3002",
+            searchPlaceholder: "\u59d3\u540d / \u96fb\u8a71",
+            searchBtn: "\u641c\u5c0b\u6703\u54e1",
+            searchBusy: "\u641c\u5c0b\u4e2d...",
+            memberSelect: "\u9078\u64c7\u6703\u54e1",
+            deviceId: "\u8a2d\u5099 ID\uff08\u9078\u586b\uff09",
+            reasonPlaceholder: "\u653e\u884c\u539f\u56e0\uff08\u5fc5\u586b\uff09",
+            submit: "\u9001\u51fa\u4eba\u5de5\u653e\u884c",
+            submitBusy: "\u63d0\u4ea4\u4e2d...",
+            success: "\u4eba\u5de5\u653e\u884c\u5df2\u5b8c\u6210\u4e26\u8a18\u9304",
+            result: "\u7d50\u679c",
+            membership: "\u6703\u7c4d\u6982\u89bd",
+            today: "\u4eca\u65e5",
+            reason: "\u539f\u56e0",
+            unknown: "\u672a\u77e5",
+            active: "\u6709\u6548",
+            inactive: "\u7121\u6548",
+            methodLabel: "\u65b9\u5f0f",
+            noName: "\uff08\u7121\u59d3\u540d\uff09",
+            memberIdLabel: "\u6703\u54e1 ID",
+            monthlyLabel: "\u6708\u8cbb",
+            passesLabel: "\u6b21\u6578\u5361",
+            searchFail: "\u6703\u54e1\u641c\u5c0b\u5931\u6557",
+            submitFail: "\u4eba\u5de5\u653e\u884c\u5931\u6557",
           }
         : {
             title: "Manual Allow",
@@ -90,6 +97,13 @@ export function ManualAllowPanel() {
             unknown: "unknown",
             active: "active",
             inactive: "inactive",
+            methodLabel: "method",
+            noName: "(no name)",
+            memberIdLabel: "memberId",
+            monthlyLabel: "monthly",
+            passesLabel: "passes",
+            searchFail: "Member search failed",
+            submitFail: "Manual allow failed",
           },
     [lang],
   );
@@ -106,12 +120,12 @@ export function ManualAllowPanel() {
       if (!res.ok) throw new Error(safeParseApiError(payload, lang));
       setOptions((payload.items || []) as MemberSearchItem[]);
     } catch (err) {
-      setMembersError(err instanceof Error ? err.message : lang === "zh" ? "會員搜尋失敗" : "Member search failed");
+      setMembersError(err instanceof Error ? err.message : t.searchFail);
       setOptions([]);
     } finally {
       setMembersLoading(false);
     }
-  }, [lang, query]);
+  }, [lang, query, t.searchFail]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -133,8 +147,9 @@ export function ManualAllowPanel() {
       if (!res.ok) throw new Error(safeParseApiError(payload, lang));
       setResult(payload as ManualAllowResponse);
       setSubmitOk(t.success);
+      onDone?.();
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : lang === "zh" ? "人工放行失敗" : "Manual allow failed");
+      setSubmitError(err instanceof Error ? err.message : t.submitFail);
     } finally {
       setSubmitLoading(false);
     }
@@ -197,23 +212,23 @@ export function ManualAllowPanel() {
               <strong>{t.result}</strong>
               <strong>{result.result.result}</strong>
             </div>
-            <p className="fdGlassText" style={{ marginTop: 6 }}>{lang === "zh" ? "方式" : "method"}: {result.result.method}</p>
+            <p className="fdGlassText" style={{ marginTop: 6 }}>{t.methodLabel}: {result.result.method}</p>
             <p className="fdGlassText" style={{ marginTop: 6 }}>
-              {result.member.fullName || (lang === "zh" ? "（未命名）" : "(no name)")} | {result.member.phoneLast4 || "-"}
+              {result.member.fullName || t.noName} | {result.member.phoneLast4 || "-"}
             </p>
             <p className="fdGlassText" style={{ marginTop: 6 }}>
-              {lang === "zh" ? "會員編號" : "memberId"}: <code>{result.member.id}</code>
+              {t.memberIdLabel}: <code>{result.member.id}</code>
             </p>
           </div>
 
           <div className="fdGlassSubPanel" style={{ padding: 12 }}>
             <p className="fdGlassText" style={{ marginTop: 0 }}>{t.membership}</p>
             <p className="fdGlassText">
-              {lang === "zh" ? "月會員" : "monthly"}: {result.membership.monthly.expiresAt ? new Date(result.membership.monthly.expiresAt).toLocaleDateString() : "-"}
+              {t.monthlyLabel}: {result.membership.monthly.expiresAt ? new Date(result.membership.monthly.expiresAt).toLocaleDateString() : "-"}
               {" | "}
               {result.membership.monthly.isActive === null ? t.unknown : result.membership.monthly.isActive ? t.active : t.inactive}
             </p>
-            <p className="fdGlassText">{lang === "zh" ? "票券" : "passes"}: {result.membership.passes.length}</p>
+            <p className="fdGlassText">{t.passesLabel}: {result.membership.passes.length}</p>
             <p className="fdGlassText">{t.today}: {result.today.count}</p>
             <p className="fdGlassText" style={{ marginTop: 8 }}>
               {t.reason}: {result.result.reason}

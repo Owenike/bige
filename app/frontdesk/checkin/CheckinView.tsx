@@ -6,9 +6,29 @@ import { useI18n } from "../../i18n-provider";
 import type { VerifyEntryResponse } from "../../../types/entry";
 import { ManualAllowPanel } from "./ManualAllowPanel";
 
+interface RecentCheckinItem {
+  id: string;
+  memberId: string;
+  memberName: string;
+  memberCode: string;
+  phoneLast4: string | null;
+  method: string;
+  result: string;
+  reason: string;
+  checkedAt: string | null;
+}
+
 function formatDateTime(value: string | null) {
   if (!value) return "-";
   return new Date(value).toLocaleString();
+}
+
+function parseEntryError(payload: any, lang: "zh" | "en") {
+  const raw = typeof payload?.error === "string" ? payload.error : "";
+  if (!raw) return lang === "zh" ? "\u8acb\u6c42\u5931\u6557" : "Request failed";
+  if (raw === "reason is required") return lang === "zh" ? "\u8acb\u8f38\u5165\u53d6\u6d88\u539f\u56e0" : "Reason is required";
+  if (raw === "Only allow records can be canceled") return lang === "zh" ? "\u53ea\u80fd\u53d6\u6d88\u300c\u653e\u884c\u300d\u8a18\u9304" : raw;
+  return raw;
 }
 
 function membershipLabel(input: VerifyEntryResponse["membership"], lang: "zh" | "en") {
@@ -78,6 +98,11 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   const [manualInput, setManualInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<VerifyEntryResponse | null>(null);
+  const [recentItems, setRecentItems] = useState<RecentCheckinItem[]>([]);
+  const [recentLoading, setRecentLoading] = useState(false);
+  const [recentError, setRecentError] = useState<string | null>(null);
+  const [recentWarning, setRecentWarning] = useState<string | null>(null);
+  const [voidingId, setVoidingId] = useState<string | null>(null);
 
   const t = useMemo(
     () =>
@@ -103,11 +128,24 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             todayCount: "\u4eca\u65e5\u5831\u5230\u6b21\u6578",
             checkedAt: "\u9a57\u8b49\u6642\u9593",
             reason: "\u539f\u56e0",
-            gate: "\u9598\u9580",
-            noPhoto: "\u7121\u7167\u7247",
-            gateOpen: "\u5df2\u958b\u9580",
-            gateClosed: "\u672a\u958b\u9580",
-          }
+             gate: "\u9598\u9580",
+             noPhoto: "\u7121\u7167\u7247",
+             gateOpen: "\u5df2\u958b\u9580",
+             gateClosed: "\u672a\u958b\u9580",
+             recentTitle: "\u6700\u8fd1\u5165\u5834\u7d00\u9304",
+             recentReload: "\u91cd\u65b0\u6574\u7406",
+             recentLoading: "\u8f09\u5165\u4e2d...",
+             recentEmpty: "\u76ee\u524d\u6c92\u6709\u5165\u5834\u7d00\u9304\u3002",
+             recentMember: "\u6703\u54e1",
+             recentMethod: "\u65b9\u5f0f",
+             recentResult: "\u7d50\u679c",
+             recentReason: "\u539f\u56e0",
+             recentCheckedAt: "\u6642\u9593",
+             recentVoidAction: "\u53d6\u6d88\u8aa4\u5237",
+             recentVoidingAction: "\u53d6\u6d88\u4e2d...",
+             recentVoidPrompt: "\u8acb\u8f38\u5165\u53d6\u6d88\u8aa4\u5237\u539f\u56e0",
+             recentVoidSuccess: "\u8aa4\u5237\u8a18\u9304\u5df2\u53d6\u6d88\u3002",
+           }
         : {
             badge: "ENTRY SCAN",
             title: "Frontdesk Entry Verification",
@@ -129,17 +167,48 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             todayCount: "Today Count",
             checkedAt: "Checked At",
             reason: "Reason",
-            gate: "Gate",
-            noPhoto: "No photo",
-            gateOpen: "Opened",
-            gateClosed: "Not opened",
-          },
+             gate: "Gate",
+             noPhoto: "No photo",
+             gateOpen: "Opened",
+             gateClosed: "Not opened",
+             recentTitle: "Recent Entry Logs",
+             recentReload: "Reload",
+             recentLoading: "Loading...",
+             recentEmpty: "No recent entry records.",
+             recentMember: "Member",
+             recentMethod: "Method",
+             recentResult: "Result",
+             recentReason: "Reason",
+             recentCheckedAt: "Time",
+             recentVoidAction: "Undo Wrong Scan",
+             recentVoidingAction: "Undoing...",
+             recentVoidPrompt: "Please input reason to undo this scan",
+             recentVoidSuccess: "Wrong scan has been canceled.",
+           },
     [lang],
   );
 
   useEffect(() => {
     busyRef.current = busy;
   }, [busy]);
+
+  const loadRecentCheckins = useCallback(async () => {
+    setRecentLoading(true);
+    setRecentError(null);
+    try {
+      const response = await fetch(`/api/frontdesk/checkins?limit=${embedded ? 12 : 24}`, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(parseEntryError(payload, lang));
+      setRecentItems(Array.isArray(payload.items) ? (payload.items as RecentCheckinItem[]) : []);
+      setRecentWarning(typeof payload.warning === "string" ? payload.warning : null);
+    } catch (error) {
+      setRecentItems([]);
+      setRecentWarning(null);
+      setRecentError(error instanceof Error ? error.message : parseEntryError({}, lang));
+    } finally {
+      setRecentLoading(false);
+    }
+  }, [embedded, lang]);
 
   const callVerify = useCallback(async (token: string) => {
     const trimmed = token.trim();
@@ -155,6 +224,9 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       });
       const payload = (await response.json()) as VerifyEntryResponse;
       setResult(payload);
+      if (payload.decision === "allow") {
+        void loadRecentCheckins();
+      }
     } catch {
       setResult({
         decision: "deny",
@@ -171,7 +243,32 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       setBusy(false);
       setManualInput("");
     }
-  }, []);
+  }, [loadRecentCheckins]);
+
+  const handleVoidCheckin = useCallback(async (item: RecentCheckinItem) => {
+    const reasonInput = window.prompt(t.recentVoidPrompt, "");
+    if (reasonInput === null) return;
+    const reason = reasonInput.trim();
+    if (!reason) return;
+
+    setVoidingId(item.id);
+    setRecentError(null);
+    try {
+      const response = await fetch("/api/frontdesk/checkins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "void", checkinId: item.id, reason }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(parseEntryError(payload, lang));
+      setRecentWarning(typeof payload.warning === "string" ? payload.warning : t.recentVoidSuccess);
+      await loadRecentCheckins();
+    } catch (error) {
+      setRecentError(error instanceof Error ? error.message : parseEntryError({}, lang));
+    } finally {
+      setVoidingId(null);
+    }
+  }, [lang, loadRecentCheckins, t.recentVoidPrompt, t.recentVoidSuccess]);
 
   const canUseBarcodeDetector = useMemo(() => typeof window !== "undefined" && "BarcodeDetector" in window, []);
 
@@ -217,6 +314,10 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
     };
   }, [callVerify, canUseBarcodeDetector, t.browserNotSupport, t.cameraFailed]);
+
+  useEffect(() => {
+    void loadRecentCheckins();
+  }, [loadRecentCheckins]);
 
   const decisionColor = result?.decision === "allow" ? "var(--brand)" : "#9b1c1c";
 
@@ -270,7 +371,54 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
           </div>
         </section>
 
-        <ManualAllowPanel />
+        <ManualAllowPanel onDone={() => { void loadRecentCheckins(); }} />
+
+        <section className="fdGlassSubPanel" style={{ marginTop: 14 }}>
+          <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
+            <h2 className="sectionTitle" style={{ margin: 0 }}>{t.recentTitle}</h2>
+            <button
+              type="button"
+              className="fdPillBtn"
+              onClick={() => void loadRecentCheckins()}
+              disabled={recentLoading || !!voidingId}
+            >
+              {t.recentReload}
+            </button>
+          </div>
+          {recentWarning ? <p className="fdGlassText" style={{ marginTop: 8, color: "var(--brand)" }}>{recentWarning}</p> : null}
+          {recentError ? <p className="error" style={{ marginTop: 8 }}>{recentError}</p> : null}
+          {recentLoading ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.recentLoading}</p> : null}
+          {!recentLoading && recentItems.length === 0 ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.recentEmpty}</p> : null}
+          <div className="fdListStack" style={{ marginTop: 8 }}>
+            {recentItems.map((item) => {
+              const memberLabel = item.memberCode
+                ? `${item.memberName || "-"} (#${item.memberCode})`
+                : (item.memberName || "-");
+              const canVoid = item.result.toLowerCase() === "allow";
+              return (
+                <div key={item.id} className="card" style={{ padding: 10 }}>
+                  <div style={{ display: "grid", gap: 4 }}>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentMember}: {memberLabel}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentMethod}: {item.method || "-"}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentResult}: {item.result || "-"}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentReason}: {item.reason || "-"}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentCheckedAt}: {formatDateTime(item.checkedAt)}</p>
+                  </div>
+                  <div className="fdInventoryActions" style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="fdPillBtn"
+                      disabled={!canVoid || voidingId === item.id}
+                      onClick={() => void handleVoidCheckin(item)}
+                    >
+                      {voidingId === item.id ? t.recentVoidingAction : t.recentVoidAction}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
       {result ? (
         <section className="fdGlassSubPanel" style={{ marginTop: 14 }}>
