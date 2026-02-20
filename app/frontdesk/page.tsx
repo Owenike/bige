@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../i18n-provider";
 import { FrontdeskCheckinView } from "./checkin/CheckinView";
@@ -312,6 +312,15 @@ export default function FrontdeskPortalPage() {
   const sceneRef = useRef<HTMLElement | null>(null);
   const overdueOrderIdsRef = useRef<Set<string> | null>(null);
   const loadingRef = useRef(false);
+  const capabilityRailRef = useRef<HTMLDivElement | null>(null);
+  const capabilityDragStateRef = useRef({
+    active: false,
+    pointerId: -1,
+    startX: 0,
+    startLeft: 0,
+    moved: false,
+  });
+  const capabilitySuppressClickRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -327,6 +336,7 @@ export default function FrontdeskPortalPage() {
   const [upcomingBookingList, setUpcomingBookingList] = useState<BookingItem[]>([]);
   const [capabilityOpen, setCapabilityOpen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
+  const [capabilityRailDragging, setCapabilityRailDragging] = useState(false);
   const [modalType, setModalType] = useState<FrontdeskModalType>("capability");
   const [selectedCapabilityId, setSelectedCapabilityId] = useState<string>("member");
   const [toolbarQuery, setToolbarQuery] = useState("");
@@ -479,6 +489,16 @@ export default function FrontdeskPortalPage() {
     setCapabilityOpen(true);
   }, []);
 
+  const capabilityModalTypeById = useCallback((id: string): FrontdeskModalType => {
+    if (id === "entry") return "entry";
+    if (id === "member") return "member";
+    return "capability";
+  }, []);
+
+  const openCapabilityShortcut = useCallback((id: string) => {
+    openCapabilityModal(id, capabilityModalTypeById(id));
+  }, [capabilityModalTypeById, openCapabilityModal]);
+
   useEffect(() => {
     const onScroll = () => {
       if (!sceneRef.current) return;
@@ -597,6 +617,14 @@ export default function FrontdeskPortalPage() {
             statusTasks: "待處理",
             statusTasksValue: `${pendingItems} 項`,
             statusTip: "先完成入場與收款，再執行交班結算。",
+            quickOpsTitle: "櫃檯作業",
+            quickOpsSub: "入場與會員的高頻操作入口。",
+            quickServiceTitle: "櫃檯服務",
+            quickServiceSub: "收銀與置物櫃作業快速切換。",
+            quickShiftTitle: "當班資訊",
+            quickShiftSub: "交班前請確認時間、當班人員與今日數據。",
+            quickPosAction: "收銀",
+            quickLockerAction: "置物櫃",
             modeClosed: "未開班",
             modeOpen: "開班中",
             startShiftTitle: "開始開班",
@@ -646,6 +674,8 @@ export default function FrontdeskPortalPage() {
             capabilityTitle: "櫃檯能力地圖",
             capabilitySub: "A~K 全模組進度：優先完成可營運與高風險稽核。",
             capabilityOpenBtn: "開啟能力地圖",
+            capabilityArcHint: "拖曳下方 A~K 按鈕，點擊即開啟對應功能。",
+            capabilityDragHint: "可用滑鼠按住拖曳左右滑動",
             capabilityModalTitle: "櫃檯能力地圖（A~K）",
             capabilityDetailTitle: "模組說明",
             capabilityCurrent: "目前選擇",
@@ -941,6 +971,14 @@ export default function FrontdeskPortalPage() {
             statusTasks: "Pending",
             statusTasksValue: `${pendingItems} items`,
             statusTip: "Finish check-ins and payments first, then run shift handover.",
+            quickOpsTitle: "Frontdesk Ops",
+            quickOpsSub: "High-frequency shortcuts for entry and member tasks.",
+            quickServiceTitle: "Frontdesk Service",
+            quickServiceSub: "Jump directly to POS and locker operations.",
+            quickShiftTitle: "Shift Info",
+            quickShiftSub: "Confirm operator/time and run handover from here.",
+            quickPosAction: "POS",
+            quickLockerAction: "Locker",
             modeClosed: "Closed",
             modeOpen: "Open",
             startShiftTitle: "Start Shift",
@@ -990,6 +1028,8 @@ export default function FrontdeskPortalPage() {
             capabilityTitle: "Frontdesk Capability Map",
             capabilitySub: "A-K module progress with operations-first and audit-first rollout.",
             capabilityOpenBtn: "Open Capability Map",
+            capabilityArcHint: "Drag the A-K buttons below and click to open each module.",
+            capabilityDragHint: "Mouse drag is supported for horizontal slide",
             capabilityModalTitle: "Frontdesk Capability Map (A-K)",
             capabilityDetailTitle: "Module Detail",
             capabilityCurrent: "Current",
@@ -3166,6 +3206,52 @@ export default function FrontdeskPortalPage() {
     [capabilityCards, selectedCapabilityId],
   );
 
+  const capabilityArcItems = useMemo(() => {
+    const midpoint = (capabilityCards.length - 1) / 2;
+    return capabilityCards.map((item, index) => {
+      const letterMatch = /^([A-Z])\./i.exec(item.title);
+      const letter = letterMatch ? letterMatch[1].toUpperCase() : item.area.charAt(0).toUpperCase();
+      const moduleTitle = item.title.replace(/^[A-Z]\.\s*/i, "");
+      const depth = Math.max(0, 26 - Math.abs(index - midpoint) * 6);
+      return { ...item, letter, moduleTitle, depth };
+    });
+  }, [capabilityCards]);
+
+  const handleCapabilityRailPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const rail = capabilityRailRef.current;
+    if (!rail) return;
+    capabilityDragStateRef.current.active = true;
+    capabilityDragStateRef.current.pointerId = event.pointerId;
+    capabilityDragStateRef.current.startX = event.clientX;
+    capabilityDragStateRef.current.startLeft = rail.scrollLeft;
+    capabilityDragStateRef.current.moved = false;
+    capabilitySuppressClickRef.current = false;
+    setCapabilityRailDragging(true);
+    rail.setPointerCapture?.(event.pointerId);
+  }, []);
+
+  const handleCapabilityRailPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!capabilityDragStateRef.current.active) return;
+    const rail = capabilityRailRef.current;
+    if (!rail) return;
+    const delta = event.clientX - capabilityDragStateRef.current.startX;
+    rail.scrollLeft = capabilityDragStateRef.current.startLeft - delta;
+    if (Math.abs(delta) > 6) {
+      capabilityDragStateRef.current.moved = true;
+      capabilitySuppressClickRef.current = true;
+    }
+  }, []);
+
+  const handleCapabilityRailPointerUp = useCallback(() => {
+    capabilityDragStateRef.current.active = false;
+    capabilityDragStateRef.current.pointerId = -1;
+    setCapabilityRailDragging(false);
+    window.setTimeout(() => {
+      capabilitySuppressClickRef.current = false;
+    }, 0);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setCapabilityOpen(false);
@@ -3430,140 +3516,159 @@ export default function FrontdeskPortalPage() {
         {error ? <div className="error">{error}</div> : null}
         {shiftActionError ? <div className="error" style={{ marginTop: error ? 10 : 0 }}>{shiftActionError}</div> : null}
 
-        <div className="fdGlassTop">
-          <article className="fdGlassPanel">
+        <div className="fdGlassTop fdGlassTopFixed">
+          <article className="fdGlassPanel fdQuickPanel">
             <div className="fdChipRow">
               <span className={`fdChip ${shiftState === "closed" ? "fdChipActive" : ""}`}>{t.modeClosed}</span>
               <span className={`fdChip ${shiftState === "open" ? "fdChipActive" : ""}`}>{t.modeOpen}</span>
               {!shiftResolved ? <span className="fdChip fdChipActive">{t.loadingState}</span> : null}
             </div>
-            {!shiftResolved ? (
-              <>
-                <h2 className="fdGlassTitle" style={{ marginTop: 16 }}>
-                  {lang === "zh" ? "櫃檯作業" : "Frontdesk Ops"}
-                </h2>
-                <p className="fdGlassText">{t.loadingState}...</p>
-              </>
-            ) : !shiftOpen ? (
-              <>
-                <h2 className="fdGlassTitle" style={{ marginTop: 16 }}>{t.startShiftTitle}</h2>
-                <p className="fdGlassText">{t.openShiftDisabledHint}</p>
-                <div className="field" style={{ marginTop: 8 }}>
-                  <label className="kvLabel">{t.openingCash}</label>
-                  <input
-                    className="input"
-                    inputMode="decimal"
-                    value={openingCash}
-                    onChange={(e) => setOpeningCash(e.target.value)}
-                  />
-                  <label className="kvLabel">{t.openingNote}</label>
-                  <textarea
-                    className="input"
-                    rows={3}
-                    value={openingNote}
-                    onChange={(e) => setOpeningNote(e.target.value)}
-                    placeholder={t.openingNotePlaceholder}
-                  />
-                  <button
-                    type="button"
-                    className="fdPillBtn fdPillBtnPrimary"
-                    onClick={() => void handleOpenShift()}
-                    disabled={openingShift}
-                    style={openingShift ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
-                  >
-                    {openingShift ? t.startingShiftAction : t.startShiftAction}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                  <h2 className="fdGlassTitle" style={{ marginTop: 16 }}>
-                    {lang === "zh" ? "櫃檯作業" : "Frontdesk Ops"}
-                  </h2>
-                  <div style={{ display: "grid", justifyItems: "end", gap: 6, marginTop: 10 }}>
-                    {activeShift?.opened_at ? (
-                      <span className="fdChip">{t.openedAt}: {fmtDateTime(activeShift.opened_at)}</span>
-                    ) : null}
-                    {activeShift?.opened_by_name || activeShift?.opened_by ? (
-                      <span className="fdChip">{t.shiftOperator}: {activeShift.opened_by_name || activeShift.opened_by}</span>
-                    ) : null}
-                    <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => {
-                      setModalType("handover");
-                      setCapabilityOpen(true);
-                    }}>
-                      {t.handoverAction}
-                    </button>
-                  </div>
-                </div>
-                <p className="fdGlassText">{t.statusTip}</p>
-                <div className="fdPillActions">
-                  <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => openCapabilityModal("entry", "entry")} disabled={actionsDisabled}>
-                    {t.primary}
-                  </button>
-                  <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => openCapabilityModal("member", "member")} disabled={actionsDisabled}>
-                    {t.secondary}
-                  </button>
-                  <button
-                    type="button"
-                    className="fdPillBtn fdPillBtnGhost"
-                    onClick={() => setSoundEnabled((prev) => !prev)}
-                    disabled={actionsDisabled}
-                  >
-                    {soundEnabled ? t.soundOn : t.soundOff}
-                  </button>
-                </div>
-              </>
-            )}
+            <h2 className="fdGlassTitle fdQuickTitle">{t.quickOpsTitle}</h2>
+            <p className="fdGlassText">{t.quickOpsSub}</p>
+            <div className="fdPillActions">
+              <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => openCapabilityModal("entry", "entry")}>
+                {t.primary}
+              </button>
+              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => openCapabilityModal("member", "member")}>
+                {t.secondary}
+              </button>
+            </div>
           </article>
 
-          <article className="fdGlassPanel">
+          <article className="fdGlassPanel fdQuickPanel">
             <div className="fdChipRow">
-              <span className="fdChip fdChipActive">{t.statusOpen}</span>
-              <span className="fdChip">{t.statusTasks}</span>
+              <span className="fdChip fdChipActive">{t.quickServiceTitle}</span>
+              <span className="fdChip">{t.capabilityTitle}</span>
             </div>
-            <h2 className="fdGlassTitle">{t.opsTitle}</h2>
+            <h2 className="fdGlassTitle fdQuickTitle">{t.quickServiceTitle}</h2>
+            <p className="fdGlassText">{t.quickServiceSub}</p>
+            <div className="fdPillActions">
+              <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => openCapabilityShortcut("pos")}>
+                {t.quickPosAction}
+              </button>
+              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => openCapabilityShortcut("locker")}>
+                {t.quickLockerAction}
+              </button>
+            </div>
+          </article>
+
+          <article className="fdGlassPanel fdQuickPanel">
+            <div className="fdChipRow">
+              <span className="fdChip fdChipActive">{t.quickShiftTitle}</span>
+              <span className="fdChip">{t.statusOpenValue}</span>
+            </div>
+            <h2 className="fdGlassTitle fdQuickTitle">{t.quickShiftTitle}</h2>
+            <p className="fdGlassText">{t.quickShiftSub}</p>
+            <div className="fdQuickInfoGrid">
+              <p className="sub" style={{ marginTop: 0 }}>{t.openedAt}: {activeShift?.opened_at ? fmtDateTime(activeShift.opened_at) : "-"}</p>
+              <p className="sub" style={{ marginTop: 0 }}>{t.shiftOperator}: {activeShift?.opened_by_name || activeShift?.opened_by || "-"}</p>
+            </div>
+            <div className="fdPillActions">
+              <button
+                type="button"
+                className="fdPillBtn fdPillBtnGhost"
+                onClick={() => {
+                  setModalType("handover");
+                  setCapabilityOpen(true);
+                }}
+                disabled={!shiftOpen}
+                style={!shiftOpen ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+              >
+                {t.handoverAction}
+              </button>
+            </div>
             {!shiftResolved ? (
-              <p className="fdGlassText" style={{ marginTop: 10 }}>{t.loadingState}...</p>
+              <p className="fdGlassText" style={{ marginTop: 8 }}>{t.loadingState}...</p>
             ) : shiftOpen ? (
-              <>
-                <div className="fdMetricLine">
-                  <span className="fdMetricLabel">{t.statusOpen}</span>
-                  <strong className="fdMetricValue">{t.statusOpenValue}</strong>
-                </div>
-                <div className="fdMetricLine">
+              <div className="fdQuickMetricGrid">
+                <div className="fdQuickMetricItem">
                   <span className="fdMetricLabel">{t.orders}</span>
-                  <strong className="fdMetricValue">{loading ? "-" : ordersToday}</strong>
+                  <strong className="fdQuickMetricValue">{loading ? "-" : ordersToday}</strong>
                 </div>
-                <div className="fdMetricLine">
+                <div className="fdQuickMetricItem">
                   <span className="fdMetricLabel">{t.paid}</span>
-                  <strong className="fdMetricValue">{loading ? "-" : paidToday}</strong>
+                  <strong className="fdQuickMetricValue">{loading ? "-" : paidToday}</strong>
                 </div>
-                <div className="fdMetricLine">
+                <div className="fdQuickMetricItem">
                   <span className="fdMetricLabel">{t.revenue}</span>
-                  <strong className="fdMetricValue">{loading ? "-" : revenueToday}</strong>
+                  <strong className="fdQuickMetricValue">{loading ? "-" : revenueToday}</strong>
                 </div>
-                <p className="fdGlassText" style={{ marginTop: 10, fontSize: 12 }}>{t.refresh}</p>
-              </>
+              </div>
             ) : (
-              <p className="fdGlassText" style={{ marginTop: 10 }}>{t.openShiftFirst}</p>
+              <div className="field" style={{ marginTop: 8 }}>
+                <label className="kvLabel">{t.openingCash}</label>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={openingCash}
+                  onChange={(e) => setOpeningCash(e.target.value)}
+                />
+                <label className="kvLabel">{t.openingNote}</label>
+                <textarea
+                  className="input"
+                  rows={2}
+                  value={openingNote}
+                  onChange={(e) => setOpeningNote(e.target.value)}
+                  placeholder={t.openingNotePlaceholder}
+                />
+                <button
+                  type="button"
+                  className="fdPillBtn fdPillBtnPrimary"
+                  onClick={() => void handleOpenShift()}
+                  disabled={openingShift}
+                  style={openingShift ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+                >
+                  {openingShift ? t.startingShiftAction : t.startShiftAction}
+                </button>
+              </div>
             )}
           </article>
         </div>
 
-        <section className="fdGlassSubPanel" style={{ marginTop: 14, padding: 14 }}>
-          <h2 className="sectionTitle">{t.capabilityTitle}</h2>
-          <p className="fdGlassText" style={{ marginTop: 8 }}>{t.capabilitySub}</p>
-          <button
-            type="button"
-            className="fdPillBtn fdPillBtnGhost"
-            onClick={() => openCapabilityModal("member", "capability")}
-            disabled={actionsDisabled}
-            style={actionsDisabled ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+        <section className="fdGlassSubPanel fdCapabilityArcWrap" style={{ marginTop: 14, padding: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div>
+              <h2 className="sectionTitle">{t.capabilityTitle}</h2>
+              <p className="fdGlassText" style={{ marginTop: 6 }}>{t.capabilityArcHint}</p>
+            </div>
+            <span className="fdChip">{t.capabilityDragHint}</span>
+          </div>
+          <div
+            ref={capabilityRailRef}
+            className={`fdCapabilityArcRail ${capabilityRailDragging ? "fdCapabilityArcRailDragging" : ""}`}
+            onPointerDown={handleCapabilityRailPointerDown}
+            onPointerMove={handleCapabilityRailPointerMove}
+            onPointerUp={handleCapabilityRailPointerUp}
+            onPointerCancel={handleCapabilityRailPointerUp}
           >
-            {t.capabilityOpenBtn}
-          </button>
-          {shiftResolved && actionsDisabled ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.openShiftFirst}</p> : null}
+            <div className="fdCapabilityArcTrack">
+              {capabilityArcItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`fdGlassSubPanel fdCapabilityCard fdCapabilityArcCard ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
+                  style={{ transform: `translateY(${item.depth}px)` }}
+                  onDragStart={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    if (capabilitySuppressClickRef.current) {
+                      event.preventDefault();
+                      return;
+                    }
+                    openCapabilityShortcut(item.id);
+                  }}
+                >
+                  <div className="fdActionHead">
+                    <span className="kvLabel">{item.letter}</span>
+                    <span className="fdChip" style={statusStyle(item.status)}>
+                      {statusLabel(item.status)}
+                    </span>
+                  </div>
+                  <h3 className="fdActionTitle">{item.moduleTitle}</h3>
+                  <p className="sub fdCapabilityDesc" style={{ marginTop: 6 }}>{item.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
 
         <section className="fdTwoCol" style={{ marginTop: 14 }}>

@@ -504,6 +504,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+.fdGlassTopFixed{
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .fdGlassPanel{
   position: relative;
   overflow: hidden;
@@ -819,6 +822,92 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdCapabilityDesc{
   margin-bottom: 0;
+}
+.fdQuickPanel{
+  min-height: 250px;
+}
+.fdQuickTitle{
+  margin-top: 12px;
+  font-size: clamp(34px, 2.5vw, 52px);
+}
+.fdQuickInfoGrid{
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+.fdQuickMetricGrid{
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.fdQuickMetricItem{
+  border-radius: 12px;
+  padding: 8px;
+  border: 1px solid rgba(194,203,217,.66);
+  background: rgba(255,255,255,.56);
+}
+.fdQuickMetricValue{
+  margin-top: 4px;
+  display: block;
+  font-size: clamp(20px, 2vw, 30px);
+  line-height: 1.05;
+  font-weight: 780;
+  color: #0f1726;
+}
+.fdCapabilityArcWrap{
+  overflow: hidden;
+}
+.fdCapabilityArcRail{
+  margin-top: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px 28px;
+  cursor: grab;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(127, 151, 182, .48) rgba(255,255,255,.26);
+}
+.fdCapabilityArcRail::-webkit-scrollbar{
+  height: 9px;
+}
+.fdCapabilityArcRail::-webkit-scrollbar-track{
+  background: rgba(255,255,255,.40);
+  border-radius: 999px;
+}
+.fdCapabilityArcRail::-webkit-scrollbar-thumb{
+  background: rgba(127, 151, 182, .52);
+  border-radius: 999px;
+}
+.fdCapabilityArcRailDragging{
+  cursor: grabbing;
+}
+.fdCapabilityArcRailDragging,
+.fdCapabilityArcRailDragging *{
+  user-select: none;
+}
+.fdCapabilityArcTrack{
+  min-width: max-content;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 0 4px 6px;
+}
+.fdCapabilityArcCard{
+  min-width: 220px;
+  max-width: 220px;
+  min-height: 162px;
+  flex: 0 0 auto;
+}
+.fdCapabilityArcCard .fdActionTitle{
+  font-size: 19px;
+  line-height: 1.2;
+}
+.fdCapabilityArcCard .sub{
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .fdModalBackdrop{
   position: fixed;
@@ -1514,6 +1603,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     padding: 14px 12px 16px;
   }
   .fdGlassTop{ grid-template-columns: 1fr; }
+  .fdGlassTopFixed{ grid-template-columns: 1fr; }
   .fdGlassPanel{ min-height: 260px; }
   .fdGlassTall{ min-height: 320px; }
   .fdGaugeWrap{
@@ -1532,6 +1622,14 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .fdTwoCol{ grid-template-columns: 1fr; }
   .fdActionGrid{ grid-template-columns: 1fr; }
   .fdCapabilityGrid{ grid-template-columns: 1fr; }
+  .fdCapabilityArcCard{
+    min-width: 180px;
+    max-width: 180px;
+    min-height: 142px;
+  }
+  .fdQuickMetricGrid{
+    grid-template-columns: 1fr;
+  }
   .fdDataGrid{ grid-template-columns: 1fr; }
   .fdLockerSummary{ grid-template-columns: 1fr; }
   .fdLockerGrid2{ grid-template-columns: 1fr; }
@@ -1578,5 +1676,13 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   }
   .fdHandoverGrid{
     grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 1260px) and (min-width: 901px){
+  .fdGlassTopFixed{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fdGlassTopFixed > :last-child{
+    grid-column: 1 / -1;
   }
 }
