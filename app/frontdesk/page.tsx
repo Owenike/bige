@@ -3638,40 +3638,16 @@ export default function FrontdeskPortalPage() {
         </div>
 
         <section className="fdGlassSubPanel fdCapabilityArcWrap" style={{ marginTop: 14 }}>
-          <div className="fdCapabilityContentLayer">
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <div>
-                <h2 className="sectionTitle">{t.capabilityTitle}</h2>
-                <p className="fdGlassText" style={{ marginTop: 6 }}>{t.capabilityArcHint}</p>
-              </div>
-            </div>
-            {frontCapability ? (
-              <article className="fdGlassSubPanel fdCapabilityFocusCard">
-                <div className="fdActionHead">
-                  <span className="kvLabel">{t.capabilityCurrent}</span>
-                  <span className="fdChip" style={statusStyle(frontCapability.status)}>
-                    {statusLabel(frontCapability.status)}
-                  </span>
-                </div>
-                <h3 className="fdActionTitle" style={{ marginTop: 8 }}>{frontCapability.title}</h3>
-                <p className="sub" style={{ marginTop: 8 }}>{frontCapability.detail}</p>
-                <div className="fdPillActions" style={{ marginTop: 12 }}>
-                  <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => openCapabilityShortcut(frontCapability.id)}>
-                    {t.capabilityOpenBtn}
-                  </button>
-                </div>
-              </article>
-            ) : null}
-          </div>
-
           <div className="fdCapabilityDockLayer">
             <div
               ref={capabilityRingRef}
               className={`fdCapabilityRingStage ${capabilityRailDragging ? "fdCapabilityRingStageDragging" : ""}`}
+              aria-label={t.capabilityTitle}
               onPointerDown={handleCapabilityRingPointerDown}
               onPointerMove={handleCapabilityRingPointerMove}
               onPointerUp={handleCapabilityRingPointerUp}
               onPointerCancel={handleCapabilityRingPointerUp}
+              onLostPointerCapture={handleCapabilityRingPointerUp}
             >
               <div className="fdCapabilityRingTrack">
                 {capabilityRingItems.map((item, index) => {

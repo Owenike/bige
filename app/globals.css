@@ -860,7 +860,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   --fd-dock-h: 220px;
   position: relative;
   overflow: hidden;
-  min-height: 560px;
+  min-height: calc(var(--fd-dock-h) + 28px);
   padding: 14px;
   border: 1px solid rgba(164, 177, 201, .44);
   background:
@@ -895,6 +895,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   right: 14px;
   bottom: 14px;
   height: var(--fd-dock-h);
+  z-index: 4;
+  pointer-events: auto;
   border-radius: 20px;
   border: 1px solid rgba(144, 171, 214, .30);
   background:
@@ -1774,7 +1776,7 @@ body.fdPageDark .footerInner{
   }
   .fdCapabilityArcWrap{
     --fd-dock-h: 190px;
-    min-height: 500px;
+    min-height: calc(var(--fd-dock-h) + 20px);
   }
   .fdCapabilityDockLayer{
     left: 10px;
