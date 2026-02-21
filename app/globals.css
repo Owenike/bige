@@ -761,6 +761,30 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+.fdMemberModalCols{
+  align-items: start;
+}
+.fdMemberFindPanel,
+.fdMemberCreatePanel{
+  min-height: 0;
+}
+.fdEmbedBackdrop .fdMemberCreatePanel .field{
+  max-height: min(54vh, 560px);
+  overflow: auto;
+  padding-right: 2px;
+}
+.fdEmbedBackdrop .fdMemberInlineResultGrid{
+  max-height: min(42vh, 380px);
+  overflow: auto;
+  align-content: start;
+  padding-right: 2px;
+}
+.fdMemberQuickActions{
+  margin-top: 12px;
+}
+.fdEmbedBackdrop .fdMemberQuickActions{
+  margin-bottom: 0;
+}
 .fdActionGrid{
   display:grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

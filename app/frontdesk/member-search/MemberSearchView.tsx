@@ -331,6 +331,62 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     }
   }
 
+  const quickActionsContent = recentCreatedId ? (
+    <div className="fdGlassSubPanel fdMemberQuickActions" style={{ padding: 14, marginBottom: embedded ? 0 : 12 }}>
+      <h2 className="sectionTitle" style={{ marginBottom: 8 }}>{t.quickActions}</h2>
+      <div className="actions" style={{ marginTop: 0 }}>
+        <a className="fdPillBtn fdPillBtnPrimary" href={`/frontdesk/orders/new?memberId=${encodeURIComponent(recentCreatedId)}`}>{t.goOrder}</a>
+        <a className="fdPillBtn" href={`/frontdesk/bookings?memberId=${encodeURIComponent(recentCreatedId)}`}>{t.goBooking}</a>
+        <a className="fdPillBtn" href="/frontdesk/checkin">{t.goCheckin}</a>
+      </div>
+    </div>
+  ) : null;
+
+  const resultContent = (
+    <section style={{ marginTop: embedded ? 12 : 14 }}>
+      <h2 className="sectionTitle">{t.resultTitle}</h2>
+      <div
+        className={`fdActionGrid ${embedded ? "fdMemberInlineResultGrid" : ""}`}
+        style={{ gridTemplateColumns: embedded ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))" }}
+      >
+        {items.length === 0 ? (
+          <div className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <div className="kvValue">{t.empty}</div>
+          </div>
+        ) : (
+          items.map((item) => (
+            <article
+              key={item.id}
+              className="fdGlassSubPanel fdActionCard"
+              style={{
+                padding: 14,
+                borderColor: item.id === recentCreatedId ? "rgba(116,182,241,.9)" : undefined,
+                boxShadow: item.id === recentCreatedId ? "0 0 0 2px rgba(159,212,255,.45)" : undefined,
+              }}
+            >
+              <h3 className="fdActionTitle" style={{ fontSize: 20 }}>{item.full_name}</h3>
+              <p className="fdGlassText" style={{ marginTop: 6 }}>{item.phone || "-"}</p>
+              <p className="fdGlassText" style={{ marginTop: 4 }}>{item.email || "-"}</p>
+              <p className="fdGlassText" style={{ marginTop: 4 }}>
+                {t.status}: {item.status || t.active}
+              </p>
+              {item.custom_fields && Object.keys(item.custom_fields).length > 0 ? (
+                <div style={{ marginTop: 10 }}>
+                  <p className="fdGlassText" style={{ marginTop: 0, fontSize: 12 }}>{t.customInfo}</p>
+                  <div className="actions" style={{ marginTop: 6 }}>
+                    {Object.entries(item.custom_fields).map(([key, value]) => (
+                      <span key={`${item.id}-${key}`} className="fdChip">{key}: {value}</span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          ))
+        )}
+      </div>
+    </section>
+  );
+
   return (
     <main className={embedded ? "fdEmbedScene" : "fdGlassScene"} style={embedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
       <section
@@ -394,8 +450,8 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
           </div>
         ) : null}
 
-        <section className="fdTwoCol" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))" }}>
-          <div className="fdGlassSubPanel" style={{ padding: 14 }}>
+        <section className={`fdTwoCol ${embedded ? "fdMemberModalCols" : ""}`} style={{ gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))" }}>
+          <div className="fdGlassSubPanel fdMemberFindPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{t.findTitle}</h2>
             <p className="fdGlassText" style={{ marginTop: 6 }}>{t.findHint}</p>
             <form onSubmit={search} className="field">
@@ -407,9 +463,10 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                 {allMembersLoading ? t.allMembersLoading : t.findAllBtn}
               </button>
             </form>
+            {embedded ? resultContent : null}
           </div>
 
-          <div className="fdGlassSubPanel" style={{ padding: 14 }}>
+          <div className="fdGlassSubPanel fdMemberCreatePanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{t.createTitle}</h2>
             <form onSubmit={createMember} className="field">
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.createName} className="input" required />
@@ -453,59 +510,12 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
               </button>
             </form>
             <p className="fdGlassText" style={{ marginTop: 10, fontSize: 12 }}>{t.continueHint}</p>
+            {embedded ? quickActionsContent : null}
           </div>
         </section>
 
-        <section style={{ marginTop: 14 }}>
-          {recentCreatedId ? (
-            <div className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 12 }}>
-              <h2 className="sectionTitle" style={{ marginBottom: 8 }}>{t.quickActions}</h2>
-              <div className="actions" style={{ marginTop: 0 }}>
-                <a className="fdPillBtn fdPillBtnPrimary" href={`/frontdesk/orders/new?memberId=${encodeURIComponent(recentCreatedId)}`}>{t.goOrder}</a>
-                <a className="fdPillBtn" href={`/frontdesk/bookings?memberId=${encodeURIComponent(recentCreatedId)}`}>{t.goBooking}</a>
-                <a className="fdPillBtn" href="/frontdesk/checkin">{t.goCheckin}</a>
-              </div>
-            </div>
-          ) : null}
-
-          <h2 className="sectionTitle">{t.resultTitle}</h2>
-          <div className="fdActionGrid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
-            {items.length === 0 ? (
-              <div className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <div className="kvValue">{t.empty}</div>
-              </div>
-            ) : (
-              items.map((item) => (
-                <article
-                  key={item.id}
-                  className="fdGlassSubPanel fdActionCard"
-                  style={{
-                    padding: 14,
-                    borderColor: item.id === recentCreatedId ? "rgba(116,182,241,.9)" : undefined,
-                    boxShadow: item.id === recentCreatedId ? "0 0 0 2px rgba(159,212,255,.45)" : undefined,
-                  }}
-                >
-                  <h3 className="fdActionTitle" style={{ fontSize: 20 }}>{item.full_name}</h3>
-                  <p className="fdGlassText" style={{ marginTop: 6 }}>{item.phone || "-"}</p>
-                  <p className="fdGlassText" style={{ marginTop: 4 }}>{item.email || "-"}</p>
-                  <p className="fdGlassText" style={{ marginTop: 4 }}>
-                    {t.status}: {item.status || t.active}
-                  </p>
-                  {item.custom_fields && Object.keys(item.custom_fields).length > 0 ? (
-                    <div style={{ marginTop: 10 }}>
-                      <p className="fdGlassText" style={{ marginTop: 0, fontSize: 12 }}>{t.customInfo}</p>
-                      <div className="actions" style={{ marginTop: 6 }}>
-                        {Object.entries(item.custom_fields).map(([key, value]) => (
-                          <span key={`${item.id}-${key}`} className="fdChip">{key}: {value}</span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </article>
-              ))
-            )}
-          </div>
-        </section>
+        {!embedded ? quickActionsContent : null}
+        {!embedded ? resultContent : null}
 
         {allMembersOpen && portalReady ? createPortal(
           <div className="fdModalBackdrop fdNestedMemberBackdrop" onClick={() => setAllMembersOpen(false)} role="presentation">
