@@ -1,6 +1,7 @@
 ﻿"use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n-provider";
 
 interface MemberItem {
@@ -58,9 +59,14 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   const [allMembersError, setAllMembersError] = useState<string | null>(null);
   const [allMembers, setAllMembers] = useState<MemberItem[]>([]);
   const [selectedAllMemberId, setSelectedAllMemberId] = useState<string | null>(null);
+  const [portalReady, setPortalReady] = useState(false);
   const [creating, setCreating] = useState(false);
   const [recentCreatedId, setRecentCreatedId] = useState<string | null>(null);
   const [duplicateCandidate, setDuplicateCandidate] = useState<MemberItem | null>(null);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   const t = useMemo(
     () =>
@@ -501,138 +507,105 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
           </div>
         </section>
 
-        {allMembersOpen ? (
-          <div
-            style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.45)", display: "grid", placeItems: "center", zIndex: 90, padding: 16 }}
-            onClick={() => setAllMembersOpen(false)}
-          >
+        {allMembersOpen && portalReady ? createPortal(
+          <div className="fdModalBackdrop fdNestedMemberBackdrop" onClick={() => setAllMembersOpen(false)} role="presentation">
             <div
-              className="fdGlassSubPanel"
-              style={{
-                width: "min(1120px, 100%)",
-                maxHeight: "88vh",
-                padding: 16,
-                overflow: "hidden",
-                background: "rgba(248,250,252,.98)",
-                borderColor: "rgba(148,163,184,.45)",
-              }}
+              className="fdModal fdModalLight fdModalHandover fdAllMembersModal"
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
               aria-label={t.allMembersTitle}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <h2 className="sectionTitle" style={{ margin: 0 }}>{t.allMembersTitle}</h2>
-                  <p className="sub" style={{ marginTop: 4 }}>{t.allMembersSub}</p>
-                </div>
-                <button type="button" className="fdPillBtn" onClick={() => setAllMembersOpen(false)}>
-                  {t.close}
+              <div className="fdModalHead">
+                <h2 className="sectionTitle" style={{ margin: 0 }}>{t.allMembersTitle}</h2>
+                <button type="button" className="fdModalIconBtn" aria-label={t.close} onClick={() => setAllMembersOpen(false)}>
+                  <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+                    <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
                 </button>
               </div>
 
-              {allMembersError ? <div className="error" style={{ marginTop: 10 }}>{allMembersError}</div> : null}
+              <div className="fdAllMembersBody">
+                <p className="sub fdAllMembersSub">{t.allMembersSub}</p>
+                {allMembersError ? <div className="error">{allMembersError}</div> : null}
 
-              <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "minmax(260px, 330px) 1fr", gap: 12, minHeight: 420 }}>
-                <aside
-                  style={{
-                    border: "1px solid rgba(148,163,184,.35)",
-                    borderRadius: 14,
-                    background: "rgba(255,255,255,.88)",
-                    overflowY: "auto",
-                    padding: 8,
-                  }}
-                >
-                  {allMembersLoading ? (
-                    <p className="sub" style={{ padding: 8 }}>{t.allMembersLoading}</p>
-                  ) : allMembers.length === 0 ? (
-                    <p className="sub" style={{ padding: 8 }}>{t.allMembersEmpty}</p>
-                  ) : (
-                    allMembers.map((item, idx) => {
-                      const selected = item.id === selectedAllMemberId;
-                      const memberCode = item.member_code?.trim() || String(idx + 1).padStart(4, "0");
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setSelectedAllMemberId(item.id)}
-                          style={{
-                            width: "100%",
-                            textAlign: "left",
-                            border: selected ? "1px solid rgba(20,184,166,.6)" : "1px solid rgba(148,163,184,.3)",
-                            background: selected ? "rgba(20,184,166,.1)" : "rgba(255,255,255,.84)",
-                            borderRadius: 10,
-                            padding: "10px 12px",
-                            marginBottom: 8,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <div className="kvLabel">#{memberCode}</div>
-                          <div className="kvValue" style={{ marginTop: 4 }}>{item.full_name}</div>
-                          <div className="sub" style={{ marginTop: 4 }}>{item.phone || "-"}</div>
-                        </button>
-                      );
-                    })
-                  )}
-                </aside>
+                <div className="fdAllMembersGrid">
+                  <aside className="fdAllMembersList">
+                    {allMembersLoading ? (
+                      <p className="sub">{t.allMembersLoading}</p>
+                    ) : allMembers.length === 0 ? (
+                      <p className="sub">{t.allMembersEmpty}</p>
+                    ) : (
+                      allMembers.map((item, idx) => {
+                        const selected = item.id === selectedAllMemberId;
+                        const memberCode = item.member_code?.trim() || String(idx + 1).padStart(4, "0");
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setSelectedAllMemberId(item.id)}
+                            className={`fdAllMemberItem ${selected ? "fdAllMemberItemActive" : ""}`}
+                          >
+                            <div className="kvLabel">#{memberCode}</div>
+                            <div className="kvValue" style={{ marginTop: 4 }}>{item.full_name}</div>
+                            <div className="sub" style={{ marginTop: 4 }}>{item.phone || "-"}</div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </aside>
 
-                <section
-                  style={{
-                    border: "1px solid rgba(148,163,184,.35)",
-                    borderRadius: 14,
-                    background: "rgba(255,255,255,.88)",
-                    padding: 14,
-                    overflowY: "auto",
-                  }}
-                >
-                  {selectedAllMember ? (
-                    <>
-                      <h3 className="sectionTitle" style={{ marginTop: 0 }}>{selectedAllMember.full_name}</h3>
-                      <div className="fdTwoCol" style={{ marginTop: 10, gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
-                          <div className="kvLabel">{t.memberCode}</div>
-                          <div className="kvValue">{selectedAllMember.member_code?.trim() || "-"}</div>
-                        </div>
-                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
-                          <div className="kvLabel">{t.memberId}</div>
-                          <div className="kvValue" style={{ fontSize: 14, wordBreak: "break-all" }}>{selectedAllMember.id}</div>
-                        </div>
-                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
-                          <div className="kvLabel">{t.phoneLabel}</div>
-                          <div className="kvValue">{selectedAllMember.phone || "-"}</div>
-                        </div>
-                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
-                          <div className="kvLabel">{t.emailLabel}</div>
-                          <div className="kvValue">{selectedAllMember.email || "-"}</div>
-                        </div>
-                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
-                          <div className="kvLabel">{t.birthDateLabel}</div>
-                          <div className="kvValue">{selectedAllMember.birth_date || "-"}</div>
-                        </div>
-                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
-                          <div className="kvLabel">{t.status}</div>
-                          <div className="kvValue">{selectedAllMember.status || t.active}</div>
-                        </div>
-                      </div>
-
-                      {selectedAllMember.custom_fields && Object.keys(selectedAllMember.custom_fields).length > 0 ? (
-                        <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10, background: "rgba(255,255,255,.92)" }}>
-                          <div className="kvLabel">{t.customInfo}</div>
-                          <div className="actions" style={{ marginTop: 6 }}>
-                            {Object.entries(selectedAllMember.custom_fields).map(([key, value]) => (
-                              <span key={`${selectedAllMember.id}-${key}`} className="fdChip">{key}: {value}</span>
-                            ))}
+                  <section className="fdAllMembersDetail">
+                    {selectedAllMember ? (
+                      <>
+                        <h3 className="sectionTitle" style={{ marginTop: 0 }}>{selectedAllMember.full_name}</h3>
+                        <div className="fdTwoCol" style={{ marginTop: 10, gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
+                            <div className="kvLabel">{t.memberCode}</div>
+                            <div className="kvValue">{selectedAllMember.member_code?.trim() || "-"}</div>
+                          </div>
+                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
+                            <div className="kvLabel">{t.memberId}</div>
+                            <div className="kvValue" style={{ fontSize: 14, wordBreak: "break-all" }}>{selectedAllMember.id}</div>
+                          </div>
+                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
+                            <div className="kvLabel">{t.phoneLabel}</div>
+                            <div className="kvValue">{selectedAllMember.phone || "-"}</div>
+                          </div>
+                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
+                            <div className="kvLabel">{t.emailLabel}</div>
+                            <div className="kvValue">{selectedAllMember.email || "-"}</div>
+                          </div>
+                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
+                            <div className="kvLabel">{t.birthDateLabel}</div>
+                            <div className="kvValue">{selectedAllMember.birth_date || "-"}</div>
+                          </div>
+                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
+                            <div className="kvLabel">{t.status}</div>
+                            <div className="kvValue">{selectedAllMember.status || t.active}</div>
                           </div>
                         </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    <p className="sub">{t.allMembersEmpty}</p>
-                  )}
-                </section>
+
+                        {selectedAllMember.custom_fields && Object.keys(selectedAllMember.custom_fields).length > 0 ? (
+                          <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10, background: "rgba(255,255,255,.96)" }}>
+                            <div className="kvLabel">{t.customInfo}</div>
+                            <div className="actions" style={{ marginTop: 6 }}>
+                              {Object.entries(selectedAllMember.custom_fields).map(([key, value]) => (
+                                <span key={`${selectedAllMember.id}-${key}`} className="fdChip">{key}: {value}</span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p className="sub">{t.allMembersEmpty}</p>
+                    )}
+                  </section>
+                </div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         ) : null}
       </section>
     </main>
