@@ -276,11 +276,6 @@ function normalizeRingAngle(input: number) {
   return normalized;
 }
 
-function circularDistance(index: number, center: number, total: number) {
-  const diff = Math.abs(index - center);
-  return Math.min(diff, total - diff);
-}
-
 function calcLockerDueAtByTerm(term: LockerRentalTerm) {
   const now = new Date();
   if (term === "daily") return new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
@@ -323,8 +318,14 @@ export default function FrontdeskPortalPage() {
     startX: 0,
     startAngle: 0,
     moved: false,
+    lastX: 0,
+    lastTs: 0,
+    velocity: 0,
   });
   const capabilitySuppressClickRef = useRef(false);
+  const capabilityRingAngleTargetRef = useRef(0);
+  const capabilityRingRafRef = useRef<number | null>(null);
+  const capabilityRingInertiaRef = useRef<number | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -3246,33 +3247,60 @@ export default function FrontdeskPortalPage() {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const ring = capabilityRingRef.current;
     if (!ring) return;
+    if (capabilityRingInertiaRef.current !== null) {
+      window.cancelAnimationFrame(capabilityRingInertiaRef.current);
+      capabilityRingInertiaRef.current = null;
+    }
     capabilityDragStateRef.current.active = true;
     capabilityDragStateRef.current.pointerId = event.pointerId;
     capabilityDragStateRef.current.startX = event.clientX;
-    capabilityDragStateRef.current.startAngle = capabilityRingAngle;
+    capabilityDragStateRef.current.startAngle = capabilityRingAngleTargetRef.current;
     capabilityDragStateRef.current.moved = false;
+    capabilityDragStateRef.current.lastX = event.clientX;
+    capabilityDragStateRef.current.lastTs = performance.now();
+    capabilityDragStateRef.current.velocity = 0;
     capabilitySuppressClickRef.current = false;
     setCapabilityRailDragging(true);
     ring.setPointerCapture?.(event.pointerId);
-  }, [capabilityRingAngle]);
+  }, []);
 
   const handleCapabilityRingPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!capabilityDragStateRef.current.active) return;
+    if (event.pointerId !== capabilityDragStateRef.current.pointerId) return;
     const ring = capabilityRingRef.current;
     if (!ring) return;
+    const now = performance.now();
+    const stepDelta = event.clientX - capabilityDragStateRef.current.lastX;
+    const dt = Math.max(8, now - capabilityDragStateRef.current.lastTs);
+    capabilityDragStateRef.current.lastX = event.clientX;
+    capabilityDragStateRef.current.lastTs = now;
+    const instantVelocity = stepDelta / dt;
+    capabilityDragStateRef.current.velocity = capabilityDragStateRef.current.velocity * 0.72 + instantVelocity * 0.28;
     const delta = event.clientX - capabilityDragStateRef.current.startX;
-    setCapabilityRingAngle(capabilityDragStateRef.current.startAngle + delta * 0.32);
-    if (Math.abs(delta) > 12) {
+    capabilityRingAngleTargetRef.current = capabilityDragStateRef.current.startAngle + delta * 0.24;
+    if (capabilityRingRafRef.current === null) {
+      capabilityRingRafRef.current = window.requestAnimationFrame(() => {
+        capabilityRingRafRef.current = null;
+        setCapabilityRingAngle(capabilityRingAngleTargetRef.current);
+      });
+    }
+    if (Math.abs(delta) > 8) {
       capabilityDragStateRef.current.moved = true;
       capabilitySuppressClickRef.current = true;
     }
   }, []);
 
-  const handleCapabilityRingPointerUp = useCallback(() => {
+  const handleCapabilityRingPointerUp = useCallback((event?: ReactPointerEvent<HTMLDivElement>) => {
+    if (!capabilityDragStateRef.current.active) return;
     const moved = capabilityDragStateRef.current.moved;
+    const velocity = capabilityDragStateRef.current.velocity;
     capabilityDragStateRef.current.active = false;
     capabilityDragStateRef.current.pointerId = -1;
     setCapabilityRailDragging(false);
+    if (event) {
+      const ring = capabilityRingRef.current;
+      ring?.releasePointerCapture?.(event.pointerId);
+    }
     if (moved) {
       capabilitySuppressClickRef.current = true;
       window.setTimeout(() => {
@@ -3281,6 +3309,35 @@ export default function FrontdeskPortalPage() {
       capabilityDragStateRef.current.moved = false;
     } else {
       capabilitySuppressClickRef.current = false;
+    }
+    if (Math.abs(velocity) < 0.015) return;
+    let momentum = velocity * 21;
+    const decay = 0.92;
+    const tick = () => {
+      momentum *= decay;
+      if (Math.abs(momentum) < 0.04) {
+        capabilityRingInertiaRef.current = null;
+        return;
+      }
+      capabilityRingAngleTargetRef.current += momentum;
+      setCapabilityRingAngle(capabilityRingAngleTargetRef.current);
+      capabilityRingInertiaRef.current = window.requestAnimationFrame(tick);
+    };
+    capabilityRingInertiaRef.current = window.requestAnimationFrame(tick);
+  }, []);
+
+  useEffect(() => {
+    capabilityRingAngleTargetRef.current = capabilityRingAngle;
+  }, [capabilityRingAngle]);
+
+  useEffect(() => () => {
+    if (capabilityRingRafRef.current !== null) {
+      window.cancelAnimationFrame(capabilityRingRafRef.current);
+      capabilityRingRafRef.current = null;
+    }
+    if (capabilityRingInertiaRef.current !== null) {
+      window.cancelAnimationFrame(capabilityRingInertiaRef.current);
+      capabilityRingInertiaRef.current = null;
     }
   }, []);
 
@@ -3654,16 +3711,18 @@ export default function FrontdeskPortalPage() {
                   const angle = item.baseAngle + capabilityRingAngle;
                   const rad = (angle * Math.PI) / 180;
                   const depth = Math.cos(rad);
-                  const frontIndex = frontCapability?.index ?? 0;
-                  const ringDistance = circularDistance(index, frontIndex, capabilityRingItems.length);
-                  const scale = ringDistance === 0 ? 1 : ringDistance === 1 ? 0.85 : ringDistance === 2 ? 0.7 : 0.56;
-                  const orbitX = Math.sin(rad) * 450;
-                  const orbitZ = depth * 240;
+                  const normalizedOffset = normalizeRingAngle(angle);
+                  const absOffset = Math.abs(normalizedOffset);
+                  const frontProximity = Math.max(0, 1 - absOffset / 125);
+                  const leftShrink = normalizedOffset < 0 ? Math.max(0.76, 1 - absOffset / 220) : 1;
+                  const scale = Math.min(1.24, (0.56 + frontProximity * 0.66) * leftShrink);
+                  const orbitX = Math.sin(rad) * 560;
+                  const orbitZ = depth * 320;
                   const tiltY = -Math.sin(rad) * 20;
-                  const tiltX = 8 + (1 - depth) * 4;
-                  const liftY = 24 - depth * 18;
-                  const opacity = ringDistance === 0 ? 1 : ringDistance === 1 ? 0.86 : ringDistance === 2 ? 0.68 : 0.44;
-                  const zIndex = Math.round((depth + 1) * 1000) + (ringDistance === 0 ? 2000 : 0);
+                  const tiltX = 8 + (1 - depth) * 5;
+                  const liftY = 8 - depth * 22;
+                  const opacity = Math.max(0.26, 0.38 + frontProximity * 0.62);
+                  const zIndex = Math.round((depth + 1) * 1000) + Math.round(frontProximity * 1400);
                   const ringHue = (index * 31 + 190) % 360;
                   return (
                     <button
