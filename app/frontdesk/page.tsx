@@ -326,6 +326,7 @@ export default function FrontdeskPortalPage() {
     lastX: 0,
     lastTs: 0,
     velocity: 0,
+    pressedCapabilityId: "",
   });
   const capabilitySuppressClickRef = useRef(false);
   const capabilityRingAngleTargetRef = useRef(0);
@@ -3318,6 +3319,9 @@ export default function FrontdeskPortalPage() {
     capabilityDragStateRef.current.lastX = event.clientX;
     capabilityDragStateRef.current.lastTs = performance.now();
     capabilityDragStateRef.current.velocity = 0;
+    capabilityDragStateRef.current.pressedCapabilityId = event.target instanceof HTMLElement
+      ? (event.target.closest("[data-capability-id]") as HTMLElement | null)?.dataset.capabilityId || ""
+      : "";
     capabilitySuppressClickRef.current = false;
     setCapabilityRailDragging(true);
     ring.setPointerCapture?.(event.pointerId);
@@ -3345,6 +3349,7 @@ export default function FrontdeskPortalPage() {
     }
     if (Math.abs(delta) > 8) {
       capabilityDragStateRef.current.moved = true;
+      capabilityDragStateRef.current.pressedCapabilityId = "";
       capabilitySuppressClickRef.current = true;
     }
   }, []);
@@ -3353,8 +3358,10 @@ export default function FrontdeskPortalPage() {
     if (!capabilityDragStateRef.current.active) return;
     const moved = capabilityDragStateRef.current.moved;
     const velocity = capabilityDragStateRef.current.velocity;
+    const pressedCapabilityId = capabilityDragStateRef.current.pressedCapabilityId;
     capabilityDragStateRef.current.active = false;
     capabilityDragStateRef.current.pointerId = -1;
+    capabilityDragStateRef.current.pressedCapabilityId = "";
     setCapabilityRailDragging(false);
     if (event) {
       const ring = capabilityRingRef.current;
@@ -3368,6 +3375,13 @@ export default function FrontdeskPortalPage() {
       capabilityDragStateRef.current.moved = false;
     } else {
       capabilitySuppressClickRef.current = false;
+    }
+    if (!moved && pressedCapabilityId) {
+      capabilitySuppressClickRef.current = true;
+      openCapabilityShortcut(pressedCapabilityId);
+      window.setTimeout(() => {
+        capabilitySuppressClickRef.current = false;
+      }, 120);
     }
     if (Math.abs(velocity) < 0.015) {
       snapCapabilityRingToNearest(true);
@@ -3387,7 +3401,7 @@ export default function FrontdeskPortalPage() {
       capabilityRingInertiaRef.current = window.requestAnimationFrame(tick);
     };
     capabilityRingInertiaRef.current = window.requestAnimationFrame(tick);
-  }, [snapCapabilityRingToNearest]);
+  }, [openCapabilityShortcut, snapCapabilityRingToNearest]);
 
   useEffect(() => {
     capabilityRingAngleTargetRef.current = capabilityRingAngle;
@@ -3797,6 +3811,7 @@ export default function FrontdeskPortalPage() {
                     <button
                       key={item.id}
                       type="button"
+                      data-capability-id={item.id}
                       className={`fdGlassSubPanel fdCapabilityCard fdCapabilityRingCard ${frontCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
                       style={{
                         transform: `translate3d(calc(-50% + ${orbitX}px), calc(-50% + ${liftY}px), ${orbitZ}px) rotateY(${tiltY}deg) rotateX(${tiltX}deg) scale(${scale})`,
