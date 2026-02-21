@@ -414,11 +414,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 
 /* Frontdesk liquid-light UI */
 :root{
-  --fd-bg: #e9edf2;
-  --fd-ink: #1c2430;
-  --fd-text: #4f5968;
-  --fd-line: rgba(255,255,255,.65);
-  --fd-line-soft: rgba(194,203,217,.68);
+  --fd-bg: #070c16;
+  --fd-ink: #e9f2ff;
+  --fd-text: #b6c3dc;
+  --fd-line: rgba(160,190,234,.20);
+  --fd-line-soft: rgba(123,151,190,.22);
   --fd-brand: #22b8a6;
   --fd-brand-strong: #189a8a;
   --fd-accent: #d6b57a;
@@ -453,11 +453,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   padding: 20px 24px 24px;
   min-height: calc(100vh - 116px);
   background:
-    radial-gradient(820px 420px at 12% 10%, rgba(78, 221, 205, .11), transparent 66%),
-    radial-gradient(760px 400px at 88% 14%, rgba(154, 156, 255, .10), transparent 67%),
-    radial-gradient(720px 380px at 84% 90%, rgba(216, 170, 255, .09), transparent 70%),
-    linear-gradient(165deg, #f4f7fc 0%, #edf2f9 44%, #e8eef7 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
+    radial-gradient(980px 520px at 12% 8%, rgba(60, 210, 185, .18), transparent 66%),
+    radial-gradient(820px 460px at 88% 12%, rgba(86, 118, 255, .16), transparent 68%),
+    radial-gradient(900px 460px at 52% 100%, rgba(24, 52, 110, .24), transparent 72%),
+    linear-gradient(165deg, #090f1b 0%, #050910 44%, #04070d 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
 }
 .fdEmbedBackdrop{
   position: relative;
@@ -477,9 +477,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(260px 140px at 26% 34%, rgba(255,255,255,.34), transparent 72%),
-    radial-gradient(320px 170px at 78% 58%, rgba(255,255,255,.26), transparent 72%),
-    radial-gradient(220px 110px at 44% 80%, rgba(255,255,255,.20), transparent 72%);
+    radial-gradient(300px 160px at 24% 32%, rgba(175, 224, 255, .12), transparent 74%),
+    radial-gradient(360px 190px at 78% 56%, rgba(130, 182, 255, .10), transparent 74%),
+    radial-gradient(260px 130px at 44% 82%, rgba(159, 243, 223, .10), transparent 74%);
   pointer-events: none;
 }
 .fdGlassBackdrop::after{
@@ -489,12 +489,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   background:
     repeating-linear-gradient(
       0deg,
-      rgba(20,24,32,.012) 0px,
-      rgba(20,24,32,.012) 1px,
+      rgba(198,214,255,.02) 0px,
+      rgba(198,214,255,.02) 1px,
       transparent 1px,
       transparent 3px
     ),
-    linear-gradient(135deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.08) 32%, rgba(255,255,255,0) 56%);
+    linear-gradient(135deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.02) 32%, rgba(255,255,255,0) 56%);
   pointer-events: none;
 }
 .fdGlassTop{
@@ -512,31 +512,31 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   overflow: hidden;
   min-height: 280px;
   border-radius: 24px;
-  border: 1px solid rgba(255,255,255,.34);
+  border: 1px solid rgba(157,186,227,.24);
   background:
-    linear-gradient(138deg, rgba(255,255,255,.82), rgba(255,255,255,.72) 56%, rgba(255,255,255,.68));
+    linear-gradient(138deg, rgba(30, 45, 72, .78), rgba(20, 30, 50, .72) 56%, rgba(14, 22, 38, .72));
   backdrop-filter: saturate(1.12) blur(18px);
   -webkit-backdrop-filter: saturate(1.12) blur(18px);
   padding: 16px;
-  color: #1f2937;
+  color: #eef4ff;
   box-shadow:
-    inset 0 .6px 0 rgba(255,255,255,.85),
-    0 12px 30px rgba(25, 34, 54, .11),
-    0 3px 10px rgba(36, 49, 77, .08);
+    inset 0 .6px 0 rgba(255,255,255,.16),
+    0 16px 34px rgba(5, 8, 16, .42),
+    0 4px 12px rgba(9, 15, 28, .34);
 }
 .fdGlassSubPanel{
   position: relative;
   overflow: hidden;
   border-radius: 18px;
-  border: 1px solid rgba(255,255,255,.30);
+  border: 1px solid rgba(151,181,222,.22);
   background:
-    linear-gradient(140deg, rgba(255,255,255,.78), rgba(255,255,255,.72) 52%, rgba(255,255,255,.68));
+    linear-gradient(140deg, rgba(24, 38, 62, .74), rgba(17, 27, 45, .72) 52%, rgba(13, 21, 36, .72));
   backdrop-filter: saturate(1.08) blur(16px);
   -webkit-backdrop-filter: saturate(1.08) blur(16px);
   box-shadow:
-    inset 0 .6px 0 rgba(255,255,255,.82),
-    0 9px 20px rgba(34, 45, 71, .10),
-    0 2px 7px rgba(43, 57, 88, .07);
+    inset 0 .6px 0 rgba(255,255,255,.14),
+    0 12px 26px rgba(6, 10, 20, .36),
+    0 2px 8px rgba(8, 14, 26, .28);
 }
 .fdGlassPanel::after{
   content: "";
@@ -546,7 +546,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   top: 8px;
   height: 38%;
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255,255,255,.52), rgba(255,255,255,0));
+  background: linear-gradient(180deg, rgba(160,190,240,.18), rgba(255,255,255,0));
   pointer-events: none;
 }
 .fdGlassSubPanel::after{
@@ -557,7 +557,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   bottom: 6px;
   height: 28%;
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(223,229,240,.22));
+  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(93, 126, 179, .24));
   pointer-events: none;
 }
 .fdGlassSubPanel::before{
@@ -568,7 +568,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   width: 44%;
   height: 34%;
   border-radius: 10px;
-  background: linear-gradient(160deg, rgba(255,255,255,.58), rgba(255,255,255,0));
+  background: linear-gradient(160deg, rgba(153,186,237,.20), rgba(255,255,255,0));
   pointer-events: none;
 }
 .fdGlassTall{ min-height: 420px; }
@@ -580,15 +580,15 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdChip{
   border-radius: 999px;
   padding: 7px 11px;
-  border: 1px solid rgba(161,172,190,.36);
-  background: rgba(255,255,255,.62);
-  color: rgba(61, 73, 90, .90);
+  border: 1px solid rgba(149,176,214,.34);
+  background: rgba(16, 27, 45, .62);
+  color: rgba(210, 224, 246, .92);
   font-size: 12px;
 }
 .fdChipActive{
-  color: #1f2937;
-  background: rgba(255,255,255,.78);
-  box-shadow: 0 5px 12px rgba(60, 77, 108, .10);
+  color: #f2f7ff;
+  background: rgba(24, 43, 73, .78);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .30);
 }
 .fdGlassTitle{
   margin: 14px 0 0;
@@ -596,11 +596,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   line-height: 1.08;
   letter-spacing: -.01em;
   font-weight: 740;
-  color: #1d2737;
+  color: #edf5ff;
+  text-shadow: 0 6px 18px rgba(0, 0, 0, .36);
 }
 .fdGlassText{
   margin-top: 10px;
-  color: rgba(69, 79, 96, .88);
+  color: rgba(194, 209, 233, .92);
   font-size: 14px;
   line-height: 1.68;
 }
@@ -612,22 +613,22 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdPillBtn{
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.38);
-  background: rgba(255,255,255,.62);
-  color: #253246;
+  border: 1px solid rgba(143, 174, 217, .40);
+  background: rgba(18, 29, 48, .74);
+  color: #dbe9ff;
   padding: 10px 14px;
   font-size: 13px;
   font-weight: 600;
   box-shadow:
-    inset 0 .6px 0 rgba(255,255,255,.86),
-    0 8px 16px rgba(43, 57, 84, .10);
+    inset 0 .6px 0 rgba(255,255,255,.16),
+    0 10px 18px rgba(4, 8, 17, .42);
   transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, filter .16s ease;
 }
 .fdPillBtn:hover{
   text-decoration: none;
   transform: translateY(-1px) scale(1.01);
-  border-color: rgba(255,255,255,.62);
-  box-shadow: 0 12px 24px rgba(43, 57, 84, .13);
+  border-color: rgba(175, 202, 241, .60);
+  box-shadow: 0 14px 26px rgba(4, 8, 17, .52);
   filter: brightness(1.02);
 }
 .fdPillBtnPrimary{
@@ -658,13 +659,13 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     0 8px 14px rgba(24, 119, 113, .20);
 }
 .fdPillBtnGhost{
-  background: rgba(255,255,255,.56);
-  border: 1px solid rgba(255,255,255,.42);
-  color: #2f3e55;
+  background: rgba(17, 30, 50, .66);
+  border: 1px solid rgba(146, 178, 223, .42);
+  color: #d9e9ff;
 }
 .fdPillBtnGhost:hover{
-  background: rgba(34,184,166,.14);
-  border-color: rgba(34,184,166,.38);
+  background: rgba(34,184,166,.22);
+  border-color: rgba(98,224,205,.54);
 }
 .fdPillBtnGhost:active{
   background: rgba(34,184,166,.20);
@@ -724,23 +725,23 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  color: #455367;
+  color: #dbe8ff;
 }
 .fdMetricLabel{
   font-size: 12px;
   letter-spacing: .06em;
   text-transform: uppercase;
-  color: rgba(68, 79, 95, .72);
+  color: rgba(183, 202, 232, .78);
 }
 .fdMetricValue{
   font-size: clamp(28px, 3.4vw, 40px);
   line-height: 1;
   font-weight: 800;
   letter-spacing: -.02em;
-  color: #0f1726;
+  color: #eff6ff;
 }
 .fdEyebrow{
-  color: #6f7c90;
+  color: #b8c8e3;
   font-size: 12px;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -844,8 +845,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdQuickMetricItem{
   border-radius: 12px;
   padding: 8px;
-  border: 1px solid rgba(194,203,217,.66);
-  background: rgba(255,255,255,.56);
+  border: 1px solid rgba(143,175,220,.34);
+  background: rgba(17, 30, 48, .64);
 }
 .fdQuickMetricValue{
   margin-top: 4px;
@@ -853,7 +854,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   font-size: clamp(20px, 2vw, 30px);
   line-height: 1.05;
   font-weight: 780;
-  color: #0f1726;
+  color: #eff6ff;
 }
 .fdCapabilityArcWrap{
   overflow: visible;
@@ -865,6 +866,13 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     inset 0 1px 0 rgba(255,255,255,.16),
     inset 0 -1px 0 rgba(0,0,0,.26),
     0 14px 28px rgba(11, 18, 35, .34);
+}
+.fdCapabilityArcWrap .sectionTitle{
+  color: #f2f7ff;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, .45);
+}
+.fdCapabilityArcWrap .fdGlassText{
+  color: rgba(198, 214, 238, .90);
 }
 .fdCapabilityRingStage{
   margin-top: 8px;
@@ -990,6 +998,32 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdCapabilityRingCard .kvLabel{
   color: rgba(208, 224, 248, .90);
+}
+
+.fdGlassScene .sub{
+  color: rgba(198, 214, 236, .90);
+}
+.fdGlassScene .kvLabel{
+  color: rgba(166, 188, 219, .94);
+}
+.fdGlassScene .input{
+  border: 1px solid rgba(141, 173, 216, .42);
+  background: linear-gradient(140deg, rgba(18, 30, 50, .86), rgba(12, 21, 38, .84));
+  color: #e7f1ff;
+}
+.fdGlassScene .input::placeholder{
+  color: rgba(170, 191, 222, .66);
+}
+.fdGlassScene .input:focus{
+  border-color: rgba(96, 225, 206, .78);
+  box-shadow: 0 0 0 3px rgba(78, 191, 174, .24);
+}
+body.fdPageDark .footer{
+  border-top: 1px solid rgba(96, 123, 164, .34);
+  background: linear-gradient(180deg, rgba(7, 11, 19, .96), rgba(4, 7, 12, .98));
+}
+body.fdPageDark .footerInner{
+  color: rgba(176, 195, 222, .84);
 }
 .fdModalBackdrop{
   position: fixed;

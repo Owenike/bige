@@ -511,6 +511,13 @@ export default function FrontdeskPortalPage() {
   }, []);
 
   useEffect(() => {
+    document.body.classList.add("fdPageDark");
+    return () => {
+      document.body.classList.remove("fdPageDark");
+    };
+  }, []);
+
+  useEffect(() => {
     setPortalReady(true);
   }, []);
 
