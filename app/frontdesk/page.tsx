@@ -271,6 +271,16 @@ function addMonths(base: Date, months: number) {
   return date;
 }
 
+function normalizeRingAngle(input: number) {
+  const normalized = ((input + 180) % 360 + 360) % 360 - 180;
+  return normalized;
+}
+
+function circularDistance(index: number, center: number, total: number) {
+  const diff = Math.abs(index - center);
+  return Math.min(diff, total - diff);
+}
+
 function calcLockerDueAtByTerm(term: LockerRentalTerm) {
   const now = new Date();
   if (term === "daily") return new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
@@ -3218,6 +3228,20 @@ export default function FrontdeskPortalPage() {
     });
   }, [capabilityCards]);
 
+  const frontCapability = useMemo(() => {
+    if (capabilityRingItems.length === 0) return null;
+    let bestIndex = 0;
+    let bestOffset = Number.POSITIVE_INFINITY;
+    capabilityRingItems.forEach((item, index) => {
+      const offset = Math.abs(normalizeRingAngle(item.baseAngle + capabilityRingAngle));
+      if (offset < bestOffset) {
+        bestOffset = offset;
+        bestIndex = index;
+      }
+    });
+    return { ...capabilityRingItems[bestIndex], index: bestIndex };
+  }, [capabilityRingAngle, capabilityRingItems]);
+
   const handleCapabilityRingPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const ring = capabilityRingRef.current;
@@ -3613,68 +3637,90 @@ export default function FrontdeskPortalPage() {
           </article>
         </div>
 
-        <section className="fdGlassSubPanel fdCapabilityArcWrap" style={{ marginTop: 14, padding: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <div>
-              <h2 className="sectionTitle">{t.capabilityTitle}</h2>
-              <p className="fdGlassText" style={{ marginTop: 6 }}>{t.capabilityArcHint}</p>
+        <section className="fdGlassSubPanel fdCapabilityArcWrap" style={{ marginTop: 14 }}>
+          <div className="fdCapabilityContentLayer">
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div>
+                <h2 className="sectionTitle">{t.capabilityTitle}</h2>
+                <p className="fdGlassText" style={{ marginTop: 6 }}>{t.capabilityArcHint}</p>
+              </div>
             </div>
+            {frontCapability ? (
+              <article className="fdGlassSubPanel fdCapabilityFocusCard">
+                <div className="fdActionHead">
+                  <span className="kvLabel">{t.capabilityCurrent}</span>
+                  <span className="fdChip" style={statusStyle(frontCapability.status)}>
+                    {statusLabel(frontCapability.status)}
+                  </span>
+                </div>
+                <h3 className="fdActionTitle" style={{ marginTop: 8 }}>{frontCapability.title}</h3>
+                <p className="sub" style={{ marginTop: 8 }}>{frontCapability.detail}</p>
+                <div className="fdPillActions" style={{ marginTop: 12 }}>
+                  <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => openCapabilityShortcut(frontCapability.id)}>
+                    {t.capabilityOpenBtn}
+                  </button>
+                </div>
+              </article>
+            ) : null}
           </div>
-          <div
-            ref={capabilityRingRef}
-            className={`fdCapabilityRingStage ${capabilityRailDragging ? "fdCapabilityRingStageDragging" : ""}`}
-            onPointerDown={handleCapabilityRingPointerDown}
-            onPointerMove={handleCapabilityRingPointerMove}
-            onPointerUp={handleCapabilityRingPointerUp}
-            onPointerCancel={handleCapabilityRingPointerUp}
-          >
-            <div className="fdCapabilityRingTrack">
-              {capabilityRingItems.map((item, index) => {
-                const angle = item.baseAngle + capabilityRingAngle;
-                const rad = (angle * Math.PI) / 180;
-                const depth = Math.cos(rad);
-                const orbitX = Math.sin(rad) * 430;
-                const orbitZ = depth * 300;
-                const tiltY = -Math.sin(rad) * 24;
-                const tiltX = 10 + (1 - depth) * 6;
-                const scale = 0.56 + ((depth + 1) / 2) * 0.52;
-                const liftY = 92 - depth * 36;
-                const visibility = (depth + 1) / 2;
-                const opacity = Math.max(0.22, Math.min(1, 0.18 + visibility * 0.9));
-                const zIndex = Math.round((depth + 1) * 1000);
-                const ringHue = (index * 31 + 190) % 360;
-                return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`fdGlassSubPanel fdCapabilityCard fdCapabilityRingCard ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
-                  style={{
-                    transform: `translate3d(calc(-50% + ${orbitX}px), calc(-50% + ${liftY}px), ${orbitZ}px) rotateY(${tiltY}deg) rotateX(${tiltX}deg) scale(${scale})`,
-                    opacity,
-                    zIndex,
-                    ["--fd-ring-hue" as any]: String(ringHue),
-                    ["--fd-ring-depth" as any]: String(visibility),
-                  }}
-                  onDragStart={(event) => event.preventDefault()}
-                  onClick={(event) => {
-                    if (capabilitySuppressClickRef.current) {
-                      event.preventDefault();
-                      return;
-                    }
-                    openCapabilityShortcut(item.id);
-                  }}
-                >
-                  <div className="fdActionHead">
-                    <span className="kvLabel">{item.letter}</span>
-                    <span className="fdChip" style={statusStyle(item.status)}>
-                      {statusLabel(item.status)}
-                    </span>
-                  </div>
-                  <h3 className="fdActionTitle">{item.moduleTitle}</h3>
-                  <p className="sub fdCapabilityDesc" style={{ marginTop: 6 }}>{item.desc}</p>
-                </button>
-                );
-              })}
+
+          <div className="fdCapabilityDockLayer">
+            <div
+              ref={capabilityRingRef}
+              className={`fdCapabilityRingStage ${capabilityRailDragging ? "fdCapabilityRingStageDragging" : ""}`}
+              onPointerDown={handleCapabilityRingPointerDown}
+              onPointerMove={handleCapabilityRingPointerMove}
+              onPointerUp={handleCapabilityRingPointerUp}
+              onPointerCancel={handleCapabilityRingPointerUp}
+            >
+              <div className="fdCapabilityRingTrack">
+                {capabilityRingItems.map((item, index) => {
+                  const angle = item.baseAngle + capabilityRingAngle;
+                  const rad = (angle * Math.PI) / 180;
+                  const depth = Math.cos(rad);
+                  const frontIndex = frontCapability?.index ?? 0;
+                  const ringDistance = circularDistance(index, frontIndex, capabilityRingItems.length);
+                  const scale = ringDistance === 0 ? 1 : ringDistance === 1 ? 0.85 : ringDistance === 2 ? 0.7 : 0.56;
+                  const orbitX = Math.sin(rad) * 450;
+                  const orbitZ = depth * 240;
+                  const tiltY = -Math.sin(rad) * 20;
+                  const tiltX = 8 + (1 - depth) * 4;
+                  const liftY = 24 - depth * 18;
+                  const opacity = ringDistance === 0 ? 1 : ringDistance === 1 ? 0.86 : ringDistance === 2 ? 0.68 : 0.44;
+                  const zIndex = Math.round((depth + 1) * 1000) + (ringDistance === 0 ? 2000 : 0);
+                  const ringHue = (index * 31 + 190) % 360;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`fdGlassSubPanel fdCapabilityCard fdCapabilityRingCard ${frontCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
+                      style={{
+                        transform: `translate3d(calc(-50% + ${orbitX}px), calc(-50% + ${liftY}px), ${orbitZ}px) rotateY(${tiltY}deg) rotateX(${tiltX}deg) scale(${scale})`,
+                        opacity,
+                        zIndex,
+                        ["--fd-ring-hue" as any]: String(ringHue),
+                      }}
+                      onDragStart={(event) => event.preventDefault()}
+                      onClick={(event) => {
+                        if (capabilitySuppressClickRef.current) {
+                          event.preventDefault();
+                          return;
+                        }
+                        openCapabilityShortcut(item.id);
+                      }}
+                    >
+                      <div className="fdActionHead">
+                        <span className="kvLabel">{item.letter}</span>
+                        <span className="fdChip" style={statusStyle(item.status)}>
+                          {statusLabel(item.status)}
+                        </span>
+                      </div>
+                      <h3 className="fdActionTitle">{item.moduleTitle}</h3>
+                      <p className="sub fdCapabilityDesc" style={{ marginTop: 6 }}>{item.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </section>
