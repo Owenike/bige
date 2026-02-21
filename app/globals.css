@@ -857,7 +857,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   color: #eff6ff;
 }
 .fdCapabilityArcWrap{
-  --fd-dock-h: 300px;
+  --fd-dock-h: 280px;
   position: relative;
   overflow: hidden;
   min-height: calc(var(--fd-dock-h) + 36px);
@@ -971,9 +971,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdCapabilityRingCard{
   position: absolute;
   left: 50%;
-  top: 42%;
-  width: 340px;
-  min-height: 184px;
+  top: 44%;
+  width: 332px;
+  min-height: 176px;
   transform-style: preserve-3d;
   transform-origin: center center;
   backface-visibility: hidden;
@@ -1781,7 +1781,7 @@ body.fdPageDark .footerInner{
     height: 100%;
   }
   .fdCapabilityArcWrap{
-    --fd-dock-h: 230px;
+    --fd-dock-h: 220px;
     min-height: calc(var(--fd-dock-h) + 24px);
   }
   .fdCapabilityDockLayer{
@@ -1791,9 +1791,9 @@ body.fdPageDark .footerInner{
   }
   .fdCapabilityRingCard{
     left: 50%;
-    top: 42%;
-    width: 248px;
-    min-height: 146px;
+    top: 44%;
+    width: 242px;
+    min-height: 142px;
   }
   .fdQuickMetricGrid{
     grid-template-columns: 1fr;

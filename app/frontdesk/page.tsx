@@ -3781,10 +3781,11 @@ export default function FrontdeskPortalPage() {
                   const normalizedOffset = normalizeRingAngle(angle);
                   const absOffset = Math.abs(normalizedOffset);
                   const frontProximity = Math.max(0, 1 - absOffset / 92);
-                  const centerLock = Math.max(0, 1 - absOffset / 24);
+                  const centerLockRaw = Math.max(0, 1 - absOffset / 24);
+                  const centerLock = capabilityRailDragging ? 0 : centerLockRaw;
                   const leftShrink = normalizedOffset < 0 ? Math.max(0.8, 1 - absOffset / 240) : 1;
-                  const scale = Math.min(1.28, (0.52 + frontProximity * 0.58 + centerLock * 0.24) * leftShrink);
-                  const orbitX = Math.sin(rad) * 560 * (1 - centerLock * 0.96);
+                  const scale = Math.min(1.22, (0.54 + frontProximity * 0.54 + centerLock * 0.14) * leftShrink);
+                  const orbitX = Math.sin(rad) * 560 * (1 - centerLock * 0.86);
                   const orbitZ = depth * 320 + centerLock * 120;
                   const tiltY = -Math.sin(rad) * 20 * (1 - centerLock * 0.9);
                   const tiltX = 8 + (1 - depth) * 5;
