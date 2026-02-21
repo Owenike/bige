@@ -76,11 +76,13 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             title: "會員查詢 / 建檔",
             sub: "快速查詢會員、避免重複建檔，並在櫃檯完成完整會員資料建立。",
             findTitle: "查詢會員",
-            findHint: "可用姓名、電話或 Email 查詢",
+            findHint: "可用姓名、電話或 Email 完全一致查詢",
             findPlaceholder: "輸入姓名 / 電話 / Email",
             findBtn: "開始查詢",
             findAllBtn: "查看所有會員",
             searching: "查詢中...",
+            searchRequireInput: "請先輸入姓名 / 電話 / Email",
+            exactNoMatch: "找不到完全一致的會員資料",
             createTitle: "新增會員",
             createName: "姓名",
             createPhone: "電話（必填）",
@@ -132,11 +134,13 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             title: "Member Search / Create",
             sub: "Find members quickly, prevent duplicates, and create complete member profiles at frontdesk.",
             findTitle: "Find Member",
-            findHint: "Search by name, phone, or email",
+            findHint: "Exact match by name, phone, or email",
             findPlaceholder: "Enter name / phone / email",
             findBtn: "Search",
             findAllBtn: "View All Members",
             searching: "Searching...",
+            searchRequireInput: "Enter name / phone / email first",
+            exactNoMatch: "No exact member match found",
             createTitle: "Create Member",
             createName: "Full Name",
             createPhone: "Phone (Required)",
@@ -221,15 +225,47 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     });
   }
 
+  function isExactMemberMatch(item: MemberItem, keyword: string) {
+    const trimmedKeyword = keyword.trim();
+    if (!trimmedKeyword) return false;
+    const normalizedKeyword = trimmedKeyword.toLowerCase();
+    const normalizedPhoneKeyword = normalizePhone(trimmedKeyword);
+    const phoneLikeKeyword = /^[\d\s()+-]+$/.test(trimmedKeyword);
+
+    const fullName = (item.full_name || "").trim();
+    const emailValue = (item.email || "").trim().toLowerCase();
+    const phoneValue = normalizePhone(item.phone || "");
+
+    const matchedName = fullName === trimmedKeyword;
+    const matchedEmail = emailValue !== "" && emailValue === normalizedKeyword;
+    const matchedPhone = phoneLikeKeyword && normalizedPhoneKeyword.length > 0 && phoneValue === normalizedPhoneKeyword;
+
+    return matchedName || matchedEmail || matchedPhone;
+  }
+
   async function search(event?: FormEvent) {
     event?.preventDefault();
     const keyword = q.trim();
+    if (!keyword) {
+      setError(t.searchRequireInput);
+      setItems([]);
+      return;
+    }
     setError(null);
     setMessage(null);
     setLoading(true);
     try {
-      const nextItems = await fetchMembers(keyword);
-      setItems(nextItems);
+      const allItems = sortMembersByCode(await fetchMembers("", { limit: 500 }));
+      const exactMatches = allItems.filter((item) => isExactMemberMatch(item, keyword));
+      setItems(exactMatches);
+      if (exactMatches.length === 0) {
+        setError(t.exactNoMatch);
+        return;
+      }
+      setAllMembersError(null);
+      setAllMembers(allItems);
+      setSelectedAllMemberId(exactMatches[0]?.id || null);
+      setAllMembersOpen(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.searchFail);
     } finally {
@@ -264,6 +300,19 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     () => allMembers.find((item) => item.id === selectedAllMemberId) || null,
     [allMembers, selectedAllMemberId],
   );
+  const searchKeyword = q.trim();
+  const searchDisabled = loading || searchKeyword.length === 0;
+
+  useEffect(() => {
+    if (!allMembersOpen || !selectedAllMemberId) return;
+    const nodes = document.querySelectorAll<HTMLButtonElement>(".fdAllMembersList [data-member-id]");
+    for (const node of Array.from(nodes)) {
+      if (node.dataset.memberId === selectedAllMemberId) {
+        node.scrollIntoView({ block: "nearest" });
+        break;
+      }
+    }
+  }, [allMembersOpen, selectedAllMemberId]);
 
   async function createMember(event: FormEvent) {
     event.preventDefault();
@@ -456,7 +505,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             <p className="fdGlassText" style={{ marginTop: 6 }}>{t.findHint}</p>
             <form onSubmit={search} className="field">
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.findPlaceholder} className="input" />
-              <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={loading}>
+              <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={searchDisabled}>
                 {loading ? t.searching : t.findBtn}
               </button>
               <button type="button" className="fdPillBtn" onClick={() => void openAllMembersModal()} disabled={allMembersLoading}>
@@ -555,6 +604,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                             type="button"
                             onClick={() => setSelectedAllMemberId(item.id)}
                             className={`fdAllMemberItem ${selected ? "fdAllMemberItemActive" : ""}`}
+                            data-member-id={item.id}
                           >
                             <div className="kvLabel">#{memberCode}</div>
                             <div className="kvValue" style={{ marginTop: 4 }}>{item.full_name}</div>
