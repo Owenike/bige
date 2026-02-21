@@ -581,6 +581,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   justify-content: flex-end;
   align-items: flex-start;
 }
+.fdQuickPanelTopRow{
+  min-height: 38px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+}
 .fdChip{
   border-radius: 999px;
   padding: 7px 11px;

@@ -3707,6 +3707,7 @@ export default function FrontdeskPortalPage() {
 
         <div className="fdGlassTop fdGlassTopFixed">
           <article className="fdGlassPanel fdQuickPanel">
+            <div className="fdQuickPanelTopRow" aria-hidden="true" />
             <h2 className="fdGlassTitle fdQuickTitle">{t.quickOpsTitle}</h2>
             <p className="fdGlassText">{t.quickOpsSub}</p>
             <div className="fdPillActions">
@@ -3720,10 +3721,7 @@ export default function FrontdeskPortalPage() {
           </article>
 
           <article className="fdGlassPanel fdQuickPanel">
-            <div className="fdChipRow fdChipRowTopRight">
-              <span className="fdChip fdChipActive">{t.quickServiceTitle}</span>
-              <span className="fdChip">{t.capabilityTitle}</span>
-            </div>
+            <div className="fdQuickPanelTopRow" aria-hidden="true" />
             <h2 className="fdGlassTitle fdQuickTitle">{t.quickServiceTitle}</h2>
             <p className="fdGlassText">{t.quickServiceSub}</p>
             <div className="fdPillActions">
@@ -3737,8 +3735,7 @@ export default function FrontdeskPortalPage() {
           </article>
 
           <article className="fdGlassPanel fdQuickPanel">
-            <div className="fdChipRow fdChipRowTopRight">
-              <span className="fdChip fdChipActive">{t.quickShiftTitle}</span>
+            <div className="fdQuickPanelTopRow">
               <span className="fdChip">{t.statusOpenValue}</span>
             </div>
             <h2 className="fdGlassTitle fdQuickTitle">{t.quickShiftTitle}</h2>
