@@ -3231,19 +3231,26 @@ export default function FrontdeskPortalPage() {
     if (!ring) return;
     const delta = event.clientX - capabilityDragStateRef.current.startX;
     setCapabilityRingAngle(capabilityDragStateRef.current.startAngle + delta * 0.32);
-    if (Math.abs(delta) > 6) {
+    if (Math.abs(delta) > 12) {
       capabilityDragStateRef.current.moved = true;
       capabilitySuppressClickRef.current = true;
     }
   }, []);
 
   const handleCapabilityRingPointerUp = useCallback(() => {
+    const moved = capabilityDragStateRef.current.moved;
     capabilityDragStateRef.current.active = false;
     capabilityDragStateRef.current.pointerId = -1;
     setCapabilityRailDragging(false);
-    window.setTimeout(() => {
+    if (moved) {
+      capabilitySuppressClickRef.current = true;
+      window.setTimeout(() => {
+        capabilitySuppressClickRef.current = false;
+      }, 180);
+      capabilityDragStateRef.current.moved = false;
+    } else {
       capabilitySuppressClickRef.current = false;
-    }, 0);
+    }
   }, []);
 
   useEffect(() => {
@@ -3512,11 +3519,6 @@ export default function FrontdeskPortalPage() {
 
         <div className="fdGlassTop fdGlassTopFixed">
           <article className="fdGlassPanel fdQuickPanel">
-            <div className="fdChipRow">
-              <span className={`fdChip ${shiftState === "closed" ? "fdChipActive" : ""}`}>{t.modeClosed}</span>
-              <span className={`fdChip ${shiftState === "open" ? "fdChipActive" : ""}`}>{t.modeOpen}</span>
-              {!shiftResolved ? <span className="fdChip fdChipActive">{t.loadingState}</span> : null}
-            </div>
             <h2 className="fdGlassTitle fdQuickTitle">{t.quickOpsTitle}</h2>
             <p className="fdGlassText">{t.quickOpsSub}</p>
             <div className="fdPillActions">
@@ -3573,22 +3575,7 @@ export default function FrontdeskPortalPage() {
             </div>
             {!shiftResolved ? (
               <p className="fdGlassText" style={{ marginTop: 8 }}>{t.loadingState}...</p>
-            ) : shiftOpen ? (
-              <div className="fdQuickMetricGrid">
-                <div className="fdQuickMetricItem">
-                  <span className="fdMetricLabel">{t.orders}</span>
-                  <strong className="fdQuickMetricValue">{loading ? "-" : ordersToday}</strong>
-                </div>
-                <div className="fdQuickMetricItem">
-                  <span className="fdMetricLabel">{t.paid}</span>
-                  <strong className="fdQuickMetricValue">{loading ? "-" : paidToday}</strong>
-                </div>
-                <div className="fdQuickMetricItem">
-                  <span className="fdMetricLabel">{t.revenue}</span>
-                  <strong className="fdQuickMetricValue">{loading ? "-" : revenueToday}</strong>
-                </div>
-              </div>
-            ) : (
+            ) : !shiftOpen ? (
               <div className="field" style={{ marginTop: 8 }}>
                 <label className="kvLabel">{t.openingCash}</label>
                 <input
@@ -3615,7 +3602,7 @@ export default function FrontdeskPortalPage() {
                   {openingShift ? t.startingShiftAction : t.startShiftAction}
                 </button>
               </div>
-            )}
+            ) : null}
           </article>
         </div>
 
@@ -3646,7 +3633,6 @@ export default function FrontdeskPortalPage() {
                 const liftY = depth < 0 ? 62 : (1 - depth) * 32;
                 const visibility = (depth + 1) / 2;
                 const opacity = Math.max(0.06, Math.min(1, 0.14 + visibility * 0.9));
-                const interactive = visibility > 0.24;
                 const zIndex = Math.round((depth + 1) * 1000);
                 return (
                 <button
@@ -3657,7 +3643,6 @@ export default function FrontdeskPortalPage() {
                     transform: `translate3d(calc(-50% + ${orbitX}px), calc(-50% + ${liftY}px), ${orbitZ}px) rotateY(${tilt}deg) scale(${scale})`,
                     opacity,
                     zIndex,
-                    pointerEvents: interactive ? "auto" : "none",
                   }}
                   onDragStart={(event) => event.preventDefault()}
                   onClick={(event) => {
