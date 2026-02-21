@@ -965,6 +965,43 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdCapabilityRingStageDragging .fdCapabilityRingCard{
   transition: none;
 }
+.fdCapabilityRingArrow{
+  position: absolute;
+  top: 50%;
+  z-index: 9;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid rgba(156, 190, 235, .46);
+  background: linear-gradient(180deg, rgba(14, 28, 50, .86), rgba(8, 17, 33, .92));
+  color: #e8f4ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  box-shadow: 0 10px 24px rgba(2, 7, 16, .48);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.fdCapabilityRingArrow span{
+  display: inline-block;
+  font-size: 26px;
+  line-height: 1;
+  margin-top: -2px;
+}
+.fdCapabilityRingArrowLeft{
+  left: 12px;
+}
+.fdCapabilityRingArrowRight{
+  right: 12px;
+}
+.fdCapabilityRingArrow:hover{
+  border-color: rgba(126, 255, 229, .74);
+  box-shadow: 0 12px 28px rgba(6, 16, 33, .56), 0 0 0 1px rgba(126, 255, 229, .28);
+}
+.fdCapabilityRingArrow:active{
+  transform: translateY(-50%) scale(.96);
+}
 .fdCapabilityRingTrack{
   position: relative;
   width: 100%;
@@ -1804,6 +1841,13 @@ body.fdPageDark .footerInner{
     top: 50%;
     width: 252px;
     min-height: 150px;
+  }
+  .fdCapabilityRingArrow{
+    width: 36px;
+    height: 36px;
+  }
+  .fdCapabilityRingArrow span{
+    font-size: 22px;
   }
   .fdQuickMetricGrid{
     grid-template-columns: 1fr;

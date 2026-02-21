@@ -3299,6 +3299,25 @@ export default function FrontdeskPortalPage() {
     }
   }, [animateCapabilityRingTo, capabilityRingItems]);
 
+  const handleCapabilityRingStep = useCallback((direction: "prev" | "next") => {
+    if (capabilityRingItems.length <= 1) return;
+    if (capabilityRingInertiaRef.current !== null) {
+      window.cancelAnimationFrame(capabilityRingInertiaRef.current);
+      capabilityRingInertiaRef.current = null;
+    }
+    if (capabilityRingSnapRafRef.current !== null) {
+      window.cancelAnimationFrame(capabilityRingSnapRafRef.current);
+      capabilityRingSnapRafRef.current = null;
+    }
+    const step = 360 / capabilityRingItems.length;
+    const offset = direction === "prev" ? step : -step;
+    capabilitySuppressClickRef.current = true;
+    animateCapabilityRingTo(capabilityRingAngleTargetRef.current + offset, 220);
+    window.setTimeout(() => {
+      capabilitySuppressClickRef.current = false;
+    }, 160);
+  }, [animateCapabilityRingTo, capabilityRingItems.length]);
+
   const handleCapabilityRingPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const ring = capabilityRingRef.current;
@@ -3787,6 +3806,38 @@ export default function FrontdeskPortalPage() {
               onPointerCancel={handleCapabilityRingPointerUp}
               onLostPointerCapture={handleCapabilityRingPointerUp}
             >
+              <button
+                type="button"
+                className="fdCapabilityRingArrow fdCapabilityRingArrowLeft"
+                aria-label={lang === "zh" ? "上一張" : "Previous card"}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  handleCapabilityRingStep("prev");
+                }}
+              >
+                <span aria-hidden="true">‹</span>
+              </button>
+              <button
+                type="button"
+                className="fdCapabilityRingArrow fdCapabilityRingArrowRight"
+                aria-label={lang === "zh" ? "下一張" : "Next card"}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  handleCapabilityRingStep("next");
+                }}
+              >
+                <span aria-hidden="true">›</span>
+              </button>
               <div className="fdCapabilityRingTrack">
                 {capabilityRingItems.map((item, index) => {
                   const angle = item.baseAngle + capabilityRingAngle;
