@@ -58,6 +58,8 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("q") || "").trim();
+  const rawLimit = Number(searchParams.get("limit") || "30");
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 500) : 30;
 
   let query = auth.supabase
     .from("members")
@@ -79,7 +81,7 @@ export async function GET(request: Request) {
     )
     .eq("tenant_id", auth.context.tenantId)
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(limit);
 
   if (q) {
     query = query.or(`full_name.ilike.%${q}%,phone.ilike.%${q}%,email.ilike.%${q}%,member_code.ilike.%${q}%`);

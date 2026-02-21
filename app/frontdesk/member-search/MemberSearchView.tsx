@@ -10,6 +10,7 @@ interface MemberItem {
   email?: string | null;
   status?: string | null;
   birth_date?: string | null;
+  member_code?: string | null;
   custom_fields?: Record<string, string>;
 }
 
@@ -52,6 +53,11 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [allMembersOpen, setAllMembersOpen] = useState(false);
+  const [allMembersLoading, setAllMembersLoading] = useState(false);
+  const [allMembersError, setAllMembersError] = useState<string | null>(null);
+  const [allMembers, setAllMembers] = useState<MemberItem[]>([]);
+  const [selectedAllMemberId, setSelectedAllMemberId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [recentCreatedId, setRecentCreatedId] = useState<string | null>(null);
   const [duplicateCandidate, setDuplicateCandidate] = useState<MemberItem | null>(null);
@@ -104,6 +110,16 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             customInfo: "自訂資訊",
             status: "狀態",
             active: "啟用",
+            allMembersTitle: "所有會員",
+            allMembersSub: "左側按會員編號排序，點選即可查看詳細資料。",
+            allMembersLoading: "載入會員中...",
+            allMembersEmpty: "目前沒有會員資料",
+            memberCode: "會員編號",
+            memberId: "會員 ID",
+            phoneLabel: "電話",
+            emailLabel: "Email",
+            birthDateLabel: "生日",
+            close: "關閉",
           }
         : {
             badge: "MEMBER DESK",
@@ -150,18 +166,53 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             customInfo: "Custom Info",
             status: "Status",
             active: "Active",
+            allMembersTitle: "All Members",
+            allMembersSub: "Left list is sorted by member code. Click one member to view details.",
+            allMembersLoading: "Loading members...",
+            allMembersEmpty: "No members found",
+            memberCode: "Member Code",
+            memberId: "Member ID",
+            phoneLabel: "Phone",
+            emailLabel: "Email",
+            birthDateLabel: "Birth Date",
+            close: "Close",
           },
     [zh],
   );
 
-  async function fetchMembers(keyword: string) {
-    const endpoint = keyword ? `/api/members?q=${encodeURIComponent(keyword)}` : "/api/members";
+  async function fetchMembers(keyword: string, options?: { limit?: number }) {
+    const params = new URLSearchParams();
+    const trimmed = keyword.trim();
+    if (trimmed) params.set("q", trimmed);
+    if (options?.limit && Number.isFinite(options.limit) && options.limit > 0) {
+      params.set("limit", String(Math.trunc(options.limit)));
+    }
+    const endpoint = params.size > 0 ? `/api/members?${params.toString()}` : "/api/members";
     const res = await fetch(endpoint);
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(payload?.error || t.searchFail);
     }
     return (payload.items || []) as MemberItem[];
+  }
+
+  function memberSortKey(item: MemberItem) {
+    const code = typeof item.member_code === "string" ? item.member_code.trim() : "";
+    if (!code) return Number.POSITIVE_INFINITY;
+    const parsed = Number(code);
+    return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+  }
+
+  function sortMembersByCode(list: MemberItem[]) {
+    return [...list].sort((a, b) => {
+      const aNum = memberSortKey(a);
+      const bNum = memberSortKey(b);
+      if (aNum !== bNum) return aNum - bNum;
+      const aCode = (a.member_code || "").trim();
+      const bCode = (b.member_code || "").trim();
+      if (aCode !== bCode) return aCode.localeCompare(bCode, "zh-Hant");
+      return a.full_name.localeCompare(b.full_name, "zh-Hant");
+    });
   }
 
   async function search(event?: FormEvent) {
@@ -180,20 +231,33 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     }
   }
 
-  async function loadAllMembers() {
+  async function openAllMembersModal() {
     setError(null);
     setMessage(null);
-    setLoading(true);
+    setAllMembersError(null);
+    setAllMembersOpen(true);
+    setAllMembersLoading(true);
     try {
-      setQ("");
-      const nextItems = await fetchMembers("");
-      setItems(nextItems);
+      const nextItems = sortMembersByCode(await fetchMembers("", { limit: 500 }));
+      setAllMembers(nextItems);
+      setSelectedAllMemberId((current) => {
+        if (current && nextItems.some((item) => item.id === current)) return current;
+        return nextItems[0]?.id || null;
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.searchFail);
+      const nextError = err instanceof Error ? err.message : t.searchFail;
+      setAllMembersError(nextError);
+      setAllMembers([]);
+      setSelectedAllMemberId(null);
     } finally {
-      setLoading(false);
+      setAllMembersLoading(false);
     }
   }
+
+  const selectedAllMember = useMemo(
+    () => allMembers.find((item) => item.id === selectedAllMemberId) || null,
+    [allMembers, selectedAllMemberId],
+  );
 
   async function createMember(event: FormEvent) {
     event.preventDefault();
@@ -333,8 +397,8 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
               <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={loading}>
                 {loading ? t.searching : t.findBtn}
               </button>
-              <button type="button" className="fdPillBtn" onClick={() => void loadAllMembers()} disabled={loading}>
-                {loading ? t.searching : t.findAllBtn}
+              <button type="button" className="fdPillBtn" onClick={() => void openAllMembersModal()} disabled={allMembersLoading}>
+                {allMembersLoading ? t.allMembersLoading : t.findAllBtn}
               </button>
             </form>
           </div>
@@ -436,6 +500,140 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             )}
           </div>
         </section>
+
+        {allMembersOpen ? (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.45)", display: "grid", placeItems: "center", zIndex: 90, padding: 16 }}
+            onClick={() => setAllMembersOpen(false)}
+          >
+            <div
+              className="fdGlassSubPanel"
+              style={{
+                width: "min(1120px, 100%)",
+                maxHeight: "88vh",
+                padding: 16,
+                overflow: "hidden",
+                background: "rgba(248,250,252,.98)",
+                borderColor: "rgba(148,163,184,.45)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label={t.allMembersTitle}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <div>
+                  <h2 className="sectionTitle" style={{ margin: 0 }}>{t.allMembersTitle}</h2>
+                  <p className="sub" style={{ marginTop: 4 }}>{t.allMembersSub}</p>
+                </div>
+                <button type="button" className="fdPillBtn" onClick={() => setAllMembersOpen(false)}>
+                  {t.close}
+                </button>
+              </div>
+
+              {allMembersError ? <div className="error" style={{ marginTop: 10 }}>{allMembersError}</div> : null}
+
+              <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "minmax(260px, 330px) 1fr", gap: 12, minHeight: 420 }}>
+                <aside
+                  style={{
+                    border: "1px solid rgba(148,163,184,.35)",
+                    borderRadius: 14,
+                    background: "rgba(255,255,255,.88)",
+                    overflowY: "auto",
+                    padding: 8,
+                  }}
+                >
+                  {allMembersLoading ? (
+                    <p className="sub" style={{ padding: 8 }}>{t.allMembersLoading}</p>
+                  ) : allMembers.length === 0 ? (
+                    <p className="sub" style={{ padding: 8 }}>{t.allMembersEmpty}</p>
+                  ) : (
+                    allMembers.map((item, idx) => {
+                      const selected = item.id === selectedAllMemberId;
+                      const memberCode = item.member_code?.trim() || String(idx + 1).padStart(4, "0");
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setSelectedAllMemberId(item.id)}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            border: selected ? "1px solid rgba(20,184,166,.6)" : "1px solid rgba(148,163,184,.3)",
+                            background: selected ? "rgba(20,184,166,.1)" : "rgba(255,255,255,.84)",
+                            borderRadius: 10,
+                            padding: "10px 12px",
+                            marginBottom: 8,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div className="kvLabel">#{memberCode}</div>
+                          <div className="kvValue" style={{ marginTop: 4 }}>{item.full_name}</div>
+                          <div className="sub" style={{ marginTop: 4 }}>{item.phone || "-"}</div>
+                        </button>
+                      );
+                    })
+                  )}
+                </aside>
+
+                <section
+                  style={{
+                    border: "1px solid rgba(148,163,184,.35)",
+                    borderRadius: 14,
+                    background: "rgba(255,255,255,.88)",
+                    padding: 14,
+                    overflowY: "auto",
+                  }}
+                >
+                  {selectedAllMember ? (
+                    <>
+                      <h3 className="sectionTitle" style={{ marginTop: 0 }}>{selectedAllMember.full_name}</h3>
+                      <div className="fdTwoCol" style={{ marginTop: 10, gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
+                          <div className="kvLabel">{t.memberCode}</div>
+                          <div className="kvValue">{selectedAllMember.member_code?.trim() || "-"}</div>
+                        </div>
+                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
+                          <div className="kvLabel">{t.memberId}</div>
+                          <div className="kvValue" style={{ fontSize: 14, wordBreak: "break-all" }}>{selectedAllMember.id}</div>
+                        </div>
+                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
+                          <div className="kvLabel">{t.phoneLabel}</div>
+                          <div className="kvValue">{selectedAllMember.phone || "-"}</div>
+                        </div>
+                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
+                          <div className="kvLabel">{t.emailLabel}</div>
+                          <div className="kvValue">{selectedAllMember.email || "-"}</div>
+                        </div>
+                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
+                          <div className="kvLabel">{t.birthDateLabel}</div>
+                          <div className="kvValue">{selectedAllMember.birth_date || "-"}</div>
+                        </div>
+                        <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
+                          <div className="kvLabel">{t.status}</div>
+                          <div className="kvValue">{selectedAllMember.status || t.active}</div>
+                        </div>
+                      </div>
+
+                      {selectedAllMember.custom_fields && Object.keys(selectedAllMember.custom_fields).length > 0 ? (
+                        <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10, background: "rgba(255,255,255,.92)" }}>
+                          <div className="kvLabel">{t.customInfo}</div>
+                          <div className="actions" style={{ marginTop: 6 }}>
+                            {Object.entries(selectedAllMember.custom_fields).map(([key, value]) => (
+                              <span key={`${selectedAllMember.id}-${key}`} className="fdChip">{key}: {value}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="sub">{t.allMembersEmpty}</p>
+                  )}
+                </section>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );
