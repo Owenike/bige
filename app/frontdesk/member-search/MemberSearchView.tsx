@@ -67,6 +67,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             findHint: "可用姓名、電話或 Email 查詢",
             findPlaceholder: "輸入姓名 / 電話 / Email",
             findBtn: "開始查詢",
+            findAllBtn: "查看所有會員",
             searching: "查詢中...",
             createTitle: "新增會員",
             createName: "姓名",
@@ -112,6 +113,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             findHint: "Search by name, phone, or email",
             findPlaceholder: "Enter name / phone / email",
             findBtn: "Search",
+            findAllBtn: "View All Members",
             searching: "Searching...",
             createTitle: "Create Member",
             createName: "Full Name",
@@ -152,6 +154,16 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     [zh],
   );
 
+  async function fetchMembers(keyword: string) {
+    const endpoint = keyword ? `/api/members?q=${encodeURIComponent(keyword)}` : "/api/members";
+    const res = await fetch(endpoint);
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(payload?.error || t.searchFail);
+    }
+    return (payload.items || []) as MemberItem[];
+  }
+
   async function search(event?: FormEvent) {
     event?.preventDefault();
     const keyword = q.trim();
@@ -159,13 +171,25 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     setMessage(null);
     setLoading(true);
     try {
-      const res = await fetch(`/api/members?q=${encodeURIComponent(keyword)}`);
-      const payload = await res.json();
-      if (!res.ok) {
-        setError(payload?.error || t.searchFail);
-        return;
-      }
-      setItems((payload.items || []) as MemberItem[]);
+      const nextItems = await fetchMembers(keyword);
+      setItems(nextItems);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.searchFail);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadAllMembers() {
+    setError(null);
+    setMessage(null);
+    setLoading(true);
+    try {
+      setQ("");
+      const nextItems = await fetchMembers("");
+      setItems(nextItems);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.searchFail);
     } finally {
       setLoading(false);
     }
@@ -308,6 +332,9 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.findPlaceholder} className="input" />
               <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={loading}>
                 {loading ? t.searching : t.findBtn}
+              </button>
+              <button type="button" className="fdPillBtn" onClick={() => void loadAllMembers()} disabled={loading}>
+                {loading ? t.searching : t.findAllBtn}
               </button>
             </form>
           </div>
