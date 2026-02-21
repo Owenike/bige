@@ -1379,6 +1379,9 @@ body.fdPageDark .footerInner{
   min-height: 0;
   overflow: hidden;
 }
+.fdModalLayout.fdModalLayoutSingle{
+  grid-template-columns: minmax(0, 1fr);
+}
 .fdModalList{
   display: grid;
   grid-template-columns: 1fr;
@@ -1452,6 +1455,9 @@ body.fdPageDark .footerInner{
 .fdModal.fdModalCapability .fdModalLayout{
   grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
   gap: 14px;
+}
+.fdModal.fdModalCapability .fdModalLayout.fdModalLayoutSingle{
+  grid-template-columns: minmax(0, 1fr);
 }
 .fdModal.fdModalCapability .fdModalList{
   gap: 12px;

@@ -3840,7 +3840,7 @@ export default function FrontdeskPortalPage() {
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
-              aria-label={modalType === "handover" ? t.handoverModalTitle : t.capabilityModalTitle}
+              aria-label={modalType === "handover" ? t.handoverModalTitle : modalType === "capability" ? (selectedCapability?.title || t.capabilityModalTitle) : t.capabilityModalTitle}
             >
               <div className="fdModalHead">
                 <h2 className="sectionTitle" style={{ margin: 0 }}>
@@ -3850,7 +3850,7 @@ export default function FrontdeskPortalPage() {
                       ? t.memberModalTitle
                       : modalType === "handover"
                         ? t.handoverModalTitle
-                        : t.capabilityModalTitle}
+                        : (selectedCapability?.title || t.capabilityModalTitle)}
                 </h2>
                 {modalType === "handover" ? (
                   <button
@@ -3870,26 +3870,7 @@ export default function FrontdeskPortalPage() {
                 )}
               </div>
               {modalType === "capability" ? (
-                <div className="fdModalLayout" style={{ marginTop: 10 }}>
-                  <div className="fdModalList">
-                    {capabilityCards.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={`fdGlassSubPanel fdCapabilityCard fdModalCapabilityItem ${selectedCapability?.id === item.id ? "fdCapabilityCardActive" : ""}`}
-                        onClick={() => setSelectedCapabilityId(item.id)}
-                      >
-                        <div className="fdActionHead">
-                          <span className="kvLabel">{item.area}</span>
-                          <span className="fdChip" style={statusStyle(item.status)}>
-                            {statusLabel(item.status)}
-                          </span>
-                        </div>
-                        <h3 className="fdActionTitle">{item.title}</h3>
-                        <p className="sub fdCapabilityDesc" style={{ marginTop: 8 }}>{item.desc}</p>
-                      </button>
-                    ))}
-                  </div>
+                <div className="fdModalLayout fdModalLayoutSingle" style={{ marginTop: 10 }}>
                   {selectedCapability ? (
                     <div className="fdGlassSubPanel fdModalDetail">
                       <div className="fdActionHead">
