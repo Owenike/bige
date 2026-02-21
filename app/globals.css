@@ -1558,6 +1558,109 @@ body.fdPageDark .footerInner{
 .fdModal.fdModalCapability .sub{
   color: #526179;
 }
+.fdModal.fdModalLight{
+  border: 1px solid #d2deee;
+  background: linear-gradient(180deg, #f8fbff 0%, #edf3fb 100%);
+  color: #1f2a3d;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, .24),
+    0 10px 28px rgba(15, 23, 42, .12);
+}
+.fdModal.fdModalLight::before{
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.74);
+  background: linear-gradient(180deg, rgba(255,255,255,.56), rgba(255,255,255,0));
+}
+.fdModal.fdModalLight::after{
+  display: none;
+}
+.fdModal.fdModalLight .fdModalHead{
+  border-bottom-color: #d3deed;
+  background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,0));
+}
+.fdModal.fdModalLight .fdGlassPanel,
+.fdModal.fdModalLight .fdGlassSubPanel,
+.fdModal.fdModalLight .card{
+  background: #ffffff;
+  border-color: #d7e2f0;
+  color: #1f2a3d;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 6px 16px rgba(33, 52, 84, .08);
+}
+.fdModal.fdModalLight .fdGlassPanel::after,
+.fdModal.fdModalLight .fdGlassSubPanel::before,
+.fdModal.fdModalLight .fdGlassSubPanel::after{
+  display: none;
+}
+.fdModal.fdModalLight .fdGlassTitle,
+.fdModal.fdModalLight .fdActionTitle{
+  color: #23314a;
+  text-shadow: none;
+}
+.fdModal.fdModalLight .fdGlassText{
+  color: #526179;
+}
+.fdModal.fdModalLight .sub{
+  color: #5a6b86;
+}
+.fdModal.fdModalLight .kvLabel{
+  color: #6b7b94;
+}
+.fdModal.fdModalLight .input{
+  background: #ffffff;
+  border: 1px solid #ccd8e8;
+  color: #1f2a3d;
+}
+.fdModal.fdModalLight .input::placeholder{
+  color: #8797ad;
+}
+.fdModal.fdModalLight .input:focus{
+  border-color: #9fc2ef;
+  box-shadow: 0 0 0 3px rgba(178, 210, 246, .38);
+}
+.fdModal.fdModalLight .fdChip{
+  background: #f3f7ff;
+  border-color: #cfdbea;
+  color: #51607a;
+}
+.fdModal.fdModalLight .fdChipActive{
+  background: #e8f1ff;
+  color: #2e4368;
+  box-shadow: none;
+}
+body.fdPageDark .fdModal.fdModalLight{
+  background: linear-gradient(180deg, #f8fbff 0%, #edf3fb 100%);
+  color: #1f2a3d;
+  border-color: #d2deee;
+}
+body.fdPageDark .fdModal.fdModalLight .fdHandoverSection{
+  background: #fafafa;
+  border-color: #e4e4e7;
+}
+body.fdPageDark .fdModal.fdModalLight .fdHandoverField .input{
+  background: #ffffff;
+  border-color: #d4d4d8;
+  color: #18181b;
+}
+body.fdPageDark .fdModal.fdModalLight .fdHandoverBtn{
+  background: #ffffff;
+  border-color: #d4d4d8;
+  color: #27272a;
+}
+body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
+  background: #14b8a6;
+  border-color: #14b8a6;
+  color: #ffffff;
+}
+body.fdPageDark .fdModal.fdModalLight .fdModalIconBtn{
+  border-color: #e4e4e7;
+  color: #52525b;
+}
+body.fdPageDark .fdModal.fdModalLight .fdModalIconBtn:hover{
+  background: #f4f4f5;
+}
 .fdListStack{
   display: grid;
   grid-template-columns: 1fr;
