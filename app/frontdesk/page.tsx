@@ -3687,7 +3687,7 @@ export default function FrontdeskPortalPage() {
           </article>
 
           <article className="fdGlassPanel fdQuickPanel">
-            <div className="fdChipRow">
+            <div className="fdChipRow fdChipRowTopRight">
               <span className="fdChip fdChipActive">{t.quickServiceTitle}</span>
               <span className="fdChip">{t.capabilityTitle}</span>
             </div>
@@ -3704,7 +3704,7 @@ export default function FrontdeskPortalPage() {
           </article>
 
           <article className="fdGlassPanel fdQuickPanel">
-            <div className="fdChipRow">
+            <div className="fdChipRow fdChipRowTopRight">
               <span className="fdChip fdChipActive">{t.quickShiftTitle}</span>
               <span className="fdChip">{t.statusOpenValue}</span>
             </div>
