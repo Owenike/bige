@@ -377,6 +377,7 @@ export default function FrontdeskPortalPage() {
   const [openingNote, setOpeningNote] = useState("");
   const [openingShift, setOpeningShift] = useState(false);
   const [closingShift, setClosingShift] = useState(false);
+  const [handoverView, setHandoverView] = useState<"close" | "records">("close");
   const [closeCashTotal, setCloseCashTotal] = useState("0");
   const [closeCardTotal, setCloseCardTotal] = useState("0");
   const [closeTransferTotal, setCloseTransferTotal] = useState("0");
@@ -3851,6 +3852,7 @@ export default function FrontdeskPortalPage() {
                 className="fdPillBtn fdPillBtnPrimary"
                 onClick={() => {
                   setModalType("handover");
+                  setHandoverView("close");
                   setCapabilityOpen(true);
                   setHandoverReminderOpen(false);
                 }}
@@ -3906,6 +3908,7 @@ export default function FrontdeskPortalPage() {
                 className="fdPillBtn fdPillBtnGhost"
                 onClick={() => {
                   setModalType("handover");
+                  setHandoverView("close");
                   setCapabilityOpen(true);
                 }}
                 disabled={!shiftOpen}
@@ -3918,6 +3921,7 @@ export default function FrontdeskPortalPage() {
                 className="fdPillBtn fdPillBtnGhost"
                 onClick={() => {
                   setModalType("handover");
+                  setHandoverView("records");
                   setCapabilityOpen(true);
                 }}
               >
@@ -4076,7 +4080,11 @@ export default function FrontdeskPortalPage() {
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
-              aria-label={modalType === "handover" ? t.handoverModalTitle : modalType === "capability" ? (selectedCapability?.title || t.capabilityModalTitle) : t.capabilityModalTitle}
+              aria-label={modalType === "handover"
+                ? (handoverView === "close" ? t.handoverModalTitle : t.handoverRecordsAction)
+                : modalType === "capability"
+                  ? (selectedCapability?.title || t.capabilityModalTitle)
+                  : t.capabilityModalTitle}
             >
               <div className="fdModalHead">
                 <h2 className="sectionTitle" style={{ margin: 0 }}>
@@ -4085,7 +4093,7 @@ export default function FrontdeskPortalPage() {
                     : modalType === "member"
                       ? t.memberModalTitle
                       : modalType === "handover"
-                        ? t.handoverModalTitle
+                        ? (handoverView === "close" ? t.handoverModalTitle : t.handoverRecordsAction)
                         : (selectedCapability?.title || t.capabilityModalTitle)}
                 </h2>
                 {modalType === "handover" ? (
@@ -5802,150 +5810,169 @@ export default function FrontdeskPortalPage() {
                   ) : null}
                 </div>
               ) : modalType === "handover" ? (
-                <form onSubmit={handleCloseShift} className="fdHandoverForm">
-                  <div className="fdHandoverSection">
-                    <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 10 }}>{t.handoverHint}</p>
-                    {!activeShift?.id ? (
-                      <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 10 }}>{t.openShiftFirst}</p>
-                    ) : null}
-                    {activeShift?.opened_at ? (
-                      <div className="fdChip" style={{ marginBottom: 12, display: "inline-flex" }}>
-                        {t.openedAt}: {fmtDateTime(activeShift.opened_at)}
+                handoverView === "close" ? (
+                  <form onSubmit={handleCloseShift} className="fdHandoverForm">
+                    <div className="fdHandoverSection">
+                      <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 10 }}>{t.handoverHint}</p>
+                      {!activeShift?.id ? (
+                        <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 10 }}>{t.openShiftFirst}</p>
+                      ) : null}
+                      {activeShift?.opened_at ? (
+                        <div className="fdChip" style={{ marginBottom: 12, display: "inline-flex" }}>
+                          {t.openedAt}: {fmtDateTime(activeShift.opened_at)}
+                        </div>
+                      ) : null}
+                      <div className="fdHandoverGrid">
+                        <label className="fdHandoverField">
+                          <span className="kvLabel">{t.closeCashTotal}</span>
+                          <div className="fdAmountInputWrap">
+                            <span className="fdAmountPrefix">NT$</span>
+                            <input
+                              className="input fdAmountInput"
+                              inputMode="decimal"
+                              value={closeCashTotal}
+                              onChange={(e) => setCloseCashTotal(e.target.value)}
+                              disabled={closingShift || !activeShift?.id}
+                            />
+                          </div>
+                        </label>
+                        <label className="fdHandoverField">
+                          <span className="kvLabel">{t.closeCardTotal}</span>
+                          <div className="fdAmountInputWrap">
+                            <span className="fdAmountPrefix">NT$</span>
+                            <input
+                              className="input fdAmountInput"
+                              inputMode="decimal"
+                              value={closeCardTotal}
+                              onChange={(e) => setCloseCardTotal(e.target.value)}
+                              disabled={closingShift || !activeShift?.id}
+                            />
+                          </div>
+                        </label>
+                        <label className="fdHandoverField">
+                          <span className="kvLabel">{t.closeTransferTotal}</span>
+                          <div className="fdAmountInputWrap">
+                            <span className="fdAmountPrefix">NT$</span>
+                            <input
+                              className="input fdAmountInput"
+                              inputMode="decimal"
+                              value={closeTransferTotal}
+                              onChange={(e) => setCloseTransferTotal(e.target.value)}
+                              disabled={closingShift || !activeShift?.id}
+                            />
+                          </div>
+                        </label>
                       </div>
-                    ) : null}
-                    <div className="fdHandoverGrid">
-                      <label className="fdHandoverField">
-                        <span className="kvLabel">{t.closeCashTotal}</span>
-                        <div className="fdAmountInputWrap">
-                          <span className="fdAmountPrefix">NT$</span>
-                          <input
-                            className="input fdAmountInput"
-                            inputMode="decimal"
-                            value={closeCashTotal}
-                            onChange={(e) => setCloseCashTotal(e.target.value)}
-                            disabled={closingShift || !activeShift?.id}
-                          />
-                        </div>
-                      </label>
-                      <label className="fdHandoverField">
-                        <span className="kvLabel">{t.closeCardTotal}</span>
-                        <div className="fdAmountInputWrap">
-                          <span className="fdAmountPrefix">NT$</span>
-                          <input
-                            className="input fdAmountInput"
-                            inputMode="decimal"
-                            value={closeCardTotal}
-                            onChange={(e) => setCloseCardTotal(e.target.value)}
-                            disabled={closingShift || !activeShift?.id}
-                          />
-                        </div>
-                      </label>
-                      <label className="fdHandoverField">
-                        <span className="kvLabel">{t.closeTransferTotal}</span>
-                        <div className="fdAmountInputWrap">
-                          <span className="fdAmountPrefix">NT$</span>
-                          <input
-                            className="input fdAmountInput"
-                            inputMode="decimal"
-                            value={closeTransferTotal}
-                            onChange={(e) => setCloseTransferTotal(e.target.value)}
-                            disabled={closingShift || !activeShift?.id}
-                          />
-                        </div>
-                      </label>
                     </div>
-                  </div>
-                  <div className="fdHandoverSection">
-                    <label className="fdHandoverField fdHandoverNote">
-                      <span className="kvLabel">{t.closeNote}</span>
-                      <textarea
-                        className="input fdHandoverTextarea"
-                        rows={3}
-                        value={closeNote}
-                        onChange={(e) => setCloseNote(e.target.value)}
-                        disabled={closingShift || !activeShift?.id}
-                        placeholder={t.openingNotePlaceholder}
-                      />
-                    </label>
-                  </div>
-                  <div className="fdHandoverSection">
-                    <h3 className="sectionTitle" style={{ marginTop: 0, marginBottom: 8, fontSize: 16 }}>{t.handoverSettingTitle}</h3>
-                    <div className="fdHandoverGrid">
-                      <label className="fdHandoverField">
-                        <span className="kvLabel">{t.handoverDeadlineLabel}</span>
-                        <input
-                          className="input"
-                          type="time"
-                          value={handoverDeadlineTime}
-                          onChange={(event) => {
-                            const next = event.target.value;
-                            if (!next || parseTimeValue(next)) {
-                              setHandoverDeadlineTime(next || "22:00");
-                            }
-                          }}
+                    <div className="fdHandoverSection">
+                      <label className="fdHandoverField fdHandoverNote">
+                        <span className="kvLabel">{t.closeNote}</span>
+                        <textarea
+                          className="input fdHandoverTextarea"
+                          rows={3}
+                          value={closeNote}
+                          onChange={(e) => setCloseNote(e.target.value)}
+                          disabled={closingShift || !activeShift?.id}
+                          placeholder={t.openingNotePlaceholder}
                         />
                       </label>
-                      <label className="fdHandoverField">
-                        <span className="kvLabel">{t.handoverReminderToggle}</span>
-                        <div className="fdHandoverToggle">
-                          <input
-                            type="checkbox"
-                            checked={handoverReminderEnabled}
-                            onChange={(event) => setHandoverReminderEnabled(event.target.checked)}
-                          />
-                          <span>{handoverReminderEnabled ? t.handoverReminderOn : t.handoverReminderOff}</span>
-                        </div>
-                      </label>
                     </div>
-                    <p className="fdGlassText" style={{ marginTop: 8, marginBottom: 0 }}>
-                      {handoverReminderEnabled
-                        ? `${t.handoverReminderHint} (${t.handoverDeadlineLabel}: ${handoverDeadlineText})`
-                        : t.handoverReminderDisabledHint}
-                    </p>
-                  </div>
-                  <div className="fdHandoverSection">
-                    <h3 className="sectionTitle" style={{ marginTop: 0, marginBottom: 8, fontSize: 16 }}>
-                      {t.handoverRecordTitle}
-                    </h3>
-                    {closedShiftHistory.length === 0 ? (
-                      <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 0 }}>{t.handoverRecordEmpty}</p>
-                    ) : (
-                      <div className="fdListStack" style={{ maxHeight: 220, overflow: "auto" }}>
-                        {closedShiftHistory.slice(0, 10).map((item) => (
-                          <div key={item.id} className="fdGlassSubPanel" style={{ padding: 10 }}>
-                            <p className="sub" style={{ marginTop: 0 }}>
-                              {t.handoverRecordAt}: {item.closed_at ? fmtDateTime(item.closed_at) : "-"}
-                            </p>
-                            <p className="sub" style={{ marginTop: 2 }}>
-                              {t.openedAt}: {item.opened_at ? fmtDateTime(item.opened_at) : "-"}
-                            </p>
-                            <div className="fdHandoverHistoryTotals">
-                              <span>{t.handoverRecordCash}: NT${Number(item.cash_total || 0)}</span>
-                              <span>{t.handoverRecordCard}: NT${Number(item.card_total || 0)}</span>
-                              <span>{t.handoverRecordTransfer}: NT${Number(item.transfer_total || 0)}</span>
-                            </div>
-                            <p className="sub" style={{ marginTop: 6, marginBottom: 0 }}>
-                              {t.handoverRecordNote}: {item.note?.trim() || t.handoverRecordNoNote}
-                            </p>
+                    <div className="fdHandoverFooter">
+                      <button type="button" className="fdHandoverBtn fdHandoverBtnGhost" onClick={() => setCapabilityOpen(false)}>
+                        {t.cancel}
+                      </button>
+                      <button
+                        type="submit"
+                        className="fdHandoverBtn fdHandoverBtnPrimary"
+                        disabled={closingShift || !activeShift?.id}
+                        style={closingShift || !activeShift?.id ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+                      >
+                        {closingShift ? t.closingShiftAction : t.closeShiftAction}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="fdHandoverForm">
+                    <div className="fdHandoverSection">
+                      <h3 className="sectionTitle" style={{ marginTop: 0, marginBottom: 8, fontSize: 16 }}>{t.handoverSettingTitle}</h3>
+                      <div className="fdHandoverGrid">
+                        <label className="fdHandoverField">
+                          <span className="kvLabel">{t.handoverDeadlineLabel}</span>
+                          <input
+                            className="input"
+                            type="time"
+                            value={handoverDeadlineTime}
+                            onChange={(event) => {
+                              const next = event.target.value;
+                              if (!next || parseTimeValue(next)) {
+                                setHandoverDeadlineTime(next || "22:00");
+                              }
+                            }}
+                          />
+                        </label>
+                        <label className="fdHandoverField">
+                          <span className="kvLabel">{t.handoverReminderToggle}</span>
+                          <div className="fdHandoverToggle">
+                            <input
+                              type="checkbox"
+                              checked={handoverReminderEnabled}
+                              onChange={(event) => setHandoverReminderEnabled(event.target.checked)}
+                            />
+                            <span>{handoverReminderEnabled ? t.handoverReminderOn : t.handoverReminderOff}</span>
                           </div>
-                        ))}
+                        </label>
                       </div>
-                    )}
+                      <p className="fdGlassText" style={{ marginTop: 8, marginBottom: 0 }}>
+                        {handoverReminderEnabled
+                          ? `${t.handoverReminderHint} (${t.handoverDeadlineLabel}: ${handoverDeadlineText})`
+                          : t.handoverReminderDisabledHint}
+                      </p>
+                    </div>
+                    <div className="fdHandoverSection">
+                      <h3 className="sectionTitle" style={{ marginTop: 0, marginBottom: 8, fontSize: 16 }}>
+                        {t.handoverRecordTitle}
+                      </h3>
+                      {closedShiftHistory.length === 0 ? (
+                        <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 0 }}>{t.handoverRecordEmpty}</p>
+                      ) : (
+                        <div className="fdListStack" style={{ maxHeight: 220, overflow: "auto" }}>
+                          {closedShiftHistory.slice(0, 10).map((item) => (
+                            <div key={item.id} className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <p className="sub" style={{ marginTop: 0 }}>
+                                {t.handoverRecordAt}: {item.closed_at ? fmtDateTime(item.closed_at) : "-"}
+                              </p>
+                              <p className="sub" style={{ marginTop: 2 }}>
+                                {t.openedAt}: {item.opened_at ? fmtDateTime(item.opened_at) : "-"}
+                              </p>
+                              <div className="fdHandoverHistoryTotals">
+                                <span>{t.handoverRecordCash}: NT${Number(item.cash_total || 0)}</span>
+                                <span>{t.handoverRecordCard}: NT${Number(item.card_total || 0)}</span>
+                                <span>{t.handoverRecordTransfer}: NT${Number(item.transfer_total || 0)}</span>
+                              </div>
+                              <p className="sub" style={{ marginTop: 6, marginBottom: 0 }}>
+                                {t.handoverRecordNote}: {item.note?.trim() || t.handoverRecordNoNote}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="fdHandoverFooter">
+                      <button type="button" className="fdHandoverBtn fdHandoverBtnGhost" onClick={() => setCapabilityOpen(false)}>
+                        {t.cancel}
+                      </button>
+                      <button
+                        type="button"
+                        className="fdHandoverBtn fdHandoverBtnPrimary"
+                        onClick={() => setHandoverView("close")}
+                        disabled={!activeShift?.id}
+                        style={!activeShift?.id ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+                      >
+                        {t.handoverNowAction}
+                      </button>
+                    </div>
                   </div>
-                  <div className="fdHandoverFooter">
-                    <button type="button" className="fdHandoverBtn fdHandoverBtnGhost" onClick={() => setCapabilityOpen(false)}>
-                      {t.cancel}
-                    </button>
-                    <button
-                      type="submit"
-                      className="fdHandoverBtn fdHandoverBtnPrimary"
-                      disabled={closingShift || !activeShift?.id}
-                      style={closingShift || !activeShift?.id ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
-                    >
-                      {closingShift ? t.closingShiftAction : t.closeShiftAction}
-                    </button>
-                  </div>
-                </form>
+                )
               ) : (
                 <div className="fdModalFeatureBody">
                   {modalType === "entry" ? <FrontdeskCheckinView embedded /> : <FrontdeskMemberSearchView embedded />}
