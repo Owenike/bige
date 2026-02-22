@@ -1813,7 +1813,7 @@ body.fdPageDark .footerInner{
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(122, 214, 255, .18), rgba(122, 214, 255, 0) 34%, rgba(102, 236, 206, .14) 68%, rgba(102, 236, 206, 0) 100%);
+    linear-gradient(90deg, rgba(122, 214, 255, .08), rgba(122, 214, 255, 0) 36%, rgba(102, 236, 206, .06) 72%, rgba(102, 236, 206, 0) 100%);
 }
 .fdModal.fdModalHandover.fdModalLight::before,
 .fdModal.fdModalHandover.fdModalLight::after{
@@ -1831,27 +1831,27 @@ body.fdPageDark .footerInner{
   mix-blend-mode: multiply;
 }
 .fdModal.fdModalHandover.fdModalLight .fdModalHead{
-  border-bottom: 1px solid rgba(188, 209, 233, .72);
+  border-bottom: 1px solid rgba(196, 216, 240, .82);
   background:
-    linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.42)),
-    linear-gradient(90deg, rgba(160, 224, 255, .48), rgba(146, 246, 221, .30) 46%, rgba(174, 196, 255, .38));
+    linear-gradient(180deg, rgba(255,255,255,.95) 0%, rgba(246, 251, 255, .82) 58%, rgba(241, 248, 255, .72) 100%);
 }
 .fdModal.fdModalHandover.fdModalLight .sectionTitle{
-  color: #1d3352;
+  color: #253d60;
   font-weight: 780;
   letter-spacing: .015em;
-  text-shadow: 0 1px 0 rgba(255,255,255,.72);
+  text-shadow: none;
 }
 .fdModal.fdModalHandover.fdModalLight .sectionTitle,
 .fdModal.fdModalHandover.fdModalLight .fdGlassText,
 .fdModal.fdModalHandover.fdModalLight .sub{
-  color: #2c405f;
+  color: #375174;
 }
 .fdModal.fdModalHandover.fdModalLight .fdGlassText{
   line-height: 1.68;
+  font-weight: 520;
 }
 .fdModal.fdModalHandover.fdModalLight .kvLabel{
-  color: #6983a9;
+  color: #58759d;
   letter-spacing: .04em;
 }
 .fdModal.fdModalHandover.fdModalLight .fdHandoverSection{
