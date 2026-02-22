@@ -20,6 +20,15 @@ interface CustomFieldRow {
   value: string;
 }
 
+interface AllMemberEditForm {
+  fullName: string;
+  phone: string;
+  email: string;
+  birthDate: string;
+  status: string;
+  customRows: CustomFieldRow[];
+}
+
 function normalizePhone(input: string) {
   return input.replace(/\D/g, "");
 }
@@ -33,6 +42,35 @@ function toCustomFields(rows: CustomFieldRow[]) {
     output[key] = value;
   }
   return output;
+}
+
+function toCustomRows(fields?: Record<string, string>) {
+  const entries = Object.entries(fields || {})
+    .map(([key, value]) => ({ key, value }))
+    .filter((row) => row.key.trim() && row.value.trim());
+  return entries.length > 0 ? entries : [{ key: "", value: "" }];
+}
+
+function buildAllMemberEditForm(member: MemberItem): AllMemberEditForm {
+  return {
+    fullName: member.full_name || "",
+    phone: member.phone || "",
+    email: member.email || "",
+    birthDate: member.birth_date || "",
+    status: member.status || "active",
+    customRows: toCustomRows(member.custom_fields),
+  };
+}
+
+function cloneAllMemberEditForm(form: AllMemberEditForm): AllMemberEditForm {
+  return {
+    fullName: form.fullName,
+    phone: form.phone,
+    email: form.email,
+    birthDate: form.birthDate,
+    status: form.status,
+    customRows: form.customRows.map((row) => ({ ...row })),
+  };
 }
 
 export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boolean }) {
@@ -59,6 +97,10 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   const [allMembersError, setAllMembersError] = useState<string | null>(null);
   const [allMembers, setAllMembers] = useState<MemberItem[]>([]);
   const [selectedAllMemberId, setSelectedAllMemberId] = useState<string | null>(null);
+  const [allMemberForm, setAllMemberForm] = useState<AllMemberEditForm | null>(null);
+  const [allMemberBaseline, setAllMemberBaseline] = useState<AllMemberEditForm | null>(null);
+  const [allMemberSaving, setAllMemberSaving] = useState(false);
+  const [allMemberMessage, setAllMemberMessage] = useState<string | null>(null);
   const [portalReady, setPortalReady] = useState(false);
   const [creating, setCreating] = useState(false);
   const [recentCreatedId, setRecentCreatedId] = useState<string | null>(null);
@@ -127,6 +169,18 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             phoneLabel: "電話",
             emailLabel: "Email",
             birthDateLabel: "生日",
+            editMemberTitle: "編輯會員資料",
+            saveMemberBtn: "儲存修改",
+            savingMemberBtn: "儲存中...",
+            resetMemberBtn: "還原",
+            saveMemberSuccess: "會員資料已更新",
+            saveMemberFail: "儲存會員資料失敗",
+            nameRequired: "姓名為必填",
+            invalidEmail: "Email 格式錯誤",
+            invalidBirthDate: "生日格式錯誤",
+            statusActive: "啟用",
+            statusInactive: "停用",
+            statusSuspended: "停權",
             close: "關閉",
           }
         : {
@@ -185,6 +239,18 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             phoneLabel: "Phone",
             emailLabel: "Email",
             birthDateLabel: "Birth Date",
+            editMemberTitle: "Edit Member",
+            saveMemberBtn: "Save",
+            savingMemberBtn: "Saving...",
+            resetMemberBtn: "Reset",
+            saveMemberSuccess: "Member updated",
+            saveMemberFail: "Failed to update member",
+            nameRequired: "Full name is required",
+            invalidEmail: "Invalid email format",
+            invalidBirthDate: "Invalid birth date format",
+            statusActive: "Active",
+            statusInactive: "Inactive",
+            statusSuspended: "Suspended",
             close: "Close",
           },
     [zh],
@@ -300,6 +366,10 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     () => allMembers.find((item) => item.id === selectedAllMemberId) || null,
     [allMembers, selectedAllMemberId],
   );
+  const allMemberDirty = useMemo(() => {
+    if (!allMemberForm || !allMemberBaseline) return false;
+    return JSON.stringify(allMemberForm) !== JSON.stringify(allMemberBaseline);
+  }, [allMemberBaseline, allMemberForm]);
   const searchKeyword = q.trim();
   const searchDisabled = loading || searchKeyword.length === 0;
 
@@ -313,6 +383,88 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
       }
     }
   }, [allMembersOpen, selectedAllMemberId]);
+
+  useEffect(() => {
+    if (!allMembersOpen) return;
+    if (!selectedAllMember) {
+      setAllMemberForm(null);
+      setAllMemberBaseline(null);
+      setAllMemberMessage(null);
+      return;
+    }
+    const next = buildAllMemberEditForm(selectedAllMember);
+    setAllMemberForm(cloneAllMemberEditForm(next));
+    setAllMemberBaseline(cloneAllMemberEditForm(next));
+    setAllMemberMessage(null);
+    setAllMembersError(null);
+  }, [allMembersOpen, selectedAllMember]);
+
+  async function saveAllMember(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedAllMember || !allMemberForm) return;
+
+    const fullName = allMemberForm.fullName.trim();
+    const normalizedPhone = normalizePhone(allMemberForm.phone);
+    const emailValue = allMemberForm.email.trim().toLowerCase();
+    const birthDateValue = allMemberForm.birthDate.trim();
+    const statusValue = allMemberForm.status.trim() || "active";
+
+    if (!fullName) {
+      setAllMembersError(t.nameRequired);
+      setAllMemberMessage(null);
+      return;
+    }
+    if (normalizedPhone && normalizedPhone.length < 8) {
+      setAllMembersError(t.invalidPhone);
+      setAllMemberMessage(null);
+      return;
+    }
+    if (emailValue && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
+      setAllMembersError(t.invalidEmail);
+      setAllMemberMessage(null);
+      return;
+    }
+    if (birthDateValue && !/^\d{4}-\d{2}-\d{2}$/.test(birthDateValue)) {
+      setAllMembersError(t.invalidBirthDate);
+      setAllMemberMessage(null);
+      return;
+    }
+
+    setAllMemberSaving(true);
+    setAllMembersError(null);
+    setAllMemberMessage(null);
+    try {
+      const res = await fetch(`/api/members/${encodeURIComponent(selectedAllMember.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName,
+          phone: normalizedPhone || null,
+          email: emailValue || null,
+          birthDate: birthDateValue || null,
+          status: statusValue,
+          customFields: toCustomFields(allMemberForm.customRows),
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || t.saveMemberFail);
+      }
+      const nextMember = (payload?.member || null) as MemberItem | null;
+      if (!nextMember) throw new Error(t.saveMemberFail);
+
+      setAllMembers((prev) => prev.map((item) => (item.id === nextMember.id ? { ...item, ...nextMember } : item)));
+      setItems((prev) => prev.map((item) => (item.id === nextMember.id ? { ...item, ...nextMember } : item)));
+      const nextForm = buildAllMemberEditForm(nextMember);
+      setAllMemberForm(cloneAllMemberEditForm(nextForm));
+      setAllMemberBaseline(cloneAllMemberEditForm(nextForm));
+      setAllMemberMessage(t.saveMemberSuccess);
+    } catch (err) {
+      setAllMembersError(err instanceof Error ? err.message : t.saveMemberFail);
+    } finally {
+      setAllMemberSaving(false);
+    }
+  }
 
   async function createMember(event: FormEvent) {
     event.preventDefault();
@@ -616,10 +768,33 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                   </aside>
 
                   <section className="fdAllMembersDetail">
-                    {selectedAllMember ? (
-                      <>
-                        <h3 className="sectionTitle" style={{ marginTop: 0 }}>{selectedAllMember.full_name}</h3>
-                        <div className="fdTwoCol" style={{ marginTop: 10, gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                    {selectedAllMember && allMemberForm ? (
+                      <form onSubmit={saveAllMember} className="field" style={{ gap: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                          <h3 className="sectionTitle" style={{ marginTop: 0, marginBottom: 0 }}>{t.editMemberTitle}</h3>
+                          <div className="actions" style={{ marginTop: 0 }}>
+                            <button
+                              type="button"
+                              className="fdPillBtn"
+                              onClick={() => {
+                                if (!allMemberBaseline) return;
+                                setAllMemberForm(cloneAllMemberEditForm(allMemberBaseline));
+                                setAllMemberMessage(null);
+                                setAllMembersError(null);
+                              }}
+                              disabled={allMemberSaving || !allMemberDirty}
+                            >
+                              {t.resetMemberBtn}
+                            </button>
+                            <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={allMemberSaving || !allMemberDirty}>
+                              {allMemberSaving ? t.savingMemberBtn : t.saveMemberBtn}
+                            </button>
+                          </div>
+                        </div>
+
+                        {allMemberMessage ? <p className="sub" style={{ marginTop: 0, color: "var(--brand)" }}>{allMemberMessage}</p> : null}
+
+                        <div className="fdTwoCol" style={{ marginTop: 2, gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                           <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
                             <div className="kvLabel">{t.memberCode}</div>
                             <div className="kvValue">{selectedAllMember.member_code?.trim() || "-"}</div>
@@ -628,35 +803,135 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                             <div className="kvLabel">{t.memberId}</div>
                             <div className="kvValue" style={{ fontSize: 14, wordBreak: "break-all" }}>{selectedAllMember.id}</div>
                           </div>
-                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
-                            <div className="kvLabel">{t.phoneLabel}</div>
-                            <div className="kvValue">{selectedAllMember.phone || "-"}</div>
-                          </div>
-                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
-                            <div className="kvLabel">{t.emailLabel}</div>
-                            <div className="kvValue">{selectedAllMember.email || "-"}</div>
-                          </div>
-                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
-                            <div className="kvLabel">{t.birthDateLabel}</div>
-                            <div className="kvValue">{selectedAllMember.birth_date || "-"}</div>
-                          </div>
-                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
-                            <div className="kvLabel">{t.status}</div>
-                            <div className="kvValue">{selectedAllMember.status || t.active}</div>
-                          </div>
+                          <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
+                            <span className="kvLabel">{t.createName}</span>
+                            <input
+                              className="input"
+                              value={allMemberForm.fullName}
+                              onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, fullName: event.target.value } : prev))}
+                              disabled={allMemberSaving}
+                              required
+                            />
+                          </label>
+                          <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
+                            <span className="kvLabel">{t.phoneLabel}</span>
+                            <input
+                              className="input"
+                              value={allMemberForm.phone}
+                              onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, phone: event.target.value } : prev))}
+                              disabled={allMemberSaving}
+                              placeholder={t.createPhone}
+                            />
+                          </label>
+                          <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
+                            <span className="kvLabel">{t.emailLabel}</span>
+                            <input
+                              className="input"
+                              value={allMemberForm.email}
+                              onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, email: event.target.value } : prev))}
+                              disabled={allMemberSaving}
+                              placeholder={t.createEmail}
+                            />
+                          </label>
+                          <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
+                            <span className="kvLabel">{t.birthDateLabel}</span>
+                            <input
+                              className="input"
+                              type="date"
+                              value={allMemberForm.birthDate}
+                              onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, birthDate: event.target.value } : prev))}
+                              disabled={allMemberSaving}
+                            />
+                          </label>
+                          <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
+                            <span className="kvLabel">{t.status}</span>
+                            <select
+                              className="input"
+                              value={allMemberForm.status}
+                              onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, status: event.target.value } : prev))}
+                              disabled={allMemberSaving}
+                            >
+                              <option value="active">{t.statusActive}</option>
+                              <option value="inactive">{t.statusInactive}</option>
+                              <option value="suspended">{t.statusSuspended}</option>
+                            </select>
+                          </label>
                         </div>
 
-                        {selectedAllMember.custom_fields && Object.keys(selectedAllMember.custom_fields).length > 0 ? (
-                          <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10, background: "rgba(255,255,255,.96)" }}>
-                            <div className="kvLabel">{t.customInfo}</div>
-                            <div className="actions" style={{ marginTop: 6 }}>
-                              {Object.entries(selectedAllMember.custom_fields).map(([key, value]) => (
-                                <span key={`${selectedAllMember.id}-${key}`} className="fdChip">{key}: {value}</span>
-                              ))}
-                            </div>
+                        <div className="fdGlassSubPanel" style={{ marginTop: 6, padding: 10, background: "rgba(255,255,255,.96)" }}>
+                          <div className="kvLabel">{t.customInfo}</div>
+                          <div className="field" style={{ marginTop: 8 }}>
+                            {allMemberForm.customRows.map((row, idx) => (
+                              <div key={`${idx}-${row.key}`} style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr auto" }}>
+                                <input
+                                  className="input"
+                                  value={row.key}
+                                  placeholder={t.customKey}
+                                  disabled={allMemberSaving}
+                                  onChange={(event) =>
+                                    setAllMemberForm((prev) => {
+                                      if (!prev) return prev;
+                                      return {
+                                        ...prev,
+                                        customRows: prev.customRows.map((item, rowIndex) =>
+                                          rowIndex === idx ? { ...item, key: event.target.value } : item,
+                                        ),
+                                      };
+                                    })
+                                  }
+                                />
+                                <input
+                                  className="input"
+                                  value={row.value}
+                                  placeholder={t.customValue}
+                                  disabled={allMemberSaving}
+                                  onChange={(event) =>
+                                    setAllMemberForm((prev) => {
+                                      if (!prev) return prev;
+                                      return {
+                                        ...prev,
+                                        customRows: prev.customRows.map((item, rowIndex) =>
+                                          rowIndex === idx ? { ...item, value: event.target.value } : item,
+                                        ),
+                                      };
+                                    })
+                                  }
+                                />
+                                <button
+                                  type="button"
+                                  className="fdPillBtn"
+                                  disabled={allMemberSaving}
+                                  onClick={() =>
+                                    setAllMemberForm((prev) => {
+                                      if (!prev) return prev;
+                                      if (prev.customRows.length <= 1) return prev;
+                                      return {
+                                        ...prev,
+                                        customRows: prev.customRows.filter((_, rowIndex) => rowIndex !== idx),
+                                      };
+                                    })
+                                  }
+                                >
+                                  {t.removeField}
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              className="fdPillBtn"
+                              disabled={allMemberSaving}
+                              onClick={() =>
+                                setAllMemberForm((prev) => {
+                                  if (!prev) return prev;
+                                  return { ...prev, customRows: [...prev.customRows, { key: "", value: "" }] };
+                                })
+                              }
+                            >
+                              {t.addField}
+                            </button>
                           </div>
-                        ) : null}
-                      </>
+                        </div>
+                      </form>
                     ) : (
                       <p className="sub">{t.allMembersEmpty}</p>
                     )}
