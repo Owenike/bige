@@ -755,7 +755,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.createName} className="input" required />
               <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.createPhone} className="input" required />
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.createEmail} className="input" />
-              <div style={{ position: "relative" }}>
+              <div className="fdBirthDateField">
                 <input
                   id="fd-member-birth-date"
                   type="date"
@@ -764,20 +764,9 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                   className="input"
                   aria-label={t.createBirthDate}
                   max={new Date().toISOString().slice(0, 10)}
-                  style={{ paddingRight: 90 }}
+                  style={{ paddingRight: 116 }}
                 />
-                <span
-                  className="kvLabel"
-                  style={{
-                    position: "absolute",
-                    right: 48,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    pointerEvents: "none",
-                    fontSize: 12,
-                    letterSpacing: ".04em",
-                  }}
-                >
+                <span className="kvLabel fdBirthDateTag">
                   {t.createBirthDateTag}
                 </span>
               </div>

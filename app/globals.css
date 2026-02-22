@@ -390,6 +390,18 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   border-color: rgba(137,188,236,.9);
   box-shadow: 0 0 0 4px rgba(186,221,255,.5);
 }
+.fdBirthDateField{
+  position: relative;
+}
+.fdBirthDateTag{
+  position: absolute;
+  right: 44px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 2;
+  letter-spacing: .04em;
+}
 .error{
   color: #9b1c1c;
   background: rgba(155,28,28,.06);
