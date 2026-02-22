@@ -141,6 +141,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             createPhone: "電話",
             createEmail: "Email",
             createBirthDate: "生日",
+            createBirthDateTag: "生日",
             createGender: "性別",
             emergencyName: "緊急聯絡人",
             emergencyPhone: "緊急聯絡電話",
@@ -218,6 +219,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             createPhone: "Phone",
             createEmail: "Email",
             createBirthDate: "Birth Date",
+            createBirthDateTag: "DOB",
             createGender: "Gender",
             emergencyName: "Emergency Contact",
             emergencyPhone: "Emergency Phone",
@@ -753,8 +755,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.createName} className="input" required />
               <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.createPhone} className="input" required />
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.createEmail} className="input" />
-              <div style={{ display: "grid", gap: 6 }}>
-                <label className="kvLabel" htmlFor="fd-member-birth-date">{t.createBirthDate}</label>
+              <div style={{ position: "relative" }}>
                 <input
                   id="fd-member-birth-date"
                   type="date"
@@ -763,7 +764,22 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                   className="input"
                   aria-label={t.createBirthDate}
                   max={new Date().toISOString().slice(0, 10)}
+                  style={{ paddingRight: 90 }}
                 />
+                <span
+                  className="kvLabel"
+                  style={{
+                    position: "absolute",
+                    right: 48,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    pointerEvents: "none",
+                    fontSize: 12,
+                    letterSpacing: ".04em",
+                  }}
+                >
+                  {t.createBirthDateTag}
+                </span>
               </div>
               <input value={gender} onChange={(e) => setGender(e.target.value)} placeholder={t.createGender} className="input" />
               <input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder={t.emergencyName} className="input" />
