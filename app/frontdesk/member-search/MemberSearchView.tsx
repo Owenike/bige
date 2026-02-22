@@ -753,7 +753,18 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.createName} className="input" required />
               <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.createPhone} className="input" required />
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.createEmail} className="input" />
-              <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="input" />
+              <div style={{ display: "grid", gap: 6 }}>
+                <label className="kvLabel" htmlFor="fd-member-birth-date">{t.createBirthDate}</label>
+                <input
+                  id="fd-member-birth-date"
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  className="input"
+                  aria-label={t.createBirthDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                />
+              </div>
               <input value={gender} onChange={(e) => setGender(e.target.value)} placeholder={t.createGender} className="input" />
               <input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder={t.emergencyName} className="input" />
               <input value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder={t.emergencyPhone} className="input" />
@@ -1046,4 +1057,3 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     </main>
   );
 }
-
