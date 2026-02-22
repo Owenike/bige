@@ -1364,6 +1364,46 @@ body.fdPageDark .footerInner{
   padding-left: 44px;
   text-align: right;
 }
+.fdHandoverToggle{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.fdHandoverToggle input{
+  width: 16px;
+  height: 16px;
+}
+.fdHandoverToggle span{
+  font-size: 13px;
+  color: #536b8f;
+}
+.fdHandoverHistoryTotals{
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: #4f6a90;
+}
+.fdHandoverReminder{
+  margin-top: 8px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(251, 191, 36, .45);
+  background: linear-gradient(140deg, rgba(255, 251, 235, .96), rgba(255, 243, 204, .92));
+  box-shadow: 0 10px 22px rgba(22, 34, 58, .2);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+.fdHandoverReminderText strong{
+  color: #8a4b00;
+}
+.fdHandoverReminderText .sub{
+  color: #8f6312;
+}
 .fdHandoverFooter{
   margin-top: auto;
   border-top: 1px solid #e4e4e7;
@@ -1507,6 +1547,22 @@ body.fdPageDark .footerInner{
   }
   .fdHandoverFooter{
     border-top-color: #27272a;
+  }
+  .fdHandoverToggle span{
+    color: #b3bdd3;
+  }
+  .fdHandoverHistoryTotals{
+    color: #c2cee8;
+  }
+  .fdHandoverReminder{
+    border-color: rgba(251, 191, 36, .4);
+    background: linear-gradient(140deg, rgba(73, 45, 0, .86), rgba(56, 36, 5, .8));
+  }
+  .fdHandoverReminderText strong{
+    color: #facc15;
+  }
+  .fdHandoverReminderText .sub{
+    color: #fde68a;
   }
   .fdHandoverBtn{
     background: #18181b;
@@ -2243,6 +2299,10 @@ body.fdPageDark .fdModal.fdModalLight:not(.fdModalHandover) .fdModalIconBtn:hove
   to { opacity: 1; transform: translateY(0); }
 }
 @media (max-width: 900px){
+  .fdHandoverReminder{
+    flex-direction: column;
+    align-items: flex-start;
+  }
   .fdGlassScene{
     padding: 0;
   }

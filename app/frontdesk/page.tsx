@@ -21,6 +21,11 @@ type ShiftItem = {
   id: string;
   status: string;
   opened_at: string;
+  closed_at?: string | null;
+  cash_total?: number | null;
+  card_total?: number | null;
+  transfer_total?: number | null;
+  note?: string | null;
   opened_by?: string | null;
   opened_by_name?: string | null;
 };
@@ -254,6 +259,16 @@ function parseAmount(value: string) {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
+function parseTimeValue(value: string) {
+  const matched = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  if (!matched) return null;
+  const hour = Number(matched[1]);
+  const minute = Number(matched[2]);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return { hour, minute };
+}
+
 function parseDateTimeInput(value: string) {
   if (!value.trim()) return null;
   const parsed = new Date(value);
@@ -338,7 +353,12 @@ export default function FrontdeskPortalPage() {
   const [error, setError] = useState<string | null>(null);
   const [shiftState, setShiftState] = useState<"open" | "closed" | "unknown">("unknown");
   const [activeShift, setActiveShift] = useState<ShiftItem | null>(null);
+  const [shiftHistory, setShiftHistory] = useState<ShiftItem[]>([]);
   const [shiftActionError, setShiftActionError] = useState<string | null>(null);
+  const [handoverDeadlineTime, setHandoverDeadlineTime] = useState("22:00");
+  const [handoverReminderEnabled, setHandoverReminderEnabled] = useState(true);
+  const [handoverReminderOpen, setHandoverReminderOpen] = useState(false);
+  const [handoverReminderSnoozeUntil, setHandoverReminderSnoozeUntil] = useState<number | null>(null);
   const [pendingItems, setPendingItems] = useState(0);
   const [ordersToday, setOrdersToday] = useState(0);
   const [paidToday, setPaidToday] = useState(0);
@@ -529,6 +549,15 @@ export default function FrontdeskPortalPage() {
   }, []);
 
   useEffect(() => {
+    const savedDeadline = window.localStorage.getItem("frontdesk_handover_deadline_time");
+    if (savedDeadline && parseTimeValue(savedDeadline)) {
+      setHandoverDeadlineTime(savedDeadline);
+    }
+    const savedReminderEnabled = window.localStorage.getItem("frontdesk_handover_reminder_enabled");
+    if (savedReminderEnabled === "0") setHandoverReminderEnabled(false);
+  }, []);
+
+  useEffect(() => {
     document.body.classList.add("fdPageDark");
     return () => {
       document.body.classList.remove("fdPageDark");
@@ -542,6 +571,14 @@ export default function FrontdeskPortalPage() {
   useEffect(() => {
     window.localStorage.setItem("frontdesk_sound_enabled", soundEnabled ? "1" : "0");
   }, [soundEnabled]);
+
+  useEffect(() => {
+    window.localStorage.setItem("frontdesk_handover_deadline_time", handoverDeadlineTime);
+  }, [handoverDeadlineTime]);
+
+  useEffect(() => {
+    window.localStorage.setItem("frontdesk_handover_reminder_enabled", handoverReminderEnabled ? "1" : "0");
+  }, [handoverReminderEnabled]);
 
   const loadDashboard = useCallback(async (silent = false) => {
     if (loadingRef.current) return;
@@ -599,6 +636,7 @@ export default function FrontdeskPortalPage() {
 
       setShiftState(openShift ? "open" : "closed");
       setActiveShift(openShift || null);
+      setShiftHistory(shifts);
       setPendingItems(unpaidOrders.length + upcomingBookings.length);
       setOrdersToday(todayOrders.length);
       setPaidToday(todayPaidOrders.length);
@@ -659,8 +697,28 @@ export default function FrontdeskPortalPage() {
             openedAt: "開班時間",
             shiftOperator: "當班人員",
             handoverAction: "交班",
+            handoverRecordsAction: "交班紀錄",
             handoverModalTitle: "交班結算",
             handoverHint: "請確認三種收款總額，送出後班次將關閉。",
+            handoverSettingTitle: "交班提醒設定",
+            handoverDeadlineLabel: "交班截止時間",
+            handoverReminderToggle: "到時未交班提醒",
+            handoverReminderOn: "已啟用",
+            handoverReminderOff: "已停用",
+            handoverReminderHint: "到達設定時間仍未交班，系統將跳出提醒。",
+            handoverReminderDisabledHint: "提醒已關閉，不會自動跳出通知。",
+            handoverReminderPopupTitle: "交班提醒",
+            handoverReminderPopupText: "已超過交班時間，請儘快完成交班結算。",
+            handoverReminderSnoozeAction: "10 分鐘後提醒",
+            handoverNowAction: "立即交班",
+            handoverRecordTitle: "最近交班紀錄",
+            handoverRecordEmpty: "目前沒有已完成交班紀錄。",
+            handoverRecordAt: "交班時間",
+            handoverRecordCash: "現金",
+            handoverRecordCard: "刷卡",
+            handoverRecordTransfer: "轉帳",
+            handoverRecordNote: "交班事項",
+            handoverRecordNoNote: "無",
             closeCashTotal: "現金總額",
             closeCardTotal: "刷卡總額",
             closeTransferTotal: "轉帳總額",
@@ -1013,8 +1071,28 @@ export default function FrontdeskPortalPage() {
             openedAt: "Opened At",
             shiftOperator: "Operator",
             handoverAction: "Handover",
+            handoverRecordsAction: "Handover Logs",
             handoverModalTitle: "Shift Handover",
             handoverHint: "Confirm all totals before submit. The shift will be closed.",
+            handoverSettingTitle: "Handover Reminder",
+            handoverDeadlineLabel: "Handover Deadline",
+            handoverReminderToggle: "Reminder if not handed over",
+            handoverReminderOn: "Enabled",
+            handoverReminderOff: "Disabled",
+            handoverReminderHint: "When deadline is reached and shift is still open, reminder will pop up.",
+            handoverReminderDisabledHint: "Reminder is disabled.",
+            handoverReminderPopupTitle: "Handover Reminder",
+            handoverReminderPopupText: "Deadline passed. Please complete shift handover.",
+            handoverReminderSnoozeAction: "Remind in 10 min",
+            handoverNowAction: "Handover Now",
+            handoverRecordTitle: "Recent Handover Records",
+            handoverRecordEmpty: "No completed handover records yet.",
+            handoverRecordAt: "Closed At",
+            handoverRecordCash: "Cash",
+            handoverRecordCard: "Card",
+            handoverRecordTransfer: "Transfer",
+            handoverRecordNote: "Handover Notes",
+            handoverRecordNoNote: "None",
             closeCashTotal: "Cash Total",
             closeCardTotal: "Card Total",
             closeTransferTotal: "Transfer Total",
@@ -1502,6 +1580,47 @@ export default function FrontdeskPortalPage() {
   const shiftOpen = shiftState === "open";
   const actionsDisabled = !shiftResolved || !shiftOpen;
   const isFeatureModal = modalType === "entry" || modalType === "member";
+  const closedShiftHistory = useMemo(
+    () => shiftHistory.filter((item) => item.status === "closed"),
+    [shiftHistory],
+  );
+  const handoverDeadlineParsed = useMemo(
+    () => parseTimeValue(handoverDeadlineTime),
+    [handoverDeadlineTime],
+  );
+  const handoverDeadlineText = handoverDeadlineParsed
+    ? `${handoverDeadlineParsed.hour.toString().padStart(2, "0")}:${handoverDeadlineParsed.minute.toString().padStart(2, "0")}`
+    : "--:--";
+  const handoverOverdue = useMemo(() => {
+    if (!shiftOpen || !handoverReminderEnabled || !handoverDeadlineParsed) return false;
+    const now = new Date();
+    const deadline = new Date();
+    deadline.setHours(handoverDeadlineParsed.hour, handoverDeadlineParsed.minute, 0, 0);
+    return now.getTime() >= deadline.getTime();
+  }, [handoverDeadlineParsed, handoverReminderEnabled, shiftOpen]);
+
+  useEffect(() => {
+    if (!shiftOpen || !handoverReminderEnabled || !handoverDeadlineParsed || (capabilityOpen && modalType === "handover")) {
+      setHandoverReminderOpen(false);
+      return;
+    }
+    const checkReminder = () => {
+      const now = Date.now();
+      const deadline = new Date();
+      deadline.setHours(handoverDeadlineParsed.hour, handoverDeadlineParsed.minute, 0, 0);
+      const pastDeadline = now >= deadline.getTime();
+      if (!pastDeadline) return;
+      if (handoverReminderSnoozeUntil && now < handoverReminderSnoozeUntil) return;
+      setHandoverReminderOpen((prev) => {
+        if (!prev && soundEnabled) playNotificationTone();
+        return true;
+      });
+    };
+    checkReminder();
+    const timer = window.setInterval(checkReminder, 30000);
+    return () => window.clearInterval(timer);
+  }, [capabilityOpen, handoverDeadlineParsed, handoverReminderEnabled, handoverReminderSnoozeUntil, modalType, shiftOpen, soundEnabled]);
+
   const lockerActiveItems = useMemo(
     () => lockerRentals.filter((item) => item.status === "active"),
     [lockerRentals],
@@ -1641,6 +1760,8 @@ export default function FrontdeskPortalPage() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || t.openShiftFail);
       await loadDashboard(false);
+      setHandoverReminderOpen(false);
+      setHandoverReminderSnoozeUntil(null);
       setOpeningNote("");
       setCloseNote("");
     } catch (err) {
@@ -1688,6 +1809,8 @@ export default function FrontdeskPortalPage() {
       setCloseCardTotal("0");
       setCloseTransferTotal("0");
       setCloseNote("");
+      setHandoverReminderOpen(false);
+      setHandoverReminderSnoozeUntil(null);
       await loadDashboard(false);
     } catch (err) {
       setShiftActionError(err instanceof Error ? err.message : t.closeShiftFail);
@@ -3704,6 +3827,39 @@ export default function FrontdeskPortalPage() {
       <section className="fdGlassBackdrop fdEnter">
         {error ? <div className="error">{error}</div> : null}
         {shiftActionError ? <div className="error" style={{ marginTop: error ? 10 : 0 }}>{shiftActionError}</div> : null}
+        {handoverReminderOpen ? (
+          <div className="fdHandoverReminder">
+            <div className="fdHandoverReminderText">
+              <strong>{t.handoverReminderPopupTitle}</strong>
+              <p className="sub" style={{ marginTop: 4 }}>
+                {t.handoverReminderPopupText}（{t.handoverDeadlineLabel}: {handoverDeadlineText}）
+              </p>
+            </div>
+            <div className="fdPillActions" style={{ marginTop: 0 }}>
+              <button
+                type="button"
+                className="fdPillBtn fdPillBtnGhost"
+                onClick={() => {
+                  setHandoverReminderSnoozeUntil(Date.now() + 10 * 60 * 1000);
+                  setHandoverReminderOpen(false);
+                }}
+              >
+                {t.handoverReminderSnoozeAction}
+              </button>
+              <button
+                type="button"
+                className="fdPillBtn fdPillBtnPrimary"
+                onClick={() => {
+                  setModalType("handover");
+                  setCapabilityOpen(true);
+                  setHandoverReminderOpen(false);
+                }}
+              >
+                {t.handoverNowAction}
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="fdGlassTop fdGlassTopFixed">
           <article className="fdGlassPanel fdQuickPanel">
@@ -3757,7 +3913,22 @@ export default function FrontdeskPortalPage() {
               >
                 {t.handoverAction}
               </button>
+              <button
+                type="button"
+                className="fdPillBtn fdPillBtnGhost"
+                onClick={() => {
+                  setModalType("handover");
+                  setCapabilityOpen(true);
+                }}
+              >
+                {t.handoverRecordsAction}
+              </button>
             </div>
+            {handoverOverdue ? (
+              <p className="fdGlassText" style={{ marginTop: 6, color: "#fbbf24" }}>
+                {t.handoverReminderPopupText}
+              </p>
+            ) : null}
             {!shiftResolved ? (
               <p className="fdGlassText" style={{ marginTop: 8 }}>{t.loadingState}...</p>
             ) : !shiftOpen ? (
@@ -5634,6 +5805,9 @@ export default function FrontdeskPortalPage() {
                 <form onSubmit={handleCloseShift} className="fdHandoverForm">
                   <div className="fdHandoverSection">
                     <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 10 }}>{t.handoverHint}</p>
+                    {!activeShift?.id ? (
+                      <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 10 }}>{t.openShiftFirst}</p>
+                    ) : null}
                     {activeShift?.opened_at ? (
                       <div className="fdChip" style={{ marginBottom: 12, display: "inline-flex" }}>
                         {t.openedAt}: {fmtDateTime(activeShift.opened_at)}
@@ -5649,7 +5823,7 @@ export default function FrontdeskPortalPage() {
                             inputMode="decimal"
                             value={closeCashTotal}
                             onChange={(e) => setCloseCashTotal(e.target.value)}
-                            disabled={closingShift}
+                            disabled={closingShift || !activeShift?.id}
                           />
                         </div>
                       </label>
@@ -5662,7 +5836,7 @@ export default function FrontdeskPortalPage() {
                             inputMode="decimal"
                             value={closeCardTotal}
                             onChange={(e) => setCloseCardTotal(e.target.value)}
-                            disabled={closingShift}
+                            disabled={closingShift || !activeShift?.id}
                           />
                         </div>
                       </label>
@@ -5675,7 +5849,7 @@ export default function FrontdeskPortalPage() {
                             inputMode="decimal"
                             value={closeTransferTotal}
                             onChange={(e) => setCloseTransferTotal(e.target.value)}
-                            disabled={closingShift}
+                            disabled={closingShift || !activeShift?.id}
                           />
                         </div>
                       </label>
@@ -5689,10 +5863,74 @@ export default function FrontdeskPortalPage() {
                         rows={3}
                         value={closeNote}
                         onChange={(e) => setCloseNote(e.target.value)}
-                        disabled={closingShift}
+                        disabled={closingShift || !activeShift?.id}
                         placeholder={t.openingNotePlaceholder}
                       />
                     </label>
+                  </div>
+                  <div className="fdHandoverSection">
+                    <h3 className="sectionTitle" style={{ marginTop: 0, marginBottom: 8, fontSize: 16 }}>{t.handoverSettingTitle}</h3>
+                    <div className="fdHandoverGrid">
+                      <label className="fdHandoverField">
+                        <span className="kvLabel">{t.handoverDeadlineLabel}</span>
+                        <input
+                          className="input"
+                          type="time"
+                          value={handoverDeadlineTime}
+                          onChange={(event) => {
+                            const next = event.target.value;
+                            if (!next || parseTimeValue(next)) {
+                              setHandoverDeadlineTime(next || "22:00");
+                            }
+                          }}
+                        />
+                      </label>
+                      <label className="fdHandoverField">
+                        <span className="kvLabel">{t.handoverReminderToggle}</span>
+                        <div className="fdHandoverToggle">
+                          <input
+                            type="checkbox"
+                            checked={handoverReminderEnabled}
+                            onChange={(event) => setHandoverReminderEnabled(event.target.checked)}
+                          />
+                          <span>{handoverReminderEnabled ? t.handoverReminderOn : t.handoverReminderOff}</span>
+                        </div>
+                      </label>
+                    </div>
+                    <p className="fdGlassText" style={{ marginTop: 8, marginBottom: 0 }}>
+                      {handoverReminderEnabled
+                        ? `${t.handoverReminderHint} (${t.handoverDeadlineLabel}: ${handoverDeadlineText})`
+                        : t.handoverReminderDisabledHint}
+                    </p>
+                  </div>
+                  <div className="fdHandoverSection">
+                    <h3 className="sectionTitle" style={{ marginTop: 0, marginBottom: 8, fontSize: 16 }}>
+                      {t.handoverRecordTitle}
+                    </h3>
+                    {closedShiftHistory.length === 0 ? (
+                      <p className="fdGlassText" style={{ marginTop: 0, marginBottom: 0 }}>{t.handoverRecordEmpty}</p>
+                    ) : (
+                      <div className="fdListStack" style={{ maxHeight: 220, overflow: "auto" }}>
+                        {closedShiftHistory.slice(0, 10).map((item) => (
+                          <div key={item.id} className="fdGlassSubPanel" style={{ padding: 10 }}>
+                            <p className="sub" style={{ marginTop: 0 }}>
+                              {t.handoverRecordAt}: {item.closed_at ? fmtDateTime(item.closed_at) : "-"}
+                            </p>
+                            <p className="sub" style={{ marginTop: 2 }}>
+                              {t.openedAt}: {item.opened_at ? fmtDateTime(item.opened_at) : "-"}
+                            </p>
+                            <div className="fdHandoverHistoryTotals">
+                              <span>{t.handoverRecordCash}: NT${Number(item.cash_total || 0)}</span>
+                              <span>{t.handoverRecordCard}: NT${Number(item.card_total || 0)}</span>
+                              <span>{t.handoverRecordTransfer}: NT${Number(item.transfer_total || 0)}</span>
+                            </div>
+                            <p className="sub" style={{ marginTop: 6, marginBottom: 0 }}>
+                              {t.handoverRecordNote}: {item.note?.trim() || t.handoverRecordNoNote}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="fdHandoverFooter">
                     <button type="button" className="fdHandoverBtn fdHandoverBtnGhost" onClick={() => setCapabilityOpen(false)}>
@@ -5701,8 +5939,8 @@ export default function FrontdeskPortalPage() {
                     <button
                       type="submit"
                       className="fdHandoverBtn fdHandoverBtnPrimary"
-                      disabled={closingShift}
-                      style={closingShift ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+                      disabled={closingShift || !activeShift?.id}
+                      style={closingShift || !activeShift?.id ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
                     >
                       {closingShift ? t.closingShiftAction : t.closeShiftAction}
                     </button>
