@@ -975,7 +975,7 @@ export default function FrontdeskPortalPage() {
             cancel: "取消",
             openShiftFail: "開班失敗",
             closeShiftFail: "交班失敗",
-            ready: "已上線",
+            ready: "",
             building: "建置中",
             planned: "規劃中",
           }
@@ -1329,7 +1329,7 @@ export default function FrontdeskPortalPage() {
             cancel: "Cancel",
             openShiftFail: "Open shift failed",
             closeShiftFail: "Close shift failed",
-            ready: "Ready",
+            ready: "",
             building: "Building",
             planned: "Planned",
           },
@@ -3200,10 +3200,10 @@ export default function FrontdeskPortalPage() {
             { id: "locker", title: "E. 置物櫃 / 租借", desc: "置物櫃租借登記、歸還與押金管理。", detail: "可直接登記租借與歸還，包含押金、到期時間與備註，並保留完整操作軌跡。", area: "LOCKER", status: "ready" },
             { id: "inventory", title: "F. 商品 / 庫存 / 銷售", desc: "前台銷售、庫存調整、低庫存提醒。", detail: "可直接在櫃檯完成商品銷售入帳、庫存扣減與補貨/盤損調整，並保留異動紀錄。", area: "INVENTORY", status: "ready" },
             { id: "cs", title: "G. 客服 / 事件紀錄", desc: "客訴與現場事件工單，含進度追蹤與結案。", detail: "可建立客服/事件工單、更新處理狀態、追加追蹤紀錄與結案說明，並保留完整操作軌跡。", area: "CS", status: "ready" },
-            { id: "lead", title: "H. 線索 / 參觀導覽", desc: "Lead 建檔、轉會員、追蹤轉換。", detail: "已上線：線索建檔、導覽排程、追蹤紀錄與轉會員/失單流程。", area: "LEAD", status: "ready" },
-            { id: "chain", title: "I. 跨店規則", desc: "跨店可用範圍、停權/黑名單同步。", detail: "已上線：跨店放行規則、例外覆核條件與黑名單同步維護。", area: "CHAIN", status: "ready" },
-            { id: "report", title: "J. 報表 / 即時監控", desc: "今日營收、到期、欠費、No-show、待辦。", detail: "已上線：櫃檯今日營運看板、待辦彙總與風險提示。", area: "REPORT", status: "ready" },
-            { id: "audit", title: "K. 權限 / 稽核", desc: "高風險送審、角色權限、完整稽核軌跡。", detail: "已上線：高風險動作送審、管理者核准/駁回、完整 Audit Log。", area: "AUDIT", status: "ready" },
+            { id: "lead", title: "H. 線索 / 參觀導覽", desc: "Lead 建檔、轉會員、追蹤轉換。", detail: "線索建檔、導覽排程、追蹤紀錄與轉會員/失單流程。", area: "LEAD", status: "ready" },
+            { id: "chain", title: "I. 跨店規則", desc: "跨店可用範圍、停權/黑名單同步。", detail: "跨店放行規則、例外覆核條件與黑名單同步維護。", area: "CHAIN", status: "ready" },
+            { id: "report", title: "J. 報表 / 即時監控", desc: "今日營收、到期、欠費、No-show、待辦。", detail: "櫃檯今日營運看板、待辦彙總與風險提示。", area: "REPORT", status: "ready" },
+            { id: "audit", title: "K. 權限 / 稽核", desc: "高風險送審、角色權限、完整稽核軌跡。", detail: "高風險動作送審、管理者核准/駁回、完整 Audit Log。", area: "AUDIT", status: "ready" },
           ]
         : [
             { id: "entry", title: "A. Entry / Allow", desc: "Scan, exception pass, undo, reason code with audit.", detail: "Supports card/QR/manual exception pass with reason code and full audit trail.", area: "ENTRY", status: "ready" },
@@ -3213,10 +3213,10 @@ export default function FrontdeskPortalPage() {
             { id: "locker", title: "E. Locker / Rental", desc: "Locker rent/return with deposit handling.", detail: "Register rental and return with deposit, due time, and operation audit trail.", area: "LOCKER", status: "ready" },
             { id: "inventory", title: "F. Product / Inventory", desc: "Desk sales, stock adjustments, low-stock alerts.", detail: "Complete product sales posting, stock deduction, restock/adjustment, and movement history in frontdesk.", area: "INVENTORY", status: "ready" },
             { id: "cs", title: "G. Service / Incidents", desc: "Complaint and on-site incident tickets with workflow.", detail: "Create incident tickets, update status, add follow-up notes, and close with resolution records.", area: "CS", status: "ready" },
-            { id: "lead", title: "H. Lead / Tours", desc: "Lead intake, visit scheduling, conversion.", detail: "Ready: lead intake, tour scheduling, follow-up timeline, and conversion/lost flow.", area: "LEAD", status: "ready" },
-            { id: "chain", title: "I. Multi-Branch Rules", desc: "Cross-branch policy and blacklist sync.", detail: "Ready: cross-branch access rules, approval gates, and synced blacklist controls.", area: "CHAIN", status: "ready" },
-            { id: "report", title: "J. Reports / Live Monitor", desc: "Revenue, due list, no-show, handover TODO.", detail: "Ready: desk live operation board with pending tasks and risk indicators.", area: "REPORT", status: "ready" },
-            { id: "audit", title: "K. Role / Audit", desc: "Approval workflow, role control, full audit logs.", detail: "Ready: approval workflow, role-based controls, and audit logs.", area: "AUDIT", status: "ready" },
+            { id: "lead", title: "H. Lead / Tours", desc: "Lead intake, visit scheduling, conversion.", detail: "Lead intake, tour scheduling, follow-up timeline, and conversion/lost flow.", area: "LEAD", status: "ready" },
+            { id: "chain", title: "I. Multi-Branch Rules", desc: "Cross-branch policy and blacklist sync.", detail: "Cross-branch access rules, approval gates, and synced blacklist controls.", area: "CHAIN", status: "ready" },
+            { id: "report", title: "J. Reports / Live Monitor", desc: "Revenue, due list, no-show, handover TODO.", detail: "Desk live operation board with pending tasks and risk indicators.", area: "REPORT", status: "ready" },
+            { id: "audit", title: "K. Role / Audit", desc: "Approval workflow, role control, full audit logs.", detail: "Approval workflow, role-based controls, and audit logs.", area: "AUDIT", status: "ready" },
           ],
     [lang],
   );
@@ -3878,9 +3878,11 @@ export default function FrontdeskPortalPage() {
                     >
                       <div className="fdActionHead">
                         <span className="kvLabel">{item.letter}</span>
-                        <span className="fdChip" style={statusStyle(item.status)}>
-                          {statusLabel(item.status)}
-                        </span>
+                        {item.status !== "ready" ? (
+                          <span className="fdChip" style={statusStyle(item.status)}>
+                            {statusLabel(item.status)}
+                          </span>
+                        ) : null}
                       </div>
                       <h3 className="fdActionTitle">{item.moduleTitle}</h3>
                       <p className="sub fdCapabilityDesc" style={{ marginTop: 6 }}>{item.desc}</p>
@@ -3938,9 +3940,11 @@ export default function FrontdeskPortalPage() {
                     <div className="fdGlassSubPanel fdModalDetail">
                       <div className="fdActionHead">
                         <span className="kvLabel">{t.capabilityCurrent}</span>
-                        <span className="fdChip" style={statusStyle(selectedCapability.status)}>
-                          {statusLabel(selectedCapability.status)}
-                        </span>
+                        {selectedCapability.status !== "ready" ? (
+                          <span className="fdChip" style={statusStyle(selectedCapability.status)}>
+                            {statusLabel(selectedCapability.status)}
+                          </span>
+                        ) : null}
                       </div>
                       <h3 className="fdActionTitle" style={{ marginTop: 8 }}>{selectedCapability.title}</h3>
                       <p className="sub" style={{ marginTop: 8 }}>{selectedCapability.detail}</p>
