@@ -20,6 +20,14 @@ interface CustomFieldRow {
   value: string;
 }
 
+interface CheckinListItem {
+  id: string;
+  memberId: string;
+  method: string;
+  result: string;
+  checkedAt: string | null;
+}
+
 interface AllMemberEditForm {
   fullName: string;
   phone: string;
@@ -101,6 +109,9 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   const [allMemberBaseline, setAllMemberBaseline] = useState<AllMemberEditForm | null>(null);
   const [allMemberSaving, setAllMemberSaving] = useState(false);
   const [allMemberMessage, setAllMemberMessage] = useState<string | null>(null);
+  const [memberCheckins, setMemberCheckins] = useState<CheckinListItem[]>([]);
+  const [memberCheckinsLoading, setMemberCheckinsLoading] = useState(false);
+  const [memberCheckinsError, setMemberCheckinsError] = useState<string | null>(null);
   const [portalReady, setPortalReady] = useState(false);
   const [creating, setCreating] = useState(false);
   const [recentCreatedId, setRecentCreatedId] = useState<string | null>(null);
@@ -127,13 +138,13 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             exactNoMatch: "找不到完全一致的會員資料",
             createTitle: "新增會員",
             createName: "姓名",
-            createPhone: "電話（必填）",
-            createEmail: "Email（選填）",
-            createBirthDate: "生日（選填）",
-            createGender: "性別（選填）",
-            emergencyName: "緊急聯絡人（選填）",
-            emergencyPhone: "緊急聯絡電話（選填）",
-            leadSource: "來源（選填）",
+            createPhone: "電話",
+            createEmail: "Email",
+            createBirthDate: "生日",
+            createGender: "性別",
+            emergencyName: "緊急聯絡人",
+            emergencyPhone: "緊急聯絡電話",
+            leadSource: "載具",
             customTitle: "自訂欄位",
             customKey: "欄位名稱（例：身高）",
             customValue: "欄位內容（例：178）",
@@ -181,6 +192,13 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             statusActive: "啟用",
             statusInactive: "停用",
             statusSuspended: "停權",
+            entryRecordTitle: "進場紀錄",
+            entryRecordLoading: "載入進場紀錄中...",
+            entryRecordEmpty: "目前沒有進場紀錄",
+            entryRecordAt: "進場時間",
+            entryRecordMethod: "方式",
+            entryRecordResult: "結果",
+            entryRecordLoadFail: "載入進場紀錄失敗",
             close: "關閉",
           }
         : {
@@ -197,13 +215,13 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             exactNoMatch: "No exact member match found",
             createTitle: "Create Member",
             createName: "Full Name",
-            createPhone: "Phone (Required)",
-            createEmail: "Email (Optional)",
-            createBirthDate: "Birth Date (Optional)",
-            createGender: "Gender (Optional)",
-            emergencyName: "Emergency Contact (Optional)",
-            emergencyPhone: "Emergency Phone (Optional)",
-            leadSource: "Lead Source (Optional)",
+            createPhone: "Phone",
+            createEmail: "Email",
+            createBirthDate: "Birth Date",
+            createGender: "Gender",
+            emergencyName: "Emergency Contact",
+            emergencyPhone: "Emergency Phone",
+            leadSource: "Carrier",
             customTitle: "Custom Fields",
             customKey: "Field name (e.g. Height)",
             customValue: "Field value (e.g. 178)",
@@ -251,6 +269,13 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             statusActive: "Active",
             statusInactive: "Inactive",
             statusSuspended: "Suspended",
+            entryRecordTitle: "Entry Records",
+            entryRecordLoading: "Loading entry records...",
+            entryRecordEmpty: "No entry records yet",
+            entryRecordAt: "Entry Time",
+            entryRecordMethod: "Method",
+            entryRecordResult: "Result",
+            entryRecordLoadFail: "Failed to load entry records",
             close: "Close",
           },
     [zh],
@@ -366,6 +391,14 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     () => allMembers.find((item) => item.id === selectedAllMemberId) || null,
     [allMembers, selectedAllMemberId],
   );
+  const selectedAllMemberCode = useMemo(() => {
+    if (!selectedAllMember) return "-";
+    const directCode = selectedAllMember.member_code?.trim();
+    if (directCode) return directCode;
+    const index = allMembers.findIndex((item) => item.id === selectedAllMember.id);
+    if (index >= 0) return String(index + 1).padStart(4, "0");
+    return "-";
+  }, [allMembers, selectedAllMember]);
   const allMemberDirty = useMemo(() => {
     if (!allMemberForm || !allMemberBaseline) return false;
     return JSON.stringify(allMemberForm) !== JSON.stringify(allMemberBaseline);
@@ -398,6 +431,46 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     setAllMemberMessage(null);
     setAllMembersError(null);
   }, [allMembersOpen, selectedAllMember]);
+
+  useEffect(() => {
+    if (!allMembersOpen || !selectedAllMember?.id) {
+      setMemberCheckins([]);
+      setMemberCheckinsError(null);
+      setMemberCheckinsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const loadMemberCheckins = async () => {
+      setMemberCheckinsLoading(true);
+      setMemberCheckinsError(null);
+      try {
+        const res = await fetch(
+          `/api/frontdesk/checkins?limit=80&memberId=${encodeURIComponent(selectedAllMember.id)}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload?.error || t.entryRecordLoadFail);
+        if (cancelled) return;
+        const rows = ((payload?.items || []) as CheckinListItem[]).filter((item) => item.memberId === selectedAllMember.id);
+        setMemberCheckins(rows);
+      } catch (err) {
+        if (controller.signal.aborted || cancelled) return;
+        setMemberCheckins([]);
+        setMemberCheckinsError(err instanceof Error ? err.message : t.entryRecordLoadFail);
+      } finally {
+        if (!cancelled) setMemberCheckinsLoading(false);
+      }
+    };
+
+    void loadMemberCheckins();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [allMembersOpen, selectedAllMember?.id, t.entryRecordLoadFail]);
 
   async function saveAllMember(event: FormEvent) {
     event.preventDefault();
@@ -464,6 +537,13 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     } finally {
       setAllMemberSaving(false);
     }
+  }
+
+  function fmtDateTime(value: string | null) {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString(locale === "en" ? "en-US" : "zh-TW");
   }
 
   async function createMember(event: FormEvent) {
@@ -797,11 +877,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                         <div className="fdTwoCol" style={{ marginTop: 2, gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                           <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
                             <div className="kvLabel">{t.memberCode}</div>
-                            <div className="kvValue">{selectedAllMember.member_code?.trim() || "-"}</div>
-                          </div>
-                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
-                            <div className="kvLabel">{t.memberId}</div>
-                            <div className="kvValue" style={{ fontSize: 14, wordBreak: "break-all" }}>{selectedAllMember.id}</div>
+                            <div className="kvValue">#{selectedAllMemberCode}</div>
                           </div>
                           <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
                             <span className="kvLabel">{t.createName}</span>
@@ -930,6 +1006,30 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                               {t.addField}
                             </button>
                           </div>
+                        </div>
+
+                        <div className="fdGlassSubPanel" style={{ marginTop: 6, padding: 10, background: "rgba(255,255,255,.96)" }}>
+                          <div className="kvLabel">{t.entryRecordTitle}</div>
+                          {memberCheckinsLoading ? (
+                            <p className="sub" style={{ marginTop: 8 }}>{t.entryRecordLoading}</p>
+                          ) : memberCheckinsError ? (
+                            <p className="sub" style={{ marginTop: 8, color: "#c2410c" }}>{memberCheckinsError}</p>
+                          ) : memberCheckins.length === 0 ? (
+                            <p className="sub" style={{ marginTop: 8 }}>{t.entryRecordEmpty}</p>
+                          ) : (
+                            <div className="fdListStack" style={{ marginTop: 8, maxHeight: 220, overflowY: "auto" }}>
+                              {memberCheckins.map((item) => (
+                                <div key={item.id} className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.92)" }}>
+                                  <p className="sub" style={{ marginTop: 0 }}>
+                                    {t.entryRecordAt}: {fmtDateTime(item.checkedAt)}
+                                  </p>
+                                  <p className="sub" style={{ marginTop: 4 }}>
+                                    {t.entryRecordMethod}: {item.method || "-"} | {t.entryRecordResult}: {item.result || "-"}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </form>
                     ) : (

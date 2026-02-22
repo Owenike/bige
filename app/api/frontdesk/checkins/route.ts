@@ -75,7 +75,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing tenant context" }, { status: 400 });
   }
 
-  const limit = parseLimit(new URL(request.url).searchParams.get("limit"));
+  const searchParams = new URL(request.url).searchParams;
+  const limit = parseLimit(searchParams.get("limit"));
+  const memberId = (searchParams.get("memberId") || "").trim();
+  if (memberId && !UUID_RE.test(memberId)) {
+    return NextResponse.json({ error: "Invalid memberId" }, { status: 400 });
+  }
   const admin = createSupabaseAdminClient();
 
   let baseQuery = admin
@@ -88,6 +93,9 @@ export async function GET(request: Request) {
 
   if (auth.context.branchId) {
     baseQuery = baseQuery.eq("store_id", auth.context.branchId);
+  }
+  if (memberId) {
+    baseQuery = baseQuery.eq("member_id", memberId);
   }
 
   let checkinsResult: any = await baseQuery;
@@ -105,6 +113,9 @@ export async function GET(request: Request) {
 
     if (auth.context.branchId) {
       fallbackQuery = fallbackQuery.eq("store_id", auth.context.branchId);
+    }
+    if (memberId) {
+      fallbackQuery = fallbackQuery.eq("member_id", memberId);
     }
 
     checkinsResult = await fallbackQuery;

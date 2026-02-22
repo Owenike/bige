@@ -1592,24 +1592,30 @@ export default function FrontdeskPortalPage() {
   const handoverDeadlineText = handoverDeadlineParsed
     ? `${handoverDeadlineParsed.hour.toString().padStart(2, "0")}:${handoverDeadlineParsed.minute.toString().padStart(2, "0")}`
     : "--:--";
-  const handoverOverdue = useMemo(() => {
-    if (!shiftOpen || !handoverReminderEnabled || !handoverDeadlineParsed) return false;
-    const now = new Date();
-    const deadline = new Date();
+  const handoverDeadlineAtMs = useMemo(() => {
+    if (!handoverDeadlineParsed) return null;
+    const shiftOpenedAt = activeShift?.opened_at ? new Date(activeShift.opened_at) : null;
+    const base = shiftOpenedAt && Number.isFinite(shiftOpenedAt.getTime()) ? shiftOpenedAt : new Date();
+    const deadline = new Date(base);
     deadline.setHours(handoverDeadlineParsed.hour, handoverDeadlineParsed.minute, 0, 0);
-    return now.getTime() >= deadline.getTime();
-  }, [handoverDeadlineParsed, handoverReminderEnabled, shiftOpen]);
+    if (base.getTime() > deadline.getTime()) {
+      deadline.setDate(deadline.getDate() + 1);
+    }
+    return deadline.getTime();
+  }, [activeShift?.opened_at, handoverDeadlineParsed]);
+  const handoverOverdue = useMemo(() => {
+    if (!shiftOpen || !handoverReminderEnabled || !handoverDeadlineAtMs) return false;
+    return Date.now() >= handoverDeadlineAtMs;
+  }, [handoverDeadlineAtMs, handoverReminderEnabled, shiftOpen]);
 
   useEffect(() => {
-    if (!shiftOpen || !handoverReminderEnabled || !handoverDeadlineParsed || (capabilityOpen && modalType === "handover")) {
+    if (!shiftOpen || !handoverReminderEnabled || !handoverDeadlineAtMs || (capabilityOpen && modalType === "handover")) {
       setHandoverReminderOpen(false);
       return;
     }
     const checkReminder = () => {
       const now = Date.now();
-      const deadline = new Date();
-      deadline.setHours(handoverDeadlineParsed.hour, handoverDeadlineParsed.minute, 0, 0);
-      const pastDeadline = now >= deadline.getTime();
+      const pastDeadline = now >= handoverDeadlineAtMs;
       if (!pastDeadline) return;
       if (handoverReminderSnoozeUntil && now < handoverReminderSnoozeUntil) return;
       setHandoverReminderOpen((prev) => {
@@ -1620,7 +1626,7 @@ export default function FrontdeskPortalPage() {
     checkReminder();
     const timer = window.setInterval(checkReminder, 30000);
     return () => window.clearInterval(timer);
-  }, [capabilityOpen, handoverDeadlineParsed, handoverReminderEnabled, handoverReminderSnoozeUntil, modalType, shiftOpen, soundEnabled]);
+  }, [capabilityOpen, handoverDeadlineAtMs, handoverReminderEnabled, handoverReminderSnoozeUntil, modalType, shiftOpen, soundEnabled]);
 
   const lockerActiveItems = useMemo(
     () => lockerRentals.filter((item) => item.status === "active"),
