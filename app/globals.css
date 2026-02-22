@@ -1776,35 +1776,36 @@ body.fdPageDark .footerInner{
 /* Frontdesk handover modal: thick wet-glass style */
 .fdModalBackdropHandover{
   background:
-    radial-gradient(68% 54% at 50% 8%, rgba(126, 216, 255, .30), rgba(126, 216, 255, 0) 72%),
-    radial-gradient(78% 66% at 50% 100%, rgba(120, 176, 255, .28), rgba(120, 176, 255, 0) 76%),
+    radial-gradient(72% 58% at 50% 8%, rgba(126, 216, 255, .44), rgba(126, 216, 255, 0) 72%),
+    radial-gradient(80% 70% at 50% 100%, rgba(120, 176, 255, .36), rgba(120, 176, 255, 0) 76%),
     rgba(10, 18, 34, .58);
-  -webkit-backdrop-filter: blur(16px) saturate(1.16);
-  backdrop-filter: blur(16px) saturate(1.16);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.2);
 }
 .fdModal.fdModalHandover.fdModalLight{
   border: 1px solid rgba(194, 217, 244, .84);
   border-radius: 20px;
   background:
-    linear-gradient(165deg, rgba(255,255,255,.95) 0%, rgba(237, 247, 255, .92) 52%, rgba(225, 240, 255, .88) 100%),
-    radial-gradient(120% 90% at 6% 0%, rgba(167, 223, 255, .38), rgba(167, 223, 255, 0) 58%),
-    radial-gradient(130% 96% at 94% 100%, rgba(145, 232, 214, .26), rgba(145, 232, 214, 0) 66%);
+    linear-gradient(168deg, rgba(255,255,255,.96) 0%, rgba(234, 246, 255, .94) 48%, rgba(220, 236, 255, .90) 100%),
+    radial-gradient(126% 96% at 4% 0%, rgba(133, 205, 255, .56), rgba(133, 205, 255, 0) 58%),
+    radial-gradient(128% 96% at 98% 100%, rgba(116, 242, 214, .34), rgba(116, 242, 214, 0) 68%),
+    radial-gradient(90% 86% at 54% 108%, rgba(178, 162, 255, .20), rgba(178, 162, 255, 0) 72%);
   color: #21324d;
-  -webkit-backdrop-filter: blur(14px) saturate(1.1);
-  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.12);
+  backdrop-filter: blur(14px) saturate(1.12);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,.96),
-    inset 0 -20px 36px rgba(212, 232, 252, .58),
+    inset 0 -22px 40px rgba(204, 228, 252, .64),
     0 0 0 1px rgba(206, 225, 246, .46),
-    0 28px 54px rgba(10, 22, 45, .34),
-    0 12px 24px rgba(136, 186, 240, .22);
+    0 32px 56px rgba(10, 22, 45, .36),
+    0 14px 26px rgba(136, 186, 240, .28);
 }
 .fdModal.fdModalHandover.fdModalLight .fdHandoverForm{
   position: relative;
   gap: 14px;
   padding: 16px 16px 14px;
   background:
-    linear-gradient(180deg, rgba(251, 255, 255, .74), rgba(239, 248, 255, .62) 50%, rgba(228, 241, 255, .58) 100%);
+    linear-gradient(180deg, rgba(253, 255, 255, .80), rgba(236, 248, 255, .68) 50%, rgba(224, 239, 255, .64) 100%);
 }
 .fdModal.fdModalHandover.fdModalLight .fdHandoverForm::before{
   content: "";
@@ -1812,7 +1813,7 @@ body.fdPageDark .footerInner{
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(140, 220, 255, .10), rgba(140, 220, 255, 0) 30%, rgba(116, 240, 214, .08) 62%, rgba(116, 240, 214, 0) 100%);
+    linear-gradient(90deg, rgba(122, 214, 255, .18), rgba(122, 214, 255, 0) 34%, rgba(102, 236, 206, .14) 68%, rgba(102, 236, 206, 0) 100%);
 }
 .fdModal.fdModalHandover.fdModalLight::before,
 .fdModal.fdModalHandover.fdModalLight::after{
@@ -1821,8 +1822,8 @@ body.fdPageDark .footerInner{
 .fdModal.fdModalHandover.fdModalLight::before{
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.74);
   background:
-    linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,0) 34%),
-    radial-gradient(62% 34% at 16% 8%, rgba(255,255,255,.52), rgba(255,255,255,0) 74%);
+    linear-gradient(180deg, rgba(255,255,255,.74), rgba(255,255,255,0) 36%),
+    radial-gradient(62% 34% at 16% 8%, rgba(255,255,255,.58), rgba(255,255,255,0) 74%);
 }
 .fdModal.fdModalHandover.fdModalLight::after{
   display: block;
@@ -1832,8 +1833,8 @@ body.fdPageDark .footerInner{
 .fdModal.fdModalHandover.fdModalLight .fdModalHead{
   border-bottom: 1px solid rgba(188, 209, 233, .72);
   background:
-    linear-gradient(180deg, rgba(255,255,255,.90), rgba(255,255,255,.36)),
-    linear-gradient(90deg, rgba(182, 227, 255, .34), rgba(167, 245, 227, .22) 46%, rgba(182, 205, 255, .30));
+    linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.42)),
+    linear-gradient(90deg, rgba(160, 224, 255, .48), rgba(146, 246, 221, .30) 46%, rgba(174, 196, 255, .38));
 }
 .fdModal.fdModalHandover.fdModalLight .sectionTitle{
   color: #1d3352;
@@ -1858,7 +1859,7 @@ body.fdPageDark .footerInner{
   overflow: hidden;
   border: 1px solid rgba(193, 212, 236, .78);
   background:
-    linear-gradient(150deg, rgba(255, 255, 255, .90), rgba(242, 250, 255, .84) 54%, rgba(229, 243, 255, .78));
+    linear-gradient(150deg, rgba(255, 255, 255, .92), rgba(238, 250, 255, .88) 52%, rgba(222, 240, 255, .84));
   box-shadow:
     inset 0 .8px 0 rgba(255,255,255,.92),
     inset 0 -10px 22px rgba(221, 234, 249, .44),
@@ -1871,8 +1872,8 @@ body.fdPageDark .footerInner{
   pointer-events: none;
   border-radius: inherit;
   background:
-    linear-gradient(180deg, rgba(255,255,255,.50), rgba(255,255,255,0) 34%),
-    radial-gradient(100% 52% at 50% 118%, rgba(162, 207, 255, .16), rgba(162, 207, 255, 0) 72%);
+    linear-gradient(180deg, rgba(255,255,255,.58), rgba(255,255,255,0) 36%),
+    radial-gradient(100% 54% at 50% 118%, rgba(146, 202, 255, .26), rgba(146, 202, 255, 0) 72%);
 }
 .fdModal.fdModalHandover.fdModalLight .fdHandoverSection::after{
   content: "";
@@ -1881,8 +1882,8 @@ body.fdPageDark .footerInner{
   pointer-events: none;
   border-radius: inherit;
   background:
-    linear-gradient(135deg, rgba(170, 236, 255, .16), rgba(170, 236, 255, 0) 38%),
-    linear-gradient(320deg, rgba(154, 255, 224, .12), rgba(154, 255, 224, 0) 50%);
+    linear-gradient(135deg, rgba(154, 228, 255, .24), rgba(154, 228, 255, 0) 42%),
+    linear-gradient(320deg, rgba(136, 255, 218, .18), rgba(136, 255, 218, 0) 52%);
 }
 .fdModal.fdModalHandover.fdModalLight .fdHandoverGrid{
   gap: 14px;
@@ -1893,8 +1894,8 @@ body.fdPageDark .footerInner{
 .fdModal.fdModalHandover.fdModalLight .fdHandoverField .input{
   border: 1px solid rgba(186, 208, 234, .84);
   background:
-    linear-gradient(152deg, rgba(255,255,255,.94), rgba(241, 249, 255, .84)),
-    linear-gradient(90deg, rgba(188, 236, 255, .20), rgba(188, 236, 255, 0) 58%);
+    linear-gradient(152deg, rgba(255,255,255,.95), rgba(238, 248, 255, .88)),
+    linear-gradient(90deg, rgba(170, 232, 255, .28), rgba(170, 232, 255, 0) 58%);
   color: #243653;
   box-shadow: inset 0 .8px 0 rgba(255,255,255,.96);
 }
@@ -1921,7 +1922,7 @@ body.fdPageDark .footerInner{
   border-top: 1px solid rgba(191, 210, 236, .72);
   padding-top: 14px;
   background:
-    linear-gradient(180deg, rgba(240, 251, 255, .14), rgba(228, 242, 255, .42));
+    linear-gradient(180deg, rgba(233, 249, 255, .24), rgba(220, 239, 255, .52));
 }
 .fdModal.fdModalHandover.fdModalLight .fdHandoverBtn{
   border: 1px solid rgba(183, 205, 232, .84);
