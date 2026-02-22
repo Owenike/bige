@@ -876,28 +876,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     0 8px 20px rgba(6, 14, 30, .44);
 }
 .fdQuickPanel::before{
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.24), rgba(255,255,255,0) 24%),
-    radial-gradient(62% 30% at 24% 6%, rgba(255,255,255,.20), rgba(255,255,255,0) 70%),
-    radial-gradient(44% 26% at 84% 12%, rgba(125, 250, 229, .14), rgba(125, 250, 229, 0) 74%);
-  mix-blend-mode: screen;
-  opacity: .9;
+  display: none;
 }
 .fdQuickPanel::after{
-  left: 10px;
-  right: 10px;
-  top: 8px;
-  height: 48%;
-  border-radius: 16px;
-  background:
-    linear-gradient(180deg, rgba(178, 213, 255, .24), rgba(255,255,255,0) 54%),
-    linear-gradient(102deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,0) 36%, rgba(118, 244, 221, .07) 66%, rgba(255,255,255,0) 100%);
-  opacity: .9;
+  display: none;
 }
 .fdQuickPanel > *{
   position: relative;
@@ -1121,16 +1103,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   -webkit-backdrop-filter: blur(14px) saturate(1.24);
 }
 .fdCapabilityRingCard::before{
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,0) 26%),
-    linear-gradient(106deg, rgba(160, 247, 224, .16) 6%, rgba(255,255,255,0) 36%, rgba(132, 181, 255, .10) 62%, rgba(255,255,255,0) 88%);
-  mix-blend-mode: screen;
-  opacity: .54;
+  display: none;
+}
+.fdCapabilityRingCard.fdGlassSubPanel::before{
+  display: none;
 }
 .fdCapabilityRingCard::after{
   content: "";
