@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n-provider";
 
@@ -9,6 +9,7 @@ interface MemberItem {
   full_name: string;
   phone: string | null;
   email?: string | null;
+  photo_url?: string | null;
   status?: string | null;
   birth_date?: string | null;
   member_code?: string | null;
@@ -32,10 +33,13 @@ interface AllMemberEditForm {
   fullName: string;
   phone: string;
   email: string;
+  photoUrl: string;
   birthDate: string;
   status: string;
   customRows: CustomFieldRow[];
 }
+
+const MEMBER_PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 
 function normalizePhone(input: string) {
   return input.replace(/\D/g, "");
@@ -64,6 +68,7 @@ function buildAllMemberEditForm(member: MemberItem): AllMemberEditForm {
     fullName: member.full_name || "",
     phone: member.phone || "",
     email: member.email || "",
+    photoUrl: member.photo_url || "",
     birthDate: member.birth_date || "",
     status: member.status || "active",
     customRows: toCustomRows(member.custom_fields),
@@ -75,10 +80,26 @@ function cloneAllMemberEditForm(form: AllMemberEditForm): AllMemberEditForm {
     fullName: form.fullName,
     phone: form.phone,
     email: form.email,
+    photoUrl: form.photoUrl,
     birthDate: form.birthDate,
     status: form.status,
     customRows: form.customRows.map((row) => ({ ...row })),
   };
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("invalid_file_reader_result"));
+      }
+    };
+    reader.onerror = () => reject(new Error("file_reader_error"));
+    reader.readAsDataURL(file);
+  });
 }
 
 export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boolean }) {
@@ -180,6 +201,16 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             memberId: "會員 ID",
             phoneLabel: "電話",
             emailLabel: "Email",
+            photoLabel: "會員照片",
+            photoUploadBtn: "上傳照片",
+            photoReplaceBtn: "重新上傳",
+            photoRemoveBtn: "移除照片",
+            photoHint: "建議 JPG / PNG / WEBP，檔案大小 2MB 以內。",
+            photoEmpty: "尚未上傳照片",
+            photoInvalidType: "請上傳圖片檔（JPG / PNG / WEBP）。",
+            photoTooLarge: "照片檔案過大，請上傳 2MB 以內。",
+            photoReadFail: "照片讀取失敗，請重試。",
+            photoPreviewAlt: "會員照片預覽",
             birthDateLabel: "生日",
             editMemberTitle: "編輯會員資料",
             saveMemberBtn: "儲存修改",
@@ -258,6 +289,16 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             memberId: "Member ID",
             phoneLabel: "Phone",
             emailLabel: "Email",
+            photoLabel: "Member Photo",
+            photoUploadBtn: "Upload Photo",
+            photoReplaceBtn: "Replace Photo",
+            photoRemoveBtn: "Remove Photo",
+            photoHint: "Use JPG / PNG / WEBP, up to 2MB.",
+            photoEmpty: "No photo uploaded",
+            photoInvalidType: "Please upload an image file (JPG / PNG / WEBP).",
+            photoTooLarge: "Image is too large. Please upload a file up to 2MB.",
+            photoReadFail: "Failed to read image file. Please try again.",
+            photoPreviewAlt: "Member photo preview",
             birthDateLabel: "Birth Date",
             editMemberTitle: "Edit Member",
             saveMemberBtn: "Save",
@@ -481,6 +522,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     const fullName = allMemberForm.fullName.trim();
     const normalizedPhone = normalizePhone(allMemberForm.phone);
     const emailValue = allMemberForm.email.trim().toLowerCase();
+    const photoUrlValue = allMemberForm.photoUrl.trim();
     const birthDateValue = allMemberForm.birthDate.trim();
     const statusValue = allMemberForm.status.trim() || "active";
 
@@ -516,6 +558,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
           fullName,
           phone: normalizedPhone || null,
           email: emailValue || null,
+          photoUrl: photoUrlValue || null,
           birthDate: birthDateValue || null,
           status: statusValue,
           customFields: toCustomFields(allMemberForm.customRows),
@@ -538,6 +581,28 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
       setAllMembersError(err instanceof Error ? err.message : t.saveMemberFail);
     } finally {
       setAllMemberSaving(false);
+    }
+  }
+
+  async function onAllMemberPhotoSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAllMembersError(t.photoInvalidType);
+      return;
+    }
+    if (file.size > MEMBER_PHOTO_MAX_BYTES) {
+      setAllMembersError(t.photoTooLarge);
+      return;
+    }
+    try {
+      const nextPhotoUrl = await fileToDataUrl(file);
+      setAllMemberForm((prev) => (prev ? { ...prev, photoUrl: nextPhotoUrl } : prev));
+      setAllMembersError(null);
+      setAllMemberMessage(null);
+    } catch {
+      setAllMembersError(t.photoReadFail);
     }
   }
 
@@ -893,64 +958,97 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
 
                         {allMemberMessage ? <p className="sub" style={{ marginTop: 0, color: "var(--brand)" }}>{allMemberMessage}</p> : null}
 
-                        <div className="fdTwoCol" style={{ marginTop: 2, gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-                          <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
-                            <div className="kvLabel">{t.memberCode}</div>
-                            <div className="kvValue">#{selectedAllMemberCode}</div>
+                        <div className="fdMemberEditTopLayout" style={{ marginTop: 2 }}>
+                          <div className="fdGlassSubPanel fdMemberPhotoPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
+                            <div className="kvLabel">{t.photoLabel}</div>
+                            <div className="fdMemberPhotoPreview">
+                              {allMemberForm.photoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={allMemberForm.photoUrl} alt={t.photoPreviewAlt} className="fdMemberPhotoImg" />
+                              ) : (
+                                <span className="sub">{t.photoEmpty}</span>
+                              )}
+                            </div>
+                            <p className="sub fdMemberPhotoHint">{t.photoHint}</p>
+                            <div className="actions fdMemberPhotoActions" style={{ marginTop: 8 }}>
+                              <label className="fdPillBtn fdPillBtnPrimary fdMemberPhotoUploadBtn">
+                                {allMemberForm.photoUrl ? t.photoReplaceBtn : t.photoUploadBtn}
+                                <input type="file" accept="image/*" onChange={onAllMemberPhotoSelected} disabled={allMemberSaving} />
+                              </label>
+                              <button
+                                type="button"
+                                className="fdPillBtn"
+                                disabled={allMemberSaving || !allMemberForm.photoUrl}
+                                onClick={() => {
+                                  setAllMemberForm((prev) => (prev ? { ...prev, photoUrl: "" } : prev));
+                                  setAllMembersError(null);
+                                  setAllMemberMessage(null);
+                                }}
+                              >
+                                {t.photoRemoveBtn}
+                              </button>
+                            </div>
                           </div>
-                          <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
-                            <span className="kvLabel">{t.createName}</span>
-                            <input
-                              className="input"
-                              value={allMemberForm.fullName}
-                              onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, fullName: event.target.value } : prev))}
-                              disabled={allMemberSaving}
-                              required
-                            />
-                          </label>
-                          <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
-                            <span className="kvLabel">{t.phoneLabel}</span>
-                            <input
-                              className="input"
-                              value={allMemberForm.phone}
-                              onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, phone: event.target.value } : prev))}
-                              disabled={allMemberSaving}
-                              placeholder={t.createPhone}
-                            />
-                          </label>
-                          <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
-                            <span className="kvLabel">{t.emailLabel}</span>
-                            <input
-                              className="input"
-                              value={allMemberForm.email}
-                              onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, email: event.target.value } : prev))}
-                              disabled={allMemberSaving}
-                              placeholder={t.createEmail}
-                            />
-                          </label>
-                          <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
-                            <span className="kvLabel">{t.birthDateLabel}</span>
-                            <input
-                              className="input"
-                              type="date"
-                              value={allMemberForm.birthDate}
-                              onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, birthDate: event.target.value } : prev))}
-                              disabled={allMemberSaving}
-                            />
-                          </label>
-                          <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
-                            <span className="kvLabel">{t.status}</span>
-                            <select
-                              className="input"
-                              value={allMemberForm.status}
-                              onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, status: event.target.value } : prev))}
-                              disabled={allMemberSaving}
-                            >
-                              <option value="active">{t.statusActive}</option>
-                              <option value="inactive">{t.statusInactive}</option>
-                              <option value="suspended">{t.statusSuspended}</option>
-                            </select>
-                          </label>
+
+                          <div className="fdTwoCol fdMemberProfileGrid" style={{ gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                            <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
+                              <div className="kvLabel">{t.memberCode}</div>
+                              <div className="kvValue">#{selectedAllMemberCode}</div>
+                            </div>
+                            <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
+                              <span className="kvLabel">{t.createName}</span>
+                              <input
+                                className="input"
+                                value={allMemberForm.fullName}
+                                onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, fullName: event.target.value } : prev))}
+                                disabled={allMemberSaving}
+                                required
+                              />
+                            </label>
+                            <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
+                              <span className="kvLabel">{t.phoneLabel}</span>
+                              <input
+                                className="input"
+                                value={allMemberForm.phone}
+                                onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, phone: event.target.value } : prev))}
+                                disabled={allMemberSaving}
+                                placeholder={t.createPhone}
+                              />
+                            </label>
+                            <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
+                              <span className="kvLabel">{t.emailLabel}</span>
+                              <input
+                                className="input"
+                                value={allMemberForm.email}
+                                onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, email: event.target.value } : prev))}
+                                disabled={allMemberSaving}
+                                placeholder={t.createEmail}
+                              />
+                            </label>
+                            <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
+                              <span className="kvLabel">{t.birthDateLabel}</span>
+                              <input
+                                className="input"
+                                type="date"
+                                value={allMemberForm.birthDate}
+                                onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, birthDate: event.target.value } : prev))}
+                                disabled={allMemberSaving}
+                              />
+                            </label>
+                            <label className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)", display: "grid", gap: 6 }}>
+                              <span className="kvLabel">{t.status}</span>
+                              <select
+                                className="input"
+                                value={allMemberForm.status}
+                                onChange={(event) => setAllMemberForm((prev) => (prev ? { ...prev, status: event.target.value } : prev))}
+                                disabled={allMemberSaving}
+                              >
+                                <option value="active">{t.statusActive}</option>
+                                <option value="inactive">{t.statusInactive}</option>
+                                <option value="suspended">{t.statusSuspended}</option>
+                              </select>
+                            </label>
+                          </div>
                         </div>
 
                         <div className="fdGlassSubPanel" style={{ marginTop: 6, padding: 10, background: "rgba(255,255,255,.96)" }}>

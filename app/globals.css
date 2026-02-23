@@ -1549,6 +1549,54 @@ body.fdPageDark .footerInner{
   background: #ecfcf9;
   box-shadow: 0 0 0 2px rgba(20, 184, 166, .18);
 }
+.fdMemberEditTopLayout{
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.fdMemberPhotoPanel{
+  display: grid;
+  gap: 8px;
+}
+.fdMemberPhotoPreview{
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: 1px solid #cdd9ea;
+  border-radius: 12px;
+  background: linear-gradient(160deg, #f7fbff, #edf5ff);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.fdMemberPhotoImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.fdMemberPhotoHint{
+  margin: 0;
+  font-size: 12px;
+}
+.fdMemberPhotoActions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fdMemberPhotoUploadBtn{
+  position: relative;
+  overflow: hidden;
+}
+.fdMemberPhotoUploadBtn input{
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.fdMemberProfileGrid{
+  align-content: start;
+}
 @media (max-width: 980px){
   .fdModal.fdAllMembersModal{
     width: min(1120px, calc(100vw - 14px));
@@ -1559,6 +1607,12 @@ body.fdPageDark .footerInner{
   }
   .fdAllMembersList{
     max-height: 220px;
+  }
+  .fdMemberEditTopLayout{
+    grid-template-columns: 1fr;
+  }
+  .fdMemberPhotoPanel{
+    max-width: 260px;
   }
 }
 @media (prefers-color-scheme: dark){

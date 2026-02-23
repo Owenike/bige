@@ -48,11 +48,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const hasFullName = Object.prototype.hasOwnProperty.call(body, "fullName");
   const hasPhone = Object.prototype.hasOwnProperty.call(body, "phone");
   const hasEmail = Object.prototype.hasOwnProperty.call(body, "email");
+  const hasPhotoUrl = Object.prototype.hasOwnProperty.call(body, "photoUrl");
   const hasBirthDate = Object.prototype.hasOwnProperty.call(body, "birthDate");
   const hasStatus = Object.prototype.hasOwnProperty.call(body, "status");
   const hasCustomFields = Object.prototype.hasOwnProperty.call(body, "customFields");
 
-  if (!hasFullName && !hasPhone && !hasEmail && !hasBirthDate && !hasStatus && !hasCustomFields) {
+  if (!hasFullName && !hasPhone && !hasEmail && !hasPhotoUrl && !hasBirthDate && !hasStatus && !hasCustomFields) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
@@ -60,6 +61,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const rawPhone = typeof body.phone === "string" ? body.phone.trim() : "";
   const phone = rawPhone ? normalizePhone(rawPhone) : null;
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const photoUrl =
+    hasPhotoUrl && typeof body.photoUrl === "string"
+      ? body.photoUrl.trim()
+      : hasPhotoUrl && body.photoUrl === null
+        ? ""
+        : "";
   const parsedBirthDate = hasBirthDate ? parseDateInput(body.birthDate) : null;
   const rawStatus = typeof body.status === "string" ? body.status.trim().toLowerCase() : "";
   const nextCustomFields = hasCustomFields ? parseCustomFields(body.customFields) : null;
@@ -72,6 +79,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
   if (hasEmail && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
+  }
+  if (hasPhotoUrl && body.photoUrl !== null && typeof body.photoUrl !== "string") {
+    return NextResponse.json({ error: "Invalid photo URL" }, { status: 400 });
+  }
+  if (hasPhotoUrl && photoUrl.length > 3_000_000) {
+    return NextResponse.json({ error: "Photo payload too large" }, { status: 400 });
   }
   if (hasBirthDate && body.birthDate && !parsedBirthDate) {
     return NextResponse.json({ error: "Invalid birth date format" }, { status: 400 });
@@ -140,6 +153,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (hasFullName) updatePayload.full_name = fullName;
   if (hasPhone) updatePayload.phone = phone || null;
   if (hasEmail) updatePayload.email = email || null;
+  if (hasPhotoUrl) updatePayload.photo_url = photoUrl || null;
   if (hasBirthDate) updatePayload.birth_date = parsedBirthDate;
   if (hasStatus) updatePayload.status = rawStatus || "active";
   if (hasCustomFields && nextCustomFields) {
@@ -152,7 +166,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .update(updatePayload)
     .eq("tenant_id", auth.context.tenantId)
     .eq("id", id)
-    .select("id, full_name, phone, email, status, birth_date, member_code, custom_fields")
+    .select("id, full_name, phone, email, photo_url, status, birth_date, member_code, custom_fields")
     .maybeSingle();
 
   if (updateResult.error) return NextResponse.json({ error: updateResult.error.message }, { status: 500 });
@@ -170,4 +184,3 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   return NextResponse.json({ member: updateResult.data });
 }
-
