@@ -354,20 +354,22 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             {cameraError ? <p className="error" style={{ marginTop: 8 }}>{cameraError}</p> : null}
           </div>
 
-          <div className="fdGlassSubPanel fdEntryManualPanel">
-            <h2 className="sectionTitle">{t.manualTitle}</h2>
-            <form
-              className="field fdEntryManualForm"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void callVerify(manualInput);
-              }}
-            >
-              <input value={manualInput} onChange={(event) => setManualInput(event.target.value)} className="input" placeholder={t.manualPlaceholder} autoFocus />
-              <button type="submit" disabled={busy || !manualInput.trim()} className="fdPillBtn fdPillBtnPrimary">
-                {busy ? t.manualBusy : t.manualBtn}
-              </button>
-            </form>
+          <div className="fdEntrySideCol">
+            <div className="fdGlassSubPanel fdEntryManualPanel">
+              <h2 className="sectionTitle">{t.manualTitle}</h2>
+              <form
+                className="field fdEntryManualForm"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void callVerify(manualInput);
+                }}
+              >
+                <input value={manualInput} onChange={(event) => setManualInput(event.target.value)} className="input" placeholder={t.manualPlaceholder} autoFocus />
+                <button type="submit" disabled={busy || !manualInput.trim()} className="fdPillBtn fdPillBtnPrimary">
+                  {busy ? t.manualBusy : t.manualBtn}
+                </button>
+              </form>
+            </div>
           </div>
         </section>
 
