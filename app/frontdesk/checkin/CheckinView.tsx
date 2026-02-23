@@ -121,6 +121,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             manualBtn: "\u9a57\u8b49",
             manualBusy: "\u9a57\u8b49\u4e2d...",
             resultTitle: "\u9a57\u8b49\u7d50\u679c",
+            resultPending: "\u5c1a\u672a\u9a57\u8b49\uff0c\u8acb\u5148\u6383\u78bc\u6216\u624b\u52d5\u8cbc\u4e0a token\u3002",
             memberName: "\u59d3\u540d",
             phoneLast4: "\u96fb\u8a71\u672b\u56db\u78bc",
             membership: "\u6703\u7c4d",
@@ -160,6 +161,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             manualBtn: "Verify",
             manualBusy: "Verifying...",
             resultTitle: "Verification Result",
+            resultPending: "No verification yet. Scan QR or paste token first.",
             memberName: "Name",
             phoneLast4: "Phone Last 4",
             membership: "Membership",
@@ -370,65 +372,45 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
                 </button>
               </form>
             </div>
-          </div>
-        </section>
 
-      {result ? (
-        <section className="fdGlassSubPanel fdEntryResultPanel" style={{ marginTop: 14 }}>
-          <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
-            <h2 className="sectionTitle" style={{ margin: 0 }}>
-              {t.resultTitle}
-            </h2>
-            <strong style={{ color: decisionColor }}>{decisionLabel(result.decision, lang)}</strong>
-          </div>
-
-          <div className="fdEntryResultGrid">
-            <div>
-              {result.member?.photoUrl ? (
-                <Image
-                  className="card"
-                  style={{ width: 112, height: 112, objectFit: "cover" }}
-                  src={result.member.photoUrl}
-                  alt={`${result.member.name} photo`}
-                  width={112}
-                  height={112}
-                  unoptimized
-                />
-              ) : (
-                <div className="card" style={{ width: 112, height: 112, display: "grid", placeItems: "center", color: "var(--muted)", fontSize: 12 }}>
-                  {t.noPhoto}
+            <div className="fdGlassSubPanel fdEntryResultPanelInline">
+              <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
+                <h2 className="sectionTitle" style={{ margin: 0 }}>{t.resultTitle}</h2>
+                {result ? <strong style={{ color: decisionColor }}>{decisionLabel(result.decision, lang)}</strong> : null}
+              </div>
+              {result ? (
+                <div className="fdDataGrid" style={{ marginTop: 10 }}>
+                  <p className="sub">
+                    {t.memberName}: {result.member?.name ?? "-"}
+                  </p>
+                  <p className="sub">
+                    {t.phoneLast4}: {result.member?.phoneLast4 ?? "-"}
+                  </p>
+                  <p className="sub">
+                    {t.membership}: {membershipLabel(result.membership, lang)}
+                  </p>
+                  <p className="sub">
+                    {t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}
+                  </p>
+                  <p className="sub">
+                    {t.todayCount}: {result.todayCheckinCount}
+                  </p>
+                  <p className="sub">
+                    {t.checkedAt}: {formatDateTime(result.checkedAt)}
+                  </p>
+                  <p className="sub">
+                    {t.reason}: {denyReasonLabel(result.reason, lang)}
+                  </p>
+                  <p className="sub">
+                    {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
+                  </p>
                 </div>
+              ) : (
+                <p className="fdGlassText" style={{ marginTop: 8 }}>{t.resultPending}</p>
               )}
             </div>
-            <div className="fdDataGrid">
-              <p className="sub">
-                {t.memberName}: {result.member?.name ?? "-"}
-              </p>
-              <p className="sub">
-                {t.phoneLast4}: {result.member?.phoneLast4 ?? "-"}
-              </p>
-              <p className="sub">
-                {t.membership}: {membershipLabel(result.membership, lang)}
-              </p>
-              <p className="sub">
-                {t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}
-              </p>
-              <p className="sub">
-                {t.todayCount}: {result.todayCheckinCount}
-              </p>
-              <p className="sub">
-                {t.checkedAt}: {formatDateTime(result.checkedAt)}
-              </p>
-              <p className="sub">
-                {t.reason}: {denyReasonLabel(result.reason, lang)}
-              </p>
-              <p className="sub">
-                {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
-              </p>
-            </div>
           </div>
         </section>
-      ) : null}
 
         <ManualAllowPanel onDone={() => { void loadRecentCheckins(); }} />
 
