@@ -829,6 +829,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdEntryTopGrid{
   align-items: start;
   grid-template-columns: minmax(420px, 1.12fr) minmax(340px, .88fr);
+  gap: 12px;
 }
 .fdEntryScannerVideo{
   margin-top: 8px;
@@ -847,6 +848,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdEntryManualForm .fdPillBtn{
   justify-content: center;
+}
+.fdEntryManualPanel{
+  align-self: start;
+  height: fit-content;
 }
 .fdEntryResultPanel{
   border-color: rgba(152, 198, 238, .64);
@@ -1966,6 +1971,31 @@ body.fdPageDark .footerInner{
 .fdModal.fdModalLight .input:focus{
   border-color: #9fc2ef;
   box-shadow: 0 0 0 3px rgba(178, 210, 246, .38);
+}
+.fdModal.fdModalLight .fdEntryTopGrid{
+  align-items: start !important;
+}
+.fdModal.fdModalLight .fdEntryTopGrid > .fdGlassSubPanel{
+  height: auto !important;
+  min-height: 0 !important;
+}
+.fdModal.fdModalLight .fdEntryManualPanel{
+  align-self: start !important;
+}
+.fdModal.fdModalLight .fdEntryScannerVideo{
+  min-height: 320px;
+  background: #0b0f16 !important;
+  border-color: rgba(146, 173, 210, .56) !important;
+  box-shadow: inset 0 0 0 1px rgba(18, 28, 44, .76);
+}
+.fdModal.fdModalLight .fdEntryManualForm{
+  gap: 10px;
+}
+.fdModal.fdModalLight .fdEntryManualForm .fdPillBtn{
+  width: 100%;
+}
+.fdModal.fdModalLight .fdEntryReasonForm .fdPillBtn{
+  justify-self: stretch;
 }
 .fdModal.fdModalLight .fdChip{
   background: #f3f7ff;
