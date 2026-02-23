@@ -324,7 +324,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   return (
     <main className={embedded ? "fdEmbedScene" : "fdGlassScene"} style={embedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
       <section
-        className={embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"}
+        className={`${embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"} fdEntryLayout`}
         style={embedded ? { minHeight: "auto", height: "auto", padding: 12 } : undefined}
       >
         {!embedded ? (
@@ -338,26 +338,26 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             </div>
           </section>
         ) : (
-          <div className="fdGlassSubPanel" style={{ padding: 12, marginBottom: 12 }}>
+          <div className="fdGlassSubPanel fdEntryIntroPanel" style={{ padding: 12, marginBottom: 12 }}>
             <h2 className="sectionTitle" style={{ marginBottom: 2 }}>{t.title}</h2>
             <p className="fdGlassText" style={{ marginTop: 0 }}>{t.sub}</p>
           </div>
         )}
 
-        <section className="fdTwoCol">
-          <div className="fdGlassSubPanel">
+        <section className="fdTwoCol fdEntryTopGrid">
+          <div className="fdGlassSubPanel fdEntryScannerPanel">
             <h2 className="sectionTitle">{t.cameraTitle}</h2>
-            <video ref={videoRef} className="input" style={{ marginTop: 8, minHeight: 260, background: "#111", borderColor: "rgba(255,255,255,.25)" }} muted playsInline />
-            <p className="fdGlassText" style={{ marginTop: 8 }}>
+            <video ref={videoRef} className="input fdEntryScannerVideo" muted playsInline />
+            <p className="fdGlassText fdEntryScannerState">
               {scannerReady ? t.cameraReady : t.cameraPreparing}
             </p>
             {cameraError ? <p className="error" style={{ marginTop: 8 }}>{cameraError}</p> : null}
           </div>
 
-          <div className="fdGlassSubPanel">
+          <div className="fdGlassSubPanel fdEntryManualPanel">
             <h2 className="sectionTitle">{t.manualTitle}</h2>
             <form
-              className="field"
+              className="field fdEntryManualForm"
               onSubmit={(event) => {
                 event.preventDefault();
                 void callVerify(manualInput);
@@ -371,57 +371,8 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
           </div>
         </section>
 
-        <ManualAllowPanel onDone={() => { void loadRecentCheckins(); }} />
-
-        <section className="fdGlassSubPanel" style={{ marginTop: 14 }}>
-          <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
-            <h2 className="sectionTitle" style={{ margin: 0 }}>{t.recentTitle}</h2>
-            <button
-              type="button"
-              className="fdPillBtn"
-              onClick={() => void loadRecentCheckins()}
-              disabled={recentLoading || !!voidingId}
-            >
-              {t.recentReload}
-            </button>
-          </div>
-          {recentWarning ? <p className="fdGlassText" style={{ marginTop: 8, color: "var(--brand)" }}>{recentWarning}</p> : null}
-          {recentError ? <p className="error" style={{ marginTop: 8 }}>{recentError}</p> : null}
-          {recentLoading ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.recentLoading}</p> : null}
-          {!recentLoading && recentItems.length === 0 ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.recentEmpty}</p> : null}
-          <div className="fdListStack" style={{ marginTop: 8 }}>
-            {recentItems.map((item) => {
-              const memberLabel = item.memberCode
-                ? `${item.memberName || "-"} (#${item.memberCode})`
-                : (item.memberName || "-");
-              const canVoid = item.result.toLowerCase() === "allow";
-              return (
-                <div key={item.id} className="card" style={{ padding: 10 }}>
-                  <div style={{ display: "grid", gap: 4 }}>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentMember}: {memberLabel}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentMethod}: {item.method || "-"}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentResult}: {item.result || "-"}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentReason}: {item.reason || "-"}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentCheckedAt}: {formatDateTime(item.checkedAt)}</p>
-                  </div>
-                  <div className="fdInventoryActions" style={{ marginTop: 8 }}>
-                    <button
-                      type="button"
-                      className="fdPillBtn"
-                      disabled={!canVoid || voidingId === item.id}
-                      onClick={() => void handleVoidCheckin(item)}
-                    >
-                      {voidingId === item.id ? t.recentVoidingAction : t.recentVoidAction}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
       {result ? (
-        <section className="fdGlassSubPanel" style={{ marginTop: 14 }}>
+        <section className="fdGlassSubPanel fdEntryResultPanel" style={{ marginTop: 14 }}>
           <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
             <h2 className="sectionTitle" style={{ margin: 0 }}>
               {t.resultTitle}
@@ -429,7 +380,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             <strong style={{ color: decisionColor }}>{decisionLabel(result.decision, lang)}</strong>
           </div>
 
-          <div style={{ marginTop: 10, display: "grid", gap: 14, gridTemplateColumns: "112px 1fr" }}>
+          <div className="fdEntryResultGrid">
             <div>
               {result.member?.photoUrl ? (
                 <Image
@@ -476,6 +427,55 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
           </div>
         </section>
       ) : null}
+
+        <ManualAllowPanel onDone={() => { void loadRecentCheckins(); }} />
+
+        <section className="fdGlassSubPanel fdEntryRecentPanel" style={{ marginTop: 14 }}>
+          <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
+            <h2 className="sectionTitle" style={{ margin: 0 }}>{t.recentTitle}</h2>
+            <button
+              type="button"
+              className="fdPillBtn"
+              onClick={() => void loadRecentCheckins()}
+              disabled={recentLoading || !!voidingId}
+            >
+              {t.recentReload}
+            </button>
+          </div>
+          {recentWarning ? <p className="fdGlassText" style={{ marginTop: 8, color: "var(--brand)" }}>{recentWarning}</p> : null}
+          {recentError ? <p className="error" style={{ marginTop: 8 }}>{recentError}</p> : null}
+          {recentLoading ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.recentLoading}</p> : null}
+          {!recentLoading && recentItems.length === 0 ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.recentEmpty}</p> : null}
+          <div className="fdListStack" style={{ marginTop: 8 }}>
+            {recentItems.map((item) => {
+              const memberLabel = item.memberCode
+                ? `${item.memberName || "-"} (#${item.memberCode})`
+                : (item.memberName || "-");
+              const canVoid = item.result.toLowerCase() === "allow";
+              return (
+                <div key={item.id} className="card fdEntryRecentItem" style={{ padding: 10 }}>
+                  <div style={{ display: "grid", gap: 4 }}>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentMember}: {memberLabel}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentMethod}: {item.method || "-"}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentResult}: {item.result || "-"}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentReason}: {item.reason || "-"}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentCheckedAt}: {formatDateTime(item.checkedAt)}</p>
+                  </div>
+                  <div className="fdInventoryActions" style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="fdPillBtn"
+                      disabled={!canVoid || voidingId === item.id}
+                      onClick={() => void handleVoidCheckin(item)}
+                    >
+                      {voidingId === item.id ? t.recentVoidingAction : t.recentVoidAction}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       </section>
     </main>
   );

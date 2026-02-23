@@ -156,8 +156,8 @@ export function ManualAllowPanel({ onDone }: { onDone?: () => void }) {
   }
 
   return (
-    <section className="fdGlassSubPanel" style={{ marginTop: 14, padding: 14 }}>
-      <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
+    <section className="fdGlassSubPanel fdEntryManualAllowPanel" style={{ marginTop: 14, padding: 14 }}>
+      <div className="actions fdEntryManualAllowHead" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
         <h2 className="sectionTitle" style={{ margin: 0 }}>{t.title}</h2>
         <p className="fdGlassText" style={{ marginTop: 0, fontSize: 12 }}>{t.hint}</p>
       </div>
@@ -166,7 +166,7 @@ export function ManualAllowPanel({ onDone }: { onDone?: () => void }) {
       {submitError ? <p className="error" style={{ marginTop: 8 }}>{submitError}</p> : null}
       {submitOk ? <p className="fdGlassText" style={{ marginTop: 8, color: "#d9ffe0" }}>{submitOk}</p> : null}
 
-      <div className="fdTwoCol" style={{ marginTop: 8 }}>
+      <div className="fdTwoCol fdEntryManualSearchGrid" style={{ marginTop: 8 }}>
         <div style={{ display: "grid", gap: 8 }}>
           <input
             value={query}
@@ -191,7 +191,7 @@ export function ManualAllowPanel({ onDone }: { onDone?: () => void }) {
         </div>
       </div>
 
-      <form style={{ marginTop: 8 }} onSubmit={submit}>
+      <form className="fdEntryReasonForm" style={{ marginTop: 8 }} onSubmit={submit}>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
@@ -200,13 +200,13 @@ export function ManualAllowPanel({ onDone }: { onDone?: () => void }) {
           style={{ minHeight: 92 }}
           required
         />
-        <button type="submit" className="fdPillBtn" style={{ marginTop: 10 }} disabled={!canSubmit}>
+        <button type="submit" className="fdPillBtn fdPillBtnPrimary" style={{ marginTop: 10 }} disabled={!canSubmit}>
           {submitLoading ? t.submitBusy : t.submit}
         </button>
       </form>
 
       {result ? (
-        <div className="fdTwoCol" style={{ marginTop: 12 }}>
+        <div className="fdTwoCol fdEntryManualResultGrid" style={{ marginTop: 12 }}>
           <div className="fdGlassSubPanel" style={{ padding: 12 }}>
             <div className="actions" style={{ marginTop: 0, justifyContent: "space-between" }}>
               <strong>{t.result}</strong>

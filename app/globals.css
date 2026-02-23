@@ -822,6 +822,63 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+.fdEntryLayout{
+  display: grid;
+  gap: 12px;
+}
+.fdEntryTopGrid{
+  align-items: start;
+  grid-template-columns: minmax(420px, 1.12fr) minmax(340px, .88fr);
+}
+.fdEntryScannerVideo{
+  margin-top: 8px;
+  width: 100%;
+  min-height: 280px;
+  max-height: 360px;
+  background: #0b0f16;
+  border-color: rgba(171, 194, 226, .48);
+  object-fit: cover;
+}
+.fdEntryScannerState{
+  margin-top: 10px;
+}
+.fdEntryManualForm{
+  gap: 10px;
+}
+.fdEntryManualForm .fdPillBtn{
+  justify-content: center;
+}
+.fdEntryResultPanel{
+  border-color: rgba(152, 198, 238, .64);
+}
+.fdEntryResultGrid{
+  margin-top: 10px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 112px minmax(0, 1fr);
+}
+.fdEntryManualAllowHead{
+  gap: 10px;
+}
+.fdEntryManualAllowHead .fdGlassText{
+  max-width: 460px;
+}
+.fdEntryManualSearchGrid{
+  align-items: start;
+}
+.fdEntryReasonForm{
+  display: grid;
+  gap: 8px;
+}
+.fdEntryReasonForm .fdPillBtn{
+  justify-self: start;
+}
+.fdEntryManualResultGrid{
+  align-items: stretch;
+}
+.fdEntryRecentItem{
+  border-color: rgba(193, 212, 236, .84);
+}
 .fdCapabilityGrid{
   display:grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2546,6 +2603,19 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     font-size: 22px;
   }
   .fdTwoCol{ grid-template-columns: 1fr; }
+  .fdEntryTopGrid{
+    grid-template-columns: 1fr;
+  }
+  .fdEntryScannerVideo{
+    min-height: 220px;
+    max-height: 280px;
+  }
+  .fdEntryResultGrid{
+    grid-template-columns: 1fr;
+  }
+  .fdEntryReasonForm .fdPillBtn{
+    justify-self: stretch;
+  }
   .fdActionGrid{ grid-template-columns: 1fr; }
   .fdCapabilityGrid{ grid-template-columns: 1fr; }
   .fdCapabilityRingStage{
