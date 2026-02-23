@@ -733,7 +733,10 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
           </div>
         ) : null}
 
-        <section className={`fdTwoCol ${embedded ? "fdMemberModalCols" : ""}`} style={{ gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))" }}>
+        <section
+          className={`fdTwoCol ${embedded ? "fdMemberModalCols" : ""}`}
+          style={embedded ? undefined : { gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))" }}
+        >
           <div className="fdGlassSubPanel fdMemberFindPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{t.findTitle}</h2>
             <p className="fdGlassText" style={{ marginTop: 6 }}>{t.findHint}</p>
@@ -777,7 +780,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
 
               <label className="fdGlassText" style={{ marginTop: 0 }}>{t.customTitle}</label>
               {customRows.map((row, idx) => (
-                <div key={`${idx}-${row.key}`} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8 }}>
+                <div key={`${idx}-${row.key}`} className="fdMemberCustomRow">
                   <input
                     value={row.key}
                     onChange={(e) => setCustomRows((prev) => prev.map((it, i) => (i === idx ? { ...it, key: e.target.value } : it)))}

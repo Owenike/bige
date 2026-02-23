@@ -775,10 +775,21 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdMemberModalCols{
   align-items: start;
+  grid-template-columns: minmax(360px, .95fr) minmax(520px, 1.25fr);
+  gap: 14px;
 }
 .fdMemberFindPanel,
 .fdMemberCreatePanel{
   min-height: 0;
+}
+.fdMemberCustomRow{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.fdMemberCustomRow .input{
+  min-width: 0;
 }
 .fdEmbedBackdrop .fdMemberCreatePanel .field{
   max-height: min(54vh, 560px);
@@ -2554,6 +2565,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .fdModal.fdModalHandover .fdHandoverGrid{
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .fdMemberModalCols{
+    grid-template-columns: minmax(320px, .95fr) minmax(420px, 1.15fr);
+  }
 }
 @media (max-width: 1260px) and (min-width: 901px){
   .fdGlassTopFixed{
@@ -2561,5 +2575,13 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
   .fdGlassTopFixed > :last-child{
     grid-column: 1 / -1;
+  }
+}
+@media (max-width: 1024px){
+  .fdMemberCustomRow{
+    grid-template-columns: 1fr;
+  }
+  .fdMemberCustomRow .fdPillBtn{
+    justify-self: stretch;
   }
 }
