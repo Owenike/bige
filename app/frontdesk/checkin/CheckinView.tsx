@@ -372,44 +372,44 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
                 </button>
               </form>
             </div>
-
-            <div className="fdGlassSubPanel fdEntryResultPanelInline">
-              <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
-                <h2 className="sectionTitle" style={{ margin: 0 }}>{t.resultTitle}</h2>
-                {result ? <strong style={{ color: decisionColor }}>{decisionLabel(result.decision, lang)}</strong> : null}
-              </div>
-              {result ? (
-                <div className="fdDataGrid" style={{ marginTop: 10 }}>
-                  <p className="sub">
-                    {t.memberName}: {result.member?.name ?? "-"}
-                  </p>
-                  <p className="sub">
-                    {t.phoneLast4}: {result.member?.phoneLast4 ?? "-"}
-                  </p>
-                  <p className="sub">
-                    {t.membership}: {membershipLabel(result.membership, lang)}
-                  </p>
-                  <p className="sub">
-                    {t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}
-                  </p>
-                  <p className="sub">
-                    {t.todayCount}: {result.todayCheckinCount}
-                  </p>
-                  <p className="sub">
-                    {t.checkedAt}: {formatDateTime(result.checkedAt)}
-                  </p>
-                  <p className="sub">
-                    {t.reason}: {denyReasonLabel(result.reason, lang)}
-                  </p>
-                  <p className="sub">
-                    {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
-                  </p>
-                </div>
-              ) : (
-                <p className="fdGlassText" style={{ marginTop: 8 }}>{t.resultPending}</p>
-              )}
-            </div>
           </div>
+        </section>
+
+        <section className="fdGlassSubPanel fdEntryResultPanelInline">
+          <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
+            <h2 className="sectionTitle" style={{ margin: 0 }}>{t.resultTitle}</h2>
+            {result ? <strong style={{ color: decisionColor }}>{decisionLabel(result.decision, lang)}</strong> : null}
+          </div>
+          {result ? (
+            <div className="fdDataGrid" style={{ marginTop: 10 }}>
+              <p className="sub">
+                {t.memberName}: {result.member?.name ?? "-"}
+              </p>
+              <p className="sub">
+                {t.phoneLast4}: {result.member?.phoneLast4 ?? "-"}
+              </p>
+              <p className="sub">
+                {t.membership}: {membershipLabel(result.membership, lang)}
+              </p>
+              <p className="sub">
+                {t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}
+              </p>
+              <p className="sub">
+                {t.todayCount}: {result.todayCheckinCount}
+              </p>
+              <p className="sub">
+                {t.checkedAt}: {formatDateTime(result.checkedAt)}
+              </p>
+              <p className="sub">
+                {t.reason}: {denyReasonLabel(result.reason, lang)}
+              </p>
+              <p className="sub">
+                {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
+              </p>
+            </div>
+          ) : (
+            <p className="fdGlassText" style={{ marginTop: 8 }}>{t.resultPending}</p>
+          )}
         </section>
 
         <ManualAllowPanel onDone={() => { void loadRecentCheckins(); }} />

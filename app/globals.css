@@ -827,18 +827,16 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 12px;
 }
 .fdEntryTopGrid{
-  align-items: stretch;
+  align-items: start;
   grid-template-columns: minmax(420px, 1.12fr) minmax(340px, .88fr);
   gap: 12px;
 }
 .fdEntrySideCol{
   display: grid;
-  grid-template-rows: auto minmax(220px, 1fr);
-  align-content: stretch;
-  align-items: stretch;
+  align-content: start;
+  align-items: start;
   gap: 12px;
   min-height: 0;
-  height: 100%;
 }
 .fdEntryScannerVideo{
   margin-top: 8px;
@@ -870,12 +868,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     0 12px 26px rgba(6, 10, 20, .36),
     0 2px 8px rgba(8, 14, 26, .28);
   padding: 12px;
-  align-self: stretch;
+  align-self: start;
   height: auto;
 }
 .fdEntryResultPanelInline{
-  min-height: 220px;
-  height: 100%;
+  min-height: 120px;
 }
 .fdEntryResultPanelInline .fdDataGrid{
   align-content: start;
@@ -2000,19 +1997,15 @@ body.fdPageDark .footerInner{
   box-shadow: 0 0 0 3px rgba(178, 210, 246, .38);
 }
 .fdModal.fdModalLight .fdEntryTopGrid{
-  align-items: stretch !important;
+  align-items: start !important;
 }
-.fdModal.fdModalLight .fdEntryTopGrid > .fdGlassSubPanel{
+.fdModal.fdModalLight .fdEntryTopGrid > .fdGlassSubPanel,
+.fdModal.fdModalLight .fdEntryTopGrid > .fdEntrySideCol{
   height: auto !important;
   min-height: 0 !important;
 }
-.fdModal.fdModalLight .fdEntryTopGrid > .fdEntrySideCol{
-  height: 100% !important;
-  min-height: 0 !important;
-  align-self: stretch !important;
-}
 .fdModal.fdModalLight .fdEntryManualCard{
-  align-self: stretch !important;
+  align-self: start !important;
   background: #ffffff;
   border-color: #d7e2f0;
   box-shadow: 0 6px 16px rgba(33, 52, 84, .08);
@@ -2032,7 +2025,7 @@ body.fdPageDark .footerInner{
   width: 100%;
 }
 .fdModal.fdModalLight .fdEntryResultPanelInline{
-  min-height: 240px;
+  min-height: 120px;
 }
 .fdModal.fdModalLight .fdEntryReasonForm .fdPillBtn{
   justify-self: stretch;
