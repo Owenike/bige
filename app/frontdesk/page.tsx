@@ -3831,6 +3831,21 @@ export default function FrontdeskPortalPage() {
 
   return (
     <main ref={sceneRef} className={`fdGlassScene ${capabilityOpen ? "fdSceneBlurred" : ""}`}>
+      <div
+        style={{
+          position: "fixed",
+          top: "12px",
+          left: "12px",
+          zIndex: 99999,
+          background: "red",
+          color: "white",
+          padding: "6px 10px",
+          fontWeight: 700,
+          borderRadius: "8px",
+        }}
+      >
+        DEBUG: FRONTDESK LAYOUT V1
+      </div>
       <section className="fdGlassBackdrop fdEnter">
         {error ? <div className="error">{error}</div> : null}
         {shiftActionError ? <div className="error" style={{ marginTop: error ? 10 : 0 }}>{shiftActionError}</div> : null}
