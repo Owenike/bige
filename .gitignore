@@ -6,6 +6,7 @@ node_modules/
 .next/
 out/
 .codex/
+.tmp/
 supabase/.temp/
 tsconfig.tsbuildinfo
 

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IssueEntryTokenResponse } from "../../../types/entry";
 import { useI18n } from "../../i18n-provider";
+import { MemberTabs } from "../_components/MemberTabs";
 
 const FALLBACK_REFRESH_SECONDS = 60;
 
@@ -81,6 +82,7 @@ export default function MemberEntryQrPage() {
       <p className="mt-2 text-sm text-gray-600">
         {zh ? "請在櫃檯出示此 QR。系統會在過期前自動更新。" : "Present this QR at front desk. It auto refreshes before expiry."}
       </p>
+      <MemberTabs />
 
       <section className="card mt-6 rounded-lg border p-4">
         {qrImageSrc ? (

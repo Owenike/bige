@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../lib/auth-context";
+import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 type CustomFields = Record<string, string>;
 
@@ -89,13 +90,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (hasBirthDate && body.birthDate && !parsedBirthDate) {
     return NextResponse.json({ error: "Invalid birth date format" }, { status: 400 });
   }
-  if (hasStatus && rawStatus && !["active", "inactive", "suspended"].includes(rawStatus)) {
+  if (hasStatus && rawStatus && !["active", "expired", "frozen", "suspended", "blacklisted"].includes(rawStatus)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
 
   const memberResult = await auth.supabase
     .from("members")
-    .select("id, store_id, phone, email")
+    .select("id, store_id, phone, email, auth_user_id")
     .eq("tenant_id", auth.context.tenantId)
     .eq("id", id)
     .maybeSingle();
@@ -146,6 +147,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
   }
 
+  if (memberResult.data.auth_user_id && hasEmail && email && email !== String(memberResult.data.email || "").trim().toLowerCase()) {
+    const admin = createSupabaseAdminClient();
+    const authUpdateResult = await admin.auth.admin.updateUserById(String(memberResult.data.auth_user_id), {
+      email,
+      email_confirm: true,
+    });
+    if (authUpdateResult.error) {
+      return NextResponse.json({ error: authUpdateResult.error.message }, { status: 500 });
+    }
+  }
+
   const updatePayload: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
@@ -166,7 +178,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .update(updatePayload)
     .eq("tenant_id", auth.context.tenantId)
     .eq("id", id)
-    .select("id, full_name, phone, email, photo_url, status, birth_date, member_code, custom_fields")
+    .select(
+      [
+        "id",
+        "full_name",
+        "phone",
+        "email",
+        "photo_url",
+        "status",
+        "birth_date",
+        "member_code",
+        "custom_fields",
+        "portal_status",
+        "portal_activated_at",
+        "portal_last_activation_sent_at",
+      ].join(", "),
+    )
     .maybeSingle();
 
   if (updateResult.error) return NextResponse.json({ error: updateResult.error.message }, { status: 500 });

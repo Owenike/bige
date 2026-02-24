@@ -11,7 +11,8 @@
                     "db:migrate:apply":  "powershell -ExecutionPolicy Bypass -File scripts/apply-migrations.ps1",
                     "ui:check-cards":  "powershell -ExecutionPolicy Bypass -File scripts/check-page-cards.ps1",
                     "go-live:check":  "powershell -ExecutionPolicy Bypass -File scripts/go-live-check.ps1",
-                    "test:smoke":  "powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1"
+                    "test:smoke":  "powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1",
+                    "test:unit":  "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1"
                 },
     "dependencies":  {
                          "@supabase/ssr":  "^0.8.0",

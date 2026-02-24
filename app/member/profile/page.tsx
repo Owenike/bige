@@ -3,15 +3,21 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { useI18n } from "../../i18n-provider";
+import { MemberTabs } from "../_components/MemberTabs";
 
 const MemberSchema = z
   .object({
     full_name: z.string().nullable().optional(),
     phone: z.string().nullable().optional(),
+    email: z.string().nullable().optional(),
+    address: z.string().nullable().optional(),
+    emergency_contact_name: z.string().nullable().optional(),
+    emergency_contact_phone: z.string().nullable().optional(),
     photo_url: z.string().nullable().optional(),
     notes: z.string().nullable().optional(),
     consent_status: z.string().nullable().optional(),
     consent_signed_at: z.string().nullable().optional(),
+    portal_status: z.string().nullable().optional(),
   })
   .passthrough();
 
@@ -26,6 +32,10 @@ type Member = z.infer<typeof MemberSchema>;
 type FormState = {
   full_name: string;
   phone: string;
+  email: string;
+  address: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
   photo_url: string;
   notes: string;
   consentAgree: boolean;
@@ -54,6 +64,10 @@ export default function MemberProfilePage() {
   const [form, setForm] = useState<FormState>({
     full_name: "",
     phone: "",
+    email: "",
+    address: "",
+    emergency_contact_name: "",
+    emergency_contact_phone: "",
     photo_url: "",
     notes: "",
     consentAgree: false,
@@ -75,10 +89,15 @@ export default function MemberProfilePage() {
             edit: "編輯資料",
             fullName: "姓名",
             phone: "電話",
+            email: "Email",
+            address: "地址",
+            emergencyName: "緊急聯絡人",
+            emergencyPhone: "緊急聯絡電話",
             photoUrl: "照片網址",
             notes: "備註",
             consentStatus: "同意狀態",
             consentSignedAt: "同意時間",
+            portalStatus: "會員入口狀態",
             agree: "我同意會員條款",
             alreadyAgreed: "（已同意）",
             agreeHint: "勾選後會把同意狀態設為 agreed，並寫入同意時間。",
@@ -99,10 +118,15 @@ export default function MemberProfilePage() {
             edit: "Edit",
             fullName: "Full Name",
             phone: "Phone",
+            email: "Email",
+            address: "Address",
+            emergencyName: "Emergency Contact",
+            emergencyPhone: "Emergency Phone",
             photoUrl: "Photo URL",
             notes: "Notes",
             consentStatus: "Consent Status",
             consentSignedAt: "Consent Signed At",
+            portalStatus: "Portal Status",
             agree: "I agree to member terms",
             alreadyAgreed: "(Already agreed)",
             agreeHint: "Checking this sets consent_status=agreed and writes consent_signed_at.",
@@ -140,6 +164,10 @@ export default function MemberProfilePage() {
       setForm({
         full_name: toText(m.full_name),
         phone: toText(m.phone),
+        email: toText(m.email),
+        address: toText(m.address),
+        emergency_contact_name: toText(m.emergency_contact_name),
+        emergency_contact_phone: toText(m.emergency_contact_phone),
         photo_url: toText(m.photo_url),
         notes: toText(m.notes),
         consentAgree: false,
@@ -165,6 +193,10 @@ export default function MemberProfilePage() {
       const payload = {
         full_name: form.full_name,
         phone: form.phone,
+        email: form.email,
+        address: form.address,
+        emergency_contact_name: form.emergency_contact_name,
+        emergency_contact_phone: form.emergency_contact_phone,
         photo_url: form.photo_url,
         notes: form.notes,
         consent_agree: form.consentAgree === true,
@@ -202,6 +234,7 @@ export default function MemberProfilePage() {
           <h1 className="h1" style={{ marginTop: 10, fontSize: 34 }}>
             {t.profile}
           </h1>
+          <MemberTabs />
 
           <div className="actions" style={{ marginTop: 10 }}>
             <a className="btn" href="/member">
@@ -209,6 +242,18 @@ export default function MemberProfilePage() {
             </a>
             <a className="btn btnPrimary" href="/member/bookings">
               {t.myBookings}
+            </a>
+            <a className="btn" href="/member/notifications">
+              {lang === "zh" ? "通知中心" : "Notifications"}
+            </a>
+            <a className="btn" href="/member/support">
+              {lang === "zh" ? "客服工單" : "Support"}
+            </a>
+            <a className="btn" href="/member/rules">
+              {lang === "zh" ? "規則" : "Rules"}
+            </a>
+            <a className="btn" href="/member/settings">
+              {lang === "zh" ? "設定" : "Settings"}
             </a>
           </div>
 
@@ -245,6 +290,18 @@ export default function MemberProfilePage() {
                       {t.phone}: {toText(member.phone) || "-"}
                     </div>
                     <div className="sub">
+                      {t.email}: {toText(member.email) || "-"}
+                    </div>
+                    <div className="sub">
+                      {t.address}: {toText(member.address) || "-"}
+                    </div>
+                    <div className="sub">
+                      {t.emergencyName}: {toText(member.emergency_contact_name) || "-"}
+                    </div>
+                    <div className="sub">
+                      {t.emergencyPhone}: {toText(member.emergency_contact_phone) || "-"}
+                    </div>
+                    <div className="sub">
                       {t.photoUrl}: {toText(member.photo_url) || "-"}
                     </div>
                     <div className="sub">
@@ -255,6 +312,9 @@ export default function MemberProfilePage() {
                     </div>
                     <div className="sub">
                       {t.consentSignedAt}: {formatDateTime(member.consent_signed_at) || "-"}
+                    </div>
+                    <div className="sub">
+                      {t.portalStatus}: {toText(member.portal_status) || "-"}
                     </div>
                   </div>
                 </div>
@@ -283,6 +343,47 @@ export default function MemberProfilePage() {
                   value={form.phone}
                   onChange={(ev) => setForm((s) => ({ ...s, phone: ev.target.value }))}
                   placeholder={lang === "zh" ? "電話" : "phone"}
+                />
+
+                <label className="sub" style={{ display: "block", marginTop: 10 }}>
+                  {t.email}
+                </label>
+                <input
+                  className="input"
+                  type="email"
+                  value={form.email}
+                  onChange={(ev) => setForm((s) => ({ ...s, email: ev.target.value }))}
+                  placeholder="you@example.com"
+                />
+
+                <label className="sub" style={{ display: "block", marginTop: 10 }}>
+                  {t.address}
+                </label>
+                <input
+                  className="input"
+                  value={form.address}
+                  onChange={(ev) => setForm((s) => ({ ...s, address: ev.target.value }))}
+                  placeholder={lang === "zh" ? "地址" : "address"}
+                />
+
+                <label className="sub" style={{ display: "block", marginTop: 10 }}>
+                  {t.emergencyName}
+                </label>
+                <input
+                  className="input"
+                  value={form.emergency_contact_name}
+                  onChange={(ev) => setForm((s) => ({ ...s, emergency_contact_name: ev.target.value }))}
+                  placeholder={lang === "zh" ? "緊急聯絡人姓名" : "emergency contact name"}
+                />
+
+                <label className="sub" style={{ display: "block", marginTop: 10 }}>
+                  {t.emergencyPhone}
+                </label>
+                <input
+                  className="input"
+                  value={form.emergency_contact_phone}
+                  onChange={(ev) => setForm((s) => ({ ...s, emergency_contact_phone: ev.target.value }))}
+                  placeholder={lang === "zh" ? "緊急聯絡電話" : "emergency contact phone"}
                 />
 
                 <label className="sub" style={{ display: "block", marginTop: 10 }}>

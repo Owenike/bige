@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useI18n } from "../../i18n-provider";
+import { MemberTabs } from "../_components/MemberTabs";
 
 const CANCEL_OR_RESCHEDULE_LOCK_MINUTES = 120;
 
@@ -29,6 +30,14 @@ type BookingEditState = {
   rescheduleEndsLocal: string;
   submitting: boolean;
   error: string | null;
+};
+
+type CreateBookingFormState = {
+  serviceName: string;
+  coachId: string;
+  startsLocal: string;
+  endsLocal: string;
+  note: string;
 };
 
 function canModifyByTime(startsAtIso: string) {
@@ -75,10 +84,21 @@ export default function MemberBookingsPage() {
   const status = searchParams.get("status") ?? "";
   const { locale } = useI18n();
   const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
+  const zh = lang === "zh";
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<Booking[]>([]);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createMessage, setCreateMessage] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createForm, setCreateForm] = useState<CreateBookingFormState>({
+    serviceName: "",
+    coachId: "",
+    startsLocal: "",
+    endsLocal: "",
+    note: "",
+  });
 
   const [edit, setEdit] = useState<Record<string, BookingEditState>>({});
 
@@ -91,6 +111,14 @@ export default function MemberBookingsPage() {
             backMember: "返回會員首頁",
             profile: "個人資料",
             reload: "重新載入",
+            createTitle: "新增預約",
+            createService: "課程/服務名稱",
+            createCoach: "教練 ID（可選）",
+            createStartsAt: "開始時間",
+            createEndsAt: "結束時間",
+            createNote: "備註",
+            createAction: "建立預約",
+            creating: "建立中...",
             filter: "狀態篩選",
             loading: "載入中...",
             noData: "尚無預約資料",
@@ -117,6 +145,7 @@ export default function MemberBookingsPage() {
             requireReason: "請填寫原因",
             requireTime: "請填寫開始與結束時間",
             endAfterStart: "結束時間必須晚於開始時間",
+            createSuccess: "預約建立成功",
           }
         : {
             title: "My Bookings",
@@ -124,6 +153,14 @@ export default function MemberBookingsPage() {
             backMember: "Back to Member",
             profile: "Profile",
             reload: "Reload",
+            createTitle: "Create Booking",
+            createService: "Service Name",
+            createCoach: "Coach ID (optional)",
+            createStartsAt: "Starts At",
+            createEndsAt: "Ends At",
+            createNote: "Note",
+            createAction: "Create Booking",
+            creating: "Creating...",
             filter: "Status Filter",
             loading: "Loading...",
             noData: "No bookings",
@@ -150,6 +187,7 @@ export default function MemberBookingsPage() {
             requireReason: "reason is required",
             requireTime: "startsAt and endsAt are required",
             endAfterStart: "endsAt must be after startsAt",
+            createSuccess: "Booking created",
           },
     [lang],
   );
@@ -282,6 +320,41 @@ export default function MemberBookingsPage() {
     return { reason: "", rescheduleStartsLocal: "", rescheduleEndsLocal: "", submitting: false, error: null };
   }
 
+  async function onCreateBooking() {
+    setCreateBusy(true);
+    setCreateError(null);
+    setCreateMessage(null);
+    try {
+      const startsAt = fromLocalInputValue(createForm.startsLocal);
+      const endsAt = fromLocalInputValue(createForm.endsLocal);
+      if (!createForm.serviceName.trim()) throw new Error(zh ? "請輸入課程或服務名稱" : "Service name is required");
+      if (!startsAt || !endsAt) throw new Error(t.requireTime);
+      if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) throw new Error(t.endAfterStart);
+
+      const res = await fetch("/api/member/bookings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          serviceName: createForm.serviceName.trim(),
+          coachId: createForm.coachId.trim() || null,
+          startsAt,
+          endsAt,
+          note: createForm.note.trim() || null,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || t.updateFail);
+
+      setCreateMessage(t.createSuccess);
+      setCreateForm({ serviceName: "", coachId: "", startsLocal: "", endsLocal: "", note: "" });
+      await fetchList(status);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : t.updateFail);
+    } finally {
+      setCreateBusy(false);
+    }
+  }
+
   return (
     <main className="container">
       <section className="hero">
@@ -291,6 +364,7 @@ export default function MemberBookingsPage() {
             {t.title}
           </h1>
           <p className="sub">{t.desc}</p>
+          <MemberTabs />
 
           <div className="actions" style={{ marginTop: 10 }}>
             <a className="btn" href="/member">
@@ -302,6 +376,64 @@ export default function MemberBookingsPage() {
             <button className="btn btnPrimary" type="button" onClick={() => void fetchList(status)} disabled={loading}>
               {t.reload}
             </button>
+          </div>
+
+          <div className="card" style={{ marginTop: 12, padding: 12 }}>
+            <div className="kvLabel">{t.createTitle}</div>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <input
+                className="input"
+                value={createForm.serviceName}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, serviceName: event.target.value }))}
+                placeholder={t.createService}
+              />
+              <input
+                className="input"
+                value={createForm.coachId}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, coachId: event.target.value }))}
+                placeholder={t.createCoach}
+              />
+              <label className="sub" style={{ marginBottom: -4 }}>
+                {t.createStartsAt}
+              </label>
+              <input
+                className="input"
+                type="datetime-local"
+                value={createForm.startsLocal}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, startsLocal: event.target.value }))}
+              />
+              <label className="sub" style={{ marginBottom: -4 }}>
+                {t.createEndsAt}
+              </label>
+              <input
+                className="input"
+                type="datetime-local"
+                value={createForm.endsLocal}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, endsLocal: event.target.value }))}
+              />
+              <textarea
+                className="input"
+                value={createForm.note}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, note: event.target.value }))}
+                placeholder={t.createNote}
+                rows={2}
+              />
+            </div>
+            {createError ? (
+              <div className="sub" style={{ marginTop: 8, color: "var(--danger, #b00020)" }}>
+                {createError}
+              </div>
+            ) : null}
+            {createMessage ? (
+              <div className="sub" style={{ marginTop: 8, color: "var(--success, #0b6b3a)" }}>
+                {createMessage}
+              </div>
+            ) : null}
+            <div className="actions" style={{ marginTop: 10 }}>
+              <button className="btn btnPrimary" type="button" onClick={() => void onCreateBooking()} disabled={createBusy}>
+                {createBusy ? t.creating : t.createAction}
+              </button>
+            </div>
           </div>
 
           <div className="card" style={{ marginTop: 12, padding: 12 }}>

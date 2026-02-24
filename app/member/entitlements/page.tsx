@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "../../i18n-provider";
+import { MemberTabs } from "../_components/MemberTabs";
 
 type EntitlementSummary = {
   monthly_expires_at: string | null;
@@ -99,6 +100,15 @@ export default function MemberEntitlementsPage() {
         <p style={{ opacity: 0.8, marginTop: 8 }}>
           {zh ? "\u5165\u5834\u8207\u9810\u7d04\u76f8\u95dc\u7684\u6703\u54e1\u8207\u7968\u5238\u6548\u671f\u3002" : "Membership and pass validity for entry and bookings."}
         </p>
+        <MemberTabs />
+        <div className="actions" style={{ marginTop: 10 }}>
+          <a className="btn" href="/member/history">
+            {zh ? "查看付款與消費紀錄" : "View Billing History"}
+          </a>
+          <a className="btn" href="/member/bookings">
+            {zh ? "前往預約" : "Go to Bookings"}
+          </a>
+        </div>
 
         {loading ? <p style={{ marginTop: 12 }}>{zh ? "\u8f09\u5165\u4e2d..." : "Loading..."}</p> : null}
         {error ? <p style={{ marginTop: 12, color: "crimson" }}>{error}</p> : null}
@@ -155,6 +165,15 @@ export default function MemberEntitlementsPage() {
                 {zh ? "\u6703\u54e1\u65b9\u6848" : "subscriptions"}: {data.subscriptions.length} |{" "}
                 {zh ? "\u6b0a\u76ca" : "entitlements"}: {data.entitlements.length} |{" "}
                 {zh ? "\u7968\u5238" : "entry passes"}: {data.entryPasses.length}
+              </p>
+            </section>
+
+            <section className="card" style={{ marginTop: 20, padding: 12 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{zh ? "續約與付款（待串接）" : "Renewal & Payment (Planned)"}</h2>
+              <p style={{ marginTop: 10, opacity: 0.85 }}>
+                {zh
+                  ? "此區將串接會籍續約、付款方式管理、扣款提醒與電子發票。"
+                  : "This section will include renewals, payment methods, billing reminders, and invoice details."}
               </p>
             </section>
           </>

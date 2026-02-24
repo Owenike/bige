@@ -75,6 +75,9 @@ export async function GET(request: Request) {
         "status",
         "birth_date",
         "member_code",
+        "portal_status",
+        "portal_activated_at",
+        "portal_last_activation_sent_at",
         "custom_fields",
         "notes",
       ].join(", "),
@@ -101,6 +104,9 @@ export async function GET(request: Request) {
     status: string | null;
     birth_date: string | null;
     member_code: string | null;
+    portal_status: string | null;
+    portal_activated_at: string | null;
+    portal_last_activation_sent_at: string | null;
     custom_fields: unknown;
     notes: string | null;
   }>).map((item) => {
@@ -215,10 +221,25 @@ export async function POST(request: Request) {
       health_note: healthNote || null,
       guardian_name: guardianName || null,
       guardian_phone: guardianPhone || null,
+      portal_status: "pending_activation",
+      portal_activated_at: null,
       custom_fields: customFields,
       notes: legacyNotes,
     })
-    .select("id, full_name, phone, email, store_id, custom_fields, notes")
+    .select(
+      [
+        "id",
+        "full_name",
+        "phone",
+        "email",
+        "store_id",
+        "portal_status",
+        "portal_activated_at",
+        "portal_last_activation_sent_at",
+        "custom_fields",
+        "notes",
+      ].join(", "),
+    )
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

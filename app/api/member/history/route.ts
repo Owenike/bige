@@ -52,6 +52,28 @@ export async function GET(request: Request) {
 
   const memberId = memberResult.data.id;
 
+  const loadPayments = async () => {
+    const direct = await auth.supabase
+      .from("payments")
+      .select("*")
+      .eq("tenant_id", auth.context.tenantId)
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (!direct.error || !direct.error.message.includes("member_id")) {
+      return direct;
+    }
+
+    return auth.supabase
+      .from("payments")
+      .select("*, orders!inner(member_id)")
+      .eq("tenant_id", auth.context.tenantId)
+      .eq("orders.member_id", memberId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+  };
+
   const [checkinsRes, redemptionsRes, ordersRes, paymentsRes] = await Promise.all([
     auth.supabase
       .from("checkins")
@@ -74,13 +96,7 @@ export async function GET(request: Request) {
       .eq("member_id", memberId)
       .order("created_at", { ascending: false })
       .limit(limit),
-    auth.supabase
-      .from("payments")
-      .select("*")
-      .eq("tenant_id", auth.context.tenantId)
-      .eq("member_id", memberId)
-      .order("created_at", { ascending: false })
-      .limit(limit),
+    loadPayments(),
   ]);
 
   if (checkinsRes.error || redemptionsRes.error || ordersRes.error || paymentsRes.error) {
@@ -109,4 +125,3 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ memberId, items });
 }
-

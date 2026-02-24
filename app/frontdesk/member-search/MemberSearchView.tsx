@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n-provider";
+import { MemberProgressPanel } from "./MemberProgressPanel";
 
 interface MemberItem {
   id: string;
@@ -11,6 +12,9 @@ interface MemberItem {
   email?: string | null;
   photo_url?: string | null;
   status?: string | null;
+  portal_status?: string | null;
+  portal_activated_at?: string | null;
+  portal_last_activation_sent_at?: string | null;
   birth_date?: string | null;
   member_code?: string | null;
   custom_fields?: Record<string, string>;
@@ -63,6 +67,13 @@ function toCustomRows(fields?: Record<string, string>) {
   return entries.length > 0 ? entries : [{ key: "", value: "" }];
 }
 
+function normalizeMemberStatus(input: string | null | undefined) {
+  const value = (input || "").trim().toLowerCase();
+  if (["active", "expired", "frozen", "suspended", "blacklisted"].includes(value)) return value;
+  if (value === "inactive") return "frozen";
+  return "active";
+}
+
 function buildAllMemberEditForm(member: MemberItem): AllMemberEditForm {
   return {
     fullName: member.full_name || "",
@@ -70,7 +81,7 @@ function buildAllMemberEditForm(member: MemberItem): AllMemberEditForm {
     email: member.email || "",
     photoUrl: member.photo_url || "",
     birthDate: member.birth_date || "",
-    status: member.status || "active",
+    status: normalizeMemberStatus(member.status),
     customRows: toCustomRows(member.custom_fields),
   };
 }
@@ -133,6 +144,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   const [memberCheckins, setMemberCheckins] = useState<CheckinListItem[]>([]);
   const [memberCheckinsLoading, setMemberCheckinsLoading] = useState(false);
   const [memberCheckinsError, setMemberCheckinsError] = useState<string | null>(null);
+  const [activationSendingMemberId, setActivationSendingMemberId] = useState<string | null>(null);
   const [portalReady, setPortalReady] = useState(false);
   const [creating, setCreating] = useState(false);
   const [recentCreatedId, setRecentCreatedId] = useState<string | null>(null);
@@ -222,8 +234,20 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             invalidEmail: "Email 格式錯誤",
             invalidBirthDate: "生日格式錯誤",
             statusActive: "啟用",
-            statusInactive: "停用",
+            statusExpired: "到期",
+            statusFrozen: "凍結",
             statusSuspended: "停權",
+            statusBlacklisted: "黑名單",
+            portalStatus: "會員入口",
+            portalPending: "待啟用",
+            portalReady: "已啟用",
+            portalDisabled: "停用",
+            portalActivatedAt: "啟用時間",
+            portalLastSentAt: "最近寄送",
+            sendActivationEmail: "寄送啟用信",
+            sendingActivationEmail: "寄送中...",
+            sendActivationEmailDone: "啟用信已寄出",
+            sendActivationEmailFail: "寄送啟用信失敗",
             entryRecordTitle: "進場紀錄",
             entryRecordLoading: "載入進場紀錄中...",
             entryRecordEmpty: "目前沒有進場紀錄",
@@ -310,8 +334,20 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             invalidEmail: "Invalid email format",
             invalidBirthDate: "Invalid birth date format",
             statusActive: "Active",
-            statusInactive: "Inactive",
+            statusExpired: "Expired",
+            statusFrozen: "Frozen",
             statusSuspended: "Suspended",
+            statusBlacklisted: "Blacklisted",
+            portalStatus: "Portal",
+            portalPending: "Pending Activation",
+            portalReady: "Active",
+            portalDisabled: "Disabled",
+            portalActivatedAt: "Activated At",
+            portalLastSentAt: "Last Activation Email",
+            sendActivationEmail: "Send Activation Email",
+            sendingActivationEmail: "Sending...",
+            sendActivationEmailDone: "Activation email sent",
+            sendActivationEmailFail: "Failed to send activation email",
             entryRecordTitle: "Entry Records",
             entryRecordLoading: "Loading entry records...",
             entryRecordEmpty: "No entry records yet",
@@ -613,6 +649,74 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     return date.toLocaleString(locale === "en" ? "en-US" : "zh-TW");
   }
 
+  function portalStatusLabel(value: string | null | undefined) {
+    if (value === "active") return t.portalReady;
+    if (value === "disabled") return t.portalDisabled;
+    return t.portalPending;
+  }
+
+  function memberStatusLabel(value: string | null | undefined) {
+    const normalized = normalizeMemberStatus(value);
+    if (normalized === "active") return t.statusActive;
+    if (normalized === "expired") return t.statusExpired;
+    if (normalized === "frozen") return t.statusFrozen;
+    if (normalized === "suspended") return t.statusSuspended;
+    return t.statusBlacklisted;
+  }
+
+  async function sendActivationEmailForMember(member: MemberItem) {
+    const normalizedPhone = normalizePhone(member.phone || "");
+    if (!normalizedPhone) {
+      setAllMembersError(t.invalidPhone);
+      return;
+    }
+
+    setActivationSendingMemberId(member.id);
+    setAllMembersError(null);
+    setAllMemberMessage(null);
+    try {
+      const res = await fetch("/api/auth/member-activation/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: normalizedPhone }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || t.sendActivationEmailFail);
+      }
+
+      const nowIso = new Date().toISOString();
+      setAllMembers((prev) =>
+        prev.map((item) =>
+          item.id === member.id
+            ? {
+                ...item,
+                portal_last_activation_sent_at: nowIso,
+              }
+            : item,
+        ),
+      );
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === member.id
+            ? {
+                ...item,
+                portal_last_activation_sent_at: nowIso,
+              }
+            : item,
+        ),
+      );
+      setMessage(payload?.maskedEmail ? `${t.sendActivationEmailDone}: ${payload.maskedEmail}` : t.sendActivationEmailDone);
+      setAllMemberMessage(payload?.maskedEmail ? `${t.sendActivationEmailDone}: ${payload.maskedEmail}` : t.sendActivationEmailDone);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t.sendActivationEmailFail;
+      setAllMembersError(msg);
+      setError(msg);
+    } finally {
+      setActivationSendingMemberId(null);
+    }
+  }
+
   async function createMember(event: FormEvent) {
     event.preventDefault();
     const normalizedPhone = normalizePhone(phone);
@@ -716,8 +820,27 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
               <p className="fdGlassText" style={{ marginTop: 6 }}>{item.phone || "-"}</p>
               <p className="fdGlassText" style={{ marginTop: 4 }}>{item.email || "-"}</p>
               <p className="fdGlassText" style={{ marginTop: 4 }}>
-                {t.status}: {item.status || t.active}
+                {t.status}: {memberStatusLabel(item.status)}
               </p>
+              <p className="fdGlassText" style={{ marginTop: 4 }}>
+                {t.portalStatus}: {portalStatusLabel(item.portal_status)}
+              </p>
+              <p className="fdGlassText" style={{ marginTop: 4 }}>
+                {t.portalActivatedAt}: {fmtDateTime(item.portal_activated_at || null)}
+              </p>
+              <p className="fdGlassText" style={{ marginTop: 4 }}>
+                {t.portalLastSentAt}: {fmtDateTime(item.portal_last_activation_sent_at || null)}
+              </p>
+              <div className="actions" style={{ marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="fdPillBtn"
+                  disabled={activationSendingMemberId === item.id}
+                  onClick={() => void sendActivationEmailForMember(item)}
+                >
+                  {activationSendingMemberId === item.id ? t.sendingActivationEmail : t.sendActivationEmail}
+                </button>
+              </div>
               {item.custom_fields && Object.keys(item.custom_fields).length > 0 ? (
                 <div style={{ marginTop: 10 }}>
                   <p className="fdGlassText" style={{ marginTop: 0, fontSize: 12 }}>{t.customInfo}</p>
@@ -1044,10 +1167,32 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                                 disabled={allMemberSaving}
                               >
                                 <option value="active">{t.statusActive}</option>
-                                <option value="inactive">{t.statusInactive}</option>
+                                <option value="expired">{t.statusExpired}</option>
+                                <option value="frozen">{t.statusFrozen}</option>
                                 <option value="suspended">{t.statusSuspended}</option>
+                                <option value="blacklisted">{t.statusBlacklisted}</option>
                               </select>
                             </label>
+                            <div className="fdGlassSubPanel" style={{ padding: 10, background: "rgba(255,255,255,.96)" }}>
+                              <div className="kvLabel">{t.portalStatus}</div>
+                              <div className="sub" style={{ marginTop: 6 }}>{portalStatusLabel(selectedAllMember.portal_status)}</div>
+                              <div className="sub" style={{ marginTop: 6 }}>
+                                {t.portalActivatedAt}: {fmtDateTime(selectedAllMember.portal_activated_at || null)}
+                              </div>
+                              <div className="sub" style={{ marginTop: 6 }}>
+                                {t.portalLastSentAt}: {fmtDateTime(selectedAllMember.portal_last_activation_sent_at || null)}
+                              </div>
+                              <div className="actions" style={{ marginTop: 8 }}>
+                                <button
+                                  type="button"
+                                  className="fdPillBtn"
+                                  disabled={activationSendingMemberId === selectedAllMember.id}
+                                  onClick={() => void sendActivationEmailForMember(selectedAllMember)}
+                                >
+                                  {activationSendingMemberId === selectedAllMember.id ? t.sendingActivationEmail : t.sendActivationEmail}
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -1148,6 +1293,11 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                             </div>
                           )}
                         </div>
+
+                        <MemberProgressPanel
+                          memberId={selectedAllMember.id}
+                          memberName={selectedAllMember.full_name || ""}
+                        />
                       </form>
                     ) : (
                       <p className="sub">{t.allMembersEmpty}</p>

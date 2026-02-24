@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "../../i18n-provider";
+import { MemberTabs } from "../_components/MemberTabs";
 
 type HistoryItem = {
   type: "checkin" | "session_redemption" | "order" | "payment" | string;
@@ -81,6 +82,7 @@ export default function MemberHistoryPage() {
             ? "\u67e5\u770b\u5165\u5834\u3001\u6838\u92b7\u3001\u8a02\u55ae\u8207\u4ed8\u6b3e\u3002"
             : "Check-ins, redemptions, orders, and payments in one timeline."}
         </p>
+        <MemberTabs />
 
         {loading ? <p style={{ marginTop: 12 }}>{zh ? "\u8f09\u5165\u4e2d..." : "Loading..."}</p> : null}
         {error ? <p style={{ marginTop: 12, color: "crimson" }}>{error}</p> : null}
