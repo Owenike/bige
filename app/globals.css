@@ -827,15 +827,18 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 12px;
 }
 .fdEntryTopGrid{
-  align-items: start;
+  align-items: stretch;
   grid-template-columns: minmax(420px, 1.12fr) minmax(340px, .88fr);
   gap: 12px;
 }
 .fdEntrySideCol{
   display: grid;
-  align-content: start;
-  gap: 10px;
+  grid-template-rows: auto minmax(220px, 1fr);
+  align-content: stretch;
+  align-items: stretch;
+  gap: 12px;
   min-height: 0;
+  height: 100%;
 }
 .fdEntryScannerVideo{
   margin-top: 8px;
@@ -867,8 +870,15 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     0 12px 26px rgba(6, 10, 20, .36),
     0 2px 8px rgba(8, 14, 26, .28);
   padding: 12px;
-  align-self: start;
-  height: fit-content;
+  align-self: stretch;
+  height: auto;
+}
+.fdEntryResultPanelInline{
+  min-height: 220px;
+  height: 100%;
+}
+.fdEntryResultPanelInline .fdDataGrid{
+  align-content: start;
 }
 .fdEntryResultPanel{
   border-color: rgba(152, 198, 238, .64);
@@ -1990,15 +2000,19 @@ body.fdPageDark .footerInner{
   box-shadow: 0 0 0 3px rgba(178, 210, 246, .38);
 }
 .fdModal.fdModalLight .fdEntryTopGrid{
-  align-items: start !important;
+  align-items: stretch !important;
 }
-.fdModal.fdModalLight .fdEntryTopGrid > .fdGlassSubPanel,
-.fdModal.fdModalLight .fdEntryTopGrid > .fdEntrySideCol{
+.fdModal.fdModalLight .fdEntryTopGrid > .fdGlassSubPanel{
   height: auto !important;
   min-height: 0 !important;
 }
+.fdModal.fdModalLight .fdEntryTopGrid > .fdEntrySideCol{
+  height: 100% !important;
+  min-height: 0 !important;
+  align-self: stretch !important;
+}
 .fdModal.fdModalLight .fdEntryManualCard{
-  align-self: start !important;
+  align-self: stretch !important;
   background: #ffffff;
   border-color: #d7e2f0;
   box-shadow: 0 6px 16px rgba(33, 52, 84, .08);
@@ -2016,6 +2030,9 @@ body.fdPageDark .footerInner{
 }
 .fdModal.fdModalLight .fdEntryManualForm .fdPillBtn{
   width: 100%;
+}
+.fdModal.fdModalLight .fdEntryResultPanelInline{
+  min-height: 240px;
 }
 .fdModal.fdModalLight .fdEntryReasonForm .fdPillBtn{
   justify-self: stretch;
@@ -2660,7 +2677,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     grid-template-columns: 1fr;
   }
   .fdEntrySideCol{
+    grid-template-rows: auto auto;
     gap: 8px;
+    height: auto;
   }
   .fdEntryScannerVideo{
     min-height: 220px;

@@ -346,7 +346,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
           </div>
         )}
 
-        <section className="fdTwoCol fdEntryTopGrid" style={{ alignItems: "start" }}>
+        <section className="fdTwoCol fdEntryTopGrid">
           <div className="fdGlassSubPanel fdEntryScannerPanel">
             <h2 className="sectionTitle">{t.cameraTitle}</h2>
             <video ref={videoRef} className="input fdEntryScannerVideo" muted playsInline />
@@ -356,7 +356,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             {cameraError ? <p className="error" style={{ marginTop: 8 }}>{cameraError}</p> : null}
           </div>
 
-          <div className="fdEntrySideCol" style={{ alignSelf: "start" }}>
+          <div className="fdEntrySideCol">
             <div className="fdEntryManualCard">
               <h2 className="sectionTitle">{t.manualTitle}</h2>
               <form
