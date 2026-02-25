@@ -39,28 +39,55 @@ export function MemberTabs() {
   );
 
   return (
-    <nav
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
-        gap: 8,
-        marginTop: 12,
-      }}
-      aria-label={zh ? "會員主分頁" : "Member main tabs"}
-    >
+    <nav className="memberTabs" aria-label={zh ? "會員導覽分頁" : "Member tabs"}>
       {tabs.map((tab) => {
         const active = isActive(pathname, tab.href);
         return (
           <Link
             key={tab.href}
             href={tab.href}
-            className={active ? "btn btnPrimary" : "btn"}
+            className={active ? "memberTab memberTabActive" : "memberTab"}
             aria-current={active ? "page" : undefined}
           >
             {tab.label}
           </Link>
         );
       })}
+      <style jsx>{`
+        .memberTabs {
+          display: flex;
+          gap: 8px;
+          margin-top: 10px;
+          overflow-x: auto;
+          padding-bottom: 2px;
+          scrollbar-width: thin;
+        }
+        .memberTab {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 78px;
+          padding: 8px 14px;
+          border-radius: 12px;
+          border: 1px solid var(--line);
+          background: linear-gradient(140deg, rgba(255, 255, 255, 0.8), rgba(242, 247, 255, 0.58));
+          color: #1f2b3d;
+          font-size: 14px;
+          line-height: 1.2;
+          white-space: nowrap;
+          text-decoration: none;
+        }
+        .memberTab:hover {
+          text-decoration: none;
+          background: linear-gradient(140deg, rgba(255, 255, 255, 0.92), rgba(238, 245, 255, 0.72));
+        }
+        .memberTabActive {
+          border-color: rgba(137, 188, 236, 0.9);
+          background: radial-gradient(130% 140% at 20% 30%, rgba(126, 196, 255, 0.5), rgba(229, 241, 255, 0.88));
+          color: #23425f;
+          font-weight: 600;
+        }
+      `}</style>
     </nav>
   );
 }
