@@ -12,12 +12,13 @@ type GridItem = {
 function GridCard({ item }: { item: GridItem }) {
   return (
     <article className="homeLuxuryGridCard">
-      <div className={`homeLuxuryGridMedia ${item.mediaClass}`} />
-      <div className="homeLuxuryGridBody">
-        <p className="homeLuxuryGridBadge">{item.badge}</p>
-        <h3>{item.title}</h3>
-        <p>{item.description}</p>
-        <a className="homeLuxuryGridLink" href={item.href}>{item.cta}</a>
+      <div className={`homeLuxuryGridMedia ${item.mediaClass}`}>
+        <div className="homeLuxuryGridOverlay">
+          <p className="homeLuxuryGridBadge">{item.badge}</p>
+          <h3>{item.title}</h3>
+          <p>{item.description}</p>
+          <a className="homeLuxuryGridLink" href={item.href}>{item.cta}</a>
+        </div>
       </div>
     </article>
   );
