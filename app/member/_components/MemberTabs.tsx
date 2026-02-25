@@ -59,13 +59,15 @@ export function MemberTabs() {
           gap: 8px;
           margin-top: 10px;
           overflow-x: auto;
-          padding-bottom: 2px;
+          padding-bottom: 4px;
           scrollbar-width: thin;
+          scroll-snap-type: x mandatory;
         }
         .memberTab {
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          flex: 0 0 auto;
           min-width: 78px;
           padding: 8px 14px;
           border-radius: 12px;
@@ -76,6 +78,7 @@ export function MemberTabs() {
           line-height: 1.2;
           white-space: nowrap;
           text-decoration: none;
+          scroll-snap-align: start;
         }
         .memberTab:hover {
           text-decoration: none;
@@ -86,6 +89,17 @@ export function MemberTabs() {
           background: radial-gradient(130% 140% at 20% 30%, rgba(126, 196, 255, 0.5), rgba(229, 241, 255, 0.88));
           color: #23425f;
           font-weight: 600;
+        }
+        @media (max-width: 920px) {
+          .memberTabs {
+            margin-top: 8px;
+            gap: 6px;
+          }
+          .memberTab {
+            min-width: 84px;
+            padding: 10px 14px;
+            font-size: 15px;
+          }
         }
       `}</style>
     </nav>

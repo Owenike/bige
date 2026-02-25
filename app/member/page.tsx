@@ -404,13 +404,22 @@ export default function MemberHomePage() {
               </a>
             ))}
           </section>
+
+          <div className="memberMobileDock" aria-label={zh ? "手機快捷操作" : "Mobile quick actions"}>
+            <a className="btn btnPrimary memberMobileDockBtn" href="/member/entry-qr">
+              {zh ? "簽到 QR" : "Check-in QR"}
+            </a>
+            <a className="btn memberMobileDockBtn" href="/member/bookings">
+              {zh ? "管理預約" : "Bookings"}
+            </a>
+          </div>
         </div>
       </section>
       <style jsx>{`
         .memberDashWrap {
           padding: 20px;
           display: grid;
-          gap: 14px;
+          gap: 16px;
         }
         .memberHeader {
           display: flex;
@@ -432,8 +441,8 @@ export default function MemberHomePage() {
           flex-shrink: 0;
         }
         .memberIconBtn {
-          width: 40px;
-          height: 40px;
+          width: 44px;
+          height: 44px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -558,15 +567,111 @@ export default function MemberHomePage() {
           font-size: 13px;
           line-height: 1.45;
         }
+        .memberMobileDock {
+          display: none;
+        }
         @media (max-width: 920px) {
           .memberDashWrap {
-            padding: 16px;
+            padding: 14px;
+            gap: 12px;
+            padding-bottom: 88px;
+          }
+          .memberHeader {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+          }
+          .memberHeaderIcons {
+            justify-content: flex-end;
+          }
+          .memberTitle {
+            margin-top: 6px;
+            font-size: clamp(27px, 8vw, 34px);
+          }
+          .memberSubtitle {
+            margin-top: 6px;
+            font-size: 14px;
+            line-height: 1.6;
+          }
+          .memberPrimaryCta {
+            padding: 12px;
+            align-items: stretch;
+          }
+          .memberCtaActions {
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+          }
+          .memberPrimaryBtn,
+          .memberSecondaryBtn {
+            width: 100%;
+            min-width: 0;
+          }
+          .memberSummaryCard {
+            min-height: 0;
+          }
+          .memberSummaryValue {
+            font-size: clamp(22px, 6vw, 28px);
+          }
+          .memberSummaryHint {
+            font-size: 13px;
+            line-height: 1.5;
+          }
+          .memberCardAction {
+            justify-content: flex-start;
+          }
+          .memberTaskCard {
+            align-items: stretch;
+          }
+          .memberTaskCard .btn {
+            width: 100%;
           }
           .memberSummaryGrid {
             grid-template-columns: 1fr;
           }
           .memberQuickGrid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+          }
+          .memberQuickItem {
+            min-height: 132px;
+            padding: 10px;
+          }
+          .memberQuickTitle {
+            font-size: 15px;
+          }
+          .memberQuickDesc {
+            font-size: 12px;
+          }
+          .memberMobileDock {
+            position: fixed;
+            left: 10px;
+            right: 10px;
+            bottom: max(10px, env(safe-area-inset-bottom));
+            z-index: 40;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            padding: 8px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: rgba(246, 250, 255, 0.96);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 12px 24px rgba(104, 122, 150, 0.24);
+          }
+          .memberMobileDockBtn {
+            min-width: 0;
+            width: 100%;
+            padding: 11px 10px;
+          }
+        }
+        @media (max-width: 420px) {
+          .memberDashWrap {
+            padding: 12px;
+          }
+          .memberQuickGrid {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
