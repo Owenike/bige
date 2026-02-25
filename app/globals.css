@@ -393,6 +393,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   border-top: 1px solid var(--line);
   background: rgba(243,248,255,.58);
 }
+.shellWorkspace:not(.shellEmbedded) .footer{
+  border-top: 0 !important;
+}
 .shellFrontdesk:not(.shellEmbedded) .footer{
   border-top: 0 !important;
   background: #04070d;

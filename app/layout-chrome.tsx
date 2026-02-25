@@ -11,10 +11,14 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   const isEmbedded = searchParams.get("embed") === "1";
   const isFrontdeskRoute = pathname?.startsWith("/frontdesk");
-  const showTopbar = !isEmbedded && !isFrontdeskRoute;
+  const isMemberRoute = pathname?.startsWith("/member");
+  const isCoachRoute = pathname?.startsWith("/coach");
+  const isWorkspaceRoute = isFrontdeskRoute || isMemberRoute || isCoachRoute;
+  const showTopbar = !isEmbedded && !isWorkspaceRoute;
   const shellClassName = [
     "shell",
     isEmbedded ? "shellEmbedded" : "",
+    isWorkspaceRoute ? "shellWorkspace" : "",
     isFrontdeskRoute ? "shellFrontdesk" : "",
   ]
     .filter(Boolean)
