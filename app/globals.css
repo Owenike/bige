@@ -71,49 +71,28 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 
 @media (hover: hover) and (pointer: fine){
   .topbar{
-    z-index: 30;
-    overflow: hidden;
-    transform: translateY(calc(-100% + 24px));
-    transition: transform .28s cubic-bezier(.22,.8,.22,1), box-shadow .24s ease, background .24s ease;
-    will-change: transform;
-  }
-  .topbar::after{
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 8px;
-    transform: translateX(-50%);
-    width: 108px;
-    height: 5px;
-    border-radius: 999px;
-    background: rgba(123, 141, 167, .40);
-    pointer-events: none;
-  }
-  .topbar::before{
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -14px;
-    height: 14px;
-    background: transparent;
+    z-index: 20;
+    overflow: visible;
+    transform: none;
+    transition: none;
+    will-change: auto;
   }
   .topbar .nav{
-    opacity: .08;
-    transform: translateY(-6px);
-    transition: opacity .22s ease, transform .22s ease;
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
   .topbar:hover,
   .topbar:focus-within{
-    transform: translateY(0);
+    transform: none;
     overflow: visible;
-    box-shadow: 0 12px 24px rgba(114, 132, 160, .16);
-    background: rgba(244,248,255,.92);
+    box-shadow: none;
+    background: rgba(244,248,255,.62);
   }
   .topbar:hover .nav,
   .topbar:focus-within .nav{
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
