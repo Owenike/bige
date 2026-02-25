@@ -1,18 +1,21 @@
 "use client";
 
 import React from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import LangSwitch from "./lang-switch";
 import { useI18n } from "./i18n-provider";
 
 export default function LayoutChrome({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const isEmbedded = searchParams.get("embed") === "1";
+  const isFrontdeskRoute = pathname?.startsWith("/frontdesk");
+  const showTopbar = !isEmbedded && !isFrontdeskRoute;
 
   return (
     <div className={`shell ${isEmbedded ? "shellEmbedded" : ""}`}>
-      {!isEmbedded ? (
+      {showTopbar ? (
         <header className="topbar">
           <div className="container nav">
             <div className="brand">
