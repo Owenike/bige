@@ -12,9 +12,16 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isEmbedded = searchParams.get("embed") === "1";
   const isFrontdeskRoute = pathname?.startsWith("/frontdesk");
   const showTopbar = !isEmbedded && !isFrontdeskRoute;
+  const shellClassName = [
+    "shell",
+    isEmbedded ? "shellEmbedded" : "",
+    isFrontdeskRoute ? "shellFrontdesk" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className={`shell ${isEmbedded ? "shellEmbedded" : ""}`}>
+    <div className={shellClassName}>
       {showTopbar ? (
         <header className="topbar">
           <div className="container nav">
