@@ -1,25 +1,169 @@
-import { getT } from "../lib/i18n-server";
+﻿import { getT } from "../lib/i18n-server";
+
+type GridItem = {
+  badge: string;
+  title: string;
+  description: string;
+  href: string;
+  mediaClass: string;
+  cta: string;
+};
+
+function GridCard({ item }: { item: GridItem }) {
+  return (
+    <article className="homeLuxuryGridCard">
+      <div className={`homeLuxuryGridMedia ${item.mediaClass}`} />
+      <div className="homeLuxuryGridBody">
+        <p className="homeLuxuryGridBadge">{item.badge}</p>
+        <h3>{item.title}</h3>
+        <p>{item.description}</p>
+        <a className="homeLuxuryGridLink" href={item.href}>{item.cta}</a>
+      </div>
+    </article>
+  );
+}
 
 export default async function Home() {
   const t = await getT();
   const heroTitleLines = t("home.hero_title").split("\n");
 
+  const sectionTwoItems: GridItem[] = [
+    {
+      badge: t("home.flow"),
+      title: t("home.member_area"),
+      description: t("home.flow_desc"),
+      href: "/member",
+      mediaClass: "homeLuxuryMediaS2A",
+      cta: "Open",
+    },
+    {
+      badge: t("home.clarity"),
+      title: t("home.frontdesk_desk"),
+      description: t("home.clarity_desc"),
+      href: "/frontdesk",
+      mediaClass: "homeLuxuryMediaS2B",
+      cta: "Open",
+    },
+    {
+      badge: t("home.quick_links"),
+      title: t("home.coach_console"),
+      description: t("home.calm_ui_desc"),
+      href: "/coach",
+      mediaClass: "homeLuxuryMediaS2C",
+      cta: "Open",
+    },
+    {
+      badge: t("home.quick_links"),
+      title: t("home.manager_ops"),
+      description: t("home.section_body_awareness"),
+      href: "/manager",
+      mediaClass: "homeLuxuryMediaS2D",
+      cta: "Open",
+    },
+  ];
+
+  const sectionFourItems: GridItem[] = [
+    {
+      badge: "Access",
+      title: t("home.cta_login"),
+      description: t("home.hero_sub"),
+      href: "/login",
+      mediaClass: "homeLuxuryMediaS4A",
+      cta: "Go",
+    },
+    {
+      badge: "Member",
+      title: t("home.member_dynamic_qr"),
+      description: t("home.flow_desc"),
+      href: "/member/entry-qr",
+      mediaClass: "homeLuxuryMediaS4B",
+      cta: "Open",
+    },
+    {
+      badge: "Desk",
+      title: t("home.frontdesk_checkin"),
+      description: t("home.clarity_desc"),
+      href: "/frontdesk/checkin",
+      mediaClass: "homeLuxuryMediaS4C",
+      cta: "Open",
+    },
+    {
+      badge: "Admin",
+      title: t("home.platform_admin"),
+      description: t("home.calm_ui_desc"),
+      href: "/platform-admin",
+      mediaClass: "homeLuxuryMediaS4D",
+      cta: "Open",
+    },
+  ];
+
+  const sectionSixItems: GridItem[] = [
+    {
+      badge: "Role",
+      title: t("home.member_area"),
+      description: t("home.hero_sub"),
+      href: "/member",
+      mediaClass: "homeLuxuryMediaS6A",
+      cta: "Open",
+    },
+    {
+      badge: "Role",
+      title: t("home.coach_console"),
+      description: t("home.flow_desc"),
+      href: "/coach",
+      mediaClass: "homeLuxuryMediaS6B",
+      cta: "Open",
+    },
+    {
+      badge: "Role",
+      title: t("home.manager_ops"),
+      description: t("home.clarity_desc"),
+      href: "/manager",
+      mediaClass: "homeLuxuryMediaS6C",
+      cta: "Open",
+    },
+    {
+      badge: "Role",
+      title: t("home.platform_admin"),
+      description: t("home.calm_ui_desc"),
+      href: "/platform-admin",
+      mediaClass: "homeLuxuryMediaS6D",
+      cta: "Open",
+    },
+  ];
+
+  const sectionEightItems: GridItem[] = [
+    {
+      badge: "Fast Entry",
+      title: t("home.member_dynamic_qr"),
+      description: t("home.flow_desc"),
+      href: "/member/entry-qr",
+      mediaClass: "homeLuxuryMediaS8A",
+      cta: "Open",
+    },
+    {
+      badge: "On Site",
+      title: t("home.frontdesk_checkin"),
+      description: t("home.clarity_desc"),
+      href: "/frontdesk/checkin",
+      mediaClass: "homeLuxuryMediaS8B",
+      cta: "Open",
+    },
+    {
+      badge: "Session",
+      title: t("auth.logout"),
+      description: t("home.calm_ui_desc"),
+      href: "/logout",
+      mediaClass: "homeLuxuryMediaS8C",
+      cta: "Open",
+    },
+  ];
+
   return (
     <main className="homeLuxury">
-      <section className="homeLuxuryHero">
-        <video
-          className="homeLuxuryHeroVideo"
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="metadata"
-          poster="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1920&q=80"
-        >
-          <source src="https://player.vimeo.com/external/371433846.sd.mp4?s=236d0365417e992cf83f8d4d32dcff3ce2fe04dd&profile_id=165&oauth2_token_id=57447761" type="video/mp4" />
-        </video>
-        <div className="homeLuxuryHeroShade" />
-        <div className="homeLuxuryHeroContent">
+      <section className="homeLuxuryHero homeLuxuryFullImageSection homeLuxuryHeroImage">
+        <div className="homeLuxuryFullShade" />
+        <div className="homeLuxuryOverlayContent">
           <p className="homeLuxuryEyebrow">BIGE</p>
           <h1 className="homeLuxuryHeroTitle">
             {heroTitleLines[0] || t("home.hero_title")}
@@ -35,62 +179,85 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="homeLuxuryEditorial">
-        <article className="homeLuxuryFeatureCard">
-          <div className="homeLuxuryFeatureMedia homeLuxuryFeatureMediaOne" />
-          <div className="homeLuxuryFeatureBody">
-            <p className="homeLuxuryCardLabel">{t("home.flow")}</p>
-            <h2>{t("home.member_area")}</h2>
-            <p>{t("home.flow_desc")}</p>
-            <a className="homeLuxuryTextLink" href="/member">Explore Member</a>
+      <section className="homeLuxuryGridSection">
+        <div className="homeLuxuryGridInner">
+          <h2 className="homeLuxurySectionTitle">{t("home.quick_links")}</h2>
+          <div className="homeLuxuryGridFour">
+            {sectionTwoItems.map((item) => (
+              <GridCard key={`${item.title}-${item.href}`} item={item} />
+            ))}
           </div>
-        </article>
-        <article className="homeLuxuryFeatureCard">
-          <div className="homeLuxuryFeatureMedia homeLuxuryFeatureMediaTwo" />
-          <div className="homeLuxuryFeatureBody">
-            <p className="homeLuxuryCardLabel">{t("home.clarity")}</p>
-            <h2>{t("home.frontdesk_desk")}</h2>
-            <p>{t("home.clarity_desc")}</p>
-            <a className="homeLuxuryTextLink" href="/frontdesk">Explore Frontdesk</a>
-          </div>
-        </article>
-      </section>
-
-      <section className="homeLuxuryTiles">
-        <article className="homeLuxuryTile">
-          <div className="homeLuxuryTileMedia homeLuxuryTileMediaOne" />
-          <div className="homeLuxuryTileBody">
-            <p className="homeLuxuryCardLabel">{t("home.quick_links")}</p>
-            <h3>{t("home.coach_console")}</h3>
-            <a className="homeLuxuryTextLink" href="/coach">Open</a>
-          </div>
-        </article>
-        <article className="homeLuxuryTile">
-          <div className="homeLuxuryTileMedia homeLuxuryTileMediaTwo" />
-          <div className="homeLuxuryTileBody">
-            <p className="homeLuxuryCardLabel">{t("home.quick_links")}</p>
-            <h3>{t("home.manager_ops")}</h3>
-            <a className="homeLuxuryTextLink" href="/manager">Open</a>
-          </div>
-        </article>
-        <article className="homeLuxuryTile">
-          <div className="homeLuxuryTileMedia homeLuxuryTileMediaThree" />
-          <div className="homeLuxuryTileBody">
-            <p className="homeLuxuryCardLabel">{t("home.quick_links")}</p>
-            <h3>{t("home.platform_admin")}</h3>
-            <a className="homeLuxuryTextLink" href="/platform-admin">Open</a>
-          </div>
-        </article>
-      </section>
-
-      <section className="homeLuxuryBand">
-        <div>
-          <p className="homeLuxuryCardLabel">{t("home.calm_ui")}</p>
-          <h2>{t("home.section_body_awareness")}</h2>
-          <p>{t("home.calm_ui_desc")}</p>
         </div>
-        <div className="homeLuxuryBandActions">
-          <a className="homeLuxuryBtn" href="/logout">{t("auth.logout")}</a>
+      </section>
+
+      <section className="homeLuxuryFullImageSection homeLuxurySectionImageA">
+        <div className="homeLuxuryFullShade" />
+        <div className="homeLuxuryOverlayContent homeLuxuryOverlayCompact">
+          <p className="homeLuxuryEyebrow">{t("home.calm_ui")}</p>
+          <h2 className="homeLuxuryOverlayTitle">{t("home.section_body_awareness")}</h2>
+          <a className="homeLuxuryBtn" href="/member">{t("home.member_area")}</a>
+        </div>
+      </section>
+
+      <section className="homeLuxuryGridSection">
+        <div className="homeLuxuryGridInner">
+          <h2 className="homeLuxurySectionTitle">Operational Paths</h2>
+          <div className="homeLuxuryGridFour">
+            {sectionFourItems.map((item) => (
+              <GridCard key={`${item.title}-${item.href}`} item={item} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="homeLuxuryFullVideoSection">
+        <video
+          className="homeLuxuryFullVideo"
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="metadata"
+          poster="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1920&q=80"
+        >
+          <source src="https://player.vimeo.com/external/371433846.sd.mp4?s=236d0365417e992cf83f8d4d32dcff3ce2fe04dd&profile_id=165&oauth2_token_id=57447761" type="video/mp4" />
+        </video>
+        <div className="homeLuxuryFullShade" />
+        <div className="homeLuxuryOverlayContent homeLuxuryOverlayCompact">
+          <p className="homeLuxuryEyebrow">{t("home.flow")}</p>
+          <h2 className="homeLuxuryOverlayTitle">{t("home.frontdesk_desk")}</h2>
+          <a className="homeLuxuryBtn" href="/frontdesk">Open Frontdesk</a>
+        </div>
+      </section>
+
+      <section className="homeLuxuryGridSection">
+        <div className="homeLuxuryGridInner">
+          <h2 className="homeLuxurySectionTitle">Role Centers</h2>
+          <div className="homeLuxuryGridFour">
+            {sectionSixItems.map((item) => (
+              <GridCard key={`${item.title}-${item.href}`} item={item} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="homeLuxuryFullImageSection homeLuxurySectionImageB">
+        <div className="homeLuxuryFullShade" />
+        <div className="homeLuxuryOverlayContent homeLuxuryOverlayCompact">
+          <p className="homeLuxuryEyebrow">{t("home.clarity")}</p>
+          <h2 className="homeLuxuryOverlayTitle">{t("home.platform_admin")}</h2>
+          <a className="homeLuxuryBtn" href="/platform-admin">Open Admin</a>
+        </div>
+      </section>
+
+      <section className="homeLuxuryGridSection homeLuxuryGridSectionLast">
+        <div className="homeLuxuryGridInner">
+          <h2 className="homeLuxurySectionTitle">Final Actions</h2>
+          <div className="homeLuxuryGridThree">
+            {sectionEightItems.map((item) => (
+              <GridCard key={`${item.title}-${item.href}`} item={item} />
+            ))}
+          </div>
         </div>
       </section>
     </main>
