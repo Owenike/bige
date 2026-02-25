@@ -394,7 +394,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   background: rgba(243,248,255,.58);
 }
 .shellFrontdesk:not(.shellEmbedded) .footer{
-  border-top: 0;
+  border-top: 0 !important;
+  background: #04070d;
+  box-shadow: none;
+}
+.shellFrontdesk:not(.shellEmbedded){
+  background: #04070d;
 }
 .footerInner{
   display:flex;
@@ -1283,6 +1288,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 body.fdPageDark .footer{
   border-top: 1px solid rgba(96, 123, 164, .34);
   background: linear-gradient(180deg, rgba(7, 11, 19, .96), rgba(4, 7, 12, .98));
+}
+body.fdPageDark .shellFrontdesk:not(.shellEmbedded) .footer{
+  border-top: 0 !important;
+  background: #04070d;
 }
 body.fdPageDark .footerInner{
   color: rgba(176, 195, 222, .84);
