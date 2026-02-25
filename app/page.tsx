@@ -210,18 +210,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="homeLuxuryFullVideoSection">
-        <video
-          className="homeLuxuryFullVideo"
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="metadata"
-          poster="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1920&q=80"
-        >
-          <source src="https://player.vimeo.com/external/371433846.sd.mp4?s=236d0365417e992cf83f8d4d32dcff3ce2fe04dd&profile_id=165&oauth2_token_id=57447761" type="video/mp4" />
-        </video>
+      <section className="homeLuxuryFullImageSection homeLuxurySectionImageC">
         <div className="homeLuxuryFullShade" />
         <div className="homeLuxuryOverlayContent homeLuxuryOverlayCompact">
           <p className="homeLuxuryEyebrow">{t("home.flow")}</p>
