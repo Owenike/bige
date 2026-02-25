@@ -393,6 +393,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   border-top: 1px solid var(--line);
   background: rgba(243,248,255,.58);
 }
+.shellFrontdesk:not(.shellEmbedded) .footer{
+  border-top: 0;
+}
 .footerInner{
   display:flex;
   justify-content: space-between;
