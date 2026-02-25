@@ -210,7 +210,15 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="homeLuxuryFullImageSection homeLuxurySectionImageC">
+      <section className="homeLuxuryFullVideoSection">
+        <iframe
+          className="homeLuxuryYouTubeEmbed"
+          src="https://www.youtube-nocookie.com/embed/V33I8IozKgc?autoplay=1&mute=1&loop=1&playlist=V33I8IozKgc&controls=0&rel=0&playsinline=1&modestbranding=1"
+          title="Homepage showcase video"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allowFullScreen
+        />
         <div className="homeLuxuryFullShade" />
         <div className="homeLuxuryOverlayContent homeLuxuryOverlayCompact">
           <p className="homeLuxuryEyebrow">{t("home.flow")}</p>
