@@ -42,8 +42,15 @@ export default function MemberEntryQrPage() {
       });
 
       if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || `HTTP ${response.status}`);
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        if (response.status === 503) {
+          throw new Error(
+            zh
+              ? "QR 服務暫時不可用，請通知櫃台處理。"
+              : "Entry QR service is temporarily unavailable. Please contact front desk.",
+          );
+        }
+        throw new Error(payload?.error || `HTTP ${response.status}`);
       }
 
       const data = (await response.json()) as IssueEntryTokenResponse;
