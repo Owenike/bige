@@ -23,6 +23,15 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
               <a className="pill" href="/login">
                 {t("nav.login")}
               </a>
+              <a className="pill" href="/member">
+                {t("nav.member")}
+              </a>
+              <a className="pill" href="/coach">
+                {t("nav.coach")}
+              </a>
+              <a className="pill" href="/frontdesk">
+                {t("nav.frontdesk")}
+              </a>
               <a className="pill" href="/manager">
                 {t("nav.manager")}
               </a>
