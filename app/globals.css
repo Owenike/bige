@@ -457,20 +457,14 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   font-size: clamp(14px, 1.35vw, 18px);
 }
 .homeLuxuryHeroSubZh{
-  display: grid;
-  grid-template-columns: max-content max-content clamp(36px, 7vw, 180px) max-content;
-  column-gap: clamp(16px, 2vw, 28px);
-  row-gap: 2px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: clamp(18px, 3.2vw, 52px);
+  max-width: 100%;
+  width: max-content;
 }
 .homeLuxuryHeroSubItem{
   white-space: nowrap;
-}
-.homeLuxuryHeroSubItemAnchor{
-  grid-column: 4;
-}
-.homeLuxuryHeroSubItemTail{
-  grid-column: 4;
-  grid-row: 2;
 }
 .homeLuxuryHeroActions{
   margin-top: 8px;
@@ -722,15 +716,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     padding-right: 14px;
   }
   .homeLuxuryHeroSubZh{
-    grid-template-columns: repeat(2, max-content);
-    column-gap: clamp(14px, 4vw, 26px);
-    row-gap: 0;
-  }
-  .homeLuxuryHeroSubItemAnchor{
-    grid-column: 2;
-  }
-  .homeLuxuryHeroSubItemTail{
-    grid-column: 2;
+    gap: clamp(12px, 3.4vw, 20px);
+    overflow-x: auto;
+    scrollbar-width: none;
   }
   .homeLuxuryBtn{
     width: 100%;

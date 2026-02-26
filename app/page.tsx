@@ -207,13 +207,7 @@ export default async function Home() {
               {heroSubItems.map((item, index) => (
                 <span
                   key={`${item}-${index}`}
-                  className={
-                    index === 2
-                      ? "homeLuxuryHeroSubItem homeLuxuryHeroSubItemAnchor"
-                      : index === heroSubItems.length - 1
-                        ? "homeLuxuryHeroSubItem homeLuxuryHeroSubItemTail"
-                        : "homeLuxuryHeroSubItem"
-                  }
+                  className="homeLuxuryHeroSubItem"
                 >
                   {item}
                 </span>
