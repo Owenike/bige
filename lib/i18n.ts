@@ -17,7 +17,7 @@ export const messages = {
     "home.quick_links": "快速連結",
     "home.baseline": "基準",
     "home.hero_title": "仁武健身房\n質感、親切、專業",
-    "home.hero_sub": "以柔和配色、圓角卡片與低對比邊框建立健康平台的視覺語氣，同時保持操作資訊清楚。",
+    "home.hero_sub": "器械皮拉提斯 重量訓練 樂齡訓練 拳擊體能訓練",
     "home.cta_login": "前往登入",
     "home.member_dynamic_qr": "會員動態 QR",
     "home.frontdesk_checkin": "櫃檯報到",
