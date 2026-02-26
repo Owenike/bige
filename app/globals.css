@@ -458,15 +458,19 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .homeLuxuryHeroSubZh{
   display: grid;
-  grid-template-columns: repeat(3, max-content);
-  column-gap: clamp(18px, 3.2vw, 52px);
+  grid-template-columns: max-content max-content clamp(36px, 7vw, 180px) max-content;
+  column-gap: clamp(16px, 2vw, 28px);
   row-gap: 2px;
 }
 .homeLuxuryHeroSubItem{
   white-space: nowrap;
 }
+.homeLuxuryHeroSubItemAnchor{
+  grid-column: 4;
+}
 .homeLuxuryHeroSubItemTail{
-  grid-column: 3;
+  grid-column: 4;
+  grid-row: 2;
 }
 .homeLuxuryHeroActions{
   margin-top: 8px;
@@ -721,6 +725,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     grid-template-columns: repeat(2, max-content);
     column-gap: clamp(14px, 4vw, 26px);
     row-gap: 0;
+  }
+  .homeLuxuryHeroSubItemAnchor{
+    grid-column: 2;
   }
   .homeLuxuryHeroSubItemTail{
     grid-column: 2;
