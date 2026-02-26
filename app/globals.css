@@ -434,6 +434,14 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   font-size: 11px;
   opacity: .82;
 }
+.homeLuxuryHeroTextBlock{
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: max-content;
+  max-width: min(100%, 54ch);
+  gap: 10px;
+}
 .homeLuxuryHeroTitle{
   margin: 0;
   font-weight: 550;
@@ -449,9 +457,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .homeLuxuryHeroSub{
   margin: 0;
-  max-width: min(100%, 52ch);
-  width: fit-content;
-  align-self: flex-start;
+  width: 100%;
+  max-width: none;
   color: rgba(238,242,248,.86);
   line-height: 1.74;
   font-size: clamp(14px, 1.35vw, 18px);
@@ -704,6 +711,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .homeLuxuryOverlayContent{
     padding-left: 14px;
     padding-right: 14px;
+  }
+  .homeLuxuryHeroTextBlock{
+    width: 100%;
+    max-width: 100%;
   }
   .homeLuxuryBtn{
     width: 100%;
