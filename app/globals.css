@@ -528,6 +528,43 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .homeLuxurySectionTitlePorsche{
   color: #eef2fb;
 }
+.homeLuxurySectionTitleWithLogo{
+  margin: 0 0 clamp(20px, 3vw, 34px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 1.8vw, 18px);
+}
+.homeLuxurySectionTitleInline{
+  margin: 0;
+}
+.homeLuxuryCircleLogo{
+  width: clamp(46px, 4.1vw, 64px);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(16px, 1.5vw, 22px);
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: #0d1016;
+  border: 1px solid rgba(255,255,255,.34);
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255,255,255,.98), rgba(236,240,247,.96) 48%, rgba(200,208,220,.95));
+  box-shadow:
+    0 8px 20px rgba(4, 8, 18, .26),
+    inset 0 1px 0 rgba(255,255,255,.78);
+}
+.homeLuxuryCircleLogoWord{
+  color: #0f131a;
+}
+.homeLuxuryCircleLogoAccent{
+  color: #d5c36f;
+}
 .homeLuxuryGridFour,
 .homeLuxuryGridThree{
   display: grid;
@@ -720,6 +757,13 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .homeLuxuryOverlayContent{
     padding-left: 14px;
     padding-right: 14px;
+  }
+  .homeLuxurySectionTitleWithLogo{
+    gap: 10px;
+  }
+  .homeLuxuryCircleLogo{
+    width: 46px;
+    font-size: 16px;
   }
   .homeLuxuryHeroSubZh{
     gap: clamp(10px, 2.8vw, 16px);

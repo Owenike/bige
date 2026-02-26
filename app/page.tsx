@@ -237,7 +237,15 @@ export default async function Home() {
 
       <section className="homeLuxuryGridSection homeLuxuryGridSectionPorsche">
         <div className="homeLuxuryGridInner">
-          <h2 className="homeLuxurySectionTitle homeLuxurySectionTitlePorsche">{isEn ? "Training Programs" : "全方位訓練"}</h2>
+          <div className="homeLuxurySectionTitleWithLogo">
+            <h2 className="homeLuxurySectionTitle homeLuxurySectionTitlePorsche homeLuxurySectionTitleInline">
+              {isEn ? "Bige Fitness Club" : "巨挺健身館"}
+            </h2>
+            <span className="homeLuxuryCircleLogo" aria-hidden>
+              <span className="homeLuxuryCircleLogoWord">Big</span>
+              <span className="homeLuxuryCircleLogoAccent">E</span>
+            </span>
+          </div>
           <div className="homeLuxuryGridShowcase">
             {sectionTwoItems.map((item) => (
               <PorscheCard key={`${item.title}-${item.href}`} item={item} />
