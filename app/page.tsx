@@ -135,34 +135,42 @@ export default async function Home() {
 
   const sectionSixItems: GridItem[] = [
     {
-      badge: "Role",
-      title: t("home.member_area"),
-      description: t("home.hero_sub"),
-      href: "/member",
+      badge: isEn ? "Entry" : "入場",
+      title: isEn ? "Single Pass" : "單次入場",
+      description: isEn
+        ? "Flexible pay-per-visit entry. Train when you want without long-term commitment."
+        : "彈性單次入場，想練就來，不被長約綁住。",
+      href: "/member/entry-qr",
       mediaClass: "homeLuxuryMediaS6A",
       cta: "Open",
     },
     {
-      badge: "Role",
-      title: t("home.coach_console"),
-      description: t("home.flow_desc"),
-      href: "/coach",
+      badge: isEn ? "Membership" : "月費",
+      title: isEn ? "Monthly Plan" : "月費",
+      description: isEn
+        ? "Flat monthly pricing with full gym access to help you stay consistent every week."
+        : "固定月費方案，完整使用器材與空間，穩定建立每週運動習慣。",
+      href: "/member",
       mediaClass: "homeLuxuryMediaS6B",
       cta: "Open",
     },
     {
-      badge: "Role",
-      title: t("home.manager_ops"),
-      description: t("home.clarity_desc"),
-      href: "/manager",
+      badge: isEn ? "Coaching" : "教練",
+      title: isEn ? "Coaching Program" : "教練課程",
+      description: isEn
+        ? "Personal and small-group coaching programs built around your goals and training pace."
+        : "一對一與小班教練課程，依你的目標與節奏安排進度。",
+      href: "/coach",
       mediaClass: "homeLuxuryMediaS6C",
       cta: "Open",
     },
     {
-      badge: "Role",
-      title: t("home.platform_admin"),
-      description: t("home.calm_ui_desc"),
-      href: "/platform-admin",
+      badge: isEn ? "Assessment" : "測量",
+      title: isEn ? "Body Assessment" : "體態測量",
+      description: isEn
+        ? "Track body shape and key metrics over time, so each stage of progress is visible."
+        : "透過體態與關鍵數據追蹤變化，讓每個階段成果都看得見。",
+      href: "/member/progress",
       mediaClass: "homeLuxuryMediaS6D",
       cta: "Open",
     },
@@ -271,7 +279,7 @@ export default async function Home() {
 
       <section className="homeLuxuryGridSection">
         <div className="homeLuxuryGridInner">
-          <h2 className="homeLuxurySectionTitle">Role Centers</h2>
+          <h2 className="homeLuxurySectionTitle">{isEn ? "More Choices, Less Pressure" : "多元選擇 輕鬆無負擔"}</h2>
           <div className="homeLuxuryGridFour">
             {sectionSixItems.map((item) => (
               <GridCard key={`${item.title}-${item.href}`} item={item} />
