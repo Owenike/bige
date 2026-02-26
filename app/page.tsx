@@ -18,7 +18,6 @@ function PorscheCard({ item }: { item: GridItem }) {
             <p className="homeLuxuryPorscheBadge">{item.badge}</p>
             <h3>{item.title}</h3>
             <div className="homeLuxuryPorscheFooter">
-              <span className="homeLuxuryPorscheCta">{item.cta}</span>
               <span className="homeLuxuryPorscheArrow" aria-hidden>→</span>
             </div>
           </div>
@@ -36,7 +35,9 @@ function GridCard({ item }: { item: GridItem }) {
           <p className="homeLuxuryGridBadge">{item.badge}</p>
           <h3>{item.title}</h3>
           <p>{item.description}</p>
-          <a className="homeLuxuryGridLink" href={item.href}>{item.cta}</a>
+          <a className="homeLuxuryGridLink" href={item.href} aria-label={item.title}>
+            <span aria-hidden>→</span>
+          </a>
         </div>
       </div>
     </article>
@@ -226,7 +227,7 @@ export default async function Home() {
 
       <section className="homeLuxuryGridSection homeLuxuryGridSectionPorsche">
         <div className="homeLuxuryGridInner">
-          <h2 className="homeLuxurySectionTitle homeLuxurySectionTitlePorsche">{t("home.quick_links")}</h2>
+          <h2 className="homeLuxurySectionTitle homeLuxurySectionTitlePorsche">{isEn ? "Training Programs" : "訓練課程"}</h2>
           <div className="homeLuxuryGridShowcase">
             {sectionTwoItems.map((item) => (
               <PorscheCard key={`${item.title}-${item.href}`} item={item} />
@@ -268,7 +269,7 @@ export default async function Home() {
         <div className="homeLuxuryOverlayContent homeLuxuryOverlayCompact">
           <p className="homeLuxuryEyebrow">{t("home.flow")}</p>
           <h2 className="homeLuxuryOverlayTitle">{t("home.frontdesk_desk")}</h2>
-          <a className="homeLuxuryBtn" href="/frontdesk">Open Frontdesk</a>
+          <a className="homeLuxuryBtn" href="/frontdesk">{isEn ? "Frontdesk" : "櫃檯"}</a>
         </div>
       </section>
 
@@ -288,7 +289,7 @@ export default async function Home() {
         <div className="homeLuxuryOverlayContent homeLuxuryOverlayCompact">
           <p className="homeLuxuryEyebrow">{t("home.clarity")}</p>
           <h2 className="homeLuxuryOverlayTitle">{t("home.platform_admin")}</h2>
-          <a className="homeLuxuryBtn" href="/platform-admin">Open Admin</a>
+          <a className="homeLuxuryBtn" href="/platform-admin">{isEn ? "Admin" : "後台"}</a>
         </div>
       </section>
 

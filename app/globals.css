@@ -597,14 +597,20 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .homeLuxuryGridLink{
   margin-top: 6px;
+  align-self: flex-end;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #f3f6fc;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  font-weight: 500;
+  text-decoration: none;
+  font-size: 24px;
+  line-height: 1;
+  transition: transform .18s ease, opacity .18s ease;
+  opacity: .94;
 }
 .homeLuxuryGridLink:hover{
-  text-decoration-thickness: 2px;
+  transform: translateX(2px);
+  opacity: 1;
 }
 .homeLuxuryGridCard:hover .homeLuxuryGridMedia{
   transform: scale(1.02);
@@ -659,7 +665,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .homeLuxuryPorscheFooter{
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
 }
 .homeLuxuryPorscheCta{
