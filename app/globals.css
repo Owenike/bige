@@ -449,7 +449,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .homeLuxuryHeroSub{
   margin: 0;
-  max-width: 780px;
+  max-width: min(100%, 52ch);
+  width: fit-content;
+  align-self: flex-start;
   color: rgba(238,242,248,.86);
   line-height: 1.74;
   font-size: clamp(14px, 1.35vw, 18px);
