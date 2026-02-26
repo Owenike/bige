@@ -93,7 +93,7 @@ export default async function Home() {
 
   const sectionFourItems: GridItem[] = [
     {
-      badge: isEn ? "Senior" : "銀髮族",
+      badge: "Senior",
       title: isEn ? "Senior Fitness Training" : "銀髮族訓練",
       description: isEn
         ? "Low-impact mobility and balance practice to improve daily stability and confident movement."
@@ -103,7 +103,7 @@ export default async function Home() {
       cta: "Go",
     },
     {
-      badge: isEn ? "Cardio" : "心肺體能",
+      badge: "Cardio",
       title: isEn ? "Cardio Conditioning Training" : "心肺體能訓練",
       description: isEn
         ? "Rhythm-based aerobic intervals to raise endurance, circulation efficiency, and sustained energy."
@@ -113,7 +113,7 @@ export default async function Home() {
       cta: "Open",
     },
     {
-      badge: isEn ? "Core" : "核心",
+      badge: "Core",
       title: isEn ? "Core Training" : "核心訓練",
       description: isEn
         ? "Build trunk control and core strength to support posture quality and stable force output."
@@ -123,7 +123,7 @@ export default async function Home() {
       cta: "Open",
     },
     {
-      badge: isEn ? "Functional" : "功能性",
+      badge: "Functional",
       title: isEn ? "Functional Adjustment" : "功能性調整",
       description: isEn
         ? "Targeted movement correction to release fatigue patterns and restore efficient mechanics."
