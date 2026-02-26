@@ -231,7 +231,7 @@ export default async function Home() {
 
       <section className="homeLuxuryGridSection">
         <div className="homeLuxuryGridInner">
-          <h2 className="homeLuxurySectionTitle">Operational Paths</h2>
+          <h2 className="homeLuxurySectionTitle">{isEn ? "Training Programs" : "訓練課程"}</h2>
           <div className="homeLuxuryGridFour">
             {sectionFourItems.map((item) => (
               <GridCard key={`${item.title}-${item.href}`} item={item} />
