@@ -229,7 +229,7 @@ export default async function Home() {
 
       <section className="homeLuxuryGridSection homeLuxuryGridSectionPorsche">
         <div className="homeLuxuryGridInner">
-          <h2 className="homeLuxurySectionTitle homeLuxurySectionTitlePorsche">{isEn ? "Training Programs" : "訓練課程"}</h2>
+          <h2 className="homeLuxurySectionTitle homeLuxurySectionTitlePorsche">{isEn ? "Training Programs" : "全方位訓練"}</h2>
           <div className="homeLuxuryGridShowcase">
             {sectionTwoItems.map((item) => (
               <PorscheCard key={`${item.title}-${item.href}`} item={item} />
@@ -248,7 +248,7 @@ export default async function Home() {
 
       <section className="homeLuxuryGridSection">
         <div className="homeLuxuryGridInner">
-          <h2 className="homeLuxurySectionTitle">{isEn ? "Training Programs" : "訓練課程"}</h2>
+          <h2 className="homeLuxurySectionTitle">{isEn ? "Training Programs" : "全方位訓練"}</h2>
           <div className="homeLuxuryGridFour">
             {sectionFourItems.map((item) => (
               <GridCard key={`${item.title}-${item.href}`} item={item} />
