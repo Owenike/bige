@@ -50,8 +50,10 @@ export default async function Home() {
   const isEn = locale === "en";
   const heroTitleLines = t("home.hero_title").split("\n");
   const heroSubText = t("home.hero_sub");
-  const heroSubItems = heroSubText.trim().split(/\s+/);
-  const useZhHeroSubGrid = !isEn && heroSubItems.length === 4;
+  const zhHeroSubItems = ["器械皮拉提斯", "重量訓練", "樂齡訓練", "拳擊體能訓練", "核心燃脂訓練"];
+  const heroSubItems = isEn ? heroSubText.trim().split(/\s+/) : zhHeroSubItems;
+  const heroSubDisplayText = isEn ? heroSubText : zhHeroSubItems.join(" ");
+  const useZhHeroSubGrid = !isEn;
 
   const sectionTwoItems: GridItem[] = [
     {
@@ -204,7 +206,7 @@ export default async function Home() {
             <br />{heroTitleLines[1] || ""}
           </h1>
           {useZhHeroSubGrid ? (
-            <p className="homeLuxuryHeroSub homeLuxuryHeroSubZh" aria-label={heroSubText}>
+            <p className="homeLuxuryHeroSub homeLuxuryHeroSubZh" aria-label={heroSubDisplayText}>
               {heroSubItems.map((item, index) => (
                 <span
                   key={`${item}-${index}`}
@@ -215,7 +217,7 @@ export default async function Home() {
               ))}
             </p>
           ) : (
-            <p className="homeLuxuryHeroSub">{heroSubText}</p>
+            <p className="homeLuxuryHeroSub">{heroSubDisplayText}</p>
           )}
           <div className="homeLuxuryHeroActions">
             <a className="homeLuxuryBtn homeLuxuryBtnPrimary" href="/login">{t("home.cta_login")}</a>
