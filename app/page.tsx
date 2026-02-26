@@ -267,11 +267,6 @@ export default async function Home() {
           allowFullScreen
         />
         <div className="homeLuxuryFullShade" />
-        <div className="homeLuxuryOverlayContent homeLuxuryOverlayCompact">
-          <p className="homeLuxuryEyebrow">{t("home.flow")}</p>
-          <h2 className="homeLuxuryOverlayTitle">{t("home.frontdesk_desk")}</h2>
-          <a className="homeLuxuryBtn" href="/frontdesk">{isEn ? "Frontdesk" : "櫃檯"}</a>
-        </div>
       </section>
 
       <section className="homeLuxuryGridSection">
