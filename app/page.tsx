@@ -195,14 +195,12 @@ export default async function Home() {
         <div className="homeLuxuryFullShade" />
         <div className="homeLuxuryOverlayContent">
           <p className="homeLuxuryEyebrow">BIGE</p>
-          <div className="homeLuxuryHeroTextBlock">
-            <h1 className="homeLuxuryHeroTitle">
-              {heroTitleLines[0] || t("home.hero_title")}
-              <br />
-              {heroTitleLines[1] || ""}
-            </h1>
-            <p className="homeLuxuryHeroSub">{t("home.hero_sub")}</p>
-          </div>
+          <h1 className="homeLuxuryHeroTitle">
+            {heroTitleLines[0] || t("home.hero_title")}
+            <br />
+            {heroTitleLines[1] || ""}
+          </h1>
+          <p className="homeLuxuryHeroSub">{t("home.hero_sub")}</p>
           <div className="homeLuxuryHeroActions">
             <a className="homeLuxuryBtn homeLuxuryBtnPrimary" href="/login">{t("home.cta_login")}</a>
             <a className="homeLuxuryBtn" href="/member/entry-qr">{t("home.member_dynamic_qr")}</a>
