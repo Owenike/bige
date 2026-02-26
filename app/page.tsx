@@ -1,4 +1,5 @@
-﻿import { getLocaleFromCookies, getT } from "../lib/i18n-server";
+import Image from "next/image";
+import { getLocaleFromCookies, getT } from "../lib/i18n-server";
 
 type GridItem = {
   badge: string;
@@ -242,8 +243,7 @@ export default async function Home() {
               {isEn ? "Bige Fitness Club" : "巨挺健身館"}
             </h2>
             <span className="homeLuxuryCircleLogo" aria-hidden>
-              <span className="homeLuxuryCircleLogoWord">Big</span>
-              <span className="homeLuxuryCircleLogoAccent">E</span>
+              <Image src="/LOGO.jpg" alt="" width={128} height={128} className="homeLuxuryCircleLogoImage" />
             </span>
           </div>
           <div className="homeLuxuryGridShowcase">
