@@ -1,4 +1,4 @@
-﻿import { getT } from "../lib/i18n-server";
+﻿import { getLocaleFromCookies, getT } from "../lib/i18n-server";
 
 type GridItem = {
   badge: string;
@@ -44,7 +44,9 @@ function GridCard({ item }: { item: GridItem }) {
 }
 
 export default async function Home() {
+  const locale = await getLocaleFromCookies();
   const t = await getT();
+  const isEn = locale === "en";
   const heroTitleLines = t("home.hero_title").split("\n");
 
   const sectionTwoItems: GridItem[] = [
@@ -84,33 +86,41 @@ export default async function Home() {
 
   const sectionFourItems: GridItem[] = [
     {
-      badge: "Access",
-      title: t("home.cta_login"),
-      description: t("home.hero_sub"),
+      badge: isEn ? "Senior" : "銀髮族",
+      title: isEn ? "Senior Fitness Training" : "銀髮族訓練",
+      description: isEn
+        ? "Low-impact mobility and balance practice to improve daily stability and confident movement."
+        : "低衝擊的活動度與平衡訓練，幫助提升日常穩定與行動自信。",
       href: "/login",
       mediaClass: "homeLuxuryMediaS4A",
       cta: "Go",
     },
     {
-      badge: "Member",
-      title: t("home.member_dynamic_qr"),
-      description: t("home.flow_desc"),
+      badge: isEn ? "Cardio" : "心肺體能",
+      title: isEn ? "Cardio Conditioning Training" : "心肺體能訓練",
+      description: isEn
+        ? "Rhythm-based aerobic intervals to raise endurance, circulation efficiency, and sustained energy."
+        : "透過節奏有氧與間歇訓練，提升心肺耐力、循環效率與持續體能。",
       href: "/member/entry-qr",
       mediaClass: "homeLuxuryMediaS4B",
       cta: "Open",
     },
     {
-      badge: "Desk",
-      title: t("home.frontdesk_checkin"),
-      description: t("home.clarity_desc"),
+      badge: isEn ? "Core" : "核心",
+      title: isEn ? "Core Training" : "核心訓練",
+      description: isEn
+        ? "Build trunk control and core strength to support posture quality and stable force output."
+        : "強化軀幹控制與核心穩定，改善姿勢品質與發力表現。",
       href: "/frontdesk/checkin",
       mediaClass: "homeLuxuryMediaS4C",
       cta: "Open",
     },
     {
-      badge: "Admin",
-      title: t("home.platform_admin"),
-      description: t("home.calm_ui_desc"),
+      badge: isEn ? "Functional" : "功能性",
+      title: isEn ? "Functional Adjustment" : "功能性調整",
+      description: isEn
+        ? "Targeted movement correction to release fatigue patterns and restore efficient mechanics."
+        : "針對動作代償與疲勞模式進行調整，恢復更有效率的身體機制。",
       href: "/platform-admin",
       mediaClass: "homeLuxuryMediaS4D",
       cta: "Open",
@@ -280,3 +290,5 @@ export default async function Home() {
     </main>
   );
 }
+
+
