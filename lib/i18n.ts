@@ -16,7 +16,7 @@ export const messages = {
     "footer.tagline": "沉穩、乾淨、卡片式介面",
     "home.quick_links": "快速連結",
     "home.baseline": "基準",
-    "home.hero_title": "多角色營運平台\n乾淨、安定、可擴充",
+    "home.hero_title": "仁武健身房\n質感、親切、專業",
     "home.hero_sub": "以柔和配色、圓角卡片與低對比邊框建立健康平台的視覺語氣，同時保持操作資訊清楚。",
     "home.cta_login": "前往登入",
     "home.member_dynamic_qr": "會員動態 QR",
