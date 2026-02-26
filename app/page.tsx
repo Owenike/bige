@@ -291,7 +291,7 @@ export default async function Home() {
       <section className="homeLuxuryFullImageSection homeLuxurySectionImageB">
         <div className="homeLuxuryFullShade" />
         <div className="homeLuxuryOverlayContent homeLuxuryOverlayCompact">
-          <p className="homeLuxuryEyebrow">{isEn ? t("home.clarity") : "健康就是力量"}</p>
+          {isEn ? <p className="homeLuxuryEyebrow">{t("home.clarity")}</p> : null}
           <h2 className="homeLuxuryOverlayTitle">{isEn ? t("home.platform_admin") : "掌握身體 才能體驗豐富人生"}</h2>
         </div>
       </section>
