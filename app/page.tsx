@@ -197,8 +197,7 @@ export default async function Home() {
           <p className="homeLuxuryEyebrow">BIGE</p>
           <h1 className="homeLuxuryHeroTitle">
             {heroTitleLines[0] || t("home.hero_title")}
-            <br />
-            {heroTitleLines[1] || ""}
+            <br />{heroTitleLines[1] || ""}
           </h1>
           <p className="homeLuxuryHeroSub">{t("home.hero_sub")}</p>
           <div className="homeLuxuryHeroActions">
@@ -290,5 +289,4 @@ export default async function Home() {
     </main>
   );
 }
-
 
