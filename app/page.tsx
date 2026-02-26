@@ -48,6 +48,9 @@ export default async function Home() {
   const t = await getT();
   const isEn = locale === "en";
   const heroTitleLines = t("home.hero_title").split("\n");
+  const heroSubText = t("home.hero_sub");
+  const heroSubItems = heroSubText.trim().split(/\s+/);
+  const useZhHeroSubGrid = !isEn && heroSubItems.length === 4;
 
   const sectionTwoItems: GridItem[] = [
     {
@@ -199,7 +202,20 @@ export default async function Home() {
             {heroTitleLines[0] || t("home.hero_title")}
             <br />{heroTitleLines[1] || ""}
           </h1>
-          <p className="homeLuxuryHeroSub">{t("home.hero_sub")}</p>
+          {useZhHeroSubGrid ? (
+            <p className="homeLuxuryHeroSub homeLuxuryHeroSubZh" aria-label={heroSubText}>
+              {heroSubItems.map((item, index) => (
+                <span
+                  key={`${item}-${index}`}
+                  className={index === heroSubItems.length - 1 ? "homeLuxuryHeroSubItem homeLuxuryHeroSubItemTail" : "homeLuxuryHeroSubItem"}
+                >
+                  {item}
+                </span>
+              ))}
+            </p>
+          ) : (
+            <p className="homeLuxuryHeroSub">{heroSubText}</p>
+          )}
           <div className="homeLuxuryHeroActions">
             <a className="homeLuxuryBtn homeLuxuryBtnPrimary" href="/login">{t("home.cta_login")}</a>
             <a className="homeLuxuryBtn" href="/member/entry-qr">{t("home.member_dynamic_qr")}</a>
@@ -289,4 +305,3 @@ export default async function Home() {
     </main>
   );
 }
-

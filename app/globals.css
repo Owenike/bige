@@ -456,6 +456,18 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   line-height: 1.74;
   font-size: clamp(14px, 1.35vw, 18px);
 }
+.homeLuxuryHeroSubZh{
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  column-gap: clamp(18px, 3.2vw, 52px);
+  row-gap: 2px;
+}
+.homeLuxuryHeroSubItem{
+  white-space: nowrap;
+}
+.homeLuxuryHeroSubItemTail{
+  grid-column: 3;
+}
 .homeLuxuryHeroActions{
   margin-top: 8px;
   display: flex;
@@ -704,6 +716,14 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .homeLuxuryOverlayContent{
     padding-left: 14px;
     padding-right: 14px;
+  }
+  .homeLuxuryHeroSubZh{
+    grid-template-columns: repeat(2, max-content);
+    column-gap: clamp(14px, 4vw, 26px);
+    row-gap: 0;
+  }
+  .homeLuxuryHeroSubItemTail{
+    grid-column: 2;
   }
   .homeLuxuryBtn{
     width: 100%;
@@ -3154,4 +3174,3 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     justify-self: stretch;
   }
 }
-
