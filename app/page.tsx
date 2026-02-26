@@ -179,26 +179,32 @@ export default async function Home() {
 
   const sectionEightItems: GridItem[] = [
     {
-      badge: "Fast Entry",
-      title: t("home.member_dynamic_qr"),
-      description: t("home.flow_desc"),
-      href: "/member/entry-qr",
+      badge: "Contact Us",
+      title: isEn ? "Contact Us" : "聯繫我們",
+      description: isEn
+        ? "Message us anytime and we will help you choose the right plan and schedule."
+        : "歡迎隨時聯繫我們，將由專人協助你挑選最適合的方案與時段。",
+      href: "/member/support",
       mediaClass: "homeLuxuryMediaS8A",
       cta: "Open",
     },
     {
-      badge: "On Site",
-      title: t("home.frontdesk_checkin"),
-      description: t("home.clarity_desc"),
-      href: "/frontdesk/checkin",
+      badge: "Book Now",
+      title: isEn ? "Book Now" : "立即預約",
+      description: isEn
+        ? "Book your visit or trial class in minutes and secure your preferred time."
+        : "線上快速完成預約，提前鎖定你想要的訓練時段。",
+      href: "/member/bookings",
       mediaClass: "homeLuxuryMediaS8B",
       cta: "Open",
     },
     {
-      badge: "Session",
-      title: t("auth.logout"),
-      description: t("home.calm_ui_desc"),
-      href: "/logout",
+      badge: "Map Guide",
+      title: isEn ? "Map Guide" : "地圖導覽",
+      description: isEn
+        ? "Open map directions and navigate to the gym with the fastest route."
+        : "一鍵查看地圖路線，快速找到場館位置與交通方式。",
+      href: "https://www.google.com/maps/search/?api=1&query=%E5%B7%A8%E6%8C%BA%E5%81%A5%E8%BA%AB%E9%A4%A8",
       mediaClass: "homeLuxuryMediaS8C",
       cta: "Open",
     },
@@ -306,7 +312,7 @@ export default async function Home() {
 
       <section className="homeLuxuryGridSection homeLuxuryGridSectionLast">
         <div className="homeLuxuryGridInner">
-          <h2 className="homeLuxurySectionTitle">Final Actions</h2>
+          <h2 className="homeLuxurySectionTitle">{isEn ? "Take the First Step" : "邁出第一步"}</h2>
           <div className="homeLuxuryGridThree">
             {sectionEightItems.map((item) => (
               <GridCard key={`${item.title}-${item.href}`} item={item} />
