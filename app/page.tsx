@@ -9,6 +9,25 @@ type GridItem = {
   cta: string;
 };
 
+function PorscheCard({ item }: { item: GridItem }) {
+  return (
+    <article className="homeLuxuryPorscheCard">
+      <a className="homeLuxuryPorscheLink" href={item.href}>
+        <div className={`homeLuxuryGridMedia homeLuxuryPorscheMedia ${item.mediaClass}`}>
+          <div className="homeLuxuryPorscheOverlay">
+            <p className="homeLuxuryPorscheBadge">{item.badge}</p>
+            <h3>{item.title}</h3>
+            <div className="homeLuxuryPorscheFooter">
+              <span className="homeLuxuryPorscheCta">{item.cta}</span>
+              <span className="homeLuxuryPorscheArrow" aria-hidden>→</span>
+            </div>
+          </div>
+        </div>
+      </a>
+    </article>
+  );
+}
+
 function GridCard({ item }: { item: GridItem }) {
   return (
     <article className="homeLuxuryGridCard">
@@ -180,12 +199,12 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="homeLuxuryGridSection">
+      <section className="homeLuxuryGridSection homeLuxuryGridSectionPorsche">
         <div className="homeLuxuryGridInner">
-          <h2 className="homeLuxurySectionTitle">{t("home.quick_links")}</h2>
-          <div className="homeLuxuryGridFour">
+          <h2 className="homeLuxurySectionTitle homeLuxurySectionTitlePorsche">{t("home.quick_links")}</h2>
+          <div className="homeLuxuryGridShowcase">
             {sectionTwoItems.map((item) => (
-              <GridCard key={`${item.title}-${item.href}`} item={item} />
+              <PorscheCard key={`${item.title}-${item.href}`} item={item} />
             ))}
           </div>
         </div>
