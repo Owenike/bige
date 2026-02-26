@@ -135,7 +135,7 @@ export default async function Home() {
 
   const sectionSixItems: GridItem[] = [
     {
-      badge: isEn ? "Entry" : "入場",
+      badge: "Entry",
       title: isEn ? "Single Pass" : "單次入場",
       description: isEn
         ? "Flexible pay-per-visit entry. Train when you want without long-term commitment."
@@ -145,7 +145,7 @@ export default async function Home() {
       cta: "Open",
     },
     {
-      badge: isEn ? "Membership" : "月費",
+      badge: "Membership",
       title: isEn ? "Monthly Plan" : "月費",
       description: isEn
         ? "Flat monthly pricing with full gym access to help you stay consistent every week."
@@ -155,17 +155,17 @@ export default async function Home() {
       cta: "Open",
     },
     {
-      badge: isEn ? "Coaching" : "教練",
+      badge: "Coaching",
       title: isEn ? "Coaching Program" : "教練課程",
       description: isEn
         ? "Personal and small-group coaching programs built around your goals and training pace."
-        : "一對一與小班教練課程，依你的目標與節奏安排進度。",
+        : "一對一教練課程，依你的目標與節奏安排進度。",
       href: "/coach",
       mediaClass: "homeLuxuryMediaS6C",
       cta: "Open",
     },
     {
-      badge: isEn ? "Assessment" : "測量",
+      badge: "Assessment",
       title: isEn ? "Body Assessment" : "體態測量",
       description: isEn
         ? "Track body shape and key metrics over time, so each stage of progress is visible."
