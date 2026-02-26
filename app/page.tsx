@@ -239,9 +239,8 @@ export default async function Home() {
       <section className="homeLuxuryFullImageSection homeLuxurySectionImageA">
         <div className="homeLuxuryFullShade" />
         <div className="homeLuxuryOverlayContent homeLuxuryOverlayCompact">
-          <p className="homeLuxuryEyebrow">{t("home.calm_ui")}</p>
+          <p className="homeLuxuryEyebrow">{isEn ? t("home.calm_ui") : "心靈之旅"}</p>
           <h2 className="homeLuxuryOverlayTitle">{t("home.section_body_awareness")}</h2>
-          <a className="homeLuxuryBtn" href="/member">{t("home.member_area")}</a>
         </div>
       </section>
 
