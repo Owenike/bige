@@ -485,6 +485,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   text-decoration: none;
   transition: background .18s ease, border-color .18s ease, transform .18s ease;
 }
+.homeLuxuryBtnMobileOnly{
+  display: none;
+}
 .homeLuxuryBtn:hover{
   text-decoration: none;
   background: rgba(31,37,52,.72);
@@ -762,6 +765,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   }
   .homeLuxuryBtn{
     width: 100%;
+  }
+  .homeLuxuryBtnMobileOnly{
+    display: inline-flex;
   }
 }
 .formCard{

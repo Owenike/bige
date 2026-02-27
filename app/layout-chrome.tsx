@@ -13,8 +13,9 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isFrontdeskRoute = pathname?.startsWith("/frontdesk");
   const isMemberRoute = pathname?.startsWith("/member");
   const isCoachRoute = pathname?.startsWith("/coach");
+  const isHomeRoute = pathname === "/";
   const isWorkspaceRoute = isFrontdeskRoute || isMemberRoute || isCoachRoute;
-  const showTopbar = !isEmbedded && !isWorkspaceRoute;
+  const showTopbar = !isEmbedded && !isWorkspaceRoute && !isHomeRoute;
   const shellClassName = [
     "shell",
     isEmbedded ? "shellEmbedded" : "",

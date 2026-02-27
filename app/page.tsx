@@ -235,7 +235,7 @@ export default async function Home() {
             <p className="homeLuxuryHeroSub">{heroSubDisplayText}</p>
           )}
           <div className="homeLuxuryHeroActions">
-            <a className="homeLuxuryBtn" href="/member/entry-qr">{t("home.member_dynamic_qr")}</a>
+            <a className="homeLuxuryBtn homeLuxuryBtnMobileOnly" href="/member/entry-qr">{t("home.member_dynamic_qr")}</a>
           </div>
         </div>
       </section>
