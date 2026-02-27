@@ -769,6 +769,13 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .homeLuxuryGridThree > .homeLuxuryGridCard{
     scroll-snap-align: start;
   }
+  .homeLuxuryGridFour .homeLuxuryGridMedia{
+    aspect-ratio: 3 / 2;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-color: #0b0f16;
+  }
   .homeLuxuryGridMedia{
     aspect-ratio: 16 / 12;
   }
