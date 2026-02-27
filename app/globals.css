@@ -752,7 +752,18 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   }
   .homeLuxuryGridFour,
   .homeLuxuryGridThree{
-    grid-template-columns: 1fr;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 88%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 14px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .homeLuxuryGridFour > .homeLuxuryGridCard,
+  .homeLuxuryGridThree > .homeLuxuryGridCard{
+    scroll-snap-align: start;
   }
   .homeLuxuryGridMedia{
     aspect-ratio: 16 / 12;
