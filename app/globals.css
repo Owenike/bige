@@ -734,7 +734,17 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 @media (max-width: 780px){
   .homeLuxuryGridShowcase{
-    grid-template-columns: 1fr;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 88%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 14px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .homeLuxuryGridShowcase > .homeLuxuryPorscheCard{
+    scroll-snap-align: start;
   }
   .homeLuxuryFullImageSection,
   .homeLuxuryFullVideoSection{
