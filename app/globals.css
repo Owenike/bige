@@ -1754,6 +1754,34 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdEntryManualAllowHead .fdGlassText{
   max-width: 460px;
 }
+.fdEntryManualAllowInfo{
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.fdEntryManualAllowOpenBtn{
+  white-space: nowrap;
+}
+.fdEntryManualAllowBackdrop{
+  align-items: center;
+}
+.fdEntryManualAllowModal{
+  width: min(980px, calc(100vw - 24px));
+  height: min(92vh, 860px);
+}
+.fdEntryManualAllowModalBody{
+  overflow: auto;
+  padding-right: 2px;
+}
+.fdEntryManualAllowModalBody .fdEntryManualAllowPanel{
+  margin-top: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
 .fdEntryManualSearchGrid{
   align-items: start;
 }
@@ -3588,6 +3616,13 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
   .fdEntryResultGrid{
     grid-template-columns: 1fr;
+  }
+  .fdEntryManualAllowHead{
+    align-items: stretch !important;
+  }
+  .fdEntryManualAllowOpenBtn{
+    width: 100%;
+    justify-content: center;
   }
   .fdEntryReasonForm .fdPillBtn{
     justify-self: stretch;

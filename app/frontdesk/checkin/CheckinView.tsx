@@ -8,6 +8,7 @@ import {
   useState,
   type ClipboardEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n-provider";
 import type { VerifyEntryResponse } from "../../../types/entry";
 import { ManualAllowPanel } from "./ManualAllowPanel";
@@ -131,6 +132,8 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   const [scannerMode, setScannerMode] = useState<ScannerMode>("manual");
   const [cameraFacingMode, setCameraFacingMode] = useState<"environment" | "user">("environment");
   const [cameraNonce, setCameraNonce] = useState(0);
+  const [manualAllowOpen, setManualAllowOpen] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
 
   const [manualInput, setManualInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -151,6 +154,11 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             sub: "掃描會員動態 QR，或手動貼上 token 進行驗證。",
             cameraTitle: "鏡頭掃碼",
             manualTitle: "手動驗證",
+            manualAllowQuickTitle: "人工放行",
+            manualAllowQuickHint: "僅限例外情境使用，點擊按鈕開啟視窗填寫。",
+            manualAllowOpenBtn: "開啟人工放行",
+            manualAllowModalTitle: "人工放行",
+            closeModal: "關閉",
             cameraReady: "鏡頭就緒",
             cameraPreparing: "正在初始化鏡頭...",
             browserNotSupport: "目前瀏覽器不支援 BarcodeDetector，已自動切換 jsQR 備援模式。",
@@ -206,6 +214,11 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             sub: "Scan member dynamic QR or paste token manually for verification.",
             cameraTitle: "Camera Scanner",
             manualTitle: "Manual Verify",
+            manualAllowQuickTitle: "Manual Allow",
+            manualAllowQuickHint: "Use for exceptions only. Click the button to open the manual-allow dialog.",
+            manualAllowOpenBtn: "Open Manual Allow",
+            manualAllowModalTitle: "Manual Allow",
+            closeModal: "Close",
             cameraReady: "Camera ready",
             cameraPreparing: "Initializing camera...",
             browserNotSupport: "BarcodeDetector is not supported. Switched to jsQR fallback mode.",
@@ -261,6 +274,24 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   useEffect(() => {
     busyRef.current = busy;
   }, [busy]);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!manualAllowOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setManualAllowOpen(false);
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [manualAllowOpen]);
 
   const stopScanner = useCallback(() => {
     if (timerRef.current) {
@@ -679,7 +710,54 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
           )}
         </section>
 
-        <ManualAllowPanel onDone={() => { void loadRecentCheckins(); }} />
+        <section className="fdGlassSubPanel fdEntryManualAllowTrigger" style={{ marginTop: 14 }}>
+          <div className="actions fdEntryManualAllowHead" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
+            <div className="fdEntryManualAllowInfo">
+              <h2 className="sectionTitle" style={{ margin: 0 }}>{t.manualAllowQuickTitle}</h2>
+              <p className="fdGlassText" style={{ marginTop: 0, fontSize: 12 }}>{t.manualAllowQuickHint}</p>
+            </div>
+            <button
+              type="button"
+              className="fdPillBtn fdPillBtnPrimary fdEntryManualAllowOpenBtn"
+              onClick={() => setManualAllowOpen(true)}
+            >
+              {t.manualAllowOpenBtn}
+            </button>
+          </div>
+        </section>
+
+        {manualAllowOpen && portalReady
+          ? createPortal(
+              <div
+                className="fdModalBackdrop fdModalBackdropFeature fdEntryManualAllowBackdrop"
+                onClick={() => setManualAllowOpen(false)}
+                role="presentation"
+              >
+                <div
+                  className="fdModal fdModalLight fdEntryManualAllowModal"
+                  onClick={(event) => event.stopPropagation()}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={t.manualAllowModalTitle}
+                >
+                  <div className="fdModalHead">
+                    <h2 className="sectionTitle" style={{ margin: 0 }}>{t.manualAllowModalTitle}</h2>
+                    <button
+                      type="button"
+                      className="fdPillBtn fdPillBtnGhost fdModalCloseBtn"
+                      onClick={() => setManualAllowOpen(false)}
+                    >
+                      {t.closeModal}
+                    </button>
+                  </div>
+                  <div className="fdEntryManualAllowModalBody">
+                    <ManualAllowPanel onDone={() => { void loadRecentCheckins(); }} />
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
 
         <section className="fdGlassSubPanel fdEntryRecentPanel" style={{ marginTop: 14 }}>
           <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
