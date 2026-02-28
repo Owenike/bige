@@ -754,8 +754,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .homeLuxuryFullVideoSection{
     min-height: 78vh;
   }
-  .homeLuxuryGridFour,
-  .homeLuxuryGridThree{
+  .homeLuxuryGridFour{
     grid-template-columns: none;
     grid-auto-flow: column;
     grid-auto-columns: 88%;
@@ -765,9 +764,19 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     scroll-padding-left: 14px;
     -webkit-overflow-scrolling: touch;
   }
-  .homeLuxuryGridFour > .homeLuxuryGridCard,
-  .homeLuxuryGridThree > .homeLuxuryGridCard{
+  .homeLuxuryGridFour > .homeLuxuryGridCard{
     scroll-snap-align: start;
+  }
+  .homeLuxuryGridThree{
+    grid-template-columns: 1fr;
+    grid-auto-flow: row;
+    overflow: visible;
+  }
+  .homeLuxuryGridThree .homeLuxuryGridCard{
+    border-radius: 18px;
+  }
+  .homeLuxuryGridThree .homeLuxuryGridMedia{
+    aspect-ratio: 16 / 9;
   }
   .homeLuxuryGridFour .homeLuxuryGridMedia{
     aspect-ratio: 4 / 5;
