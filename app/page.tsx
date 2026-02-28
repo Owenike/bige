@@ -13,7 +13,7 @@ type GridItem = {
 
 function PorscheCard({ item }: { item: GridItem }) {
   return (
-    <article className="homeLuxuryPorscheCard">
+    <article className="homeLuxuryPorscheCard" data-reveal-item data-parallax-card>
       <div className="homeLuxuryPorscheLink">
         <div className={`homeLuxuryGridMedia homeLuxuryPorscheMedia ${item.mediaClass}`}>
           <div className="homeLuxuryPorscheOverlay">
@@ -38,7 +38,7 @@ function GridCard({ item, clickable = false }: { item: GridItem; clickable?: boo
   );
 
   return (
-    <article className="homeLuxuryGridCard">
+    <article className="homeLuxuryGridCard" data-reveal-item data-parallax-card>
       {clickable ? (
         <a className="homeLuxuryGridCardLink" href={item.href} aria-label={item.title}>
           {cardContent}
@@ -246,7 +246,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="homeLuxuryGridSection homeLuxuryGridSectionPorsche">
+      <section className="homeLuxuryGridSection homeLuxuryGridSectionPorsche" data-reveal>
         <div className="homeLuxuryGridInner">
           <div className="homeLuxurySectionTitleWithLogo">
             <h2 className="homeLuxurySectionTitle homeLuxurySectionTitlePorsche homeLuxurySectionTitleInline">
@@ -256,11 +256,12 @@ export default async function Home() {
               <Image src="/LOGO.jpg" alt="" width={128} height={128} className="homeLuxuryCircleLogoImage" />
             </span>
           </div>
-          <div className="homeLuxuryGridShowcase">
+          <div className="homeLuxuryGridShowcase" data-swipe-track="showcase">
             {sectionTwoItems.map((item) => (
               <PorscheCard key={`${item.title}-${item.href}`} item={item} />
             ))}
           </div>
+          <div className="homeSwipeDots" data-swipe-dots="showcase" aria-hidden />
         </div>
       </section>
 
@@ -272,14 +273,15 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="homeLuxuryGridSection homeLuxuryGridSectionFadeFromDark" data-scroll-fade="dark-to-light">
+      <section className="homeLuxuryGridSection homeLuxuryGridSectionFadeFromDark" data-scroll-fade="dark-to-light" data-reveal>
         <div className="homeLuxuryGridInner">
           <h2 className="homeLuxurySectionTitle">{isEn ? "Training Programs" : "全方位訓練"}</h2>
-          <div className="homeLuxuryGridFour">
+          <div className="homeLuxuryGridFour" data-swipe-track="training">
             {sectionFourItems.map((item) => (
               <GridCard key={`${item.title}-${item.href}`} item={item} />
             ))}
           </div>
+          <div className="homeSwipeDots" data-swipe-dots="training" aria-hidden />
         </div>
       </section>
 
@@ -295,14 +297,15 @@ export default async function Home() {
         <div className="homeLuxuryFullShade" />
       </section>
 
-      <section className="homeLuxuryGridSection">
+      <section className="homeLuxuryGridSection" data-reveal>
         <div className="homeLuxuryGridInner">
           <h2 className="homeLuxurySectionTitle">{isEn ? "More Choices, Less Pressure" : "多元選擇 輕鬆無負擔"}</h2>
-          <div className="homeLuxuryGridFour">
+          <div className="homeLuxuryGridFour" data-swipe-track="choices">
             {sectionSixItems.map((item) => (
               <GridCard key={`${item.title}-${item.href}`} item={item} />
             ))}
           </div>
+          <div className="homeSwipeDots" data-swipe-dots="choices" aria-hidden />
         </div>
       </section>
 
@@ -314,7 +317,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="homeLuxuryGridSection homeLuxuryGridSectionLast">
+      <section className="homeLuxuryGridSection homeLuxuryGridSectionLast" data-reveal>
         <div className="homeLuxuryGridInner">
           <h2 className="homeLuxurySectionTitle">{isEn ? "Take the First Step" : "邁出第一步"}</h2>
           <div className="homeLuxuryGridThree">
