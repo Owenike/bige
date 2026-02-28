@@ -770,26 +770,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     scroll-snap-align: start;
   }
   .homeLuxuryGridFour .homeLuxuryGridMedia{
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-    background-color: transparent;
-  }
-  .homeLuxuryGridFour .homeLuxuryMediaS4A,
-  .homeLuxuryGridFour .homeLuxuryMediaS4B{
     aspect-ratio: 4 / 5;
-  }
-  .homeLuxuryGridFour .homeLuxuryMediaS4C,
-  .homeLuxuryGridFour .homeLuxuryMediaS4D{
-    aspect-ratio: 2 / 3;
-  }
-  .homeLuxuryGridFour .homeLuxuryMediaS6A,
-  .homeLuxuryGridFour .homeLuxuryMediaS6B,
-  .homeLuxuryGridFour .homeLuxuryMediaS6C{
-    aspect-ratio: 3 / 2;
-  }
-  .homeLuxuryGridFour .homeLuxuryMediaS6D{
-    aspect-ratio: 130 / 157;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center top;
   }
   .homeLuxuryGridMedia{
     aspect-ratio: 16 / 12;
