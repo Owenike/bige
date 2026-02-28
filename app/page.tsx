@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { getLocaleFromCookies, getT } from "../lib/i18n-server";
+import HomeScrollEffects from "./home-scroll-effects";
 
 type GridItem = {
   badge: string;
@@ -216,6 +217,7 @@ export default async function Home() {
 
   return (
     <main className="homeLuxury">
+      <HomeScrollEffects />
       <section className="homeLuxuryHero homeLuxuryFullImageSection homeLuxuryHeroImage">
         <div className="homeLuxuryFullShade" />
         <div className="homeLuxuryOverlayContent">
@@ -270,7 +272,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="homeLuxuryGridSection homeLuxuryGridSectionFadeFromDark">
+      <section className="homeLuxuryGridSection homeLuxuryGridSectionFadeFromDark" data-scroll-fade="dark-to-light">
         <div className="homeLuxuryGridInner">
           <h2 className="homeLuxurySectionTitle">{isEn ? "Training Programs" : "全方位訓練"}</h2>
           <div className="homeLuxuryGridFour">

@@ -536,22 +536,31 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .homeLuxuryGridSectionFadeFromDark{
   position: relative;
   border-top: 0;
+  --home-fade-progress: 0;
 }
 .homeLuxuryGridSectionFadeFromDark::before{
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: -120px;
-  height: 120px;
+  top: -156px;
+  height: 220px;
+  z-index: 0;
   pointer-events: none;
   background: linear-gradient(
     180deg,
     #060a12 0%,
-    rgba(6, 10, 18, .72) 32%,
-    rgba(244, 242, 239, .86) 72%,
-    #f4f2ef 100%
+    rgba(6, 10, 18, .92) 30%,
+    rgba(6, 10, 18, .54) 64%,
+    rgba(244, 242, 239, .18) 88%,
+    rgba(244, 242, 239, 0) 100%
   );
+  opacity: calc(1 - var(--home-fade-progress));
+  transform: translateY(calc(var(--home-fade-progress) * 24px));
+}
+.homeLuxuryGridSectionFadeFromDark > .homeLuxuryGridInner{
+  position: relative;
+  z-index: 1;
 }
 .homeLuxuryGridSectionPorsche{
   background: #070b12;
@@ -779,8 +788,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     display: none;
   }
   .homeLuxuryGridSectionFadeFromDark::before{
-    top: -84px;
-    height: 84px;
+    top: -108px;
+    height: 128px;
   }
   .homeLuxuryGridFour{
     grid-template-columns: none;
