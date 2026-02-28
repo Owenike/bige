@@ -546,9 +546,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   --home-fade-progress: 0;
   --home-pin-progress: 0;
   --home-title-mask: #f4f2ef;
-  min-height: 130vh;
-  padding-top: 0;
-  padding-bottom: 0;
+  min-height: 0;
   background: #f4f2ef;
   color: #111318;
   isolation: isolate;
@@ -598,18 +596,16 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   opacity: 0;
 }
 .homeLuxuryPinFrame{
-  position: sticky;
-  top: 0;
-  min-height: 92vh;
-  padding-top: clamp(34px, 4vh, 56px);
-  padding-bottom: clamp(22px, 3vh, 34px);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  position: relative;
+  top: auto;
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  display: block;
 }
 .homeLuxuryGridSectionFadeFromDark .homeLuxuryGridFour{
-  transform: translateY(calc((1 - var(--home-pin-progress)) * 24px));
-  opacity: calc(.84 + var(--home-pin-progress) * .16);
+  transform: translateY(calc((1 - var(--home-pin-progress)) * 14px));
+  opacity: calc(.9 + var(--home-pin-progress) * .1);
   transition: transform .18s linear, opacity .18s linear;
 }
 .homeLuxuryGridSectionFadeFromDark .homeLuxurySectionTitle{
