@@ -18,9 +18,6 @@ function PorscheCard({ item }: { item: GridItem }) {
           <div className="homeLuxuryPorscheOverlay">
             <p className="homeLuxuryPorscheBadge">{item.badge}</p>
             <h3>{item.title}</h3>
-            <div className="homeLuxuryPorscheFooter">
-              <span className="homeLuxuryPorscheArrow" aria-hidden>→</span>
-            </div>
           </div>
         </div>
       </a>
@@ -31,16 +28,15 @@ function PorscheCard({ item }: { item: GridItem }) {
 function GridCard({ item }: { item: GridItem }) {
   return (
     <article className="homeLuxuryGridCard">
-      <div className={`homeLuxuryGridMedia ${item.mediaClass}`}>
-        <div className="homeLuxuryGridOverlay">
-          <p className="homeLuxuryGridBadge">{item.badge}</p>
-          <h3>{item.title}</h3>
-          <p>{item.description}</p>
-          <a className="homeLuxuryGridLink" href={item.href} aria-label={item.title}>
-            <span aria-hidden>→</span>
-          </a>
+      <a className="homeLuxuryGridCardLink" href={item.href} aria-label={item.title}>
+        <div className={`homeLuxuryGridMedia ${item.mediaClass}`}>
+          <div className="homeLuxuryGridOverlay">
+            <p className="homeLuxuryGridBadge">{item.badge}</p>
+            <h3>{item.title}</h3>
+            <p>{item.description}</p>
+          </div>
         </div>
-      </div>
+      </a>
     </article>
   );
 }
