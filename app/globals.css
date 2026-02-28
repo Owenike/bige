@@ -546,7 +546,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   --home-fade-progress: 0;
   --home-pin-progress: 0;
   --home-title-mask: #f4f2ef;
-  min-height: 170vh;
+  min-height: 130vh;
+  padding-top: 0;
+  padding-bottom: 0;
   background: #f4f2ef;
   color: #111318;
   isolation: isolate;
@@ -598,8 +600,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .homeLuxuryPinFrame{
   position: sticky;
   top: 0;
-  min-height: 100vh;
-  padding-top: clamp(42px, 5vh, 72px);
+  min-height: 92vh;
+  padding-top: clamp(34px, 4vh, 56px);
+  padding-bottom: clamp(22px, 3vh, 34px);
   display: flex;
   flex-direction: column;
   justify-content: center;
