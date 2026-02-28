@@ -547,7 +547,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   z-index: 0;
   pointer-events: none;
   background: #060a12;
-  opacity: calc((1 - var(--home-fade-progress)) * .78);
+  opacity: calc((1 - var(--home-fade-progress)) * .9);
 }
 .homeLuxuryGridSectionFadeFromDark::after{
   content: "";
@@ -555,10 +555,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   left: 0;
   right: 0;
   top: 0;
-  height: 38%;
+  height: 44%;
   z-index: 0;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(6,10,18,.78) 0%, rgba(6,10,18,0) 100%);
+  background: linear-gradient(180deg, rgba(6,10,18,.9) 0%, rgba(6,10,18,0) 100%);
   opacity: calc(1 - var(--home-fade-progress));
 }
 .homeLuxuryGridSectionFadeFromDark > .homeLuxuryGridInner{
