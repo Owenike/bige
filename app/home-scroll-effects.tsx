@@ -11,8 +11,9 @@ export default function HomeScrollEffects() {
     const update = () => {
       const rect = section.getBoundingClientRect();
       const vh = Math.max(1, window.innerHeight);
-      const start = vh * 0.96;
-      const end = vh * 0.28;
+      // Keep the fade visible for longer while the section enters the viewport.
+      const start = vh * 1.05;
+      const end = vh * 0.15;
       const raw = (start - rect.top) / (start - end);
       const progress = Math.max(0, Math.min(1, raw));
       section.style.setProperty("--home-fade-progress", progress.toFixed(3));

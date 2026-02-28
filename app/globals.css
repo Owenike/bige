@@ -537,26 +537,36 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   position: relative;
   border-top: 0;
   --home-fade-progress: 0;
+  isolation: isolate;
 }
 .homeLuxuryGridSectionFadeFromDark::before{
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: -156px;
-  height: 220px;
+  top: -170px;
+  height: 240px;
   z-index: 0;
   pointer-events: none;
   background: linear-gradient(
     180deg,
     #060a12 0%,
-    rgba(6, 10, 18, .92) 30%,
-    rgba(6, 10, 18, .54) 64%,
-    rgba(244, 242, 239, .18) 88%,
+    rgba(6, 10, 18, .95) 32%,
+    rgba(6, 10, 18, .62) 66%,
+    rgba(244, 242, 239, .24) 90%,
     rgba(244, 242, 239, 0) 100%
   );
   opacity: calc(1 - var(--home-fade-progress));
   transform: translateY(calc(var(--home-fade-progress) * 24px));
+}
+.homeLuxuryGridSectionFadeFromDark::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: #060a12;
+  opacity: calc((1 - var(--home-fade-progress)) * .22);
 }
 .homeLuxuryGridSectionFadeFromDark > .homeLuxuryGridInner{
   position: relative;
@@ -788,8 +798,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     display: none;
   }
   .homeLuxuryGridSectionFadeFromDark::before{
-    top: -108px;
-    height: 128px;
+    top: -128px;
+    height: 148px;
   }
   .homeLuxuryGridFour{
     grid-template-columns: none;
