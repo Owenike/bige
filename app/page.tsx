@@ -13,30 +13,38 @@ type GridItem = {
 function PorscheCard({ item }: { item: GridItem }) {
   return (
     <article className="homeLuxuryPorscheCard">
-      <a className="homeLuxuryPorscheLink" href={item.href}>
+      <div className="homeLuxuryPorscheLink">
         <div className={`homeLuxuryGridMedia homeLuxuryPorscheMedia ${item.mediaClass}`}>
           <div className="homeLuxuryPorscheOverlay">
             <p className="homeLuxuryPorscheBadge">{item.badge}</p>
             <h3>{item.title}</h3>
           </div>
         </div>
-      </a>
+      </div>
     </article>
   );
 }
 
-function GridCard({ item }: { item: GridItem }) {
+function GridCard({ item, clickable = false }: { item: GridItem; clickable?: boolean }) {
+  const cardContent = (
+    <div className={`homeLuxuryGridMedia ${item.mediaClass}`}>
+      <div className="homeLuxuryGridOverlay">
+        <p className="homeLuxuryGridBadge">{item.badge}</p>
+        <h3>{item.title}</h3>
+        <p>{item.description}</p>
+      </div>
+    </div>
+  );
+
   return (
     <article className="homeLuxuryGridCard">
-      <a className="homeLuxuryGridCardLink" href={item.href} aria-label={item.title}>
-        <div className={`homeLuxuryGridMedia ${item.mediaClass}`}>
-          <div className="homeLuxuryGridOverlay">
-            <p className="homeLuxuryGridBadge">{item.badge}</p>
-            <h3>{item.title}</h3>
-            <p>{item.description}</p>
-          </div>
-        </div>
-      </a>
+      {clickable ? (
+        <a className="homeLuxuryGridCardLink" href={item.href} aria-label={item.title}>
+          {cardContent}
+        </a>
+      ) : (
+        <div className="homeLuxuryGridCardFrame">{cardContent}</div>
+      )}
     </article>
   );
 }
@@ -180,7 +188,7 @@ export default async function Home() {
       description: isEn
         ? "Message us anytime and we will help you choose the right plan and schedule."
         : "歡迎隨時聯繫我們，將由專人協助你挑選最適合的方案與時段。",
-      href: "/member/support",
+      href: "https://lin.ee/0GWm0oZ",
       mediaClass: "homeLuxuryMediaS8A",
       cta: "Open",
     },
@@ -309,11 +317,20 @@ export default async function Home() {
           <h2 className="homeLuxurySectionTitle">{isEn ? "Take the First Step" : "邁出第一步"}</h2>
           <div className="homeLuxuryGridThree">
             {sectionEightItems.map((item) => (
-              <GridCard key={`${item.title}-${item.href}`} item={item} />
+              <GridCard key={`${item.title}-${item.href}`} item={item} clickable />
             ))}
           </div>
         </div>
       </section>
+      <a
+        className="homeLuxuryLineFab"
+        href="https://lin.ee/0GWm0oZ"
+        target="_blank"
+        rel="noreferrer"
+        aria-label={isEn ? "Open LINE" : "開啟 LINE"}
+      >
+        LINE
+      </a>
     </main>
   );
 }
