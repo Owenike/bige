@@ -750,9 +750,15 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     aspect-ratio: 3 / 5;
     min-height: 0;
   }
-  .homeLuxuryFullImageSection,
-  .homeLuxuryFullVideoSection{
+  .homeLuxuryFullImageSection{
     min-height: 78vh;
+  }
+  .homeLuxuryFullVideoSection{
+    min-height: 0;
+    aspect-ratio: 16 / 9;
+  }
+  .homeLuxuryFullVideoSection .homeLuxuryFullShade{
+    display: none;
   }
   .homeLuxuryGridFour{
     grid-template-columns: none;
