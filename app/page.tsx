@@ -270,7 +270,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="homeLuxuryGridSection">
+      <section className="homeLuxuryGridSection homeLuxuryGridSectionFadeFromDark">
         <div className="homeLuxuryGridInner">
           <h2 className="homeLuxurySectionTitle">{isEn ? "Training Programs" : "全方位訓練"}</h2>
           <div className="homeLuxuryGridFour">

@@ -533,6 +533,26 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   border-top: 1px solid rgba(18,24,34,.08);
   border-bottom: 1px solid rgba(18,24,34,.08);
 }
+.homeLuxuryGridSectionFadeFromDark{
+  position: relative;
+  border-top: 0;
+}
+.homeLuxuryGridSectionFadeFromDark::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -120px;
+  height: 120px;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    #060a12 0%,
+    rgba(6, 10, 18, .72) 32%,
+    rgba(244, 242, 239, .86) 72%,
+    #f4f2ef 100%
+  );
+}
 .homeLuxuryGridSectionPorsche{
   background: #070b12;
   border-top: 1px solid rgba(255,255,255,.08);
@@ -757,6 +777,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   }
   .homeLuxuryFullVideoSection .homeLuxuryFullShade{
     display: none;
+  }
+  .homeLuxuryGridSectionFadeFromDark::before{
+    top: -84px;
+    height: 84px;
   }
   .homeLuxuryGridFour{
     grid-template-columns: none;
