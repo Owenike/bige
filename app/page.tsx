@@ -250,7 +250,9 @@ export default async function Home() {
         <div className="homeLuxuryGridInner">
           <div className="homeLuxurySectionTitleWithLogo">
             <h2 className="homeLuxurySectionTitle homeLuxurySectionTitlePorsche homeLuxurySectionTitleInline">
+              <span className="homeLuxurySectionTitleText">
               {isEn ? "Bige Fitness Club" : "巨挺健身館"}
+            </span>
             </h2>
             <span className="homeLuxuryCircleLogo" aria-hidden>
               <Image src="/LOGO.jpg" alt="" width={128} height={128} className="homeLuxuryCircleLogoImage" />
@@ -273,9 +275,17 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="homeLuxuryGridSection homeLuxuryGridSectionFadeFromDark" data-scroll-fade="dark-to-light" data-reveal>
-        <div className="homeLuxuryGridInner">
-          <h2 className="homeLuxurySectionTitle">{isEn ? "Training Programs" : "全方位訓練"}</h2>
+      <section
+        className="homeLuxuryGridSection homeLuxuryGridSectionFadeFromDark"
+        data-scroll-fade="dark-to-light"
+        data-reveal
+        data-theme-swap="hard"
+        data-pin-section
+      >
+        <div className="homeLuxuryGridInner homeLuxuryPinFrame">
+          <h2 className="homeLuxurySectionTitle">
+            <span className="homeLuxurySectionTitleText">{isEn ? "Training Programs" : "全方位訓練"}</span>
+          </h2>
           <div className="homeLuxuryGridFour" data-swipe-track="training">
             {sectionFourItems.map((item) => (
               <GridCard key={`${item.title}-${item.href}`} item={item} />
@@ -299,7 +309,9 @@ export default async function Home() {
 
       <section className="homeLuxuryGridSection" data-reveal>
         <div className="homeLuxuryGridInner">
-          <h2 className="homeLuxurySectionTitle">{isEn ? "More Choices, Less Pressure" : "多元選擇 輕鬆無負擔"}</h2>
+          <h2 className="homeLuxurySectionTitle">
+            <span className="homeLuxurySectionTitleText">{isEn ? "More Choices, Less Pressure" : "多元選擇 輕鬆無負擔"}</span>
+          </h2>
           <div className="homeLuxuryGridFour" data-swipe-track="choices">
             {sectionSixItems.map((item) => (
               <GridCard key={`${item.title}-${item.href}`} item={item} />
@@ -319,7 +331,9 @@ export default async function Home() {
 
       <section className="homeLuxuryGridSection homeLuxuryGridSectionLast" data-reveal>
         <div className="homeLuxuryGridInner">
-          <h2 className="homeLuxurySectionTitle">{isEn ? "Take the First Step" : "邁出第一步"}</h2>
+          <h2 className="homeLuxurySectionTitle">
+            <span className="homeLuxurySectionTitleText">{isEn ? "Take the First Step" : "邁出第一步"}</span>
+          </h2>
           <div className="homeLuxuryGridThree">
             {sectionEightItems.map((item) => (
               <GridCard key={`${item.title}-${item.href}`} item={item} clickable />

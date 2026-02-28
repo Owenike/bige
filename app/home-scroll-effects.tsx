@@ -19,11 +19,12 @@ export default function HomeScrollEffects() {
       if (!fadeSection) return;
       const rect = fadeSection.getBoundingClientRect();
       const vh = Math.max(1, window.innerHeight);
-      const start = vh * 1.05;
-      const end = vh * 0.15;
-      const raw = (start - rect.top) / (start - end);
+      const travel = Math.max(1, rect.height - vh);
+      const raw = travel > 1 ? -rect.top / travel : (vh * 1.05 - rect.top) / (vh * 0.9);
       const progress = clamp(raw, 0, 1);
       fadeSection.style.setProperty("--home-fade-progress", progress.toFixed(3));
+      fadeSection.style.setProperty("--home-pin-progress", progress.toFixed(3));
+      fadeSection.classList.toggle("is-theme-dark", progress < 0.52);
     };
 
     const updateParallax = () => {
@@ -110,6 +111,7 @@ export default function HomeScrollEffects() {
             }
           });
 
+          items.forEach((item, index) => item.classList.toggle("is-swipe-active", index === activeIndex));
           dots.forEach((dot, index) => dot.classList.toggle("is-active", index === activeIndex));
           dotsHost.classList.toggle("is-hidden", track.scrollWidth <= track.clientWidth + 2);
         };
@@ -122,6 +124,7 @@ export default function HomeScrollEffects() {
         cleanupFns.push(() => {
           track.removeEventListener("scroll", onTrackScroll);
           window.removeEventListener("resize", updateDots);
+          items.forEach((item) => item.classList.remove("is-swipe-active"));
           dotsHost.innerHTML = "";
           dotsHost.classList.remove("is-hidden");
         });
@@ -153,7 +156,11 @@ export default function HomeScrollEffects() {
       if (rafId) window.cancelAnimationFrame(rafId);
       window.removeEventListener("scroll", requestFrame);
       window.removeEventListener("resize", requestFrame);
-      if (fadeSection) fadeSection.style.removeProperty("--home-fade-progress");
+      if (fadeSection) {
+        fadeSection.style.removeProperty("--home-fade-progress");
+        fadeSection.style.removeProperty("--home-pin-progress");
+        fadeSection.classList.remove("is-theme-dark");
+      }
       parallaxMedia.forEach((media) => media.style.removeProperty("--home-parallax"));
       if (lineFab) lineFab.classList.remove("homeLineFabHidden");
       cleanupFns.forEach((fn) => fn());
