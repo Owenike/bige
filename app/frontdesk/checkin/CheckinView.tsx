@@ -1,7 +1,13 @@
 "use client";
 
-import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+} from "react";
 import { useI18n } from "../../i18n-provider";
 import type { VerifyEntryResponse } from "../../../types/entry";
 import { ManualAllowPanel } from "./ManualAllowPanel";
@@ -18,17 +24,40 @@ interface RecentCheckinItem {
   checkedAt: string | null;
 }
 
+type ScannerMode = "detector" | "jsqr" | "manual";
+type NoticeTone = "ok" | "warn" | "error";
+
+interface EntryNotice {
+  tone: NoticeTone;
+  text: string;
+}
+
 function formatDateTime(value: string | null) {
   if (!value) return "-";
   return new Date(value).toLocaleString();
 }
 
-function parseEntryError(payload: any, lang: "zh" | "en") {
+function memberInitials(name: string | null | undefined) {
+  if (!name) return "--";
+  const normalized = name.trim();
+  if (!normalized) return "--";
+  if (normalized.length <= 2) return normalized.toUpperCase();
+  return normalized.slice(0, 2).toUpperCase();
+}
+
+function parseEntryError(payload: any, lang: "zh" | "en", status?: number) {
   const raw = typeof payload?.error === "string" ? payload.error : "";
-  if (!raw) return lang === "zh" ? "\u8acb\u6c42\u5931\u6557" : "Request failed";
-  if (raw === "reason is required") return lang === "zh" ? "\u8acb\u8f38\u5165\u53d6\u6d88\u539f\u56e0" : "Reason is required";
-  if (raw === "Only allow records can be canceled") return lang === "zh" ? "\u53ea\u80fd\u53d6\u6d88\u300c\u653e\u884c\u300d\u8a18\u9304" : raw;
-  return raw;
+  if (raw === "reason is required") return lang === "zh" ? "請輸入取消原因" : "Reason is required";
+  if (raw === "Only allow records can be canceled") return lang === "zh" ? "只能取消「放行」記錄" : raw;
+  if (raw === "Shift is not open") return lang === "zh" ? "班別尚未開啟，請先開班。" : "Shift is not open. Please open shift first.";
+  if (raw === "Unauthorized") return lang === "zh" ? "尚未登入櫃檯帳號，請重新登入。" : "Unauthorized. Please sign in again.";
+  if (raw === "Missing branch context") return lang === "zh" ? "缺少分店資訊，請聯絡管理員。" : "Missing branch context.";
+  if (raw === "Missing tenant context") return lang === "zh" ? "缺少租戶資訊，請聯絡管理員。" : "Missing tenant context.";
+  if (raw) return raw;
+  if (status === 401) return lang === "zh" ? "未授權，請先登入。" : "Unauthorized request.";
+  if (status === 409) return lang === "zh" ? "目前不可驗證，請先確認班別狀態。" : "Cannot verify now. Check shift status.";
+  if (status === 429) return lang === "zh" ? "操作過於頻繁，請稍後再試。" : "Too many requests. Try again shortly.";
+  return lang === "zh" ? "請求失敗" : "Request failed";
 }
 
 function membershipLabel(input: VerifyEntryResponse["membership"], lang: "zh" | "en") {
@@ -44,28 +73,29 @@ function membershipLabel(input: VerifyEntryResponse["membership"], lang: "zh" | 
         return "No valid membership";
     }
   }
+
   switch (input.kind) {
     case "monthly":
-      return `\u6708\u8cbb\u6703\u54e1 (\u5230\u671f: ${formatDateTime(input.monthlyExpiresAt)})`;
+      return `月費會員 (到期: ${formatDateTime(input.monthlyExpiresAt)})`;
     case "single":
-      return `\u55ae\u5802\u65b9\u6848 (\u5269\u9918: ${input.remainingSessions ?? 0})`;
+      return `單堂方案 (剩餘: ${input.remainingSessions ?? 0})`;
     case "punch":
-      return `\u9ede\u6578\u65b9\u6848 (\u5269\u9918: ${input.remainingSessions ?? 0})`;
+      return `點數方案 (剩餘: ${input.remainingSessions ?? 0})`;
     default:
-      return "\u7121\u6709\u6548\u6703\u7c4d";
+      return "無有效會籍";
   }
 }
 
 function denyReasonLabel(reason: VerifyEntryResponse["reason"], lang: "zh" | "en") {
   if (!reason) return "-";
   const zh: Record<NonNullable<VerifyEntryResponse["reason"]>, string> = {
-    token_invalid: "QR \u7121\u6548",
-    token_expired: "QR \u5df2\u904e\u671f",
-    token_used: "QR \u5df2\u4f7f\u7528",
-    rate_limited: "\u64cd\u4f5c\u904e\u65bc\u983b\u7e41",
-    member_not_found: "\u627e\u4e0d\u5230\u6703\u54e1",
-    already_checked_in_recently: "\u8fd1\u671f\u5df2\u5831\u5230",
-    no_valid_pass: "\u7121\u53ef\u7528\u6703\u7c4d/\u5802\u6578",
+    token_invalid: "QR 無效",
+    token_expired: "QR 已過期",
+    token_used: "QR 已使用",
+    rate_limited: "操作過於頻繁",
+    member_not_found: "找不到會員",
+    already_checked_in_recently: "近期已報到",
+    no_valid_pass: "無可用會籍/堂數",
   };
   const en: Record<NonNullable<VerifyEntryResponse["reason"]>, string> = {
     token_invalid: "Invalid QR token",
@@ -81,7 +111,7 @@ function denyReasonLabel(reason: VerifyEntryResponse["reason"], lang: "zh" | "en
 
 function decisionLabel(decision: VerifyEntryResponse["decision"], lang: "zh" | "en") {
   if (lang === "en") return decision === "allow" ? "Allow" : "Deny";
-  return decision === "allow" ? "\u653e\u884c" : "\u62d2\u7d55";
+  return decision === "allow" ? "放行" : "拒絕";
 }
 
 export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean }) {
@@ -89,15 +119,23 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
   const busyRef = useRef(false);
+  const lastDetectedRef = useRef<{ token: string; at: number }>({ token: "", at: 0 });
 
   const [scannerReady, setScannerReady] = useState(false);
+  const [cameraBooting, setCameraBooting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [scannerMode, setScannerMode] = useState<ScannerMode>("manual");
+  const [cameraFacingMode, setCameraFacingMode] = useState<"environment" | "user">("environment");
+  const [cameraNonce, setCameraNonce] = useState(0);
+
   const [manualInput, setManualInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<VerifyEntryResponse | null>(null);
+  const [notice, setNotice] = useState<EntryNotice | null>(null);
   const [recentItems, setRecentItems] = useState<RecentCheckinItem[]>([]);
   const [recentLoading, setRecentLoading] = useState(false);
   const [recentError, setRecentError] = useState<string | null>(null);
@@ -109,44 +147,59 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       lang === "zh"
         ? {
             badge: "ENTRY SCAN",
-            title: "\u6ac3\u6aaf\u5831\u5230\u9a57\u8b49",
-            sub: "\u6383\u63cf\u6703\u54e1\u52d5\u614b QR\uff0c\u6216\u624b\u52d5\u8cbc\u4e0a token \u9032\u884c\u9a57\u8b49\u3002",
-            cameraTitle: "\u93e1\u982d\u6383\u78bc",
-            manualTitle: "\u624b\u52d5\u9a57\u8b49",
-            cameraReady: "\u93e1\u982d\u5c31\u7dd2",
-            cameraPreparing: "\u6b63\u5728\u521d\u59cb\u5316\u93e1\u982d...",
-            browserNotSupport: "\u76ee\u524d\u700f\u89bd\u5668\u4e0d\u652f\u63f4 BarcodeDetector\uff0c\u8acb\u6539\u7528\u624b\u52d5 token \u9a57\u8b49\u3002",
-            cameraFailed: "\u7121\u6cd5\u555f\u7528\u93e1\u982d\uff0c\u8acb\u78ba\u8a8d\u6b0a\u9650\u8207 HTTPS \u74b0\u5883\u3002",
-            manualPlaceholder: "\u8cbc\u4e0a token \u5f8c\u6309 Enter",
-            manualBtn: "\u9a57\u8b49",
-            manualBusy: "\u9a57\u8b49\u4e2d...",
-            resultTitle: "\u9a57\u8b49\u7d50\u679c",
-            resultPending: "\u5c1a\u672a\u9a57\u8b49\uff0c\u8acb\u5148\u6383\u78bc\u6216\u624b\u52d5\u8cbc\u4e0a token\u3002",
-            memberName: "\u59d3\u540d",
-            phoneLast4: "\u96fb\u8a71\u672b\u56db\u78bc",
-            membership: "\u6703\u7c4d",
-            lastCheckin: "\u6700\u8fd1\u5831\u5230",
-            todayCount: "\u4eca\u65e5\u5831\u5230\u6b21\u6578",
-            checkedAt: "\u9a57\u8b49\u6642\u9593",
-            reason: "\u539f\u56e0",
-             gate: "\u9598\u9580",
-             noPhoto: "\u7121\u7167\u7247",
-             gateOpen: "\u5df2\u958b\u9580",
-             gateClosed: "\u672a\u958b\u9580",
-             recentTitle: "\u6700\u8fd1\u5165\u5834\u7d00\u9304",
-             recentReload: "\u91cd\u65b0\u6574\u7406",
-             recentLoading: "\u8f09\u5165\u4e2d...",
-             recentEmpty: "\u76ee\u524d\u6c92\u6709\u5165\u5834\u7d00\u9304\u3002",
-             recentMember: "\u6703\u54e1",
-             recentMethod: "\u65b9\u5f0f",
-             recentResult: "\u7d50\u679c",
-             recentReason: "\u539f\u56e0",
-             recentCheckedAt: "\u6642\u9593",
-             recentVoidAction: "\u53d6\u6d88\u8aa4\u5237",
-             recentVoidingAction: "\u53d6\u6d88\u4e2d...",
-             recentVoidPrompt: "\u8acb\u8f38\u5165\u53d6\u6d88\u8aa4\u5237\u539f\u56e0",
-             recentVoidSuccess: "\u8aa4\u5237\u8a18\u9304\u5df2\u53d6\u6d88\u3002",
-           }
+            title: "櫃檯報到驗證",
+            sub: "掃描會員動態 QR，或手動貼上 token 進行驗證。",
+            cameraTitle: "鏡頭掃碼",
+            manualTitle: "手動驗證",
+            cameraReady: "鏡頭就緒",
+            cameraPreparing: "正在初始化鏡頭...",
+            browserNotSupport: "目前瀏覽器不支援 BarcodeDetector，已自動切換 jsQR 備援模式。",
+            fallbackReady: "已使用 jsQR 備援掃碼，可正常驗證。",
+            fallbackLoadFailed: "無法載入備援掃碼引擎，請改用手動 token 驗證。",
+            cameraFailed: "無法啟用鏡頭，請確認權限與 HTTPS 環境。",
+            cameraPermissionHint: "若畫面無法掃碼，請在瀏覽器網址列允許攝影機權限。",
+            scannerModeLabel: "掃碼模式",
+            modeDetector: "BarcodeDetector",
+            modeFallback: "jsQR 備援",
+            modeManual: "手動驗證",
+            restartCamera: "重啟鏡頭",
+            switchCamera: "切換前後鏡頭",
+            manualPlaceholder: "貼上 token 後按 Enter",
+            manualBtn: "驗證",
+            manualBusy: "驗證中...",
+            manualHint: "貼上完整 token 會自動驗證。",
+            clearToken: "清空 token",
+            resultTitle: "驗證結果",
+            resultPending: "尚未驗證，請先掃碼或手動貼上 token。",
+            clearResult: "清空結果",
+            memberName: "姓名",
+            phoneLast4: "電話末四碼",
+            membership: "會籍",
+            lastCheckin: "最近報到",
+            todayCount: "今日報到次數",
+            checkedAt: "驗證時間",
+            reason: "原因",
+            gate: "閘門",
+            noPhoto: "無照片",
+            gateOpen: "已開門",
+            gateClosed: "未開門",
+            verifyAllowed: "驗證通過，會員可入場。",
+            verifyDenied: "驗證未通過",
+            verifyNetworkFailed: "驗證失敗，請檢查網路或稍後再試。",
+            recentTitle: "最近入場紀錄",
+            recentReload: "重新整理",
+            recentLoading: "載入中...",
+            recentEmpty: "目前沒有入場紀錄。",
+            recentMember: "會員",
+            recentMethod: "方式",
+            recentResult: "結果",
+            recentReason: "原因",
+            recentCheckedAt: "時間",
+            recentVoidAction: "取消誤刷",
+            recentVoidingAction: "取消中...",
+            recentVoidPrompt: "請輸入取消誤刷原因",
+            recentVoidSuccess: "誤刷記錄已取消。",
+          }
         : {
             badge: "ENTRY SCAN",
             title: "Frontdesk Entry Verification",
@@ -155,13 +208,25 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             manualTitle: "Manual Verify",
             cameraReady: "Camera ready",
             cameraPreparing: "Initializing camera...",
-            browserNotSupport: "BarcodeDetector is not supported here. Use manual token input or latest Chrome/Edge.",
+            browserNotSupport: "BarcodeDetector is not supported. Switched to jsQR fallback mode.",
+            fallbackReady: "jsQR fallback scanner is active.",
+            fallbackLoadFailed: "Failed to load fallback scanner. Use manual token verification.",
             cameraFailed: "Cannot access camera. Check permission and HTTPS or localhost.",
+            cameraPermissionHint: "If scanner stays black, allow camera permission from browser site settings.",
+            scannerModeLabel: "Scanner Mode",
+            modeDetector: "BarcodeDetector",
+            modeFallback: "jsQR fallback",
+            modeManual: "Manual only",
+            restartCamera: "Restart Camera",
+            switchCamera: "Switch Camera",
             manualPlaceholder: "Paste token and press Enter",
             manualBtn: "Verify",
             manualBusy: "Verifying...",
+            manualHint: "Pasting a complete token will auto verify.",
+            clearToken: "Clear token",
             resultTitle: "Verification Result",
             resultPending: "No verification yet. Scan QR or paste token first.",
+            clearResult: "Clear result",
             memberName: "Name",
             phoneLast4: "Phone Last 4",
             membership: "Membership",
@@ -169,24 +234,27 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             todayCount: "Today Count",
             checkedAt: "Checked At",
             reason: "Reason",
-             gate: "Gate",
-             noPhoto: "No photo",
-             gateOpen: "Opened",
-             gateClosed: "Not opened",
-             recentTitle: "Recent Entry Logs",
-             recentReload: "Reload",
-             recentLoading: "Loading...",
-             recentEmpty: "No recent entry records.",
-             recentMember: "Member",
-             recentMethod: "Method",
-             recentResult: "Result",
-             recentReason: "Reason",
-             recentCheckedAt: "Time",
-             recentVoidAction: "Undo Wrong Scan",
-             recentVoidingAction: "Undoing...",
-             recentVoidPrompt: "Please input reason to undo this scan",
-             recentVoidSuccess: "Wrong scan has been canceled.",
-           },
+            gate: "Gate",
+            noPhoto: "No photo",
+            gateOpen: "Opened",
+            gateClosed: "Not opened",
+            verifyAllowed: "Verification passed. Member can enter.",
+            verifyDenied: "Verification denied",
+            verifyNetworkFailed: "Verification failed. Check network and retry.",
+            recentTitle: "Recent Entry Logs",
+            recentReload: "Reload",
+            recentLoading: "Loading...",
+            recentEmpty: "No recent entry records.",
+            recentMember: "Member",
+            recentMethod: "Method",
+            recentResult: "Result",
+            recentReason: "Reason",
+            recentCheckedAt: "Time",
+            recentVoidAction: "Undo Wrong Scan",
+            recentVoidingAction: "Undoing...",
+            recentVoidPrompt: "Please input reason to undo this scan",
+            recentVoidSuccess: "Wrong scan has been canceled.",
+          },
     [lang],
   );
 
@@ -194,13 +262,26 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
     busyRef.current = busy;
   }, [busy]);
 
+  const stopScanner = useCallback(() => {
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setScannerReady(false);
+    setCameraBooting(false);
+  }, []);
+
   const loadRecentCheckins = useCallback(async () => {
     setRecentLoading(true);
     setRecentError(null);
     try {
       const response = await fetch(`/api/frontdesk/checkins?limit=${embedded ? 12 : 24}`, { cache: "no-store" });
       const payload = await response.json();
-      if (!response.ok) throw new Error(parseEntryError(payload, lang));
+      if (!response.ok) throw new Error(parseEntryError(payload, lang, response.status));
       setRecentItems(Array.isArray(payload.items) ? (payload.items as RecentCheckinItem[]) : []);
       setRecentWarning(typeof payload.warning === "string" ? payload.warning : null);
     } catch (error) {
@@ -217,6 +298,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
     if (!trimmed || busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
+    setNotice(null);
 
     try {
       const response = await fetch("/api/entry/verify", {
@@ -224,12 +306,27 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: trimmed }),
       });
-      const payload = (await response.json()) as VerifyEntryResponse;
-      setResult(payload);
-      if (payload.decision === "allow") {
+      const payload = (await response.json().catch(() => null)) as VerifyEntryResponse | { error?: string } | null;
+
+      if (!response.ok) {
+        const message = parseEntryError(payload, lang, response.status);
+        setResult(null);
+        setNotice({ tone: "error", text: message });
+        return;
+      }
+
+      const verified = payload as VerifyEntryResponse;
+      setResult(verified);
+
+      if (verified.decision === "allow") {
+        setNotice({ tone: "ok", text: t.verifyAllowed });
         void loadRecentCheckins();
+      } else {
+        const reasonText = denyReasonLabel(verified.reason, lang);
+        setNotice({ tone: "warn", text: `${t.verifyDenied}: ${reasonText}` });
       }
     } catch {
+      setNotice({ tone: "error", text: t.verifyNetworkFailed });
       setResult({
         decision: "deny",
         reason: "token_invalid",
@@ -245,7 +342,19 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       setBusy(false);
       setManualInput("");
     }
-  }, [loadRecentCheckins]);
+  }, [lang, loadRecentCheckins, t.verifyAllowed, t.verifyDenied, t.verifyNetworkFailed]);
+
+  const submitScannedToken = useCallback(async (rawToken: string) => {
+    const token = rawToken.trim();
+    if (!token) return;
+
+    const now = Date.now();
+    if (lastDetectedRef.current.token === token && now - lastDetectedRef.current.at < 1500) {
+      return;
+    }
+    lastDetectedRef.current = { token, at: now };
+    await callVerify(token);
+  }, [callVerify]);
 
   const handleVoidCheckin = useCallback(async (item: RecentCheckinItem) => {
     const reasonInput = window.prompt(t.recentVoidPrompt, "");
@@ -262,7 +371,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
         body: JSON.stringify({ action: "void", checkinId: item.id, reason }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(parseEntryError(payload, lang));
+      if (!response.ok) throw new Error(parseEntryError(payload, lang, response.status));
       setRecentWarning(typeof payload.warning === "string" ? payload.warning : t.recentVoidSuccess);
       await loadRecentCheckins();
     } catch (error) {
@@ -272,56 +381,171 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
     }
   }, [lang, loadRecentCheckins, t.recentVoidPrompt, t.recentVoidSuccess]);
 
-  const canUseBarcodeDetector = useMemo(() => typeof window !== "undefined" && "BarcodeDetector" in window, []);
+  const restartCamera = useCallback(() => {
+    setCameraNonce((value) => value + 1);
+  }, []);
+
+  const toggleCameraFacing = useCallback(() => {
+    setCameraFacingMode((mode) => (mode === "environment" ? "user" : "environment"));
+  }, []);
+
+  const handleManualPaste = useCallback((event: ClipboardEvent<HTMLInputElement>) => {
+    const pasted = event.clipboardData.getData("text").trim();
+    if (!pasted) return;
+    event.preventDefault();
+    setManualInput(pasted);
+    setNotice({ tone: "ok", text: t.manualHint });
+    window.setTimeout(() => {
+      void callVerify(pasted);
+    }, 80);
+  }, [callVerify, t.manualHint]);
 
   useEffect(() => {
     let mounted = true;
+    let jsQrDecode: null | ((bytes: Uint8ClampedArray, width: number, height: number) => string | null) = null;
+    let detector: any = null;
 
-    async function startCameraScanner() {
-      if (!canUseBarcodeDetector) {
-        setCameraError(t.browserNotSupport);
-        return;
-      }
+    const bootScanner = async () => {
+      stopScanner();
+      setScannerReady(false);
+      setCameraError(null);
+      setCameraBooting(true);
+
       try {
-        const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+        if (typeof window !== "undefined" && "BarcodeDetector" in window) {
+          detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+          setScannerMode("detector");
+        }
+      } catch {
+        detector = null;
+      }
+
+      if (!detector) {
+        try {
+          const mod = await import("jsqr");
+          jsQrDecode = (bytes: Uint8ClampedArray, width: number, height: number) => {
+            const result = mod.default(bytes, width, height, { inversionAttempts: "dontInvert" });
+            return result?.data ?? null;
+          };
+          setScannerMode("jsqr");
+          setNotice({ tone: "warn", text: t.browserNotSupport });
+        } catch {
+          setScannerMode("manual");
+          setCameraError(t.fallbackLoadFailed);
+          setCameraBooting(false);
+          return;
+        }
+      }
+
+      try {
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: cameraFacingMode },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+
+        if (!mounted) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
         streamRef.current = stream;
         if (!videoRef.current) return;
-
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
+
+        if (!mounted) return;
         setScannerReady(true);
+        setCameraBooting(false);
+        if (!detector) {
+          setNotice({ tone: "warn", text: t.fallbackReady });
+        }
 
         const tick = async () => {
           if (!mounted || !videoRef.current) return;
-          if (!busyRef.current) {
-            const codes = await detector.detect(videoRef.current);
-            const value = codes?.[0]?.rawValue;
-            if (value) await callVerify(value);
+
+          if (!busyRef.current && videoRef.current.readyState >= 2) {
+            let value: string | null = null;
+
+            if (detector) {
+              try {
+                const codes = await detector.detect(videoRef.current);
+                value = (codes?.[0]?.rawValue as string | undefined) ?? null;
+              } catch {
+                value = null;
+              }
+            } else if (jsQrDecode && scanCanvasRef.current) {
+              const video = videoRef.current;
+              const canvas = scanCanvasRef.current;
+              const width = video.videoWidth;
+              const height = video.videoHeight;
+
+              if (width > 0 && height > 0) {
+                if (canvas.width !== width || canvas.height !== height) {
+                  canvas.width = width;
+                  canvas.height = height;
+                }
+                const context = canvas.getContext("2d", { willReadFrequently: true });
+                if (context) {
+                  context.drawImage(video, 0, 0, width, height);
+                  const frame = context.getImageData(0, 0, width, height);
+                  value = jsQrDecode(frame.data, width, height);
+                }
+              }
+            }
+
+            if (value) {
+              await submitScannedToken(value);
+            }
           }
+
           timerRef.current = window.setTimeout(() => {
             void tick();
-          }, 500);
+          }, 420);
         };
+
         void tick();
       } catch {
+        setScannerMode("manual");
         setCameraError(t.cameraFailed);
+        setCameraBooting(false);
       }
-    }
+    };
 
-    void startCameraScanner();
+    void bootScanner();
     return () => {
       mounted = false;
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
+      stopScanner();
     };
-  }, [callVerify, canUseBarcodeDetector, t.browserNotSupport, t.cameraFailed]);
+  }, [
+    cameraFacingMode,
+    cameraNonce,
+    stopScanner,
+    submitScannedToken,
+    t.browserNotSupport,
+    t.cameraFailed,
+    t.fallbackLoadFailed,
+    t.fallbackReady,
+  ]);
 
   useEffect(() => {
     void loadRecentCheckins();
   }, [loadRecentCheckins]);
 
   const decisionColor = result?.decision === "allow" ? "var(--brand)" : "#9b1c1c";
+  const decisionClass = result?.decision === "allow" ? "fdEntryDecisionAllow" : "fdEntryDecisionDeny";
+  const modeLabel = scannerMode === "detector" ? t.modeDetector : scannerMode === "jsqr" ? t.modeFallback : t.modeManual;
+  const modeClass = scannerMode === "detector" ? "fdEntryModeDetector" : scannerMode === "jsqr" ? "fdEntryModeFallback" : "fdEntryModeManual";
+  const noticeClass =
+    notice?.tone === "ok" ? "fdEntryNoticeOk" : notice?.tone === "warn" ? "fdEntryNoticeWarn" : "fdEntryNoticeError";
 
   return (
     <main className={embedded ? "fdEmbedScene" : "fdGlassScene"} style={embedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
@@ -346,14 +570,29 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
           </div>
         )}
 
+        {notice ? <div className={`fdEntryNotice ${noticeClass}`}>{notice.text}</div> : null}
+
         <section className="fdTwoCol fdEntryTopGrid">
           <div className="fdGlassSubPanel fdEntryScannerPanel">
-            <h2 className="sectionTitle">{t.cameraTitle}</h2>
+            <div className="fdEntryScannerHead">
+              <h2 className="sectionTitle">{t.cameraTitle}</h2>
+              <span className={`fdEntryModeChip ${modeClass}`}>{t.scannerModeLabel}: {modeLabel}</span>
+            </div>
             <video ref={videoRef} className="input fdEntryScannerVideo" muted playsInline />
+            <canvas ref={scanCanvasRef} className="fdEntryScanCanvas" aria-hidden />
             <p className="fdGlassText fdEntryScannerState">
-              {scannerReady ? t.cameraReady : t.cameraPreparing}
+              {cameraBooting ? t.cameraPreparing : scannerReady ? t.cameraReady : t.cameraFailed}
             </p>
+            <p className="fdGlassText fdEntryScannerHint">{t.cameraPermissionHint}</p>
             {cameraError ? <p className="error" style={{ marginTop: 8 }}>{cameraError}</p> : null}
+            <div className="fdEntryScannerActions">
+              <button type="button" className="fdPillBtn" onClick={restartCamera} disabled={cameraBooting || busy}>
+                {t.restartCamera}
+              </button>
+              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={toggleCameraFacing} disabled={cameraBooting || busy}>
+                {t.switchCamera}
+              </button>
+            </div>
           </div>
 
           <div className="fdEntrySideCol">
@@ -366,11 +605,27 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
                   void callVerify(manualInput);
                 }}
               >
-                <input value={manualInput} onChange={(event) => setManualInput(event.target.value)} className="input" placeholder={t.manualPlaceholder} autoFocus />
+                <input
+                  value={manualInput}
+                  onChange={(event) => setManualInput(event.target.value)}
+                  onPaste={handleManualPaste}
+                  className="input"
+                  placeholder={t.manualPlaceholder}
+                  autoFocus
+                />
                 <button type="submit" disabled={busy || !manualInput.trim()} className="fdPillBtn fdPillBtnPrimary">
                   {busy ? t.manualBusy : t.manualBtn}
                 </button>
+                <button
+                  type="button"
+                  className="fdPillBtn fdPillBtnGhost"
+                  onClick={() => setManualInput("")}
+                  disabled={busy || !manualInput}
+                >
+                  {t.clearToken}
+                </button>
               </form>
+              <p className="fdEntryManualHint">{t.manualHint}</p>
             </div>
           </div>
         </section>
@@ -378,34 +633,46 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
         <section className="fdGlassSubPanel fdEntryResultPanelInline">
           <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
             <h2 className="sectionTitle" style={{ margin: 0 }}>{t.resultTitle}</h2>
-            {result ? <strong style={{ color: decisionColor }}>{decisionLabel(result.decision, lang)}</strong> : null}
+            <div className="fdEntryResultHeadActions">
+              {result ? <strong className={`fdEntryDecisionTag ${decisionClass}`} style={{ color: decisionColor }}>{decisionLabel(result.decision, lang)}</strong> : null}
+              <button
+                type="button"
+                className="fdPillBtn fdPillBtnGhost"
+                onClick={() => {
+                  setResult(null);
+                  setNotice(null);
+                }}
+                disabled={!result}
+              >
+                {t.clearResult}
+              </button>
+            </div>
           </div>
+
           {result ? (
-            <div className="fdDataGrid" style={{ marginTop: 10 }}>
-              <p className="sub">
-                {t.memberName}: {result.member?.name ?? "-"}
-              </p>
-              <p className="sub">
-                {t.phoneLast4}: {result.member?.phoneLast4 ?? "-"}
-              </p>
-              <p className="sub">
-                {t.membership}: {membershipLabel(result.membership, lang)}
-              </p>
-              <p className="sub">
-                {t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}
-              </p>
-              <p className="sub">
-                {t.todayCount}: {result.todayCheckinCount}
-              </p>
-              <p className="sub">
-                {t.checkedAt}: {formatDateTime(result.checkedAt)}
-              </p>
-              <p className="sub">
-                {t.reason}: {denyReasonLabel(result.reason, lang)}
-              </p>
-              <p className="sub">
-                {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
-              </p>
+            <div className="fdEntryResultHero">
+              <div className="fdEntryAvatar">
+                {result.member?.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={result.member.photoUrl} alt={result.member?.name || t.noPhoto} className="fdEntryAvatarImage" />
+                ) : (
+                  <span className="fdEntryAvatarFallback">{memberInitials(result.member?.name)}</span>
+                )}
+              </div>
+              <div className="fdEntryMemberBlock">
+                <h3 className="fdEntryMemberName">{result.member?.name ?? "-"}</h3>
+                <p className="fdEntryMemberMeta">{t.phoneLast4}: {result.member?.phoneLast4 ?? "-"}</p>
+                <p className="fdEntryMemberMeta">{t.membership}: {membershipLabel(result.membership, lang)}</p>
+                <div className="fdEntryResultMetaGrid">
+                  <p className="sub">{t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}</p>
+                  <p className="sub">{t.todayCount}: {result.todayCheckinCount}</p>
+                  <p className="sub">{t.checkedAt}: {formatDateTime(result.checkedAt)}</p>
+                  <p className="sub">{t.reason}: {denyReasonLabel(result.reason, lang)}</p>
+                </div>
+                <p className="fdEntryGateStatus">
+                  {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
+                </p>
+              </div>
             </div>
           ) : (
             <p className="fdGlassText" style={{ marginTop: 8 }}>{t.resultPending}</p>
@@ -432,9 +699,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
           {!recentLoading && recentItems.length === 0 ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.recentEmpty}</p> : null}
           <div className="fdListStack" style={{ marginTop: 8 }}>
             {recentItems.map((item) => {
-              const memberLabel = item.memberCode
-                ? `${item.memberName || "-"} (#${item.memberCode})`
-                : (item.memberName || "-");
+              const memberLabel = item.memberCode ? `${item.memberName || "-"} (#${item.memberCode})` : (item.memberName || "-");
               const canVoid = item.result.toLowerCase() === "allow";
               return (
                 <div key={item.id} className="card fdEntryRecentItem" style={{ padding: 10 }}>

@@ -1523,10 +1523,64 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   display: grid;
   gap: 12px;
 }
+.fdEntryNotice{
+  border-radius: 14px;
+  border: 1px solid transparent;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.fdEntryNoticeOk{
+  border-color: rgba(40, 182, 140, .38);
+  background: rgba(32, 170, 129, .12);
+  color: #0d664c;
+}
+.fdEntryNoticeWarn{
+  border-color: rgba(230, 159, 52, .46);
+  background: rgba(224, 145, 42, .14);
+  color: #784705;
+}
+.fdEntryNoticeError{
+  border-color: rgba(202, 72, 72, .44);
+  background: rgba(202, 72, 72, .12);
+  color: #8a1f1f;
+}
 .fdEntryTopGrid{
   align-items: start;
   grid-template-columns: minmax(420px, 1.12fr) minmax(340px, .88fr);
   gap: 12px;
+}
+.fdEntryScannerHead{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fdEntryModeChip{
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(172, 193, 220, .58);
+  background: rgba(240, 246, 255, .76);
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.fdEntryModeDetector{
+  border-color: rgba(45, 181, 143, .5);
+  background: rgba(45, 181, 143, .12);
+  color: #0f7054;
+}
+.fdEntryModeFallback{
+  border-color: rgba(211, 148, 43, .54);
+  background: rgba(211, 148, 43, .13);
+  color: #7a4904;
+}
+.fdEntryModeManual{
+  border-color: rgba(165, 174, 193, .64);
+  background: rgba(231, 238, 250, .56);
+  color: #485870;
 }
 .fdEntrySideCol{
   display: grid;
@@ -1546,6 +1600,24 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdEntryScannerState{
   margin-top: 10px;
+}
+.fdEntryScannerHint{
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: .92;
+}
+.fdEntryScannerActions{
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fdEntryScannerActions .fdPillBtn{
+  min-height: 34px;
+  padding: 7px 12px;
+}
+.fdEntryScanCanvas{
+  display: none;
 }
 .fdEntryManualForm{
   gap: 10px;
@@ -1568,11 +1640,104 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   align-self: start;
   height: auto;
 }
+.fdEntryManualHint{
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #8ca5ca;
+}
 .fdEntryResultPanelInline{
   min-height: 120px;
 }
 .fdEntryResultPanelInline .fdDataGrid{
   align-content: start;
+}
+.fdEntryResultHeadActions{
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.fdEntryDecisionTag{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 5px 12px;
+  border: 1px solid currentColor;
+  font-size: 13px;
+  line-height: 1.2;
+}
+.fdEntryDecisionAllow{
+  color: #0f8d63 !important;
+  background: rgba(20, 166, 127, .12);
+}
+.fdEntryDecisionDeny{
+  color: #aa2f2f !important;
+  background: rgba(191, 52, 52, .1);
+}
+.fdEntryResultHero{
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.fdEntryAvatar{
+  width: 96px;
+  height: 96px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(173, 192, 220, .6);
+  background: linear-gradient(145deg, rgba(230, 238, 250, .95), rgba(216, 228, 246, .82));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fdEntryAvatarImage{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fdEntryAvatarFallback{
+  font-size: 30px;
+  letter-spacing: .03em;
+  color: #4b5f7b;
+  font-weight: 700;
+}
+.fdEntryMemberBlock{
+  display: grid;
+  gap: 6px;
+}
+.fdEntryMemberName{
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: .01em;
+  color: #20324e;
+}
+.fdEntryMemberMeta{
+  margin: 0;
+  color: #4f6485;
+  line-height: 1.45;
+}
+.fdEntryResultMetaGrid{
+  margin-top: 2px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+.fdEntryResultMetaGrid .sub{
+  margin-top: 0;
+}
+.fdEntryGateStatus{
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(170, 191, 221, .48);
+  background: rgba(232, 240, 252, .52);
+  color: #304866;
+  font-size: 13px;
+  line-height: 1.4;
 }
 .fdEntryResultPanel{
   border-color: rgba(152, 198, 238, .64);
@@ -2728,6 +2893,22 @@ body.fdPageDark .footerInner{
 .fdModal.fdModalLight .fdEntryResultPanelInline{
   min-height: 120px;
 }
+.fdModal.fdModalLight .fdEntryNoticeOk{
+  border-color: rgba(40, 182, 140, .34);
+  background: rgba(40, 182, 140, .1);
+}
+.fdModal.fdModalLight .fdEntryNoticeWarn{
+  border-color: rgba(211, 148, 43, .4);
+  background: rgba(211, 148, 43, .1);
+}
+.fdModal.fdModalLight .fdEntryNoticeError{
+  border-color: rgba(202, 72, 72, .4);
+  background: rgba(202, 72, 72, .09);
+}
+.fdModal.fdModalLight .fdEntryGateStatus{
+  background: #eef4ff;
+  border-color: #cfdbea;
+}
 .fdModal.fdModalLight .fdEntryReasonForm .fdPillBtn{
   justify-self: stretch;
 }
@@ -3381,6 +3562,29 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .fdEntryScannerVideo{
     min-height: 220px;
     max-height: 280px;
+  }
+  .fdEntryScannerActions .fdPillBtn{
+    flex: 1 1 48%;
+    justify-content: center;
+  }
+  .fdEntryResultHeadActions{
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .fdEntryResultHero{
+    grid-template-columns: 1fr;
+  }
+  .fdEntryAvatar{
+    width: 84px;
+    height: 84px;
+  }
+  .fdEntryMemberName{
+    font-size: 24px;
+  }
+  .fdEntryResultMetaGrid{
+    grid-template-columns: 1fr;
   }
   .fdEntryResultGrid{
     grid-template-columns: 1fr;
