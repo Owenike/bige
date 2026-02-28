@@ -65,7 +65,13 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
         <footer className="footer">
           <div className="footerInner">
             <div>c {new Date().getFullYear()} BIGE</div>
-            <div>{t("footer.tagline")}</div>
+            <div className="footerTagline">
+              本網站及自動化系統由
+              <a className="footerBigeBtn" href="https://lin.ee/0GWm0oZ" target="_blank" rel="noreferrer">
+                BIGE
+              </a>
+              團隊維護與管理
+            </div>
           </div>
         </footer>
       ) : null}

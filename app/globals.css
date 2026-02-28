@@ -854,6 +854,29 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   font-size: 13px;
   padding: 16px 22px;
 }
+.footerTagline{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.footerBigeBtn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 178, 221, .45);
+  background: rgba(255, 255, 255, .75);
+  color: #23354d;
+  text-decoration: none;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.footerBigeBtn:hover{
+  text-decoration: none;
+  background: rgba(255, 255, 255, .92);
+}
 
 /* Frontdesk liquid-light UI */
 :root{
