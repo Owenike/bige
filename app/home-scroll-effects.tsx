@@ -8,6 +8,7 @@ export default function HomeScrollEffects() {
     const revealSections = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
     const parallaxMedia = Array.from(document.querySelectorAll<HTMLElement>("[data-parallax-card] .homeLuxuryGridMedia"));
     const lineFab = document.querySelector<HTMLElement>(".homeLuxuryLineFab");
+    const lockSwipeTrackIds = new Set(["training", "choices"]);
 
     let rafId = 0;
     let lastScrollY = window.scrollY;
@@ -122,6 +123,66 @@ export default function HomeScrollEffects() {
         track.addEventListener("scroll", onTrackScroll, { passive: true });
         window.addEventListener("resize", updateDots);
         updateDots();
+
+        if (lockSwipeTrackIds.has(id)) {
+          const isMobileViewport = () => window.matchMedia("(max-width: 900px)").matches;
+          const getMaxScrollLeft = () => Math.max(0, track.scrollWidth - track.clientWidth);
+          const canLockByDelta = (delta: number) => {
+            if (!isMobileViewport()) return false;
+            const maxScrollLeft = getMaxScrollLeft();
+            if (maxScrollLeft <= 2) return false;
+            const left = track.scrollLeft;
+            const atStart = left <= 1;
+            const atEnd = left >= maxScrollLeft - 1;
+            if (delta > 0) return !atEnd;
+            if (delta < 0) return !atStart;
+            return false;
+          };
+
+          const onWheel = (event: WheelEvent) => {
+            const dominantDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+            if (!canLockByDelta(dominantDelta)) return;
+            event.preventDefault();
+            track.scrollLeft += dominantDelta * 1.15;
+            window.requestAnimationFrame(updateDots);
+          };
+
+          let lastTouchX = 0;
+          let lastTouchY = 0;
+
+          const onTouchStart = (event: TouchEvent) => {
+            if (event.touches.length !== 1) return;
+            lastTouchX = event.touches[0].clientX;
+            lastTouchY = event.touches[0].clientY;
+          };
+
+          const onTouchMove = (event: TouchEvent) => {
+            if (event.touches.length !== 1) return;
+            const touch = event.touches[0];
+            const dx = touch.clientX - lastTouchX;
+            const dy = touch.clientY - lastTouchY;
+            lastTouchX = touch.clientX;
+            lastTouchY = touch.clientY;
+
+            if (Math.abs(dy) <= Math.abs(dx)) return;
+            const verticalIntent = -dy;
+            if (!canLockByDelta(verticalIntent)) return;
+
+            event.preventDefault();
+            track.scrollLeft += verticalIntent * 1.25;
+            window.requestAnimationFrame(updateDots);
+          };
+
+          track.addEventListener("wheel", onWheel, { passive: false });
+          track.addEventListener("touchstart", onTouchStart, { passive: true });
+          track.addEventListener("touchmove", onTouchMove, { passive: false });
+
+          cleanupFns.push(() => {
+            track.removeEventListener("wheel", onWheel);
+            track.removeEventListener("touchstart", onTouchStart);
+            track.removeEventListener("touchmove", onTouchMove);
+          });
+        }
 
         cleanupFns.push(() => {
           track.removeEventListener("scroll", onTrackScroll);
