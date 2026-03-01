@@ -190,14 +190,18 @@ export default function HomeScrollEffects() {
               consumeDelta(verticalIntent);
             };
 
-            section.addEventListener("wheel", onSectionWheel, { passive: false });
-            section.addEventListener("touchstart", onSectionTouchStart, { passive: true });
-            section.addEventListener("touchmove", onSectionTouchMove, { passive: false });
+            const wheelOptions: AddEventListenerOptions = { passive: false, capture: true };
+            const touchStartOptions: AddEventListenerOptions = { passive: true, capture: true };
+            const touchMoveOptions: AddEventListenerOptions = { passive: false, capture: true };
+
+            section.addEventListener("wheel", onSectionWheel, wheelOptions);
+            section.addEventListener("touchstart", onSectionTouchStart, touchStartOptions);
+            section.addEventListener("touchmove", onSectionTouchMove, touchMoveOptions);
 
             cleanupFns.push(() => {
-              section.removeEventListener("wheel", onSectionWheel);
-              section.removeEventListener("touchstart", onSectionTouchStart);
-              section.removeEventListener("touchmove", onSectionTouchMove);
+              section.removeEventListener("wheel", onSectionWheel, wheelOptions);
+              section.removeEventListener("touchstart", onSectionTouchStart, touchStartOptions);
+              section.removeEventListener("touchmove", onSectionTouchMove, touchMoveOptions);
             });
           }
         }
