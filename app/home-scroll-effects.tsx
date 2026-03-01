@@ -80,6 +80,13 @@ export default function HomeScrollEffects() {
 
     const setupSwipeDots = () => {
       const tracks = Array.from(document.querySelectorAll<HTMLElement>("[data-swipe-track]"));
+      type LockConfig = {
+        track: HTMLElement;
+        section: HTMLElement;
+        updateDots: () => void;
+      };
+      const lockConfigs: LockConfig[] = [];
+
       for (const track of tracks) {
         const id = track.dataset.swipeTrack;
         if (!id) continue;
@@ -125,63 +132,10 @@ export default function HomeScrollEffects() {
         updateDots();
 
         if (lockSwipeTrackIds.has(id)) {
-          const isMobileViewport = () => window.matchMedia("(max-width: 900px)").matches;
-          const getMaxScrollLeft = () => Math.max(0, track.scrollWidth - track.clientWidth);
-          const canLockByDelta = (delta: number) => {
-            if (!isMobileViewport()) return false;
-            const maxScrollLeft = getMaxScrollLeft();
-            if (maxScrollLeft <= 2) return false;
-            const left = track.scrollLeft;
-            const atStart = left <= 1;
-            const atEnd = left >= maxScrollLeft - 1;
-            if (delta > 0) return !atEnd;
-            if (delta < 0) return !atStart;
-            return false;
-          };
-
-          const onWheel = (event: WheelEvent) => {
-            const dominantDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
-            if (!canLockByDelta(dominantDelta)) return;
-            event.preventDefault();
-            track.scrollLeft += dominantDelta * 1.15;
-            window.requestAnimationFrame(updateDots);
-          };
-
-          let lastTouchX = 0;
-          let lastTouchY = 0;
-
-          const onTouchStart = (event: TouchEvent) => {
-            if (event.touches.length !== 1) return;
-            lastTouchX = event.touches[0].clientX;
-            lastTouchY = event.touches[0].clientY;
-          };
-
-          const onTouchMove = (event: TouchEvent) => {
-            if (event.touches.length !== 1) return;
-            const touch = event.touches[0];
-            const dx = touch.clientX - lastTouchX;
-            const dy = touch.clientY - lastTouchY;
-            lastTouchX = touch.clientX;
-            lastTouchY = touch.clientY;
-
-            if (Math.abs(dy) <= Math.abs(dx)) return;
-            const verticalIntent = -dy;
-            if (!canLockByDelta(verticalIntent)) return;
-
-            event.preventDefault();
-            track.scrollLeft += verticalIntent * 1.25;
-            window.requestAnimationFrame(updateDots);
-          };
-
-          track.addEventListener("wheel", onWheel, { passive: false });
-          track.addEventListener("touchstart", onTouchStart, { passive: true });
-          track.addEventListener("touchmove", onTouchMove, { passive: false });
-
-          cleanupFns.push(() => {
-            track.removeEventListener("wheel", onWheel);
-            track.removeEventListener("touchstart", onTouchStart);
-            track.removeEventListener("touchmove", onTouchMove);
-          });
+          const section = track.closest("section");
+          if (section instanceof HTMLElement) {
+            lockConfigs.push({ track, section, updateDots });
+          }
         }
 
         cleanupFns.push(() => {
@@ -192,6 +146,127 @@ export default function HomeScrollEffects() {
           dotsHost.classList.remove("is-hidden");
         });
       }
+
+      if (lockConfigs.length === 0) return;
+
+      const isMobileViewport = () => window.matchMedia("(max-width: 900px)").matches;
+      const getMaxScrollLeft = (trackEl: HTMLElement) => Math.max(0, trackEl.scrollWidth - trackEl.clientWidth);
+      const canConsumeDelta = (config: LockConfig, delta: number) => {
+        if (!isMobileViewport()) return false;
+        const maxScrollLeft = getMaxScrollLeft(config.track);
+        if (maxScrollLeft <= 2) return false;
+        const left = config.track.scrollLeft;
+        const atStart = left <= 1;
+        const atEnd = left >= maxScrollLeft - 1;
+        if (delta > 0) return !atEnd;
+        if (delta < 0) return !atStart;
+        return false;
+      };
+
+      const getLockConfigFromTarget = (target: EventTarget | null) => {
+        if (!(target instanceof Node)) return null;
+        return lockConfigs.find((config) => config.section.contains(target)) ?? null;
+      };
+
+      const getActiveLockConfig = () => {
+        if (!isMobileViewport()) return null;
+        const vh = Math.max(1, window.innerHeight);
+        let picked: LockConfig | null = null;
+        let bestScore = 0;
+
+        for (const config of lockConfigs) {
+          const rect = config.section.getBoundingClientRect();
+          const visible = Math.min(rect.bottom, vh) - Math.max(rect.top, 0);
+          if (visible <= 0) continue;
+          if (rect.top >= vh * 0.88 || rect.bottom <= vh * 0.12) continue;
+
+          const center = rect.top + rect.height * 0.5;
+          const centerDistance = Math.abs(center - vh * 0.5);
+          const score = visible - centerDistance * 0.15;
+          if (score > bestScore) {
+            bestScore = score;
+            picked = config;
+          }
+        }
+
+        return picked;
+      };
+
+      const consumeVerticalDelta = (delta: number, preferred: LockConfig | null) => {
+        const ordered = preferred
+          ? [preferred, ...lockConfigs.filter((config) => config !== preferred)]
+          : lockConfigs;
+
+        for (const config of ordered) {
+          if (!canConsumeDelta(config, delta)) continue;
+          config.track.scrollLeft += delta * 1.2;
+          window.requestAnimationFrame(config.updateDots);
+          return true;
+        }
+        return false;
+      };
+
+      const onWindowWheel = (event: WheelEvent) => {
+        if (!isMobileViewport()) return;
+        const dominantDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+        if (Math.abs(dominantDelta) < 0.8) return;
+
+        const preferred = getLockConfigFromTarget(event.target) ?? getActiveLockConfig();
+        if (!preferred) return;
+        if (consumeVerticalDelta(dominantDelta, preferred)) {
+          event.preventDefault();
+        }
+      };
+
+      let lastTouchX = 0;
+      let lastTouchY = 0;
+      let touchPreferred: LockConfig | null = null;
+
+      const onWindowTouchStart = (event: TouchEvent) => {
+        if (event.touches.length !== 1) return;
+        lastTouchX = event.touches[0].clientX;
+        lastTouchY = event.touches[0].clientY;
+        touchPreferred = getLockConfigFromTarget(event.target) ?? getActiveLockConfig();
+      };
+
+      const onWindowTouchMove = (event: TouchEvent) => {
+        if (!isMobileViewport()) return;
+        if (event.touches.length !== 1) return;
+
+        const touch = event.touches[0];
+        const dx = touch.clientX - lastTouchX;
+        const dy = touch.clientY - lastTouchY;
+        lastTouchX = touch.clientX;
+        lastTouchY = touch.clientY;
+
+        if (Math.abs(dy) <= Math.abs(dx)) return;
+        const dominantDelta = -dy;
+        if (Math.abs(dominantDelta) < 0.6) return;
+
+        const preferred = touchPreferred ?? getLockConfigFromTarget(event.target) ?? getActiveLockConfig();
+        if (!preferred) return;
+        if (consumeVerticalDelta(dominantDelta, preferred)) {
+          event.preventDefault();
+        }
+      };
+
+      const resetTouchPreferred = () => {
+        touchPreferred = null;
+      };
+
+      window.addEventListener("wheel", onWindowWheel, { passive: false });
+      window.addEventListener("touchstart", onWindowTouchStart, { passive: true });
+      window.addEventListener("touchmove", onWindowTouchMove, { passive: false });
+      window.addEventListener("touchend", resetTouchPreferred, { passive: true });
+      window.addEventListener("touchcancel", resetTouchPreferred, { passive: true });
+
+      cleanupFns.push(() => {
+        window.removeEventListener("wheel", onWindowWheel);
+        window.removeEventListener("touchstart", onWindowTouchStart);
+        window.removeEventListener("touchmove", onWindowTouchMove);
+        window.removeEventListener("touchend", resetTouchPreferred);
+        window.removeEventListener("touchcancel", resetTouchPreferred);
+      });
     };
 
     const runFrame = () => {
