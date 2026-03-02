@@ -244,13 +244,24 @@ export async function POST(request: Request) {
     `${ENTRY_SCHEMA.memberPhoneColumn}:phone`,
   ].join(", ");
 
-  const memberQuery = await supabase
+  const memberQueryStrict = await supabase
     .from(ENTRY_SCHEMA.membersTable)
     .select(memberSelect)
     .eq("id", payload.memberId)
     .eq("tenant_id", payload.tenantId)
     .eq("store_id", payload.storeId)
     .maybeSingle<MemberRow>();
+
+  let memberQuery = memberQueryStrict;
+  if (!memberQueryStrict.error && !memberQueryStrict.data) {
+    // Fallback for legacy/member data where store assignment might be blank or migrated.
+    memberQuery = await supabase
+      .from(ENTRY_SCHEMA.membersTable)
+      .select(memberSelect)
+      .eq("id", payload.memberId)
+      .eq("tenant_id", payload.tenantId)
+      .maybeSingle<MemberRow>();
+  }
 
   if (memberQuery.error || !memberQuery.data) {
     logEvent("info", { type: "http", action: "entry_verify", ...base, userId: auth.context.userId, status: 200, durationMs: Date.now() - t0, decision: "deny", reason: "member_not_found" });
