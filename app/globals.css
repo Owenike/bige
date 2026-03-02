@@ -1547,7 +1547,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdEntryTopGrid{
   align-items: start;
-  grid-template-columns: minmax(420px, 1.12fr) minmax(340px, .88fr);
+  grid-template-columns: minmax(300px, .64fr) minmax(420px, 1.36fr);
   gap: 12px;
 }
 .fdEntryScannerHead{
@@ -1592,8 +1592,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdEntryScannerVideo{
   margin-top: 8px;
   width: 100%;
-  min-height: 280px;
-  max-height: 360px;
+  min-height: 150px;
+  max-height: 190px;
   background: #0b0f16;
   border-color: rgba(171, 194, 226, .48);
   object-fit: cover;
@@ -2907,7 +2907,8 @@ body.fdPageDark .footerInner{
   backdrop-filter: none;
 }
 .fdModal.fdModalLight .fdEntryScannerVideo{
-  min-height: 320px;
+  min-height: 170px;
+  max-height: 210px;
   background: #0b0f16 !important;
   border-color: rgba(146, 173, 210, .56) !important;
   box-shadow: inset 0 0 0 1px rgba(18, 28, 44, .76);
