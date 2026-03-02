@@ -152,6 +152,56 @@ function decisionLabel(decision: VerifyEntryResponse["decision"], lang: "zh" | "
   return decision === "allow" ? "放行" : "拒絕";
 }
 
+function recentMethodLabel(method: string | null | undefined, lang: "zh" | "en") {
+  const code = (method || "").trim().toLowerCase();
+  if (!code || code === "unknown") return "-";
+  const zhMap: Record<string, string> = {
+    qr: "掃碼",
+    barcode: "掃碼",
+    manual: "人工放行",
+    token: "手動 token",
+  };
+  const enMap: Record<string, string> = {
+    qr: "QR scan",
+    barcode: "Barcode scan",
+    manual: "Manual allow",
+    token: "Manual token",
+  };
+  return lang === "zh" ? (zhMap[code] || method || "-") : (enMap[code] || method || "-");
+}
+
+function recentResultLabel(result: string | null | undefined, lang: "zh" | "en") {
+  const code = (result || "").trim().toLowerCase();
+  if (!code || code === "unknown") return "-";
+  if (lang === "zh") {
+    if (code === "allow") return "通過";
+    if (code === "deny") return "拒絕";
+    return result || "-";
+  }
+  if (code === "allow") return "Allow";
+  if (code === "deny") return "Deny";
+  return result || "-";
+}
+
+function recentReasonLabel(reason: string | null | undefined, lang: "zh" | "en") {
+  const raw = (reason || "").trim();
+  if (!raw) return "-";
+  const code = raw.toLowerCase();
+  const knownReasons: Array<NonNullable<VerifyEntryResponse["reason"]>> = [
+    "token_invalid",
+    "token_expired",
+    "token_used",
+    "rate_limited",
+    "member_not_found",
+    "already_checked_in_recently",
+    "no_valid_pass",
+  ];
+  if (knownReasons.includes(code as NonNullable<VerifyEntryResponse["reason"]>)) {
+    return denyReasonLabel(code as NonNullable<VerifyEntryResponse["reason"]>, lang);
+  }
+  return raw;
+}
+
 export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean }) {
   const { locale } = useI18n();
   const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
@@ -928,13 +978,16 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             {recentItems.map((item) => {
               const memberLabel = item.memberCode ? `${item.memberName || "-"} (#${item.memberCode})` : (item.memberName || "-");
               const canVoid = item.result.toLowerCase() === "allow";
+              const methodText = recentMethodLabel(item.method, lang);
+              const resultText = recentResultLabel(item.result, lang);
+              const reasonText = recentReasonLabel(item.reason, lang);
               return (
                 <div key={item.id} className="card fdEntryRecentItem" style={{ padding: 10 }}>
                   <div style={{ display: "grid", gap: 4 }}>
                     <p className="sub" style={{ marginTop: 0 }}>{t.recentMember}: {memberLabel}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentMethod}: {item.method || "-"}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentResult}: {item.result || "-"}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentReason}: {item.reason || "-"}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentMethod}: {methodText}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentResult}: {resultText}</p>
+                    <p className="sub" style={{ marginTop: 0 }}>{t.recentReason}: {reasonText}</p>
                     <p className="sub" style={{ marginTop: 0 }}>{t.recentCheckedAt}: {formatDateTime(item.checkedAt)}</p>
                   </div>
                   <div className="fdInventoryActions" style={{ marginTop: 8 }}>
