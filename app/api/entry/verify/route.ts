@@ -19,10 +19,21 @@ const ANTI_PASSBACK_MINUTES = 10;
 type MemberRow = {
   id: string;
   tenant_id: string;
-  store_id: string;
+  store_id: string | null;
   name: string;
   photo_url: string | null;
   phone: string | null;
+};
+
+type MemberRawRow = {
+  id: string;
+  tenant_id: string;
+  store_id: string | null;
+  full_name?: string | null;
+  name?: string | null;
+  photo_url?: string | null;
+  phone?: string | null;
+  [key: string]: unknown;
 };
 
 type EntitlementRow = {
@@ -125,6 +136,12 @@ function buildEntitlement(input: {
     monthly_expires_at: input.monthlyExpiresAt,
     remaining_sessions: input.remainingSessions,
   };
+}
+
+function toNullableString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 export async function POST(request: Request) {
@@ -235,32 +252,23 @@ export async function POST(request: Request) {
 
   const supabase = createSupabaseAdminClient();
 
-  const memberSelect = [
-    "id",
-    "tenant_id",
-    "store_id",
-    `${ENTRY_SCHEMA.memberNameColumn}:name`,
-    `${ENTRY_SCHEMA.memberPhotoColumn}:photo_url`,
-    `${ENTRY_SCHEMA.memberPhoneColumn}:phone`,
-  ].join(", ");
-
   const memberQueryStrict = await supabase
     .from(ENTRY_SCHEMA.membersTable)
-    .select(memberSelect)
+    .select("*")
     .eq("id", payload.memberId)
     .eq("tenant_id", payload.tenantId)
     .eq("store_id", payload.storeId)
-    .maybeSingle<MemberRow>();
+    .maybeSingle<MemberRawRow>();
 
   let memberQuery = memberQueryStrict;
   if (!memberQueryStrict.error && !memberQueryStrict.data) {
     // Fallback for legacy/member data where store assignment might be blank or migrated.
     memberQuery = await supabase
       .from(ENTRY_SCHEMA.membersTable)
-      .select(memberSelect)
+      .select("*")
       .eq("id", payload.memberId)
       .eq("tenant_id", payload.tenantId)
-      .maybeSingle<MemberRow>();
+      .maybeSingle<MemberRawRow>();
   }
 
   if (memberQuery.error || !memberQuery.data) {
@@ -268,7 +276,19 @@ export async function POST(request: Request) {
     return NextResponse.json(denyResponse("member_not_found"), { status: 200 });
   }
 
-  const member = memberQuery.data;
+  const rawMember = memberQuery.data;
+  const configuredName = toNullableString(rawMember[ENTRY_SCHEMA.memberNameColumn]);
+  const configuredPhoto = toNullableString(rawMember[ENTRY_SCHEMA.memberPhotoColumn]);
+  const configuredPhone = toNullableString(rawMember[ENTRY_SCHEMA.memberPhoneColumn]);
+
+  const member: MemberRow = {
+    id: String(rawMember.id),
+    tenant_id: String(rawMember.tenant_id),
+    store_id: toNullableString(rawMember.store_id),
+    name: configuredName || toNullableString(rawMember.full_name) || toNullableString(rawMember.name) || "-",
+    photo_url: configuredPhoto || toNullableString(rawMember.photo_url),
+    phone: configuredPhone || toNullableString(rawMember.phone),
+  };
   const scanResult = await supabase.rpc("verify_entry_scan", {
     p_tenant_id: payload.tenantId,
     p_store_id: payload.storeId,
