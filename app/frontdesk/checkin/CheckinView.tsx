@@ -138,7 +138,7 @@ function denyReasonLabel(reason: VerifyEntryResponse["reason"], lang: "zh" | "en
   const en: Record<NonNullable<VerifyEntryResponse["reason"]>, string> = {
     token_invalid: "Invalid QR token",
     token_expired: "Token expired",
-    token_used: "Token already used",
+    token_used: "Token already used. Ask member to refresh QR and scan again.",
     rate_limited: "Too many requests",
     member_not_found: "Member not found",
     already_checked_in_recently: "Recently checked in",
@@ -162,6 +162,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   const timerRef = useRef<number | null>(null);
   const busyRef = useRef(false);
   const lastDetectedRef = useRef<{ token: string; at: number }>({ token: "", at: 0 });
+  const scannedTokenLockRef = useRef<Set<string>>(new Set());
 
   const [scannerReady, setScannerReady] = useState(false);
   const [cameraBooting, setCameraBooting] = useState(false);
@@ -367,7 +368,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
 
   const callVerify = useCallback(async (token: string) => {
     const trimmed = token.trim();
-    if (!trimmed || busyRef.current) return;
+    if (!trimmed || busyRef.current) return false;
     busyRef.current = true;
     setBusy(true);
     setNotice(null);
@@ -384,7 +385,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
         const message = parseEntryError(payload, lang, response.status);
         setResult(null);
         setNotice({ tone: "error", text: message });
-        return;
+        return true;
       }
 
       const verified = payload as VerifyEntryResponse;
@@ -397,6 +398,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
         const reasonText = denyReasonLabel(verified.reason, lang);
         setNotice({ tone: "warn", text: `${t.verifyDenied}: ${reasonText}` });
       }
+      return true;
     } catch {
       setNotice({ tone: "error", text: t.verifyNetworkFailed });
       setResult({
@@ -409,6 +411,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
         checkedAt: new Date().toISOString(),
         gate: { attempted: false, opened: false, message: "Verify request failed" },
       });
+      return false;
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -419,13 +422,21 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   const submitScannedToken = useCallback(async (rawToken: string) => {
     const token = normalizeScannedToken(rawToken);
     if (!token) return;
+    if (scannedTokenLockRef.current.has(token)) return;
 
     const now = Date.now();
     if (lastDetectedRef.current.token === token && now - lastDetectedRef.current.at < 1500) {
       return;
     }
     lastDetectedRef.current = { token, at: now };
-    await callVerify(token);
+    const reachedServer = await callVerify(token);
+    if (!reachedServer) return;
+
+    scannedTokenLockRef.current.add(token);
+    if (scannedTokenLockRef.current.size > 120) {
+      const oldest = scannedTokenLockRef.current.values().next().value as string | undefined;
+      if (oldest) scannedTokenLockRef.current.delete(oldest);
+    }
   }, [callVerify]);
 
   const handleVoidCheckin = useCallback(async (item: RecentCheckinItem) => {
