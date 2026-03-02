@@ -46,6 +46,24 @@ function memberInitials(name: string | null | undefined) {
   return normalized.slice(0, 2).toUpperCase();
 }
 
+function normalizeScannedToken(raw: string) {
+  const value = raw.trim();
+  if (!value) return "";
+
+  try {
+    const parsed = new URL(value);
+    const tokenFromUrl = parsed.searchParams.get("token");
+    if (tokenFromUrl) return tokenFromUrl.trim();
+  } catch {
+    // ignore URL parse failure and fall back to raw value
+  }
+
+  if (value.startsWith("token:")) {
+    return value.slice(6).trim();
+  }
+  return value;
+}
+
 function parseEntryError(payload: any, lang: "zh" | "en", status?: number) {
   const raw = typeof payload?.error === "string" ? payload.error : "";
   if (raw === "reason is required") return lang === "zh" ? "請輸入取消原因" : "Reason is required";
@@ -376,7 +394,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   }, [lang, loadRecentCheckins, t.verifyAllowed, t.verifyDenied, t.verifyNetworkFailed]);
 
   const submitScannedToken = useCallback(async (rawToken: string) => {
-    const token = rawToken.trim();
+    const token = normalizeScannedToken(rawToken);
     if (!token) return;
 
     const now = Date.now();
@@ -434,6 +452,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   useEffect(() => {
     let mounted = true;
     let jsQrDecode: null | ((bytes: Uint8ClampedArray, width: number, height: number) => string | null) = null;
+    let jsQrDecodeFrame: null | ((context: CanvasRenderingContext2D, width: number, height: number) => string | null) = null;
     let detector: any = null;
 
     const bootScanner = async () => {
@@ -454,9 +473,29 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       if (!detector) {
         try {
           const mod = await import("jsqr");
-          jsQrDecode = (bytes: Uint8ClampedArray, width: number, height: number) => {
-            const result = mod.default(bytes, width, height, { inversionAttempts: "dontInvert" });
+          const decode = (bytes: Uint8ClampedArray, width: number, height: number) => {
+            const result = mod.default(bytes, width, height, { inversionAttempts: "attemptBoth" });
             return result?.data ?? null;
+          };
+          jsQrDecode = decode;
+          jsQrDecodeFrame = (context: CanvasRenderingContext2D, width: number, height: number) => {
+            const decodeRegion = (sx: number, sy: number, sw: number, sh: number) => {
+              const frame = context.getImageData(sx, sy, sw, sh);
+              return decode(frame.data, sw, sh);
+            };
+
+            const full = decodeRegion(0, 0, width, height);
+            if (full) return full;
+
+            const cropW = Math.floor(width * 0.72);
+            const cropH = Math.floor(height * 0.72);
+            if (cropW >= 180 && cropH >= 180) {
+              const sx = Math.floor((width - cropW) / 2);
+              const sy = Math.floor((height - cropH) / 2);
+              const center = decodeRegion(sx, sy, cropW, cropH);
+              if (center) return center;
+            }
+            return null;
           };
           setScannerMode("jsqr");
           setNotice({ tone: "warn", text: t.browserNotSupport });
@@ -474,8 +513,9 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
               facingMode: { ideal: cameraFacingMode },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
+              width: { ideal: 1920, min: 640 },
+              height: { ideal: 1080, min: 480 },
+              frameRate: { ideal: 30, max: 60 },
             },
             audio: false,
           });
@@ -513,7 +553,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
               } catch {
                 value = null;
               }
-            } else if (jsQrDecode && scanCanvasRef.current) {
+            } else if (jsQrDecodeFrame && scanCanvasRef.current) {
               const video = videoRef.current;
               const canvas = scanCanvasRef.current;
               const width = video.videoWidth;
@@ -527,8 +567,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
                 const context = canvas.getContext("2d", { willReadFrequently: true });
                 if (context) {
                   context.drawImage(video, 0, 0, width, height);
-                  const frame = context.getImageData(0, 0, width, height);
-                  value = jsQrDecode(frame.data, width, height);
+                  value = jsQrDecodeFrame(context, width, height);
                 }
               }
             }
@@ -540,7 +579,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
 
           timerRef.current = window.setTimeout(() => {
             void tick();
-          }, 420);
+          }, 260);
         };
 
         void tick();
