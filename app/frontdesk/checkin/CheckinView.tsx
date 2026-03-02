@@ -395,8 +395,8 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
         setNotice({ tone: "ok", text: t.verifyAllowed });
         void loadRecentCheckins();
       } else {
-        const reasonText = denyReasonLabel(verified.reason, lang);
-        setNotice({ tone: "warn", text: `${t.verifyDenied}: ${reasonText}` });
+        // Keep deny details only in the result card to avoid duplicate top warnings.
+        setNotice(null);
       }
       return true;
     } catch {
@@ -417,7 +417,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       setBusy(false);
       setManualInput("");
     }
-  }, [lang, loadRecentCheckins, t.verifyAllowed, t.verifyDenied, t.verifyNetworkFailed]);
+  }, [lang, loadRecentCheckins, t.verifyAllowed, t.verifyNetworkFailed]);
 
   const submitScannedToken = useCallback(async (rawToken: string) => {
     const token = normalizeScannedToken(rawToken);
