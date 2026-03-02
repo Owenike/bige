@@ -27,7 +27,13 @@ export default function MemberEntryQrPage() {
   const qrImageSrc = useMemo(() => {
     if (!payload?.token) return null;
     const encoded = encodeURIComponent(payload.token);
-    return `https://quickchart.io/qr?text=${encoded}&size=320&ecLevel=M`;
+    return `https://quickchart.io/qr?text=${encoded}&size=420&margin=1&ecLevel=L`;
+  }, [payload?.token]);
+
+  const barcodeImageSrc = useMemo(() => {
+    if (!payload?.token) return null;
+    const encoded = encodeURIComponent(payload.token);
+    return `https://quickchart.io/barcode?type=code128&text=${encoded}&width=900&height=220&format=png`;
   }, [payload?.token]);
 
   const refreshToken = useCallback(async () => {
@@ -99,6 +105,19 @@ export default function MemberEntryQrPage() {
             {loading ? (zh ? "產生 QR 中..." : "Generating QR...") : zh ? "QR 無法使用" : "QR unavailable"}
           </div>
         )}
+
+        {barcodeImageSrc ? (
+          <div className="mt-3 rounded border bg-white p-2">
+            <Image
+              src={barcodeImageSrc}
+              alt={zh ? "入場條碼" : "Entry barcode"}
+              className="mx-auto h-20 w-full object-contain"
+              width={900}
+              height={220}
+              unoptimized
+            />
+          </div>
+        ) : null}
 
         <div className="mt-4 space-y-1 text-sm">
           <p>{zh ? "更新倒數：" : "Refresh in:"} {countdown} {zh ? "秒" : "seconds"}</p>

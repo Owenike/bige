@@ -25,7 +25,7 @@ interface RecentCheckinItem {
   checkedAt: string | null;
 }
 
-type ScannerMode = "detector" | "jsqr" | "manual";
+type ScannerMode = "detector" | "zxing" | "jsqr" | "manual";
 type NoticeTone = "ok" | "warn" | "error";
 
 interface EntryNotice {
@@ -50,12 +50,31 @@ function normalizeScannedToken(raw: string) {
   const value = raw.trim();
   if (!value) return "";
 
-  try {
-    const parsed = new URL(value);
+  const readTokenFromUrl = (input: string) => {
+    const parsed = new URL(input);
     const tokenFromUrl = parsed.searchParams.get("token");
-    if (tokenFromUrl) return tokenFromUrl.trim();
+    return tokenFromUrl ? tokenFromUrl.trim() : "";
+  };
+
+  try {
+    const tokenFromUrl = readTokenFromUrl(value);
+    if (tokenFromUrl) return tokenFromUrl;
   } catch {
-    // ignore URL parse failure and fall back to raw value
+    try {
+      const tokenFromRelative = readTokenFromUrl(new URL(value, "https://entry.local").toString());
+      if (tokenFromRelative) return tokenFromRelative;
+    } catch {
+      // ignore URL parse failure and fall back to raw value
+    }
+  }
+
+  const tokenParam = value.match(/[?&]token=([^&#\s]+)/i);
+  if (tokenParam?.[1]) {
+    try {
+      return decodeURIComponent(tokenParam[1]).trim();
+    } catch {
+      return tokenParam[1].trim();
+    }
   }
 
   if (value.startsWith("token:")) {
@@ -316,6 +335,10 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -451,6 +474,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
 
   useEffect(() => {
     let mounted = true;
+    let zxingDecodeFrame: null | ((canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, width: number, height: number) => string | null) = null;
     let jsQrDecode: null | ((bytes: Uint8ClampedArray, width: number, height: number) => string | null) = null;
     let jsQrDecodeFrame: null | ((context: CanvasRenderingContext2D, width: number, height: number) => string | null) = null;
     let detector: any = null;
@@ -463,7 +487,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
 
       try {
         if (typeof window !== "undefined" && "BarcodeDetector" in window) {
-          detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+          detector = new (window as any).BarcodeDetector({ formats: ["qr_code", "code_128"] });
           setScannerMode("detector");
         }
       } catch {
@@ -471,6 +495,44 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       }
 
       if (!detector) {
+        try {
+          const mod = await import("@zxing/browser");
+          const reader = new mod.BrowserMultiFormatReader();
+          reader.possibleFormats = [mod.BarcodeFormat.QR_CODE, mod.BarcodeFormat.CODE_128];
+          zxingDecodeFrame = (canvas, context, width, height) => {
+            const decodeRegion = (sx: number, sy: number, sw: number, sh: number) => {
+              const video = videoRef.current;
+              if (!video) return null;
+              if (canvas.width !== sw || canvas.height !== sh) {
+                canvas.width = sw;
+                canvas.height = sh;
+              }
+              context.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+              try {
+                const result = reader.decodeFromCanvas(canvas);
+                const text = typeof result.getText === "function" ? result.getText() : "";
+                return typeof text === "string" ? text : null;
+              } catch {
+                return null;
+              }
+            };
+
+            const full = decodeRegion(0, 0, width, height);
+            if (full) return full;
+
+            const cropW = Math.floor(width * 0.72);
+            const cropH = Math.floor(height * 0.72);
+            if (cropW >= 180 && cropH >= 180) {
+              const sx = Math.floor((width - cropW) / 2);
+              const sy = Math.floor((height - cropH) / 2);
+              return decodeRegion(sx, sy, cropW, cropH);
+            }
+            return null;
+          };
+        } catch {
+          zxingDecodeFrame = null;
+        }
+
         try {
           const mod = await import("jsqr");
           const decode = (bytes: Uint8ClampedArray, width: number, height: number) => {
@@ -497,9 +559,21 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             }
             return null;
           };
+        } catch {
+          jsQrDecode = null;
+          jsQrDecodeFrame = null;
+        }
+
+        if (zxingDecodeFrame) {
+          setScannerMode("zxing");
+          setNotice({
+            tone: "warn",
+            text: lang === "zh" ? "目前瀏覽器不支援 BarcodeDetector，已切換 ZXing 備援模式。" : "BarcodeDetector is not supported. Switched to ZXing fallback mode.",
+          });
+        } else if (jsQrDecodeFrame) {
           setScannerMode("jsqr");
           setNotice({ tone: "warn", text: t.browserNotSupport });
-        } catch {
+        } else {
           setScannerMode("manual");
           setCameraError(t.fallbackLoadFailed);
           setCameraBooting(false);
@@ -537,7 +611,14 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
         setScannerReady(true);
         setCameraBooting(false);
         if (!detector) {
-          setNotice({ tone: "warn", text: t.fallbackReady });
+          if (zxingDecodeFrame) {
+            setNotice({
+              tone: "warn",
+              text: lang === "zh" ? "已使用 ZXing 備援掃碼，可正常驗證。" : "ZXing fallback scanner is active.",
+            });
+          } else {
+            setNotice({ tone: "warn", text: t.fallbackReady });
+          }
         }
 
         const tick = async () => {
@@ -553,21 +634,26 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
               } catch {
                 value = null;
               }
-            } else if (jsQrDecodeFrame && scanCanvasRef.current) {
+            } else if (scanCanvasRef.current) {
               const video = videoRef.current;
               const canvas = scanCanvasRef.current;
               const width = video.videoWidth;
               const height = video.videoHeight;
 
               if (width > 0 && height > 0) {
-                if (canvas.width !== width || canvas.height !== height) {
-                  canvas.width = width;
-                  canvas.height = height;
-                }
                 const context = canvas.getContext("2d", { willReadFrequently: true });
                 if (context) {
-                  context.drawImage(video, 0, 0, width, height);
-                  value = jsQrDecodeFrame(context, width, height);
+                  if (zxingDecodeFrame) {
+                    value = zxingDecodeFrame(canvas, context, width, height);
+                  }
+                  if (!value && jsQrDecodeFrame) {
+                    if (canvas.width !== width || canvas.height !== height) {
+                      canvas.width = width;
+                      canvas.height = height;
+                    }
+                    context.drawImage(video, 0, 0, width, height);
+                    value = jsQrDecodeFrame(context, width, height);
+                  }
                 }
               }
             }
@@ -600,6 +686,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
     cameraNonce,
     stopScanner,
     submitScannedToken,
+    lang,
     t.browserNotSupport,
     t.cameraFailed,
     t.fallbackLoadFailed,
@@ -612,8 +699,20 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
 
   const decisionColor = result?.decision === "allow" ? "var(--brand)" : "#9b1c1c";
   const decisionClass = result?.decision === "allow" ? "fdEntryDecisionAllow" : "fdEntryDecisionDeny";
-  const modeLabel = scannerMode === "detector" ? t.modeDetector : scannerMode === "jsqr" ? t.modeFallback : t.modeManual;
-  const modeClass = scannerMode === "detector" ? "fdEntryModeDetector" : scannerMode === "jsqr" ? "fdEntryModeFallback" : "fdEntryModeManual";
+  const modeLabel =
+    scannerMode === "detector"
+      ? t.modeDetector
+      : scannerMode === "zxing"
+        ? "ZXing fallback"
+        : scannerMode === "jsqr"
+          ? t.modeFallback
+          : t.modeManual;
+  const modeClass =
+    scannerMode === "detector"
+      ? "fdEntryModeDetector"
+      : scannerMode === "zxing" || scannerMode === "jsqr"
+        ? "fdEntryModeFallback"
+        : "fdEntryModeManual";
   const noticeClass =
     notice?.tone === "ok" ? "fdEntryNoticeOk" : notice?.tone === "warn" ? "fdEntryNoticeWarn" : "fdEntryNoticeError";
 

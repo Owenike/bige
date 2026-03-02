@@ -6,7 +6,7 @@ import type {
   VerifyEntryRequest,
   VerifyEntryResponse,
 } from "../../../../types/entry";
-import { verifyEntryToken } from "../../../../lib/entry-token";
+import { EntryTokenExpiredError, verifyEntryToken } from "../../../../lib/entry-token";
 import { ENTRY_SCHEMA } from "../../../../lib/entry-schema";
 import { openGate } from "../../../../lib/integrations/gate";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
@@ -54,7 +54,7 @@ function deriveMembershipKind(entitlement: EntitlementRow | null): MembershipKin
 }
 
 function parseJwtError(error: unknown): EntryDenyReason {
-  if (error instanceof joseErrors.JWTExpired) return "token_expired";
+  if (error instanceof joseErrors.JWTExpired || error instanceof EntryTokenExpiredError) return "token_expired";
   return "token_invalid";
 }
 
