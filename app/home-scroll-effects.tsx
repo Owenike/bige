@@ -8,7 +8,6 @@ export default function HomeScrollEffects() {
     const revealSections = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
     const parallaxMedia = Array.from(document.querySelectorAll<HTMLElement>("[data-parallax-card] .homeLuxuryGridMedia"));
     const lineFab = document.querySelector<HTMLElement>(".homeLuxuryLineFab");
-    const lockSwipeTrackIds = new Set(["training", "choices"]);
 
     let rafId = 0;
     let lastScrollY = window.scrollY;
@@ -80,32 +79,6 @@ export default function HomeScrollEffects() {
 
     const setupSwipeDots = () => {
       const tracks = Array.from(document.querySelectorAll<HTMLElement>("[data-swipe-track]"));
-      type LockEntry = {
-        track: HTMLElement;
-        section: HTMLElement;
-        updateDots: () => void;
-      };
-      const lockEntries: LockEntry[] = [];
-      let activeLock: LockEntry | null = null;
-
-      const isMobileViewport = () => window.matchMedia("(max-width: 900px)").matches;
-      const getMaxScrollLeft = (entry: LockEntry) => Math.max(0, entry.track.scrollWidth - entry.track.clientWidth);
-      const canConsumeDelta = (entry: LockEntry, delta: number) => {
-        if (!isMobileViewport()) return false;
-        const maxScrollLeft = getMaxScrollLeft(entry);
-        if (maxScrollLeft <= 2) return false;
-        const left = entry.track.scrollLeft;
-        const atStart = left <= 1;
-        const atEnd = left >= maxScrollLeft - 1;
-        if (delta > 0) return !atEnd;
-        if (delta < 0) return !atStart;
-        return false;
-      };
-      const consumeDelta = (entry: LockEntry, delta: number) => {
-        entry.track.scrollLeft += delta * 1.06;
-        window.requestAnimationFrame(entry.updateDots);
-      };
-
       for (const track of tracks) {
         const id = track.dataset.swipeTrack;
         if (!id) continue;
@@ -150,64 +123,6 @@ export default function HomeScrollEffects() {
         window.addEventListener("resize", updateDots);
         updateDots();
 
-        if (lockSwipeTrackIds.has(id)) {
-          const section = track.closest("section");
-          if (section instanceof HTMLElement) {
-            const lockEntry: LockEntry = { track, section, updateDots };
-            lockEntries.push(lockEntry);
-
-            let lastTouchX = 0;
-            let lastTouchY = 0;
-
-            const onSectionWheel = (event: WheelEvent) => {
-              const dominantDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
-              if (Math.abs(dominantDelta) < 0.35) return;
-              if (!canConsumeDelta(lockEntry, dominantDelta)) return;
-              event.preventDefault();
-              event.stopPropagation();
-              consumeDelta(lockEntry, dominantDelta);
-            };
-
-            const onSectionTouchStart = (event: TouchEvent) => {
-              if (event.touches.length !== 1) return;
-              lastTouchX = event.touches[0].clientX;
-              lastTouchY = event.touches[0].clientY;
-            };
-
-            const onSectionTouchMove = (event: TouchEvent) => {
-              if (!isMobileViewport()) return;
-              if (event.touches.length !== 1) return;
-              const touch = event.touches[0];
-              const dx = touch.clientX - lastTouchX;
-              const dy = touch.clientY - lastTouchY;
-              lastTouchX = touch.clientX;
-              lastTouchY = touch.clientY;
-
-              if (Math.abs(dy) <= Math.abs(dx) * 0.8) return;
-              const dominantDelta = -dy;
-              if (Math.abs(dominantDelta) < 0.2) return;
-              if (!canConsumeDelta(lockEntry, dominantDelta)) return;
-              event.preventDefault();
-              event.stopPropagation();
-              consumeDelta(lockEntry, dominantDelta);
-            };
-
-            const wheelOptions: AddEventListenerOptions = { passive: false, capture: true };
-            const touchStartOptions: AddEventListenerOptions = { passive: true, capture: true };
-            const touchMoveOptions: AddEventListenerOptions = { passive: false, capture: true };
-
-            section.addEventListener("wheel", onSectionWheel, wheelOptions);
-            section.addEventListener("touchstart", onSectionTouchStart, touchStartOptions);
-            section.addEventListener("touchmove", onSectionTouchMove, touchMoveOptions);
-
-            cleanupFns.push(() => {
-              section.removeEventListener("wheel", onSectionWheel, wheelOptions);
-              section.removeEventListener("touchstart", onSectionTouchStart, touchStartOptions);
-              section.removeEventListener("touchmove", onSectionTouchMove, touchMoveOptions);
-            });
-          }
-        }
-
         cleanupFns.push(() => {
           track.removeEventListener("scroll", onTrackScroll);
           window.removeEventListener("resize", updateDots);
@@ -216,92 +131,6 @@ export default function HomeScrollEffects() {
           dotsHost.classList.remove("is-hidden");
         });
       }
-
-      if (lockEntries.length === 0) return;
-
-      const pickActiveLock = () => {
-        if (!isMobileViewport()) {
-          activeLock = null;
-          return;
-        }
-
-        const vh = Math.max(1, window.innerHeight);
-        let picked: LockEntry | null = null;
-        let bestScore = 0;
-
-        for (const entry of lockEntries) {
-          const rect = entry.section.getBoundingClientRect();
-          const visible = Math.min(rect.bottom, vh) - Math.max(rect.top, 0);
-          if (visible <= 0) continue;
-          if (rect.top >= vh * 0.9 || rect.bottom <= vh * 0.1) continue;
-          if (visible > bestScore) {
-            bestScore = visible;
-            picked = entry;
-          }
-        }
-
-        activeLock = picked;
-      };
-
-      const observer = new IntersectionObserver(
-        () => pickActiveLock(),
-        { threshold: [0, 0.2, 0.4, 0.6, 0.8, 1] },
-      );
-      lockEntries.forEach((entry) => observer.observe(entry.section));
-      cleanupFns.push(() => observer.disconnect());
-
-      let globalLastTouchX = 0;
-      let globalLastTouchY = 0;
-
-      const onWindowWheel = (event: WheelEvent) => {
-        if (!activeLock) return;
-        const dominantDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
-        if (Math.abs(dominantDelta) < 0.35) return;
-        if (!canConsumeDelta(activeLock, dominantDelta)) return;
-        event.preventDefault();
-        consumeDelta(activeLock, dominantDelta);
-      };
-
-      const onWindowTouchStart = (event: TouchEvent) => {
-        if (event.touches.length !== 1) return;
-        globalLastTouchX = event.touches[0].clientX;
-        globalLastTouchY = event.touches[0].clientY;
-      };
-
-      const onWindowTouchMove = (event: TouchEvent) => {
-        if (!activeLock || !isMobileViewport()) return;
-        if (event.touches.length !== 1) return;
-        const touch = event.touches[0];
-        const dx = touch.clientX - globalLastTouchX;
-        const dy = touch.clientY - globalLastTouchY;
-        globalLastTouchX = touch.clientX;
-        globalLastTouchY = touch.clientY;
-        if (Math.abs(dy) <= Math.abs(dx) * 0.8) return;
-        const dominantDelta = -dy;
-        if (Math.abs(dominantDelta) < 0.2) return;
-        if (!canConsumeDelta(activeLock, dominantDelta)) return;
-        event.preventDefault();
-        consumeDelta(activeLock, dominantDelta);
-      };
-
-      const wheelOptions: AddEventListenerOptions = { passive: false, capture: true };
-      const touchStartOptions: AddEventListenerOptions = { passive: true, capture: true };
-      const touchMoveOptions: AddEventListenerOptions = { passive: false, capture: true };
-
-      window.addEventListener("wheel", onWindowWheel, wheelOptions);
-      window.addEventListener("touchstart", onWindowTouchStart, touchStartOptions);
-      window.addEventListener("touchmove", onWindowTouchMove, touchMoveOptions);
-      window.addEventListener("scroll", pickActiveLock, { passive: true });
-      window.addEventListener("resize", pickActiveLock);
-      pickActiveLock();
-
-      cleanupFns.push(() => {
-        window.removeEventListener("wheel", onWindowWheel, wheelOptions);
-        window.removeEventListener("touchstart", onWindowTouchStart, touchStartOptions);
-        window.removeEventListener("touchmove", onWindowTouchMove, touchMoveOptions);
-        window.removeEventListener("scroll", pickActiveLock);
-        window.removeEventListener("resize", pickActiveLock);
-      });
     };
 
     const runFrame = () => {
