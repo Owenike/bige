@@ -221,6 +221,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   const [cameraClosed, setCameraClosed] = useState(false);
   const [cameraNonce, setCameraNonce] = useState(0);
   const [manualAllowOpen, setManualAllowOpen] = useState(false);
+  const [memberViewOpen, setMemberViewOpen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
 
   const [busy, setBusy] = useState(false);
@@ -367,6 +368,11 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   }, []);
 
   useEffect(() => {
+    if (!result?.member) return;
+    setMemberViewOpen(true);
+  }, [result]);
+
+  useEffect(() => {
     if (!manualAllowOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setManualAllowOpen(false);
@@ -379,6 +385,17 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [manualAllowOpen]);
+
+  useEffect(() => {
+    if (!memberViewOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMemberViewOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [memberViewOpen]);
 
   const stopScanner = useCallback(() => {
     if (timerRef.current) {
@@ -815,72 +832,96 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
           </div>
 
           <div className="fdEntrySideCol">
-            <section className="fdGlassSubPanel fdEntryResultPanelInline fdEntryResultPanelSide">
+            <section className="fdGlassSubPanel fdEntryControlPanel fdEntryResultPanelInline fdEntryResultPanelSide">
               <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
-                <h2 className="sectionTitle" style={{ margin: 0 }}>{t.resultTitle}</h2>
-                <div className="fdEntryResultHeadActions">
-                  {result ? <strong className={`fdEntryDecisionTag ${decisionClass}`} style={{ color: decisionColor }}>{decisionLabel(result.decision, lang)}</strong> : null}
-                  <button
-                    type="button"
-                    className="fdPillBtn fdPillBtnGhost"
-                    onClick={() => {
-                      setResult(null);
-                      setNotice(null);
-                    }}
-                    disabled={!result}
-                  >
-                    {t.clearResult}
-                  </button>
-                </div>
+                <h2 className="sectionTitle" style={{ margin: 0 }}>{lang === "zh" ? "操作區" : "Actions"}</h2>
               </div>
-
-              {result ? (
-                <div className="fdEntryResultHero">
-                  <div className="fdEntryAvatar">
-                    {result.member?.photoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={result.member.photoUrl} alt={result.member?.name || t.noPhoto} className="fdEntryAvatarImage" />
-                    ) : (
-                      <span className="fdEntryAvatarFallback">{memberInitials(result.member?.name)}</span>
-                    )}
-                  </div>
-                  <div className="fdEntryMemberBlock">
-                    <h3 className="fdEntryMemberName">{result.member?.name ?? "-"}</h3>
-                    <p className="fdEntryMemberMeta">{t.phoneLast4}: {result.member?.phoneLast4 ?? "-"}</p>
-                    <p className="fdEntryMemberMeta">{t.membership}: {membershipLabel(result.membership, lang)}</p>
-                    <div className="fdEntryResultMetaGrid">
-                      <p className="sub">{t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}</p>
-                      <p className="sub">{t.todayCount}: {result.todayCheckinCount}</p>
-                      <p className="sub">{t.checkedAt}: {formatDateTime(result.checkedAt)}</p>
-                      <p className="sub">{t.reason}: {denyReasonLabel(result.reason, lang)}</p>
-                    </div>
-                    <p className="fdEntryGateStatus">
-                      {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <p className="fdGlassText" style={{ marginTop: 8 }}>{t.resultPending}</p>
-              )}
+              <p className="fdGlassText fdEntryControlHint" style={{ marginTop: 8 }}>
+                {lang === "zh" ? "掃碼成功後會自動跳出會員資料視窗（唯讀）。" : "After a successful scan, a read-only member profile popup opens automatically."}
+              </p>
+              <div className="fdEntryControlGrid">
+                <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={restartCamera} disabled={cameraBooting || busy || cameraClosed}>
+                  {t.restartCamera}
+                </button>
+                <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={toggleCameraPower} disabled={busy}>
+                  {cameraClosed ? (lang === "zh" ? "開啟鏡頭" : "Open Camera") : (lang === "zh" ? "關閉鏡頭" : "Close Camera")}
+                </button>
+                <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={toggleCameraFacing} disabled={cameraBooting || busy || cameraClosed}>
+                  {t.switchCamera}
+                </button>
+                <button
+                  type="button"
+                  className="fdPillBtn fdPillBtnPrimary"
+                  onClick={() => setManualAllowOpen(true)}
+                >
+                  {t.manualAllowOpenBtn}
+                </button>
+              </div>
             </section>
           </div>
         </section>
 
-        <section className="fdGlassSubPanel fdEntryManualAllowTrigger" style={{ marginTop: 14 }}>
-          <div className="actions fdEntryManualAllowHead" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
-            <div className="fdEntryManualAllowInfo">
-              <h2 className="sectionTitle" style={{ margin: 0 }}>{t.manualAllowQuickTitle}</h2>
-              <p className="fdGlassText" style={{ marginTop: 0, fontSize: 12 }}>{t.manualAllowQuickHint}</p>
-            </div>
-            <button
-              type="button"
-              className="fdPillBtn fdPillBtnPrimary fdEntryManualAllowOpenBtn"
-              onClick={() => setManualAllowOpen(true)}
-            >
-              {t.manualAllowOpenBtn}
-            </button>
-          </div>
-        </section>
+        {memberViewOpen && result && result.member && portalReady
+          ? createPortal(
+              <div
+                className="fdModalBackdrop fdModalBackdropFeature fdEntryMemberViewBackdrop"
+                onClick={() => setMemberViewOpen(false)}
+                role="presentation"
+              >
+                <div
+                  className="fdModal fdModalLight fdEntryMemberViewModal"
+                  onClick={(event) => event.stopPropagation()}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={lang === "zh" ? "會員資料" : "Member Profile"}
+                >
+                  <div className="fdModalHead">
+                    <h2 className="sectionTitle" style={{ margin: 0 }}>{lang === "zh" ? "會員資料" : "Member Profile"}</h2>
+                    <button
+                      type="button"
+                      className="fdPillBtn fdPillBtnGhost fdModalCloseBtn"
+                      onClick={() => setMemberViewOpen(false)}
+                    >
+                      {t.closeModal}
+                    </button>
+                  </div>
+                  <section className="fdGlassSubPanel fdEntryResultPanelInline">
+                    <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
+                      <h3 className="sectionTitle" style={{ margin: 0 }}>{t.resultTitle}</h3>
+                      <strong className={`fdEntryDecisionTag ${decisionClass}`} style={{ color: decisionColor }}>
+                        {decisionLabel(result.decision, lang)}
+                      </strong>
+                    </div>
+                    <div className="fdEntryResultHero">
+                      <div className="fdEntryAvatar">
+                        {result.member.photoUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={result.member.photoUrl} alt={result.member.name || t.noPhoto} className="fdEntryAvatarImage" />
+                        ) : (
+                          <span className="fdEntryAvatarFallback">{memberInitials(result.member.name)}</span>
+                        )}
+                      </div>
+                      <div className="fdEntryMemberBlock">
+                        <h3 className="fdEntryMemberName">{result.member.name ?? "-"}</h3>
+                        <p className="fdEntryMemberMeta">{t.phoneLast4}: {result.member.phoneLast4 ?? "-"}</p>
+                        <p className="fdEntryMemberMeta">{t.membership}: {membershipLabel(result.membership, lang)}</p>
+                        <div className="fdEntryResultMetaGrid">
+                          <p className="sub">{t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}</p>
+                          <p className="sub">{t.todayCount}: {result.todayCheckinCount}</p>
+                          <p className="sub">{t.checkedAt}: {formatDateTime(result.checkedAt)}</p>
+                          <p className="sub">{t.reason}: {denyReasonLabel(result.reason, lang)}</p>
+                        </div>
+                        <p className="fdEntryGateStatus">
+                          {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
 
         {manualAllowOpen && portalReady
           ? createPortal(
