@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ClipboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n-provider";
@@ -217,13 +216,13 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   const [scannerReady, setScannerReady] = useState(false);
   const [cameraBooting, setCameraBooting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [scannerMode, setScannerMode] = useState<ScannerMode>("manual");
+  const [, setScannerMode] = useState<ScannerMode>("manual");
   const [cameraFacingMode, setCameraFacingMode] = useState<"environment" | "user">("environment");
+  const [cameraClosed, setCameraClosed] = useState(false);
   const [cameraNonce, setCameraNonce] = useState(0);
   const [manualAllowOpen, setManualAllowOpen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
 
-  const [manualInput, setManualInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<VerifyEntryResponse | null>(null);
   const [notice, setNotice] = useState<EntryNotice | null>(null);
@@ -465,7 +464,6 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
     } finally {
       busyRef.current = false;
       setBusy(false);
-      setManualInput("");
     }
   }, [lang, loadRecentCheckins, t.verifyAllowed, t.verifyNetworkFailed]);
 
@@ -522,16 +520,20 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
     setCameraFacingMode((mode) => (mode === "environment" ? "user" : "environment"));
   }, []);
 
-  const handleManualPaste = useCallback((event: ClipboardEvent<HTMLInputElement>) => {
-    const pasted = event.clipboardData.getData("text").trim();
-    if (!pasted) return;
-    event.preventDefault();
-    setManualInput(pasted);
-    setNotice({ tone: "ok", text: t.manualHint });
-    window.setTimeout(() => {
-      void callVerify(pasted);
-    }, 80);
-  }, [callVerify, t.manualHint]);
+  const toggleCameraPower = useCallback(() => {
+    setCameraClosed((current) => {
+      const next = !current;
+      if (next) {
+        stopScanner();
+        setCameraError(null);
+        setCameraBooting(false);
+        setScannerReady(false);
+      } else {
+        setCameraNonce((value) => value + 1);
+      }
+      return next;
+    });
+  }, [stopScanner]);
 
   useEffect(() => {
     let mounted = true;
@@ -541,6 +543,14 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
     let detector: any = null;
 
     const bootScanner = async () => {
+      if (cameraClosed) {
+        stopScanner();
+        setScannerReady(false);
+        setCameraError(null);
+        setCameraBooting(false);
+        return;
+      }
+
       stopScanner();
       setScannerReady(false);
       setCameraError(null);
@@ -627,13 +637,8 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
 
         if (zxingDecodeFrame) {
           setScannerMode("zxing");
-          setNotice({
-            tone: "warn",
-            text: lang === "zh" ? "目前瀏覽器不支援 BarcodeDetector，已切換 ZXing 備援模式。" : "BarcodeDetector is not supported. Switched to ZXing fallback mode.",
-          });
         } else if (jsQrDecodeFrame) {
           setScannerMode("jsqr");
-          setNotice({ tone: "warn", text: t.browserNotSupport });
         } else {
           setScannerMode("manual");
           setCameraError(t.fallbackLoadFailed);
@@ -671,16 +676,6 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
         if (!mounted) return;
         setScannerReady(true);
         setCameraBooting(false);
-        if (!detector) {
-          if (zxingDecodeFrame) {
-            setNotice({
-              tone: "warn",
-              text: lang === "zh" ? "已使用 ZXing 備援掃碼，可正常驗證。" : "ZXing fallback scanner is active.",
-            });
-          } else {
-            setNotice({ tone: "warn", text: t.fallbackReady });
-          }
-        }
 
         const tick = async () => {
           if (!mounted || !videoRef.current) return;
@@ -743,15 +738,13 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       stopScanner();
     };
   }, [
+    cameraClosed,
     cameraFacingMode,
     cameraNonce,
     stopScanner,
     submitScannedToken,
-    lang,
-    t.browserNotSupport,
     t.cameraFailed,
     t.fallbackLoadFailed,
-    t.fallbackReady,
   ]);
 
   useEffect(() => {
@@ -760,20 +753,6 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
 
   const decisionColor = result?.decision === "allow" ? "var(--brand)" : "#9b1c1c";
   const decisionClass = result?.decision === "allow" ? "fdEntryDecisionAllow" : "fdEntryDecisionDeny";
-  const modeLabel =
-    scannerMode === "detector"
-      ? t.modeDetector
-      : scannerMode === "zxing"
-        ? "ZXing fallback"
-        : scannerMode === "jsqr"
-          ? t.modeFallback
-          : t.modeManual;
-  const modeClass =
-    scannerMode === "detector"
-      ? "fdEntryModeDetector"
-      : scannerMode === "zxing" || scannerMode === "jsqr"
-        ? "fdEntryModeFallback"
-        : "fdEntryModeManual";
   const noticeClass =
     notice?.tone === "ok" ? "fdEntryNoticeOk" : notice?.tone === "warn" ? "fdEntryNoticeWarn" : "fdEntryNoticeError";
 
@@ -806,57 +785,36 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
           <div className="fdGlassSubPanel fdEntryScannerPanel">
             <div className="fdEntryScannerHead">
               <h2 className="sectionTitle">{t.cameraTitle}</h2>
-              <span className={`fdEntryModeChip ${modeClass}`}>{t.scannerModeLabel}: {modeLabel}</span>
             </div>
             <video ref={videoRef} className="input fdEntryScannerVideo" muted playsInline />
             <canvas ref={scanCanvasRef} className="fdEntryScanCanvas" aria-hidden />
             <p className="fdGlassText fdEntryScannerState">
-              {cameraBooting ? t.cameraPreparing : scannerReady ? t.cameraReady : t.cameraFailed}
+              {cameraClosed
+                ? lang === "zh"
+                  ? "鏡頭已關閉"
+                  : "Camera is turned off"
+                : cameraBooting
+                  ? t.cameraPreparing
+                  : scannerReady
+                    ? t.cameraReady
+                    : t.cameraFailed}
             </p>
             <p className="fdGlassText fdEntryScannerHint">{t.cameraPermissionHint}</p>
             {cameraError ? <p className="error" style={{ marginTop: 8 }}>{cameraError}</p> : null}
             <div className="fdEntryScannerActions">
-              <button type="button" className="fdPillBtn" onClick={restartCamera} disabled={cameraBooting || busy}>
+              <button type="button" className="fdPillBtn" onClick={restartCamera} disabled={cameraBooting || busy || cameraClosed}>
                 {t.restartCamera}
               </button>
-              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={toggleCameraFacing} disabled={cameraBooting || busy}>
+              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={toggleCameraPower} disabled={busy}>
+                {cameraClosed ? (lang === "zh" ? "開啟鏡頭" : "Open Camera") : (lang === "zh" ? "關閉鏡頭" : "Close Camera")}
+              </button>
+              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={toggleCameraFacing} disabled={cameraBooting || busy || cameraClosed}>
                 {t.switchCamera}
               </button>
             </div>
           </div>
 
           <div className="fdEntrySideCol">
-            <div className="fdEntryManualCard">
-              <h2 className="sectionTitle">{t.manualTitle}</h2>
-              <form
-                className="field fdEntryManualForm"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void callVerify(manualInput);
-                }}
-              >
-                <input
-                  value={manualInput}
-                  onChange={(event) => setManualInput(event.target.value)}
-                  onPaste={handleManualPaste}
-                  className="input"
-                  placeholder={t.manualPlaceholder}
-                  autoFocus
-                />
-                <button type="submit" disabled={busy || !manualInput.trim()} className="fdPillBtn fdPillBtnPrimary">
-                  {busy ? t.manualBusy : t.manualBtn}
-                </button>
-                <button
-                  type="button"
-                  className="fdPillBtn fdPillBtnGhost"
-                  onClick={() => setManualInput("")}
-                  disabled={busy || !manualInput}
-                >
-                  {t.clearToken}
-                </button>
-              </form>
-              <p className="fdEntryManualHint">{t.manualHint}</p>
-            </div>
             <section className="fdGlassSubPanel fdEntryResultPanelInline fdEntryResultPanelSide">
               <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
                 <h2 className="sectionTitle" style={{ margin: 0 }}>{t.resultTitle}</h2>
