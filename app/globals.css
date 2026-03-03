@@ -1177,6 +1177,27 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   background: linear-gradient(180deg, rgba(247,250,255,.84), rgba(241,246,253,.84));
   box-shadow: none;
 }
+.fdEmbedBackdrop.fdEntryLayout{
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 26px 30px 30px;
+  background: #f4f6f8;
+}
+.fdEmbedBackdrop.fdEntryLayout .fdEntryIntroPanel{
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0 !important;
+  margin-bottom: 6px !important;
+}
+.fdEmbedBackdrop.fdEntryLayout .fdEntryIntroPanel .sectionTitle{
+  font-size: clamp(32px, 2.5vw, 44px);
+  letter-spacing: .01em;
+}
+.fdEmbedBackdrop.fdEntryLayout .fdEntryIntroPanel .fdGlassText{
+  font-size: 14px;
+  color: #5d6d84;
+}
 .fdEmbedBackdrop::before,
 .fdEmbedBackdrop::after{
   display: none;
@@ -1521,7 +1542,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdEntryLayout{
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 .fdEntryNotice{
   border-radius: 14px;
@@ -1547,8 +1568,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdEntryTopGrid{
   align-items: start;
-  grid-template-columns: minmax(300px, .64fr) minmax(420px, 1.36fr);
-  gap: 12px;
+  grid-template-columns: minmax(640px, 1.55fr) minmax(360px, .95fr);
+  gap: 18px;
 }
 .fdEntryScannerHead{
   display: flex;
@@ -1586,14 +1607,15 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   display: grid;
   align-content: start;
   align-items: start;
-  gap: 12px;
+  gap: 14px;
   min-height: 0;
 }
 .fdEntryScannerVideo{
-  margin-top: 8px;
+  margin-top: 10px;
   width: 100%;
-  min-height: 150px;
-  max-height: 190px;
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+  max-height: none;
   background: #0b0f16;
   border-color: rgba(171, 194, 226, .48);
   object-fit: cover;
@@ -1648,6 +1670,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdEntryResultPanelInline{
   min-height: 120px;
+}
+.fdEntryResultPanelSide{
+  min-height: 0;
 }
 .fdEntryResultPanelInline .fdDataGrid{
   align-content: start;
@@ -2892,6 +2917,8 @@ body.fdPageDark .footerInner{
 }
 .fdModal.fdModalLight .fdEntryTopGrid{
   align-items: start !important;
+  grid-template-columns: minmax(620px, 1.52fr) minmax(340px, .92fr);
+  gap: 20px;
 }
 .fdModal.fdModalLight .fdEntryTopGrid > .fdGlassSubPanel,
 .fdModal.fdModalLight .fdEntryTopGrid > .fdEntrySideCol{
@@ -2907,8 +2934,9 @@ body.fdPageDark .footerInner{
   backdrop-filter: none;
 }
 .fdModal.fdModalLight .fdEntryScannerVideo{
-  min-height: 170px;
-  max-height: 210px;
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+  max-height: none;
   background: #0b0f16 !important;
   border-color: rgba(146, 173, 210, .56) !important;
   box-shadow: inset 0 0 0 1px rgba(18, 28, 44, .76);
@@ -2920,7 +2948,7 @@ body.fdPageDark .footerInner{
   width: 100%;
 }
 .fdModal.fdModalLight .fdEntryResultPanelInline{
-  min-height: 120px;
+  min-height: 0;
 }
 .fdModal.fdModalLight .fdEntryNoticeOk{
   border-color: rgba(40, 182, 140, .34);
@@ -3582,6 +3610,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .fdTwoCol{ grid-template-columns: 1fr; }
   .fdEntryTopGrid{
     grid-template-columns: 1fr;
+    gap: 10px;
   }
   .fdEntrySideCol{
     grid-template-rows: auto auto;
@@ -3589,6 +3618,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     height: auto;
   }
   .fdEntryScannerVideo{
+    aspect-ratio: 16 / 9;
     min-height: 220px;
     max-height: 280px;
   }

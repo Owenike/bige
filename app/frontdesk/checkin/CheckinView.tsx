@@ -857,56 +857,55 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
               </form>
               <p className="fdEntryManualHint">{t.manualHint}</p>
             </div>
-          </div>
-        </section>
-
-        <section className="fdGlassSubPanel fdEntryResultPanelInline">
-          <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
-            <h2 className="sectionTitle" style={{ margin: 0 }}>{t.resultTitle}</h2>
-            <div className="fdEntryResultHeadActions">
-              {result ? <strong className={`fdEntryDecisionTag ${decisionClass}`} style={{ color: decisionColor }}>{decisionLabel(result.decision, lang)}</strong> : null}
-              <button
-                type="button"
-                className="fdPillBtn fdPillBtnGhost"
-                onClick={() => {
-                  setResult(null);
-                  setNotice(null);
-                }}
-                disabled={!result}
-              >
-                {t.clearResult}
-              </button>
-            </div>
-          </div>
-
-          {result ? (
-            <div className="fdEntryResultHero">
-              <div className="fdEntryAvatar">
-                {result.member?.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={result.member.photoUrl} alt={result.member?.name || t.noPhoto} className="fdEntryAvatarImage" />
-                ) : (
-                  <span className="fdEntryAvatarFallback">{memberInitials(result.member?.name)}</span>
-                )}
-              </div>
-              <div className="fdEntryMemberBlock">
-                <h3 className="fdEntryMemberName">{result.member?.name ?? "-"}</h3>
-                <p className="fdEntryMemberMeta">{t.phoneLast4}: {result.member?.phoneLast4 ?? "-"}</p>
-                <p className="fdEntryMemberMeta">{t.membership}: {membershipLabel(result.membership, lang)}</p>
-                <div className="fdEntryResultMetaGrid">
-                  <p className="sub">{t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}</p>
-                  <p className="sub">{t.todayCount}: {result.todayCheckinCount}</p>
-                  <p className="sub">{t.checkedAt}: {formatDateTime(result.checkedAt)}</p>
-                  <p className="sub">{t.reason}: {denyReasonLabel(result.reason, lang)}</p>
+            <section className="fdGlassSubPanel fdEntryResultPanelInline fdEntryResultPanelSide">
+              <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
+                <h2 className="sectionTitle" style={{ margin: 0 }}>{t.resultTitle}</h2>
+                <div className="fdEntryResultHeadActions">
+                  {result ? <strong className={`fdEntryDecisionTag ${decisionClass}`} style={{ color: decisionColor }}>{decisionLabel(result.decision, lang)}</strong> : null}
+                  <button
+                    type="button"
+                    className="fdPillBtn fdPillBtnGhost"
+                    onClick={() => {
+                      setResult(null);
+                      setNotice(null);
+                    }}
+                    disabled={!result}
+                  >
+                    {t.clearResult}
+                  </button>
                 </div>
-                <p className="fdEntryGateStatus">
-                  {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
-                </p>
               </div>
-            </div>
-          ) : (
-            <p className="fdGlassText" style={{ marginTop: 8 }}>{t.resultPending}</p>
-          )}
+
+              {result ? (
+                <div className="fdEntryResultHero">
+                  <div className="fdEntryAvatar">
+                    {result.member?.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={result.member.photoUrl} alt={result.member?.name || t.noPhoto} className="fdEntryAvatarImage" />
+                    ) : (
+                      <span className="fdEntryAvatarFallback">{memberInitials(result.member?.name)}</span>
+                    )}
+                  </div>
+                  <div className="fdEntryMemberBlock">
+                    <h3 className="fdEntryMemberName">{result.member?.name ?? "-"}</h3>
+                    <p className="fdEntryMemberMeta">{t.phoneLast4}: {result.member?.phoneLast4 ?? "-"}</p>
+                    <p className="fdEntryMemberMeta">{t.membership}: {membershipLabel(result.membership, lang)}</p>
+                    <div className="fdEntryResultMetaGrid">
+                      <p className="sub">{t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}</p>
+                      <p className="sub">{t.todayCount}: {result.todayCheckinCount}</p>
+                      <p className="sub">{t.checkedAt}: {formatDateTime(result.checkedAt)}</p>
+                      <p className="sub">{t.reason}: {denyReasonLabel(result.reason, lang)}</p>
+                    </div>
+                    <p className="fdEntryGateStatus">
+                      {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="fdGlassText" style={{ marginTop: 8 }}>{t.resultPending}</p>
+              )}
+            </section>
+          </div>
         </section>
 
         <section className="fdGlassSubPanel fdEntryManualAllowTrigger" style={{ marginTop: 14 }}>
