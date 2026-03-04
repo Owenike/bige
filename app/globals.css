@@ -1501,6 +1501,14 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 16px;
   overflow: visible;
 }
+.fdMemberDeskLayoutEmbedded{
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
 .fdMemberDeskToolbar{
   position: sticky;
   top: 0;
@@ -1518,12 +1526,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     inset 0 .7px 0 rgba(255,255,255,.88),
     0 12px 22px rgba(22, 44, 76, .12);
 }
-.fdMemberDeskToolbarSpacer{
-  height: 98px;
-}
-.fdMemberDeskToolbarPortal{
-  position: fixed !important;
-  z-index: 76;
+.fdMemberDeskLayoutEmbedded .fdMemberDeskToolbar{
+  position: relative;
+  top: auto;
+  z-index: 1;
   margin: 0;
 }
 .fdMemberDeskToolbarLeft{
@@ -1572,6 +1578,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   grid-template-columns: minmax(320px, .38fr) minmax(560px, .62fr);
   gap: 16px;
   align-items: start;
+}
+.fdMemberDeskLayoutEmbedded .fdMemberDeskMain{
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
 }
 .fdMemberDeskLeft{
   display: grid;
@@ -1803,13 +1815,17 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     linear-gradient(160deg, rgba(251, 254, 255, .96), rgba(235, 245, 255, .92));
   box-shadow: 0 10px 18px rgba(20, 38, 66, .12);
 }
-.fdMemberCreateFooterSpacer{
-  height: 70px;
-}
-.fdMemberCreateFooterPortal{
-  position: fixed !important;
-  z-index: 76;
-  margin: 0;
+.fdMemberDeskBottomBar{
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(171, 192, 223, .74);
+  border-radius: 14px;
+  background:
+    linear-gradient(160deg, rgba(251, 254, 255, .96), rgba(235, 245, 255, .92));
+  box-shadow: 0 10px 18px rgba(20, 38, 66, .12);
 }
 .fdMemberContinueHint{
   margin-top: 0;
@@ -3381,6 +3397,8 @@ body.fdPageDark .footerInner{
 }
 .fdModalFeatureBody.fdModalFeatureBodyMember{
   contain: none;
+  overflow: hidden;
+  padding-right: 0;
 }
 .fdModalFeatureBody .fdGlassPanel,
 .fdModalFeatureBody .fdGlassSubPanel,
@@ -4540,23 +4558,24 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .fdMemberDeskMain{
     grid-template-columns: 1fr;
   }
-  .fdMemberDeskToolbarSpacer{
-    height: 122px;
-  }
-  .fdMemberCreateFooterSpacer{
-    height: 76px;
-  }
   .fdMemberFormGrid{
     grid-template-columns: 1fr;
   }
   .fdMemberCreateForm{
-    padding-bottom: 104px;
+    padding-bottom: 88px;
   }
   .fdMemberCreateFooter{
     bottom: 8px;
     justify-content: stretch;
   }
   .fdMemberCreateFooter .fdPillBtn{
+    flex: 1 1 0;
+    justify-content: center;
+  }
+  .fdMemberDeskBottomBar{
+    justify-content: stretch;
+  }
+  .fdMemberDeskBottomBar .fdPillBtn{
     flex: 1 1 0;
     justify-content: center;
   }
