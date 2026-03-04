@@ -1501,6 +1501,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 16px;
   overflow: visible;
 }
+.fdMemberDeskLayoutFixedBars{
+  padding-top: 110px;
+  padding-bottom: 98px;
+}
 .fdMemberDeskToolbar{
   position: sticky;
   top: 0;
@@ -1517,6 +1521,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   box-shadow:
     inset 0 .7px 0 rgba(255,255,255,.88),
     0 12px 22px rgba(22, 44, 76, .12);
+}
+.fdMemberDeskToolbarFixed{
+  position: fixed !important;
+  z-index: 92;
+  margin: 0;
 }
 .fdMemberDeskToolbarLeft{
   min-width: 0;
@@ -1794,6 +1803,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   background:
     linear-gradient(160deg, rgba(251, 254, 255, .96), rgba(235, 245, 255, .92));
   box-shadow: 0 10px 18px rgba(20, 38, 66, .12);
+}
+.fdMemberCreateFooterFixed{
+  position: fixed !important;
+  z-index: 91;
+  margin: 0;
 }
 .fdMemberContinueHint{
   margin-top: 0;
@@ -3366,12 +3380,6 @@ body.fdPageDark .footerInner{
 .fdModalFeatureBody.fdModalFeatureBodyMember{
   contain: none;
 }
-.fdModalFeatureBody.fdModalFeatureBodyMember .fdMemberDeskToolbar{
-  top: 0;
-}
-.fdModalFeatureBody.fdModalFeatureBodyMember .fdMemberCreateFooter{
-  bottom: 0;
-}
 .fdModalFeatureBody .fdGlassPanel,
 .fdModalFeatureBody .fdGlassSubPanel,
 .fdModalFeatureBody .card{
@@ -4529,6 +4537,10 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
   .fdMemberDeskMain{
     grid-template-columns: 1fr;
+  }
+  .fdMemberDeskLayoutFixedBars{
+    padding-top: 132px;
+    padding-bottom: 116px;
   }
   .fdMemberFormGrid{
     grid-template-columns: 1fr;

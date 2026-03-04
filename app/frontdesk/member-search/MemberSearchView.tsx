@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n-provider";
 import { MemberProgressPanel } from "./MemberProgressPanel";
@@ -116,6 +116,8 @@ function fileToDataUrl(file: File): Promise<string> {
 export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boolean }) {
   const { locale } = useI18n();
   const zh = locale !== "en";
+  const layoutRef = useRef<HTMLElement | null>(null);
+  const createPanelRef = useRef<HTMLElement | null>(null);
 
   const [q, setQ] = useState("");
   const [name, setName] = useState("");
@@ -149,6 +151,14 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   const [creating, setCreating] = useState(false);
   const [recentCreatedId, setRecentCreatedId] = useState<string | null>(null);
   const [duplicateCandidate, setDuplicateCandidate] = useState<MemberItem | null>(null);
+  const [embeddedFixedFrame, setEmbeddedFixedFrame] = useState({
+    toolbarLeft: 12,
+    toolbarTop: 12,
+    toolbarWidth: 960,
+    footerLeft: 12,
+    footerBottom: 12,
+    footerWidth: 640,
+  });
 
   useEffect(() => {
     setPortalReady(true);
@@ -840,14 +850,76 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   ) : null;
 
   const resultEmptyText = searchKeyword ? uiText.resultNoMatch : uiText.resultIdle;
+  const useFixedBars = embedded;
+
+  useEffect(() => {
+    if (!useFixedBars) return;
+
+    const updateFrame = () => {
+      const layoutEl = layoutRef.current;
+      const createPanelEl = createPanelRef.current;
+      if (!layoutEl || !createPanelEl) return;
+
+      const host = layoutEl.closest(".fdModalFeatureBodyMember") as HTMLElement | null;
+      const hostRect = host?.getBoundingClientRect();
+      const layoutRect = layoutEl.getBoundingClientRect();
+      const createPanelRect = createPanelEl.getBoundingClientRect();
+
+      const toolbarLeft = Math.round(hostRect ? hostRect.left + 8 : layoutRect.left);
+      const toolbarWidth = Math.max(320, Math.round(hostRect ? hostRect.width - 16 : layoutRect.width));
+      const toolbarTop = Math.round(hostRect ? hostRect.top + 8 : 8);
+
+      const footerLeft = Math.round(createPanelRect.left);
+      const footerWidth = Math.max(280, Math.round(createPanelRect.width));
+      const footerBottom = Math.max(8, Math.round(hostRect ? window.innerHeight - hostRect.bottom + 8 : 8));
+
+      setEmbeddedFixedFrame((prev) => {
+        if (
+          prev.toolbarLeft === toolbarLeft &&
+          prev.toolbarTop === toolbarTop &&
+          prev.toolbarWidth === toolbarWidth &&
+          prev.footerLeft === footerLeft &&
+          prev.footerBottom === footerBottom &&
+          prev.footerWidth === footerWidth
+        ) {
+          return prev;
+        }
+        return { toolbarLeft, toolbarTop, toolbarWidth, footerLeft, footerBottom, footerWidth };
+      });
+    };
+
+    const schedule = () => {
+      window.requestAnimationFrame(updateFrame);
+    };
+
+    updateFrame();
+    window.addEventListener("resize", schedule);
+    window.addEventListener("scroll", schedule, true);
+    return () => {
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("scroll", schedule, true);
+    };
+  }, [useFixedBars]);
 
   return (
     <main className={embedded ? "fdEmbedScene" : "fdGlassScene"} style={embedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
       <section
-        className={`${embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"} fdMemberDeskLayout`}
+        ref={layoutRef}
+        className={`${embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"} fdMemberDeskLayout ${useFixedBars ? "fdMemberDeskLayoutFixedBars" : ""}`}
         style={embedded ? { minHeight: "auto", height: "auto", padding: 12 } : undefined}
       >
-        <header className="fdGlassSubPanel fdMemberDeskToolbar">
+        <header
+          className={`fdGlassSubPanel fdMemberDeskToolbar ${useFixedBars ? "fdMemberDeskToolbarFixed" : ""}`}
+          style={
+            useFixedBars
+              ? {
+                  left: embeddedFixedFrame.toolbarLeft,
+                  top: embeddedFixedFrame.toolbarTop,
+                  width: embeddedFixedFrame.toolbarWidth,
+                }
+              : undefined
+          }
+        >
           <div className="fdMemberDeskToolbarLeft">
             <div className="fdEyebrow">{t.badge}</div>
             <h1 className="fdMemberDeskTitle">{t.title}</h1>
@@ -996,7 +1068,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             </section>
           </aside>
 
-          <section className="fdGlassSubPanel fdMemberCreatePanel fdMemberDeskPanel">
+          <section ref={createPanelRef} className="fdGlassSubPanel fdMemberCreatePanel fdMemberDeskPanel">
             <h2 className="sectionTitle">{t.createTitle}</h2>
             <form onSubmit={createMember} className="fdMemberCreateForm">
               <section className="fdMemberFormSection">
@@ -1096,7 +1168,18 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                 </button>
               </section>
 
-              <div className="fdMemberCreateFooter">
+              <div
+                className={`fdMemberCreateFooter ${useFixedBars ? "fdMemberCreateFooterFixed" : ""}`}
+                style={
+                  useFixedBars
+                    ? {
+                        left: embeddedFixedFrame.footerLeft,
+                        bottom: embeddedFixedFrame.footerBottom,
+                        width: embeddedFixedFrame.footerWidth,
+                      }
+                    : undefined
+                }
+              >
                 <button
                   type="button"
                   className="fdPillBtn fdPillBtnGhost"
