@@ -1502,12 +1502,13 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   overflow: visible;
 }
 .fdMemberDeskLayoutEmbedded{
-  height: auto;
-  min-height: 100%;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow: visible;
+  overflow: hidden;
 }
 .fdMemberDeskToolbar{
   position: sticky;
@@ -1527,9 +1528,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     0 12px 22px rgba(22, 44, 76, .12);
 }
 .fdMemberDeskLayoutEmbedded .fdMemberDeskToolbar{
-  position: sticky;
-  top: 0;
-  z-index: 8;
+  position: relative;
+  top: auto;
+  z-index: 1;
   margin: 0;
 }
 .fdMemberDeskToolbarLeft{
@@ -1580,10 +1581,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   align-items: start;
 }
 .fdMemberDeskLayoutEmbedded .fdMemberDeskMain{
-  flex: 0 0 auto;
-  min-height: auto;
-  overflow: visible;
-  padding-right: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
 }
 .fdMemberDeskLeft{
   display: grid;
@@ -1816,9 +1818,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   box-shadow: 0 10px 18px rgba(20, 38, 66, .12);
 }
 .fdMemberDeskBottomBar{
-  position: sticky;
-  bottom: 0;
-  z-index: 8;
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
@@ -3400,9 +3401,10 @@ body.fdPageDark .footerInner{
 }
 .fdModalFeatureBody.fdModalFeatureBodyMember{
   contain: none;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 2px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-right: 0;
 }
 .fdModalFeatureBody .fdGlassPanel,
 .fdModalFeatureBody .fdGlassSubPanel,
