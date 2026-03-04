@@ -1499,11 +1499,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdMemberDeskLayout{
   display: grid;
   gap: 16px;
+  overflow: visible;
 }
 .fdMemberDeskToolbar{
   position: sticky;
-  top: 8px;
-  z-index: 45;
+  top: 0;
+  z-index: 60;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1780,8 +1781,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .fdMemberCreateFooter{
   position: sticky;
-  bottom: 12px;
-  z-index: 4;
+  bottom: 8px;
+  z-index: 55;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -4505,7 +4506,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 @media (max-width: 1024px){
   .fdMemberDeskToolbar{
-    top: 6px;
+    top: 0;
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
@@ -4527,7 +4528,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     padding-bottom: 104px;
   }
   .fdMemberCreateFooter{
-    bottom: 10px;
+    bottom: 8px;
     justify-content: stretch;
   }
   .fdMemberCreateFooter .fdPillBtn{
