@@ -1502,13 +1502,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   overflow: visible;
 }
 .fdMemberDeskLayoutEmbedded{
-  flex: 1 1 auto;
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+  height: auto;
+  min-height: 100%;
+  display: grid;
   gap: 12px;
-  overflow: hidden;
+  overflow: visible;
 }
 .fdMemberDeskLayoutEmbedded > .fdMemberDeskToolbar,
 .fdMemberDeskLayoutEmbedded > .fdMemberDeskBottomBar{
@@ -1532,9 +1530,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     0 12px 22px rgba(22, 44, 76, .12);
 }
 .fdMemberDeskLayoutEmbedded .fdMemberDeskToolbar{
-  position: relative;
-  top: auto;
-  z-index: 1;
+  position: sticky;
+  top: 0;
+  z-index: 12;
   margin: 0;
 }
 .fdMemberDeskToolbarLeft{
@@ -1585,12 +1583,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   align-items: start;
 }
 .fdMemberDeskLayoutEmbedded .fdMemberDeskMain{
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  padding-right: 2px;
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+  padding-right: 0;
 }
 .fdMemberDeskLeft{
   display: grid;
@@ -1823,8 +1819,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   box-shadow: 0 10px 18px rgba(20, 38, 66, .12);
 }
 .fdMemberDeskBottomBar{
-  position: relative;
-  z-index: 1;
+  position: sticky;
+  bottom: 0;
+  z-index: 12;
   flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
@@ -3406,18 +3403,14 @@ body.fdPageDark .footerInner{
 }
 .fdModalFeatureBody.fdModalFeatureBodyMember{
   contain: none;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  padding-right: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
 }
 .fdModalFeatureBody.fdModalFeatureBodyMember > .fdEmbedScene{
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+  min-height: 100%;
+  height: auto;
+  display: block;
 }
 .fdModalFeatureBody .fdGlassPanel,
 .fdModalFeatureBody .fdGlassSubPanel,
