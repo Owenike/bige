@@ -846,7 +846,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     <main className={embedded ? "fdEmbedScene" : "fdGlassScene"} style={embedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
       <section
         className={`${embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"} fdMemberDeskLayout ${embedded ? "fdMemberDeskLayoutEmbedded" : ""}`}
-        style={embedded ? { minHeight: "auto", height: "auto", padding: 12 } : undefined}
+        style={embedded ? { minHeight: "100%", height: "100%", padding: 12 } : undefined}
       >
         <header className="fdGlassSubPanel fdMemberDeskToolbar">
           <div className="fdMemberDeskToolbarLeft">

@@ -1580,6 +1580,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   align-items: start;
 }
 .fdMemberDeskLayoutEmbedded .fdMemberDeskMain{
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
