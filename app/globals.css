@@ -1855,8 +1855,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   padding-bottom: 88px;
 }
 .fdEntryWfToolbar{
-  position: sticky;
-  top: 8px;
+  position: relative;
   z-index: 40;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -1956,6 +1955,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   grid-column: span 8;
   display: grid;
   gap: 10px;
+  padding: 14px 16px;
 }
 .fdEntryWfCameraGuide{
   border-radius: 12px;
@@ -2050,6 +2050,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdEntryWfActionsCard{
   display: grid;
   gap: 12px;
+  padding: 14px 16px;
 }
 .fdEntryWfInfoEmpty{
   display: grid;
@@ -2108,6 +2109,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .fdEntryWfRecentCard{
   display: grid;
   gap: 10px;
+  padding: 14px 16px;
 }
 .fdEntryWfRecentHeader{
   display: flex;
@@ -4149,7 +4151,6 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     padding-bottom: 104px;
   }
   .fdEntryWfToolbar{
-    top: 6px;
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "title actions"
@@ -4178,6 +4179,12 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
   .fdEntryWfCameraStage{
     aspect-ratio: 4 / 3;
+  }
+  .fdEntryWfCameraCard,
+  .fdEntryWfInfoCard,
+  .fdEntryWfActionsCard,
+  .fdEntryWfRecentCard{
+    padding: 12px;
   }
   .fdEntryWfScanFrame{
     width: min(82%, 460px);
