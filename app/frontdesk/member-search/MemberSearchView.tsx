@@ -118,6 +118,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   const zh = locale !== "en";
   const layoutRef = useRef<HTMLElement | null>(null);
   const createPanelRef = useRef<HTMLElement | null>(null);
+  const createFormRef = useRef<HTMLFormElement | null>(null);
 
   const [q, setQ] = useState("");
   const [name, setName] = useState("");
@@ -853,7 +854,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   const useFixedBars = embedded;
 
   useEffect(() => {
-    if (!useFixedBars) return;
+    if (!useFixedBars || !portalReady) return;
 
     const updateFrame = () => {
       const layoutEl = layoutRef.current;
@@ -888,58 +889,88 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
       });
     };
 
+    let rafId = 0;
+    let timerA: number | null = null;
+    let timerB: number | null = null;
+    let observer: ResizeObserver | null = null;
+
     const schedule = () => {
-      window.requestAnimationFrame(updateFrame);
+      if (rafId) window.cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(updateFrame);
     };
 
-    updateFrame();
+    schedule();
+    timerA = window.setTimeout(schedule, 80);
+    timerB = window.setTimeout(schedule, 220);
+
+    if (typeof window.ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => {
+        schedule();
+      });
+      const layoutEl = layoutRef.current;
+      const createPanelEl = createPanelRef.current;
+      const hostEl = layoutEl?.closest(".fdModalFeatureBodyMember") as HTMLElement | null;
+      if (hostEl) observer.observe(hostEl);
+      if (layoutEl) observer.observe(layoutEl);
+      if (createPanelEl) observer.observe(createPanelEl);
+    }
+
     window.addEventListener("resize", schedule);
-    window.addEventListener("scroll", schedule, true);
     return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+      if (timerA) window.clearTimeout(timerA);
+      if (timerB) window.clearTimeout(timerB);
+      observer?.disconnect();
       window.removeEventListener("resize", schedule);
-      window.removeEventListener("scroll", schedule, true);
     };
-  }, [useFixedBars]);
+  }, [portalReady, useFixedBars]);
+
+  const toolbarNode = (
+    <header
+      className={`fdGlassSubPanel fdMemberDeskToolbar ${useFixedBars ? "fdMemberDeskToolbarPortal" : ""}`}
+      style={
+        useFixedBars
+          ? {
+              left: embeddedFixedFrame.toolbarLeft,
+              top: embeddedFixedFrame.toolbarTop,
+              width: embeddedFixedFrame.toolbarWidth,
+            }
+          : undefined
+      }
+    >
+      <div className="fdMemberDeskToolbarLeft">
+        <div className="fdEyebrow">{t.badge}</div>
+        <h1 className="fdMemberDeskTitle">{t.title}</h1>
+        <p className="fdGlassText fdMemberDeskSub">{t.sub}</p>
+      </div>
+      <div className="fdMemberDeskToolbarRight">
+        <span className="fdMemberDeskHint">{uiText.toolbarHint}</span>
+        <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => void openAllMembersModal()} disabled={allMembersLoading}>
+          {allMembersLoading ? t.allMembersLoading : t.findAllBtn}
+        </button>
+        <button
+          type="button"
+          className="fdPillBtn fdPillBtnGhost"
+          onClick={clearCreateForm}
+          disabled={creating || !createFormHasValue}
+        >
+          {uiText.clearForm}
+        </button>
+      </div>
+    </header>
+  );
 
   return (
     <main className={embedded ? "fdEmbedScene" : "fdGlassScene"} style={embedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
       <section
         ref={layoutRef}
-        className={`${embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"} fdMemberDeskLayout ${useFixedBars ? "fdMemberDeskLayoutFixedBars" : ""}`}
+        className={`${embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"} fdMemberDeskLayout`}
         style={embedded ? { minHeight: "auto", height: "auto", padding: 12 } : undefined}
       >
-        <header
-          className={`fdGlassSubPanel fdMemberDeskToolbar ${useFixedBars ? "fdMemberDeskToolbarFixed" : ""}`}
-          style={
-            useFixedBars
-              ? {
-                  left: embeddedFixedFrame.toolbarLeft,
-                  top: embeddedFixedFrame.toolbarTop,
-                  width: embeddedFixedFrame.toolbarWidth,
-                }
-              : undefined
-          }
-        >
-          <div className="fdMemberDeskToolbarLeft">
-            <div className="fdEyebrow">{t.badge}</div>
-            <h1 className="fdMemberDeskTitle">{t.title}</h1>
-            <p className="fdGlassText fdMemberDeskSub">{t.sub}</p>
-          </div>
-          <div className="fdMemberDeskToolbarRight">
-            <span className="fdMemberDeskHint">{uiText.toolbarHint}</span>
-            <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => void openAllMembersModal()} disabled={allMembersLoading}>
-              {allMembersLoading ? t.allMembersLoading : t.findAllBtn}
-            </button>
-            <button
-              type="button"
-              className="fdPillBtn fdPillBtnGhost"
-              onClick={clearCreateForm}
-              disabled={creating || !createFormHasValue}
-            >
-              {uiText.clearForm}
-            </button>
-          </div>
-        </header>
+        {useFixedBars ? <div className="fdMemberDeskToolbarSpacer" aria-hidden /> : null}
+        {useFixedBars
+          ? (portalReady ? createPortal(toolbarNode, document.body) : null)
+          : toolbarNode}
 
         {error ? <div className="error fdMemberDeskNotice">{error}</div> : null}
         {message ? <div className="sub fdMemberDeskNotice fdMemberDeskNoticeOk">{message}</div> : null}
@@ -1070,7 +1101,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
 
           <section ref={createPanelRef} className="fdGlassSubPanel fdMemberCreatePanel fdMemberDeskPanel">
             <h2 className="sectionTitle">{t.createTitle}</h2>
-            <form onSubmit={createMember} className="fdMemberCreateForm">
+            <form ref={createFormRef} onSubmit={createMember} className="fdMemberCreateForm">
               <section className="fdMemberFormSection">
                 <h3 className="fdMemberSectionTitle">{uiText.sectionBasic}</h3>
                 <div className="fdMemberFormGrid">
@@ -1168,17 +1199,38 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                 </button>
               </section>
 
+              {useFixedBars ? (
+                <div className="fdMemberCreateFooterSpacer" aria-hidden />
+              ) : (
+                <div className="fdMemberCreateFooter">
+                  <button
+                    type="button"
+                    className="fdPillBtn fdPillBtnGhost"
+                    onClick={clearCreateForm}
+                    disabled={creating || !createFormHasValue}
+                  >
+                    {uiText.clearForm}
+                  </button>
+                  <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={creating}>
+                    {creating ? t.creatingBtn : t.createBtn}
+                  </button>
+                </div>
+              )}
+            </form>
+            <p className="fdGlassText fdMemberContinueHint">{t.continueHint}</p>
+            {quickActionsContent}
+          </section>
+        </section>
+
+        {useFixedBars && portalReady
+          ? createPortal(
               <div
-                className={`fdMemberCreateFooter ${useFixedBars ? "fdMemberCreateFooterFixed" : ""}`}
-                style={
-                  useFixedBars
-                    ? {
-                        left: embeddedFixedFrame.footerLeft,
-                        bottom: embeddedFixedFrame.footerBottom,
-                        width: embeddedFixedFrame.footerWidth,
-                      }
-                    : undefined
-                }
+                className="fdMemberCreateFooter fdMemberCreateFooterPortal"
+                style={{
+                  left: embeddedFixedFrame.footerLeft,
+                  bottom: embeddedFixedFrame.footerBottom,
+                  width: embeddedFixedFrame.footerWidth,
+                }}
               >
                 <button
                   type="button"
@@ -1188,15 +1240,18 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
                 >
                   {uiText.clearForm}
                 </button>
-                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={creating}>
+                <button
+                  type="button"
+                  className="fdPillBtn fdPillBtnPrimary"
+                  disabled={creating}
+                  onClick={() => createFormRef.current?.requestSubmit()}
+                >
                   {creating ? t.creatingBtn : t.createBtn}
                 </button>
-              </div>
-            </form>
-            <p className="fdGlassText fdMemberContinueHint">{t.continueHint}</p>
-            {quickActionsContent}
-          </section>
-        </section>
+              </div>,
+              document.body,
+            )
+          : null}
 
         {allMembersOpen && portalReady ? createPortal(
           <div className="fdModalBackdrop fdNestedMemberBackdrop" onClick={() => setAllMembersOpen(false)} role="presentation">
