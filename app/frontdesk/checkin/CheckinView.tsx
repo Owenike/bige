@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ClipboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n-provider";
@@ -26,6 +27,8 @@ interface RecentCheckinItem {
 
 type ScannerMode = "detector" | "zxing" | "jsqr" | "manual";
 type NoticeTone = "ok" | "warn" | "error";
+type RecentRange = "today" | "week" | "all";
+type WorkflowState = "idle" | "scanning" | "success" | "failed";
 
 interface EntryNotice {
   tone: NoticeTone;
@@ -137,7 +140,7 @@ function denyReasonLabel(reason: VerifyEntryResponse["reason"], lang: "zh" | "en
   const en: Record<NonNullable<VerifyEntryResponse["reason"]>, string> = {
     token_invalid: "Invalid QR token",
     token_expired: "Token expired",
-    token_used: "Token already used. Ask member to refresh QR and scan again.",
+    token_used: "Token already used",
     rate_limited: "Too many requests",
     member_not_found: "Member not found",
     already_checked_in_recently: "Recently checked in",
@@ -156,14 +159,14 @@ function recentMethodLabel(method: string | null | undefined, lang: "zh" | "en")
   if (!code || code === "unknown") return "-";
   const zhMap: Record<string, string> = {
     qr: "掃碼",
-    barcode: "掃碼",
-    manual: "人工放行",
+    barcode: "條碼",
+    manual: "人工",
     token: "手動 token",
   };
   const enMap: Record<string, string> = {
-    qr: "QR scan",
-    barcode: "Barcode scan",
-    manual: "Manual allow",
+    qr: "QR",
+    barcode: "Barcode",
+    manual: "Manual",
     token: "Manual token",
   };
   return lang === "zh" ? (zhMap[code] || method || "-") : (enMap[code] || method || "-");
@@ -173,12 +176,12 @@ function recentResultLabel(result: string | null | undefined, lang: "zh" | "en")
   const code = (result || "").trim().toLowerCase();
   if (!code || code === "unknown") return "-";
   if (lang === "zh") {
-    if (code === "allow") return "通過";
+    if (code === "allow") return "成功";
     if (code === "deny") return "拒絕";
     return result || "-";
   }
-  if (code === "allow") return "Allow";
-  if (code === "deny") return "Deny";
+  if (code === "allow") return "Success";
+  if (code === "deny") return "Denied";
   return result || "-";
 }
 
@@ -201,6 +204,23 @@ function recentReasonLabel(reason: string | null | undefined, lang: "zh" | "en")
   return raw;
 }
 
+function isSameLocalDay(isoString: string, now: Date) {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return false;
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
+}
+
+function isWithinDays(isoString: string, days: number, now: Date) {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return false;
+  const diffMs = now.getTime() - date.getTime();
+  return diffMs >= 0 && diffMs <= days * 24 * 60 * 60 * 1000;
+}
+
 export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean }) {
   const { locale } = useI18n();
   const lang: "zh" | "en" = locale === "en" ? "en" : "zh";
@@ -212,18 +232,21 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   const busyRef = useRef(false);
   const lastDetectedRef = useRef<{ token: string; at: number }>({ token: "", at: 0 });
   const scannedTokenLockRef = useRef<Set<string>>(new Set());
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [scannerReady, setScannerReady] = useState(false);
   const [cameraBooting, setCameraBooting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [, setScannerMode] = useState<ScannerMode>("manual");
+  const [scannerMode, setScannerMode] = useState<ScannerMode>("manual");
   const [cameraFacingMode, setCameraFacingMode] = useState<"environment" | "user">("environment");
   const [cameraClosed, setCameraClosed] = useState(false);
   const [cameraNonce, setCameraNonce] = useState(0);
   const [manualAllowOpen, setManualAllowOpen] = useState(false);
   const [memberViewOpen, setMemberViewOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
 
+  const [manualInput, setManualInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<VerifyEntryResponse | null>(null);
   const [notice, setNotice] = useState<EntryNotice | null>(null);
@@ -232,42 +255,43 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   const [recentError, setRecentError] = useState<string | null>(null);
   const [recentWarning, setRecentWarning] = useState<string | null>(null);
   const [voidingId, setVoidingId] = useState<string | null>(null);
+  const [recentQuery, setRecentQuery] = useState("");
+  const [recentRange, setRecentRange] = useState<RecentRange>("today");
+  const [recentViewItem, setRecentViewItem] = useState<RecentCheckinItem | null>(null);
 
   const t = useMemo(
     () =>
       lang === "zh"
         ? {
-            badge: "ENTRY SCAN",
             title: "櫃檯報到驗證",
             sub: "掃描會員動態 QR，或手動貼上 token 進行驗證。",
-            cameraTitle: "鏡頭掃碼",
-            manualTitle: "手動驗證",
-            manualAllowQuickTitle: "人工放行",
-            manualAllowQuickHint: "僅限例外情境使用，點擊按鈕開啟視窗填寫。",
-            manualAllowOpenBtn: "開啟人工放行",
-            manualAllowModalTitle: "人工放行",
-            closeModal: "關閉",
-            cameraReady: "鏡頭就緒",
-            cameraPreparing: "正在初始化鏡頭...",
-            browserNotSupport: "目前瀏覽器不支援 BarcodeDetector，已自動切換 jsQR 備援模式。",
-            fallbackReady: "已使用 jsQR 備援掃碼，可正常驗證。",
+            toolbarSwitchCamera: "切換鏡頭",
+            toolbarClose: "關閉",
+            toolbarOpen: "開啟",
+            toolbarMore: "更多",
+            moreRestart: "重新啟動鏡頭",
+            moreManualAllow: "開啟人工放行",
+            moreClearResult: "清空驗證結果",
+            statusIdle: "等待掃描",
+            statusScanning: "掃描中",
+            statusSuccess: "驗證成功",
+            statusFailed: "驗證失敗",
+            cameraGuide: "將 QR 對準框內，系統會自動辨識",
+            cameraReady: "鏡頭已就緒，可開始掃描",
+            cameraPreparing: "正在啟動鏡頭...",
+            cameraOff: "鏡頭已關閉",
+            cameraFailed: "鏡頭不可用",
+            cameraPermissionHint: "若畫面無法掃描，請在瀏覽器網址列允許攝影機權限。",
             fallbackLoadFailed: "無法載入備援掃碼引擎，請改用手動 token 驗證。",
-            cameraFailed: "無法啟用鏡頭，請確認權限與 HTTPS 環境。",
-            cameraPermissionHint: "若畫面無法掃碼，請在瀏覽器網址列允許攝影機權限。",
-            scannerModeLabel: "掃碼模式",
             modeDetector: "BarcodeDetector",
-            modeFallback: "jsQR 備援",
-            modeManual: "手動驗證",
+            modeFallback: "Fallback",
+            modeManual: "Manual only",
+            scannerModeLabel: "掃碼模式",
             restartCamera: "重啟鏡頭",
             switchCamera: "切換前後鏡頭",
-            manualPlaceholder: "貼上 token 後按 Enter",
-            manualBtn: "驗證",
-            manualBusy: "驗證中...",
-            manualHint: "貼上完整 token 會自動驗證。",
-            clearToken: "清空 token",
-            resultTitle: "驗證結果",
-            resultPending: "尚未驗證，請先掃碼或手動貼上 token。",
-            clearResult: "清空結果",
+            infoCardTitle: "狀態與會員資訊",
+            infoWaitingTitle: "尚未讀取會員",
+            infoWaitingDesc: "請將會員 QR/條碼置於掃描框內，成功後會自動顯示會員摘要。",
             memberName: "姓名",
             phoneLast4: "電話末四碼",
             membership: "會籍",
@@ -281,11 +305,43 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             gateClosed: "未開門",
             verifyAllowed: "驗證通過，會員可入場。",
             verifyDenied: "驗證未通過",
-            verifyNetworkFailed: "驗證失敗，請檢查網路或稍後再試。",
+            verifyNetworkFailed: "驗證失敗，請檢查網路後重試。",
+            actionsTitle: "操作",
+            actionManualAllow: "人工放行",
+            actionConfirmAllow: "確認放行",
+            actionRestart: "重啟鏡頭",
+            actionSwitchCamera: "切換前後鏡頭",
+            actionCloseCamera: "關閉鏡頭",
+            actionOpenCamera: "開啟鏡頭",
+            manualTitle: "手動 token 驗證",
+            manualPlaceholder: "貼上 token 後按 Enter",
+            manualBtn: "驗證",
+            manualBusy: "驗證中...",
+            manualHint: "貼上完整 token 會自動驗證。",
+            clearToken: "清空 token",
+            resultTitle: "驗證結果",
+            resultPending: "尚未驗證，請先掃碼或手動貼上 token。",
+            clearResult: "清空結果",
+            manualAllowQuickTitle: "人工放行",
+            manualAllowQuickHint: "僅限例外情境使用，點擊按鈕開啟視窗填寫。",
+            manualAllowOpenBtn: "開啟人工放行",
+            manualAllowModalTitle: "人工放行",
+            closeModal: "關閉",
+            memberModalTitle: "會員資料（唯讀）",
             recentTitle: "最近入場紀錄",
             recentReload: "重新整理",
             recentLoading: "載入中...",
-            recentEmpty: "目前沒有入場紀錄。",
+            recentEmpty: "查無符合條件的紀錄。",
+            recentSearchPlaceholder: "搜尋姓名 / 電話末碼 / 方案關鍵字",
+            recentFilterToday: "今日",
+            recentFilterWeek: "本週",
+            recentFilterAll: "全部",
+            recentColumnTime: "時間",
+            recentColumnName: "姓名",
+            recentColumnStatus: "狀態",
+            recentColumnAction: "操作",
+            recentView: "查看",
+            recentDetailTitle: "入場紀錄明細",
             recentMember: "會員",
             recentMethod: "方式",
             recentResult: "結果",
@@ -297,43 +353,41 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             recentVoidSuccess: "誤刷記錄已取消。",
           }
         : {
-            badge: "ENTRY SCAN",
-            title: "Frontdesk Entry Verification",
+            title: "Frontdesk Check-in Verification",
             sub: "Scan member dynamic QR or paste token manually for verification.",
-            cameraTitle: "Camera Scanner",
-            manualTitle: "Manual Verify",
-            manualAllowQuickTitle: "Manual Allow",
-            manualAllowQuickHint: "Use for exceptions only. Click the button to open the manual-allow dialog.",
-            manualAllowOpenBtn: "Open Manual Allow",
-            manualAllowModalTitle: "Manual Allow",
-            closeModal: "Close",
+            toolbarSwitchCamera: "Switch Camera",
+            toolbarClose: "Close",
+            toolbarOpen: "Open",
+            toolbarMore: "More",
+            moreRestart: "Restart Camera",
+            moreManualAllow: "Open Manual Allow",
+            moreClearResult: "Clear Result",
+            statusIdle: "Waiting",
+            statusScanning: "Scanning",
+            statusSuccess: "Verified",
+            statusFailed: "Failed",
+            cameraGuide: "Align member QR within the frame for auto detection",
             cameraReady: "Camera ready",
             cameraPreparing: "Initializing camera...",
-            browserNotSupport: "BarcodeDetector is not supported. Switched to jsQR fallback mode.",
-            fallbackReady: "jsQR fallback scanner is active.",
-            fallbackLoadFailed: "Failed to load fallback scanner. Use manual token verification.",
-            cameraFailed: "Cannot access camera. Check permission and HTTPS or localhost.",
+            cameraOff: "Camera is off",
+            cameraFailed: "Camera unavailable",
             cameraPermissionHint: "If scanner stays black, allow camera permission from browser site settings.",
-            scannerModeLabel: "Scanner Mode",
+            fallbackLoadFailed: "Failed to load fallback scanner. Use manual token verification.",
             modeDetector: "BarcodeDetector",
-            modeFallback: "jsQR fallback",
+            modeFallback: "Fallback",
             modeManual: "Manual only",
+            scannerModeLabel: "Scanner Mode",
             restartCamera: "Restart Camera",
             switchCamera: "Switch Camera",
-            manualPlaceholder: "Paste token and press Enter",
-            manualBtn: "Verify",
-            manualBusy: "Verifying...",
-            manualHint: "Pasting a complete token will auto verify.",
-            clearToken: "Clear token",
-            resultTitle: "Verification Result",
-            resultPending: "No verification yet. Scan QR or paste token first.",
-            clearResult: "Clear result",
+            infoCardTitle: "Status & Member",
+            infoWaitingTitle: "No member scanned yet",
+            infoWaitingDesc: "Place member QR/barcode inside the scan frame. Member summary will appear automatically.",
             memberName: "Name",
             phoneLast4: "Phone Last 4",
             membership: "Membership",
             lastCheckin: "Latest Check-in",
             todayCount: "Today Count",
-            checkedAt: "Checked At",
+            checkedAt: "Verified At",
             reason: "Reason",
             gate: "Gate",
             noPhoto: "No photo",
@@ -342,10 +396,42 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             verifyAllowed: "Verification passed. Member can enter.",
             verifyDenied: "Verification denied",
             verifyNetworkFailed: "Verification failed. Check network and retry.",
+            actionsTitle: "Actions",
+            actionManualAllow: "Manual Allow",
+            actionConfirmAllow: "Confirm Entry",
+            actionRestart: "Restart Camera",
+            actionSwitchCamera: "Switch Front/Back",
+            actionCloseCamera: "Close Camera",
+            actionOpenCamera: "Open Camera",
+            manualTitle: "Manual token verification",
+            manualPlaceholder: "Paste token and press Enter",
+            manualBtn: "Verify",
+            manualBusy: "Verifying...",
+            manualHint: "Pasting a full token will auto verify.",
+            clearToken: "Clear token",
+            resultTitle: "Verification Result",
+            resultPending: "No verification yet. Scan QR or paste token first.",
+            clearResult: "Clear result",
+            manualAllowQuickTitle: "Manual Allow",
+            manualAllowQuickHint: "Use for exceptions only. Click the button to open the manual-allow dialog.",
+            manualAllowOpenBtn: "Open Manual Allow",
+            manualAllowModalTitle: "Manual Allow",
+            closeModal: "Close",
+            memberModalTitle: "Member Profile (Read-only)",
             recentTitle: "Recent Entry Logs",
             recentReload: "Reload",
             recentLoading: "Loading...",
-            recentEmpty: "No recent entry records.",
+            recentEmpty: "No matching records.",
+            recentSearchPlaceholder: "Search by name / phone suffix / keyword",
+            recentFilterToday: "Today",
+            recentFilterWeek: "This week",
+            recentFilterAll: "All",
+            recentColumnTime: "Time",
+            recentColumnName: "Name",
+            recentColumnStatus: "Status",
+            recentColumnAction: "Action",
+            recentView: "View",
+            recentDetailTitle: "Check-in Detail",
             recentMember: "Member",
             recentMethod: "Method",
             recentResult: "Result",
@@ -387,15 +473,32 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
   }, [manualAllowOpen]);
 
   useEffect(() => {
-    if (!memberViewOpen) return;
+    if (!memberViewOpen && !recentViewItem) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMemberViewOpen(false);
+      if (event.key === "Escape") {
+        setMemberViewOpen(false);
+        setRecentViewItem(null);
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [memberViewOpen]);
+  }, [memberViewOpen, recentViewItem]);
+
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!moreMenuRef.current) return;
+      if (!moreMenuRef.current.contains(event.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [moreMenuOpen]);
 
   const stopScanner = useCallback(() => {
     if (timerRef.current) {
@@ -461,8 +564,8 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
         setNotice({ tone: "ok", text: t.verifyAllowed });
         void loadRecentCheckins();
       } else {
-        // Keep deny details only in the result card to avoid duplicate top warnings.
-        setNotice(null);
+        const reasonText = denyReasonLabel(verified.reason, lang);
+        setNotice({ tone: "warn", text: `${t.verifyDenied}: ${reasonText}` });
       }
       return true;
     } catch {
@@ -481,8 +584,9 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
     } finally {
       busyRef.current = false;
       setBusy(false);
+      setManualInput("");
     }
-  }, [lang, loadRecentCheckins, t.verifyAllowed, t.verifyNetworkFailed]);
+  }, [lang, loadRecentCheckins, t.verifyAllowed, t.verifyDenied, t.verifyNetworkFailed]);
 
   const submitScannedToken = useCallback(async (rawToken: string) => {
     const token = normalizeScannedToken(rawToken);
@@ -522,6 +626,7 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
       if (!response.ok) throw new Error(parseEntryError(payload, lang, response.status));
       setRecentWarning(typeof payload.warning === "string" ? payload.warning : t.recentVoidSuccess);
       await loadRecentCheckins();
+      setRecentViewItem((current) => (current?.id === item.id ? null : current));
     } catch (error) {
       setRecentError(error instanceof Error ? error.message : parseEntryError({}, lang));
     } finally {
@@ -537,20 +642,33 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
     setCameraFacingMode((mode) => (mode === "environment" ? "user" : "environment"));
   }, []);
 
-  const toggleCameraPower = useCallback(() => {
-    setCameraClosed((current) => {
-      const next = !current;
-      if (next) {
-        stopScanner();
-        setCameraError(null);
-        setCameraBooting(false);
-        setScannerReady(false);
-      } else {
-        setCameraNonce((value) => value + 1);
-      }
-      return next;
-    });
+  const closeCamera = useCallback(() => {
+    setCameraClosed(true);
+    setCameraError(null);
+    stopScanner();
   }, [stopScanner]);
+
+  const openCamera = useCallback(() => {
+    setCameraClosed(false);
+    setCameraError(null);
+    setCameraNonce((value) => value + 1);
+  }, []);
+
+  const toggleCameraPower = useCallback(() => {
+    if (cameraClosed) openCamera();
+    else closeCamera();
+  }, [cameraClosed, closeCamera, openCamera]);
+
+  const handleManualPaste = useCallback((event: ClipboardEvent<HTMLInputElement>) => {
+    const pasted = event.clipboardData.getData("text").trim();
+    if (!pasted) return;
+    event.preventDefault();
+    setManualInput(pasted);
+    setNotice({ tone: "ok", text: t.manualHint });
+    window.setTimeout(() => {
+      void callVerify(pasted);
+    }, 80);
+  }, [callVerify, t.manualHint]);
 
   useEffect(() => {
     let mounted = true;
@@ -770,96 +888,424 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
 
   const decisionColor = result?.decision === "allow" ? "var(--brand)" : "#9b1c1c";
   const decisionClass = result?.decision === "allow" ? "fdEntryDecisionAllow" : "fdEntryDecisionDeny";
+  const modeLabel =
+    scannerMode === "detector"
+      ? t.modeDetector
+      : scannerMode === "zxing" || scannerMode === "jsqr"
+        ? t.modeFallback
+        : t.modeManual;
+  const modeClass =
+    scannerMode === "detector"
+      ? "fdEntryModeDetector"
+      : scannerMode === "zxing" || scannerMode === "jsqr"
+        ? "fdEntryModeFallback"
+        : "fdEntryModeManual";
   const noticeClass =
     notice?.tone === "ok" ? "fdEntryNoticeOk" : notice?.tone === "warn" ? "fdEntryNoticeWarn" : "fdEntryNoticeError";
+
+  const workflowState: WorkflowState = useMemo(() => {
+    if (busy || cameraBooting) return "scanning";
+    if (result?.decision === "allow") return "success";
+    if (result?.decision === "deny" || notice?.tone === "error") return "failed";
+    return "idle";
+  }, [busy, cameraBooting, notice?.tone, result?.decision]);
+
+  const workflowStatusLabel =
+    workflowState === "scanning"
+      ? t.statusScanning
+      : workflowState === "success"
+        ? t.statusSuccess
+        : workflowState === "failed"
+          ? t.statusFailed
+          : t.statusIdle;
+
+  const cameraStatusText =
+    cameraClosed
+      ? t.cameraOff
+      : cameraBooting
+        ? t.cameraPreparing
+        : scannerReady
+          ? t.cameraReady
+          : t.cameraFailed;
+
+  const filteredRecentItems = useMemo(() => {
+    const now = new Date();
+    const q = recentQuery.trim().toLowerCase();
+    return recentItems.filter((item) => {
+      const checkedAt = item.checkedAt || "";
+      if (recentRange === "today" && checkedAt && !isSameLocalDay(checkedAt, now)) return false;
+      if (recentRange === "week" && checkedAt && !isWithinDays(checkedAt, 7, now)) return false;
+      if (!q) return true;
+      const haystack = [
+        item.memberName,
+        item.memberCode,
+        item.phoneLast4 || "",
+        item.method || "",
+        item.result || "",
+        item.reason || "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [recentItems, recentQuery, recentRange]);
+
+  const manualPrimaryLabel = result?.decision === "allow" ? t.actionConfirmAllow : t.actionManualAllow;
 
   return (
     <main className={embedded ? "fdEmbedScene" : "fdGlassScene"} style={embedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
       <section
-        className={`${embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"} fdEntryLayout`}
+        className={`${embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"} fdEntryWfLayout`}
         style={embedded ? { minHeight: "auto", height: "auto", padding: 12 } : undefined}
       >
-        {!embedded ? (
-          <section className="hero" style={{ paddingTop: 0 }}>
-            <div className="fdGlassPanel">
-              <div className="fdEyebrow">{t.badge}</div>
-              <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
-                {t.title}
-              </h1>
-              <p className="fdGlassText">{t.sub}</p>
-            </div>
-          </section>
-        ) : (
-          <div className="fdGlassSubPanel fdEntryIntroPanel" style={{ padding: 12, marginBottom: 12 }}>
-            <h2 className="sectionTitle" style={{ marginBottom: 2 }}>{t.title}</h2>
-            <p className="fdGlassText" style={{ marginTop: 0 }}>{t.sub}</p>
+        <header className="fdGlassSubPanel fdEntryWfToolbar">
+          <div className="fdEntryWfToolbarLeft">
+            <h1 className="fdEntryWfTitle">{t.title}</h1>
           </div>
-        )}
+          <div className={`fdEntryWfStatusBadge fdEntryWfStatus-${workflowState}`}>{workflowStatusLabel}</div>
+          <div className="fdEntryWfToolbarRight">
+            <button
+              type="button"
+              className="fdPillBtn fdPillBtnGhost"
+              onClick={toggleCameraFacing}
+              disabled={busy || cameraBooting || cameraClosed}
+            >
+              {t.toolbarSwitchCamera}
+            </button>
+            <button
+              type="button"
+              className="fdPillBtn fdPillBtnGhost"
+              onClick={toggleCameraPower}
+              disabled={busy}
+            >
+              {cameraClosed ? t.toolbarOpen : t.toolbarClose}
+            </button>
+            <div className="fdEntryWfMoreWrap" ref={moreMenuRef}>
+              <button
+                type="button"
+                className="fdPillBtn fdPillBtnGhost fdEntryWfMoreButton"
+                onClick={() => setMoreMenuOpen((open) => !open)}
+              >
+                {t.toolbarMore}
+              </button>
+              {moreMenuOpen ? (
+                <div className="fdEntryWfMoreMenu">
+                  <button
+                    type="button"
+                    className="fdEntryWfMenuItem"
+                    onClick={() => {
+                      restartCamera();
+                      setMoreMenuOpen(false);
+                    }}
+                    disabled={cameraBooting || busy || cameraClosed}
+                  >
+                    {t.moreRestart}
+                  </button>
+                  <button
+                    type="button"
+                    className="fdEntryWfMenuItem"
+                    onClick={() => {
+                      setManualAllowOpen(true);
+                      setMoreMenuOpen(false);
+                    }}
+                  >
+                    {t.moreManualAllow}
+                  </button>
+                  <button
+                    type="button"
+                    className="fdEntryWfMenuItem"
+                    onClick={() => {
+                      setResult(null);
+                      setNotice(null);
+                      setMoreMenuOpen(false);
+                    }}
+                    disabled={!result && !notice}
+                  >
+                    {t.moreClearResult}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </header>
 
         {notice ? <div className={`fdEntryNotice ${noticeClass}`}>{notice.text}</div> : null}
 
-        <section className="fdTwoCol fdEntryTopGrid">
-          <div className="fdGlassSubPanel fdEntryScannerPanel">
-            <div className="fdEntryScannerHead">
-              <h2 className="sectionTitle">{t.cameraTitle}</h2>
+        <section className="fdEntryWfMainGrid">
+          <section className="fdGlassSubPanel fdEntryWfCameraCard">
+            <div className="fdEntryWfCameraGuide">{t.cameraGuide}</div>
+            <div className="fdEntryWfCameraStage">
+              <video ref={videoRef} className="input fdEntryWfVideo" muted playsInline />
+              <div className="fdEntryWfScanOverlay" aria-hidden>
+                <div className="fdEntryWfScanFrame">
+                  <span className="fdEntryWfCorner fdEntryWfCorner-tl" />
+                  <span className="fdEntryWfCorner fdEntryWfCorner-tr" />
+                  <span className="fdEntryWfCorner fdEntryWfCorner-bl" />
+                  <span className="fdEntryWfCorner fdEntryWfCorner-br" />
+                </div>
+              </div>
             </div>
-            <video ref={videoRef} className="input fdEntryScannerVideo" muted playsInline />
             <canvas ref={scanCanvasRef} className="fdEntryScanCanvas" aria-hidden />
-            <p className="fdGlassText fdEntryScannerState">
-              {cameraClosed
-                ? lang === "zh"
-                  ? "鏡頭已關閉"
-                  : "Camera is turned off"
-                : cameraBooting
-                  ? t.cameraPreparing
-                  : scannerReady
-                    ? t.cameraReady
-                    : t.cameraFailed}
-            </p>
-            <p className="fdGlassText fdEntryScannerHint">{t.cameraPermissionHint}</p>
-            {cameraError ? <p className="error" style={{ marginTop: 8 }}>{cameraError}</p> : null}
-            <div className="fdEntryScannerActions">
-              <button type="button" className="fdPillBtn" onClick={restartCamera} disabled={cameraBooting || busy || cameraClosed}>
-                {t.restartCamera}
+            <div className="fdEntryWfCameraMeta">
+              <span>{cameraStatusText}</span>
+              <span className={`fdEntryModeChip ${modeClass}`}>{t.scannerModeLabel}: {modeLabel}</span>
+            </div>
+            {cameraError ? (
+              <div className="fdEntryWfAlert fdEntryWfAlertWarn">
+                <strong>{t.cameraFailed}</strong>
+                <span>{cameraError}</span>
+              </div>
+            ) : (
+              <p className="fdGlassText fdEntryWfCameraHint">{t.cameraPermissionHint}</p>
+            )}
+          </section>
+
+          <aside className="fdEntryWfSideCol">
+            <section className="fdGlassSubPanel fdEntryWfInfoCard">
+              <h2 className="sectionTitle">{t.infoCardTitle}</h2>
+              {!result ? (
+                <div className="fdEntryWfInfoEmpty">
+                  <p className="fdEntryWfInfoEmptyTitle">{t.infoWaitingTitle}</p>
+                  <p className="fdGlassText">{t.infoWaitingDesc}</p>
+                </div>
+              ) : result.member ? (
+                <div className="fdEntryWfMemberSummary">
+                  <div className="fdEntryAvatar">
+                    {result.member.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={result.member.photoUrl} alt={result.member.name || t.noPhoto} className="fdEntryAvatarImage" />
+                    ) : (
+                      <span className="fdEntryAvatarFallback">{memberInitials(result.member.name)}</span>
+                    )}
+                  </div>
+                  <div className="fdEntryMemberBlock">
+                    <h3 className="fdEntryMemberName">{result.member.name ?? "-"}</h3>
+                    <p className="fdEntryMemberMeta">{t.phoneLast4}: {result.member.phoneLast4 ?? "-"}</p>
+                    <p className="fdEntryMemberMeta">{t.membership}: {membershipLabel(result.membership, lang)}</p>
+                    <div className="fdEntryResultMetaGrid">
+                      <p className="sub">{t.lastCheckin}: {formatDateTime(result.latestCheckinAt)}</p>
+                      <p className="sub">{t.todayCount}: {result.todayCheckinCount}</p>
+                      <p className="sub">{t.checkedAt}: {formatDateTime(result.checkedAt)}</p>
+                      <p className="sub">{t.reason}: {denyReasonLabel(result.reason, lang)}</p>
+                    </div>
+                    <p className="fdEntryGateStatus">
+                      {t.gate}: {result.gate ? `${result.gate.opened ? t.gateOpen : t.gateClosed} (${result.gate.message})` : "-"}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="fdEntryWfInfoEmpty">
+                  <p className="fdEntryWfInfoEmptyTitle">{t.verifyDenied}</p>
+                  <p className="fdGlassText">{t.reason}: {denyReasonLabel(result.reason, lang)}</p>
+                </div>
+              )}
+            </section>
+
+            <section className="fdGlassSubPanel fdEntryWfActionsCard">
+              <h2 className="sectionTitle">{t.actionsTitle}</h2>
+              <button
+                type="button"
+                className="fdPillBtn fdPillBtnPrimary fdEntryWfPrimaryAction"
+                onClick={() => setManualAllowOpen(true)}
+              >
+                {manualPrimaryLabel}
               </button>
-              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={toggleCameraPower} disabled={busy}>
-                {cameraClosed ? (lang === "zh" ? "開啟鏡頭" : "Open Camera") : (lang === "zh" ? "關閉鏡頭" : "Close Camera")}
+              <div className="fdEntryWfSecondaryActions">
+                <button
+                  type="button"
+                  className="fdPillBtn fdPillBtnGhost"
+                  onClick={restartCamera}
+                  disabled={busy || cameraBooting || cameraClosed}
+                >
+                  {t.actionRestart}
+                </button>
+                <button
+                  type="button"
+                  className="fdPillBtn fdPillBtnGhost"
+                  onClick={toggleCameraFacing}
+                  disabled={busy || cameraBooting || cameraClosed}
+                >
+                  {t.actionSwitchCamera}
+                </button>
+              </div>
+              <button
+                type="button"
+                className="fdPillBtn fdEntryWfDangerAction"
+                onClick={toggleCameraPower}
+                disabled={busy}
+              >
+                {cameraClosed ? t.actionOpenCamera : t.actionCloseCamera}
               </button>
-              <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={toggleCameraFacing} disabled={cameraBooting || busy || cameraClosed}>
-                {t.switchCamera}
+              <form
+                className="fdEntryWfTokenForm"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void callVerify(manualInput);
+                }}
+              >
+                <label className="kvLabel" htmlFor="entry-manual-token">{t.manualTitle}</label>
+                <input
+                  id="entry-manual-token"
+                  value={manualInput}
+                  onChange={(event) => setManualInput(event.target.value)}
+                  onPaste={handleManualPaste}
+                  className="input"
+                  placeholder={t.manualPlaceholder}
+                />
+                <div className="fdEntryWfTokenActions">
+                  <button type="submit" disabled={busy || !manualInput.trim()} className="fdPillBtn fdPillBtnGhost">
+                    {busy ? t.manualBusy : t.manualBtn}
+                  </button>
+                  <button
+                    type="button"
+                    className="fdPillBtn fdPillBtnGhost"
+                    onClick={() => setManualInput("")}
+                    disabled={busy || !manualInput}
+                  >
+                    {t.clearToken}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </aside>
+        </section>
+
+        {manualAllowOpen && portalReady
+          ? createPortal(
+              <div
+                className="fdModalBackdrop fdModalBackdropFeature fdEntryManualAllowBackdrop"
+                onClick={() => setManualAllowOpen(false)}
+                role="presentation"
+              >
+                <div
+                  className="fdModal fdModalLight fdEntryManualAllowModal"
+                  onClick={(event) => event.stopPropagation()}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={t.manualAllowModalTitle}
+                >
+                  <div className="fdModalHead">
+                    <h2 className="sectionTitle" style={{ margin: 0 }}>{t.manualAllowModalTitle}</h2>
+                    <button
+                      type="button"
+                      className="fdPillBtn fdPillBtnGhost fdModalCloseBtn"
+                      onClick={() => setManualAllowOpen(false)}
+                    >
+                      {t.closeModal}
+                    </button>
+                  </div>
+                  <div className="fdEntryManualAllowModalBody">
+                    <ManualAllowPanel onDone={() => { void loadRecentCheckins(); }} />
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
+        <section className="fdGlassSubPanel fdEntryWfRecentCard">
+          <div className="fdEntryWfRecentHeader">
+            <h2 className="sectionTitle">{t.recentTitle}</h2>
+            <div className="fdEntryWfRecentTools">
+              <input
+                className="input fdEntryWfSearchInput"
+                value={recentQuery}
+                onChange={(event) => setRecentQuery(event.target.value)}
+                placeholder={t.recentSearchPlaceholder}
+              />
+              <div className="fdEntryWfRangeSwitch">
+                <button
+                  type="button"
+                  className={`fdEntryWfRangeBtn ${recentRange === "today" ? "active" : ""}`}
+                  onClick={() => setRecentRange("today")}
+                >
+                  {t.recentFilterToday}
+                </button>
+                <button
+                  type="button"
+                  className={`fdEntryWfRangeBtn ${recentRange === "week" ? "active" : ""}`}
+                  onClick={() => setRecentRange("week")}
+                >
+                  {t.recentFilterWeek}
+                </button>
+                <button
+                  type="button"
+                  className={`fdEntryWfRangeBtn ${recentRange === "all" ? "active" : ""}`}
+                  onClick={() => setRecentRange("all")}
+                >
+                  {t.recentFilterAll}
+                </button>
+              </div>
+              <button
+                type="button"
+                className="fdPillBtn"
+                onClick={() => void loadRecentCheckins()}
+                disabled={recentLoading || !!voidingId}
+              >
+                {t.recentReload}
               </button>
             </div>
           </div>
 
-          <div className="fdEntrySideCol">
-            <section className="fdGlassSubPanel fdEntryControlPanel fdEntryResultPanelInline fdEntryResultPanelSide">
-              <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
-                <h2 className="sectionTitle" style={{ margin: 0 }}>{lang === "zh" ? "操作區" : "Actions"}</h2>
-              </div>
-              <p className="fdGlassText fdEntryControlHint" style={{ marginTop: 8 }}>
-                {lang === "zh" ? "掃碼成功後會自動跳出會員資料視窗（唯讀）。" : "After a successful scan, a read-only member profile popup opens automatically."}
-              </p>
-              <div className="fdEntryControlGrid">
-                <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={restartCamera} disabled={cameraBooting || busy || cameraClosed}>
-                  {t.restartCamera}
-                </button>
-                <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={toggleCameraPower} disabled={busy}>
-                  {cameraClosed ? (lang === "zh" ? "開啟鏡頭" : "Open Camera") : (lang === "zh" ? "關閉鏡頭" : "Close Camera")}
-                </button>
-                <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={toggleCameraFacing} disabled={cameraBooting || busy || cameraClosed}>
-                  {t.switchCamera}
-                </button>
-                <button
-                  type="button"
-                  className="fdPillBtn fdPillBtnPrimary"
-                  onClick={() => setManualAllowOpen(true)}
-                >
-                  {t.manualAllowOpenBtn}
-                </button>
-              </div>
-            </section>
-          </div>
+          {recentWarning ? <p className="fdGlassText" style={{ marginTop: 8, color: "var(--brand)" }}>{recentWarning}</p> : null}
+          {recentError ? <p className="error" style={{ marginTop: 8 }}>{recentError}</p> : null}
+          {recentLoading ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.recentLoading}</p> : null}
+          {!recentLoading && filteredRecentItems.length === 0 ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.recentEmpty}</p> : null}
+
+          {!recentLoading && filteredRecentItems.length > 0 ? (
+            <div className="fdEntryWfRecentTableWrap">
+              <table className="fdEntryWfRecentTable">
+                <thead>
+                  <tr>
+                    <th>{t.recentColumnTime}</th>
+                    <th>{t.recentColumnName}</th>
+                    <th>{t.recentColumnStatus}</th>
+                    <th>{t.recentColumnAction}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRecentItems.map((item) => {
+                    const code = (item.result || "").trim().toLowerCase();
+                    const statusClass = code === "allow" ? "allow" : code === "deny" ? "deny" : "manual";
+                    const memberLabel = item.memberCode
+                      ? `${item.memberName || "-"} (#${item.memberCode})`
+                      : (item.memberName || "-");
+                    return (
+                      <tr key={item.id}>
+                        <td>{formatDateTime(item.checkedAt)}</td>
+                        <td>{memberLabel}</td>
+                        <td>
+                          <span className={`fdEntryWfResultBadge ${statusClass}`}>
+                            {recentResultLabel(item.result, lang)}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="fdPillBtn fdPillBtnGhost fdEntryWfViewBtn"
+                            onClick={() => setRecentViewItem(item)}
+                          >
+                            {t.recentView}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </section>
+
+        <div className="fdEntryWfMobileBar">
+          <button
+            type="button"
+            className="fdPillBtn fdPillBtnPrimary fdEntryWfMobilePrimary"
+            onClick={() => setManualAllowOpen(true)}
+          >
+            {manualPrimaryLabel}
+          </button>
+        </div>
 
         {memberViewOpen && result && result.member && portalReady
           ? createPortal(
@@ -873,10 +1319,10 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
                   onClick={(event) => event.stopPropagation()}
                   role="dialog"
                   aria-modal="true"
-                  aria-label={lang === "zh" ? "會員資料" : "Member Profile"}
+                  aria-label={t.memberModalTitle}
                 >
                   <div className="fdModalHead">
-                    <h2 className="sectionTitle" style={{ margin: 0 }}>{lang === "zh" ? "會員資料" : "Member Profile"}</h2>
+                    <h2 className="sectionTitle" style={{ margin: 0 }}>{t.memberModalTitle}</h2>
                     <button
                       type="button"
                       className="fdPillBtn fdPillBtnGhost fdModalCloseBtn"
@@ -923,86 +1369,54 @@ export function FrontdeskCheckinView({ embedded = false }: { embedded?: boolean 
             )
           : null}
 
-        {manualAllowOpen && portalReady
+        {recentViewItem && portalReady
           ? createPortal(
               <div
-                className="fdModalBackdrop fdModalBackdropFeature fdEntryManualAllowBackdrop"
-                onClick={() => setManualAllowOpen(false)}
+                className="fdModalBackdrop fdModalBackdropFeature fdEntryMemberViewBackdrop"
+                onClick={() => setRecentViewItem(null)}
                 role="presentation"
               >
                 <div
-                  className="fdModal fdModalLight fdEntryManualAllowModal"
+                  className="fdModal fdModalLight fdEntryWfRecentModal"
                   onClick={(event) => event.stopPropagation()}
                   role="dialog"
                   aria-modal="true"
-                  aria-label={t.manualAllowModalTitle}
+                  aria-label={t.recentDetailTitle}
                 >
                   <div className="fdModalHead">
-                    <h2 className="sectionTitle" style={{ margin: 0 }}>{t.manualAllowModalTitle}</h2>
+                    <h2 className="sectionTitle" style={{ margin: 0 }}>{t.recentDetailTitle}</h2>
                     <button
                       type="button"
                       className="fdPillBtn fdPillBtnGhost fdModalCloseBtn"
-                      onClick={() => setManualAllowOpen(false)}
+                      onClick={() => setRecentViewItem(null)}
                     >
                       {t.closeModal}
                     </button>
                   </div>
-                  <div className="fdEntryManualAllowModalBody">
-                    <ManualAllowPanel onDone={() => { void loadRecentCheckins(); }} />
-                  </div>
+                  <section className="fdGlassSubPanel">
+                    <div className="fdListStack" style={{ gap: 8 }}>
+                      <p className="sub">{t.recentMember}: {recentViewItem.memberName || "-"}{recentViewItem.memberCode ? ` (#${recentViewItem.memberCode})` : ""}</p>
+                      <p className="sub">{t.recentMethod}: {recentMethodLabel(recentViewItem.method, lang)}</p>
+                      <p className="sub">{t.recentResult}: {recentResultLabel(recentViewItem.result, lang)}</p>
+                      <p className="sub">{t.recentReason}: {recentReasonLabel(recentViewItem.reason, lang)}</p>
+                      <p className="sub">{t.recentCheckedAt}: {formatDateTime(recentViewItem.checkedAt)}</p>
+                    </div>
+                    <div className="fdInventoryActions" style={{ marginTop: 12 }}>
+                      <button
+                        type="button"
+                        className="fdPillBtn"
+                        disabled={(recentViewItem.result || "").toLowerCase() !== "allow" || voidingId === recentViewItem.id}
+                        onClick={() => void handleVoidCheckin(recentViewItem)}
+                      >
+                        {voidingId === recentViewItem.id ? t.recentVoidingAction : t.recentVoidAction}
+                      </button>
+                    </div>
+                  </section>
                 </div>
               </div>,
               document.body,
             )
           : null}
-
-        <section className="fdGlassSubPanel fdEntryRecentPanel" style={{ marginTop: 14 }}>
-          <div className="actions" style={{ marginTop: 0, justifyContent: "space-between", alignItems: "center" }}>
-            <h2 className="sectionTitle" style={{ margin: 0 }}>{t.recentTitle}</h2>
-            <button
-              type="button"
-              className="fdPillBtn"
-              onClick={() => void loadRecentCheckins()}
-              disabled={recentLoading || !!voidingId}
-            >
-              {t.recentReload}
-            </button>
-          </div>
-          {recentWarning ? <p className="fdGlassText" style={{ marginTop: 8, color: "var(--brand)" }}>{recentWarning}</p> : null}
-          {recentError ? <p className="error" style={{ marginTop: 8 }}>{recentError}</p> : null}
-          {recentLoading ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.recentLoading}</p> : null}
-          {!recentLoading && recentItems.length === 0 ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.recentEmpty}</p> : null}
-          <div className="fdListStack" style={{ marginTop: 8 }}>
-            {recentItems.map((item) => {
-              const memberLabel = item.memberCode ? `${item.memberName || "-"} (#${item.memberCode})` : (item.memberName || "-");
-              const canVoid = item.result.toLowerCase() === "allow";
-              const methodText = recentMethodLabel(item.method, lang);
-              const resultText = recentResultLabel(item.result, lang);
-              const reasonText = recentReasonLabel(item.reason, lang);
-              return (
-                <div key={item.id} className="card fdEntryRecentItem" style={{ padding: 10 }}>
-                  <div style={{ display: "grid", gap: 4 }}>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentMember}: {memberLabel}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentMethod}: {methodText}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentResult}: {resultText}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentReason}: {reasonText}</p>
-                    <p className="sub" style={{ marginTop: 0 }}>{t.recentCheckedAt}: {formatDateTime(item.checkedAt)}</p>
-                  </div>
-                  <div className="fdInventoryActions" style={{ marginTop: 8 }}>
-                    <button
-                      type="button"
-                      className="fdPillBtn"
-                      disabled={!canVoid || voidingId === item.id}
-                      onClick={() => void handleVoidCheckin(item)}
-                    >
-                      {voidingId === item.id ? t.recentVoidingAction : t.recentVoidAction}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
       </section>
     </main>
   );
