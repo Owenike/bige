@@ -3363,6 +3363,15 @@ body.fdPageDark .footerInner{
   contain: content;
   padding-right: 2px;
 }
+.fdModalFeatureBody.fdModalFeatureBodyMember{
+  contain: none;
+}
+.fdModalFeatureBody.fdModalFeatureBodyMember .fdMemberDeskToolbar{
+  top: 0;
+}
+.fdModalFeatureBody.fdModalFeatureBodyMember .fdMemberCreateFooter{
+  bottom: 0;
+}
 .fdModalFeatureBody .fdGlassPanel,
 .fdModalFeatureBody .fdGlassSubPanel,
 .fdModalFeatureBody .card{

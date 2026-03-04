@@ -5995,7 +5995,7 @@ export default function FrontdeskPortalPage() {
                   </div>
                 )
               ) : (
-                <div className="fdModalFeatureBody">
+                <div className={`fdModalFeatureBody ${modalType === "member" ? "fdModalFeatureBodyMember" : ""}`}>
                   {modalType === "entry" ? <FrontdeskCheckinView embedded /> : <FrontdeskMemberSearchView embedded />}
                 </div>
               )}
