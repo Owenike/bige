@@ -1496,9 +1496,268 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   grid-template-columns: minmax(300px, .78fr) minmax(760px, 1.42fr);
   gap: 14px;
 }
+.fdMemberDeskLayout{
+  display: grid;
+  gap: 16px;
+}
+.fdMemberDeskToolbar{
+  position: sticky;
+  top: 8px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  border-color: rgba(166, 188, 219, .42);
+  background:
+    linear-gradient(152deg, rgba(251, 254, 255, .95), rgba(236, 246, 255, .92)),
+    radial-gradient(140% 120% at 0% 0%, rgba(170, 219, 255, .18), rgba(170, 219, 255, 0) 56%);
+  box-shadow:
+    inset 0 .7px 0 rgba(255,255,255,.88),
+    0 12px 22px rgba(22, 44, 76, .12);
+}
+.fdMemberDeskToolbarLeft{
+  min-width: 0;
+}
+.fdMemberDeskTitle{
+  margin: 4px 0 0;
+  font-size: clamp(22px, 1.9vw, 28px);
+  line-height: 1.12;
+  color: #1d304f;
+  letter-spacing: .01em;
+}
+.fdMemberDeskSub{
+  margin-top: 4px;
+  color: #51698c;
+  line-height: 1.5;
+}
+.fdMemberDeskToolbarRight{
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fdMemberDeskHint{
+  font-size: 12px;
+  line-height: 1.2;
+  color: #56739b;
+  border: 1px solid rgba(170, 196, 232, .74);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(239, 246, 255, .82);
+}
+.fdMemberDeskNotice{
+  margin-bottom: 0;
+}
+.fdMemberDeskNoticeOk{
+  border-radius: 14px;
+  border: 1px solid rgba(40, 182, 140, .34);
+  background: rgba(40, 182, 140, .1);
+  color: #116755;
+  padding: 10px 12px;
+}
+.fdMemberDeskMain{
+  display: grid;
+  grid-template-columns: minmax(320px, .38fr) minmax(560px, .62fr);
+  gap: 16px;
+  align-items: start;
+}
+.fdMemberDeskLeft{
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.fdMemberDeskPanel{
+  padding: 16px;
+  border-color: rgba(174, 194, 224, .46);
+  background:
+    linear-gradient(152deg, rgba(252, 254, 255, .96), rgba(237, 246, 255, .93)),
+    radial-gradient(180% 120% at 100% 100%, rgba(149, 205, 255, .16), rgba(149, 205, 255, 0) 62%);
+  box-shadow:
+    inset 0 .8px 0 rgba(255,255,255,.92),
+    0 12px 24px rgba(16, 34, 62, .1);
+}
 .fdMemberFindPanel,
 .fdMemberCreatePanel{
   min-height: 0;
+}
+.fdMemberCreatePanel{
+  overflow: visible;
+}
+.fdMemberPanelHint{
+  margin-top: 4px;
+  color: #5b7498;
+}
+.fdMemberSearchForm{
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+.fdMemberSearchActions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fdMemberSearchActions .fdPillBtn{
+  min-height: 38px;
+}
+.fdMemberPanelHead{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fdMemberResultPanel .sectionTitle{
+  margin-bottom: 0;
+}
+.fdMemberResultCount{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(165, 190, 225, .82);
+  background: rgba(236, 245, 255, .92);
+  color: #3f587b;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
+  padding: 0 10px;
+}
+.fdMemberResultEmpty{
+  margin: 10px 0 0;
+  border-radius: 12px;
+  border: 1px dashed rgba(174, 194, 224, .8);
+  background: rgba(247, 251, 255, .9);
+  color: #5f7697;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.fdMemberResultList{
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+.fdMemberResultItem{
+  border: 1px solid rgba(182, 201, 228, .82);
+  border-radius: 14px;
+  background: rgba(248, 252, 255, .95);
+  box-shadow: inset 0 .7px 0 rgba(255,255,255,.84);
+  transition: border-color .14s ease, box-shadow .14s ease, transform .14s ease;
+}
+.fdMemberResultItem.isActive{
+  border-color: rgba(59, 130, 246, .7);
+  box-shadow:
+    inset 0 .7px 0 rgba(255,255,255,.9),
+    0 0 0 2px rgba(145, 199, 255, .34);
+}
+.fdMemberResultItem.isRecent{
+  border-color: rgba(57, 185, 154, .74);
+}
+.fdMemberResultSelect{
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  padding: 12px;
+  border-radius: 14px 14px 0 0;
+}
+.fdMemberResultSelect:hover{
+  background: rgba(236, 246, 255, .72);
+}
+.fdMemberResultNameRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fdMemberResultName{
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+  color: #213757;
+}
+.fdMemberResultOpen{
+  color: #4b698f;
+  font-size: 12px;
+  line-height: 1.2;
+  border: 1px solid rgba(175, 197, 228, .74);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(241, 248, 255, .9);
+}
+.fdMemberResultMeta{
+  margin: 6px 0 0;
+  color: #536d91;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.fdMemberResultFooter{
+  padding: 0 12px 12px;
+}
+.fdMemberResultCustomWrap{
+  border-top: 1px solid rgba(195, 211, 234, .74);
+  padding: 10px 12px 12px;
+}
+.fdMemberResultCustomTitle{
+  margin: 0;
+  color: #547199;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.fdMemberResultCustomList{
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fdMemberCreateForm{
+  margin-top: 6px;
+  display: grid;
+  gap: 12px;
+  padding-bottom: 88px;
+}
+.fdMemberFormSection{
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(181, 200, 228, .72);
+  background: rgba(249, 252, 255, .9);
+}
+.fdMemberSectionTitle{
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.2;
+  letter-spacing: .01em;
+  color: #2c466a;
+}
+.fdMemberSectionHint{
+  color: #5f789a;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.fdMemberFormGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.fdMemberField{
+  display: grid;
+  gap: 6px;
+}
+.fdMemberFieldWide{
+  grid-column: 1 / -1;
+}
+.fdMemberCustomList{
+  display: grid;
+  gap: 8px;
 }
 .fdMemberCustomRow{
   display: grid;
@@ -1513,27 +1772,42 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   width: 72px;
   justify-content: center;
 }
-.fdEmbedBackdrop .fdMemberCreatePanel .field{
-  max-height: min(54vh, 560px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-gutter: stable;
-  padding-right: 2px;
+.fdMemberCustomRemoveBtn{
+  min-height: 40px;
 }
-.fdEmbedBackdrop .fdMemberCreatePanel .field > *{
-  max-width: 100%;
+.fdMemberCustomAddBtn{
+  justify-self: start;
 }
-.fdEmbedBackdrop .fdMemberInlineResultGrid{
-  max-height: min(42vh, 380px);
-  overflow: auto;
-  align-content: start;
-  padding-right: 2px;
+.fdMemberCreateFooter{
+  position: sticky;
+  bottom: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(171, 192, 223, .74);
+  background:
+    linear-gradient(160deg, rgba(251, 254, 255, .96), rgba(235, 245, 255, .92));
+  box-shadow: 0 10px 18px rgba(20, 38, 66, .12);
+}
+.fdMemberContinueHint{
+  margin-top: 0;
+  font-size: 12px;
+  color: #5f789a;
 }
 .fdMemberQuickActions{
-  margin-top: 12px;
+  margin-top: 10px;
+  padding: 12px;
 }
-.fdEmbedBackdrop .fdMemberQuickActions{
-  margin-bottom: 0;
+.fdMemberQuickActions .sectionTitle{
+  margin-bottom: 8px;
+}
+.fdMemberQuickActionsButtons{
+  margin-top: 0;
 }
 .fdActionGrid{
   display:grid;
@@ -4230,10 +4504,41 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
 }
 @media (max-width: 1024px){
+  .fdMemberDeskToolbar{
+    top: 6px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .fdMemberDeskToolbarRight{
+    justify-content: flex-start;
+  }
+  .fdMemberDeskHint{
+    order: 3;
+  }
+  .fdMemberDeskMain{
+    grid-template-columns: 1fr;
+  }
+  .fdMemberFormGrid{
+    grid-template-columns: 1fr;
+  }
+  .fdMemberCreateForm{
+    padding-bottom: 104px;
+  }
+  .fdMemberCreateFooter{
+    bottom: 10px;
+    justify-content: stretch;
+  }
+  .fdMemberCreateFooter .fdPillBtn{
+    flex: 1 1 0;
+    justify-content: center;
+  }
   .fdMemberCustomRow{
     grid-template-columns: 1fr;
   }
   .fdMemberCustomRow .fdPillBtn{
     justify-self: stretch;
+    width: 100%;
   }
 }

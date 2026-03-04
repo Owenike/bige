@@ -484,6 +484,47 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   }, [allMemberBaseline, allMemberForm]);
   const searchKeyword = q.trim();
   const searchDisabled = loading || searchKeyword.length === 0;
+  const createFormHasValue = useMemo(() => {
+    const hasCustomInput = customRows.some((row) => row.key.trim() || row.value.trim());
+    return Boolean(
+      name.trim() ||
+      phone.trim() ||
+      email.trim() ||
+      birthDate.trim() ||
+      gender.trim() ||
+      emergencyName.trim() ||
+      emergencyPhone.trim() ||
+      leadSource.trim() ||
+      hasCustomInput,
+    );
+  }, [birthDate, customRows, email, emergencyName, emergencyPhone, gender, leadSource, name, phone]);
+  const uiText = useMemo(
+    () =>
+      zh
+        ? {
+            toolbarHint: "Enter 可直接查詢",
+            clearForm: "清空表單",
+            resultIdle: "請輸入姓名 / 電話 / Email，按 Enter 或點「開始查詢」。",
+            resultNoMatch: "查無符合會員，請確認輸入內容是否完全一致。",
+            resultOpen: "查看 / 編輯",
+            sectionBasic: "基本資料",
+            sectionEmergency: "緊急聯絡",
+            sectionNote: "備註 / 來源",
+            sectionCustomHint: "可自訂欄位名稱與內容，送出時會一起建立。",
+          }
+        : {
+            toolbarHint: "Press Enter to search",
+            clearForm: "Clear Form",
+            resultIdle: "Enter name / phone / email, then press Enter or click Search.",
+            resultNoMatch: "No exact match found. Check your input and try again.",
+            resultOpen: "View / Edit",
+            sectionBasic: "Basic Info",
+            sectionEmergency: "Emergency Contact",
+            sectionNote: "Notes / Source",
+            sectionCustomHint: "Custom fields are submitted together with member creation.",
+          },
+    [zh],
+  );
 
   useEffect(() => {
     if (!allMembersOpen || !selectedAllMemberId) return;
@@ -717,6 +758,18 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     }
   }
 
+  function clearCreateForm() {
+    setName("");
+    setPhone("");
+    setEmail("");
+    setBirthDate("");
+    setGender("");
+    setEmergencyName("");
+    setEmergencyPhone("");
+    setLeadSource("");
+    setCustomRows([{ key: "", value: "" }]);
+  }
+
   async function createMember(event: FormEvent) {
     event.preventDefault();
     const normalizedPhone = normalizePhone(phone);
@@ -765,15 +818,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
         return;
       }
       const createdId = String(payload?.member?.id || "");
-      setName("");
-      setPhone("");
-      setEmail("");
-      setBirthDate("");
-      setGender("");
-      setEmergencyName("");
-      setEmergencyPhone("");
-      setLeadSource("");
-      setCustomRows([{ key: "", value: "" }]);
+      clearCreateForm();
       setRecentCreatedId(createdId || null);
       setQ(payload?.member?.phone || "");
       setMessage(`${t.created}: ${createdId}`);
@@ -784,9 +829,9 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   }
 
   const quickActionsContent = recentCreatedId ? (
-    <div className="fdGlassSubPanel fdMemberQuickActions" style={{ padding: 14, marginBottom: embedded ? 0 : 12 }}>
-      <h2 className="sectionTitle" style={{ marginBottom: 8 }}>{t.quickActions}</h2>
-      <div className="actions" style={{ marginTop: 0 }}>
+    <div className="fdGlassSubPanel fdMemberQuickActions">
+      <h2 className="sectionTitle">{t.quickActions}</h2>
+      <div className="actions fdMemberQuickActionsButtons">
         <a className="fdPillBtn fdPillBtnPrimary" href={`/frontdesk/orders/new?memberId=${encodeURIComponent(recentCreatedId)}`}>{t.goOrder}</a>
         <a className="fdPillBtn" href={`/frontdesk/bookings?memberId=${encodeURIComponent(recentCreatedId)}`}>{t.goBooking}</a>
         <a className="fdPillBtn" href="/frontdesk/checkin">{t.goCheckin}</a>
@@ -794,93 +839,38 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
     </div>
   ) : null;
 
-  const resultContent = (
-    <section style={{ marginTop: embedded ? 12 : 14 }}>
-      <h2 className="sectionTitle">{t.resultTitle}</h2>
-      <div
-        className={`fdActionGrid ${embedded ? "fdMemberInlineResultGrid" : ""}`}
-        style={{ gridTemplateColumns: embedded ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))" }}
-      >
-        {items.length === 0 ? (
-          <div className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <div className="kvValue">{t.empty}</div>
-          </div>
-        ) : (
-          items.map((item) => (
-            <article
-              key={item.id}
-              className="fdGlassSubPanel fdActionCard"
-              style={{
-                padding: 14,
-                borderColor: item.id === recentCreatedId ? "rgba(116,182,241,.9)" : undefined,
-                boxShadow: item.id === recentCreatedId ? "0 0 0 2px rgba(159,212,255,.45)" : undefined,
-              }}
-            >
-              <h3 className="fdActionTitle" style={{ fontSize: 20 }}>{item.full_name}</h3>
-              <p className="fdGlassText" style={{ marginTop: 6 }}>{item.phone || "-"}</p>
-              <p className="fdGlassText" style={{ marginTop: 4 }}>{item.email || "-"}</p>
-              <p className="fdGlassText" style={{ marginTop: 4 }}>
-                {t.status}: {memberStatusLabel(item.status)}
-              </p>
-              <p className="fdGlassText" style={{ marginTop: 4 }}>
-                {t.portalStatus}: {portalStatusLabel(item.portal_status)}
-              </p>
-              <p className="fdGlassText" style={{ marginTop: 4 }}>
-                {t.portalActivatedAt}: {fmtDateTime(item.portal_activated_at || null)}
-              </p>
-              <p className="fdGlassText" style={{ marginTop: 4 }}>
-                {t.portalLastSentAt}: {fmtDateTime(item.portal_last_activation_sent_at || null)}
-              </p>
-              <div className="actions" style={{ marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="fdPillBtn"
-                  disabled={activationSendingMemberId === item.id}
-                  onClick={() => void sendActivationEmailForMember(item)}
-                >
-                  {activationSendingMemberId === item.id ? t.sendingActivationEmail : t.sendActivationEmail}
-                </button>
-              </div>
-              {item.custom_fields && Object.keys(item.custom_fields).length > 0 ? (
-                <div style={{ marginTop: 10 }}>
-                  <p className="fdGlassText" style={{ marginTop: 0, fontSize: 12 }}>{t.customInfo}</p>
-                  <div className="actions" style={{ marginTop: 6 }}>
-                    {Object.entries(item.custom_fields).map(([key, value]) => (
-                      <span key={`${item.id}-${key}`} className="fdChip">{key}: {value}</span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </article>
-          ))
-        )}
-      </div>
-    </section>
-  );
+  const resultEmptyText = searchKeyword ? uiText.resultNoMatch : uiText.resultIdle;
 
   return (
     <main className={embedded ? "fdEmbedScene" : "fdGlassScene"} style={embedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
       <section
-        className={embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"}
+        className={`${embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"} fdMemberDeskLayout`}
         style={embedded ? { minHeight: "auto", height: "auto", padding: 12 } : undefined}
       >
-        {!embedded ? (
-          <section className="hero" style={{ paddingTop: 0 }}>
-            <div className="fdGlassPanel">
-              <div className="fdEyebrow">{t.badge}</div>
-              <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>{t.title}</h1>
-              <p className="fdGlassText">{t.sub}</p>
-            </div>
-          </section>
-        ) : (
-          <div className="fdGlassSubPanel" style={{ padding: 12, marginBottom: 12 }}>
-            <h2 className="sectionTitle" style={{ marginBottom: 2 }}>{t.title}</h2>
-            <p className="fdGlassText" style={{ marginTop: 0 }}>{t.sub}</p>
+        <header className="fdGlassSubPanel fdMemberDeskToolbar">
+          <div className="fdMemberDeskToolbarLeft">
+            <div className="fdEyebrow">{t.badge}</div>
+            <h1 className="fdMemberDeskTitle">{t.title}</h1>
+            <p className="fdGlassText fdMemberDeskSub">{t.sub}</p>
           </div>
-        )}
+          <div className="fdMemberDeskToolbarRight">
+            <span className="fdMemberDeskHint">{uiText.toolbarHint}</span>
+            <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => void openAllMembersModal()} disabled={allMembersLoading}>
+              {allMembersLoading ? t.allMembersLoading : t.findAllBtn}
+            </button>
+            <button
+              type="button"
+              className="fdPillBtn fdPillBtnGhost"
+              onClick={clearCreateForm}
+              disabled={creating || !createFormHasValue}
+            >
+              {uiText.clearForm}
+            </button>
+          </div>
+        </header>
 
-        {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
-        {message ? <div className="sub" style={{ marginBottom: 12, color: "var(--brand)" }}>{message}</div> : null}
+        {error ? <div className="error fdMemberDeskNotice">{error}</div> : null}
+        {message ? <div className="sub fdMemberDeskNotice fdMemberDeskNoticeOk">{message}</div> : null}
 
         {duplicateCandidate ? (
           <div
@@ -921,89 +911,209 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
           </div>
         ) : null}
 
-        <section
-          className={`fdTwoCol ${embedded ? "fdMemberModalCols" : ""}`}
-          style={embedded ? undefined : { gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))" }}
-        >
-          <div className="fdGlassSubPanel fdMemberFindPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{t.findTitle}</h2>
-            <p className="fdGlassText" style={{ marginTop: 6 }}>{t.findHint}</p>
-            <form onSubmit={search} className="field">
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.findPlaceholder} className="input" />
-              <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={searchDisabled}>
-                {loading ? t.searching : t.findBtn}
-              </button>
-              <button type="button" className="fdPillBtn" onClick={() => void openAllMembersModal()} disabled={allMembersLoading}>
-                {allMembersLoading ? t.allMembersLoading : t.findAllBtn}
-              </button>
-            </form>
-            {embedded ? resultContent : null}
-          </div>
-
-          <div className="fdGlassSubPanel fdMemberCreatePanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{t.createTitle}</h2>
-            <form onSubmit={createMember} className="field">
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.createName} className="input" required />
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.createPhone} className="input" required />
-              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.createEmail} className="input" />
-              <div className="fdBirthDateField">
-                <input
-                  id="fd-member-birth-date"
-                  type="date"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                  className="input"
-                  aria-label={t.createBirthDate}
-                  max={new Date().toISOString().slice(0, 10)}
-                  style={{ paddingRight: 116 }}
-                />
-                <span className="kvLabel fdBirthDateTag">
-                  {t.createBirthDateTag}
-                </span>
-              </div>
-              <input value={gender} onChange={(e) => setGender(e.target.value)} placeholder={t.createGender} className="input" />
-              <input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder={t.emergencyName} className="input" />
-              <input value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder={t.emergencyPhone} className="input" />
-              <input value={leadSource} onChange={(e) => setLeadSource(e.target.value)} placeholder={t.leadSource} className="input" />
-
-              <label className="fdGlassText" style={{ marginTop: 0 }}>{t.customTitle}</label>
-              {customRows.map((row, idx) => (
-                <div key={`${idx}-${row.key}`} className="fdMemberCustomRow">
-                  <input
-                    value={row.key}
-                    onChange={(e) => setCustomRows((prev) => prev.map((it, i) => (i === idx ? { ...it, key: e.target.value } : it)))}
-                    placeholder={t.customKey}
-                    className="input"
-                  />
-                  <input
-                    value={row.value}
-                    onChange={(e) => setCustomRows((prev) => prev.map((it, i) => (i === idx ? { ...it, value: e.target.value } : it)))}
-                    placeholder={t.customValue}
-                    className="input"
-                  />
-                  <button
-                    type="button"
-                    className="fdPillBtn"
-                    onClick={() => setCustomRows((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))}
-                  >
-                    {t.removeField}
+        <section className="fdMemberDeskMain">
+          <aside className="fdMemberDeskLeft">
+            <section className="fdGlassSubPanel fdMemberFindPanel fdMemberDeskPanel">
+              <h2 className="sectionTitle">{t.findTitle}</h2>
+              <p className="fdGlassText fdMemberPanelHint">{t.findHint}</p>
+              <form onSubmit={search} className="fdMemberSearchForm">
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.findPlaceholder} className="input" />
+                <div className="fdMemberSearchActions">
+                  <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={searchDisabled}>
+                    {loading ? t.searching : t.findBtn}
+                  </button>
+                  <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => void openAllMembersModal()} disabled={allMembersLoading}>
+                    {allMembersLoading ? t.allMembersLoading : t.findAllBtn}
                   </button>
                 </div>
-              ))}
-              <button type="button" className="fdPillBtn" onClick={() => setCustomRows((prev) => [...prev, { key: "", value: "" }])}>
-                {t.addField}
-              </button>
-              <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={creating}>
-                {creating ? t.creatingBtn : t.createBtn}
-              </button>
-            </form>
-            <p className="fdGlassText" style={{ marginTop: 10, fontSize: 12 }}>{t.continueHint}</p>
-            {embedded ? quickActionsContent : null}
-          </div>
-        </section>
+              </form>
+            </section>
 
-        {!embedded ? quickActionsContent : null}
-        {!embedded ? resultContent : null}
+            <section className="fdGlassSubPanel fdMemberResultPanel fdMemberDeskPanel">
+              <div className="fdMemberPanelHead">
+                <h2 className="sectionTitle">{t.resultTitle}</h2>
+                <span className="fdMemberResultCount">{items.length}</span>
+              </div>
+              {items.length === 0 ? (
+                <p className="fdMemberResultEmpty">{resultEmptyText}</p>
+              ) : (
+                <div className="fdMemberResultList">
+                  {items.map((item) => {
+                    const selected = item.id === selectedAllMemberId;
+                    return (
+                      <article
+                        key={item.id}
+                        className={`fdMemberResultItem ${selected ? "isActive" : ""} ${item.id === recentCreatedId ? "isRecent" : ""}`}
+                      >
+                        <button
+                          type="button"
+                          className="fdMemberResultSelect"
+                          onClick={() => {
+                            setSelectedAllMemberId(item.id);
+                            if (allMembers.length === 0) {
+                              void openAllMembersModal();
+                            } else {
+                              setAllMembersOpen(true);
+                            }
+                          }}
+                        >
+                          <div className="fdMemberResultNameRow">
+                            <h3 className="fdMemberResultName">{item.full_name}</h3>
+                            <span className="fdMemberResultOpen">{uiText.resultOpen}</span>
+                          </div>
+                          <p className="fdMemberResultMeta">{item.phone || "-"}</p>
+                          <p className="fdMemberResultMeta">{item.email || "-"}</p>
+                          <p className="fdMemberResultMeta">{t.status}: {memberStatusLabel(item.status)}</p>
+                          <p className="fdMemberResultMeta">{t.portalStatus}: {portalStatusLabel(item.portal_status)}</p>
+                          <p className="fdMemberResultMeta">{t.portalActivatedAt}: {fmtDateTime(item.portal_activated_at || null)}</p>
+                          <p className="fdMemberResultMeta">{t.portalLastSentAt}: {fmtDateTime(item.portal_last_activation_sent_at || null)}</p>
+                        </button>
+                        <div className="fdMemberResultFooter">
+                          <button
+                            type="button"
+                            className="fdPillBtn"
+                            disabled={activationSendingMemberId === item.id}
+                            onClick={() => void sendActivationEmailForMember(item)}
+                          >
+                            {activationSendingMemberId === item.id ? t.sendingActivationEmail : t.sendActivationEmail}
+                          </button>
+                        </div>
+                        {item.custom_fields && Object.keys(item.custom_fields).length > 0 ? (
+                          <div className="fdMemberResultCustomWrap">
+                            <p className="fdMemberResultCustomTitle">{t.customInfo}</p>
+                            <div className="fdMemberResultCustomList">
+                              {Object.entries(item.custom_fields).map(([key, value]) => (
+                                <span key={`${item.id}-${key}`} className="fdChip">{key}: {value}</span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </aside>
+
+          <section className="fdGlassSubPanel fdMemberCreatePanel fdMemberDeskPanel">
+            <h2 className="sectionTitle">{t.createTitle}</h2>
+            <form onSubmit={createMember} className="fdMemberCreateForm">
+              <section className="fdMemberFormSection">
+                <h3 className="fdMemberSectionTitle">{uiText.sectionBasic}</h3>
+                <div className="fdMemberFormGrid">
+                  <label className="fdMemberField">
+                    <span className="kvLabel">{t.createName}</span>
+                    <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.createName} className="input" required />
+                  </label>
+                  <label className="fdMemberField">
+                    <span className="kvLabel">{t.createPhone}</span>
+                    <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.createPhone} className="input" required />
+                  </label>
+                  <label className="fdMemberField">
+                    <span className="kvLabel">{t.createEmail}</span>
+                    <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.createEmail} className="input" />
+                  </label>
+                  <label className="fdMemberField">
+                    <span className="kvLabel">{t.createBirthDate}</span>
+                    <div className="fdBirthDateField">
+                      <input
+                        id="fd-member-birth-date"
+                        type="date"
+                        value={birthDate}
+                        onChange={(e) => setBirthDate(e.target.value)}
+                        className="input"
+                        aria-label={t.createBirthDate}
+                        max={new Date().toISOString().slice(0, 10)}
+                        style={{ paddingRight: 116 }}
+                      />
+                      <span className="kvLabel fdBirthDateTag">{t.createBirthDateTag}</span>
+                    </div>
+                  </label>
+                  <label className="fdMemberField fdMemberFieldWide">
+                    <span className="kvLabel">{t.createGender}</span>
+                    <input value={gender} onChange={(e) => setGender(e.target.value)} placeholder={t.createGender} className="input" />
+                  </label>
+                </div>
+              </section>
+
+              <section className="fdMemberFormSection">
+                <h3 className="fdMemberSectionTitle">{uiText.sectionEmergency}</h3>
+                <div className="fdMemberFormGrid">
+                  <label className="fdMemberField">
+                    <span className="kvLabel">{t.emergencyName}</span>
+                    <input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder={t.emergencyName} className="input" />
+                  </label>
+                  <label className="fdMemberField">
+                    <span className="kvLabel">{t.emergencyPhone}</span>
+                    <input value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder={t.emergencyPhone} className="input" />
+                  </label>
+                </div>
+              </section>
+
+              <section className="fdMemberFormSection">
+                <h3 className="fdMemberSectionTitle">{uiText.sectionNote}</h3>
+                <div className="fdMemberFormGrid">
+                  <label className="fdMemberField fdMemberFieldWide">
+                    <span className="kvLabel">{t.leadSource}</span>
+                    <input value={leadSource} onChange={(e) => setLeadSource(e.target.value)} placeholder={t.leadSource} className="input" />
+                  </label>
+                </div>
+              </section>
+
+              <section className="fdMemberFormSection">
+                <div className="fdMemberPanelHead">
+                  <h3 className="fdMemberSectionTitle">{t.customTitle}</h3>
+                  <span className="fdMemberSectionHint">{uiText.sectionCustomHint}</span>
+                </div>
+                <div className="fdMemberCustomList">
+                  {customRows.map((row, idx) => (
+                    <div key={`${idx}-${row.key}`} className="fdMemberCustomRow">
+                      <input
+                        value={row.key}
+                        onChange={(e) => setCustomRows((prev) => prev.map((it, i) => (i === idx ? { ...it, key: e.target.value } : it)))}
+                        placeholder={t.customKey}
+                        className="input"
+                      />
+                      <input
+                        value={row.value}
+                        onChange={(e) => setCustomRows((prev) => prev.map((it, i) => (i === idx ? { ...it, value: e.target.value } : it)))}
+                        placeholder={t.customValue}
+                        className="input"
+                      />
+                      <button
+                        type="button"
+                        className="fdPillBtn fdMemberCustomRemoveBtn"
+                        onClick={() => setCustomRows((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))}
+                      >
+                        {t.removeField}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className="fdPillBtn fdPillBtnGhost fdMemberCustomAddBtn" onClick={() => setCustomRows((prev) => [...prev, { key: "", value: "" }])}>
+                  + {t.addField}
+                </button>
+              </section>
+
+              <div className="fdMemberCreateFooter">
+                <button
+                  type="button"
+                  className="fdPillBtn fdPillBtnGhost"
+                  onClick={clearCreateForm}
+                  disabled={creating || !createFormHasValue}
+                >
+                  {uiText.clearForm}
+                </button>
+                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={creating}>
+                  {creating ? t.creatingBtn : t.createBtn}
+                </button>
+              </div>
+            </form>
+            <p className="fdGlassText fdMemberContinueHint">{t.continueHint}</p>
+            {quickActionsContent}
+          </section>
+        </section>
 
         {allMembersOpen && portalReady ? createPortal(
           <div className="fdModalBackdrop fdNestedMemberBackdrop" onClick={() => setAllMembersOpen(false)} role="presentation">
