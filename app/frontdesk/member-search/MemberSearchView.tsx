@@ -843,10 +843,13 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
   const resultEmptyText = searchKeyword ? uiText.resultNoMatch : uiText.resultIdle;
 
   return (
-    <main className={embedded ? "fdEmbedScene" : "fdGlassScene"} style={embedded ? { width: "100%", margin: 0, padding: 0 } : undefined}>
+    <main
+      className={embedded ? "fdEmbedScene" : "fdGlassScene"}
+      style={embedded ? { width: "100%", margin: 0, padding: 0, height: "100%", minHeight: 0, display: "flex", flexDirection: "column" } : undefined}
+    >
       <section
         className={`${embedded ? "fdEmbedBackdrop" : "fdGlassBackdrop"} fdMemberDeskLayout ${embedded ? "fdMemberDeskLayoutEmbedded" : ""}`}
-        style={embedded ? { minHeight: "100%", height: "100%", padding: 12 } : undefined}
+        style={embedded ? { flex: 1, minHeight: 0, height: "100%", padding: 12 } : undefined}
       >
         <header className="fdGlassSubPanel fdMemberDeskToolbar">
           <div className="fdMemberDeskToolbarLeft">
