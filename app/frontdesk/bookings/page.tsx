@@ -1,8 +1,20 @@
 ﻿"use client";
 
-import { DragEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useI18n } from "../../i18n-provider";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 
 interface BookingItem {
   id: string;
@@ -56,6 +68,40 @@ interface AuditItem {
   actor_id: string;
 }
 
+interface SessionRedemptionItem {
+  id: string;
+  booking_id: string | null;
+  member_id: string;
+  pass_id: string | null;
+  session_no: number | null;
+  redeemed_kind: string;
+  quantity: number;
+  note: string | null;
+  created_at: string;
+}
+
+interface CoachBlockItem {
+  id: string;
+  coach_id: string;
+  starts_at: string;
+  ends_at: string;
+  reason: string;
+  note: string | null;
+  status: string;
+}
+
+interface WaitlistItem {
+  id: string;
+  member_id: string | null;
+  contact_name: string;
+  contact_phone: string | null;
+  desired_date: string | null;
+  desired_time: string | null;
+  note: string | null;
+  status: string;
+  created_at: string;
+}
+
 type DraftMode = "sessionDrop" | "quickCreate" | "reschedule";
 
 interface BookingDraft {
@@ -101,12 +147,13 @@ type DragPayload =
       durationMinutes: number;
       note: string;
     };
+type SlotDropData = { coachId: string; timeLabel: string };
 
-const DRAG_MIME = "application/x-frontdesk-booking";
 const DAY_START_MINUTE = 6 * 60;
 const DAY_END_MINUTE = 23 * 60;
 const SLOT_MINUTE = 30;
 const SLOT_HEIGHT = 34;
+const ACTIVE_BOOKING_STATUSES = ["booked", "checked_in"] as const;
 
 function fmtDate(value: string) {
   const date = new Date(value);
@@ -250,6 +297,115 @@ function sanitizePhoneQuery(input: string) {
   return input.replace(/\D/g, "");
 }
 
+function parseSessionNoFromNote(note: string | null) {
+  if (!note) return null;
+  const match = note.match(/session_no:(\d+)/i);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function decodeWaitlistInput(input: string) {
+  const raw = input.trim();
+  if (!raw) return null;
+  const chunks = raw.split(/[|,]/).map((value) => value.trim()).filter(Boolean);
+  if (chunks.length === 0) return null;
+  const [contactName, contactPhoneRaw, desiredTimeRaw, ...rest] = chunks;
+  const contactPhoneDigits = sanitizePhoneQuery(contactPhoneRaw || "");
+  const desiredTime = desiredTimeRaw && /^\d{2}:\d{2}$/.test(desiredTimeRaw) ? desiredTimeRaw : null;
+  return {
+    contactName: contactName || raw,
+    contactPhone: contactPhoneDigits || null,
+    desiredTime,
+    note: rest.join(" ").trim() || raw,
+  };
+}
+
+function DraggableSessionPill(props: {
+  id: string;
+  payload: DragPayload;
+  disabled: boolean;
+  used: boolean;
+  label: string;
+  helper: string;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: props.id,
+    data: { payload: props.payload },
+    disabled: props.disabled,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`fdBkSessionPill ${props.used ? "is-used" : ""} ${isDragging ? "is-dragging" : ""}`}
+      style={{ transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.55 : 1 }}
+      {...attributes}
+      {...listeners}
+    >
+      <span>{props.label}</span>
+      <small>{props.helper}</small>
+    </div>
+  );
+}
+
+function DraggableBookingEvent(props: {
+  id: string;
+  payload: DragPayload;
+  disabled: boolean;
+  className: string;
+  style: Record<string, string>;
+  onClick: () => void;
+  title: string;
+  subtitle: string;
+  statusText: string;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: props.id,
+    data: { payload: props.payload },
+    disabled: props.disabled,
+  });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      className={`${props.className} ${isDragging ? "is-dragging" : ""}`}
+      style={{
+        ...props.style,
+        transform: CSS.Translate.toString(transform),
+        opacity: isDragging ? 0.55 : 1,
+      }}
+      onClick={props.onClick}
+      {...attributes}
+      {...listeners}
+    >
+      <strong>{props.title}</strong>
+      <span>{props.subtitle}</span>
+      <span>{props.statusText}</span>
+    </button>
+  );
+}
+
+function DroppableSlotCell(props: {
+  id: string;
+  coachId: string;
+  timeLabel: string;
+  onClick: () => void;
+  title: string;
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: props.id,
+    data: { coachId: props.coachId, timeLabel: props.timeLabel },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`fdBkSlotCell ${isOver ? "is-active-drop" : ""}`}
+      onClick={props.onClick}
+      title={props.title}
+    />
+  );
+}
+
 export default function FrontdeskBookingsPage() {
   const searchParams = useSearchParams();
   const { locale } = useI18n();
@@ -259,6 +415,8 @@ export default function FrontdeskBookingsPage() {
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [coaches, setCoaches] = useState<CoachItem[]>([]);
   const [auditItems, setAuditItems] = useState<AuditItem[]>([]);
+  const [coachBlocks, setCoachBlocks] = useState<CoachBlockItem[]>([]);
+  const [memberRedemptions, setMemberRedemptions] = useState<SessionRedemptionItem[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -280,7 +438,7 @@ export default function FrontdeskBookingsPage() {
   const [pendingPassDeduct, setPendingPassDeduct] = useState<Record<string, number>>({});
   const [recentQueries, setRecentQueries] = useState<string[]>([]);
 
-  const [dropCell, setDropCell] = useState<{ coachId: string; timeLabel: string } | null>(null);
+  const [activeDragPayload, setActiveDragPayload] = useState<DragPayload | null>(null);
   const [draft, setDraft] = useState<BookingDraft | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
 
@@ -289,7 +447,22 @@ export default function FrontdeskBookingsPage() {
   const [statusReason, setStatusReason] = useState("");
 
   const [waitlistInput, setWaitlistInput] = useState("");
-  const [waitlist, setWaitlist] = useState<string[]>([]);
+  const [waitlist, setWaitlist] = useState<WaitlistItem[]>([]);
+
+  const [blockCoachId, setBlockCoachId] = useState("");
+  const [blockStartsLocal, setBlockStartsLocal] = useState("");
+  const [blockEndsLocal, setBlockEndsLocal] = useState("");
+  const [blockReason, setBlockReason] = useState("");
+  const [blockNote, setBlockNote] = useState("");
+  const [editingBlockId, setEditingBlockId] = useState("");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 6,
+      },
+    }),
+  );
 
   const prefillMemberId = (searchParams.get("memberId") || "").trim();
 
@@ -351,17 +524,33 @@ export default function FrontdeskBookingsPage() {
     return map;
   }, [dayBookings]);
 
+  const blocksByCoach = useMemo(() => {
+    const map: Record<string, CoachBlockItem[]> = {};
+    for (const block of coachBlocks) {
+      if (block.status !== "active") continue;
+      if (!map[block.coach_id]) map[block.coach_id] = [];
+      map[block.coach_id].push(block);
+    }
+    for (const key of Object.keys(map)) {
+      map[key] = map[key].sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+    }
+    return map;
+  }, [coachBlocks]);
+
   const unassignedBookings = bookingsByCoach.__unassigned__ || [];
 
   const coachSummary = useMemo(() => {
     return coachOptions.map((coach) => {
       const list = bookingsByCoach[coach.id] || [];
+      const blockList = blocksByCoach[coach.id] || [];
       const bookedCount = list.filter((item) => isActiveForConflict(item.status)).length;
       let nextFree = "--";
       for (const slot of timeSlots) {
         const slotStart = localDatetimeToIso(localDateTimeFrom(dateKey, slot));
         const slotEnd = localDatetimeToIso(addMinutesToLocalDate(localDateTimeFrom(dateKey, slot), 60));
-        const hasConflict = list.some((item) => isActiveForConflict(item.status) && overlap(item.starts_at, item.ends_at, slotStart, slotEnd));
+        const hasBookingConflict = list.some((item) => isActiveForConflict(item.status) && overlap(item.starts_at, item.ends_at, slotStart, slotEnd));
+        const hasBlockConflict = blockList.some((item) => overlap(item.starts_at, item.ends_at, slotStart, slotEnd));
+        const hasConflict = hasBookingConflict || hasBlockConflict;
         if (!hasConflict) {
           nextFree = slot;
           break;
@@ -369,17 +558,25 @@ export default function FrontdeskBookingsPage() {
       }
       return { coach, bookedCount, nextFree };
     });
-  }, [bookingsByCoach, coachOptions, dateKey, timeSlots]);
+  }, [blocksByCoach, bookingsByCoach, coachOptions, dateKey, timeSlots]);
 
   const selectedMemberContracts = useMemo(() => {
     return memberPasses.map((pass) => {
       const total = parsePassTotal(pass.pass_type);
+      const usedRows = memberRedemptions
+        .filter((item) => item.pass_id === pass.id)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      const usedSessionNumbers = new Set<number>();
+      usedRows.forEach((item, index) => {
+        const no = item.session_no || parseSessionNoFromNote(item.note) || index + 1;
+        if (no > 0) usedSessionNumbers.add(no);
+      });
       const pending = pendingPassDeduct[pass.id] || 0;
       const remaining = Math.max(0, Number(pass.remaining || 0) - pending);
-      const fallbackTotal = total ?? remaining;
-      return { pass, total, fallbackTotal, remaining };
+      const fallbackTotal = total ?? Math.max(remaining + usedSessionNumbers.size, remaining);
+      return { pass, total, fallbackTotal, remaining, usedSessionNumbers };
     });
-  }, [memberPasses, pendingPassDeduct]);
+  }, [memberPasses, memberRedemptions, pendingPassDeduct]);
 
   const loadRecentQueries = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -403,21 +600,11 @@ export default function FrontdeskBookingsPage() {
     });
   }, []);
 
-  const loadWaitlist = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const raw = window.localStorage.getItem("frontdesk_booking_waitlist");
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as string[];
-      if (Array.isArray(parsed)) setWaitlist(parsed.filter((item) => typeof item === "string").slice(0, 12));
-    } catch {
-      // ignore malformed cache
-    }
-  }, []);
-
-  const saveWaitlist = useCallback((next: string[]) => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("frontdesk_booking_waitlist", JSON.stringify(next.slice(0, 12)));
+  const loadWaitlist = useCallback(async (targetDate: string) => {
+    const res = await fetch(`/api/frontdesk/booking-waitlist?date=${encodeURIComponent(targetDate)}&limit=20`, { cache: "no-store" });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return;
+    setWaitlist((payload.items || []) as WaitlistItem[]);
   }, []);
 
   const loadAudit = useCallback(async () => {
@@ -466,6 +653,18 @@ export default function FrontdeskBookingsPage() {
     [zh],
   );
 
+  const loadCoachBlocksByDate = useCallback(
+    async (targetDate: string) => {
+      const from = encodeURIComponent(startOfDayIso(targetDate));
+      const to = encodeURIComponent(endOfDayIso(targetDate));
+      const res = await fetch(`/api/frontdesk/coach-blocks?from=${from}&to=${to}`, { cache: "no-store" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      setCoachBlocks((payload.items || []) as CoachBlockItem[]);
+    },
+    [],
+  );
+
   const loadMemberContracts = useCallback(
     async (memberId: string) => {
       if (!memberId) return;
@@ -481,9 +680,8 @@ export default function FrontdeskBookingsPage() {
           throw new Error(passesPayload?.error || (zh ? "載入合約失敗" : "Load member contracts failed"));
         }
         setMemberPasses((passesPayload.items || []) as PassItem[]);
-        if (!redemptionsRes.ok) {
-          setMessage(redemptionsPayload?.error || null);
-        }
+        if (redemptionsRes.ok) setMemberRedemptions((redemptionsPayload.items || []) as SessionRedemptionItem[]);
+        else setMessage(redemptionsPayload?.error || null);
       } finally {
         setLoadingPasses(false);
       }
@@ -496,21 +694,20 @@ export default function FrontdeskBookingsPage() {
       setLoading(true);
       setError(null);
       try {
-        await Promise.all([loadMasterData(), loadBookingsByDate(targetDate), loadAudit()]);
+        await Promise.all([loadMasterData(), loadBookingsByDate(targetDate), loadCoachBlocksByDate(targetDate), loadAudit(), loadWaitlist(targetDate)]);
       } catch (err) {
         setError(err instanceof Error ? err.message : zh ? "載入失敗" : "Load failed");
       } finally {
         setLoading(false);
       }
     },
-    [loadAudit, loadBookingsByDate, loadMasterData, zh],
+    [loadAudit, loadBookingsByDate, loadCoachBlocksByDate, loadMasterData, loadWaitlist, zh],
   );
 
   useEffect(() => {
     loadRecentQueries();
-    loadWaitlist();
     void loadAll(dateKey);
-  }, [dateKey, loadAll, loadRecentQueries, loadWaitlist]);
+  }, [dateKey, loadAll, loadRecentQueries]);
 
   useEffect(() => {
     if (!prefillMemberId) return;
@@ -649,33 +846,25 @@ export default function FrontdeskBookingsPage() {
     setDraftError(null);
   }
 
-  function parseDragPayload(event: DragEvent<HTMLElement>) {
-    const raw = event.dataTransfer.getData(DRAG_MIME);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as DragPayload;
-    } catch {
-      return null;
-    }
+  function handleDragStart(event: DragStartEvent) {
+    const payload = (event.active.data.current?.payload || null) as DragPayload | null;
+    setActiveDragPayload(payload);
   }
 
-  function handleSlotDragOver(event: DragEvent<HTMLDivElement>, coachId: string, timeLabel: string) {
-    const payload = parseDragPayload(event);
-    if (!payload) return;
-    event.preventDefault();
-    setDropCell({ coachId, timeLabel });
+  function handleDragCancel() {
+    setActiveDragPayload(null);
   }
 
-  function handleSlotDrop(event: DragEvent<HTMLDivElement>, coachId: string, timeLabel: string) {
-    event.preventDefault();
-    const payload = parseDragPayload(event);
-    setDropCell(null);
-    if (!payload) return;
+  function handleDragEnd(event: DragEndEvent) {
+    const payload = (event.active.data.current?.payload || null) as DragPayload | null;
+    const overData = (event.over?.data.current || null) as SlotDropData | null;
+    setActiveDragPayload(null);
+    if (!payload || !overData?.coachId || !overData?.timeLabel) return;
     if (payload.kind === "pass_session") {
-      openSessionDropDraft(payload, coachId, timeLabel);
+      openSessionDropDraft(payload, overData.coachId, overData.timeLabel);
       return;
     }
-    openRescheduleDraft(payload, coachId, timeLabel);
+    openRescheduleDraft(payload, overData.coachId, overData.timeLabel);
   }
 
   function handleCalendarCellClick(coachId: string, timeLabel: string) {
@@ -690,6 +879,11 @@ export default function FrontdeskBookingsPage() {
     room: string;
     ignoreBookingId?: string | null;
   }) {
+    const coachBlocked = coachBlocks.find((item) => {
+      if (item.status !== "active") return false;
+      if (item.coach_id !== params.coachId) return false;
+      return overlap(item.starts_at, item.ends_at, params.startsAt, params.endsAt);
+    });
     const coachConflict = dayBookings.find((item) => {
       if (params.ignoreBookingId && item.id === params.ignoreBookingId) return false;
       if (!isActiveForConflict(item.status) && !isBlockedBooking(item)) return false;
@@ -709,7 +903,7 @@ export default function FrontdeskBookingsPage() {
           return parseRoomFromNote(item.note) === params.room && overlap(item.starts_at, item.ends_at, params.startsAt, params.endsAt);
         })
       : null;
-    return { coachConflict, memberConflict, roomConflict };
+    return { coachConflict, memberConflict, roomConflict, coachBlocked };
   }
 
   async function createBookingApi(input: {
@@ -740,6 +934,7 @@ export default function FrontdeskBookingsPage() {
   async function patchBookingApi(input: {
     bookingId: string;
     status?: string;
+    coachId?: string | null;
     startsAt?: string;
     endsAt?: string;
     note?: string | null;
@@ -750,6 +945,7 @@ export default function FrontdeskBookingsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         status: input.status,
+        coachId: input.coachId,
         startsAt: input.startsAt,
         endsAt: input.endsAt,
         note: input.note,
@@ -761,7 +957,7 @@ export default function FrontdeskBookingsPage() {
     return payload?.booking as BookingItem | undefined;
   }
 
-  async function redeemPass(input: { bookingId: string; memberId: string; passId: string }) {
+  async function redeemPass(input: { bookingId: string; memberId: string; passId: string; sessionNo: number | null }) {
     const res = await fetch("/api/session-redemptions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -770,8 +966,9 @@ export default function FrontdeskBookingsPage() {
         memberId: input.memberId,
         redeemedKind: "pass",
         passId: input.passId,
+        sessionNo: input.sessionNo,
         quantity: 1,
-        note: zh ? "前台排課扣堂" : "Frontdesk booking redemption",
+        note: `${zh ? "前台排課扣堂" : "Frontdesk booking redemption"}${input.sessionNo ? ` session_no:${input.sessionNo}` : ""}`,
       }),
     });
     const payload = await res.json().catch(() => ({}));
@@ -799,6 +996,19 @@ export default function FrontdeskBookingsPage() {
         templateKey: "frontdesk_booking_schedule",
       }),
     });
+  }
+
+  async function queueBookingSync(input: { bookingId: string; eventType: string; payload?: Record<string, unknown> }) {
+    await fetch("/api/frontdesk/booking-sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bookingId: input.bookingId,
+        provider: "google_calendar",
+        eventType: input.eventType,
+        payload: input.payload || {},
+      }),
+    }).catch(() => null);
   }
 
   async function confirmDraft() {
@@ -831,7 +1041,7 @@ export default function FrontdeskBookingsPage() {
       return;
     }
 
-    const { coachConflict, memberConflict, roomConflict } = detectConflicts({
+    const { coachConflict, memberConflict, roomConflict, coachBlocked } = detectConflicts({
       memberId: draft.memberId,
       coachId: draft.coachId,
       startsAt,
@@ -840,9 +1050,10 @@ export default function FrontdeskBookingsPage() {
       ignoreBookingId: draft.mode === "reschedule" ? draft.sourceBookingId : null,
     });
 
-    if (coachConflict || memberConflict || roomConflict) {
+    if (coachConflict || memberConflict || roomConflict || coachBlocked) {
       const messages: string[] = [];
       if (coachConflict) messages.push(zh ? "教練同時段已有課程或封鎖時段。" : "Coach has overlap / blocked slot.");
+      if (coachBlocked) messages.push(zh ? "教練該時段已封鎖。" : "Coach is blocked for this slot.");
       if (memberConflict) messages.push(zh ? "會員同時段已有預約。" : "Member already has overlapping booking.");
       if (roomConflict) messages.push(zh ? "場地同時段已被使用。" : "Room is occupied for this slot.");
       setDraftError(messages.join(" "));
@@ -857,7 +1068,14 @@ export default function FrontdeskBookingsPage() {
 
         const coachChanged = String(original.coach_id || "") !== draft.coachId;
         if (!coachChanged) {
-          await patchBookingApi({ bookingId: draft.sourceBookingId, startsAt, endsAt, note: noteText, reason });
+          const updated = await patchBookingApi({ bookingId: draft.sourceBookingId, startsAt, endsAt, note: noteText, reason, coachId: draft.coachId });
+          if (updated?.id) {
+            await queueBookingSync({
+              bookingId: updated.id,
+              eventType: "upsert",
+              payload: { source: "frontdesk_reschedule", startsAt, endsAt, coachId: draft.coachId },
+            });
+          }
           if (draft.notifyMember) {
             await sendBookingNotification({
               memberId: draft.memberId,
@@ -886,10 +1104,20 @@ export default function FrontdeskBookingsPage() {
               note: `${stripRoomFromNote(original.note)} [rescheduled]`.trim(),
               reason: `${reason} | rescheduled_to:${created.id}`,
             });
+            await queueBookingSync({
+              bookingId: draft.sourceBookingId,
+              eventType: "cancel",
+              payload: { source: "frontdesk_reschedule", movedTo: created.id },
+            });
           } catch (rollbackErr) {
             await patchBookingApi({ bookingId: created.id, status: "cancelled", reason: "rollback_reschedule_failed" }).catch(() => null);
             throw rollbackErr;
           }
+          await queueBookingSync({
+            bookingId: created.id,
+            eventType: "upsert",
+            payload: { source: "frontdesk_reschedule", startsAt, endsAt, coachId: draft.coachId },
+          });
           setMessage(zh ? "預約已改期（跨教練）。" : "Booking moved to another coach.");
         }
       } else {
@@ -902,10 +1130,20 @@ export default function FrontdeskBookingsPage() {
           note: noteText,
         });
         if (!created?.id) throw new Error(zh ? "建立預約失敗。" : "Failed to create booking.");
+        await queueBookingSync({
+          bookingId: created.id,
+          eventType: "upsert",
+          payload: { source: "frontdesk_create", startsAt, endsAt, coachId: draft.coachId },
+        });
 
         if (draft.mode === "sessionDrop" && draft.passId) {
           try {
-            await redeemPass({ bookingId: created.id, memberId: draft.memberId, passId: draft.passId });
+            await redeemPass({
+              bookingId: created.id,
+              memberId: draft.memberId,
+              passId: draft.passId,
+              sessionNo: draft.sessionNumber || null,
+            });
             setPendingPassDeduct((prev) => ({ ...prev, [draft.passId as string]: (prev[draft.passId as string] || 0) + 1 }));
           } catch (redeemErr) {
             await patchBookingApi({
@@ -959,10 +1197,37 @@ export default function FrontdeskBookingsPage() {
         note: statusValue === "cancelled" && booking ? `${stripRoomFromNote(booking.note)} [manual-cancelled]`.trim() : booking?.note || null,
         reason: statusReason.trim(),
       });
+      await queueBookingSync({
+        bookingId: statusBookingId,
+        eventType: statusValue === "cancelled" ? "cancel" : "upsert",
+        payload: { source: "frontdesk_status_update", status: statusValue },
+      });
       setMessage(zh ? "預約狀態已更新。" : "Booking status updated.");
       setStatusReason("");
       await loadBookingsByDate(dateKey);
       await loadAudit();
+      if (statusValue === "cancelled" && waitlist.length > 0) {
+        const nextCandidate = waitlist[0];
+        if (nextCandidate.contact_phone) {
+          await fetch("/api/notify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              channel: "sms",
+              target: sanitizePhoneQuery(nextCandidate.contact_phone),
+              message: zh ? "有候補時段釋出，請盡快與櫃檯確認。" : "A waitlist slot is now available, please confirm with frontdesk.",
+              memberId: nextCandidate.member_id,
+              templateKey: "frontdesk_waitlist_open_slot",
+            }),
+          }).catch(() => null);
+        }
+        await fetch(`/api/frontdesk/booking-waitlist/${encodeURIComponent(nextCandidate.id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "notified", note: "auto_notified_by_cancel" }),
+        }).catch(() => null);
+        await loadWaitlist(dateKey);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : zh ? "更新失敗" : "Update failed");
     } finally {
@@ -974,19 +1239,117 @@ export default function FrontdeskBookingsPage() {
     setCoachVisible((prev) => ({ ...prev, [coachId]: !(prev[coachId] ?? true) }));
   }
 
-  function addWaitlistItem() {
-    const value = waitlistInput.trim();
-    if (!value) return;
-    const next = [value, ...waitlist].slice(0, 12);
-    setWaitlist(next);
-    saveWaitlist(next);
+  async function addWaitlistItem() {
+    const parsed = decodeWaitlistInput(waitlistInput);
+    if (!parsed) return;
+    const payload = {
+      memberId: selectedMember?.id || null,
+      contactName: selectedMember?.full_name || parsed.contactName,
+      contactPhone: selectedMember?.phone || parsed.contactPhone,
+      desiredDate: dateKey,
+      desiredTime: parsed.desiredTime,
+      note: parsed.note,
+    };
+    await fetch("/api/frontdesk/booking-waitlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => null);
+    await loadWaitlist(dateKey);
     setWaitlistInput("");
   }
 
-  function removeWaitlistItem(index: number) {
-    const next = waitlist.filter((_, i) => i !== index);
-    setWaitlist(next);
-    saveWaitlist(next);
+  async function removeWaitlistItem(waitlistId: string) {
+    const target = waitlist.find((item) => item.id === waitlistId);
+    if (!target) return;
+    await fetch(`/api/frontdesk/booking-waitlist/${encodeURIComponent(target.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancelled", note: "removed_from_frontdesk" }),
+    }).catch(() => null);
+    await loadWaitlist(dateKey);
+  }
+
+  async function submitCoachBlock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!blockCoachId || !blockStartsLocal || !blockEndsLocal || !blockReason.trim()) {
+      setError(zh ? "請填寫完整封鎖欄位。" : "Please complete the block form.");
+      return;
+    }
+    const startsAt = localDatetimeToIso(blockStartsLocal);
+    const endsAt = localDatetimeToIso(blockEndsLocal);
+    if (!startsAt || !endsAt || new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+      setError(zh ? "封鎖時間格式無效。" : "Invalid block time range.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/frontdesk/coach-blocks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coachId: blockCoachId,
+          startsAt,
+          endsAt,
+          reason: blockReason.trim(),
+          note: blockNote.trim() || null,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || (zh ? "建立封鎖失敗。" : "Create block failed."));
+      setBlockStartsLocal("");
+      setBlockEndsLocal("");
+      setBlockReason("");
+      setBlockNote("");
+      setEditingBlockId("");
+      await loadCoachBlocksByDate(dateKey);
+      setMessage(zh ? "封鎖時段已建立。" : "Blocked slot saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : zh ? "建立封鎖失敗。" : "Create block failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function clearCoachBlock() {
+    if (!blockCoachId || !blockStartsLocal || !blockEndsLocal) {
+      setBlockCoachId("");
+      setBlockStartsLocal("");
+      setBlockEndsLocal("");
+      setBlockReason("");
+      setBlockNote("");
+      setEditingBlockId("");
+      return;
+    }
+    const target = coachBlocks.find((item) => item.id === editingBlockId && item.status === "active");
+    if (!target) {
+      setBlockCoachId("");
+      setBlockStartsLocal("");
+      setBlockEndsLocal("");
+      setBlockReason("");
+      setBlockNote("");
+      setEditingBlockId("");
+      return;
+    }
+    setSaving(true);
+    try {
+      await fetch(`/api/frontdesk/coach-blocks/${encodeURIComponent(target.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled", note: zh ? "前台取消封鎖" : "Cancelled by frontdesk" }),
+      }).catch(() => null);
+      await loadCoachBlocksByDate(dateKey);
+      setMessage(zh ? "封鎖時段已取消。" : "Blocked slot cancelled.");
+    } finally {
+      setSaving(false);
+      setBlockCoachId("");
+      setBlockStartsLocal("");
+      setBlockEndsLocal("");
+      setBlockReason("");
+      setBlockNote("");
+      setEditingBlockId("");
+    }
   }
 
   return (
@@ -1013,8 +1376,9 @@ export default function FrontdeskBookingsPage() {
         {error ? <div className="error" style={{ marginTop: 10 }}>{error}</div> : null}
         {message ? <p className="sub" style={{ marginTop: 10, color: "var(--brand)" }}>{message}</p> : null}
 
-        <section className="fdBkLayout">
-          <aside className="fdGlassSubPanel fdBkSidebar">
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
+          <section className="fdBkLayout">
+            <aside className="fdGlassSubPanel fdBkSidebar">
             <section className="fdBkCard">
               <h2 className="sectionTitle" style={{ margin: 0 }}>{zh ? "會員搜尋" : "Member Search"}</h2>
               <form onSubmit={handleMemberSearchSubmit} className="fdBkMemberSearchForm">
@@ -1074,9 +1438,8 @@ export default function FrontdeskBookingsPage() {
               {loadingPasses ? <p className="fdGlassText">{zh ? "載入合約..." : "Loading contracts..."}</p> : null}
               {!loadingPasses && selectedMember && selectedMemberContracts.length === 0 ? <p className="fdGlassText">{zh ? "無教練課程合約。" : "No active contract."}</p> : null}
               {!selectedMember ? <p className="fdGlassText">{zh ? "請先選擇會員。" : "Please select member first."}</p> : null}
-              {selectedMemberContracts.map(({ pass, total, remaining, fallbackTotal }) => {
+              {selectedMemberContracts.map(({ pass, total, remaining, fallbackTotal, usedSessionNumbers }) => {
                 const expanded = expandedPasses[pass.id] ?? false;
-                const usedCount = Math.max(0, fallbackTotal - remaining);
                 return (
                   <article key={pass.id} className="fdBkPassCard">
                     <button type="button" className="fdBkPassHead" onClick={() => setExpandedPasses((prev) => ({ ...prev, [pass.id]: !expanded }))}>
@@ -1090,34 +1453,29 @@ export default function FrontdeskBookingsPage() {
                       <div className="fdBkPassSessions">
                         {Array.from({ length: fallbackTotal }, (_, index) => {
                           const no = index + 1;
-                          const used = no <= usedCount;
+                          const used = usedSessionNumbers.has(no);
                           const dragDisabled = used || !selectedMember;
                           return (
-                            <div
+                            <DraggableSessionPill
                               key={`${pass.id}-${no}`}
-                              className={`fdBkSessionPill ${used ? "is-used" : ""}`}
-                              draggable={!dragDisabled}
-                              onDragStart={(event) => {
-                                if (dragDisabled || !selectedMember) return;
-                                const payload: DragPayload = {
-                                  kind: "pass_session",
-                                  memberId: selectedMember.id,
-                                  memberName: selectedMember.full_name || selectedMember.id,
-                                  memberPhone: selectedMember.phone || "",
-                                  passId: pass.id,
-                                  passType: pass.pass_type,
-                                  passTotal: total,
-                                  passRemaining: remaining,
-                                  sessionNumber: no,
-                                  serviceName: serviceOptions[0]?.value || "",
-                                };
-                                event.dataTransfer.effectAllowed = "copyMove";
-                                event.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
+                              id={`session-${pass.id}-${no}`}
+                              disabled={dragDisabled}
+                              used={used}
+                              label={`#${no}`}
+                              helper={used ? (zh ? "已排" : "Used") : (zh ? "可拖拉" : "Drag")}
+                              payload={{
+                                kind: "pass_session",
+                                memberId: selectedMember?.id || "",
+                                memberName: selectedMember?.full_name || selectedMember?.id || "",
+                                memberPhone: selectedMember?.phone || "",
+                                passId: pass.id,
+                                passType: pass.pass_type,
+                                passTotal: total,
+                                passRemaining: remaining,
+                                sessionNumber: no,
+                                serviceName: serviceOptions[0]?.value || "",
                               }}
-                            >
-                              <span>#{no}</span>
-                              <small>{used ? (zh ? "已排" : "Used") : (zh ? "可拖拉" : "Drag")}</small>
-                            </div>
+                            />
                           );
                         })}
                       </div>
@@ -1147,16 +1505,61 @@ export default function FrontdeskBookingsPage() {
             </section>
 
             <section className="fdBkCard">
+              <h3 className="sectionTitle" style={{ margin: 0 }}>{zh ? "封鎖時段（教練不可排）" : "Coach Blocked Slots"}</h3>
+              <form onSubmit={submitCoachBlock} className="fdBkStatusForm">
+                <select className="input" value={blockCoachId} onChange={(event) => { setBlockCoachId(event.target.value); if (editingBlockId) setEditingBlockId(""); }} required>
+                  <option value="">{zh ? "選擇教練" : "Select coach"}</option>
+                  {coaches.map((coach) => (
+                    <option key={coach.id} value={coach.id}>{coach.displayName || coach.id}</option>
+                  ))}
+                </select>
+                <input
+                  type="datetime-local"
+                  className="input"
+                  value={blockStartsLocal}
+                  onChange={(event) => { setBlockStartsLocal(event.target.value); if (editingBlockId) setEditingBlockId(""); }}
+                  required
+                />
+                <input
+                  type="datetime-local"
+                  className="input"
+                  value={blockEndsLocal}
+                  onChange={(event) => { setBlockEndsLocal(event.target.value); if (editingBlockId) setEditingBlockId(""); }}
+                  required
+                />
+                <input
+                  className="input"
+                  value={blockReason}
+                  onChange={(event) => { setBlockReason(event.target.value); if (editingBlockId) setEditingBlockId(""); }}
+                  placeholder={zh ? "封鎖原因（必填）" : "Reason (required)"}
+                  required
+                />
+                <input
+                  className="input"
+                  value={blockNote}
+                  onChange={(event) => { setBlockNote(event.target.value); if (editingBlockId) setEditingBlockId(""); }}
+                  placeholder={zh ? "備註（選填）" : "Optional note"}
+                />
+                <div className="fdBkInline">
+                  <button type="submit" className="fdPillBtn">{zh ? "建立封鎖" : "Create block"}</button>
+                  <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => void clearCoachBlock()}>
+                    {zh ? "取消封鎖 / 清空" : "Cancel block / Reset"}
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section className="fdBkCard">
               <h3 className="sectionTitle" style={{ margin: 0 }}>{zh ? "候補名單（P2）" : "Waitlist (P2)"}</h3>
               <div className="fdBkInline">
                 <input className="input" value={waitlistInput} onChange={(event) => setWaitlistInput(event.target.value)} placeholder={zh ? "姓名 / 電話 / 時段" : "Name / phone / time"} />
                 <button type="button" className="fdPillBtn" onClick={addWaitlistItem}>+</button>
               </div>
               <div className="fdBkWaitlist">
-                {waitlist.map((item, index) => (
-                  <div key={`${item}-${index}`} className="fdBkWaitRow">
-                    <span>{item}</span>
-                    <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => removeWaitlistItem(index)}>{zh ? "移除" : "Remove"}</button>
+                {waitlist.map((item) => (
+                  <div key={item.id} className="fdBkWaitRow">
+                    <span>{item.contact_name}{item.contact_phone ? ` / ${item.contact_phone}` : ""}{item.desired_time ? ` / ${item.desired_time}` : ""}</span>
+                    <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => void removeWaitlistItem(item.id)}>{zh ? "移除" : "Remove"}</button>
                   </div>
                 ))}
                 {waitlist.length === 0 ? <p className="fdGlassText">{zh ? "尚無候補資料。" : "No waitlist items."}</p> : null}
@@ -1224,19 +1627,46 @@ export default function FrontdeskBookingsPage() {
 
                   {coachOptions.map((coach) => {
                     const coachBookings = bookingsByCoach[coach.id] || [];
+                    const coachBlockItems = blocksByCoach[coach.id] || [];
                     return (
                       <div key={coach.id} className="fdBkCoachColumn">
                         {timeSlots.map((slot) => {
-                          const active = dropCell?.coachId === coach.id && dropCell.timeLabel === slot;
                           return (
-                            <div
+                            <DroppableSlotCell
                               key={`${coach.id}-${slot}`}
-                              className={`fdBkSlotCell ${active ? "is-active-drop" : ""}`}
-                              onDragOver={(event) => handleSlotDragOver(event, coach.id, slot)}
-                              onDrop={(event) => handleSlotDrop(event, coach.id, slot)}
+                              id={`slot-${coach.id}-${slot}`}
+                              coachId={coach.id}
+                              timeLabel={slot}
                               onClick={() => handleCalendarCellClick(coach.id, slot)}
                               title={zh ? "點擊快速建立 / 拖放堂次到此格" : "Click quick-create or drop session here"}
                             />
+                          );
+                        })}
+                        {coachBlockItems.map((block) => {
+                          const startsMinute = minuteFromIso(block.starts_at);
+                          const endsMinute = minuteFromIso(block.ends_at);
+                          const top = ((startsMinute - DAY_START_MINUTE) / SLOT_MINUTE) * SLOT_HEIGHT;
+                          const height = Math.max(((endsMinute - startsMinute) / SLOT_MINUTE) * SLOT_HEIGHT - 2, 24);
+                          if (startsMinute < DAY_START_MINUTE || startsMinute >= DAY_END_MINUTE) return null;
+                          return (
+                            <button
+                              key={block.id}
+                              type="button"
+                              className="fdBkEvent is-blocked"
+                              style={{ top: `${top}px`, height: `${height}px` }}
+                              onClick={() => {
+                                setEditingBlockId(block.id);
+                                setBlockCoachId(block.coach_id);
+                                setBlockStartsLocal(isoToLocalInputValue(block.starts_at));
+                                setBlockEndsLocal(isoToLocalInputValue(block.ends_at));
+                                setBlockReason(block.reason);
+                                setBlockNote(block.note || "");
+                              }}
+                            >
+                              <strong>{zh ? "封鎖時段" : "Blocked"}</strong>
+                              <span>{toTimeLabel(startsMinute)}-{toTimeLabel(endsMinute)}</span>
+                              <span>{block.reason}</span>
+                            </button>
                           );
                         })}
                         {coachBookings.map((item) => {
@@ -1249,36 +1679,30 @@ export default function FrontdeskBookingsPage() {
                           const member = memberMap[item.member_id];
                           const isDraggable = status === "booked" || status === "checked_in";
                           return (
-                            <button
+                            <DraggableBookingEvent
                               key={item.id}
-                              type="button"
+                              id={`booking-${item.id}`}
                               className={`fdBkEvent ${statusClassName(status)}`}
-                              draggable={isDraggable}
+                              disabled={!isDraggable}
                               style={{ top: `${top}px`, height: `${height}px` }}
                               onClick={() => {
                                 setStatusBookingId(item.id);
                                 setStatusReason("");
                                 setStatusValue(item.status);
                               }}
-                              onDragStart={(event) => {
-                                if (!isDraggable) return;
-                                const payload: DragPayload = {
-                                  kind: "booking_event",
-                                  bookingId: item.id,
-                                  memberId: item.member_id,
-                                  serviceName: item.service_name,
-                                  coachId: item.coach_id,
-                                  durationMinutes: Math.max(30, endsMinute - startsMinute),
-                                  note: item.note || "",
-                                };
-                                event.dataTransfer.effectAllowed = "move";
-                                event.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
+                              title={member?.full_name || item.member_id.slice(0, 6)}
+                              subtitle={`${toTimeLabel(startsMinute)}-${toTimeLabel(endsMinute)}`}
+                              statusText={statusLabel(status, zh)}
+                              payload={{
+                                kind: "booking_event",
+                                bookingId: item.id,
+                                memberId: item.member_id,
+                                serviceName: item.service_name,
+                                coachId: item.coach_id,
+                                durationMinutes: Math.max(30, endsMinute - startsMinute),
+                                note: item.note || "",
                               }}
-                            >
-                              <strong>{member?.full_name || item.member_id.slice(0, 6)}</strong>
-                              <span>{toTimeLabel(startsMinute)}-{toTimeLabel(endsMinute)}</span>
-                              <span>{statusLabel(status, zh)}</span>
-                            </button>
+                            />
                           );
                         })}
                       </div>
@@ -1319,8 +1743,18 @@ export default function FrontdeskBookingsPage() {
                 {auditItems.length === 0 ? <p className="fdGlassText">{zh ? "目前沒有稽核紀錄。" : "No audit logs."}</p> : null}
               </div>
             </div>
+            </section>
           </section>
-        </section>
+          <DragOverlay dropAnimation={null}>
+            {activeDragPayload ? (
+              <div className="fdBkDragOverlay">
+                {activeDragPayload.kind === "pass_session"
+                  ? `${activeDragPayload.memberName} / #${activeDragPayload.sessionNumber}`
+                  : `${activeDragPayload.serviceName} / ${activeDragPayload.bookingId.slice(0, 8)}`}
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       </section>
 
       {draft ? (

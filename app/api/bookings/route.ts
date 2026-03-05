@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
 import { requireOpenShift, requireProfile } from "../../../lib/auth-context";
 
+function parseRoomFromNote(note: string | null) {
+  if (!note) return "";
+  const match = note.match(/\[room:([^\]]+)\]/i);
+  return match?.[1]?.trim() || "";
+}
+
+function isMissingCoachBlocksTable(message: string) {
+  return message.includes('relation "coach_blocks" does not exist')
+    || message.includes("Could not find the table 'public.coach_blocks' in the schema cache");
+}
+
 export async function GET(request: Request) {
   const auth = await requireProfile(["manager", "frontdesk", "coach"], request);
   if (!auth.ok) return auth.response;
@@ -49,6 +60,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "endsAt must be after startsAt" }, { status: 400 });
   }
 
+  const memberOverlap = await auth.supabase
+    .from("bookings")
+    .select("id")
+    .eq("tenant_id", auth.context.tenantId)
+    .eq("member_id", memberId)
+    .in("status", ["booked", "checked_in"])
+    .lt("starts_at", endsAt)
+    .gt("ends_at", startsAt)
+    .limit(1)
+    .maybeSingle();
+  if (memberOverlap.error) return NextResponse.json({ error: memberOverlap.error.message }, { status: 500 });
+  if (memberOverlap.data) {
+    return NextResponse.json({ error: "Member time overlaps with another booking" }, { status: 400 });
+  }
+
+  const room = parseRoomFromNote(note);
+  if (room) {
+    const roomCandidates = await auth.supabase
+      .from("bookings")
+      .select("id, note")
+      .eq("tenant_id", auth.context.tenantId)
+      .in("status", ["booked", "checked_in"])
+      .lt("starts_at", endsAt)
+      .gt("ends_at", startsAt)
+      .limit(200);
+    if (roomCandidates.error) return NextResponse.json({ error: roomCandidates.error.message }, { status: 500 });
+    const roomConflict = (roomCandidates.data || []).find((item: { note: string | null }) => parseRoomFromNote(item.note || null) === room);
+    if (roomConflict) {
+      return NextResponse.json({ error: "Room time overlaps with another booking" }, { status: 400 });
+    }
+  }
+
   if (coachId) {
     const coachOverlap = await auth.supabase
       .from("bookings")
@@ -64,6 +107,23 @@ export async function POST(request: Request) {
     if (coachOverlap.error) return NextResponse.json({ error: coachOverlap.error.message }, { status: 500 });
     if (coachOverlap.data) {
       return NextResponse.json({ error: "Coach time overlaps with another booking" }, { status: 400 });
+    }
+
+    const coachBlock = await auth.supabase
+      .from("coach_blocks")
+      .select("id")
+      .eq("tenant_id", auth.context.tenantId)
+      .eq("coach_id", coachId)
+      .eq("status", "active")
+      .lt("starts_at", endsAt)
+      .gt("ends_at", startsAt)
+      .limit(1)
+      .maybeSingle();
+    if (coachBlock.error && !isMissingCoachBlocksTable(coachBlock.error.message)) {
+      return NextResponse.json({ error: coachBlock.error.message }, { status: 500 });
+    }
+    if (!coachBlock.error && coachBlock.data) {
+      return NextResponse.json({ error: "Coach is blocked in this time range" }, { status: 400 });
     }
 
     const slotResult = await auth.supabase

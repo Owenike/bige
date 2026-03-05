@@ -4923,6 +4923,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   gap: 2px;
   cursor: grab;
 }
+.fdBkSessionPill.is-dragging{
+  box-shadow: 0 12px 22px rgba(23, 41, 70, .2);
+}
 .fdBkSessionPill.is-used{
   opacity: .55;
   background: #f2f5f9;
@@ -5087,6 +5090,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .fdBkEvent span{
   font-size: 12px;
 }
+.fdBkEvent.is-dragging{
+  box-shadow: 0 14px 24px rgba(22, 38, 66, .22);
+}
 .fdBkEvent.is-booked{ background: #e7f6ff; border-color: #9ac8ed; color: #294b68; }
 .fdBkEvent.is-checkin{ background: #e9fff8; border-color: #8fd9c4; color: #21584d; }
 .fdBkEvent.is-completed{ background: #edf3ff; border-color: #c0d2f2; color: #40597b; }
@@ -5157,6 +5163,16 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+.fdBkDragOverlay{
+  border: 1px solid #58b9ff;
+  border-radius: 10px;
+  background: #fff;
+  color: #1d3f66;
+  padding: 8px 10px;
+  box-shadow: 0 12px 22px rgba(20, 39, 69, .2);
+  font-size: 12px;
+  font-weight: 700;
 }
 .fdBkLoadingMask{
   position: fixed;

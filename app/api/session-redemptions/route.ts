@@ -14,6 +14,9 @@ function mapRedemptionError(message: string | undefined) {
   if (message.includes("session_redemptions_booking_unique")) {
     return { status: 409, error: "Booking already redeemed" };
   }
+  if (message.includes("session_redemptions_pass_session_unique")) {
+    return { status: 409, error: "Session number already redeemed for this pass" };
+  }
   const status = REDEMPTION_ERROR_STATUS[message];
   if (status) return { status, error: message };
   return { status: 500, error: message };
@@ -27,7 +30,7 @@ export async function GET(request: Request) {
 
   let query = auth.supabase
     .from("session_redemptions")
-    .select("id, booking_id, member_id, redeemed_kind, quantity, note, created_at")
+    .select("id, booking_id, member_id, pass_id, session_no, redeemed_kind, quantity, note, created_at")
     .eq("tenant_id", auth.context.tenantId)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -48,6 +51,7 @@ export async function POST(request: Request) {
   const memberId = typeof body?.memberId === "string" ? body.memberId : "";
   const redeemedKind = body?.redeemedKind === "monthly" ? "monthly" : "pass";
   const passId = typeof body?.passId === "string" ? body.passId : null;
+  const sessionNo = Number.isFinite(Number(body?.sessionNo)) ? Math.max(1, Number(body?.sessionNo)) : null;
   const note = typeof body?.note === "string" ? body.note : null;
   const quantity = Math.max(1, Number(body?.quantity ?? 1));
 
@@ -77,6 +81,7 @@ export async function POST(request: Request) {
     p_redeemed_by: auth.context.userId,
     p_redeemed_kind: redeemedKind,
     p_pass_id: passId,
+    p_session_no: sessionNo,
     p_quantity: quantity,
     p_note: note,
   });
