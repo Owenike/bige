@@ -4062,6 +4062,210 @@ body.fdPageDark .fdModal.fdModalLight:not(.fdModalHandover) .fdModalIconBtn:hove
   border-color: #9fc2ef;
   box-shadow: 0 0 0 3px rgba(178, 210, 246, .38);
 }
+.fdPosWorkspace{
+  margin-top: 12px;
+  padding: 12px;
+  border-color: #d8e4f2 !important;
+  background: #f7fbff !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 8px 18px rgba(46, 64, 96, .10) !important;
+}
+.fdPosWorkspaceHead{
+  padding: 2px 2px 4px;
+}
+.fdPosTabs{
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  margin-top: 8px;
+  padding: 8px 2px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  background: #f7fbff;
+}
+.fdPosTabBtn{
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid #c8d8ec;
+  background: #ffffff;
+  color: #5f789d;
+  font-size: 13px;
+  font-weight: 600;
+}
+.fdPosTabBtn.is-active{
+  border-color: #6fd4c7;
+  background: linear-gradient(160deg, #4ee2ce, #24ccba 56%, #13b6a8);
+  color: #f7fffd;
+  box-shadow: 0 10px 18px rgba(10, 103, 100, .24);
+}
+.fdPosTabPanel{
+  margin-top: 6px;
+  display: grid;
+  gap: 12px;
+}
+.fdPosCashierGrid{
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr);
+}
+.fdPosCard{
+  border-color: #dce5f2 !important;
+  background: #ffffff !important;
+  box-shadow: 0 6px 14px rgba(46, 64, 96, .08) !important;
+}
+.fdPosCashierSide{
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding-bottom: 88px;
+}
+.fdPosValueGrid{
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.fdPosCheckboxLine{
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.fdPosSummaryGrid{
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.fdPosMetricCard{
+  padding: 10px;
+  border-radius: 12px;
+  border-color: #dee8f4;
+  box-shadow: none;
+}
+.fdPosMetricCard strong{
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+  color: #1f2a3d;
+}
+.fdPosMetaRow{
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.fdPosStickyFooter{
+  position: sticky;
+  bottom: 0;
+  z-index: 7;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 0 0;
+  background: linear-gradient(180deg, rgba(247,251,255,0), rgba(247,251,255,.94) 42%);
+}
+.fdPosPendingGrid{
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
+}
+.fdPosTableLike{
+  display: grid;
+  gap: 6px;
+}
+.fdPosListRow{
+  width: 100%;
+  border: 1px solid #d7e3f2;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.fdPosListRow.is-active{
+  border-color: #73bde8;
+  box-shadow: 0 0 0 2px rgba(115, 189, 232, .22);
+}
+.fdPosListCell{
+  font-size: 13px;
+  color: #566b89;
+  white-space: nowrap;
+}
+.fdPosPendingDetail{
+  padding-bottom: 76px;
+}
+.fdPosDetailMeta{
+  margin-top: 10px;
+}
+.fdPosStickyInline{
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  margin-top: 10px;
+  padding-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.95) 42%);
+}
+.fdPosRiskGrid{
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.fdPosCardFooter{
+  margin-top: auto;
+  padding-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+.fdPosInvoiceStack{
+  display: grid;
+  gap: 12px;
+}
+.fdPosSegmentTabs{
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d8e4f2;
+  border-radius: 999px;
+  background: #f4f8fe;
+}
+.fdPosSegmentBtn{
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #5f789d;
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.fdPosSegmentBtn.is-active{
+  border-color: #c7d9ef;
+  background: #fff;
+  color: #2f4f73;
+}
+.fdPosInvoiceForm{
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+.fdPosAuditFilters{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.fdPosAuditSearch{
+  grid-column: span 1;
+}
 .fdModal:not(.fdModalFeature) .fdLockerPanel{
   border-color: #d8e1ee;
   background: #f8fbff;
@@ -4416,6 +4620,23 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .fdInventoryFormGrid{ grid-template-columns: 1fr; }
   .fdInventoryGrid2{ grid-template-columns: 1fr; }
   .fdInventoryListGrid{ grid-template-columns: 1fr; }
+  .fdPosCashierGrid{ grid-template-columns: 1fr; }
+  .fdPosPendingGrid{ grid-template-columns: 1fr; }
+  .fdPosRiskGrid{ grid-template-columns: 1fr; }
+  .fdPosValueGrid{ grid-template-columns: 1fr; }
+  .fdPosSummaryGrid{ grid-template-columns: 1fr; }
+  .fdPosAuditFilters{ grid-template-columns: 1fr; }
+  .fdPosCashierSide{ padding-bottom: 92px; }
+  .fdPosStickyFooter{
+    justify-content: stretch;
+  }
+  .fdPosStickyFooter .fdPillBtn{
+    flex: 1 1 0;
+    justify-content: center;
+  }
+  .fdPosListRow{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .fdModalLayout{
     grid-template-columns: 1fr;
   }

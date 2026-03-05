@@ -8,6 +8,8 @@ import { FrontdeskMemberSearchView } from "./member-search/MemberSearchView";
 
 type CapabilityStatus = "ready" | "building" | "planned";
 type FrontdeskModalType = "capability" | "entry" | "member" | "handover";
+type PosWorkspaceTab = "cashier" | "pending" | "risk" | "invoice" | "audit";
+type PosInvoiceMode = "issue" | "void" | "allowance";
 type CapabilityCard = {
   id: string;
   title: string;
@@ -414,6 +416,12 @@ export default function FrontdeskPortalPage() {
   const [posSubmittingInvoice, setPosSubmittingInvoice] = useState(false);
   const [posError, setPosError] = useState<string | null>(null);
   const [posMessage, setPosMessage] = useState<string | null>(null);
+  const [posWorkspaceTab, setPosWorkspaceTab] = useState<PosWorkspaceTab>("cashier");
+  const [posInvoiceMode, setPosInvoiceMode] = useState<PosInvoiceMode>("issue");
+  const [posPendingPreviewId, setPosPendingPreviewId] = useState("");
+  const [posAuditTypeFilter, setPosAuditTypeFilter] = useState("all");
+  const [posAuditTimeFilter, setPosAuditTimeFilter] = useState<"all" | "today" | "week">("all");
+  const [posAuditKeyword, setPosAuditKeyword] = useState("");
   const [lockerRentals, setLockerRentals] = useState<LockerRentalItem[]>([]);
   const [lockerLoading, setLockerLoading] = useState(false);
   const [lockerSubmitting, setLockerSubmitting] = useState(false);
@@ -849,6 +857,33 @@ export default function FrontdeskPortalPage() {
             posStatusCancelled: "已取消",
             posPendingTitle: "待收款訂單",
             posNoPending: "目前沒有待收款訂單。",
+            posTabCashier: "收銀",
+            posTabPending: "待收款",
+            posTabRisk: "退費 / 作廢",
+            posTabInvoice: "發票",
+            posTabAudit: "稽核紀錄",
+            posSummaryCardTitle: "目前訂單摘要",
+            posSummaryDue: "應收",
+            posSummaryPaid: "已收",
+            posSummaryRemaining: "差額",
+            posSummaryPaymentMethod: "最近付款方式",
+            posSummaryNone: "未選擇",
+            posSummaryPending: "待收款",
+            posSummaryPaidState: "已付款",
+            posPendingListTitle: "待收款列表",
+            posAllOrdersTitle: "全部訂單",
+            posPendingDetailTitle: "訂單明細",
+            posNoOrderPreview: "請先從左側選擇訂單",
+            posInvoiceSegIssue: "開立",
+            posInvoiceSegVoid: "作廢",
+            posInvoiceSegAllowance: "折讓",
+            posAuditTypeFilterLabel: "類型",
+            posAuditTimeFilterLabel: "時間",
+            posAuditKeywordLabel: "關鍵字",
+            posAuditFilterAll: "全部",
+            posAuditFilterToday: "今日",
+            posAuditFilterWeek: "本週",
+            posAuditKeywordPlaceholder: "搜尋單號 / UUID / 文字",
             lockerTitle: "置物櫃租借作業",
             lockerSub: "現場快速登記租借與歸還，並保留操作紀錄。",
             lockerCodeLabel: "置物櫃編號",
@@ -1223,6 +1258,33 @@ export default function FrontdeskPortalPage() {
             posStatusCancelled: "Cancelled",
             posPendingTitle: "Pending Payments",
             posNoPending: "No unpaid orders right now.",
+            posTabCashier: "Cashier",
+            posTabPending: "Pending",
+            posTabRisk: "Refund / Void",
+            posTabInvoice: "Invoice",
+            posTabAudit: "Audit",
+            posSummaryCardTitle: "Current Order Summary",
+            posSummaryDue: "Due",
+            posSummaryPaid: "Paid",
+            posSummaryRemaining: "Remaining",
+            posSummaryPaymentMethod: "Latest Method",
+            posSummaryNone: "Not Selected",
+            posSummaryPending: "Pending",
+            posSummaryPaidState: "Paid",
+            posPendingListTitle: "Pending Orders",
+            posAllOrdersTitle: "All Orders",
+            posPendingDetailTitle: "Order Detail",
+            posNoOrderPreview: "Select an order from the list first",
+            posInvoiceSegIssue: "Issue",
+            posInvoiceSegVoid: "Void",
+            posInvoiceSegAllowance: "Allowance",
+            posAuditTypeFilterLabel: "Type",
+            posAuditTimeFilterLabel: "Time",
+            posAuditKeywordLabel: "Keyword",
+            posAuditFilterAll: "All",
+            posAuditFilterToday: "Today",
+            posAuditFilterWeek: "This Week",
+            posAuditKeywordPlaceholder: "Search by order / UUID / text",
             lockerTitle: "Locker Rental Desk",
             lockerSub: "Register locker rent/return quickly with audit trail.",
             lockerCodeLabel: "Locker Code",
@@ -1696,6 +1758,61 @@ export default function FrontdeskPortalPage() {
     () => Math.max(0, Number(selectedPosOrder?.amount || 0) - posPaidTotal),
     [posPaidTotal, selectedPosOrder?.amount],
   );
+  const posLatestPaymentMethod = useMemo(
+    () => posPayments.find((item) => item.status === "paid")?.method || "-",
+    [posPayments],
+  );
+  const posWorkspaceTabs = useMemo(
+    () => [
+      { id: "cashier" as const, label: t.posTabCashier },
+      { id: "pending" as const, label: t.posTabPending },
+      { id: "risk" as const, label: t.posTabRisk },
+      { id: "invoice" as const, label: t.posTabInvoice },
+      { id: "audit" as const, label: t.posTabAudit },
+    ],
+    [t.posTabAudit, t.posTabCashier, t.posTabInvoice, t.posTabPending, t.posTabRisk],
+  );
+  const posPendingRows = useMemo(() => {
+    const map = new Map<string, PosOrderItem>();
+    for (const item of unpaidOrderList) {
+      map.set(item.id, {
+        id: item.id,
+        member_id: item.member_id || null,
+        status: item.status,
+        amount: Number(item.amount || 0),
+        channel: "frontdesk",
+        note: null,
+        created_at: item.created_at,
+      });
+    }
+    for (const item of posOrders) {
+      if (!map.has(item.id)) map.set(item.id, item);
+    }
+    return Array.from(map.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [posOrders, unpaidOrderList]);
+  const posPendingPreviewOrder = useMemo(
+    () => posPendingRows.find((item) => item.id === posPendingPreviewId) || null,
+    [posPendingPreviewId, posPendingRows],
+  );
+  const posAuditActionFilters = useMemo(
+    () => ["all", ...Array.from(new Set(posAudit.map((item) => item.action)))],
+    [posAudit],
+  );
+  const filteredPosAudit = useMemo(() => {
+    const keyword = posAuditKeyword.trim().toLowerCase();
+    const now = new Date();
+    const nowMs = now.getTime();
+    const weekStart = nowMs - 7 * 24 * 60 * 60 * 1000;
+    return posAudit.filter((item) => {
+      if (posAuditTypeFilter !== "all" && item.action !== posAuditTypeFilter) return false;
+      const ts = new Date(item.created_at).getTime();
+      if (posAuditTimeFilter === "today" && !isSameLocalDay(item.created_at, now)) return false;
+      if (posAuditTimeFilter === "week" && (Number.isNaN(ts) || ts < weekStart || ts > nowMs)) return false;
+      if (!keyword) return true;
+      const haystack = [item.action, item.target_type, item.target_id || "", item.reason || ""].join(" ").toLowerCase();
+      return haystack.includes(keyword);
+    });
+  }, [posAudit, posAuditKeyword, posAuditTimeFilter, posAuditTypeFilter]);
   const leadNewCount = useMemo(
     () => leadItems.filter((item) => item.status === "new").length,
     [leadItems],
@@ -1884,8 +2001,18 @@ export default function FrontdeskPortalPage() {
     setPosInvoices((payload.items || []) as PosInvoiceEvent[]);
   }, [t.posInvoiceFail]);
 
+  const clearPosCurrentOrder = useCallback(() => {
+    setPosOrderId("");
+    setPosCheckoutUrl("");
+    setPosError(null);
+    setPosMessage(null);
+    setPosPayments([]);
+    setPosInvoices([]);
+  }, []);
+
   const handlePosSelectOrder = useCallback(async (orderId: string, amount?: number) => {
     setPosOrderId(orderId);
+    setPosPendingPreviewId(orderId);
     setPosPaymentAmount(amount !== undefined ? String(amount) : posPaymentAmount);
     setPosCheckoutUrl("");
     setPosError(null);
@@ -3647,6 +3774,21 @@ export default function FrontdeskPortalPage() {
   ]);
 
   useEffect(() => {
+    if (!posOrderId) return;
+    setPosPendingPreviewId((prev) => prev || posOrderId);
+  }, [posOrderId]);
+
+  useEffect(() => {
+    if (posPendingRows.length === 0) {
+      if (posPendingPreviewId) setPosPendingPreviewId("");
+      return;
+    }
+    if (!posPendingPreviewId || !posPendingRows.some((item) => item.id === posPendingPreviewId)) {
+      setPosPendingPreviewId(posOrderId && posPendingRows.some((item) => item.id === posOrderId) ? posOrderId : posPendingRows[0].id);
+    }
+  }, [posOrderId, posPendingPreviewId, posPendingRows]);
+
+  useEffect(() => {
     if (csIncidents.length === 0) {
       if (csSelectedIncidentId) setCsSelectedIncidentId("");
       return;
@@ -4153,14 +4295,14 @@ export default function FrontdeskPortalPage() {
                         <p className="sub" style={{ marginTop: 6 }}>{selectedCapability.desc}</p>
                       </div>
                       {selectedCapability.id === "pos" ? (
-                        <div className="fdGlassSubPanel" style={{ marginTop: 12, padding: 10 }}>
-                          <h4 className="sectionTitle" style={{ margin: 0 }}>{t.posModuleTitle}</h4>
-                          <p className="fdGlassText" style={{ marginTop: 6 }}>{t.posModuleSub}</p>
-                          {posError ? <div className="error" style={{ marginTop: 8 }}>{posError}</div> : null}
-                          {posMessage ? <p className="sub" style={{ marginTop: 8, color: "var(--brand)" }}>{posMessage}</p> : null}
-                          {actionsDisabled ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.openShiftFirst}</p> : null}
-
-                          <div className="fdPillActions" style={{ marginTop: 10 }}>
+                        <div className="fdGlassSubPanel fdPosWorkspace" style={{ marginTop: 12 }}>
+                          <div className="fdPosWorkspaceHead">
+                            <h4 className="sectionTitle" style={{ margin: 0 }}>{t.posModuleTitle}</h4>
+                            <p className="fdGlassText" style={{ marginTop: 6 }}>{t.posModuleSub}</p>
+                            {posError ? <div className="error" style={{ marginTop: 8 }}>{posError}</div> : null}
+                            {posMessage ? <p className="sub" style={{ marginTop: 8, color: "var(--brand)" }}>{posMessage}</p> : null}
+                            {actionsDisabled ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.openShiftFirst}</p> : null}
+                            <div className="fdPillActions" style={{ marginTop: 10 }}>
                             <button
                               type="button"
                               className="fdPillBtn"
@@ -4201,251 +4343,316 @@ export default function FrontdeskPortalPage() {
                             >
                               {t.posOpenBookingAction}
                             </a>
+                            </div>
                           </div>
+                          <div className="fdPosTabs" role="tablist" aria-label={t.posModuleTitle}>
+                            {posWorkspaceTabs.map((tab) => (
+                              <button
+                                key={tab.id}
+                                type="button"
+                                role="tab"
+                                aria-selected={posWorkspaceTab === tab.id}
+                                className={`fdPosTabBtn ${posWorkspaceTab === tab.id ? "is-active" : ""}`}
+                                onClick={() => setPosWorkspaceTab(tab.id)}
+                              >
+                                {tab.label}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="fdPosTabPanel">
 
-                          <div className="fdInventoryFormGrid" style={{ marginTop: 10 }}>
-                            <form onSubmit={handlePosCreateOrder} className="fdGlassSubPanel fdInventoryFormBlock">
-                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posCreateSection}</h5>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posMemberIdOptional}</span>
-                                <input
-                                  className="input"
-                                  value={posMemberId}
-                                  onChange={(event) => setPosMemberId(event.target.value)}
-                                  placeholder={t.posMemberIdOptional}
-                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
-                                />
-                              </label>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posSubtotalLabel}</span>
-                                <input
-                                  className="input"
-                                  inputMode="decimal"
-                                  value={posSubtotal}
-                                  onChange={(event) => setPosSubtotal(event.target.value)}
-                                  placeholder={t.posSubtotalLabel}
-                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
-                                />
-                              </label>
-                              <div className="fdInventoryGrid2">
+                          {posWorkspaceTab === "cashier" ? (
+                            <div className="fdPosCashierGrid">
+                              <form onSubmit={handlePosCreateOrder} className="fdGlassSubPanel fdInventoryFormBlock fdPosCard">
+                                <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posCreateSection}</h5>
                                 <label className="fdInventoryField">
-                                  <span className="kvLabel">{t.posDiscountLabel}</span>
+                                  <span className="kvLabel">{t.posMemberIdOptional}</span>
                                   <input
                                     className="input"
-                                    inputMode="decimal"
-                                    value={posDiscountAmount}
-                                    onChange={(event) => setPosDiscountAmount(event.target.value)}
-                                    placeholder={t.posDiscountLabel}
+                                    value={posMemberId}
+                                    onChange={(event) => setPosMemberId(event.target.value)}
+                                    placeholder={t.posMemberIdOptional}
                                     disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
                                   />
                                 </label>
-                                <label className="fdInventoryField">
-                                  <span className="kvLabel">{t.posAmountLabel}</span>
-                                  <div className="input">
-                                    {Number.isFinite(Number(posSubtotal) - Number(posDiscountAmount))
-                                      ? Math.max(0, Number(posSubtotal) - Number(posDiscountAmount))
-                                      : "-"}
-                                  </div>
-                                </label>
-                              </div>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posDiscountNoteLabel}</span>
-                                <input
-                                  className="input"
-                                  value={posDiscountNote}
-                                  onChange={(event) => setPosDiscountNote(event.target.value)}
-                                  placeholder={t.posDiscountNoteLabel}
-                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
-                                />
-                              </label>
-                              <label className="fdInventoryField" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                                <input
-                                  type="checkbox"
-                                  checked={posManagerOverride}
-                                  onChange={(event) => setPosManagerOverride(event.target.checked)}
-                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
-                                />
-                                <span className="sub" style={{ marginTop: 0 }}>{t.posManagerOverrideLabel}</span>
-                              </label>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posNoteLabel}</span>
-                                <input
-                                  className="input"
-                                  value={posNote}
-                                  onChange={(event) => setPosNote(event.target.value)}
-                                  placeholder={t.posNoteLabel}
-                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
-                                />
-                              </label>
-                              <div className="fdInventoryActions">
-                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}>
-                                  {posCreatingOrder ? t.posCreatingAction : t.posCreateAction}
-                                </button>
-                              </div>
-                            </form>
-
-                            <form onSubmit={handlePosPayOrder} className="fdGlassSubPanel fdInventoryFormBlock">
-                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posPaymentSection}</h5>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posCurrentOrder}</span>
-                                <div className="input">{posOrderId || t.posNoOrder}</div>
-                              </label>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posRemainingLabel}</span>
-                                <div className="input">{posOrderId ? posRemaining : "-"}</div>
-                              </label>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posPaymentAmountLabel}</span>
-                                <input
-                                  className="input"
-                                  inputMode="decimal"
-                                  value={posPaymentAmount}
-                                  onChange={(event) => setPosPaymentAmount(event.target.value)}
-                                  placeholder={t.posPaymentAmountLabel}
-                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
-                                />
-                              </label>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posPaymentMethodLabel}</span>
-                                <select
-                                  className="input"
-                                  value={posPaymentMethod}
-                                  onChange={(event) => setPosPaymentMethod(event.target.value)}
-                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
-                                >
-                                  <option value="cash">{t.cash}</option>
-                                  <option value="card">{t.card}</option>
-                                  <option value="transfer">{t.transfer}</option>
-                                  <option value="manual">{t.manual}</option>
-                                  <option value="newebpay">{t.newebpay}</option>
-                                </select>
-                              </label>
-                              <div className="fdInventoryActions">
-                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout || !posOrderId}>
-                                  {posPayingOrder ? t.posPayingAction : t.posPayAction}
-                                </button>
-                              </div>
-                            </form>
-
-                            <form onSubmit={handlePosInitCheckout} className="fdGlassSubPanel fdInventoryFormBlock" style={{ gridColumn: "1 / -1" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posCheckoutSection}</h5>
-                                <button
-                                  type="button"
-                                  className="fdPillBtn"
-                                  onClick={() => {
-                                    setPosOrderId("");
-                                    setPosCheckoutUrl("");
-                                    setPosError(null);
-                                    setPosMessage(null);
-                                    setPosPayments([]);
-                                    setPosInvoices([]);
-                                  }}
-                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
-                                >
-                                  {t.posClearOrderAction}
-                                </button>
-                              </div>
-                              <p className="sub" style={{ marginTop: 8 }}>{t.posCurrentOrder}: {posOrderId || t.posNoOrder}</p>
-                              <div className="fdInventoryActions">
-                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout || !posOrderId}>
-                                  {posInitializingCheckout ? t.posInitializingCheckoutAction : t.posInitCheckoutAction}
-                                </button>
-                              </div>
-                              {posCheckoutUrl ? (
-                                <p className="sub" style={{ marginTop: 8 }}>
-                                  {t.posCheckoutUrlLabel}:{" "}
-                                  <a href={posCheckoutUrl} target="_blank" rel="noreferrer">{posCheckoutUrl}</a>
-                                </p>
-                              ) : null}
-                            </form>
-                          </div>
-
-                          <div className="kvLabel" style={{ marginTop: 10 }}>{t.posPendingTitle}</div>
-                          <div className="fdListStack" style={{ marginTop: 8 }}>
-                            {unpaidOrderList.slice(0, 4).map((item) => (
-                              <div key={item.id} className="card" style={{ padding: 10 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                                  <strong>{item.id.slice(0, 8)}</strong>
-                                  <span className="fdChip">{item.status}</span>
+                                <div className="fdPosValueGrid">
+                                  <label className="fdInventoryField">
+                                    <span className="kvLabel">{t.posSubtotalLabel}</span>
+                                    <input
+                                      className="input"
+                                      inputMode="decimal"
+                                      value={posSubtotal}
+                                      onChange={(event) => setPosSubtotal(event.target.value)}
+                                      placeholder={t.posSubtotalLabel}
+                                      disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                    />
+                                  </label>
+                                  <label className="fdInventoryField">
+                                    <span className="kvLabel">{t.posDiscountLabel}</span>
+                                    <input
+                                      className="input"
+                                      inputMode="decimal"
+                                      value={posDiscountAmount}
+                                      onChange={(event) => setPosDiscountAmount(event.target.value)}
+                                      placeholder={t.posDiscountLabel}
+                                      disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                    />
+                                  </label>
+                                  <label className="fdInventoryField">
+                                    <span className="kvLabel">{t.posAmountLabel}</span>
+                                    <div className="input">
+                                      {Number.isFinite(Number(posSubtotal) - Number(posDiscountAmount))
+                                        ? Math.max(0, Number(posSubtotal) - Number(posDiscountAmount))
+                                        : "-"}
+                                    </div>
+                                  </label>
                                 </div>
-                                <p className="sub" style={{ marginTop: 4 }}>NT${item.amount}</p>
-                                <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
-                                <button
-                                  type="button"
-                                  className="fdPillBtn"
-                                  style={{ marginTop: 8, display: "inline-flex", opacity: actionsDisabled ? 0.7 : 1 }}
-                                  disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
-                                  onClick={() => {
-                                    void handlePosSelectOrder(item.id, Number(item.amount || 0));
-                                  }}
-                                >
-                                  {t.posUseOrderAction}
-                                </button>
-                              </div>
-                            ))}
-                            {!loading && unpaidOrderList.length === 0 ? <p className="fdGlassText">{t.posNoPending}</p> : null}
-                          </div>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.posDiscountNoteLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={posDiscountNote}
+                                    onChange={(event) => setPosDiscountNote(event.target.value)}
+                                    placeholder={t.posDiscountNoteLabel}
+                                    disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                  />
+                                </label>
+                                <label className="fdInventoryField fdPosCheckboxLine">
+                                  <input
+                                    type="checkbox"
+                                    checked={posManagerOverride}
+                                    onChange={(event) => setPosManagerOverride(event.target.checked)}
+                                    disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                  />
+                                  <span className="sub" style={{ marginTop: 0 }}>{t.posManagerOverrideLabel}</span>
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.posNoteLabel}</span>
+                                  <input
+                                    className="input"
+                                    value={posNote}
+                                    onChange={(event) => setPosNote(event.target.value)}
+                                    placeholder={t.posNoteLabel}
+                                    disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                  />
+                                </label>
+                                <div className="fdInventoryActions">
+                                  <button type="submit" className={`fdPillBtn ${!posOrderId ? "fdPillBtnPrimary" : ""}`} disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}>
+                                    {posCreatingOrder ? t.posCreatingAction : t.posCreateAction}
+                                  </button>
+                                </div>
+                              </form>
 
-                          <div className="fdInventoryListGrid" style={{ marginTop: 10 }}>
-                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
-                              <div className="kvLabel">{t.posOrdersSection}</div>
-                              <div className="fdListStack" style={{ marginTop: 8 }}>
-                                {posOrders.map((item) => (
-                                  <div key={item.id} className="card" style={{ padding: 10 }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                                      <strong>{item.id.slice(0, 8)}</strong>
+                              <div className="fdPosCashierSide">
+                                <div className="fdGlassSubPanel fdInventoryFormBlock fdPosCard">
+                                  <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posSummaryCardTitle}</h5>
+                                  <div className="fdPosSummaryGrid">
+                                    <div className="card fdPosMetricCard">
+                                      <div className="kvLabel">{t.posSummaryDue}</div>
+                                      <strong>NT${Number(selectedPosOrder?.amount || 0)}</strong>
+                                    </div>
+                                    <div className="card fdPosMetricCard">
+                                      <div className="kvLabel">{t.posSummaryPaid}</div>
+                                      <strong>NT${posPaidTotal}</strong>
+                                    </div>
+                                    <div className="card fdPosMetricCard">
+                                      <div className="kvLabel">{t.posSummaryRemaining}</div>
+                                      <strong>NT${posRemaining}</strong>
+                                    </div>
+                                  </div>
+                                  <div className="fdPosMetaRow">
+                                    <span className="kvLabel">{t.posCurrentOrder}</span>
+                                    <strong>{posOrderId || t.posNoOrder}</strong>
+                                  </div>
+                                  <div className="fdPosMetaRow">
+                                    <span className="kvLabel">{t.posSummaryPaymentMethod}</span>
+                                    <span>{posLatestPaymentMethod}</span>
+                                  </div>
+                                  <div className="fdPosMetaRow">
+                                    <span className="kvLabel">{t.posStatusPending}</span>
+                                    <span className="fdChip">{!posOrderId ? t.posSummaryNone : posRemaining > 0 ? t.posSummaryPending : t.posSummaryPaidState}</span>
+                                  </div>
+                                </div>
+
+                                <form id="fd-pos-pay-form" onSubmit={handlePosPayOrder} className="fdGlassSubPanel fdInventoryFormBlock fdPosCard">
+                                  <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posPaymentSection}</h5>
+                                  <label className="fdInventoryField">
+                                    <span className="kvLabel">{t.posCurrentOrder}</span>
+                                    <div className="input">{posOrderId || t.posNoOrder}</div>
+                                  </label>
+                                  <label className="fdInventoryField">
+                                    <span className="kvLabel">{t.posRemainingLabel}</span>
+                                    <div className="input">{posOrderId ? posRemaining : "-"}</div>
+                                  </label>
+                                  <div className="fdInventoryGrid2">
+                                    <label className="fdInventoryField">
+                                      <span className="kvLabel">{t.posPaymentAmountLabel}</span>
+                                      <input
+                                        className="input"
+                                        inputMode="decimal"
+                                        value={posPaymentAmount}
+                                        onChange={(event) => setPosPaymentAmount(event.target.value)}
+                                        placeholder={t.posPaymentAmountLabel}
+                                        disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                      />
+                                    </label>
+                                    <label className="fdInventoryField">
+                                      <span className="kvLabel">{t.posPaymentMethodLabel}</span>
+                                      <select
+                                        className="input"
+                                        value={posPaymentMethod}
+                                        onChange={(event) => setPosPaymentMethod(event.target.value)}
+                                        disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                      >
+                                        <option value="cash">{t.cash}</option>
+                                        <option value="card">{t.card}</option>
+                                        <option value="transfer">{t.transfer}</option>
+                                        <option value="manual">{t.manual}</option>
+                                        <option value="newebpay">{t.newebpay}</option>
+                                      </select>
+                                    </label>
+                                  </div>
+                                </form>
+
+                                <form onSubmit={handlePosInitCheckout} className="fdGlassSubPanel fdInventoryFormBlock fdPosCard">
+                                  <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posCheckoutSection}</h5>
+                                  <p className="sub" style={{ marginTop: 8 }}>{t.posCurrentOrder}: {posOrderId || t.posNoOrder}</p>
+                                  <div className="fdInventoryActions">
+                                    <button type="submit" className="fdPillBtn" disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout || !posOrderId}>
+                                      {posInitializingCheckout ? t.posInitializingCheckoutAction : t.posInitCheckoutAction}
+                                    </button>
+                                  </div>
+                                  {posCheckoutUrl ? (
+                                    <p className="sub" style={{ marginTop: 8 }}>
+                                      {t.posCheckoutUrlLabel}:{" "}
+                                      <a href={posCheckoutUrl} target="_blank" rel="noreferrer">{posCheckoutUrl}</a>
+                                    </p>
+                                  ) : null}
+                                </form>
+
+                                <div className="fdPosStickyFooter">
+                                  <button type="button" className="fdPillBtn" onClick={clearPosCurrentOrder} disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}>
+                                    {t.posClearOrderAction}
+                                  </button>
+                                  <button type="submit" form="fd-pos-pay-form" className={`fdPillBtn ${posOrderId ? "fdPillBtnPrimary" : ""}`} disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout || !posOrderId}>
+                                    {posPayingOrder ? t.posPayingAction : t.posPayAction}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {posWorkspaceTab === "pending" ? (
+                            <div className="fdPosPendingGrid">
+                              <div className="fdGlassSubPanel fdInventoryFormBlock fdPosCard">
+                                <div className="kvLabel">{t.posPendingListTitle}</div>
+                                <div className="fdPosTableLike" style={{ marginTop: 10 }}>
+                                  {unpaidOrderList.map((item) => (
+                                    <button
+                                      key={`pending-${item.id}`}
+                                      type="button"
+                                      className={`fdPosListRow ${posPendingPreviewId === item.id ? "is-active" : ""}`}
+                                      onClick={() => setPosPendingPreviewId(item.id)}
+                                    >
+                                      <span className="fdPosListCell">{item.id.slice(0, 8)}</span>
+                                      <span className="fdPosListCell">NT${item.amount}</span>
+                                      <span className="fdPosListCell">{fmtDateTime(item.created_at)}</span>
                                       <span className="fdChip">{item.status}</span>
-                                    </div>
-                                    <p className="sub" style={{ marginTop: 4 }}>NT${item.amount}</p>
-                                    <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
-                                    {item.note ? <p className="sub" style={{ marginTop: 4 }}>{item.note}</p> : null}
-                                    <button
-                                      type="button"
-                                      className="fdPillBtn"
-                                      style={{ marginTop: 8 }}
-                                      onClick={() => void handlePosSelectOrder(item.id, Number(item.amount || 0))}
-                                      disabled={actionsDisabled || posLoading || posCreatingOrder || posPayingOrder || posInitializingCheckout}
-                                    >
-                                      {t.posUseOrderAction}
                                     </button>
-                                  </div>
-                                ))}
-                                {!posLoading && posOrders.length === 0 ? <p className="fdGlassText">{t.posNoOrders}</p> : null}
-                              </div>
-                            </div>
-                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
-                              <div className="kvLabel">{t.posPaymentsSection}</div>
-                              <div className="fdListStack" style={{ marginTop: 8 }}>
-                                {posPayments.map((item) => (
-                                  <div key={item.id} className="card" style={{ padding: 10 }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                                      <strong>{item.id.slice(0, 8)}</strong>
-                                      <span className="fdChip">{item.method}</span>
-                                    </div>
-                                    <p className="sub" style={{ marginTop: 4 }}>NT${item.amount}</p>
-                                    <p className="sub" style={{ marginTop: 4 }}>{item.paid_at ? fmtDateTime(item.paid_at) : "-"}</p>
-                                    <button
-                                      type="button"
-                                      className="fdPillBtn"
-                                      style={{ marginTop: 8 }}
-                                      disabled={actionsDisabled || posSubmittingRisk}
-                                      onClick={() => {
-                                        setPosRefundPaymentId(item.id);
-                                        setPosRefundReason("");
-                                      }}
-                                    >
-                                      {t.posRefundAction}
-                                    </button>
-                                  </div>
-                                ))}
-                                {!posLoading && posPayments.length === 0 ? <p className="fdGlassText">{t.posNoPayments}</p> : null}
-                              </div>
-                            </div>
-                          </div>
+                                  ))}
+                                  {!loading && unpaidOrderList.length === 0 ? <p className="fdGlassText">{t.posNoPending}</p> : null}
+                                </div>
 
-                          <div className="fdInventoryFormGrid" style={{ marginTop: 10 }}>
-                            <form onSubmit={handlePosVoidOrder} className="fdGlassSubPanel fdInventoryFormBlock">
+                                <div className="kvLabel" style={{ marginTop: 14 }}>{t.posAllOrdersTitle}</div>
+                                <div className="fdPosTableLike" style={{ marginTop: 10 }}>
+                                  {posPendingRows.map((item) => (
+                                    <button
+                                      key={`all-${item.id}`}
+                                      type="button"
+                                      className={`fdPosListRow ${posPendingPreviewId === item.id ? "is-active" : ""}`}
+                                      onClick={() => setPosPendingPreviewId(item.id)}
+                                    >
+                                      <span className="fdPosListCell">{item.id.slice(0, 8)}</span>
+                                      <span className="fdPosListCell">NT${item.amount}</span>
+                                      <span className="fdPosListCell">{fmtDateTime(item.created_at)}</span>
+                                      <span className="fdChip">{item.status}</span>
+                                    </button>
+                                  ))}
+                                  {!posLoading && posPendingRows.length === 0 ? <p className="fdGlassText">{t.posNoOrders}</p> : null}
+                                </div>
+                              </div>
+
+                              <div className="fdGlassSubPanel fdInventoryFormBlock fdPosCard fdPosPendingDetail">
+                                <div className="kvLabel">{t.posPendingDetailTitle}</div>
+                                {posPendingPreviewOrder ? (
+                                  <>
+                                    <div className="fdPosDetailMeta">
+                                      <div className="fdPosMetaRow">
+                                        <span className="kvLabel">{t.posCurrentOrder}</span>
+                                        <strong>{posPendingPreviewOrder.id}</strong>
+                                      </div>
+                                      <div className="fdPosMetaRow">
+                                        <span className="kvLabel">{t.posAmountLabel}</span>
+                                        <strong>NT${posPendingPreviewOrder.amount}</strong>
+                                      </div>
+                                      <div className="fdPosMetaRow">
+                                        <span className="kvLabel">{t.posStatusPending}</span>
+                                        <span className="fdChip">{posPendingPreviewOrder.status}</span>
+                                      </div>
+                                    </div>
+                                    <div className="kvLabel" style={{ marginTop: 12 }}>{t.posPaymentsSection}</div>
+                                    <div className="fdListStack" style={{ marginTop: 8 }}>
+                                      {posPendingPreviewOrder.id !== posOrderId ? (
+                                        <p className="fdGlassText">{t.posUseOrderAction}</p>
+                                      ) : posPayments.length === 0 ? (
+                                        <p className="fdGlassText">{t.posNoPayments}</p>
+                                      ) : (
+                                        posPayments.map((item) => (
+                                          <div key={item.id} className="card" style={{ padding: 10 }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                              <strong>{item.id.slice(0, 8)}</strong>
+                                              <span className="fdChip">{item.method}</span>
+                                            </div>
+                                            <p className="sub" style={{ marginTop: 4 }}>NT${item.amount}</p>
+                                            <p className="sub" style={{ marginTop: 4 }}>{item.paid_at ? fmtDateTime(item.paid_at) : "-"}</p>
+                                            <button
+                                              type="button"
+                                              className="fdPillBtn"
+                                              style={{ marginTop: 8 }}
+                                              disabled={actionsDisabled || posSubmittingRisk}
+                                              onClick={() => {
+                                                setPosRefundPaymentId(item.id);
+                                                setPosRefundReason("");
+                                                setPosWorkspaceTab("risk");
+                                              }}
+                                            >
+                                              {t.posRefundAction}
+                                            </button>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                    <div className="fdPosStickyInline">
+                                      <button
+                                        type="button"
+                                        className={`fdPillBtn ${posPendingPreviewOrder.id !== posOrderId ? "fdPillBtnPrimary" : ""}`}
+                                        disabled={actionsDisabled || posCreatingOrder || posPayingOrder || posInitializingCheckout}
+                                        onClick={() => void handlePosSelectOrder(posPendingPreviewOrder.id, Number(posPendingPreviewOrder.amount || 0))}
+                                      >
+                                        {t.posUseOrderAction}
+                                      </button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <p className="fdGlassText" style={{ marginTop: 10 }}>{t.posNoOrderPreview}</p>
+                                )}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {posWorkspaceTab === "risk" ? (
+                            <div className="fdPosRiskGrid">
+                            <form onSubmit={handlePosVoidOrder} className="fdGlassSubPanel fdInventoryFormBlock fdPosCard">
                               <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posVoidSection}</h5>
                               <label className="fdInventoryField">
                                 <span className="kvLabel">{t.posCurrentOrder}</span>
@@ -4461,13 +4668,13 @@ export default function FrontdeskPortalPage() {
                                   disabled={actionsDisabled || posSubmittingRisk}
                                 />
                               </label>
-                              <div className="fdInventoryActions">
-                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posSubmittingRisk || !posOrderId}>
+                              <div className="fdPosCardFooter">
+                                <button type="submit" className={`fdPillBtn ${!posRefundPaymentId.trim() && !posRefundReason.trim() ? "fdPillBtnPrimary" : ""}`} disabled={actionsDisabled || posSubmittingRisk || !posOrderId}>
                                   {t.posVoidAction}
                                 </button>
                               </div>
                             </form>
-                            <form onSubmit={handlePosRefundPayment} className="fdGlassSubPanel fdInventoryFormBlock">
+                            <form onSubmit={handlePosRefundPayment} className="fdGlassSubPanel fdInventoryFormBlock fdPosCard">
                               <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posRefundSection}</h5>
                               <label className="fdInventoryField">
                                 <span className="kvLabel">{t.posRefundPaymentIdLabel}</span>
@@ -4489,142 +4696,100 @@ export default function FrontdeskPortalPage() {
                                   disabled={actionsDisabled || posSubmittingRisk}
                                 />
                               </label>
-                              <div className="fdInventoryActions">
-                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posSubmittingRisk}>
+                              <div className="fdPosCardFooter">
+                                <button type="submit" className={`fdPillBtn ${(posRefundPaymentId.trim() || posRefundReason.trim()) ? "fdPillBtnPrimary" : ""}`} disabled={actionsDisabled || posSubmittingRisk}>
                                   {t.posRefundAction}
                                 </button>
                               </div>
                             </form>
-                          </div>
+                            </div>
+                          ) : null}
 
-                          <div className="fdInventoryFormGrid" style={{ marginTop: 10 }}>
-                            <form onSubmit={handlePosIssueInvoice} className="fdGlassSubPanel fdInventoryFormBlock">
-                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posInvoiceSection}</h5>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posCurrentOrder}</span>
-                                <div className="input">{posOrderId || t.posNoOrder}</div>
-                              </label>
-                              <div className="fdInventoryGrid2">
-                                <label className="fdInventoryField">
-                                  <span className="kvLabel">{t.posInvoiceNoLabel}</span>
-                                  <input
-                                    className="input"
-                                    value={posInvoiceNo}
-                                    onChange={(event) => setPosInvoiceNo(event.target.value)}
-                                    placeholder={t.posInvoiceNoLabel}
-                                    disabled={actionsDisabled || posSubmittingInvoice}
-                                  />
-                                </label>
-                                <label className="fdInventoryField">
-                                  <span className="kvLabel">{t.posInvoiceTaxIdLabel}</span>
-                                  <input
-                                    className="input"
-                                    value={posInvoiceTaxId}
-                                    onChange={(event) => setPosInvoiceTaxId(event.target.value)}
-                                    placeholder={t.posInvoiceTaxIdLabel}
-                                    disabled={actionsDisabled || posSubmittingInvoice}
-                                  />
-                                </label>
+                          {posWorkspaceTab === "invoice" ? (
+                            <div className="fdPosInvoiceStack">
+                              <div className="fdGlassSubPanel fdInventoryFormBlock fdPosCard">
+                                <div className="fdPosSegmentTabs" role="tablist" aria-label={t.posInvoiceSection}>
+                                  <button type="button" className={`fdPosSegmentBtn ${posInvoiceMode === "issue" ? "is-active" : ""}`} onClick={() => setPosInvoiceMode("issue")}>
+                                    {t.posInvoiceSegIssue}
+                                  </button>
+                                  <button type="button" className={`fdPosSegmentBtn ${posInvoiceMode === "void" ? "is-active" : ""}`} onClick={() => setPosInvoiceMode("void")}>
+                                    {t.posInvoiceSegVoid}
+                                  </button>
+                                  <button type="button" className={`fdPosSegmentBtn ${posInvoiceMode === "allowance" ? "is-active" : ""}`} onClick={() => setPosInvoiceMode("allowance")}>
+                                    {t.posInvoiceSegAllowance}
+                                  </button>
+                                </div>
+                                <form onSubmit={posInvoiceMode === "issue" ? handlePosIssueInvoice : posInvoiceMode === "void" ? handlePosVoidInvoice : handlePosAllowanceInvoice} className="fdPosInvoiceForm">
+                                  <label className="fdInventoryField">
+                                    <span className="kvLabel">{t.posCurrentOrder}</span>
+                                    <div className="input">{posOrderId || t.posNoOrder}</div>
+                                  </label>
+                                  {posInvoiceMode === "issue" ? (
+                                    <>
+                                      <div className="fdInventoryGrid2">
+                                        <label className="fdInventoryField">
+                                          <span className="kvLabel">{t.posInvoiceNoLabel}</span>
+                                          <input className="input" value={posInvoiceNo} onChange={(event) => setPosInvoiceNo(event.target.value)} placeholder={t.posInvoiceNoLabel} disabled={actionsDisabled || posSubmittingInvoice} />
+                                        </label>
+                                        <label className="fdInventoryField">
+                                          <span className="kvLabel">{t.posInvoiceTaxIdLabel}</span>
+                                          <input className="input" value={posInvoiceTaxId} onChange={(event) => setPosInvoiceTaxId(event.target.value)} placeholder={t.posInvoiceTaxIdLabel} disabled={actionsDisabled || posSubmittingInvoice} />
+                                        </label>
+                                      </div>
+                                      <div className="fdInventoryGrid2">
+                                        <label className="fdInventoryField">
+                                          <span className="kvLabel">{t.posInvoiceCarrierLabel}</span>
+                                          <input className="input" value={posInvoiceCarrier} onChange={(event) => setPosInvoiceCarrier(event.target.value)} placeholder={t.posInvoiceCarrierLabel} disabled={actionsDisabled || posSubmittingInvoice} />
+                                        </label>
+                                        <label className="fdInventoryField">
+                                          <span className="kvLabel">{t.posInvoiceBuyerLabel}</span>
+                                          <input className="input" value={posInvoiceBuyerName} onChange={(event) => setPosInvoiceBuyerName(event.target.value)} placeholder={t.posInvoiceBuyerLabel} disabled={actionsDisabled || posSubmittingInvoice} />
+                                        </label>
+                                      </div>
+                                    </>
+                                  ) : null}
+                                  {posInvoiceMode === "void" ? (
+                                    <>
+                                      <label className="fdInventoryField">
+                                        <span className="kvLabel">{t.posInvoiceNoLabel}</span>
+                                        <input className="input" value={posInvoiceNo} onChange={(event) => setPosInvoiceNo(event.target.value)} placeholder={t.posInvoiceNoLabel} disabled={actionsDisabled || posSubmittingInvoice} />
+                                      </label>
+                                      <label className="fdInventoryField">
+                                        <span className="kvLabel">{t.posReasonLabel}</span>
+                                        <input className="input" value={posInvoiceReason} onChange={(event) => setPosInvoiceReason(event.target.value)} placeholder={t.posReasonLabel} disabled={actionsDisabled || posSubmittingInvoice} />
+                                      </label>
+                                    </>
+                                  ) : null}
+                                  {posInvoiceMode === "allowance" ? (
+                                    <>
+                                      <label className="fdInventoryField">
+                                        <span className="kvLabel">{t.posInvoiceNoLabel}</span>
+                                        <input className="input" value={posInvoiceNo} onChange={(event) => setPosInvoiceNo(event.target.value)} placeholder={t.posInvoiceNoLabel} disabled={actionsDisabled || posSubmittingInvoice} />
+                                      </label>
+                                      <div className="fdInventoryGrid2">
+                                        <label className="fdInventoryField">
+                                          <span className="kvLabel">{t.posAllowanceAmountLabel}</span>
+                                          <input className="input" inputMode="decimal" value={posAllowanceAmount} onChange={(event) => setPosAllowanceAmount(event.target.value)} placeholder={t.posAllowanceAmountLabel} disabled={actionsDisabled || posSubmittingInvoice} />
+                                        </label>
+                                        <label className="fdInventoryField">
+                                          <span className="kvLabel">{t.posReasonLabel}</span>
+                                          <input className="input" value={posInvoiceReason} onChange={(event) => setPosInvoiceReason(event.target.value)} placeholder={t.posReasonLabel} disabled={actionsDisabled || posSubmittingInvoice} />
+                                        </label>
+                                      </div>
+                                    </>
+                                  ) : null}
+                                  <div className="fdPosCardFooter">
+                                    <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posSubmittingInvoice || !posOrderId}>
+                                      {posInvoiceMode === "issue" ? t.posIssueInvoiceAction : posInvoiceMode === "void" ? t.posVoidInvoiceAction : t.posAllowanceInvoiceAction}
+                                    </button>
+                                  </div>
+                                </form>
                               </div>
-                              <div className="fdInventoryGrid2">
-                                <label className="fdInventoryField">
-                                  <span className="kvLabel">{t.posInvoiceCarrierLabel}</span>
-                                  <input
-                                    className="input"
-                                    value={posInvoiceCarrier}
-                                    onChange={(event) => setPosInvoiceCarrier(event.target.value)}
-                                    placeholder={t.posInvoiceCarrierLabel}
-                                    disabled={actionsDisabled || posSubmittingInvoice}
-                                  />
-                                </label>
-                                <label className="fdInventoryField">
-                                  <span className="kvLabel">{t.posInvoiceBuyerLabel}</span>
-                                  <input
-                                    className="input"
-                                    value={posInvoiceBuyerName}
-                                    onChange={(event) => setPosInvoiceBuyerName(event.target.value)}
-                                    placeholder={t.posInvoiceBuyerLabel}
-                                    disabled={actionsDisabled || posSubmittingInvoice}
-                                  />
-                                </label>
-                              </div>
-                              <div className="fdInventoryActions">
-                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posSubmittingInvoice || !posOrderId}>
-                                  {t.posIssueInvoiceAction}
-                                </button>
-                              </div>
-                            </form>
-                            <form onSubmit={handlePosVoidInvoice} className="fdGlassSubPanel fdInventoryFormBlock">
-                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posVoidInvoiceAction}</h5>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posInvoiceNoLabel}</span>
-                                <input
-                                  className="input"
-                                  value={posInvoiceNo}
-                                  onChange={(event) => setPosInvoiceNo(event.target.value)}
-                                  placeholder={t.posInvoiceNoLabel}
-                                  disabled={actionsDisabled || posSubmittingInvoice}
-                                />
-                              </label>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posReasonLabel}</span>
-                                <input
-                                  className="input"
-                                  value={posInvoiceReason}
-                                  onChange={(event) => setPosInvoiceReason(event.target.value)}
-                                  placeholder={t.posReasonLabel}
-                                  disabled={actionsDisabled || posSubmittingInvoice}
-                                />
-                              </label>
-                              <div className="fdInventoryActions">
-                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posSubmittingInvoice || !posOrderId}>
-                                  {t.posVoidInvoiceAction}
-                                </button>
-                              </div>
-                            </form>
-                            <form onSubmit={handlePosAllowanceInvoice} className="fdGlassSubPanel fdInventoryFormBlock">
-                              <h5 className="sectionTitle" style={{ margin: 0 }}>{t.posAllowanceInvoiceAction}</h5>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posInvoiceNoLabel}</span>
-                                <input
-                                  className="input"
-                                  value={posInvoiceNo}
-                                  onChange={(event) => setPosInvoiceNo(event.target.value)}
-                                  placeholder={t.posInvoiceNoLabel}
-                                  disabled={actionsDisabled || posSubmittingInvoice}
-                                />
-                              </label>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posAllowanceAmountLabel}</span>
-                                <input
-                                  className="input"
-                                  inputMode="decimal"
-                                  value={posAllowanceAmount}
-                                  onChange={(event) => setPosAllowanceAmount(event.target.value)}
-                                  placeholder={t.posAllowanceAmountLabel}
-                                  disabled={actionsDisabled || posSubmittingInvoice}
-                                />
-                              </label>
-                              <label className="fdInventoryField">
-                                <span className="kvLabel">{t.posReasonLabel}</span>
-                                <input
-                                  className="input"
-                                  value={posInvoiceReason}
-                                  onChange={(event) => setPosInvoiceReason(event.target.value)}
-                                  placeholder={t.posReasonLabel}
-                                  disabled={actionsDisabled || posSubmittingInvoice}
-                                />
-                              </label>
-                              <div className="fdInventoryActions">
-                                <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={actionsDisabled || posSubmittingInvoice || !posOrderId}>
-                                  {t.posAllowanceInvoiceAction}
-                                </button>
-                              </div>
-                            </form>
-                          </div>
+                            </div>
+                          ) : null}
 
-                          <div className="fdInventoryListGrid" style={{ marginTop: 10 }}>
-                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                          {posWorkspaceTab === "risk" ? (
+                            <div className="fdGlassSubPanel fdInventoryFormBlock fdPosCard">
                               <div className="kvLabel">{t.posApprovalsSection}</div>
                               <div className="fdListStack" style={{ marginTop: 8 }}>
                                 {posApprovals.map((item) => (
@@ -4641,7 +4806,10 @@ export default function FrontdeskPortalPage() {
                                 {!posLoading && posApprovals.length === 0 ? <p className="fdGlassText">{t.posNoApprovals}</p> : null}
                               </div>
                             </div>
-                            <div className="fdGlassSubPanel" style={{ padding: 10 }}>
+                          ) : null}
+
+                          {posWorkspaceTab === "invoice" ? (
+                            <div className="fdGlassSubPanel fdInventoryFormBlock fdPosCard">
                               <div className="kvLabel">{t.posInvoiceSection}</div>
                               <div className="fdListStack" style={{ marginTop: 8 }}>
                                 {posInvoices.map((item) => (
@@ -4657,24 +4825,48 @@ export default function FrontdeskPortalPage() {
                                 {!posLoading && posInvoices.length === 0 ? <p className="fdGlassText">{t.posNoInvoices}</p> : null}
                               </div>
                             </div>
-                          </div>
+                          ) : null}
 
-                          <div className="fdGlassSubPanel" style={{ marginTop: 10, padding: 10 }}>
-                            <div className="kvLabel">{t.posAuditSection}</div>
-                            <div className="fdListStack" style={{ marginTop: 8 }}>
-                              {posAudit.map((item) => (
-                                <div key={item.id} className="card" style={{ padding: 10 }}>
-                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                                    <strong>{item.action}</strong>
-                                    <span className="fdChip">{item.target_type}</span>
+                          {posWorkspaceTab === "audit" ? (
+                            <div className="fdGlassSubPanel fdInventoryFormBlock fdPosCard">
+                              <div className="fdPosAuditFilters">
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.posAuditTypeFilterLabel}</span>
+                                  <select className="input" value={posAuditTypeFilter} onChange={(event) => setPosAuditTypeFilter(event.target.value)}>
+                                    {posAuditActionFilters.map((action) => (
+                                      <option key={action} value={action}>{action === "all" ? t.posAuditFilterAll : action}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="fdInventoryField">
+                                  <span className="kvLabel">{t.posAuditTimeFilterLabel}</span>
+                                  <select className="input" value={posAuditTimeFilter} onChange={(event) => setPosAuditTimeFilter(event.target.value as "all" | "today" | "week")}>
+                                    <option value="all">{t.posAuditFilterAll}</option>
+                                    <option value="today">{t.posAuditFilterToday}</option>
+                                    <option value="week">{t.posAuditFilterWeek}</option>
+                                  </select>
+                                </label>
+                                <label className="fdInventoryField fdPosAuditSearch">
+                                  <span className="kvLabel">{t.posAuditKeywordLabel}</span>
+                                  <input className="input" value={posAuditKeyword} onChange={(event) => setPosAuditKeyword(event.target.value)} placeholder={t.posAuditKeywordPlaceholder} />
+                                </label>
+                              </div>
+                              <div className="fdListStack" style={{ marginTop: 8 }}>
+                                {filteredPosAudit.map((item) => (
+                                  <div key={item.id} className="card" style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                                      <strong>{item.action}</strong>
+                                      <span className="fdChip">{item.target_type}</span>
+                                    </div>
+                                    <p className="sub" style={{ marginTop: 4 }}>{item.target_id || "-"}</p>
+                                    <p className="sub" style={{ marginTop: 4 }}>{item.reason || "-"}</p>
+                                    <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
                                   </div>
-                                  <p className="sub" style={{ marginTop: 4 }}>{item.target_id || "-"}</p>
-                                  <p className="sub" style={{ marginTop: 4 }}>{item.reason || "-"}</p>
-                                  <p className="sub" style={{ marginTop: 4 }}>{fmtDateTime(item.created_at)}</p>
-                                </div>
-                              ))}
-                              {!posLoading && posAudit.length === 0 ? <p className="fdGlassText">{t.posNoAudit}</p> : null}
+                                ))}
+                                {!posLoading && filteredPosAudit.length === 0 ? <p className="fdGlassText">{t.posNoAudit}</p> : null}
+                              </div>
                             </div>
+                          ) : null}
                           </div>
                         </div>
                       ) : null}
