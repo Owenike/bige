@@ -4302,48 +4302,6 @@ export default function FrontdeskPortalPage() {
                             {posError ? <div className="error" style={{ marginTop: 8 }}>{posError}</div> : null}
                             {posMessage ? <p className="sub" style={{ marginTop: 8, color: "var(--brand)" }}>{posMessage}</p> : null}
                             {actionsDisabled ? <p className="fdGlassText" style={{ marginTop: 8 }}>{t.openShiftFirst}</p> : null}
-                            <div className="fdPillActions" style={{ marginTop: 10 }}>
-                            <button
-                              type="button"
-                              className="fdPillBtn"
-                              onClick={() => {
-                                setPosLoading(true);
-                                setPosError(null);
-                                void Promise.all([
-                                  loadPosOrders(),
-                                  loadPosApprovals(),
-                                  loadPosAudit(posOrderId || undefined),
-                                  posOrderId ? loadPosPayments(posOrderId) : Promise.resolve([] as PosPaymentItem[]),
-                                  posOrderId ? loadPosInvoices(posOrderId) : Promise.resolve(),
-                                ])
-                                  .catch((err) => setPosError(err instanceof Error ? err.message : t.posReloadAction))
-                                  .finally(() => setPosLoading(false));
-                              }}
-                              disabled={actionsDisabled || posLoading || posCreatingOrder || posPayingOrder || posInitializingCheckout || posSubmittingRisk || posSubmittingInvoice}
-                            >
-                              {t.posReloadAction}
-                            </button>
-                            <button type="button" className="fdPillBtn" onClick={handlePosPrintReceipt} disabled={actionsDisabled || !posOrderId}>
-                              {t.posPrintReceiptAction}
-                            </button>
-                            <button type="button" className="fdPillBtn" onClick={() => openCapabilityModal("entry", "entry")} disabled={actionsDisabled}>
-                              {t.posOpenEntryAction}
-                            </button>
-                            <button type="button" className="fdPillBtn" onClick={() => openCapabilityModal("member", "member")} disabled={actionsDisabled}>
-                              {t.posOpenMemberAction}
-                            </button>
-                            <a
-                              className="fdPillBtn"
-                              href="/frontdesk/bookings"
-                              style={actionsDisabled ? { opacity: 0.7, pointerEvents: "none" } : undefined}
-                              aria-disabled={actionsDisabled}
-                              onClick={(event) => {
-                                if (actionsDisabled) event.preventDefault();
-                              }}
-                            >
-                              {t.posOpenBookingAction}
-                            </a>
-                            </div>
                           </div>
                           <div className="fdPosTabs" role="tablist" aria-label={t.posModuleTitle}>
                             {posWorkspaceTabs.map((tab) => (
