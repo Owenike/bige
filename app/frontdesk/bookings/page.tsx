@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useI18n } from "../../i18n-provider";
 import {
@@ -358,6 +358,7 @@ function DraggableBookingEvent(props: {
   title: string;
   subtitle: string;
   statusText: string;
+  tooltip: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: props.id,
@@ -368,7 +369,8 @@ function DraggableBookingEvent(props: {
     <button
       ref={setNodeRef}
       type="button"
-      className={`${props.className} ${isDragging ? "is-dragging" : ""}`}
+      className={`${props.className} has-tooltip ${isDragging ? "is-dragging" : ""}`}
+      data-tooltip={props.tooltip}
       style={{
         ...props.style,
         transform: CSS.Translate.toString(transform),
@@ -403,6 +405,24 @@ function DroppableSlotCell(props: {
       onClick={props.onClick}
       title={props.title}
     />
+  );
+}
+
+function SidebarAccordion(props: {
+  title: string;
+  defaultOpen?: boolean;
+  children: import("react").ReactNode;
+  badge?: string;
+  id?: string;
+}) {
+  return (
+    <details className="fdBkAccordion" open={props.defaultOpen ?? true} id={props.id}>
+      <summary className="fdBkAccordionSummary">
+        <span>{props.title}</span>
+        {props.badge ? <span className="fdBkAccordionBadge">{props.badge}</span> : null}
+      </summary>
+      <div className="fdBkAccordionBody">{props.children}</div>
+    </details>
   );
 }
 
@@ -455,6 +475,14 @@ export default function FrontdeskBookingsPage() {
   const [blockReason, setBlockReason] = useState("");
   const [blockNote, setBlockNote] = useState("");
   const [editingBlockId, setEditingBlockId] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [nowTick, setNowTick] = useState(Date.now());
+
+  const calendarHeaderScrollRef = useRef<HTMLDivElement | null>(null);
+  const calendarGridScrollRef = useRef<HTMLDivElement | null>(null);
+  const calendarTimeScrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollSyncLockRef = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -559,6 +587,52 @@ export default function FrontdeskBookingsPage() {
       return { coach, bookedCount, nextFree };
     });
   }, [blocksByCoach, bookingsByCoach, coachOptions, dateKey, timeSlots]);
+
+  const isTodayView = useMemo(() => dateKey === toDateKey(new Date()), [dateKey]);
+  const nowMinute = useMemo(() => {
+    const d = new Date(nowTick);
+    if (Number.isNaN(d.getTime())) return DAY_START_MINUTE;
+    return d.getHours() * 60 + d.getMinutes();
+  }, [nowTick]);
+  const showNowLine = isTodayView && nowMinute >= DAY_START_MINUTE && nowMinute <= DAY_END_MINUTE;
+  const nowLineTop = ((nowMinute - DAY_START_MINUTE) / SLOT_MINUTE) * SLOT_HEIGHT;
+
+  const allDayByCoach = useMemo(() => {
+    const dayStart = new Date(`${dateKey}T00:00:00`).getTime();
+    const dayEnd = new Date(`${dateKey}T23:59:59`).getTime();
+    const result: Record<string, Array<{ id: string; label: string; type: "booking" | "block" }>> = {};
+    for (const coach of coachOptions) {
+      const rows: Array<{ id: string; label: string; type: "booking" | "block" }> = [];
+      const bookingRows = bookingsByCoach[coach.id] || [];
+      const blockRows = blocksByCoach[coach.id] || [];
+      for (const booking of bookingRows) {
+        const starts = new Date(booking.starts_at).getTime();
+        const ends = new Date(booking.ends_at).getTime();
+        if (Number.isNaN(starts) || Number.isNaN(ends)) continue;
+        const isAllDayLike = starts < dayStart || ends > dayEnd || ends - starts >= 8 * 60 * 60 * 1000;
+        if (!isAllDayLike) continue;
+        rows.push({
+          id: booking.id,
+          label: `${booking.service_name} · ${statusLabel(derivedStatus(booking), zh)}`,
+          type: "booking",
+        });
+      }
+      for (const block of blockRows) {
+        const starts = new Date(block.starts_at).getTime();
+        const ends = new Date(block.ends_at).getTime();
+        if (Number.isNaN(starts) || Number.isNaN(ends)) continue;
+        const isAllDayLike = starts < dayStart || ends > dayEnd || ends - starts >= 8 * 60 * 60 * 1000;
+        if (!isAllDayLike) continue;
+        rows.push({
+          id: block.id,
+          label: `${zh ? "封鎖" : "Blocked"} · ${block.reason}`,
+          type: "block",
+        });
+      }
+      result[coach.id] = rows.slice(0, 2);
+    }
+    return result;
+  }, [blocksByCoach, bookingsByCoach, coachOptions, dateKey, zh]);
 
   const selectedMemberContracts = useMemo(() => {
     return memberPasses.map((pass) => {
@@ -721,6 +795,12 @@ export default function FrontdeskBookingsPage() {
     setSelectedMember(ghostMember);
     void loadMemberContracts(prefillMemberId);
   }, [loadMemberContracts, prefillMemberId, zh]);
+
+  useEffect(() => {
+    if (!isTodayView) return;
+    const timer = window.setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [isTodayView]);
 
   const memberSearch = useCallback(
     async (queryInput: string) => {
@@ -1239,6 +1319,40 @@ export default function FrontdeskBookingsPage() {
     setCoachVisible((prev) => ({ ...prev, [coachId]: !(prev[coachId] ?? true) }));
   }
 
+  function syncScrollTargets(params: { left?: number; top?: number }) {
+    if (scrollSyncLockRef.current) return;
+    scrollSyncLockRef.current = true;
+    if (typeof params.left === "number") {
+      if (calendarHeaderScrollRef.current) calendarHeaderScrollRef.current.scrollLeft = params.left;
+      if (calendarGridScrollRef.current) calendarGridScrollRef.current.scrollLeft = params.left;
+    }
+    if (typeof params.top === "number") {
+      if (calendarTimeScrollRef.current) calendarTimeScrollRef.current.scrollTop = params.top;
+      if (calendarGridScrollRef.current) calendarGridScrollRef.current.scrollTop = params.top;
+    }
+    window.requestAnimationFrame(() => {
+      scrollSyncLockRef.current = false;
+    });
+  }
+
+  function handleCalendarHeadScroll() {
+    const head = calendarHeaderScrollRef.current;
+    if (!head) return;
+    syncScrollTargets({ left: head.scrollLeft });
+  }
+
+  function handleCalendarGridScroll() {
+    const grid = calendarGridScrollRef.current;
+    if (!grid) return;
+    syncScrollTargets({ left: grid.scrollLeft, top: grid.scrollTop });
+  }
+
+  function handleCalendarTimeScroll() {
+    const time = calendarTimeScrollRef.current;
+    if (!time) return;
+    syncScrollTargets({ top: time.scrollTop });
+  }
+
   async function addWaitlistItem() {
     const parsed = decodeWaitlistInput(waitlistInput);
     if (!parsed) return;
@@ -1353,34 +1467,70 @@ export default function FrontdeskBookingsPage() {
   }
 
   return (
-    <main className="fdGlassScene">
-      <section className="fdGlassBackdrop fdBkWorkspace">
-        <header className="fdGlassPanel fdBkHead">
-          <div>
-            <div className="fdEyebrow">{zh ? "櫃檯排課工作台" : "FRONTDESK SCHEDULER"}</div>
-            <h1 className="h1" style={{ marginTop: 8, fontSize: 34 }}>{zh ? "Google 行事曆風格排課" : "Google Calendar Style Scheduler"}</h1>
-            <p className="fdGlassText" style={{ marginTop: 8 }}>
-              {zh
-                ? "左側搜尋會員與合約堂次，右側依教練與時段排課。拖拉與改期都會先經過確認彈窗與衝突檢查。"
-                : "Search members and contracts on the left, schedule by coach and time on the right with confirm-first drag-and-drop."}
-            </p>
+    <main className="fdBkPage">
+      <section className={`fdBkWorkspace ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileSidebarOpen ? "is-mobile-sidebar-open" : ""}`}>
+        <header className="fdBkTopBar">
+          <div className="fdBkTopLeft">
+            <button
+              type="button"
+              className="fdBkIconBtn"
+              onClick={() => {
+                setSidebarCollapsed((prev) => !prev);
+                setMobileSidebarOpen((prev) => !prev);
+              }}
+              aria-label={zh ? "切換側欄" : "Toggle sidebar"}
+            >
+              ☰
+            </button>
+            <strong>{zh ? "櫃檯排課工作台" : "Frontdesk Scheduler"}</strong>
           </div>
-          <div className="fdPillActions" style={{ marginTop: 0 }}>
-            <button type="button" className="fdPillBtn" onClick={() => setDateKey(shiftDate(dateKey, -1))}>{zh ? "前一天" : "Prev"}</button>
-            <button type="button" className="fdPillBtn" onClick={() => setDateKey(toDateKey(new Date()))}>{zh ? "今天" : "Today"}</button>
-            <button type="button" className="fdPillBtn" onClick={() => setDateKey(shiftDate(dateKey, 1))}>{zh ? "後一天" : "Next"}</button>
-            <input type="date" className="input" value={dateKey} onChange={(event) => setDateKey(event.target.value || toDateKey(new Date()))} style={{ minWidth: 160 }} />
+          <div className="fdBkTopCenter">
+            <button type="button" className="fdBkGhostBtn" onClick={() => setDateKey(toDateKey(new Date()))}>{zh ? "今天" : "Today"}</button>
+            <button type="button" className="fdBkGhostIconBtn" onClick={() => setDateKey(shiftDate(dateKey, -1))}>{"<"}</button>
+            <button type="button" className="fdBkGhostIconBtn" onClick={() => setDateKey(shiftDate(dateKey, 1))}>{">"}</button>
+            <span className={`fdBkDateTitle ${isTodayView ? "is-today" : ""}`}>
+              {new Date(`${dateKey}T00:00:00`).toLocaleDateString(zh ? "zh-TW" : "en-US", { year: "numeric", month: "long", day: "numeric", weekday: "short" })}
+            </span>
+          </div>
+          <div className="fdBkTopRight">
+            <div className="fdBkViewSwitch" role="tablist" aria-label={zh ? "視圖切換" : "View switch"}>
+              <button type="button" className="is-active" role="tab" aria-selected>{zh ? "日" : "Day"}</button>
+              <button type="button" role="tab" aria-selected={false} disabled>{zh ? "週" : "Week"}</button>
+              <button type="button" role="tab" aria-selected={false} disabled>{zh ? "月" : "Month"}</button>
+            </div>
+            <form
+              className="fdBkTopSearch"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void memberSearch(memberQuery);
+              }}
+            >
+              <input className="input" value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} placeholder={zh ? "搜尋會員" : "Search member"} />
+            </form>
+            <input className="input fdBkCoachSearchInput" value={coachKeyword} onChange={(event) => setCoachKeyword(event.target.value)} placeholder={zh ? "搜尋教練" : "Search coach"} />
+            <button type="button" className="fdBkGhostBtn" onClick={() => void loadAll(dateKey)}>{zh ? "重新整理" : "Reload"}</button>
           </div>
         </header>
 
-        {error ? <div className="error" style={{ marginTop: 10 }}>{error}</div> : null}
-        {message ? <p className="sub" style={{ marginTop: 10, color: "var(--brand)" }}>{message}</p> : null}
+        {error ? <div className="error fdBkMessageLine">{error}</div> : null}
+        {message ? <p className="sub fdBkMessageLine fdBkMessageLineInfo">{message}</p> : null}
 
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
+        <DndContext autoScroll sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
           <section className="fdBkLayout">
-            <aside className="fdGlassSubPanel fdBkSidebar">
-            <section className="fdBkCard">
-              <h2 className="sectionTitle" style={{ margin: 0 }}>{zh ? "會員搜尋" : "Member Search"}</h2>
+            <aside className="fdBkSidebar">
+            <SidebarAccordion title={zh ? "建立入口" : "Quick Actions"} defaultOpen>
+              <div className="fdBkQuickActionGrid">
+                <button type="button" className="fdBkGhostBtn" onClick={() => setSidebarCollapsed(false)}>{zh ? "新增預約" : "New booking"}</button>
+                <button type="button" className="fdBkGhostBtn" onClick={() => document.getElementById("booking-block-slot")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{zh ? "封鎖時段" : "Block slot"}</button>
+                <button type="button" className="fdBkGhostBtn" onClick={() => document.getElementById("booking-waitlist")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{zh ? "候補名單" : "Waitlist"}</button>
+              </div>
+            </SidebarAccordion>
+
+            <SidebarAccordion title={zh ? "迷你月曆" : "Mini Calendar"} defaultOpen>
+              <input type="date" className="input" value={dateKey} onChange={(event) => setDateKey(event.target.value || toDateKey(new Date()))} />
+            </SidebarAccordion>
+
+            <SidebarAccordion title={zh ? "會員搜尋" : "Member Search"} defaultOpen id="booking-member-search">
               <form onSubmit={handleMemberSearchSubmit} className="fdBkMemberSearchForm">
                 <input value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} className="input" placeholder={zh ? "姓名 / 電話（Enter 搜尋）" : "Name / phone (Enter)"} />
                 <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={searchingMember}>
@@ -1415,10 +1565,9 @@ export default function FrontdeskBookingsPage() {
                   </button>
                 ))}
               </div>
-            </section>
+            </SidebarAccordion>
 
-            <section className="fdBkCard">
-              <h3 className="sectionTitle" style={{ margin: 0 }}>{zh ? "會員資訊" : "Member Profile"}</h3>
+            <SidebarAccordion title={zh ? "會員資訊" : "Member Profile"} defaultOpen>
               {selectedMember ? (
                 <div className="fdBkMemberInfo">
                   <p className="sub">{zh ? "姓名" : "Name"}: {selectedMember.full_name || "-"}</p>
@@ -1431,10 +1580,9 @@ export default function FrontdeskBookingsPage() {
               ) : (
                 <p className="fdGlassText">{zh ? "尚未選擇會員。" : "No member selected."}</p>
               )}
-            </section>
+            </SidebarAccordion>
 
-            <section className="fdBkCard">
-              <h3 className="sectionTitle" style={{ margin: 0 }}>{zh ? "教練課程 / 合約" : "Contracts / Sessions"}</h3>
+            <SidebarAccordion title={zh ? "教練課程 / 合約" : "Contracts / Sessions"} defaultOpen>
               {loadingPasses ? <p className="fdGlassText">{zh ? "載入合約..." : "Loading contracts..."}</p> : null}
               {!loadingPasses && selectedMember && selectedMemberContracts.length === 0 ? <p className="fdGlassText">{zh ? "無教練課程合約。" : "No active contract."}</p> : null}
               {!selectedMember ? <p className="fdGlassText">{zh ? "請先選擇會員。" : "Please select member first."}</p> : null}
@@ -1483,10 +1631,9 @@ export default function FrontdeskBookingsPage() {
                   </article>
                 );
               })}
-            </section>
+            </SidebarAccordion>
 
-            <section className="fdBkCard">
-              <h3 className="sectionTitle" style={{ margin: 0 }}>{zh ? "狀態更新" : "Status Update"}</h3>
+            <SidebarAccordion title={zh ? "狀態更新" : "Status Update"} defaultOpen={false}>
               <form onSubmit={submitStatusUpdate} className="fdBkStatusForm">
                 <select className="input" value={statusBookingId} onChange={(event) => setStatusBookingId(event.target.value)} required>
                   <option value="">{zh ? "選擇預約 ID" : "Select booking"}</option>
@@ -1502,10 +1649,9 @@ export default function FrontdeskBookingsPage() {
                 <input className="input" value={statusReason} onChange={(event) => setStatusReason(event.target.value)} placeholder={zh ? "更新原因（必填）" : "Reason (required)"} required />
                 <button type="submit" className="fdPillBtn" disabled={saving}>{saving ? (zh ? "更新中..." : "Updating...") : zh ? "套用狀態" : "Apply"}</button>
               </form>
-            </section>
+            </SidebarAccordion>
 
-            <section className="fdBkCard">
-              <h3 className="sectionTitle" style={{ margin: 0 }}>{zh ? "封鎖時段（教練不可排）" : "Coach Blocked Slots"}</h3>
+            <SidebarAccordion title={zh ? "封鎖時段（教練不可排）" : "Coach Blocked Slots"} defaultOpen={false} id="booking-block-slot">
               <form onSubmit={submitCoachBlock} className="fdBkStatusForm">
                 <select className="input" value={blockCoachId} onChange={(event) => { setBlockCoachId(event.target.value); if (editingBlockId) setEditingBlockId(""); }} required>
                   <option value="">{zh ? "選擇教練" : "Select coach"}</option>
@@ -1547,10 +1693,9 @@ export default function FrontdeskBookingsPage() {
                   </button>
                 </div>
               </form>
-            </section>
+            </SidebarAccordion>
 
-            <section className="fdBkCard">
-              <h3 className="sectionTitle" style={{ margin: 0 }}>{zh ? "候補名單（P2）" : "Waitlist (P2)"}</h3>
+            <SidebarAccordion title={zh ? "候補名單（P2）" : "Waitlist (P2)"} defaultOpen={false} id="booking-waitlist">
               <div className="fdBkInline">
                 <input className="input" value={waitlistInput} onChange={(event) => setWaitlistInput(event.target.value)} placeholder={zh ? "姓名 / 電話 / 時段" : "Name / phone / time"} />
                 <button type="button" className="fdPillBtn" onClick={addWaitlistItem}>+</button>
@@ -1564,25 +1709,23 @@ export default function FrontdeskBookingsPage() {
                 ))}
                 {waitlist.length === 0 ? <p className="fdGlassText">{zh ? "尚無候補資料。" : "No waitlist items."}</p> : null}
               </div>
-            </section>
+            </SidebarAccordion>
 
-            <section className="fdBkCard">
-              <h3 className="sectionTitle" style={{ margin: 0 }}>{zh ? "Google Sync（P2 預留）" : "Google Sync (P2 Placeholder)"}</h3>
+            <SidebarAccordion title={zh ? "Google Sync（P2 預留）" : "Google Sync (P2 Placeholder)"} defaultOpen={false}>
               <p className="fdGlassText">
                 {zh ? "目前保留同步介面：後續可將教練行程同步至 Google Calendar，避免外務衝突。" : "Sync placeholder kept for future Google Calendar integration."}
               </p>
-            </section>
+            </SidebarAccordion>
           </aside>
 
-          <section className="fdGlassSubPanel fdBkMain">
+          <section className="fdBkMain">
             <div className="fdBkMainSticky">
               <div>
                 <h2 className="sectionTitle" style={{ margin: 0 }}>{zh ? "日排程（06:00 - 23:00）" : "Daily Schedule (06:00 - 23:00)"}</h2>
-                <p className="fdGlassText" style={{ marginTop: 4 }}>{dateKey}</p>
+                <p className="fdGlassText" style={{ marginTop: 4 }}>{isTodayView ? (zh ? "今天 · 資源日視圖" : "Today · Resource Day View") : dateKey}</p>
               </div>
               <div className="fdBkInline">
-                <input className="input" value={coachKeyword} onChange={(event) => setCoachKeyword(event.target.value)} placeholder={zh ? "搜尋教練" : "Search coaches"} />
-                <button type="button" className="fdPillBtn" onClick={() => void loadAll(dateKey)}>{zh ? "重新整理" : "Reload"}</button>
+                <input type="date" className="input" value={dateKey} onChange={(event) => setDateKey(event.target.value || toDateKey(new Date()))} />
               </div>
             </div>
 
@@ -1608,9 +1751,9 @@ export default function FrontdeskBookingsPage() {
               ))}
             </div>
 
-            <div className="fdBkCalendarViewport">
+            <div className="fdBkCalendarViewport" ref={calendarGridScrollRef} onScroll={handleCalendarGridScroll}>
               <div className="fdBkCalendarBoard" style={{ minWidth: `${88 + Math.max(1, coachOptions.length) * 220}px` }}>
-                <div className="fdBkCoachHeaderRow" style={{ gridTemplateColumns: `88px repeat(${Math.max(1, coachOptions.length)}, minmax(220px, 1fr))` }}>
+                <div className="fdBkCoachHeaderRow" ref={calendarHeaderScrollRef} onScroll={handleCalendarHeadScroll} style={{ gridTemplateColumns: `88px repeat(${Math.max(1, coachOptions.length)}, minmax(220px, 1fr))` }}>
                   <div className="fdBkTimeHeader">{zh ? "時間" : "Time"}</div>
                   {coachOptions.map((coach) => (
                     <div key={coach.id} className="fdBkCoachHeaderCell">
@@ -1620,8 +1763,23 @@ export default function FrontdeskBookingsPage() {
                   ))}
                 </div>
 
+                <div className="fdBkAllDayRow" style={{ gridTemplateColumns: `88px repeat(${Math.max(1, coachOptions.length)}, minmax(220px, 1fr))` }}>
+                  <div className="fdBkAllDayTimeLabel">{zh ? "全天" : "All-day"}</div>
+                  {coachOptions.map((coach) => (
+                    <div key={`allday-${coach.id}`} className="fdBkAllDayCell">
+                      {(allDayByCoach[coach.id] || []).length > 0 ? (
+                        (allDayByCoach[coach.id] || []).map((item) => (
+                          <span key={item.id} className={`fdBkAllDayChip ${item.type === "block" ? "is-block" : ""}`}>{item.label}</span>
+                        ))
+                      ) : (
+                        <span className="fdBkAllDayPlaceholder">{zh ? "無全天事件" : "No all-day events"}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
                 <div className="fdBkCalendarBody" style={{ gridTemplateColumns: `88px repeat(${Math.max(1, coachOptions.length)}, minmax(220px, 1fr))` }}>
-                  <div className="fdBkTimeColumn">
+                  <div className="fdBkTimeColumn" ref={calendarTimeScrollRef} onScroll={handleCalendarTimeScroll}>
                     {timeSlots.map((slot) => (<div key={slot} className="fdBkTimeSlotLabel">{slot}</div>))}
                   </div>
 
@@ -1629,7 +1787,7 @@ export default function FrontdeskBookingsPage() {
                     const coachBookings = bookingsByCoach[coach.id] || [];
                     const coachBlockItems = blocksByCoach[coach.id] || [];
                     return (
-                      <div key={coach.id} className="fdBkCoachColumn">
+                      <div key={coach.id} className={`fdBkCoachColumn ${isTodayView ? "is-today" : ""}`}>
                         {timeSlots.map((slot) => {
                           return (
                             <DroppableSlotCell
@@ -1642,6 +1800,7 @@ export default function FrontdeskBookingsPage() {
                             />
                           );
                         })}
+                        {showNowLine ? <div className="fdBkNowLine" style={{ top: `${nowLineTop}px` }} /> : null}
                         {coachBlockItems.map((block) => {
                           const startsMinute = minuteFromIso(block.starts_at);
                           const endsMinute = minuteFromIso(block.ends_at);
@@ -1693,6 +1852,7 @@ export default function FrontdeskBookingsPage() {
                               title={member?.full_name || item.member_id.slice(0, 6)}
                               subtitle={`${toTimeLabel(startsMinute)}-${toTimeLabel(endsMinute)}`}
                               statusText={statusLabel(status, zh)}
+                              tooltip={`${member?.full_name || item.member_id.slice(0, 8)} · ${member?.phone || "-"} · ${statusLabel(status, zh)}${item.note ? ` · ${stripRoomFromNote(item.note) || item.note}` : ""}`}
                               payload={{
                                 kind: "booking_event",
                                 bookingId: item.id,
@@ -1745,6 +1905,13 @@ export default function FrontdeskBookingsPage() {
             </div>
             </section>
           </section>
+          <button
+            type="button"
+            className="fdBkMobileScrim"
+            aria-hidden={!mobileSidebarOpen}
+            onClick={() => setMobileSidebarOpen(false)}
+            tabIndex={mobileSidebarOpen ? 0 : -1}
+          />
           <DragOverlay dropAnimation={null}>
             {activeDragPayload ? (
               <div className="fdBkDragOverlay">
