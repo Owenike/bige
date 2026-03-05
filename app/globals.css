@@ -4820,3 +4820,363 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     width: 100%;
   }
 }
+
+/* Frontdesk bookings workspace */
+.fdBkWorkspace{
+  padding: 12px;
+}
+.fdBkHead{
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.fdBkLayout{
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 350px minmax(0, 1fr);
+  gap: 12px;
+}
+.fdBkSidebar{
+  align-self: start;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+.fdBkCard{
+  border: 1px solid #d8e4f2;
+  border-radius: 14px;
+  background: #fff;
+  padding: 10px;
+  box-shadow: 0 6px 12px rgba(46, 64, 96, .08);
+}
+.fdBkMemberSearchForm{
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr auto;
+}
+.fdBkRecentRow{
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fdBkSearchResult{
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+.fdBkMemberRow{
+  width: 100%;
+  border: 1px solid #d4e2f2;
+  border-radius: 11px;
+  background: #f7fbff;
+  text-align: left;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+}
+.fdBkMemberRow.is-active{
+  border-color: #54c9b9;
+  box-shadow: 0 0 0 2px rgba(84, 201, 185, .2);
+}
+.fdBkMemberInfo{
+  margin-top: 8px;
+  display: grid;
+  gap: 4px;
+}
+.fdBkPassCard{
+  margin-top: 8px;
+  border: 1px solid #d7e3f2;
+  border-radius: 12px;
+  background: #f9fcff;
+}
+.fdBkPassHead{
+  width: 100%;
+  background: transparent;
+  border: 0;
+  padding: 9px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+.fdBkPassSessions{
+  border-top: 1px solid #dbe7f4;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.fdBkSessionPill{
+  border: 1px solid #cddcf0;
+  border-radius: 10px;
+  background: #fff;
+  min-height: 46px;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+  cursor: grab;
+}
+.fdBkSessionPill.is-used{
+  opacity: .55;
+  background: #f2f5f9;
+  cursor: not-allowed;
+}
+.fdBkStatusForm{
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+.fdBkInline{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fdBkWaitlist{
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+.fdBkWaitRow{
+  border: 1px solid #d7e3f2;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 7px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.fdBkMain{
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.fdBkMainSticky{
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  background: linear-gradient(180deg, rgba(246,251,255,.98), rgba(246,251,255,.9));
+  padding: 8px;
+  border: 1px solid #d5e3f2;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.fdBkCoachFilterRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fdBkCoachFilterTag{
+  border: 1px solid #d2e0f0;
+  border-radius: 999px;
+  background: #fff;
+  padding: 5px 10px;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.fdBkSummaryRow{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+.fdBkSummaryCard{
+  border: 1px solid #d8e4f2;
+  border-radius: 11px;
+  background: #fff;
+  padding: 8px;
+  display: grid;
+  gap: 2px;
+}
+
+.fdBkCalendarViewport{
+  border: 1px solid #d8e4f2;
+  border-radius: 14px;
+  background: #fff;
+  overflow: auto;
+  max-height: calc(100dvh - 240px);
+}
+.fdBkCalendarBoard{
+  min-height: 400px;
+}
+.fdBkCoachHeaderRow{
+  display: grid;
+  grid-template-columns: 88px repeat(auto-fit, minmax(220px, 1fr));
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+.fdBkTimeHeader,
+.fdBkCoachHeaderCell{
+  min-height: 46px;
+  border-bottom: 1px solid #d9e5f2;
+  border-right: 1px solid #e1ebf6;
+  background: #f4f8fe;
+  padding: 8px;
+  display: grid;
+  align-content: center;
+}
+.fdBkTimeHeader{
+  position: sticky;
+  left: 0;
+  z-index: 7;
+}
+.fdBkCoachHeaderCell span{
+  font-size: 12px;
+  color: #6a7891;
+}
+.fdBkCalendarBody{
+  display: grid;
+  grid-template-columns: 88px repeat(auto-fit, minmax(220px, 1fr));
+}
+.fdBkTimeColumn{
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: #f8fbff;
+  border-right: 1px solid #e1ebf6;
+}
+.fdBkTimeSlotLabel{
+  height: 34px;
+  border-bottom: 1px solid #edf3f9;
+  padding: 5px 8px;
+  color: #607089;
+  font-size: 12px;
+}
+.fdBkCoachColumn{
+  position: relative;
+  border-right: 1px solid #edf3f9;
+}
+.fdBkSlotCell{
+  height: 34px;
+  border-bottom: 1px solid #edf3f9;
+  cursor: copy;
+}
+.fdBkSlotCell:hover{
+  background: #f7fcff;
+}
+.fdBkSlotCell.is-active-drop{
+  background: rgba(73, 203, 188, .16);
+}
+.fdBkEvent{
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  text-align: left;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+  z-index: 3;
+  cursor: move;
+}
+.fdBkEvent strong,
+.fdBkEvent span{
+  font-size: 12px;
+}
+.fdBkEvent.is-booked{ background: #e7f6ff; border-color: #9ac8ed; color: #294b68; }
+.fdBkEvent.is-checkin{ background: #e9fff8; border-color: #8fd9c4; color: #21584d; }
+.fdBkEvent.is-completed{ background: #edf3ff; border-color: #c0d2f2; color: #40597b; }
+.fdBkEvent.is-cancelled{ background: #f2f4f7; border-color: #cfd8e2; color: #5c6778; cursor: default; }
+.fdBkEvent.is-noshow{ background: #fff4eb; border-color: #efc8ab; color: #705135; }
+.fdBkEvent.is-rescheduled{ background: #efeaff; border-color: #cdbdf2; color: #56458c; }
+.fdBkEvent.is-blocked{ background: #ffeef0; border-color: #f2bcc4; color: #823946; cursor: not-allowed; }
+
+.fdBkUnassignedList,
+.fdBkAuditList{
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+.fdBkUnassignedItem,
+.fdBkAuditItem{
+  border: 1px solid #d9e5f2;
+  border-radius: 10px;
+  background: #f9fcff;
+  padding: 7px;
+  display: grid;
+  gap: 2px;
+}
+
+.fdBkModalBackdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 22, 36, .46);
+  display: grid;
+  place-items: center;
+  z-index: 200;
+  padding: 16px;
+}
+.fdBkModal{
+  width: min(820px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 12px;
+}
+.fdBkModalHead{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.fdBkModalGrid{
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.fdBkCheckboxLine{
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.fdBkContractMeta{
+  margin-top: 10px;
+  border: 1px dashed #c9dced;
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.fdBkModalActions{
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.fdBkLoadingMask{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+}
+
+@media (max-width: 1100px){
+  .fdBkLayout{ grid-template-columns: 1fr; }
+  .fdBkSidebar{ position: static; max-height: none; }
+}
+@media (max-width: 900px){
+  .fdBkHead{ flex-direction: column; }
+  .fdBkMemberSearchForm{ grid-template-columns: 1fr; }
+  .fdBkMainSticky{ position: static; }
+  .fdBkModalGrid{ grid-template-columns: 1fr; }
+  .fdBkModalActions{ flex-direction: column; }
+  .fdBkModalActions .fdPillBtn{ width: 100%; justify-content: center; }
+  .fdBkPassSessions{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
