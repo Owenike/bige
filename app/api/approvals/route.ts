@@ -1,12 +1,18 @@
-import { NextResponse } from "next/server";
-import { requireProfile } from "../../../lib/auth-context";
+import { apiError, apiSuccess, requireProfile } from "../../../lib/auth-context";
+import { requireAnyPermission } from "../../../lib/permissions";
 
 export async function GET(request: Request) {
   const auth = await requireProfile(["manager", "frontdesk"], request);
   if (!auth.ok) return auth.response;
 
+  const permission =
+    auth.context.role === "frontdesk"
+      ? requireAnyPermission(auth.context, ["refunds.request", "orders.void.request", "pass_adjustments.request"])
+      : requireAnyPermission(auth.context, ["refunds.approve", "orders.void.approve", "pass_adjustments.approve"]);
+  if (!permission.ok) return permission.response;
+
   if (!auth.context.tenantId) {
-    return NextResponse.json({ error: "Invalid tenant context" }, { status: 400 });
+    return apiError(400, "FORBIDDEN", "Invalid tenant context");
   }
 
   const params = new URL(request.url).searchParams;
@@ -24,6 +30,6 @@ export async function GET(request: Request) {
   if (auth.context.role === "frontdesk") query = query.eq("requested_by", auth.context.userId);
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: data ?? [] });
+  if (error) return apiError(500, "INTERNAL_ERROR", error.message);
+  return apiSuccess({ items: data ?? [] });
 }

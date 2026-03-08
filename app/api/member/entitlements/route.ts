@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../lib/auth-context";
+import { apiError, apiSuccess, requireProfile } from "../../../../lib/auth-context";
+import { checkMemberEligibility } from "../../../../lib/entitlement-eligibility";
+import { evaluateContractStatus } from "../../../../lib/member-plan-lifecycle";
 
 function isValidLimit(value: string | null) {
   if (!value) return false;
@@ -7,47 +8,14 @@ function isValidLimit(value: string | null) {
   return Number.isInteger(n) && n > 0 && n <= 200;
 }
 
-function extractSummaryRows(rows: any[] | null | undefined) {
-  if (!Array.isArray(rows) || rows.length === 0) return [];
-  return rows.slice(0, 50);
-}
-
-function bestEffortEntitlementSummary(input: {
-  subscriptions: any[];
-  entitlements: any[];
-  entryPasses: any[];
-}) {
-  // Keep this intentionally conservative: schema may differ across deployments.
-  const pickDate = (obj: any, keys: string[]) => {
-    for (const k of keys) {
-      const v = obj?.[k];
-      if (typeof v === "string" && v.length > 0) return v;
-    }
-    return null;
-  };
-  const pickNumber = (obj: any, keys: string[]) => {
-    for (const k of keys) {
-      const v = obj?.[k];
-      if (typeof v === "number") return v;
-      if (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))) return Number(v);
-    }
-    return null;
-  };
-
-  const latestSub = input.subscriptions?.[0] ?? null;
-  const latestEnt = input.entitlements?.[0] ?? null;
-  const latestPass = input.entryPasses?.[0] ?? null;
-
-  return {
-    monthly_expires_at:
-      pickDate(latestSub, ["expires_at", "valid_to", "current_period_end", "ends_at"]) ??
-      pickDate(latestEnt, ["monthly_expires_at", "expires_at", "valid_to"]) ??
-      null,
-    remaining_sessions:
-      pickNumber(latestEnt, ["remaining_sessions", "remaining", "remaining_count", "sessions_remaining"]) ??
-      null,
-    pass_valid_to: pickDate(latestPass, ["valid_to", "expires_at", "ends_at"]) ?? null,
-  };
+function isMissingTableError(message: string | undefined, table: string) {
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  const target = table.toLowerCase();
+  return (
+    (lower.includes("does not exist") && lower.includes(target)) ||
+    (lower.includes("could not find the table") && lower.includes(target))
+  );
 }
 
 export async function GET(request: Request) {
@@ -55,74 +23,231 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
 
   if (!auth.context.tenantId) {
-    return NextResponse.json({ error: "Tenant context is required" }, { status: 400 });
+    return apiError(400, "FORBIDDEN", "Tenant context is required");
   }
 
   const url = new URL(request.url);
   const limit = isValidLimit(url.searchParams.get("limit")) ? Number(url.searchParams.get("limit")) : 50;
 
-  // Resolve member_id for the authenticated user in this tenant.
   const memberResult = await auth.supabase
     .from("members")
-    .select("id")
+    .select("id, store_id")
     .eq("tenant_id", auth.context.tenantId)
     .eq("auth_user_id", auth.context.userId)
     .maybeSingle();
-
-  if (memberResult.error || !memberResult.data) {
-    return NextResponse.json({ error: "Member not found" }, { status: 404 });
-  }
+  if (memberResult.error) return apiError(500, "INTERNAL_ERROR", memberResult.error.message);
+  if (!memberResult.data) return apiError(404, "ENTITLEMENT_NOT_FOUND", "Member not found");
 
   const memberId = memberResult.data.id;
+  const memberBranchId = typeof memberResult.data.store_id === "string" ? memberResult.data.store_id : null;
 
-  const [subscriptionsRes, entitlementsRes, entryPassesRes] = await Promise.all([
+  const [contractsRes, plansRes, subscriptionsRes, entryPassesRes] = await Promise.all([
     auth.supabase
-      .from("subscriptions")
-      .select("*")
+      .from("member_plan_contracts")
+      .select(
+        "id, plan_catalog_id, status, starts_at, ends_at, remaining_uses, remaining_sessions, auto_renew, note, created_at, updated_at",
+      )
       .eq("tenant_id", auth.context.tenantId)
       .eq("member_id", memberId)
       .order("created_at", { ascending: false })
       .limit(limit),
     auth.supabase
-      .from("member_entitlements")
-      .select("*")
+      .from("member_plan_catalog")
+      .select("id, code, name, plan_type, fulfillment_kind, is_active")
+      .eq("tenant_id", auth.context.tenantId)
+      .limit(500),
+    auth.supabase
+      .from("subscriptions")
+      .select("id, member_plan_contract_id, valid_from, valid_to, status")
       .eq("tenant_id", auth.context.tenantId)
       .eq("member_id", memberId)
       .order("created_at", { ascending: false })
       .limit(limit),
     auth.supabase
       .from("entry_passes")
-      .select("*")
+      .select("id, member_plan_contract_id, pass_type, remaining, total_sessions, expires_at, status")
       .eq("tenant_id", auth.context.tenantId)
       .eq("member_id", memberId)
       .order("created_at", { ascending: false })
       .limit(limit),
   ]);
 
-  if (subscriptionsRes.error || entitlementsRes.error || entryPassesRes.error) {
-    return NextResponse.json(
-      {
-        error: "Failed to load entitlements",
-        details: {
-          subscriptions: subscriptionsRes.error?.message ?? null,
-          entitlements: entitlementsRes.error?.message ?? null,
-          entryPasses: entryPassesRes.error?.message ?? null,
-        },
-      },
-      { status: 500 },
-    );
+  if (contractsRes.error && !isMissingTableError(contractsRes.error.message, "member_plan_contracts")) {
+    return apiError(500, "INTERNAL_ERROR", contractsRes.error.message);
+  }
+  if (plansRes.error && !isMissingTableError(plansRes.error.message, "member_plan_catalog")) {
+    return apiError(500, "INTERNAL_ERROR", plansRes.error.message);
+  }
+  if (subscriptionsRes.error) return apiError(500, "INTERNAL_ERROR", subscriptionsRes.error.message);
+  if (entryPassesRes.error) return apiError(500, "INTERNAL_ERROR", entryPassesRes.error.message);
+
+  const plansById = new Map<
+    string,
+    {
+      code: string | null;
+      name: string | null;
+      planType: string | null;
+      fulfillmentKind: string | null;
+      isActive: boolean;
+    }
+  >();
+  for (const plan of ((plansRes.data || []) as Array<{
+    id: string;
+    code: string | null;
+    name: string | null;
+    plan_type: string | null;
+    fulfillment_kind: string | null;
+    is_active: boolean | null;
+  }>)) {
+    plansById.set(plan.id, {
+      code: plan.code ?? null,
+      name: plan.name ?? null,
+      planType: plan.plan_type ?? null,
+      fulfillmentKind: plan.fulfillment_kind ?? null,
+      isActive: plan.is_active !== false,
+    });
   }
 
-  const subscriptions = extractSummaryRows(subscriptionsRes.data);
-  const entitlements = extractSummaryRows(entitlementsRes.data);
-  const entryPasses = extractSummaryRows(entryPassesRes.data);
+  const subscriptionsByContract = new Map<string, Record<string, unknown>>();
+  for (const row of (subscriptionsRes.data || []) as Array<Record<string, unknown>>) {
+    const contractId = typeof row.member_plan_contract_id === "string" ? row.member_plan_contract_id : "";
+    if (contractId && !subscriptionsByContract.has(contractId)) {
+      subscriptionsByContract.set(contractId, row);
+    }
+  }
+  const passesByContract = new Map<string, Record<string, unknown>>();
+  for (const row of (entryPassesRes.data || []) as Array<Record<string, unknown>>) {
+    const contractId = typeof row.member_plan_contract_id === "string" ? row.member_plan_contract_id : "";
+    if (contractId && !passesByContract.has(contractId)) {
+      passesByContract.set(contractId, row);
+    }
+  }
 
-  return NextResponse.json({
+  const contracts = ((contractsRes.data || []) as Array<Record<string, unknown>>).map((contract) => {
+    const planId = typeof contract.plan_catalog_id === "string" ? contract.plan_catalog_id : "";
+    const plan = plansById.get(planId);
+    const remainingUses = typeof contract.remaining_uses === "number" ? contract.remaining_uses : null;
+    const remainingSessions = typeof contract.remaining_sessions === "number" ? contract.remaining_sessions : null;
+    const endsAt = typeof contract.ends_at === "string" ? contract.ends_at : null;
+    const subscription = subscriptionsByContract.get(String(contract.id || ""));
+    const pass = passesByContract.get(String(contract.id || ""));
+    const status = evaluateContractStatus({
+      status: typeof contract.status === "string" ? contract.status : null,
+      endsAt,
+      remainingUses,
+      remainingSessions:
+        typeof pass?.remaining === "number"
+          ? pass.remaining
+          : typeof pass?.remaining === "string"
+            ? Number(pass.remaining)
+            : remainingSessions,
+    });
+    const entryEligible = status === "active" && (plan?.planType === "subscription" || plan?.planType === "entry_pass" || plan?.planType === "trial");
+    const coachEligible = status === "active" && (plan?.planType === "coach_pack" || plan?.planType === "trial");
+    return {
+      id: String(contract.id || ""),
+      planCatalogId: planId || null,
+      planCode: plan?.code ?? null,
+      planName: plan?.name ?? null,
+      planType: plan?.planType ?? null,
+      fulfillmentKind: plan?.fulfillmentKind ?? null,
+      planActive: plan?.isActive ?? true,
+      status,
+      startsAt: typeof contract.starts_at === "string" ? contract.starts_at : null,
+      endsAt,
+      remainingUses,
+      remainingSessions:
+        typeof pass?.remaining === "number"
+          ? pass.remaining
+          : typeof pass?.remaining === "string"
+            ? Number(pass.remaining)
+            : remainingSessions,
+      autoRenew: contract.auto_renew === true,
+      note: typeof contract.note === "string" ? contract.note : null,
+      subscription: subscription || null,
+      pass: pass || null,
+      usableFor: {
+        entry: entryEligible,
+        booking: entryEligible || coachEligible,
+        redemption: coachEligible,
+      },
+      createdAt: typeof contract.created_at === "string" ? contract.created_at : null,
+      updatedAt: typeof contract.updated_at === "string" ? contract.updated_at : null,
+    };
+  });
+
+  const [entryEligibility, bookingEligibility, redemptionEligibility] = await Promise.all([
+    checkMemberEligibility({
+      supabase: auth.supabase,
+      tenantId: auth.context.tenantId,
+      memberId,
+      branchId: memberBranchId,
+      scenario: "entry",
+    }),
+    checkMemberEligibility({
+      supabase: auth.supabase,
+      tenantId: auth.context.tenantId,
+      memberId,
+      branchId: memberBranchId,
+      scenario: "booking",
+      serviceName: "coach_session",
+      coachId: "coach",
+    }),
+    checkMemberEligibility({
+      supabase: auth.supabase,
+      tenantId: auth.context.tenantId,
+      memberId,
+      branchId: memberBranchId,
+      scenario: "redemption",
+      serviceName: "coach_session",
+      coachId: "coach",
+    }),
+  ]);
+
+  const firstActiveSubscription = ((subscriptionsRes.data || []) as Array<Record<string, unknown>>).find((row) => {
+    const status = typeof row.status === "string" ? row.status : "";
+    return status === "active";
+  });
+  const firstValidPass = ((entryPassesRes.data || []) as Array<Record<string, unknown>>).find((row) => {
+    const status = typeof row.status === "string" ? row.status : "";
+    const remaining = typeof row.remaining === "number" ? row.remaining : Number(row.remaining || 0);
+    const expiresAt = typeof row.expires_at === "string" ? row.expires_at : null;
+    const notExpired = !expiresAt || new Date(expiresAt).getTime() >= Date.now();
+    return status === "active" && remaining > 0 && notExpired;
+  });
+  const legacyRemainingSessions =
+    typeof firstValidPass?.remaining === "number"
+      ? firstValidPass.remaining
+      : contracts.find((item) => typeof item.remainingSessions === "number")?.remainingSessions ?? null;
+
+  return apiSuccess({
     memberId,
-    summary: bestEffortEntitlementSummary({ subscriptions, entitlements, entryPasses }),
-    subscriptions,
-    entitlements,
-    entryPasses,
+    summary: {
+      monthly_expires_at:
+        (typeof firstActiveSubscription?.valid_to === "string" ? firstActiveSubscription.valid_to : null) ??
+        contracts.find((item) => item.planType === "subscription")?.endsAt ??
+        null,
+      remaining_sessions: legacyRemainingSessions,
+      pass_valid_to: (typeof firstValidPass?.expires_at === "string" ? firstValidPass.expires_at : null) ?? null,
+    },
+    entitlements: contracts,
+    contracts,
+    subscriptions: subscriptionsRes.data || [],
+    entryPasses: entryPassesRes.data || [],
+    eligibility: {
+      entry: entryEligibility,
+      booking: bookingEligibility,
+      redemption: redemptionEligibility,
+    },
+    lifecycle: {
+      activeContracts: contracts.filter((item) => item.status === "active").length,
+      expiringSoon: contracts.filter((item) => {
+        if (!item.endsAt) return false;
+        const days = Math.ceil((new Date(item.endsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+        return days >= 0 && days <= 14;
+      }).length,
+      expired: contracts.filter((item) => item.status === "expired").length,
+      exhausted: contracts.filter((item) => item.status === "exhausted").length,
+    },
   });
 }
-

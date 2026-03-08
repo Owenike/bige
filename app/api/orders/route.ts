@@ -1,16 +1,35 @@
 import { NextResponse } from "next/server";
-import { requireOpenShift, requireProfile } from "../../../lib/auth-context";
+import { apiError, apiSuccess, requireOpenShift, requireProfile } from "../../../lib/auth-context";
+import { claimIdempotency, finalizeIdempotency } from "../../../lib/idempotency";
+import { requirePermission } from "../../../lib/permissions";
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function ok<TData extends Record<string, unknown>>(data: TData) {
+  return apiSuccess(data);
+}
+
+function fail(
+  status: number,
+  code: "UNAUTHORIZED" | "FORBIDDEN" | "INTERNAL_ERROR" | "BRANCH_SCOPE_DENIED",
+  message: string,
+) {
+  return apiError(status, code, message);
+}
+
 export async function GET(request: Request) {
-  const auth = await requireProfile(["manager", "frontdesk"], request);
+  const auth = await requireProfile(["platform_admin", "manager", "frontdesk"], request);
   if (!auth.ok) return auth.response;
+  const permission = requirePermission(auth.context, "orders.read");
+  if (!permission.ok) return permission.response;
 
   if (!auth.context.tenantId) {
-    return NextResponse.json({ error: "Invalid tenant context" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "Invalid tenant context");
+  }
+  if (auth.context.role === "frontdesk" && !auth.context.branchId) {
+    return fail(403, "BRANCH_SCOPE_DENIED", "Missing branch context for frontdesk");
   }
 
   let query = auth.supabase
@@ -26,13 +45,18 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: data ?? [] });
+  if (error) return fail(500, "INTERNAL_ERROR", error.message);
+  return ok({ items: data ?? [] });
 }
 
 export async function POST(request: Request) {
-  const auth = await requireProfile(["manager", "frontdesk"], request);
+  const auth = await requireProfile(["platform_admin", "manager", "frontdesk"], request);
   if (!auth.ok) return auth.response;
+  const permission = requirePermission(auth.context, "orders.write");
+  if (!permission.ok) return permission.response;
+  if (auth.context.role === "frontdesk" && !auth.context.branchId) {
+    return fail(403, "BRANCH_SCOPE_DENIED", "Missing branch context for frontdesk");
+  }
 
   const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
   if (!shiftGuard.ok) return shiftGuard.response;
@@ -47,27 +71,47 @@ export async function POST(request: Request) {
   const managerOverride = body?.managerOverride === true;
   const channel = body?.channel === "online" ? "online" : "frontdesk";
   const note = typeof body?.note === "string" ? body.note.trim() : "";
+  const idempotencyKeyInput = typeof body?.idempotencyKey === "string" ? body.idempotencyKey.trim() : "";
 
   if (!auth.context.tenantId || Number.isNaN(amount) || amount <= 0) {
-    return NextResponse.json({ error: "Invalid amount or tenant context" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "Invalid amount or tenant context");
   }
   if (memberId && !isUuid(memberId)) {
-    return NextResponse.json({ error: "memberId must be a valid UUID" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "memberId must be a valid UUID");
   }
   if (!Number.isFinite(subtotal) || subtotal <= 0) {
-    return NextResponse.json({ error: "Invalid subtotal" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "Invalid subtotal");
   }
   if (!Number.isFinite(discountAmount) || discountAmount < 0 || discountAmount > subtotal) {
-    return NextResponse.json({ error: "Invalid discountAmount" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "Invalid discountAmount");
   }
   const computedAmount = Number((subtotal - discountAmount).toFixed(2));
   if (Math.abs(computedAmount - amount) > 0.01) {
-    return NextResponse.json({ error: "amount does not match subtotal - discountAmount" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "amount does not match subtotal - discountAmount");
   }
   const discountRate = subtotal > 0 ? discountAmount / subtotal : 0;
   const requiresManagerOverride = discountAmount > 0 && (discountAmount >= 500 || discountRate >= 0.2);
   if (auth.context.role === "frontdesk" && requiresManagerOverride && !managerOverride) {
-    return NextResponse.json({ error: "High discount requires manager override" }, { status: 409 });
+    return fail(409, "FORBIDDEN", "High discount requires manager override");
+  }
+
+  if (memberId) {
+    const memberResult = await auth.supabase
+      .from("members")
+      .select("id, store_id")
+      .eq("tenant_id", auth.context.tenantId)
+      .eq("id", memberId)
+      .maybeSingle();
+
+    if (memberResult.error) return fail(500, "INTERNAL_ERROR", memberResult.error.message);
+    if (!memberResult.data) return fail(404, "FORBIDDEN", "Member not found");
+    if (
+      auth.context.role === "frontdesk" &&
+      auth.context.branchId &&
+      String(memberResult.data.store_id || "") !== auth.context.branchId
+    ) {
+      return fail(403, "BRANCH_SCOPE_DENIED", "Forbidden member access for current branch");
+    }
   }
 
   const persistedNote = [
@@ -77,6 +121,24 @@ export async function POST(request: Request) {
   ]
     .filter(Boolean)
     .join(" | ");
+
+  const operationKey =
+    idempotencyKeyInput ||
+    ["order_create", auth.context.tenantId, memberId || "walkin", amount.toFixed(2), channel, persistedNote || "na"].join(":");
+  const operationClaim = await claimIdempotency({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    operationKey,
+    actorId: auth.context.userId,
+    ttlMinutes: 30,
+  });
+  if (!operationClaim.ok) return fail(500, "INTERNAL_ERROR", operationClaim.error);
+  if (!operationClaim.claimed) {
+    if (operationClaim.existing?.status === "succeeded" && operationClaim.existing.response) {
+      return ok({ replayed: true, ...operationClaim.existing.response });
+    }
+    return fail(409, "FORBIDDEN", "Duplicate order create request in progress");
+  }
 
   const { data, error } = await auth.supabase
     .from("orders")
@@ -93,7 +155,16 @@ export async function POST(request: Request) {
     .select("id, amount, status, channel, note")
     .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    await finalizeIdempotency({
+      supabase: auth.supabase,
+      tenantId: auth.context.tenantId,
+      operationKey,
+      status: "failed",
+      errorCode: "ORDER_INSERT_FAILED",
+    });
+    return fail(500, "INTERNAL_ERROR", error.message);
+  }
 
   await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
@@ -115,5 +186,21 @@ export async function POST(request: Request) {
     },
   });
 
-  return NextResponse.json({ order: data }, { status: 201 });
+  const successPayload = { order: data };
+  await finalizeIdempotency({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    operationKey,
+    status: "succeeded",
+    response: successPayload as Record<string, unknown>,
+  });
+
+  return NextResponse.json(
+    {
+      ok: true,
+      data: successPayload,
+      order: data,
+    },
+    { status: 201 },
+  );
 }

@@ -1,17 +1,13 @@
-﻿import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../lib/auth-context";
-
-const CANCEL_OR_RESCHEDULE_LOCK_MINUTES = 120;
-
-function canModify(startsAt: string) {
-  const starts = new Date(startsAt).getTime();
-  const lockAt = starts - CANCEL_OR_RESCHEDULE_LOCK_MINUTES * 60 * 1000;
-  return Date.now() < lockAt;
-}
+import { apiError, apiSuccess, requireProfile } from "../../../../lib/auth-context";
+import { checkMemberEligibility } from "../../../../lib/entitlement-eligibility";
 
 export async function GET(request: Request) {
   const auth = await requireProfile(["member"], request);
   if (!auth.ok) return auth.response;
+
+  if (!auth.context.tenantId) {
+    return apiError(400, "FORBIDDEN", "Tenant context is required");
+  }
 
   const memberResult = await auth.supabase
     .from("members")
@@ -21,7 +17,7 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   if (memberResult.error || !memberResult.data) {
-    return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    return apiError(404, "ENTITLEMENT_NOT_FOUND", "Member not found");
   }
 
   const status = new URL(request.url).searchParams.get("status");
@@ -37,9 +33,20 @@ export async function GET(request: Request) {
   if (status) query = query.eq("status", status);
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return apiError(500, "INTERNAL_ERROR", error.message);
 
-  return NextResponse.json({ items: data ?? [] });
+  return apiSuccess({ items: data ?? [] });
+}
+
+function eligibilityStatusFromCode(code: string) {
+  if (code === "BRANCH_SCOPE_DENIED") return 403;
+  if (code === "ENTITLEMENT_NOT_FOUND") return 404;
+  if (code === "PLAN_INACTIVE") return 409;
+  if (code === "ENTITLEMENT_EXPIRED") return 409;
+  if (code === "ENTITLEMENT_EXHAUSTED") return 409;
+  if (code === "CONTRACT_STATE_INVALID") return 409;
+  if (code === "NO_MATCHING_ENTITLEMENT") return 409;
+  return 409;
 }
 
 export async function POST(request: Request) {
@@ -54,26 +61,44 @@ export async function POST(request: Request) {
   const note = typeof body?.note === "string" ? body.note : null;
 
   if (!serviceName || !startsAt || !endsAt || !auth.context.tenantId) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    return apiError(400, "FORBIDDEN", "Missing required fields");
   }
 
   if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
-    return NextResponse.json({ error: "endsAt must be after startsAt" }, { status: 400 });
+    return apiError(400, "FORBIDDEN", "endsAt must be after startsAt");
   }
 
   if (new Date(startsAt).getTime() <= Date.now()) {
-    return NextResponse.json({ error: "Booking must be in the future" }, { status: 400 });
+    return apiError(400, "FORBIDDEN", "Booking must be in the future");
   }
 
   const memberResult = await auth.supabase
     .from("members")
-    .select("id")
+    .select("id, store_id")
     .eq("tenant_id", auth.context.tenantId)
     .eq("auth_user_id", auth.context.userId)
     .maybeSingle();
 
   if (memberResult.error || !memberResult.data) {
-    return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    return apiError(404, "ENTITLEMENT_NOT_FOUND", "Member not found");
+  }
+
+  const eligibility = await checkMemberEligibility({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    memberId: memberResult.data.id,
+    branchId: (typeof memberResult.data.store_id === "string" ? memberResult.data.store_id : null) || auth.context.branchId,
+    scenario: "booking",
+    serviceName,
+    coachId,
+  });
+  if (!eligibility.eligible) {
+    const denialCode = eligibility.reasonCode === "OK" ? "ELIGIBILITY_DENIED" : eligibility.reasonCode;
+    return apiError(
+      eligibilityStatusFromCode(denialCode),
+      denialCode,
+      eligibility.message,
+    );
   }
 
   const overlapResult = await auth.supabase
@@ -87,9 +112,9 @@ export async function POST(request: Request) {
     .limit(1)
     .maybeSingle();
 
-  if (overlapResult.error) return NextResponse.json({ error: overlapResult.error.message }, { status: 500 });
+  if (overlapResult.error) return apiError(500, "INTERNAL_ERROR", overlapResult.error.message);
   if (overlapResult.data) {
-    return NextResponse.json({ error: "Booking time overlaps with existing booking" }, { status: 400 });
+    return apiError(400, "FORBIDDEN", "Booking time overlaps with existing booking");
   }
 
   if (coachId) {
@@ -103,9 +128,9 @@ export async function POST(request: Request) {
       .gt("ends_at", startsAt)
       .limit(1)
       .maybeSingle();
-    if (coachOverlap.error) return NextResponse.json({ error: coachOverlap.error.message }, { status: 500 });
+    if (coachOverlap.error) return apiError(500, "INTERNAL_ERROR", coachOverlap.error.message);
     if (coachOverlap.data) {
-      return NextResponse.json({ error: "Coach time overlaps with another booking" }, { status: 400 });
+      return apiError(400, "FORBIDDEN", "Coach time overlaps with another booking");
     }
 
     const slotResult = await auth.supabase
@@ -120,10 +145,10 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (slotResult.error && !slotResult.error.message.includes('relation "coach_slots" does not exist')) {
-      return NextResponse.json({ error: slotResult.error.message }, { status: 500 });
+      return apiError(500, "INTERNAL_ERROR", slotResult.error.message);
     }
     if (!slotResult.error && !slotResult.data) {
-      return NextResponse.json({ error: "Coach is unavailable (no matching schedule slot)" }, { status: 400 });
+      return apiError(400, "FORBIDDEN", "Coach is unavailable (no matching schedule slot)");
     }
   }
 
@@ -131,7 +156,7 @@ export async function POST(request: Request) {
     .from("bookings")
     .insert({
       tenant_id: auth.context.tenantId,
-      branch_id: auth.context.branchId,
+      branch_id: auth.context.branchId ?? memberResult.data.store_id ?? null,
       member_id: memberResult.data.id,
       coach_id: coachId,
       service_name: serviceName,
@@ -144,7 +169,7 @@ export async function POST(request: Request) {
     .select("id, coach_id, service_name, starts_at, ends_at, status, note")
     .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return apiError(500, "INTERNAL_ERROR", error.message);
 
   await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
@@ -152,8 +177,16 @@ export async function POST(request: Request) {
     action: "member_booking_create",
     target_type: "booking",
     target_id: String(data?.id || ""),
-    payload: { startsAt, endsAt, serviceName },
+    payload: {
+      startsAt,
+      endsAt,
+      serviceName,
+      eligibility: {
+        code: eligibility.reasonCode,
+        selectedContractId: eligibility.candidate?.contractId ?? null,
+      },
+    },
   });
 
-  return NextResponse.json({ booking: data }, { status: 201 });
+  return apiSuccess({ booking: data, eligibility });
 }

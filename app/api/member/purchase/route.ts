@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../lib/auth-context";
+import { apiError, requireProfile } from "../../../../lib/auth-context";
 import { getPurchasableProduct } from "../../../../lib/products";
 
 export async function POST(request: Request) {
@@ -59,6 +59,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Product not purchasable online" }, { status: 400 });
   }
 
+  const planResult = await supabase
+    .from("member_plan_catalog")
+    .select("id, is_active")
+    .eq("tenant_id", member.tenant_id)
+    .eq("code", product.code)
+    .maybeSingle();
+  const missingPlanTable =
+    Boolean(planResult.error?.message) &&
+    (planResult.error!.message.includes('relation "member_plan_catalog" does not exist') ||
+      planResult.error!.message.includes("Could not find the table 'public.member_plan_catalog'"));
+  if (planResult.error && !missingPlanTable) return apiError(500, "INTERNAL_ERROR", planResult.error.message);
+  if (planResult.data && planResult.data.is_active === false) {
+    return apiError(409, "PLAN_INACTIVE", "Plan is inactive");
+  }
+
   const lineQuantity = product.quantity * quantity;
   const amount = product.unitPrice * lineQuantity;
 
@@ -96,8 +111,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: itemResult.error.message }, { status: 500 });
   }
 
-  return NextResponse.json(
-    {
+  return NextResponse.json({
+    ok: true,
+    data: {
       order: {
         id: order.id,
         amount,
@@ -105,6 +121,11 @@ export async function POST(request: Request) {
         quantity: lineQuantity,
       },
     },
-    { status: 201 },
-  );
+    order: {
+      id: order.id,
+      amount,
+      productCode,
+      quantity: lineQuantity,
+    },
+  }, { status: 201 });
 }

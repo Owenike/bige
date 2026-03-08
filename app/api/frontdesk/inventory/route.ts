@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireOpenShift, requireProfile } from "../../../../lib/auth-context";
+import { insertShiftItem } from "../../../../lib/shift-reconciliation";
 
 const MEMBER_CODE_RE = /^\d{1,4}$/;
 const PAYMENT_METHODS = ["cash", "card", "transfer", "manual", "newebpay"] as const;
@@ -588,16 +589,23 @@ export async function POST(request: Request) {
   });
   if (moveInsert.error) return NextResponse.json({ error: moveInsert.error.message }, { status: 500 });
 
-  if (shiftGuard.shift?.id) {
-    await auth.supabase.from("frontdesk_shift_items").insert({
-      tenant_id: auth.context.tenantId,
-      shift_id: shiftGuard.shift.id,
-      kind: "payment",
-      ref_id: orderId,
-      amount: totalAmount,
-      summary: `product_sale:${productCode}x${quantity}:${paymentMethod}`,
-    });
-  }
+  await insertShiftItem({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    shiftId: shiftGuard.shift?.id ? String(shiftGuard.shift.id) : null,
+    kind: "payment",
+    refId: orderId,
+    amount: totalAmount,
+    summary: `product_sale:${productCode}x${quantity}:${paymentMethod}`,
+    eventType: "inventory_sale",
+    paymentMethod,
+    metadata: {
+      orderId,
+      productCode,
+      quantity,
+      paymentMethod,
+    },
+  }).catch(() => null);
 
   await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,

@@ -13,14 +13,14 @@ type ProfileItem = {
   id: string;
   tenant_id: string | null;
   branch_id: string | null;
-  role: "platform_admin" | "manager" | "frontdesk" | "coach" | "member";
+  role: "platform_admin" | "manager" | "supervisor" | "branch_manager" | "frontdesk" | "coach" | "sales" | "member";
   display_name: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
 };
 
-const ROLES: Array<ProfileItem["role"]> = ["platform_admin", "manager", "frontdesk", "coach", "member"];
+const ROLES: Array<ProfileItem["role"]> = ["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales", "member"];
 
 export default function PlatformRbacPage() {
   const { locale } = useI18n();

@@ -10,9 +10,11 @@ import { EntryTokenExpiredError, verifyEntryToken } from "../../../../lib/entry-
 import { ENTRY_SCHEMA } from "../../../../lib/entry-schema";
 import { openGate } from "../../../../lib/integrations/gate";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
-import { requireOpenShift, requireProfile } from "../../../../lib/auth-context";
+import { apiSuccess, requireOpenShift, requireProfile } from "../../../../lib/auth-context";
+import { checkMemberEligibility } from "../../../../lib/entitlement-eligibility";
 import { httpLogBase, logEvent } from "../../../../lib/observability";
 import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
+import { insertShiftItem } from "../../../../lib/shift-reconciliation";
 
 const ANTI_PASSBACK_MINUTES = 10;
 
@@ -62,6 +64,13 @@ function phoneLast4(phone: string | null): string | null {
 function deriveMembershipKind(entitlement: EntitlementRow | null): MembershipKind {
   if (!entitlement) return "none";
   return entitlement.kind;
+}
+
+function candidateToMembershipKind(planType: string | null, passType: string | null): MembershipKind {
+  if (planType === "subscription") return "monthly";
+  if (passType === "punch" || planType === "coach_pack") return "punch";
+  if (passType === "single" || planType === "entry_pass" || planType === "trial") return "single";
+  return "none";
 }
 
 function parseJwtError(error: unknown): EntryDenyReason {
@@ -211,26 +220,30 @@ export async function POST(request: Request) {
       },
     };
 
-    return NextResponse.json(resp, {
+    return NextResponse.json(
+      {
+        ok: true,
+        data: resp,
+        ...resp,
+      },
+      {
       status: 200,
       headers: {
         "Retry-After": String(retryAfterSec),
         "X-RateLimit-Limit": String(Math.min(rlUser.limit, rlIp.limit)),
         "X-RateLimit-Remaining": String(Math.min(rlUser.remaining, rlIp.remaining)),
       },
-    });
+      },
+    );
   }
 
   const body = (await request.json().catch(() => null)) as VerifyEntryRequest | null;
   if (!body?.token) {
     logEvent("info", { type: "http", action: "entry_verify", ...base, userId: auth.context.userId, status: 200, durationMs: Date.now() - t0, decision: "deny", reason: "token_invalid" });
-    return NextResponse.json(
-      {
-        ...denyResponse("token_invalid"),
-        gate: { attempted: false, opened: false, message: "token is required" },
-      },
-      { status: 200 },
-    );
+    return apiSuccess({
+      ...denyResponse("token_invalid"),
+      gate: { attempted: false, opened: false, message: "token is required" },
+    });
   }
 
   let payload: Awaited<ReturnType<typeof verifyEntryToken>>;
@@ -238,16 +251,16 @@ export async function POST(request: Request) {
     payload = await verifyEntryToken(body.token);
   } catch (error) {
     logEvent("info", { type: "http", action: "entry_verify", ...base, userId: auth.context.userId, status: 200, durationMs: Date.now() - t0, decision: "deny", reason: parseJwtError(error) });
-    return NextResponse.json(denyResponse(parseJwtError(error)), { status: 200 });
+    return apiSuccess(denyResponse(parseJwtError(error)));
   }
 
   if (auth.context.tenantId !== payload.tenantId) {
     logEvent("info", { type: "http", action: "entry_verify", ...base, userId: auth.context.userId, status: 200, durationMs: Date.now() - t0, decision: "deny", reason: "token_invalid" });
-    return NextResponse.json(denyResponse("token_invalid"), { status: 200 });
+    return apiSuccess(denyResponse("token_invalid"));
   }
   if (auth.context.branchId && auth.context.branchId !== payload.storeId) {
     logEvent("info", { type: "http", action: "entry_verify", ...base, userId: auth.context.userId, status: 200, durationMs: Date.now() - t0, decision: "deny", reason: "token_invalid" });
-    return NextResponse.json(denyResponse("token_invalid"), { status: 200 });
+    return apiSuccess(denyResponse("token_invalid"));
   }
 
   const supabase = createSupabaseAdminClient();
@@ -273,7 +286,7 @@ export async function POST(request: Request) {
 
   if (memberQuery.error || !memberQuery.data) {
     logEvent("info", { type: "http", action: "entry_verify", ...base, userId: auth.context.userId, status: 200, durationMs: Date.now() - t0, decision: "deny", reason: "member_not_found" });
-    return NextResponse.json(denyResponse("member_not_found"), { status: 200 });
+    return apiSuccess(denyResponse("member_not_found"));
   }
 
   const rawMember = memberQuery.data;
@@ -289,6 +302,66 @@ export async function POST(request: Request) {
     photo_url: configuredPhoto || toNullableString(rawMember.photo_url),
     phone: configuredPhone || toNullableString(rawMember.phone),
   };
+
+  const unifiedEligibility = await checkMemberEligibility({
+    supabase,
+    tenantId: payload.tenantId,
+    memberId: payload.memberId,
+    branchId: payload.storeId,
+    scenario: "entry",
+  });
+  if (!unifiedEligibility.eligible) {
+    const inferredEntitlement = buildEntitlement({
+      membershipKind: candidateToMembershipKind(
+        unifiedEligibility.candidate?.planType ?? null,
+        unifiedEligibility.candidate?.passType ?? null,
+      ),
+      monthlyExpiresAt: unifiedEligibility.candidate?.subscriptionValidTo ?? null,
+      remainingSessions: unifiedEligibility.candidate?.passRemaining ?? 0,
+    });
+    const denied = buildResponse({
+      member,
+      entitlement: inferredEntitlement,
+      latestAllowAt: null,
+      todayCheckinCount: 0,
+      decision: "deny",
+      reason: "no_valid_pass",
+      checkedAt: new Date().toISOString(),
+      gate: {
+        attempted: false,
+        opened: false,
+        message: unifiedEligibility.message,
+      },
+    });
+    logEvent("info", {
+      type: "http",
+      action: "entry_verify",
+      ...base,
+      userId: auth.context.userId,
+      tenantId: auth.context.tenantId,
+      status: 200,
+      durationMs: Date.now() - t0,
+      decision: "deny",
+      reason: unifiedEligibility.reasonCode,
+    });
+    await insertShiftItem({
+      supabase: auth.supabase,
+      tenantId: auth.context.tenantId || payload.tenantId,
+      shiftId: shiftGuard.shift?.id ? String(shiftGuard.shift.id) : null,
+      kind: "note",
+      refId: payload.memberId,
+      amount: null,
+      summary: `checkin:deny:${payload.memberId}:${unifiedEligibility.reasonCode}`,
+      eventType: "checkin_denied",
+      quantity: 1,
+      metadata: {
+        memberId: payload.memberId,
+        reasonCode: unifiedEligibility.reasonCode,
+      },
+    }).catch(() => null);
+    return apiSuccess(denied);
+  }
+
   const scanResult = await supabase.rpc("verify_entry_scan", {
     p_tenant_id: payload.tenantId,
     p_store_id: payload.storeId,
@@ -300,13 +373,13 @@ export async function POST(request: Request) {
 
   if (scanResult.error) {
     logEvent("warn", { type: "http", action: "entry_verify", ...base, userId: auth.context.userId, status: 200, durationMs: Date.now() - t0, decision: "deny", reason: "token_invalid", rpcError: scanResult.error.message });
-    return NextResponse.json(denyResponse("token_invalid"), { status: 200 });
+    return apiSuccess(denyResponse("token_invalid"));
   }
 
   const scan = (Array.isArray(scanResult.data) ? scanResult.data[0] : null) as VerifyEntryScanRow | null;
   if (!scan) {
     logEvent("warn", { type: "http", action: "entry_verify", ...base, userId: auth.context.userId, status: 200, durationMs: Date.now() - t0, decision: "deny", reason: "token_invalid" });
-    return NextResponse.json(denyResponse("token_invalid"), { status: 200 });
+    return apiSuccess(denyResponse("token_invalid"));
   }
 
   const entitlement: EntitlementRow = buildEntitlement({
@@ -359,5 +432,26 @@ export async function POST(request: Request) {
     gateOpened: Boolean(gate?.opened),
   });
 
-  return NextResponse.json(response, { status: 200 });
+  await insertShiftItem({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId || payload.tenantId,
+    shiftId: shiftGuard.shift?.id ? String(shiftGuard.shift.id) : null,
+    kind: "note",
+    refId: payload.memberId,
+    amount: null,
+    summary: decision === "allow"
+      ? `checkin:allow:${payload.memberId}`
+      : `checkin:deny:${payload.memberId}:${reason || "unknown"}`,
+    eventType: decision === "allow" ? "checkin_allowed" : "checkin_denied",
+    quantity: 1,
+    metadata: {
+      memberId: payload.memberId,
+      decision,
+      reason,
+      checkedAt,
+      gateOpened: Boolean(gate?.opened),
+    },
+  }).catch(() => null);
+
+  return apiSuccess(response);
 }

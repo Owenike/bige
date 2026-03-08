@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../../lib/auth-context";
+import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-context";
 import { executeOrderVoid, executePaymentRefund } from "../../../../../lib/high-risk-actions";
+import { notifyApprovalDecision } from "../../../../../lib/in-app-notifications";
 
 type Decision = "approve" | "reject";
 
@@ -9,7 +9,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!auth.ok) return auth.response;
 
   if (!auth.context.tenantId) {
-    return NextResponse.json({ error: "Invalid tenant context" }, { status: 400 });
+    return apiError(400, "FORBIDDEN", "Invalid tenant context");
   }
 
   const { id } = await context.params;
@@ -19,14 +19,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const { data: reqRow, error: reqError } = await auth.supabase
     .from("high_risk_action_requests")
-    .select("id, action, target_type, target_id, reason, status")
+    .select("id, action, target_type, target_id, reason, status, requested_by")
     .eq("id", id)
     .eq("tenant_id", auth.context.tenantId)
     .maybeSingle();
 
-  if (reqError || !reqRow) return NextResponse.json({ error: "Approval request not found" }, { status: 404 });
+  if (reqError || !reqRow) return apiError(404, "FORBIDDEN", "Approval request not found");
   if (reqRow.status !== "pending") {
-    return NextResponse.json({ error: "This request is already resolved" }, { status: 409 });
+    return apiError(409, "FORBIDDEN", "This request is already resolved");
   }
 
   if (decision === "reject") {
@@ -44,7 +44,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       .select("id, status, decision_note, resolved_at")
       .maybeSingle();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return apiError(500, "INTERNAL_ERROR", error.message);
 
     await auth.supabase.from("audit_logs").insert({
       tenant_id: auth.context.tenantId,
@@ -56,7 +56,18 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       payload: { requestId: id, action: reqRow.action, decisionNote: decisionNote || null },
     });
 
-    return NextResponse.json({ request: data, decision: "rejected" });
+    await notifyApprovalDecision({
+      tenantId: auth.context.tenantId,
+      requestId: id,
+      decision: "rejected",
+      action: reqRow.action,
+      targetType: reqRow.target_type,
+      targetId: reqRow.target_id,
+      requestedBy: typeof reqRow.requested_by === "string" ? reqRow.requested_by : null,
+      resolvedBy: auth.context.userId,
+    }).catch(() => null);
+
+    return apiSuccess({ request: data, decision: "rejected" });
   }
 
   if (reqRow.action === "order_void") {
@@ -69,7 +80,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       orderId: reqRow.target_id,
       reason: reqRow.reason,
     });
-    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    if (!result.ok) return apiError(result.status, "FORBIDDEN", result.error);
   } else if (reqRow.action === "payment_refund") {
     const result = await executePaymentRefund({
       supabase: auth.supabase,
@@ -78,9 +89,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       paymentId: reqRow.target_id,
       reason: reqRow.reason,
     });
-    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    if (!result.ok) return apiError(result.status, "FORBIDDEN", result.error);
   } else {
-    return NextResponse.json({ error: "Unsupported action type" }, { status: 400 });
+    return apiError(400, "FORBIDDEN", "Unsupported action type");
   }
 
   const { data, error } = await auth.supabase
@@ -97,7 +108,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     .select("id, status, decision_note, resolved_at")
     .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return apiError(500, "INTERNAL_ERROR", error.message);
 
   await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
@@ -109,5 +120,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     payload: { requestId: id, action: reqRow.action, decisionNote: decisionNote || null },
   });
 
-  return NextResponse.json({ request: data, decision: "approved" });
+  await notifyApprovalDecision({
+    tenantId: auth.context.tenantId,
+    requestId: id,
+    decision: "approved",
+    action: reqRow.action,
+    targetType: reqRow.target_type,
+    targetId: reqRow.target_id,
+    requestedBy: typeof reqRow.requested_by === "string" ? reqRow.requested_by : null,
+    resolvedBy: auth.context.userId,
+  }).catch(() => null);
+
+  return apiSuccess({ request: data, decision: "approved" });
 }

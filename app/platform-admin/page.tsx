@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n-provider";
 
-type AppRole = "platform_admin" | "manager" | "frontdesk" | "coach" | "member";
+type AppRole = "platform_admin" | "manager" | "supervisor" | "branch_manager" | "frontdesk" | "coach" | "sales" | "member";
 
 type TenantItem = { id: string; name: string; status: string };
 type FlagItem = { id: string; tenant_id: string; key: string; enabled: boolean };
@@ -15,6 +15,17 @@ type ProfileItem = {
   role: AppRole;
   display_name: string | null;
   is_active: boolean;
+};
+
+type NotificationItem = {
+  id: string;
+  status: "unread" | "read" | "archived";
+  severity: "info" | "warning" | "critical";
+  title: string;
+  message: string;
+  eventType: string;
+  actionUrl: string | null;
+  createdAt: string;
 };
 
 type ErrorPayload = { error?: string };
@@ -43,6 +54,8 @@ export default function PlatformAdminPage() {
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
   const [flags, setFlags] = useState<FlagItem[]>([]);
   const [audit, setAudit] = useState<AuditItem[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   const [tenantName, setTenantName] = useState("");
   const [tenantStatus, setTenantStatus] = useState("active");
@@ -128,12 +141,41 @@ export default function PlatformAdminPage() {
     setAudit(payload.items || []);
   }
 
+  async function loadNotifications() {
+    await fetch("/api/notifications/sweep", { method: "POST" }).catch(() => null);
+    const res = await fetch("/api/notifications?status=all&limit=24");
+    const payload =
+      (await jsonSafe<{ data?: { items?: NotificationItem[]; unreadCount?: number }; items?: NotificationItem[]; unreadCount?: number } & ErrorPayload>(res)) || {};
+    if (!res.ok) {
+      const message = typeof payload.error === "string" ? payload.error : "Load notifications failed";
+      throw new Error(message);
+    }
+    const data = payload.data || payload;
+    setNotifications(data.items || []);
+    setUnreadNotificationCount(data.unreadCount || 0);
+  }
+
+  async function markNotificationRead(notificationId: string) {
+    const res = await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "read", notificationIds: [notificationId] }),
+    });
+    const payload = (await jsonSafe<ErrorPayload>(res)) || {};
+    if (!res.ok) {
+      setError(typeof payload.error === "string" ? payload.error : "Update notification failed");
+      return;
+    }
+    setNotifications((prev) => prev.map((item) => (item.id === notificationId ? { ...item, status: "read" } : item)));
+    setUnreadNotificationCount((prev) => Math.max(0, prev - 1));
+  }
+
   async function loadAll() {
     setLoading(true);
     setError(null);
     try {
       const targetTenantId = await loadTenants();
-      await Promise.all([loadProfiles(targetTenantId), loadFlags(targetTenantId), loadAudit(targetTenantId)]);
+      await Promise.all([loadProfiles(targetTenantId), loadFlags(targetTenantId), loadAudit(targetTenantId), loadNotifications()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Load failed");
     } finally {
@@ -148,7 +190,7 @@ export default function PlatformAdminPage() {
 
   useEffect(() => {
     if (!tenantId) return;
-    void Promise.all([loadProfiles(tenantId), loadFlags(tenantId), loadAudit(tenantId)]).catch((err) => {
+    void Promise.all([loadProfiles(tenantId), loadFlags(tenantId), loadAudit(tenantId), loadNotifications()]).catch((err) => {
       setError(err instanceof Error ? err.message : "Load failed");
     });
   }, [tenantId]);
@@ -296,6 +338,37 @@ export default function PlatformAdminPage() {
         </section>
         {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
         {message ? <div className="ok" style={{ marginBottom: 12 }}>{message}</div> : null}
+        <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+          <h2 className="sectionTitle">
+            {zh ? `平台通知（未讀 ${unreadNotificationCount}）` : `Platform Notifications (Unread ${unreadNotificationCount})`}
+          </h2>
+          <div className="fdDataGrid" style={{ marginTop: 8 }}>
+            {notifications.map((item) => (
+              <div key={item.id} className="fdGlassSubPanel" style={{ padding: 10 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  [{item.severity}] {item.title}
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>{item.message}</p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  {new Date(item.createdAt).toLocaleString()} | {item.eventType} | {item.status}
+                </p>
+                <div className="actions" style={{ marginTop: 8 }}>
+                  {item.actionUrl ? (
+                    <a className="fdPillBtn" href={item.actionUrl}>
+                      {zh ? "前往處理" : "Open"}
+                    </a>
+                  ) : null}
+                  {item.status === "unread" ? (
+                    <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => void markNotificationRead(item.id)}>
+                      {zh ? "標記已讀" : "Mark Read"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+            {notifications.length === 0 ? <p className="fdGlassText">{zh ? "目前沒有通知。" : "No notifications."}</p> : null}
+          </div>
+        </section>
 
         <section className="fdTwoCol">
           <form onSubmit={createTenant} className="fdGlassSubPanel" style={{ padding: 14 }}>
@@ -318,7 +391,7 @@ export default function PlatformAdminPage() {
             <h2 className="sectionTitle">{zh ? "建立使用者" : "Create User"}</h2>
             <input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} placeholder="email" className="input" required />
             <input value={userPassword} onChange={(e) => setUserPassword(e.target.value)} placeholder="password" className="input" required />
-            <select value={userRole} onChange={(e) => setUserRole(e.target.value as AppRole)} className="input">{["platform_admin","manager","frontdesk","coach","member"].map((r)=><option key={r} value={r}>{r}</option>)}</select>
+            <select value={userRole} onChange={(e) => setUserRole(e.target.value as AppRole)} className="input">{["platform_admin","manager","supervisor","branch_manager","frontdesk","coach","sales","member"].map((r)=><option key={r} value={r}>{r}</option>)}</select>
             <input value={userTenantId} onChange={(e) => setUserTenantId(e.target.value)} placeholder="tenantId" className="input" disabled={userRole === "platform_admin"} />
             <input value={userBranchId} onChange={(e) => setUserBranchId(e.target.value)} placeholder="branchId (optional)" className="input" />
             <input value={userDisplayName} onChange={(e) => setUserDisplayName(e.target.value)} placeholder="display name (optional)" className="input" />
@@ -327,7 +400,7 @@ export default function PlatformAdminPage() {
           <form onSubmit={saveProfile} className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">{zh ? "編輯帳號" : "Edit Profile"}</h2>
             <select value={selectedProfileId} onChange={(e) => setSelectedProfileId(e.target.value)} className="input">{profiles.map((p) => <option key={p.id} value={p.id}>{p.display_name || p.id}</option>)}</select>
-            <select value={editRole} onChange={(e) => setEditRole(e.target.value as AppRole)} className="input">{["platform_admin","manager","frontdesk","coach","member"].map((r)=><option key={r} value={r}>{r}</option>)}</select>
+            <select value={editRole} onChange={(e) => setEditRole(e.target.value as AppRole)} className="input">{["platform_admin","manager","supervisor","branch_manager","frontdesk","coach","sales","member"].map((r)=><option key={r} value={r}>{r}</option>)}</select>
             <input value={editProfileTenantId} onChange={(e) => setEditProfileTenantId(e.target.value)} placeholder="tenantId" className="input" disabled={editRole === "platform_admin"} />
             <input value={editProfileBranchId} onChange={(e) => setEditProfileBranchId(e.target.value)} placeholder="branchId (optional)" className="input" />
             <input value={editProfileDisplayName} onChange={(e) => setEditProfileDisplayName(e.target.value)} placeholder="display name" className="input" />
@@ -351,6 +424,8 @@ export default function PlatformAdminPage() {
               <button type="button" className="fdPillBtn" onClick={() => void loadAll()} disabled={loading}>{loading ? "Loading..." : "Reload all"}</button>
               <a className="fdPillBtn" href="/platform-admin/rbac">RBAC</a>
               <a className="fdPillBtn" href="/platform-admin/audit">Audit Explorer</a>
+              <a className="fdPillBtn" href="/platform-admin/tenant-ops">Tenant Ops</a>
+              <a className="fdPillBtn" href="/platform-admin/notifications-ops">Notification Ops</a>
             </div>
           </section>
         </section>

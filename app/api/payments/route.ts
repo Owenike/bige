@@ -1,14 +1,35 @@
 import { NextResponse } from "next/server";
-import { TEMP_DISABLE_ROLE_GUARD, requireOpenShift, requireProfile } from "../../../lib/auth-context";
+import { apiError, apiSuccess, requireOpenShift, requireProfile } from "../../../lib/auth-context";
+import { writeOperationalAudit } from "../../../lib/contracts-audit";
+import { claimIdempotency, finalizeIdempotency } from "../../../lib/idempotency";
+import { requirePermission } from "../../../lib/permissions";
 import { fulfillOrderEntitlements } from "../../../lib/order-fulfillment";
+import { insertShiftItem } from "../../../lib/shift-reconciliation";
+
+function ok<TData extends Record<string, unknown>>(data: TData) {
+  return apiSuccess(data);
+}
+
+function fail(
+  status: number,
+  code: "UNAUTHORIZED" | "FORBIDDEN" | "INTERNAL_ERROR" | "BRANCH_SCOPE_DENIED",
+  message: string,
+) {
+  return apiError(status, code, message);
+}
 
 export async function GET(request: Request) {
-  const auth = await requireProfile(["manager", "frontdesk"], request);
+  const auth = await requireProfile(["platform_admin", "manager", "frontdesk"], request);
   if (!auth.ok) return auth.response;
+  const permission = requirePermission(auth.context, "payments.read");
+  if (!permission.ok) return permission.response;
 
   const orderId = new URL(request.url).searchParams.get("orderId");
-  if (!orderId) return NextResponse.json({ error: "orderId is required" }, { status: 400 });
-  if (!auth.context.tenantId) return NextResponse.json({ error: "Invalid tenant context" }, { status: 400 });
+  if (!orderId) return fail(400, "FORBIDDEN", "orderId is required");
+  if (!auth.context.tenantId) return fail(400, "FORBIDDEN", "Invalid tenant context");
+  if (auth.context.role === "frontdesk" && !auth.context.branchId) {
+    return fail(403, "BRANCH_SCOPE_DENIED", "Missing branch context for frontdesk");
+  }
 
   const orderResult = await auth.supabase
     .from("orders")
@@ -16,9 +37,9 @@ export async function GET(request: Request) {
     .eq("tenant_id", auth.context.tenantId)
     .eq("id", orderId)
     .maybeSingle();
-  if (orderResult.error || !orderResult.data) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-  if (!TEMP_DISABLE_ROLE_GUARD && auth.context.role === "frontdesk" && auth.context.branchId && String(orderResult.data.branch_id || "") !== auth.context.branchId) {
-    return NextResponse.json({ error: "Forbidden order access for current branch" }, { status: 403 });
+  if (orderResult.error || !orderResult.data) return fail(404, "FORBIDDEN", "Order not found");
+  if (auth.context.role === "frontdesk" && auth.context.branchId && String(orderResult.data.branch_id || "") !== auth.context.branchId) {
+    return fail(403, "BRANCH_SCOPE_DENIED", "Forbidden order access for current branch");
   }
 
   const { data, error } = await auth.supabase
@@ -28,13 +49,18 @@ export async function GET(request: Request) {
     .eq("order_id", orderId)
     .order("created_at", { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: data ?? [] });
+  if (error) return fail(500, "INTERNAL_ERROR", error.message);
+  return ok({ items: data ?? [] });
 }
 
 export async function POST(request: Request) {
-  const auth = await requireProfile(["manager", "frontdesk"], request);
+  const auth = await requireProfile(["platform_admin", "manager", "frontdesk"], request);
   if (!auth.ok) return auth.response;
+  const permission = requirePermission(auth.context, "payments.write");
+  if (!permission.ok) return permission.response;
+  if (auth.context.role === "frontdesk" && !auth.context.branchId) {
+    return fail(403, "BRANCH_SCOPE_DENIED", "Missing branch context for frontdesk");
+  }
 
   const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
   if (!shiftGuard.ok) return shiftGuard.response;
@@ -46,9 +72,10 @@ export async function POST(request: Request) {
     ? body.method
     : "manual";
   const gatewayRef = typeof body?.gatewayRef === "string" ? body.gatewayRef : null;
+  const idempotencyKeyInput = typeof body?.idempotencyKey === "string" ? body.idempotencyKey.trim() : "";
 
   if (!auth.context.tenantId || !orderId || Number.isNaN(amount) || amount <= 0) {
-    return NextResponse.json({ error: "Missing or invalid payment fields" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "Missing or invalid payment fields");
   }
 
   const { data: order, error: orderError } = await auth.supabase
@@ -58,15 +85,15 @@ export async function POST(request: Request) {
     .eq("tenant_id", auth.context.tenantId)
     .maybeSingle();
 
-  if (orderError || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-  if (!TEMP_DISABLE_ROLE_GUARD && auth.context.role === "frontdesk" && auth.context.branchId && String(order.branch_id || "") !== auth.context.branchId) {
-    return NextResponse.json({ error: "Forbidden order access for current branch" }, { status: 403 });
+  if (orderError || !order) return fail(404, "FORBIDDEN", "Order not found");
+  if (auth.context.role === "frontdesk" && auth.context.branchId && String(order.branch_id || "") !== auth.context.branchId) {
+    return fail(403, "BRANCH_SCOPE_DENIED", "Forbidden order access for current branch");
   }
   if (order.status === "cancelled" || order.status === "refunded") {
-    return NextResponse.json({ error: "Order is closed" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "Order is closed");
   }
   if (order.status === "paid") {
-    return NextResponse.json({ error: "Order already paid" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "Order already paid");
   }
 
   const orderAmount = Number(order.amount ?? 0);
@@ -84,7 +111,34 @@ export async function POST(request: Request) {
   const remainingBefore = Math.max(0, orderAmount - paidTotal);
 
   if (amount > remainingBefore) {
-    return NextResponse.json({ error: "Payment amount exceeds remaining balance" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "Payment amount exceeds remaining balance");
+  }
+
+  const operationKey =
+    idempotencyKeyInput ||
+    [
+      "payment_record",
+      auth.context.tenantId,
+      orderId,
+      amount.toFixed(2),
+      method,
+      gatewayRef || "na",
+    ].join(":");
+  const operationClaim = await claimIdempotency({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    operationKey,
+    actorId: auth.context.userId,
+    ttlMinutes: 60,
+  });
+  if (!operationClaim.ok) {
+    return fail(500, "INTERNAL_ERROR", operationClaim.error);
+  }
+  if (!operationClaim.claimed) {
+    if (operationClaim.existing?.status === "succeeded" && operationClaim.existing.response) {
+      return ok({ replayed: true, ...operationClaim.existing.response });
+    }
+    return fail(409, "FORBIDDEN", "Duplicate payment request in progress");
   }
 
   const { data, error } = await auth.supabase
@@ -101,37 +155,85 @@ export async function POST(request: Request) {
     .select("id, order_id, amount, status, method, paid_at")
     .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    await finalizeIdempotency({
+      supabase: auth.supabase,
+      tenantId: auth.context.tenantId,
+      operationKey,
+      status: "failed",
+      errorCode: "PAYMENT_INSERT_FAILED",
+    });
+    return fail(500, "INTERNAL_ERROR", error.message);
+  }
 
   const remainingAfter = Math.max(0, remainingBefore - amount);
   const nextOrderStatus = remainingAfter <= 0 ? "paid" : "confirmed";
 
-  await auth.supabase
+  const orderUpdateResult = await auth.supabase
     .from("orders")
     .update({ status: nextOrderStatus, updated_at: new Date().toISOString() })
     .eq("id", orderId)
     .eq("tenant_id", auth.context.tenantId);
+  if (orderUpdateResult.error) {
+    await finalizeIdempotency({
+      supabase: auth.supabase,
+      tenantId: auth.context.tenantId,
+      operationKey,
+      status: "failed",
+      errorCode: "ORDER_UPDATE_FAILED",
+    });
+    return fail(500, "INTERNAL_ERROR", orderUpdateResult.error.message);
+  }
 
+  let fulfillmentResult:
+    | {
+        ok: boolean;
+        fulfilled?: boolean;
+        reason?: string | null;
+      }
+    | null = null;
   if (nextOrderStatus === "paid") {
-    await fulfillOrderEntitlements({
+    fulfillmentResult = await fulfillOrderEntitlements({
       supabase: auth.supabase,
       tenantId: auth.context.tenantId,
       orderId,
       actorId: auth.context.userId,
       memberId: String(order.member_id || ""),
+      paymentId: String(data?.id || ""),
     });
+    if (!fulfillmentResult.ok) {
+      await writeOperationalAudit({
+        supabase: auth.supabase,
+        tenantId: auth.context.tenantId,
+        actorId: auth.context.userId,
+        action: "entitlement_fulfillment_failed",
+        targetType: "order",
+        targetId: orderId,
+        reason: "payment_recorded_but_fulfillment_failed",
+        payload: {
+          paymentId: String(data?.id || ""),
+          reason: fulfillmentResult.reason || null,
+        },
+      });
+    }
   }
 
-  if (shiftGuard.shift?.id) {
-    await auth.supabase.from("frontdesk_shift_items").insert({
-      tenant_id: auth.context.tenantId,
-      shift_id: shiftGuard.shift.id,
-      kind: "payment",
-      ref_id: String(data?.id || ""),
-      amount,
-      summary: `payment:${orderId}:${method}`,
-    });
-  }
+  await insertShiftItem({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    shiftId: shiftGuard.shift?.id ? String(shiftGuard.shift.id) : null,
+    kind: "payment",
+    refId: String(data?.id || ""),
+    amount,
+    summary: `payment:${orderId}:${method}`,
+    eventType: "payment_recorded",
+    paymentMethod: method,
+    metadata: {
+      orderId,
+      paymentId: String(data?.id || ""),
+      method,
+    },
+  }).catch(() => null);
 
   await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
@@ -147,8 +249,29 @@ export async function POST(request: Request) {
       remainingBefore,
       remainingAfter,
       nextOrderStatus,
+      fulfillmentResult,
     },
   });
 
-  return NextResponse.json({ payment: data }, { status: 201 });
+  const successPayload = {
+    payment: data,
+    fulfillment: fulfillmentResult,
+  };
+  await finalizeIdempotency({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    operationKey,
+    status: "succeeded",
+    response: successPayload as Record<string, unknown>,
+  });
+
+  return NextResponse.json(
+    {
+      ok: true,
+      data: successPayload,
+      payment: data,
+      fulfillment: fulfillmentResult,
+    },
+    { status: 201 },
+  );
 }

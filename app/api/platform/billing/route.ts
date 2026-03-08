@@ -1,16 +1,21 @@
-import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../lib/auth-context";
+import { apiError, apiSuccess, requireProfile } from "../../../../lib/auth-context";
+import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
+import {
+  evaluateTenantAccess,
+  type TenantStatus,
+  type TenantSubscriptionSnapshot,
+} from "../../../../lib/tenant-subscription";
 
 type TenantRow = {
   id: string;
   name: string;
-  status: string;
+  status: TenantStatus;
 };
 
 type TenantBillingStat = {
   tenantId: string;
   tenantName: string;
-  tenantStatus: string;
+  tenantStatus: TenantStatus;
   paidAmount: number;
   refundedAmount: number;
   netAmount: number;
@@ -20,6 +25,31 @@ type TenantBillingStat = {
   ordersPending: number;
   activeSubscriptions: number;
   expiringIn14Days: number;
+  planCode: string | null;
+  planName: string | null;
+  subscriptionStatus: TenantSubscriptionSnapshot["status"];
+  subscriptionStartsAt: string | null;
+  subscriptionEndsAt: string | null;
+  subscriptionGraceEndsAt: string | null;
+  subscriptionRemainingDays: number | null;
+  subscriptionUsable: boolean;
+  subscriptionAccessCode: string | null;
+};
+
+type TenantSubscriptionRow = {
+  tenant_id: string;
+  plan_id: string | null;
+  plan_code: string | null;
+  status: TenantSubscriptionSnapshot["status"];
+  starts_at: string | null;
+  ends_at: string | null;
+  grace_ends_at: string | null;
+};
+
+type PlanRow = {
+  id: string;
+  code: string;
+  name: string;
 };
 
 function num(input: unknown) {
@@ -39,6 +69,13 @@ export async function GET(request: Request) {
   const auth = await requireProfile(["platform_admin", "manager"], request);
   if (!auth.ok) return auth.response;
 
+  let admin;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch (error) {
+    return apiError(500, "INTERNAL_ERROR", error instanceof Error ? error.message : "Admin client init failed");
+  }
+
   const params = new URL(request.url).searchParams;
   const requestedTenantId = params.get("tenantId");
   const days = Math.min(180, Math.max(1, Number(params.get("days") || 30)));
@@ -47,33 +84,30 @@ export async function GET(request: Request) {
   const nowMs = now.getTime();
   const expireWindow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
-  const tenantScope = auth.context.role === "platform_admin"
-    ? requestedTenantId
-      ? [requestedTenantId]
-      : null
-    : auth.context.tenantId
-      ? [auth.context.tenantId]
-      : [];
+  const tenantScope =
+    auth.context.role === "platform_admin"
+      ? requestedTenantId
+        ? [requestedTenantId]
+        : null
+      : auth.context.tenantId
+        ? [auth.context.tenantId]
+        : [];
 
   if (auth.context.role !== "platform_admin" && (!tenantScope || tenantScope.length === 0)) {
-    return NextResponse.json({ error: "Missing tenant context" }, { status: 400 });
+    return apiError(400, "FORBIDDEN", "Missing tenant context");
   }
 
-  let tenantsQuery = auth.supabase
-    .from("tenants")
-    .select("id, name, status")
-    .order("created_at", { ascending: false });
-
+  let tenantsQuery = admin.from("tenants").select("id, name, status").order("created_at", { ascending: false });
   if (tenantScope && tenantScope.length > 0) {
     tenantsQuery = tenantsQuery.in("id", tenantScope);
   }
 
   const tenantsResult = await tenantsQuery;
-  if (tenantsResult.error) return NextResponse.json({ error: tenantsResult.error.message }, { status: 500 });
+  if (tenantsResult.error) return apiError(500, "INTERNAL_ERROR", tenantsResult.error.message);
   const tenants = (tenantsResult.data || []) as TenantRow[];
   const tenantIds = tenants.map((row) => row.id);
   if (tenantIds.length === 0) {
-    return NextResponse.json({
+    return apiSuccess({
       range: { since, until: new Date().toISOString(), days },
       items: [],
       totals: {
@@ -84,30 +118,22 @@ export async function GET(request: Request) {
         refundedPayments: 0,
         activeSubscriptions: 0,
         expiringIn14Days: 0,
+        usableTenants: 0,
       },
       expiring: [],
     });
   }
 
-  const [ordersResult, paymentsResult, subscriptionsResult, expiringResult] = await Promise.all([
-    auth.supabase
-      .from("orders")
-      .select("tenant_id, status, amount, created_at")
-      .in("tenant_id", tenantIds)
-      .gte("created_at", since)
-      .limit(5000),
-    auth.supabase
+  const [ordersResult, paymentsResult, subscriptionsResult, expiringResult, tenantSubscriptionsResult] = await Promise.all([
+    admin.from("orders").select("tenant_id, status, amount, created_at").in("tenant_id", tenantIds).gte("created_at", since).limit(5000),
+    admin
       .from("payments")
       .select("tenant_id, status, amount, method, created_at, paid_at")
       .in("tenant_id", tenantIds)
       .gte("created_at", since)
       .limit(5000),
-    auth.supabase
-      .from("subscriptions")
-      .select("tenant_id, member_id, status, valid_to")
-      .in("tenant_id", tenantIds)
-      .limit(5000),
-    auth.supabase
+    admin.from("subscriptions").select("tenant_id, member_id, status, valid_to").in("tenant_id", tenantIds).limit(5000),
+    admin
       .from("subscriptions")
       .select("tenant_id, member_id, status, valid_to")
       .in("tenant_id", tenantIds)
@@ -116,15 +142,52 @@ export async function GET(request: Request) {
       .lte("valid_to", expireWindow)
       .order("valid_to", { ascending: true })
       .limit(500),
+    admin
+      .from("tenant_subscriptions")
+      .select("tenant_id, plan_id, plan_code, status, starts_at, ends_at, grace_ends_at")
+      .in("tenant_id", tenantIds)
+      .eq("is_current", true),
   ]);
 
-  if (ordersResult.error) return NextResponse.json({ error: ordersResult.error.message }, { status: 500 });
-  if (paymentsResult.error) return NextResponse.json({ error: paymentsResult.error.message }, { status: 500 });
-  if (subscriptionsResult.error) return NextResponse.json({ error: subscriptionsResult.error.message }, { status: 500 });
-  if (expiringResult.error) return NextResponse.json({ error: expiringResult.error.message }, { status: 500 });
+  if (ordersResult.error) return apiError(500, "INTERNAL_ERROR", ordersResult.error.message);
+  if (paymentsResult.error) return apiError(500, "INTERNAL_ERROR", paymentsResult.error.message);
+  if (subscriptionsResult.error) return apiError(500, "INTERNAL_ERROR", subscriptionsResult.error.message);
+  if (expiringResult.error) return apiError(500, "INTERNAL_ERROR", expiringResult.error.message);
+  if (tenantSubscriptionsResult.error) return apiError(500, "INTERNAL_ERROR", tenantSubscriptionsResult.error.message);
+
+  const tenantSubscriptions = (tenantSubscriptionsResult.data || []) as TenantSubscriptionRow[];
+  const planIds = Array.from(new Set(tenantSubscriptions.map((row) => row.plan_id).filter((id): id is string => Boolean(id))));
+
+  const planNameById = new Map<string, PlanRow>();
+  if (planIds.length > 0) {
+    const plansResult = await admin.from("saas_plans").select("id, code, name").in("id", planIds);
+    if (plansResult.error) return apiError(500, "INTERNAL_ERROR", plansResult.error.message);
+    for (const row of (plansResult.data || []) as PlanRow[]) {
+      planNameById.set(row.id, row);
+    }
+  }
+
+  const subscriptionByTenant = new Map<string, TenantSubscriptionSnapshot>();
+  for (const row of tenantSubscriptions) {
+    const plan = row.plan_id ? planNameById.get(row.plan_id) : null;
+    const planCode = row.plan_code ?? plan?.code ?? null;
+    subscriptionByTenant.set(row.tenant_id, {
+      status: row.status ?? null,
+      startsAt: row.starts_at ?? null,
+      endsAt: row.ends_at ?? null,
+      graceEndsAt: row.grace_ends_at ?? null,
+      planCode,
+      planName: plan?.name ?? null,
+    });
+  }
 
   const statsByTenant = new Map<string, TenantBillingStat>();
   for (const tenant of tenants) {
+    const subscription = subscriptionByTenant.get(tenant.id) ?? null;
+    const access = evaluateTenantAccess({
+      tenantStatus: tenant.status ?? null,
+      subscription,
+    });
     statsByTenant.set(tenant.id, {
       tenantId: tenant.id,
       tenantName: tenant.name || tenant.id,
@@ -138,6 +201,15 @@ export async function GET(request: Request) {
       ordersPending: 0,
       activeSubscriptions: 0,
       expiringIn14Days: 0,
+      planCode: subscription?.planCode ?? null,
+      planName: subscription?.planName ?? null,
+      subscriptionStatus: access.effectiveStatus === "none" ? null : access.effectiveStatus,
+      subscriptionStartsAt: subscription?.startsAt ?? null,
+      subscriptionEndsAt: subscription?.endsAt ?? null,
+      subscriptionGraceEndsAt: subscription?.graceEndsAt ?? null,
+      subscriptionRemainingDays: access.remainingDays,
+      subscriptionUsable: access.allowed,
+      subscriptionAccessCode: access.blockedCode,
     });
   }
 
@@ -180,11 +252,8 @@ export async function GET(request: Request) {
   const memberIds = Array.from(new Set(expiringRows.map((row) => String(row.member_id || "")).filter(Boolean)));
   const memberNameById = new Map<string, string>();
   if (memberIds.length > 0) {
-    const membersResult = await auth.supabase
-      .from("members")
-      .select("id, full_name")
-      .in("id", memberIds);
-    if (membersResult.error) return NextResponse.json({ error: membersResult.error.message }, { status: 500 });
+    const membersResult = await admin.from("members").select("id, full_name").in("id", memberIds);
+    if (membersResult.error) return apiError(500, "INTERNAL_ERROR", membersResult.error.message);
     for (const row of (membersResult.data || []) as Array<{ id: string; full_name: string | null }>) {
       memberNameById.set(row.id, row.full_name || row.id);
     }
@@ -208,9 +277,10 @@ export async function GET(request: Request) {
       paidAmount: Number(item.paidAmount.toFixed(2)),
       refundedAmount: Number(item.refundedAmount.toFixed(2)),
       netAmount: Number((item.paidAmount - item.refundedAmount).toFixed(2)),
-      collectionRate: item.ordersPaid + item.ordersPending > 0
-        ? Number((item.ordersPaid / (item.ordersPaid + item.ordersPending)).toFixed(4))
-        : 0,
+      collectionRate:
+        item.ordersPaid + item.ordersPending > 0
+          ? Number((item.ordersPaid / (item.ordersPaid + item.ordersPending)).toFixed(4))
+          : 0,
     }))
     .sort((a, b) => b.netAmount - a.netAmount);
 
@@ -223,6 +293,7 @@ export async function GET(request: Request) {
       acc.refundedPayments += item.refundedPayments;
       acc.activeSubscriptions += item.activeSubscriptions;
       acc.expiringIn14Days += item.expiringIn14Days;
+      acc.usableTenants += item.subscriptionUsable ? 1 : 0;
       return acc;
     },
     {
@@ -233,10 +304,11 @@ export async function GET(request: Request) {
       refundedPayments: 0,
       activeSubscriptions: 0,
       expiringIn14Days: 0,
+      usableTenants: 0,
     },
   );
 
-  return NextResponse.json({
+  return apiSuccess({
     range: { since, until: new Date().toISOString(), days },
     items,
     totals: {

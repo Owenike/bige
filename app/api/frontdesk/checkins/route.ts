@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 import { requireOpenShift, requireProfile } from "../../../../lib/auth-context";
+import { insertShiftItem } from "../../../../lib/shift-reconciliation";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -294,6 +295,23 @@ export async function POST(request: Request) {
       warning: `Audit log write failed: ${auditResult.error.message}`,
     });
   }
+
+  await insertShiftItem({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    shiftId: shiftGuard.shift?.id ? String(shiftGuard.shift.id) : null,
+    kind: "note",
+    refId: checkinId,
+    amount: null,
+    summary: `checkin:void:${checkinId}`,
+    eventType: "checkin_voided",
+    quantity: 1,
+    metadata: {
+      checkinId,
+      reason,
+      memberId: row.member_id || null,
+    },
+  }).catch(() => null);
 
   return NextResponse.json({
     ok: true,

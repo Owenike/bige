@@ -1,98 +1,233 @@
-import { NextResponse } from "next/server";
-import { requireProfile } from "../../../lib/auth-context";
-
-const REDEMPTION_ERROR_STATUS: Record<string, number> = {
-  invalid_redemption_input: 400,
-  invalid_redeemed_kind: 400,
-  pass_id_required: 400,
-  pass_not_found: 404,
-  insufficient_remaining_sessions: 400,
-};
-
-function mapRedemptionError(message: string | undefined) {
-  if (!message) return { status: 500, error: "Redemption failed" };
-  if (message.includes("session_redemptions_booking_unique")) {
-    return { status: 409, error: "Booking already redeemed" };
-  }
-  if (message.includes("session_redemptions_pass_session_unique")) {
-    return { status: 409, error: "Session number already redeemed for this pass" };
-  }
-  const status = REDEMPTION_ERROR_STATUS[message];
-  if (status) return { status, error: message };
-  return { status: 500, error: message };
-}
+import { apiError, apiSuccess, requireOpenShift, requireProfile } from "../../../lib/auth-context";
+import { writeOperationalAudit } from "../../../lib/contracts-audit";
+import { consumeSessionEntitlement } from "../../../lib/entitlement-consumption";
+import { claimIdempotency, finalizeIdempotency } from "../../../lib/idempotency";
+import { findOpenShiftForBranch, insertShiftItem } from "../../../lib/shift-reconciliation";
 
 export async function GET(request: Request) {
-  const auth = await requireProfile(["manager", "frontdesk", "coach"], request);
+  const auth = await requireProfile(
+    ["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk", "coach"],
+    request,
+  );
   if (!auth.ok) return auth.response;
+  if (!auth.context.tenantId) return apiError(400, "FORBIDDEN", "Missing tenant context");
 
   const memberId = new URL(request.url).searchParams.get("memberId");
 
   let query = auth.supabase
     .from("session_redemptions")
-    .select("id, booking_id, member_id, pass_id, session_no, redeemed_kind, quantity, note, created_at")
+    .select(
+      "id, booking_id, member_id, pass_id, member_plan_contract_id, session_no, redeemed_kind, quantity, note, created_at",
+    )
     .eq("tenant_id", auth.context.tenantId)
     .order("created_at", { ascending: false })
     .limit(100);
 
   if (memberId) query = query.eq("member_id", memberId);
 
-  const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: data ?? [] });
+  const result = await query;
+  if (result.error) return apiError(500, "INTERNAL_ERROR", result.error.message);
+  return apiSuccess({ items: result.data ?? [] });
 }
 
 export async function POST(request: Request) {
-  const auth = await requireProfile(["manager", "frontdesk", "coach"], request);
+  const auth = await requireProfile(
+    ["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk", "coach"],
+    request,
+  );
   if (!auth.ok) return auth.response;
+  if (!auth.context.tenantId) {
+    return apiError(400, "FORBIDDEN", "memberId and tenant context are required");
+  }
+
+  const shiftGuard = await requireOpenShift({
+    supabase: auth.supabase,
+    context: auth.context,
+    enforceRoles: ["frontdesk"],
+  });
+  if (!shiftGuard.ok) return shiftGuard.response;
 
   const body = await request.json().catch(() => null);
   const bookingId = typeof body?.bookingId === "string" ? body.bookingId : null;
   const memberId = typeof body?.memberId === "string" ? body.memberId : "";
-  const redeemedKind = body?.redeemedKind === "monthly" ? "monthly" : "pass";
   const passId = typeof body?.passId === "string" ? body.passId : null;
+  const contractId = typeof body?.contractId === "string" ? body.contractId : null;
   const sessionNo = Number.isFinite(Number(body?.sessionNo)) ? Math.max(1, Number(body?.sessionNo)) : null;
   const note = typeof body?.note === "string" ? body.note : null;
   const quantity = Math.max(1, Number(body?.quantity ?? 1));
+  const idempotencyKeyInput = typeof body?.idempotencyKey === "string" ? body.idempotencyKey.trim() : "";
 
-  if (!auth.context.tenantId || !memberId) {
-    return NextResponse.json({ error: "memberId and tenant context are required" }, { status: 400 });
+  if (!memberId) return apiError(400, "FORBIDDEN", "memberId and tenant context are required");
+
+  const memberResult = await auth.supabase
+    .from("members")
+    .select("id, store_id")
+    .eq("id", memberId)
+    .eq("tenant_id", auth.context.tenantId)
+    .maybeSingle();
+  if (memberResult.error) return apiError(500, "INTERNAL_ERROR", memberResult.error.message);
+  if (!memberResult.data) return apiError(404, "ENTITLEMENT_NOT_FOUND", "Member not found");
+  if (auth.context.branchId) {
+    if (!memberResult.data.store_id || auth.context.branchId !== memberResult.data.store_id) {
+      return apiError(403, "BRANCH_SCOPE_DENIED", "Forbidden member access for current branch");
+    }
   }
 
-  if (auth.context.role === "frontdesk" && auth.context.branchId) {
-    const memberResult = await auth.supabase
-      .from("members")
-      .select("id, store_id")
-      .eq("id", memberId)
+  let bookingServiceName: string | null = null;
+  let bookingCoachId: string | null = null;
+  if (bookingId) {
+    const bookingResult = await auth.supabase
+      .from("bookings")
+      .select("id, service_name, coach_id, branch_id")
       .eq("tenant_id", auth.context.tenantId)
+      .eq("id", bookingId)
       .maybeSingle();
-    if (memberResult.error || !memberResult.data) {
-      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    if (bookingResult.error) return apiError(500, "INTERNAL_ERROR", bookingResult.error.message);
+    if (!bookingResult.data) return apiError(404, "FORBIDDEN", "Booking not found");
+    if (auth.context.branchId && bookingResult.data.branch_id && bookingResult.data.branch_id !== auth.context.branchId) {
+      return apiError(403, "BRANCH_SCOPE_DENIED", "Forbidden booking access for current branch");
     }
-    if (String(memberResult.data.store_id || "") !== auth.context.branchId) {
-      return NextResponse.json({ error: "Forbidden member access for current branch" }, { status: 403 });
-    }
+    bookingServiceName =
+      typeof bookingResult.data.service_name === "string" ? bookingResult.data.service_name : null;
+    bookingCoachId = typeof bookingResult.data.coach_id === "string" ? bookingResult.data.coach_id : null;
   }
 
-  const rpcResult = await auth.supabase.rpc("redeem_session", {
-    p_tenant_id: auth.context.tenantId,
-    p_booking_id: bookingId,
-    p_member_id: memberId,
-    p_redeemed_by: auth.context.userId,
-    p_redeemed_kind: redeemedKind,
-    p_pass_id: passId,
-    p_session_no: sessionNo,
-    p_quantity: quantity,
-    p_note: note,
+  const operationKey =
+    idempotencyKeyInput ||
+    [
+      "session_redeem",
+      auth.context.tenantId,
+      memberId,
+      bookingId || "na",
+      sessionNo ?? "na",
+      quantity,
+      passId || contractId || "auto",
+    ].join(":");
+  const operationClaim = await claimIdempotency({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    operationKey,
+    actorId: auth.context.userId,
+    ttlMinutes: 60,
+  });
+  if (!operationClaim.ok) {
+    return apiError(500, "INTERNAL_ERROR", operationClaim.error);
+  }
+  if (!operationClaim.claimed) {
+    if (operationClaim.existing?.status === "succeeded" && operationClaim.existing.response) {
+      return apiSuccess({
+        replayed: true,
+        ...operationClaim.existing.response,
+      });
+    }
+    return apiError(409, "FORBIDDEN", "Duplicate redemption request in progress");
+  }
+
+  const consume = await consumeSessionEntitlement({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    memberId,
+    actorId: auth.context.userId,
+    branchId: auth.context.branchId ?? memberResult.data.store_id ?? null,
+    bookingId,
+    serviceName: bookingServiceName,
+    coachId: bookingCoachId,
+    quantity,
+    sessionNo,
+    note,
+    preferredPassId: passId,
+    preferredContractId: contractId,
+  });
+  if (!consume.ok) {
+    await finalizeIdempotency({
+      supabase: auth.supabase,
+      tenantId: auth.context.tenantId,
+      operationKey,
+      status: "failed",
+      errorCode: consume.code,
+    });
+    await writeOperationalAudit({
+      supabase: auth.supabase,
+      tenantId: auth.context.tenantId,
+      actorId: auth.context.userId,
+      action: "session_redemption_failed",
+      targetType: "member",
+      targetId: memberId,
+      reason: consume.code,
+      payload: {
+        bookingId,
+        quantity,
+        sessionNo,
+        passId,
+        contractId,
+        message: consume.message,
+      },
+    });
+    return apiError(consume.status, consume.code, consume.message);
+  }
+
+  await auth.supabase.from("audit_logs").insert({
+    tenant_id: auth.context.tenantId,
+    actor_id: auth.context.userId,
+    action: "session_redeemed",
+    target_type: "session_redemption",
+    target_id: String(consume.data.redemption.redemption_id || ""),
+    reason: note || null,
+    payload: {
+      bookingId,
+      memberId,
+      quantity,
+      sessionNo,
+      selectedContractId: consume.data.eligibility.candidate?.contractId ?? null,
+      selectedPassId: consume.data.eligibility.candidate?.passId ?? null,
+      eligibility: {
+        eligible: consume.data.eligibility.eligible,
+        reasonCode: consume.data.eligibility.reasonCode,
+        usageBucket: consume.data.eligibility.usageBucket,
+      },
+    },
   });
 
-  if (rpcResult.error) {
-    const mapped = mapRedemptionError(rpcResult.error.message);
-    return NextResponse.json({ error: mapped.error }, { status: mapped.status });
+  const successPayload = {
+    redemption: consume.data.redemption,
+    contract: consume.data.contract,
+    eligibility: consume.data.eligibility,
+  };
+  await finalizeIdempotency({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    operationKey,
+    status: "succeeded",
+    response: successPayload as Record<string, unknown>,
+  });
+
+  let shiftId = shiftGuard.shift?.id ? String(shiftGuard.shift.id) : null;
+  if (!shiftId) {
+    const branchShift = await findOpenShiftForBranch({
+      supabase: auth.supabase,
+      tenantId: auth.context.tenantId,
+      branchId: auth.context.branchId ?? memberResult.data.store_id ?? null,
+    });
+    if (branchShift.ok) shiftId = branchShift.shiftId;
   }
+  await insertShiftItem({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    shiftId,
+    kind: "note",
+    refId: String(consume.data.redemption.redemption_id || ""),
+    amount: null,
+    summary: `session_redemption:${bookingId || "na"}:${quantity}`,
+    eventType: "session_redeemed",
+    quantity,
+    metadata: {
+      memberId,
+      bookingId,
+      sessionNo,
+      selectedContractId: consume.data.eligibility.candidate?.contractId ?? null,
+      selectedPassId: consume.data.eligibility.candidate?.passId ?? null,
+    },
+  }).catch(() => null);
 
-  const redemption = Array.isArray(rpcResult.data) ? rpcResult.data[0] : null;
-  if (!redemption) return NextResponse.json({ error: "Redemption failed" }, { status: 500 });
-
-  return NextResponse.json({ redemption }, { status: 201 });
+  return apiSuccess(successPayload);
 }

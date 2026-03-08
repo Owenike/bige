@@ -7,7 +7,7 @@ import { useI18n } from "../i18n-provider";
 
 type MeResponse = {
   userId: string;
-  role: "platform_admin" | "manager" | "frontdesk" | "coach" | "member";
+  role: "platform_admin" | "manager" | "supervisor" | "branch_manager" | "frontdesk" | "coach" | "sales" | "member";
   tenantId: string | null;
   branchId: string | null;
 };
@@ -24,11 +24,15 @@ function roleHome(role: MeResponse["role"]) {
     case "platform_admin":
       return "/platform-admin";
     case "manager":
+    case "supervisor":
+    case "branch_manager":
       return "/manager";
     case "frontdesk":
       return "/frontdesk";
     case "coach":
       return "/coach";
+    case "sales":
+      return "/";
     case "member":
       return "/member";
     default:

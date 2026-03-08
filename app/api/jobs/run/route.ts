@@ -1,0 +1,380 @@
+import { apiError, apiSuccess, requireProfile, type AppRole } from "../../../../lib/auth-context";
+import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
+import { runNotificationSweep } from "../../../../lib/in-app-notifications";
+import { runOpportunitySweep } from "../../../../lib/opportunities";
+import { dispatchNotificationDeliveries } from "../../../../lib/notification-dispatch";
+import { completeJobRun, createJobRun, type JobType } from "../../../../lib/notification-ops";
+
+const DEFAULT_JOBS: JobType[] = ["notification_sweep", "opportunity_sweep", "delivery_dispatch"];
+const JOBS_RUN_LOG_PREFIX = "[jobs/run]";
+
+function getDebugModeEnabled() {
+  return process.env.JOBS_RUN_DEBUG_VERBOSE === "1";
+}
+
+function toErrorSummary(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function parseJobTypes(input: unknown) {
+  if (!Array.isArray(input)) return DEFAULT_JOBS;
+  const parsed = input
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item): item is JobType => item === "notification_sweep" || item === "opportunity_sweep" || item === "delivery_dispatch");
+  return parsed.length > 0 ? parsed : DEFAULT_JOBS;
+}
+
+function readCronSecret(request: Request) {
+  const authHeader = request.headers.get("authorization") || request.headers.get("Authorization") || "";
+  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+  const xSecret = request.headers.get("x-cron-secret") || "";
+  const vercelCron = request.headers.get("x-vercel-cron") || "";
+  return bearer || xSecret || vercelCron;
+}
+
+async function resolveCronActorId() {
+  const admin = createSupabaseAdminClient();
+  const result = await admin
+    .from("profiles")
+    .select("id")
+    .eq("role", "platform_admin")
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  if (result.error || !result.data?.id) return null;
+  return String(result.data.id);
+}
+
+async function runOneJob(params: {
+  jobType: JobType;
+  triggerMode: "scheduled" | "manual" | "api";
+  tenantId: string | null;
+  actorRole: AppRole;
+  actorUserId: string | null;
+  debug: boolean;
+}) {
+  console.info(`${JOBS_RUN_LOG_PREFIX}[job:start]`, {
+    jobType: params.jobType,
+    triggerMode: params.triggerMode,
+    tenantId: params.tenantId,
+    actorRole: params.actorRole,
+  });
+
+  const start = await createJobRun({
+    jobType: params.jobType,
+    triggerMode: params.triggerMode,
+    tenantId: params.tenantId,
+    initiatedBy: params.actorUserId,
+    payload: {
+      actorRole: params.actorRole,
+      triggerMode: params.triggerMode,
+      scopedTenantId: params.tenantId,
+    },
+  });
+
+  if (start.ok) {
+    console.info(`${JOBS_RUN_LOG_PREFIX}[job:created]`, {
+      jobType: params.jobType,
+      triggerMode: params.triggerMode,
+      tenantId: params.tenantId,
+      jobRunId: start.jobRunId,
+    });
+  } else {
+    console.error(`${JOBS_RUN_LOG_PREFIX}[job:error]`, {
+      stage: "createJobRun",
+      jobType: params.jobType,
+      triggerMode: params.triggerMode,
+      tenantId: params.tenantId,
+      error: start.error,
+    });
+  }
+
+  let affectedCount = 0;
+  let errorCount = 0;
+  let status: "success" | "failed" | "partial" = "success";
+  let errorSummary: string | null = null;
+  let resultPayload: Record<string, unknown> = {};
+  try {
+    if (params.jobType === "notification_sweep") {
+      const result = await runNotificationSweep({
+        actorRole: params.actorRole,
+        actorUserId: params.actorUserId,
+        tenantId: params.tenantId,
+      });
+      if (!result.ok) {
+        status = "failed";
+        errorCount = 1;
+        errorSummary = result.error;
+      } else {
+        affectedCount = result.summary.generated;
+        resultPayload = { byEventType: result.summary.byEventType };
+      }
+    } else if (params.jobType === "opportunity_sweep") {
+      const result = await runOpportunitySweep({
+        actorRole: params.actorRole,
+        actorUserId: params.actorUserId,
+        tenantId: params.tenantId,
+      });
+      if (!result.ok) {
+        status = "failed";
+        errorCount = 1;
+        errorSummary = result.error;
+      } else {
+        affectedCount = result.summary.inserted;
+        resultPayload = {
+          byType: result.summary.byType,
+          reminders: result.summary.reminders,
+        };
+      }
+    } else if (params.jobType === "delivery_dispatch") {
+      const result = await dispatchNotificationDeliveries({
+        tenantId: params.tenantId,
+        mode: "job",
+        includeFailed: true,
+        limit: 500,
+      });
+      if (!result.ok) {
+        status = "failed";
+        errorCount = 1;
+        errorSummary = result.error;
+      } else {
+        affectedCount = result.summary.processed;
+        resultPayload = {
+          sent: result.summary.sent,
+          skipped: result.summary.skipped,
+          failed: result.summary.failed,
+          retrying: result.summary.retrying,
+        };
+        if (result.summary.failed > 0 && result.summary.sent > 0) status = "partial";
+        if (result.summary.failed > 0 && result.summary.sent === 0) status = "failed";
+        errorCount = result.summary.failed;
+        if (result.summary.failed > 0) errorSummary = `${result.summary.failed} delivery dispatch(es) failed`;
+      }
+    }
+  } catch (error) {
+    status = "failed";
+    errorCount = Math.max(1, errorCount);
+    errorSummary = toErrorSummary(error);
+    resultPayload = params.debug
+      ? { thrown: true, error: errorSummary }
+      : { thrown: true };
+    console.error(`${JOBS_RUN_LOG_PREFIX}[job:error]`, {
+      stage: "execute",
+      jobType: params.jobType,
+      triggerMode: params.triggerMode,
+      tenantId: params.tenantId,
+      error: errorSummary,
+    });
+  }
+
+  const complete = await completeJobRun({
+    jobRunId: start.jobRunId,
+    status,
+    affectedCount,
+    errorCount,
+    errorSummary,
+    payload: resultPayload,
+  });
+  if (!complete.ok) {
+    console.error(`${JOBS_RUN_LOG_PREFIX}[job:error]`, {
+      stage: "completeJobRun",
+      jobType: params.jobType,
+      triggerMode: params.triggerMode,
+      tenantId: params.tenantId,
+      jobRunId: start.jobRunId,
+      error: complete.error,
+    });
+  }
+
+  if (status === "failed") {
+    console.error(`${JOBS_RUN_LOG_PREFIX}[job:error]`, {
+      stage: "result",
+      jobType: params.jobType,
+      triggerMode: params.triggerMode,
+      tenantId: params.tenantId,
+      status,
+      errorSummary,
+      affectedCount,
+      errorCount,
+    });
+  } else {
+    console.info(`${JOBS_RUN_LOG_PREFIX}[job:done]`, {
+      jobType: params.jobType,
+      triggerMode: params.triggerMode,
+      tenantId: params.tenantId,
+      status,
+      affectedCount,
+      errorCount,
+    });
+  }
+
+  return {
+    jobType: params.jobType,
+    status,
+    affectedCount,
+    errorCount,
+    errorSummary,
+    details: resultPayload,
+  };
+}
+
+async function handleRunJobs(request: Request) {
+  const debug = getDebugModeEnabled();
+  console.info(`${JOBS_RUN_LOG_PREFIX} hit`, {
+    method: request.method,
+    pathname: new URL(request.url).pathname,
+  });
+
+  const cronSecret = process.env.JOBS_CRON_SECRET || process.env.CRON_SECRET || "";
+  const incomingSecret = readCronSecret(request);
+  const isVercelCron = request.headers.has("x-vercel-cron");
+  let scheduledReason = "none";
+  const isScheduled =
+    (() => {
+      if (cronSecret.length > 0 && incomingSecret.length > 0 && incomingSecret === cronSecret) {
+        scheduledReason = "cron_secret_match";
+        return true;
+      }
+      if (isVercelCron && cronSecret.length === 0) {
+        scheduledReason = "x-vercel-cron_without_secret";
+        return true;
+      }
+      return false;
+    })();
+
+  console.info(`${JOBS_RUN_LOG_PREFIX}${isScheduled ? "[scheduled]" : "[api]"}`, {
+    method: request.method,
+    isScheduled,
+    scheduledReason,
+    hasCronSecret: cronSecret.length > 0,
+    hasIncomingSecret: incomingSecret.length > 0,
+    hasVercelCronHeader: isVercelCron,
+  });
+
+  let actorRole: AppRole;
+  let actorUserId: string | null = null;
+  let scopedTenantId: string | null = null;
+  let triggerMode: "scheduled" | "manual" | "api" = isScheduled ? "scheduled" : "api";
+
+  if (isScheduled) {
+    actorRole = "platform_admin";
+    actorUserId = await resolveCronActorId();
+    if (debug) {
+      console.info(`${JOBS_RUN_LOG_PREFIX}[scheduled] actor-resolved`, {
+        actorUserId,
+      });
+    }
+  } else {
+    const auth = await requireProfile(["platform_admin", "manager"], request);
+    if (!auth.ok) {
+      console.warn(`${JOBS_RUN_LOG_PREFIX}[api] auth-denied`);
+      return auth.response;
+    }
+    actorRole = auth.context.role;
+    actorUserId = auth.context.userId;
+    const body = await request.json().catch(() => null);
+    const tenantFromBody = typeof body?.tenantId === "string" ? body.tenantId.trim() : null;
+    if (actorRole === "platform_admin") {
+      scopedTenantId = tenantFromBody || null;
+    } else {
+      scopedTenantId = auth.context.tenantId || null;
+      triggerMode = "manual";
+    }
+
+    const jobs = parseJobTypes(body?.jobs);
+    console.info(`${JOBS_RUN_LOG_PREFIX}[api] dispatch`, {
+      actorRole,
+      triggerMode,
+      scopedTenantId,
+      jobs,
+    });
+    const results = [];
+    for (const job of jobs) {
+      const result = await runOneJob({
+        jobType: job,
+        triggerMode,
+        tenantId: scopedTenantId,
+        actorRole,
+        actorUserId,
+        debug,
+      });
+      results.push(result);
+    }
+    console.info(`${JOBS_RUN_LOG_PREFIX} response`, {
+      mode: "manual",
+      actorRole,
+      scopedTenantId,
+      totalJobs: results.length,
+      failedJobs: results.filter((item) => item.status === "failed").length,
+    });
+    return apiSuccess({
+      mode: "manual",
+      actorRole,
+      scopedTenantId,
+      results,
+    });
+  }
+
+  const params = new URL(request.url).searchParams;
+  scopedTenantId = params.get("tenantId");
+  const jobsParam = params.get("jobs");
+  const jobs = jobsParam
+    ? parseJobTypes(jobsParam.split(",").map((item) => item.trim()))
+    : DEFAULT_JOBS;
+
+  console.info(`${JOBS_RUN_LOG_PREFIX}[scheduled] dispatch`, {
+    actorRole,
+    triggerMode,
+    scopedTenantId,
+    jobs,
+  });
+
+  const results = [];
+  for (const job of jobs) {
+    const result = await runOneJob({
+      jobType: job,
+      triggerMode,
+      tenantId: scopedTenantId,
+      actorRole,
+      actorUserId,
+      debug,
+    });
+    results.push(result);
+  }
+
+  const failed = results.filter((item) => item.status === "failed").length;
+  if (failed === results.length && results.length > 0) {
+    console.error(`${JOBS_RUN_LOG_PREFIX} response`, {
+      mode: "scheduled",
+      actorRole,
+      scopedTenantId,
+      totalJobs: results.length,
+      failedJobs: failed,
+      status: "all_failed",
+    });
+    return apiError(500, "INTERNAL_ERROR", "All scheduled jobs failed");
+  }
+
+  console.info(`${JOBS_RUN_LOG_PREFIX} response`, {
+    mode: "scheduled",
+    actorRole,
+    scopedTenantId,
+    totalJobs: results.length,
+    failedJobs: failed,
+  });
+  return apiSuccess({
+    mode: "scheduled",
+    actorRole,
+    scopedTenantId,
+    results,
+  });
+}
+
+export async function POST(request: Request) {
+  return handleRunJobs(request);
+}
+
+export async function GET(request: Request) {
+  return handleRunJobs(request);
+}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireOpenShift, requireProfile } from "../../../../lib/auth-context";
+import { insertShiftItem } from "../../../../lib/shift-reconciliation";
 
 export const dynamic = "force-dynamic";
 
@@ -167,6 +168,24 @@ export async function POST(request: Request) {
     await admin.from("checkins").delete().eq("id", checkinId).eq("tenant_id", auth.context.tenantId);
     return jsonError(500, auditInsert.error.message);
   }
+
+  await insertShiftItem({
+    supabase: auth.supabase,
+    tenantId: auth.context.tenantId,
+    shiftId: shiftGuard.shift?.id ? String(shiftGuard.shift.id) : null,
+    kind: "note",
+    refId: checkinId,
+    amount: null,
+    summary: `checkin:manual_allow:${memberId}`,
+    eventType: "checkin_manual_allow",
+    quantity: 1,
+    metadata: {
+      memberId,
+      reason,
+      deviceId,
+      checkinId,
+    },
+  }).catch(() => null);
 
   // Recent checkin and today's checkin count for the member.
   const now = new Date();

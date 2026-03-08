@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../lib/auth-context";
+import { apiError, apiSuccess, requireProfile } from "../../../../lib/auth-context";
 
 function isValidLimit(value: string | null) {
   if (!value) return false;
@@ -7,7 +6,17 @@ function isValidLimit(value: string | null) {
   return Number.isInteger(n) && n > 0 && n <= 200;
 }
 
-function extractTimestamp(row: any): string | null {
+function isMissingTableError(message: string | undefined, table: string) {
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  const target = table.toLowerCase();
+  return (
+    (lower.includes("does not exist") && lower.includes(target)) ||
+    (lower.includes("could not find the table") && lower.includes(target))
+  );
+}
+
+function extractTimestamp(row: Record<string, unknown>): string | null {
   const keys = [
     "created_at",
     "createdAt",
@@ -22,7 +31,7 @@ function extractTimestamp(row: any): string | null {
     "timestamp",
   ];
   for (const k of keys) {
-    const v = row?.[k];
+    const v = row[k];
     if (typeof v === "string" && v.length > 0) return v;
   }
   return null;
@@ -33,7 +42,7 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
 
   if (!auth.context.tenantId) {
-    return NextResponse.json({ error: "Tenant context is required" }, { status: 400 });
+    return apiError(400, "FORBIDDEN", "Tenant context is required");
   }
 
   const url = new URL(request.url);
@@ -45,10 +54,8 @@ export async function GET(request: Request) {
     .eq("tenant_id", auth.context.tenantId)
     .eq("auth_user_id", auth.context.userId)
     .maybeSingle();
-
-  if (memberResult.error || !memberResult.data) {
-    return NextResponse.json({ error: "Member not found" }, { status: 404 });
-  }
+  if (memberResult.error) return apiError(500, "INTERNAL_ERROR", memberResult.error.message);
+  if (!memberResult.data) return apiError(404, "ENTITLEMENT_NOT_FOUND", "Member not found");
 
   const memberId = memberResult.data.id;
 
@@ -74,7 +81,7 @@ export async function GET(request: Request) {
       .limit(limit);
   };
 
-  const [checkinsRes, redemptionsRes, ordersRes, paymentsRes] = await Promise.all([
+  const [checkinsRes, redemptionsRes, ordersRes, paymentsRes, ledgerRes] = await Promise.all([
     auth.supabase
       .from("checkins")
       .select("*")
@@ -97,31 +104,32 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
       .limit(limit),
     loadPayments(),
+    auth.supabase
+      .from("member_plan_ledger")
+      .select("*")
+      .eq("tenant_id", auth.context.tenantId)
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false })
+      .limit(limit),
   ]);
 
-  if (checkinsRes.error || redemptionsRes.error || ordersRes.error || paymentsRes.error) {
-    return NextResponse.json(
-      {
-        error: "Failed to load history",
-        details: {
-          checkins: checkinsRes.error?.message ?? null,
-          session_redemptions: redemptionsRes.error?.message ?? null,
-          orders: ordersRes.error?.message ?? null,
-          payments: paymentsRes.error?.message ?? null,
-        },
-      },
-      { status: 500 },
-    );
+  if (checkinsRes.error) return apiError(500, "INTERNAL_ERROR", checkinsRes.error.message);
+  if (redemptionsRes.error) return apiError(500, "INTERNAL_ERROR", redemptionsRes.error.message);
+  if (ordersRes.error) return apiError(500, "INTERNAL_ERROR", ordersRes.error.message);
+  if (paymentsRes.error) return apiError(500, "INTERNAL_ERROR", paymentsRes.error.message);
+  if (ledgerRes.error && !isMissingTableError(ledgerRes.error.message, "member_plan_ledger")) {
+    return apiError(500, "INTERNAL_ERROR", ledgerRes.error.message);
   }
 
   const items = [
-    ...(checkinsRes.data ?? []).map((row: any) => ({ type: "checkin", ts: extractTimestamp(row), row })),
-    ...(redemptionsRes.data ?? []).map((row: any) => ({ type: "session_redemption", ts: extractTimestamp(row), row })),
-    ...(ordersRes.data ?? []).map((row: any) => ({ type: "order", ts: extractTimestamp(row), row })),
-    ...(paymentsRes.data ?? []).map((row: any) => ({ type: "payment", ts: extractTimestamp(row), row })),
+    ...((checkinsRes.data || []) as Array<Record<string, unknown>>).map((row) => ({ type: "checkin", ts: extractTimestamp(row), row })),
+    ...((redemptionsRes.data || []) as Array<Record<string, unknown>>).map((row) => ({ type: "session_redemption", ts: extractTimestamp(row), row })),
+    ...((ordersRes.data || []) as Array<Record<string, unknown>>).map((row) => ({ type: "order", ts: extractTimestamp(row), row })),
+    ...((paymentsRes.data || []) as Array<Record<string, unknown>>).map((row) => ({ type: "payment", ts: extractTimestamp(row), row })),
+    ...((ledgerRes.data || []) as Array<Record<string, unknown>>).map((row) => ({ type: "plan_ledger", ts: extractTimestamp(row), row })),
   ]
-    .filter((x) => x.ts)
+    .filter((item) => item.ts)
     .sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
 
-  return NextResponse.json({ memberId, items });
+  return apiSuccess({ memberId, items });
 }

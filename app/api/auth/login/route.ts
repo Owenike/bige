@@ -113,6 +113,12 @@ export async function POST(request: Request) {
   const userAgent = request.headers.get("user-agent") || null;
   const platform = normalizePlatform(request.headers.get("sec-ch-ua-platform"));
   const admin = createSupabaseAdminClient();
+  const nowIso = new Date().toISOString();
+
+  await admin
+    .from("profiles")
+    .update({ last_login_at: nowIso, updated_at: nowIso })
+    .eq("id", authUser.id);
 
   const profileResult = await admin.from("profiles").select("role, tenant_id").eq("id", authUser.id).maybeSingle();
   if (!profileResult.error && profileResult.data?.role === "member" && profileResult.data.tenant_id) {
@@ -124,7 +130,6 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (!memberResult.error && memberResult.data?.id) {
-      const now = new Date().toISOString();
       const deviceInsert = await admin.from("member_device_sessions").insert({
         tenant_id: profileResult.data.tenant_id,
         member_id: memberResult.data.id,
@@ -132,9 +137,9 @@ export async function POST(request: Request) {
         user_agent: userAgent,
         ip_address: base.ip || null,
         platform,
-        created_at: now,
-        updated_at: now,
-        last_seen_at: now,
+        created_at: nowIso,
+        updated_at: nowIso,
+        last_seen_at: nowIso,
         revoked_at: null,
       });
       if (deviceInsert.error && !tableMissing(deviceInsert.error.message, "member_device_sessions")) {
@@ -173,7 +178,7 @@ export async function POST(request: Request) {
           if (staleIds.length > 0) {
             const staleRevokeResult = await admin
               .from("member_device_sessions")
-              .update({ revoked_at: now, updated_at: now })
+              .update({ revoked_at: nowIso, updated_at: nowIso })
               .eq("tenant_id", profileResult.data.tenant_id)
               .eq("member_id", memberResult.data.id)
               .in("id", staleIds)

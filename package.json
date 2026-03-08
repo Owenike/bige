@@ -12,7 +12,8 @@
         "ui:check-cards": "powershell -ExecutionPolicy Bypass -File scripts/check-page-cards.ps1",
         "go-live:check": "powershell -ExecutionPolicy Bypass -File scripts/go-live-check.ps1",
         "test:smoke": "powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1",
-        "test:unit": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1"
+        "test:unit": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
+        "check:job-runs": "node scripts/check-job-runs.mjs"
     },
     "dependencies": {
         "@dnd-kit/core": "^6.3.1",

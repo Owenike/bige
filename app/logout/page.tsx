@@ -21,7 +21,7 @@ export default function LogoutPage() {
       router.replace("/login");
     }
     void run();
-  }, [router]);
+  }, [router, zh]);
 
   return (
     <main className="fdGlassScene">

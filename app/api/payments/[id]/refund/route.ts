@@ -1,20 +1,27 @@
-import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../../lib/auth-context";
+import { apiError, apiSuccess, requireOpenShift, requireProfile } from "../../../../../lib/auth-context";
 import { executePaymentRefund } from "../../../../../lib/high-risk-actions";
+import { notifyHighRiskRequestCreated } from "../../../../../lib/in-app-notifications";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireProfile(["manager", "frontdesk"], request);
   if (!auth.ok) return auth.response;
 
   if (!auth.context.tenantId) {
-    return NextResponse.json({ error: "Invalid tenant context" }, { status: 400 });
+    return apiError(400, "FORBIDDEN", "Invalid tenant context");
   }
+
+  const shiftGuard = await requireOpenShift({
+    supabase: auth.supabase,
+    context: auth.context,
+    enforceRoles: ["frontdesk"],
+  });
+  if (!shiftGuard.ok) return shiftGuard.response;
 
   const body = await request.json().catch(() => null);
   const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
   const { id } = await context.params;
 
-  if (!reason) return NextResponse.json({ error: "reason is required" }, { status: 400 });
+  if (!reason) return apiError(400, "FORBIDDEN", "reason is required");
 
   if (auth.context.role === "frontdesk") {
     const { data, error } = await auth.supabase
@@ -34,9 +41,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     if (error) {
       if (error.code === "23505") {
-        return NextResponse.json({ error: "A pending approval request already exists for this payment" }, { status: 409 });
+        return apiError(409, "FORBIDDEN", "A pending approval request already exists for this payment");
       }
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return apiError(500, "INTERNAL_ERROR", error.message);
     }
 
     await auth.supabase.from("audit_logs").insert({
@@ -49,14 +56,23 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       payload: { requestId: data?.id, action: "payment_refund" },
     });
 
-    return NextResponse.json(
-      {
-        request: data,
-        pendingApproval: true,
-        message: "Refund request submitted for manager approval",
-      },
-      { status: 202 },
-    );
+    if (data?.id) {
+      await notifyHighRiskRequestCreated({
+        tenantId: auth.context.tenantId,
+        branchId: auth.context.branchId,
+        requestId: String(data.id),
+        action: "payment_refund",
+        targetType: "payment",
+        targetId: id,
+        requestedBy: auth.context.userId,
+      }).catch(() => null);
+    }
+
+    return apiSuccess({
+      request: data,
+      pendingApproval: true,
+      message: "Refund request submitted for manager approval",
+    });
   }
 
   const result = await executePaymentRefund({
@@ -67,6 +83,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     reason,
   });
 
-  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-  return NextResponse.json({ payment: result.payment });
+  if (!result.ok) return apiError(result.status, "FORBIDDEN", result.error);
+  return apiSuccess({ payment: result.payment || null });
 }

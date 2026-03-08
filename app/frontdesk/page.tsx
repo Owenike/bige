@@ -24,12 +24,39 @@ type ShiftItem = {
   status: string;
   opened_at: string;
   closed_at?: string | null;
+  opening_cash?: number | null;
+  expected_cash?: number | null;
+  counted_cash?: number | null;
+  difference?: number | null;
   cash_total?: number | null;
   card_total?: number | null;
   transfer_total?: number | null;
   note?: string | null;
+  difference_reason?: string | null;
+  closing_confirmed?: boolean | null;
   opened_by?: string | null;
   opened_by_name?: string | null;
+};
+
+type ActiveShiftSummary = {
+  shiftId: string;
+  openingCash: number;
+  expectedCash: number;
+  expectedCashDelta: number;
+  netRevenue: number;
+  inflow: { cash: number; card: number; transfer: number; newebpay: number; manual: number };
+  outflow: { cash: number; card: number; transfer: number; newebpay: number; manual: number };
+  counts: {
+    payments: number;
+    refunds: number;
+    voids: number;
+    invoices: number;
+    checkins: number;
+    redemptions: number;
+    inventorySales: number;
+    notes: number;
+    adjustments: number;
+  };
 };
 
 type BookingItem = {
@@ -261,6 +288,18 @@ function parseAmount(value: string) {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
+function getApiError(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== "object") return fallback;
+  const data = payload as { error?: unknown; message?: unknown; errorMessage?: unknown };
+  if (typeof data.error === "string" && data.error) return data.error;
+  if (data.error && typeof data.error === "object" && typeof (data.error as { message?: unknown }).message === "string") {
+    return (data.error as { message: string }).message;
+  }
+  if (typeof data.message === "string" && data.message) return data.message;
+  if (typeof data.errorMessage === "string" && data.errorMessage) return data.errorMessage;
+  return fallback;
+}
+
 function parseTimeValue(value: string) {
   const matched = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
   if (!matched) return null;
@@ -355,6 +394,7 @@ export default function FrontdeskPortalPage() {
   const [error, setError] = useState<string | null>(null);
   const [shiftState, setShiftState] = useState<"open" | "closed" | "unknown">("unknown");
   const [activeShift, setActiveShift] = useState<ShiftItem | null>(null);
+  const [activeShiftSummary, setActiveShiftSummary] = useState<ActiveShiftSummary | null>(null);
   const [shiftHistory, setShiftHistory] = useState<ShiftItem[]>([]);
   const [shiftActionError, setShiftActionError] = useState<string | null>(null);
   const [handoverDeadlineTime, setHandoverDeadlineTime] = useState("22:00");
@@ -534,6 +574,7 @@ export default function FrontdeskPortalPage() {
   const capabilityModalTypeById = useCallback((id: string): FrontdeskModalType => {
     if (id === "entry") return "entry";
     if (id === "member") return "member";
+    if (id === "handover") return "handover";
     return "capability";
   }, []);
 
@@ -609,11 +650,12 @@ export default function FrontdeskPortalPage() {
         ordersRes.json(),
       ]);
 
-      if (!shiftsRes.ok) throw new Error(shiftsPayload?.error || "Load shifts failed");
-      if (!bookingsRes.ok) throw new Error(bookingsPayload?.error || "Load bookings failed");
-      if (!ordersRes.ok) throw new Error(ordersPayload?.error || "Load orders failed");
+      if (!shiftsRes.ok) throw new Error(getApiError(shiftsPayload, "Load shifts failed"));
+      if (!bookingsRes.ok) throw new Error(getApiError(bookingsPayload, "Load bookings failed"));
+      if (!ordersRes.ok) throw new Error(getApiError(ordersPayload, "Load orders failed"));
 
       const shifts = (shiftsPayload.items || []) as ShiftItem[];
+      const shiftSummary = (shiftsPayload.activeSummary || shiftsPayload.data?.activeSummary || null) as ActiveShiftSummary | null;
       const bookings = (bookingsPayload.items || []) as BookingItem[];
       const orders = (ordersPayload.items || []) as OrderItem[];
 
@@ -645,6 +687,7 @@ export default function FrontdeskPortalPage() {
 
       setShiftState(openShift ? "open" : "closed");
       setActiveShift(openShift || null);
+      setActiveShiftSummary(shiftSummary);
       setShiftHistory(shifts);
       setPendingItems(unpaidOrders.length + upcomingBookings.length);
       setOrdersToday(todayOrders.length);
@@ -759,13 +802,19 @@ export default function FrontdeskPortalPage() {
             dueSoon: "即將開始",
             normal: "一般",
             capabilityTitle: "櫃檯能力地圖",
-            capabilitySub: "A~K 全模組進度：優先完成可營運與高風險稽核。",
+            capabilitySub: "首頁聚焦櫃檯高頻作業，管理層工具改為次要快捷入口。",
             capabilityOpenBtn: "開啟能力地圖",
-            capabilityArcHint: "拖曳下方 A~K 按鈕，點擊即開啟對應功能。",
+            capabilityArcHint: "拖曳下方模組按鈕，點擊即開啟對應功能。",
             capabilityDragHint: "可用滑鼠按住拖曳左右滑動",
-            capabilityModalTitle: "櫃檯能力地圖（A~K）",
+            capabilityModalTitle: "櫃檯能力地圖",
             capabilityDetailTitle: "模組說明",
             capabilityCurrent: "目前選擇",
+            capabilityQuickToolsTitle: "更多工具",
+            capabilityQuickToolsSub: "管理層模組改為次要入口，避免干擾櫃檯首頁主操作。",
+            quickLeadAction: "CRM / 線索",
+            quickReportAction: "報表 / 即時監控",
+            quickChainAction: "跨店規則",
+            quickAuditAction: "權限 / 稽核",
             entryModalTitle: "入場放行",
             entryModalDesc: "快速進入入場流程，支援掃碼驗證與人工放行。",
             entryModalHint: "建議：尖峰時段優先使用掃碼入場，例外情境再用人工放行。",
@@ -930,7 +979,7 @@ export default function FrontdeskPortalPage() {
             lockerRentedAt: "租借時間",
             lockerReturnedAt: "歸還時間",
             lockerTermTag: "租期",
-            inventoryTitle: "商品 / 庫存 / 銷售",
+            inventoryTitle: "商品加購 / 銷售",
             inventorySub: "在櫃檯直接完成商品銷售入帳與庫存調整。",
             inventorySummarySkus: "上架品項",
             inventorySummaryLow: "低庫存",
@@ -1160,13 +1209,19 @@ export default function FrontdeskPortalPage() {
             dueSoon: "Starting Soon",
             normal: "Normal",
             capabilityTitle: "Frontdesk Capability Map",
-            capabilitySub: "A-K module progress with operations-first and audit-first rollout.",
+            capabilitySub: "Homepage focuses on high-frequency desk workflows; management tools are kept as quick links.",
             capabilityOpenBtn: "Open Capability Map",
-            capabilityArcHint: "Drag the A-K buttons below and click to open each module.",
+            capabilityArcHint: "Drag the module buttons below and click to open each module.",
             capabilityDragHint: "Mouse drag is supported for horizontal slide",
-            capabilityModalTitle: "Frontdesk Capability Map (A-K)",
+            capabilityModalTitle: "Frontdesk Capability Map",
             capabilityDetailTitle: "Module Detail",
             capabilityCurrent: "Current",
+            capabilityQuickToolsTitle: "More Tools",
+            capabilityQuickToolsSub: "Management-focused modules are kept as secondary entry points.",
+            quickLeadAction: "CRM / Leads",
+            quickReportAction: "Reports / Monitor",
+            quickChainAction: "Cross-Branch Rules",
+            quickAuditAction: "Role / Audit",
             entryModalTitle: "Entry Access",
             entryModalDesc: "Open check-in flow with scanner and exception handling.",
             entryModalHint: "Tip: Use scanner first during peak hours, then manual allow for exceptions.",
@@ -1882,7 +1937,7 @@ export default function FrontdeskPortalPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || t.openShiftFail);
+      if (!res.ok) throw new Error(getApiError(payload, t.openShiftFail));
       await loadDashboard(false);
       setHandoverReminderOpen(false);
       setHandoverReminderSnoozeUntil(null);
@@ -1926,7 +1981,7 @@ export default function FrontdeskPortalPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || t.closeShiftFail);
+      if (!res.ok) throw new Error(getApiError(payload, t.closeShiftFail));
       setCapabilityOpen(false);
       setModalType("capability");
       setCloseCashTotal("0");
@@ -3006,7 +3061,7 @@ export default function FrontdeskPortalPage() {
     try {
       const res = await fetch(`/api/frontdesk/leads?status=${encodeURIComponent(leadStatusFilter)}&limit=80`);
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "載入線索失敗" : "Load leads failed"));
+      if (!res.ok) throw new Error(getApiError(payload, (lang === "zh" ? "載入線索失敗" : "Load leads failed")));
       const items = (payload.items || []) as LeadItem[];
       setLeadItems(items);
       setLeadSelectedId((prev) => {
@@ -3056,7 +3111,7 @@ export default function FrontdeskPortalPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "建立線索失敗" : "Create lead failed"));
+      if (!res.ok) throw new Error(getApiError(payload, (lang === "zh" ? "建立線索失敗" : "Create lead failed")));
       setLeadName("");
       setLeadPhone("");
       setLeadCreateNote("");
@@ -3110,7 +3165,7 @@ export default function FrontdeskPortalPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "安排導覽失敗" : "Schedule tour failed"));
+      if (!res.ok) throw new Error(getApiError(payload, (lang === "zh" ? "安排導覽失敗" : "Schedule tour failed")));
       setLeadMessage(lang === "zh" ? "導覽時間已更新" : "Tour scheduled");
       setLeadScheduleNote("");
       await loadLeadModule();
@@ -3149,7 +3204,7 @@ export default function FrontdeskPortalPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "新增追蹤失敗" : "Add follow-up failed"));
+      if (!res.ok) throw new Error(getApiError(payload, (lang === "zh" ? "新增追蹤失敗" : "Add follow-up failed")));
       setLeadMessage(lang === "zh" ? "已新增追蹤紀錄" : "Follow-up added");
       setLeadFollowupNote("");
       await loadLeadModule();
@@ -3215,7 +3270,7 @@ export default function FrontdeskPortalPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "轉會員失敗" : "Convert lead failed"));
+      if (!res.ok) throw new Error(getApiError(payload, (lang === "zh" ? "轉會員失敗" : "Convert lead failed")));
       setLeadMessage(lang === "zh" ? "已完成轉會員" : "Lead converted");
       setLeadConvertMemberId(memberId || "");
       setLeadConvertNote("");
@@ -3256,7 +3311,7 @@ export default function FrontdeskPortalPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || (lang === "zh" ? "標記失單失敗" : "Mark lost failed"));
+      if (!res.ok) throw new Error(getApiError(payload, (lang === "zh" ? "標記失單失敗" : "Mark lost failed")));
       setLeadMessage(lang === "zh" ? "線索已標記失單" : "Lead marked as lost");
       setLeadLostReason("");
       setLeadLostNote("");
@@ -3446,41 +3501,53 @@ export default function FrontdeskPortalPage() {
     }
   }, [lang, loadCsModule, loadDashboard, loadLeadModule, loadPosApprovals, loadPosOrders]);
 
-  const capabilityCards = useMemo(
+  const capabilityAllCards = useMemo(
     (): CapabilityCard[] =>
       lang === "zh"
         ? [
             { id: "entry", title: "A. 入場 / 放行", desc: "掃碼、人工放行、取消誤刷、原因碼與稽核。", detail: "支援會員卡 / QR / 人工例外放行，並要求原因碼與備註，完整寫入稽核。", area: "ENTRY", status: "ready" },
             { id: "member", title: "B. 會員查詢 / 建檔", desc: "防重複建檔、自訂欄位、快速下一步。", detail: "支援電話/姓名搜尋、防重複建立、補資料與自訂欄位，櫃檯可直接接續收款與預約。", area: "MEMBER", status: "ready" },
             { id: "pos", title: "C. 收銀 / POS / 發票", desc: "訂單收款、退費/作廢送審、結帳流程。", detail: "包含櫃檯收款、多付款方式、退費與作廢送審流程，並保留稽核軌跡。", area: "POS", status: "ready" },
-            { id: "booking", title: "D. 預約 / 課務", desc: "建立即時預約與課務調整。", detail: "可建立、改期、取消課務預約，支援現場快速調整時段。", area: "BOOKING", status: "ready" },
-            { id: "locker", title: "E. 置物櫃 / 租借", desc: "置物櫃租借登記、歸還與押金管理。", detail: "可直接登記租借與歸還，包含押金、到期時間與備註，並保留完整操作軌跡。", area: "LOCKER", status: "ready" },
-            { id: "inventory", title: "F. 商品 / 庫存 / 銷售", desc: "前台銷售、庫存調整、低庫存提醒。", detail: "可直接在櫃檯完成商品銷售入帳、庫存扣減與補貨/盤損調整，並保留異動紀錄。", area: "INVENTORY", status: "ready" },
-            { id: "cs", title: "G. 客服 / 事件紀錄", desc: "客訴與現場事件工單，含進度追蹤與結案。", detail: "可建立客服/事件工單、更新處理狀態、追加追蹤紀錄與結案說明，並保留完整操作軌跡。", area: "CS", status: "ready" },
-            { id: "lead", title: "H. 線索 / 參觀導覽", desc: "Lead 建檔、轉會員、追蹤轉換。", detail: "線索建檔、導覽排程、追蹤紀錄與轉會員/失單流程。", area: "LEAD", status: "ready" },
-            { id: "chain", title: "I. 跨店規則", desc: "跨店可用範圍、停權/黑名單同步。", detail: "跨店放行規則、例外覆核條件與黑名單同步維護。", area: "CHAIN", status: "ready" },
+            { id: "handover", title: "D. 當班資訊 / 交班", desc: "開班、當班摘要、交班與班次紀錄。", detail: "顯示當班人員與班次資訊，並可快速執行交班與檢視交班紀錄。", area: "SHIFT", status: "ready" },
+            { id: "booking", title: "E. 預約 / 課務", desc: "建立即時預約與課務調整。", detail: "可建立、改期、取消課務預約，支援現場快速調整時段。", area: "BOOKING", status: "ready" },
+            { id: "locker", title: "F. 置物櫃 / 租借", desc: "置物櫃租借登記、歸還與押金管理。", detail: "可直接登記租借與歸還，包含押金、到期時間與備註，並保留完整操作軌跡。", area: "LOCKER", status: "ready" },
+            { id: "inventory", title: "G. 商品加購 / 銷售", desc: "前台加購與銷售作業。", detail: "櫃檯可快速完成商品加購與銷售入帳；庫存盤點與補貨等管理作業建議於管理端處理。", area: "INVENTORY", status: "ready" },
+            { id: "cs", title: "H. 客服 / 事件紀錄", desc: "客訴與現場事件工單，含進度追蹤與結案。", detail: "可建立客服/事件工單、更新處理狀態、追加追蹤紀錄與結案說明，並保留完整操作軌跡。", area: "CS", status: "ready" },
+            { id: "lead", title: "I. 線索 / 參觀導覽", desc: "Lead 建檔、轉會員、追蹤轉換。", detail: "線索建檔、導覽排程、追蹤紀錄與轉會員/失單流程。", area: "LEAD", status: "ready" },
             { id: "report", title: "J. 報表 / 即時監控", desc: "今日營收、到期、欠費、No-show、待辦。", detail: "櫃檯今日營運看板、待辦彙總與風險提示。", area: "REPORT", status: "ready" },
-            { id: "audit", title: "K. 權限 / 稽核", desc: "高風險送審、角色權限、完整稽核軌跡。", detail: "高風險動作送審、管理者核准/駁回、完整 Audit Log。", area: "AUDIT", status: "ready" },
+            { id: "chain", title: "K. 跨店規則", desc: "跨店可用範圍、停權/黑名單同步。", detail: "跨店放行規則、例外覆核條件與黑名單同步維護。", area: "CHAIN", status: "ready" },
+            { id: "audit", title: "L. 權限 / 稽核", desc: "高風險送審、角色權限、完整稽核軌跡。", detail: "高風險動作送審、管理者核准/駁回、完整 Audit Log。", area: "AUDIT", status: "ready" },
           ]
         : [
             { id: "entry", title: "A. Entry / Allow", desc: "Scan, exception pass, undo, reason code with audit.", detail: "Supports card/QR/manual exception pass with reason code and full audit trail.", area: "ENTRY", status: "ready" },
             { id: "member", title: "B. Member Search / Create", desc: "Duplicate prevention, custom fields, quick actions.", detail: "Search/create with duplicate prevention and configurable custom fields.", area: "MEMBER", status: "ready" },
             { id: "pos", title: "C. POS / Invoice", desc: "Order payment, refund/void approval flow.", detail: "Desk payment, multi-method checkout, and approved high-risk refund/void flow.", area: "POS", status: "ready" },
-            { id: "booking", title: "D. Booking / Classes", desc: "Booking creation and class schedule handling.", detail: "Create, reschedule, and cancel class bookings from desk operations.", area: "BOOKING", status: "ready" },
-            { id: "locker", title: "E. Locker / Rental", desc: "Locker rent/return with deposit handling.", detail: "Register rental and return with deposit, due time, and operation audit trail.", area: "LOCKER", status: "ready" },
-            { id: "inventory", title: "F. Product / Inventory", desc: "Desk sales, stock adjustments, low-stock alerts.", detail: "Complete product sales posting, stock deduction, restock/adjustment, and movement history in frontdesk.", area: "INVENTORY", status: "ready" },
-            { id: "cs", title: "G. Service / Incidents", desc: "Complaint and on-site incident tickets with workflow.", detail: "Create incident tickets, update status, add follow-up notes, and close with resolution records.", area: "CS", status: "ready" },
-            { id: "lead", title: "H. Lead / Tours", desc: "Lead intake, visit scheduling, conversion.", detail: "Lead intake, tour scheduling, follow-up timeline, and conversion/lost flow.", area: "LEAD", status: "ready" },
-            { id: "chain", title: "I. Multi-Branch Rules", desc: "Cross-branch policy and blacklist sync.", detail: "Cross-branch access rules, approval gates, and synced blacklist controls.", area: "CHAIN", status: "ready" },
+            { id: "handover", title: "D. Shift / Handover", desc: "Open shift, active summary, and handover records.", detail: "Review active shift operator/status and run handover with quick access to close logs.", area: "SHIFT", status: "ready" },
+            { id: "booking", title: "E. Booking / Classes", desc: "Booking creation and class schedule handling.", detail: "Create, reschedule, and cancel class bookings from desk operations.", area: "BOOKING", status: "ready" },
+            { id: "locker", title: "F. Locker / Rental", desc: "Locker rent/return with deposit handling.", detail: "Register rental and return with deposit, due time, and operation audit trail.", area: "LOCKER", status: "ready" },
+            { id: "inventory", title: "G. Product / Inventory", desc: "Desk sales, stock adjustments, low-stock alerts.", detail: "Complete product sales posting, stock deduction, restock/adjustment, and movement history in frontdesk.", area: "INVENTORY", status: "ready" },
+            { id: "cs", title: "H. Service / Incidents", desc: "Complaint and on-site incident tickets with workflow.", detail: "Create incident tickets, update status, add follow-up notes, and close with resolution records.", area: "CS", status: "ready" },
+            { id: "lead", title: "I. Lead / Tours", desc: "Lead intake, visit scheduling, conversion.", detail: "Lead intake, tour scheduling, follow-up timeline, and conversion/lost flow.", area: "LEAD", status: "ready" },
             { id: "report", title: "J. Reports / Live Monitor", desc: "Revenue, due list, no-show, handover TODO.", detail: "Desk live operation board with pending tasks and risk indicators.", area: "REPORT", status: "ready" },
-            { id: "audit", title: "K. Role / Audit", desc: "Approval workflow, role control, full audit logs.", detail: "Approval workflow, role-based controls, and audit logs.", area: "AUDIT", status: "ready" },
+            { id: "chain", title: "K. Multi-Branch Rules", desc: "Cross-branch policy and blacklist sync.", detail: "Cross-branch access rules, approval gates, and synced blacklist controls.", area: "CHAIN", status: "ready" },
+            { id: "audit", title: "L. Role / Audit", desc: "Approval workflow, role control, full audit logs.", detail: "Approval workflow, role-based controls, and audit logs.", area: "AUDIT", status: "ready" },
           ],
     [lang],
   );
 
+  const capabilityCards = useMemo(
+    () => capabilityAllCards.filter((item) => ["booking", "locker", "inventory", "cs"].includes(item.id)),
+    [capabilityAllCards],
+  );
+
+  const capabilityQuickCards = useMemo(
+    () => capabilityAllCards.filter((item) => ["lead", "report", "chain", "audit"].includes(item.id)),
+    [capabilityAllCards],
+  );
+
   const selectedCapability = useMemo(
-    () => capabilityCards.find((item) => item.id === selectedCapabilityId) ?? capabilityCards[0],
-    [capabilityCards, selectedCapabilityId],
+    () => capabilityAllCards.find((item) => item.id === selectedCapabilityId) ?? capabilityCards[0] ?? capabilityAllCards[0],
+    [capabilityAllCards, capabilityCards, selectedCapabilityId],
   );
 
   const capabilityRingItems = useMemo(() => {
@@ -4214,6 +4281,31 @@ export default function FrontdeskPortalPage() {
                 })}
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="fdGlassSubPanel" style={{ marginTop: 12 }}>
+          <div className="fdActionHead">
+            <span className="kvLabel">{t.capabilityQuickToolsTitle}</span>
+          </div>
+          <p className="fdGlassText" style={{ marginTop: 8, marginBottom: 10 }}>{t.capabilityQuickToolsSub}</p>
+          <div className="fdPillActions">
+            {capabilityQuickCards.map((item) => (
+              <button
+                key={`quick-${item.id}`}
+                type="button"
+                className="fdPillBtn fdPillBtnGhost"
+                onClick={() => openCapabilityShortcut(item.id)}
+              >
+                {item.id === "lead"
+                  ? t.quickLeadAction
+                  : item.id === "report"
+                    ? t.quickReportAction
+                    : item.id === "chain"
+                      ? t.quickChainAction
+                      : t.quickAuditAction}
+              </button>
+            ))}
           </div>
         </section>
 
@@ -5976,6 +6068,22 @@ export default function FrontdeskPortalPage() {
                       {activeShift?.opened_at ? (
                         <div className="fdChip" style={{ marginBottom: 12, display: "inline-flex" }}>
                           {t.openedAt}: {fmtDateTime(activeShift.opened_at)}
+                        </div>
+                      ) : null}
+                      {activeShiftSummary ? (
+                        <div className="fdGlassSubPanel" style={{ padding: 10, marginBottom: 12 }}>
+                          <p className="sub" style={{ marginTop: 0, marginBottom: 4 }}>
+                            {lang === "zh" ? "開班現金" : "Opening Cash"}: NT${activeShiftSummary.openingCash}
+                          </p>
+                          <p className="sub" style={{ marginTop: 0, marginBottom: 4 }}>
+                            {lang === "zh" ? "預期現金" : "Expected Cash"}: NT${activeShiftSummary.expectedCash}
+                          </p>
+                          <p className="sub" style={{ marginTop: 0, marginBottom: 4 }}>
+                            {lang === "zh" ? "現金流入/流出" : "Cash In/Out"}: NT${activeShiftSummary.inflow.cash} / NT${activeShiftSummary.outflow.cash}
+                          </p>
+                          <p className="sub" style={{ marginTop: 0, marginBottom: 0 }}>
+                            {lang === "zh" ? "事件統計" : "Event Counters"}: {lang === "zh" ? "收款" : "Pay"} {activeShiftSummary.counts.payments}, {lang === "zh" ? "退款" : "Refund"} {activeShiftSummary.counts.refunds}, {lang === "zh" ? "作廢" : "Void"} {activeShiftSummary.counts.voids}, {lang === "zh" ? "發票" : "Invoice"} {activeShiftSummary.counts.invoices}, {lang === "zh" ? "入場" : "Entry"} {activeShiftSummary.counts.checkins}, {lang === "zh" ? "核銷" : "Redeem"} {activeShiftSummary.counts.redemptions}
+                          </p>
                         </div>
                       ) : null}
                       <div className="fdHandoverGrid">

@@ -77,6 +77,29 @@ select
       and indexname = 'checkins_jti_idx'
   ) as ok;
 
+select
+  'idx.frontdesk_shifts_open_one_per_branch_idx' as check_name,
+  exists (
+    select 1
+    from pg_indexes
+    where schemaname = 'public'
+      and indexname = 'frontdesk_shifts_open_one_per_branch_idx'
+  ) as ok;
+
+select
+  'col.frontdesk_shifts.opening_cash' as check_name,
+  exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'frontdesk_shifts' and column_name = 'opening_cash'
+  ) as ok;
+
+select
+  'col.frontdesk_shifts.expected_cash' as check_name,
+  exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'frontdesk_shifts' and column_name = 'expected_cash'
+  ) as ok;
+
 -- 4) RLS enabled checks
 select 'rls.members' as check_name, relrowsecurity as ok
 from pg_class

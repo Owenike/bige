@@ -86,7 +86,11 @@ function normalizeScannedToken(raw: string) {
 }
 
 function parseEntryError(payload: any, lang: "zh" | "en", status?: number) {
-  const raw = typeof payload?.error === "string" ? payload.error : "";
+  const raw =
+    (typeof payload?.error === "string" ? payload.error : "") ||
+    (typeof payload?.error?.message === "string" ? payload.error.message : "") ||
+    (typeof payload?.message === "string" ? payload.message : "") ||
+    (typeof payload?.errorMessage === "string" ? payload.errorMessage : "");
   if (raw === "reason is required") return lang === "zh" ? "請輸入取消原因" : "Reason is required";
   if (raw === "Only allow records can be canceled") return lang === "zh" ? "只能取消「放行」記錄" : raw;
   if (raw === "Shift is not open") return lang === "zh" ? "班別尚未開啟，請先開班。" : "Shift is not open. Please open shift first.";

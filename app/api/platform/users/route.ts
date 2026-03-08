@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../lib/auth-context";
+import { apiError, apiSuccess, requireProfile } from "../../../../lib/auth-context";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
-const ROLES = ["platform_admin", "manager", "frontdesk", "coach", "member"] as const;
+const ROLES = ["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales", "member"] as const;
 type AppRole = (typeof ROLES)[number];
+
+function ok<TData extends Record<string, unknown>>(data: TData) {
+  return apiSuccess(data);
+}
+
+function fail(status: number, code: "UNAUTHORIZED" | "FORBIDDEN" | "INTERNAL_ERROR", message: string) {
+  return apiError(status, code, message);
+}
 
 export async function GET(request: Request) {
   const auth = await requireProfile(["platform_admin"], request);
@@ -28,8 +36,8 @@ export async function GET(request: Request) {
   if (q) query = query.or(`display_name.ilike.%${q}%,id.ilike.%${q}%`);
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: data ?? [] });
+  if (error) return fail(500, "INTERNAL_ERROR", error.message);
+  return ok({ items: data ?? [] });
 }
 
 export async function POST(request: Request) {
@@ -50,16 +58,16 @@ export async function POST(request: Request) {
   const memberPhone = typeof body?.memberPhone === "string" ? body.memberPhone.trim() : null;
 
   if (!email || !password || !ROLES.includes(role)) {
-    return NextResponse.json({ error: "email, password, role are required" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "email, password, role are required");
   }
 
   // Tenant context is required for all non-platform roles.
   if (role !== "platform_admin" && !tenantId) {
-    return NextResponse.json({ error: "tenantId is required for non-platform users" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "tenantId is required for non-platform users");
   }
 
   if (role === "member" && createMember && !memberFullName) {
-    return NextResponse.json({ error: "memberFullName is required when createMember=true" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "memberFullName is required when createMember=true");
   }
 
   const admin = createSupabaseAdminClient();
@@ -70,7 +78,7 @@ export async function POST(request: Request) {
     email_confirm: true,
   });
   if (userResult.error || !userResult.data.user) {
-    return NextResponse.json({ error: userResult.error?.message || "Create user failed" }, { status: 500 });
+    return fail(500, "INTERNAL_ERROR", userResult.error?.message || "Create user failed");
   }
 
   const userId = userResult.data.user.id;
@@ -90,7 +98,7 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (profileResult.error || !profileResult.data) {
-    return NextResponse.json({ error: profileResult.error?.message || "Create profile failed" }, { status: 500 });
+    return fail(500, "INTERNAL_ERROR", profileResult.error?.message || "Create profile failed");
   }
 
   let memberRow: any = null;
@@ -108,10 +116,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (memberResult.error) {
-      return NextResponse.json(
-        { error: memberResult.error.message, profile: profileResult.data, user: { id: userId, email } },
-        { status: 500 },
-      );
+      return fail(500, "INTERNAL_ERROR", memberResult.error.message);
     }
     memberRow = memberResult.data;
   }
@@ -128,6 +133,12 @@ export async function POST(request: Request) {
 
   return NextResponse.json(
     {
+      ok: true,
+      data: {
+        user: { id: userId, email },
+        profile: profileResult.data,
+        member: memberRow,
+      },
       user: { id: userId, email },
       profile: profileResult.data,
       member: memberRow,
@@ -149,10 +160,10 @@ export async function PATCH(request: Request) {
   const isActive = body?.isActive === false ? false : true;
 
   if (!profileId || !ROLES.includes(role)) {
-    return NextResponse.json({ error: "profileId and valid role are required" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "profileId and valid role are required");
   }
   if (role !== "platform_admin" && !tenantId) {
-    return NextResponse.json({ error: "tenantId is required for non-platform users" }, { status: 400 });
+    return fail(400, "FORBIDDEN", "tenantId is required for non-platform users");
   }
 
   const { data, error } = await auth.supabase
@@ -169,8 +180,8 @@ export async function PATCH(request: Request) {
     .select("id, tenant_id, branch_id, role, display_name, is_active, created_at, updated_at")
     .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!data) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+  if (error) return fail(500, "INTERNAL_ERROR", error.message);
+  if (!data) return fail(404, "FORBIDDEN", "Profile not found");
 
   await auth.supabase.from("audit_logs").insert({
     tenant_id: role === "platform_admin" ? null : tenantId,
@@ -188,5 +199,5 @@ export async function PATCH(request: Request) {
     },
   });
 
-  return NextResponse.json({ profile: data });
+  return ok({ profile: data });
 }
