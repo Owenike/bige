@@ -10,7 +10,7 @@ without touching notification job business semantics.
 ## Temporary debug components
 - Route: `/api/cron-probe` (GET only)
 - Table: `public.cron_probe_runs`
-- Cron (temporary): `*/15 * * * * -> /api/cron-probe`
+- Cron (temporary, Hobby-compatible): `0 14 * * * -> /api/cron-probe` (22:00 Asia/Taipei)
 
 ## Safety constraints
 - Probe route does **not** trigger notification business logic.
@@ -23,7 +23,7 @@ without touching notification job business semantics.
 2. Confirm `vercel.json` contains both cron entries:
    - `/api/jobs/run` (existing schedule)
    - `/api/cron-probe` (temporary 15-minute debug schedule)
-3. Wait for next 15-minute boundary.
+3. Wait for next 22:00 Asia/Taipei probe window.
 4. Query DB evidence:
 
 ```bash
@@ -54,4 +54,3 @@ npm run check:cron-probe -- --from 2026-03-10T12:00:00Z --to 2026-03-10T12:30:00
 1. Remove temporary cron entry for `/api/cron-probe` from `vercel.json`.
 2. Remove `/api/cron-probe` route.
 3. Keep or archive `cron_probe_runs` table per audit policy.
-
