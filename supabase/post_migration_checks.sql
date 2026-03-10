@@ -20,6 +20,7 @@ select 'table.feature_flags' as check_name, to_regclass('public.feature_flags') 
 select 'table.checkins' as check_name, to_regclass('public.checkins') is not null as ok;
 select 'table.qr_token_uses' as check_name, to_regclass('public.qr_token_uses') is not null as ok;
 select 'table.notification_logs' as check_name, to_regclass('public.notification_logs') is not null as ok;
+select 'table.cron_probe_runs' as check_name, to_regclass('public.cron_probe_runs') is not null as ok;
 
 -- 2) Critical functions
 select

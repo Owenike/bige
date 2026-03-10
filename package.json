@@ -13,7 +13,8 @@
         "go-live:check": "powershell -ExecutionPolicy Bypass -File scripts/go-live-check.ps1",
         "test:smoke": "powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1",
         "test:unit": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
-        "check:job-runs": "node scripts/check-job-runs.mjs"
+        "check:job-runs": "node scripts/check-job-runs.mjs",
+        "check:cron-probe": "node scripts/check-cron-probe.mjs"
     },
     "dependencies": {
         "@dnd-kit/core": "^6.3.1",
