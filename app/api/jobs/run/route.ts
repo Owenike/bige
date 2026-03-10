@@ -25,12 +25,21 @@ function parseJobTypes(input: unknown) {
   return parsed.length > 0 ? parsed : DEFAULT_JOBS;
 }
 
-function readCronSecret(request: Request) {
+function readCronSignal(request: Request) {
   const authHeader = request.headers.get("authorization") || request.headers.get("Authorization") || "";
   const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
   const xSecret = request.headers.get("x-cron-secret") || "";
   const vercelCron = request.headers.get("x-vercel-cron") || "";
-  return bearer || xSecret || vercelCron;
+  if (bearer) {
+    return { value: bearer, source: "authorization_bearer" as const, hasVercelCronHeader: request.headers.has("x-vercel-cron") };
+  }
+  if (xSecret) {
+    return { value: xSecret, source: "x-cron-secret" as const, hasVercelCronHeader: request.headers.has("x-vercel-cron") };
+  }
+  if (vercelCron) {
+    return { value: vercelCron, source: "x-vercel-cron" as const, hasVercelCronHeader: request.headers.has("x-vercel-cron") };
+  }
+  return { value: "", source: "none" as const, hasVercelCronHeader: request.headers.has("x-vercel-cron") };
 }
 
 async function resolveCronActorId() {
@@ -221,14 +230,25 @@ async function runOneJob(params: {
 
 async function handleRunJobs(request: Request) {
   const debug = getDebugModeEnabled();
-  console.info(`${JOBS_RUN_LOG_PREFIX} hit`, {
+  const requestUrl = new URL(request.url);
+  const requestId = request.headers.get("x-request-id");
+  console.info(`${JOBS_RUN_LOG_PREFIX}[entry]`, {
     method: request.method,
-    pathname: new URL(request.url).pathname,
+    pathname: requestUrl.pathname,
+    requestId,
+    host: request.headers.get("host"),
+    xForwardedHost: request.headers.get("x-forwarded-host"),
+    xForwardedProto: request.headers.get("x-forwarded-proto"),
+    xVercelId: request.headers.get("x-vercel-id"),
+    vercelEnv: process.env.VERCEL_ENV ?? null,
+    vercelUrl: process.env.VERCEL_URL ?? null,
+    nodeEnv: process.env.NODE_ENV ?? null,
   });
 
   const cronSecret = process.env.JOBS_CRON_SECRET || process.env.CRON_SECRET || "";
-  const incomingSecret = readCronSecret(request);
-  const isVercelCron = request.headers.has("x-vercel-cron");
+  const cronSignal = readCronSignal(request);
+  const incomingSecret = cronSignal.value;
+  const isVercelCron = cronSignal.hasVercelCronHeader;
   let scheduledReason = "none";
   const isScheduled =
     (() => {
@@ -245,10 +265,13 @@ async function handleRunJobs(request: Request) {
 
   console.info(`${JOBS_RUN_LOG_PREFIX}${isScheduled ? "[scheduled]" : "[api]"}`, {
     method: request.method,
+    requestId,
     isScheduled,
     scheduledReason,
     hasCronSecret: cronSecret.length > 0,
     hasIncomingSecret: incomingSecret.length > 0,
+    incomingSecretLength: incomingSecret.length,
+    incomingSecretSource: cronSignal.source,
     hasVercelCronHeader: isVercelCron,
   });
 
@@ -268,7 +291,12 @@ async function handleRunJobs(request: Request) {
   } else {
     const auth = await requireProfile(["platform_admin", "manager"], request);
     if (!auth.ok) {
-      console.warn(`${JOBS_RUN_LOG_PREFIX}[api] auth-denied`);
+      console.warn(`${JOBS_RUN_LOG_PREFIX}[api] auth-denied`, {
+        requestId,
+        scheduledReason,
+        hasVercelCronHeader: isVercelCron,
+        incomingSecretSource: cronSignal.source,
+      });
       return auth.response;
     }
     actorRole = auth.context.role;
