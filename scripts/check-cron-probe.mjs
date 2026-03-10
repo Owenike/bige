@@ -74,6 +74,7 @@ function loadProjectEnv() {
   const cwd = process.cwd();
   const envFiles = [
     ".env.local",
+    ".env.production.current",
     ".env.staging",
     ".env.preview.local",
     ".env.preview.current",
@@ -166,4 +167,3 @@ main().catch((error) => {
   console.error(`[check-cron-probe] ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 });
-
