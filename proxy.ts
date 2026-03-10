@@ -72,8 +72,8 @@ function redirectToLogin(request: NextRequest, requestId: string) {
 
 function redirectBlocked(request: NextRequest, requestId: string, code: string) {
   const url = request.nextUrl.clone();
-  url.pathname = "/";
-  url.searchParams.set("error", code);
+  url.pathname = "/forbidden";
+  url.searchParams.set("code", code);
   return withRequestId(NextResponse.redirect(url), requestId);
 }
 
@@ -208,6 +208,9 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!isRouteAllowed(scope, session.role)) {
+    if (scope === "member") {
+      return redirectToLogin(request, requestId);
+    }
     if (scope === "manager" && session.role === "sales" && isSalesManagerAllowedPath(request.nextUrl.pathname)) {
       return withRequestId(response, requestId);
     }

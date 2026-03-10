@@ -14,14 +14,14 @@ type GridItem = {
 function PorscheCard({ item }: { item: GridItem }) {
   return (
     <article className="homeLuxuryPorscheCard" data-reveal-item data-parallax-card>
-      <div className="homeLuxuryPorscheLink">
+      <a className="homeLuxuryPorscheLink" href={item.href} aria-label={item.title}>
         <div className={`homeLuxuryGridMedia homeLuxuryPorscheMedia ${item.mediaClass}`}>
           <div className="homeLuxuryPorscheOverlay">
             <p className="homeLuxuryPorscheBadge">{item.badge}</p>
             <h3>{item.title}</h3>
           </div>
         </div>
-      </div>
+      </a>
     </article>
   );
 }
