@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron-probe",
-      "schedule": "0 14 * * *"
+      "schedule": "15 14 * * *"
     }
   ]
 }

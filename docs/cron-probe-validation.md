@@ -10,7 +10,7 @@ without touching notification job business semantics.
 ## Temporary debug components
 - Route: `/api/cron-probe` (GET only)
 - Table: `public.cron_probe_runs`
-- Cron (temporary, Hobby-compatible): `0 14 * * * -> /api/cron-probe` (22:00 Asia/Taipei)
+- Cron (temporary, Hobby-compatible): `15 14 * * * -> /api/cron-probe` (22:15 Asia/Taipei)
 
 ## Safety constraints
 - Probe route does **not** trigger notification business logic.
@@ -23,7 +23,7 @@ without touching notification job business semantics.
 2. Confirm `vercel.json` contains both cron entries:
    - `/api/jobs/run` (existing schedule)
    - `/api/cron-probe` (temporary 15-minute debug schedule)
-3. Wait for next 22:00 Asia/Taipei probe window.
+3. Wait for next 22:15 Asia/Taipei probe window.
 4. Query DB evidence:
 
 ```bash
