@@ -31,6 +31,7 @@ export const PERMISSION_ACTIONS = [
   "pass_adjustments.request",
   "pass_adjustments.approve",
   "audit.read",
+  "jobs.rerun.execute",
   "orders.read",
   "orders.write",
   "payments.read",

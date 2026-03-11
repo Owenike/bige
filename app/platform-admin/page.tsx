@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n-provider";
 
@@ -425,6 +426,7 @@ export default function PlatformAdminPage() {
               <a className="fdPillBtn" href="/platform-admin/rbac">RBAC</a>
               <a className="fdPillBtn" href="/platform-admin/audit">Audit Explorer</a>
               <a className="fdPillBtn" href="/platform-admin/tenant-ops">Tenant Ops</a>
+              <Link className="fdPillBtn" href="/platform-admin/jobs">Jobs Monitor</Link>
               <a className="fdPillBtn" href="/platform-admin/notifications-ops">Notification Ops</a>
               <a className="fdPillBtn" href="/platform-admin/notifications-audit">Notification Audit</a>
               <a className="fdPillBtn" href="/platform-admin/notifications-config-integrity">Config Integrity</a>

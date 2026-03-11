@@ -13,6 +13,7 @@
         "go-live:check": "powershell -ExecutionPolicy Bypass -File scripts/go-live-check.ps1",
         "test:smoke": "powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1",
         "test:unit": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
+        "test:e2e:rerun": "powershell -ExecutionPolicy Bypass -File scripts/phase22-rerun-e2e.ps1",
         "check:job-runs": "node scripts/check-job-runs.mjs",
         "check:cron-probe": "node scripts/check-cron-probe.mjs"
     },
