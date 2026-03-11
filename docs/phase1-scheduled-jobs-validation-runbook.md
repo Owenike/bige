@@ -17,7 +17,12 @@ without mixing manual/API triggers into scheduled acceptance.
    - `path: /api/jobs/run`
    - `schedule: 0 12 * * *`
 3. Env is set correctly:
-   - `JOBS_CRON_SECRET` or `CRON_SECRET` (if using secret mode)
+   - Secret mode priority: incoming bearer / `x-cron-secret` must match `JOBS_CRON_SECRET` or `CRON_SECRET`.
+   - Prefer setting `CRON_SECRET` in Production to force secret match.
+   - If `CRON_SECRET` is empty, `/api/jobs/run` allows fallback only when request has all of:
+     - `x-vercel-cron` header
+     - `user-agent` includes `vercel-cron/`
+     - Vercel runtime context (`x-vercel-id` + vercel host context)
    - Supabase runtime env for API route
 4. During validation window, avoid clicking manual run buttons:
    - platform notifications ops "Run Scheduled Jobs Now"
@@ -34,10 +39,40 @@ npm run check:job-runs
 npm run check:job-runs -- --from 2026-03-11T12:00:00Z --to 2026-03-11T13:00:00Z
 ```
 
+### C. Runtime logs stream (start at T-2 min before 20:00 Asia/Taipei)
+```powershell
+vercel logs https://<LATEST_PROD_DEPLOYMENT>.vercel.app --json | rg "\[jobs/run\]"
+```
+
+How to get `LATEST_PROD_DEPLOYMENT` quickly:
+```powershell
+vercel ls bige
+```
+Use the newest `Production` deployment URL from the first rows.
+
+## Fastest verification flow (single cron window)
+1. At `19:58` Asia/Taipei, start logs stream command above.
+2. At `20:00` Asia/Taipei (=`12:00 UTC`), wait for logs and check for:
+   - `[jobs/run][entry]`
+   - `[jobs/run][scheduled]`
+   - `scheduledReason` and flags (`hasCronSecret`, `hasIncomingSecret`, `isVercelCronUserAgent`)
+   - `[jobs/run][job:created]`
+3. At `20:02~20:05` Asia/Taipei, run:
+```bash
+npm run check:job-runs -- --from 2026-03-11T12:00:00Z --to 2026-03-11T12:10:00Z
+```
+4. If no rows, keep logs open until `20:06` and classify by first missing marker:
+   - no `[entry]`
+   - has `[entry]` but no `[scheduled]`
+   - has `[auth-denied]` with `scheduledReason` in secret mismatch / missing secret categories
+   - has `[scheduled]` but no `[job:created]`
+
 ## Required log prefixes (Vercel Function Logs)
 Search by route/function logs with:
 - `[jobs/run][entry]`
 - `[jobs/run][scheduled]`
+- `[jobs/run][api]`
+- `[jobs/run][auth-denied]`
 - `[jobs/run][scheduled] dispatch`
 - `[jobs/run][job:start]`
 - `[jobs/run][job:created]`
@@ -56,6 +91,7 @@ Search by route/function logs with:
 ## Failure criteria
 1. Queried UTC window contains no scheduled rows.
 2. Scheduled logs missing or incomplete in the expected time window.
+3. Logs show `[jobs/run][auth-denied]` during cron window.
 
 ## Four-layer troubleshooting order
 1. **No `[jobs/run][entry]`**
@@ -63,7 +99,12 @@ Search by route/function logs with:
    - Check Vercel deployment target and cron attachment.
 2. **Has `[jobs/run][entry]` but no `[jobs/run][scheduled]`**
    - Request reached route but not classified as scheduled.
-   - Check cron secret/header logic and env.
+   - Check `[jobs/run][api]` / `[jobs/run][auth-denied]` `scheduledReason`:
+     - `x-vercel-cron_missing_secret_with_cron_secret_env`
+     - `x-vercel-cron_secret_mismatch`
+     - `cron_ua_missing_secret_header`
+     - `cron_ua_secret_mismatch`
+   - If reason is fallback/context related, verify `x-vercel-cron`, cron UA, and Vercel runtime context.
 3. **Has `[job:start]` but no `[job:created]`**
    - `createJobRun` write failed (DB/env/permission/runtime issue).
 4. **Has `[job:created]` but no `[job:done]`**

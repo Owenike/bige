@@ -1,17 +1,21 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   NOTIFICATION_CHANNEL_KEYS,
   NOTIFICATION_EVENT_KEYS,
+  clampRetryLimit,
   fetchApiJson,
+  parseCsvInput,
   type NotificationChannelKey,
   type NotificationRetryExecuteResult,
   type NotificationRetryPlanResult,
 } from "../../../lib/notification-productization-ui";
 
 const STATUS_OPTIONS = ["failed", "retrying"] as const;
+
+type Feedback = { type: "success" | "error"; message: string };
 
 function buildStatuses(selected: string[]) {
   return selected.filter((item) => STATUS_OPTIONS.includes(item as (typeof STATUS_OPTIONS)[number]));
@@ -26,8 +30,8 @@ export default function ManagerNotificationRetryPage() {
 
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const [plan, setPlan] = useState<NotificationRetryPlanResult | null>(null);
   const [dryRunResult, setDryRunResult] = useState<NotificationRetryExecuteResult | null>(null);
@@ -39,17 +43,42 @@ export default function ManagerNotificationRetryPage() {
     [plan],
   );
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const d = params.get("deliveryId");
+    const e = params.get("eventType");
+    const l = params.get("limit");
+    const statuses = parseCsvInput(params.get("statuses"));
+    const channels = parseCsvInput(params.get("channels"));
+    if (d) setDeliveryId(d);
+    if (e) setEventType(e);
+    if (l) setLimit(l);
+    if (statuses.length > 0) setStatusFilters(statuses);
+    if (channels.length > 0) setChannelFilters(channels);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (deliveryId.trim()) params.set("deliveryId", deliveryId.trim());
+    else params.delete("deliveryId");
+    if (eventType) params.set("eventType", eventType);
+    else params.delete("eventType");
+    params.set("limit", limit.trim() || "200");
+    if (statusFilters.length > 0) params.set("statuses", statusFilters.join(","));
+    else params.delete("statuses");
+    if (channelFilters.length > 0) params.set("channels", channelFilters.join(","));
+    else params.delete("channels");
+    const query = params.toString();
+    const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+    window.history.replaceState(null, "", nextUrl);
+  }, [deliveryId, eventType, statusFilters, channelFilters, limit]);
+
   function resetFilters() {
     setDeliveryId("");
     setEventType("");
     setStatusFilters(["failed", "retrying"]);
     setChannelFilters([]);
     setLimit("200");
-  }
-
-  function resetFeedback() {
-    setError(null);
-    setMessage(null);
   }
 
   function toggleArrayValue(value: string, current: string[], setValue: (next: string[]) => void) {
@@ -59,13 +88,13 @@ export default function ManagerNotificationRetryPage() {
 
   async function loadPlan() {
     setLoading(true);
-    resetFeedback();
+    setFeedback(null);
     setDryRunResult(null);
     setExecuteResult(null);
 
     const query = new URLSearchParams();
     query.set("includeRows", "true");
-    query.set("limit", limit.trim() || "200");
+    query.set("limit", String(clampRetryLimit(limit)));
     const delivery = deliveryId.trim();
     if (delivery) query.set("deliveryId", delivery);
     if (eventType) query.set("eventType", eventType);
@@ -75,18 +104,20 @@ export default function ManagerNotificationRetryPage() {
 
     const result = await fetchApiJson<NotificationRetryPlanResult>(`/api/manager/notifications/retry?${query.toString()}`);
     if (!result.ok) {
-      setError(result.message);
+      setFeedback({ type: "error", message: result.message });
       setLoading(false);
+      setHasLoaded(true);
       return;
     }
     setPlan(result.data);
-    setMessage("Retry plan loaded");
+    setFeedback({ type: "success", message: "Retry plan loaded." });
     setLoading(false);
+    setHasLoaded(true);
   }
 
   async function run(action: "dry_run" | "execute") {
     setRunning(true);
-    resetFeedback();
+    setFeedback(null);
     if (action === "execute") setExecuteResult(null);
     if (action === "dry_run") setDryRunResult(null);
 
@@ -96,7 +127,7 @@ export default function ManagerNotificationRetryPage() {
       statuses: buildStatuses(statusFilters),
       channels: channelFilters as NotificationChannelKey[],
       eventType: eventType || undefined,
-      limit: Number(limit || "200"),
+      limit: clampRetryLimit(limit),
     };
 
     const result = await fetchApiJson<NotificationRetryExecuteResult>("/api/manager/notifications/retry", {
@@ -105,14 +136,17 @@ export default function ManagerNotificationRetryPage() {
       body: JSON.stringify(payload),
     });
     if (!result.ok) {
-      setError(result.message);
+      setFeedback({ type: "error", message: result.message });
       setRunning(false);
       return;
     }
 
     if (action === "dry_run") setDryRunResult(result.data);
-    else setExecuteResult(result.data);
-    setMessage(`${action} completed`);
+    else {
+      setExecuteResult(result.data);
+      setConfirmText("");
+    }
+    setFeedback({ type: "success", message: `${action} completed.` });
     await loadPlan();
     setRunning(false);
   }
@@ -124,19 +158,19 @@ export default function ManagerNotificationRetryPage() {
           <div className="fdGlassPanel">
             <div className="fdEyebrow">NOTIFICATION PRODUCTIZATION</div>
             <h1 className="h1" style={{ marginTop: 10, fontSize: 32 }}>Manager Notification Retry</h1>
-            <p className="fdGlassText">tenant scope retry query / dry-run / execute。</p>
+            <p className="fdGlassText">Manager retry is tenant-scoped. You cannot retry outside your own tenant deliveries.</p>
             <div className="actions" style={{ marginTop: 10 }}>
               <Link className="fdPillBtn" href="/manager">Back</Link>
             </div>
           </div>
         </section>
 
-        {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
-        {message ? <div className="ok" style={{ marginBottom: 12 }}>{message}</div> : null}
+        {feedback?.type === "error" ? <div className="error" style={{ marginBottom: 12 }}>{feedback.message}</div> : null}
+        {feedback?.type === "success" ? <div className="ok" style={{ marginBottom: 12 }}>{feedback.message}</div> : null}
 
         <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-          <h2 className="sectionTitle">Query Filters</h2>
-          <p className="sub">Manager 僅可操作本 tenant delivery，不可跨租戶。</p>
+          <h2 className="sectionTitle">Retry Query</h2>
+          <p className="sub">Use dry-run before execute. Execute requires confirm text EXECUTE.</p>
           <div className="fdDataGrid">
             <label className="sub">
               delivery_id (optional)
@@ -155,7 +189,7 @@ export default function ManagerNotificationRetryPage() {
               limit
               <input className="input" value={limit} onChange={(event) => setLimit(event.target.value)} />
             </label>
-            <div className="sub">status</div>
+            <div className="sub">status filters</div>
             <div className="actions">
               {STATUS_OPTIONS.map((status) => (
                 <label key={status} className="sub" style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -168,7 +202,7 @@ export default function ManagerNotificationRetryPage() {
                 </label>
               ))}
             </div>
-            <div className="sub">channel</div>
+            <div className="sub">channel filters</div>
             <div className="actions">
               {NOTIFICATION_CHANNEL_KEYS.map((channel) => (
                 <label key={channel} className="sub" style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -185,12 +219,8 @@ export default function ManagerNotificationRetryPage() {
               <button type="button" className="fdPillBtn" disabled={loading} onClick={() => void loadPlan()}>
                 {loading ? "Loading..." : "Load Retry Plan"}
               </button>
-              <button type="button" className="fdPillBtn" onClick={resetFilters}>
-                Reset Filters
-              </button>
-              <button type="button" className="fdPillBtn" disabled={running || !plan} onClick={() => void run("dry_run")}>
-                Dry Run
-              </button>
+              <button type="button" className="fdPillBtn" onClick={resetFilters}>Reset Filters</button>
+              <button type="button" className="fdPillBtn" disabled={running || !plan} onClick={() => void run("dry_run")}>Dry Run</button>
               <input className="input" value={confirmText} onChange={(event) => setConfirmText(event.target.value)} placeholder="Type EXECUTE" />
               <button
                 type="button"
@@ -206,21 +236,23 @@ export default function ManagerNotificationRetryPage() {
 
         <section className="fdTwoCol">
           <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">Retry Plan</h2>
-            {!plan ? <p className="sub">No plan loaded.</p> : (
+            <h2 className="sectionTitle">Retry Plan Result</h2>
+            {!hasLoaded ? <p className="sub">Load a retry plan first.</p> : null}
+            {hasLoaded && !plan ? <p className="sub">No plan available for current filters.</p> : null}
+            {plan ? (
               <div className="fdDataGrid">
-                <p className="sub">total: {plan.summary.totalCandidates}</p>
+                <p className="sub">total candidates: {plan.summary.totalCandidates}</p>
                 <p className="sub">retryable: {plan.summary.retryable}</p>
                 <p className="sub">blocked: {plan.summary.blocked}</p>
                 <p className="sub">failed/retrying: {plan.summary.failed}/{plan.summary.retrying}</p>
-                <p className="sub">byDecision: {Object.entries(plan.summary.byDecisionCode || {}).map(([key, value]) => `${key}:${value}`).join(" | ") || "-"}</p>
-                <p className="sub">byError: {Object.entries(plan.summary.byErrorCode || {}).map(([key, value]) => `${key}:${value}`).join(" | ") || "-"}</p>
+                <p className="sub">decision breakdown: {Object.entries(plan.summary.byDecisionCode || {}).map(([key, value]) => `${key}:${value}`).join(" | ") || "-"}</p>
+                <p className="sub">error breakdown: {Object.entries(plan.summary.byErrorCode || {}).map(([key, value]) => `${key}:${value}`).join(" | ") || "-"}</p>
               </div>
-            )}
+            ) : null}
           </section>
 
           <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">Dry-run / Execute Result</h2>
+            <h2 className="sectionTitle">Dry-run / Execute</h2>
             {!dryRunResult && !executeResult ? <p className="sub">No action result yet.</p> : null}
             {dryRunResult ? (
               <div className="fdDataGrid">
@@ -271,7 +303,37 @@ export default function ManagerNotificationRetryPage() {
             </div>
           )}
         </section>
+
+        <section className="fdGlassSubPanel" style={{ padding: 14, marginTop: 14 }}>
+          <h2 className="sectionTitle">Blocked Reasons</h2>
+          {!dryRunResult?.blocked?.length && !executeResult?.blocked?.length ? (
+            <p className="sub">No blocked records in current action result.</p>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>delivery_id</th>
+                    <th>code</th>
+                    <th>reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(executeResult?.blocked || dryRunResult?.blocked || []).map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.id}</td>
+                      <td>{item.code}</td>
+                      <td>{item.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </section>
     </main>
   );
 }
+
+

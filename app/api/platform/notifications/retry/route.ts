@@ -7,21 +7,15 @@ import {
   retryRequestSchema,
   uuidLikeSchema,
 } from "../../../../../lib/notification-productization";
+import { NOTIFICATION_QUERY_STATUS_KEYS, parseCsvQueryParam } from "../../../../../lib/notification-productization-contracts";
+import { writeNotificationAdminAuditNonBlocking } from "../../../../../lib/notification-admin-audit";
 import { z } from "zod";
-
-function parseCsv(input: string | null): string[] {
-  if (!input) return [];
-  return input
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
 
 const retryGetQuerySchema = z.object({
   tenantId: uuidLikeSchema.nullable().optional(),
   limit: z.number().int().min(1).max(500).optional(),
   includeRows: z.boolean().optional(),
-  statuses: z.array(z.enum(["failed", "retrying", "pending", "sent", "skipped"])).optional(),
+  statuses: z.array(z.enum(NOTIFICATION_QUERY_STATUS_KEYS)).optional(),
   channels: z.array(notificationChannelSchema).optional(),
   eventType: notificationEventKeySchema.optional(),
   deliveryId: uuidLikeSchema.optional(),
@@ -36,8 +30,8 @@ export async function GET(request: Request) {
     tenantId: params.get("tenantId"),
     limit: Number(params.get("limit") || 200),
     includeRows: parseBooleanQuery(params.get("includeRows"), false),
-    statuses: parseCsv(params.get("statuses")),
-    channels: parseCsv(params.get("channels")),
+    statuses: parseCsvQueryParam(params.get("statuses")),
+    channels: parseCsvQueryParam(params.get("channels")),
     eventType: params.get("eventType") || undefined,
     deliveryId: params.get("deliveryId") || undefined,
   });
@@ -98,6 +92,37 @@ export async function POST(request: Request) {
   if (!validated.ok) return apiError(500, "INTERNAL_ERROR", validated.error);
 
   if (!execute) {
+    await writeNotificationAdminAuditNonBlocking({
+      scope: tenantId ? "tenant" : "platform",
+      action: "retry_dry_run",
+      tenantId,
+      actorUserId: auth.context.userId,
+      actorRole: auth.context.role,
+      targetType: "notification_retry_operation",
+      targetId: null,
+      beforeData: {
+        tenantId,
+        requestedIds: targetIds.length,
+      },
+      afterData: {
+        retryableCount: validated.items.length,
+        blockedCount: validated.rejected.length,
+      },
+      metadata: {
+        requested: {
+          statuses: parsed.data.statuses || [],
+          channels: parsed.data.channels || [],
+          eventType: parsed.data.eventType || null,
+          limit,
+          action: parsed.data.action,
+        },
+        blocked: validated.rejected.map((item) => ({
+          id: item.id,
+          code: item.code,
+        })),
+      },
+      logContext: "platform/retry:post:dry_run",
+    });
     return apiSuccess({
       mode: "dry_run",
       tenantId,
@@ -116,6 +141,40 @@ export async function POST(request: Request) {
     limit,
   });
   if (!run.ok) return apiError(500, "INTERNAL_ERROR", run.error);
+
+  await writeNotificationAdminAuditNonBlocking({
+    scope: tenantId ? "tenant" : "platform",
+    action: "retry_execute",
+    tenantId,
+    actorUserId: auth.context.userId,
+    actorRole: auth.context.role,
+    targetType: "notification_retry_operation",
+    targetId: null,
+    beforeData: {
+      tenantId,
+      requestedIds: targetIds.length,
+      retryableIds: validated.items.length,
+    },
+    afterData: {
+      retriedCount: validated.items.length,
+      blockedCount: validated.rejected.length,
+      summary: run.summary,
+    },
+    metadata: {
+      requested: {
+        statuses: parsed.data.statuses || [],
+        channels: parsed.data.channels || [],
+        eventType: parsed.data.eventType || null,
+        limit,
+        action: parsed.data.action,
+      },
+      blocked: validated.rejected.map((item) => ({
+        id: item.id,
+        code: item.code,
+      })),
+    },
+    logContext: "platform/retry:post:execute",
+  });
   return apiSuccess({
     mode: "execute",
     tenantId,

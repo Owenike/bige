@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   NOTIFICATION_CHANNEL_KEYS,
   NOTIFICATION_EVENT_KEYS,
@@ -40,6 +40,8 @@ type PreferencesResponse = {
   userPreferences: UserPreferenceItem[];
 };
 
+type Feedback = { type: "success" | "error"; message: string };
+
 function buildChannels(selectedChannel: NotificationChannelKey, enabled: boolean) {
   const channels: Record<NotificationChannelKey, boolean> = {
     in_app: true,
@@ -71,8 +73,8 @@ export default function PlatformNotificationsPreferencesPage() {
   const [tenantId, setTenantId] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [roleItems, setRoleItems] = useState<RolePreferenceItem[]>([]);
   const [userItems, setUserItems] = useState<UserPreferenceItem[]>([]);
   const [activeTab, setActiveTab] = useState<"role" | "user">("role");
@@ -87,6 +89,24 @@ export default function PlatformNotificationsPreferencesPage() {
 
   const canLoad = useMemo(() => tenantId.trim().length > 0, [tenantId]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const initialTenant = params.get("tenantId");
+    const initialMode = params.get("mode");
+    if (initialTenant) setTenantId(initialTenant);
+    if (initialMode === "role" || initialMode === "user") setActiveTab(initialMode);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (tenantId.trim()) params.set("tenantId", tenantId.trim());
+    else params.delete("tenantId");
+    params.set("mode", activeTab);
+    const query = params.toString();
+    const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+    window.history.replaceState(null, "", nextUrl);
+  }, [tenantId, activeTab]);
+
   function resetForm() {
     setActiveTab("role");
     setEventType(NOTIFICATION_EVENT_KEYS[0]);
@@ -98,28 +118,25 @@ export default function PlatformNotificationsPreferencesPage() {
     setNote("");
   }
 
-  function resetFeedback() {
-    setError(null);
-    setMessage(null);
-  }
-
   async function load() {
     if (!canLoad) {
-      setError("tenant_id 是必填");
+      setFeedback({ type: "error", message: "tenant_id is required." });
       return;
     }
     setLoading(true);
-    resetFeedback();
+    setFeedback(null);
     const query = new URLSearchParams({ tenantId: tenantId.trim() });
     const result = await fetchApiJson<PreferencesResponse>(`/api/platform/notifications/preferences?${query.toString()}`);
     if (!result.ok) {
-      setError(result.message);
+      setFeedback({ type: "error", message: result.message });
       setLoading(false);
+      setHasLoaded(true);
       return;
     }
     setRoleItems(result.data.rolePreferences || []);
     setUserItems(result.data.userPreferences || []);
     setLoading(false);
+    setHasLoaded(true);
   }
 
   function fillRoleForm(item: RolePreferenceItem) {
@@ -131,7 +148,7 @@ export default function PlatformNotificationsPreferencesPage() {
     setChannelEnabled(channelState.enabled);
     setRuleEnabled(item.is_enabled);
     setNote(item.note || "");
-    setMessage("已帶入 role preference，可直接修改後儲存");
+    setFeedback({ type: "success", message: "Loaded role preference into form." });
   }
 
   function fillUserForm(item: UserPreferenceItem) {
@@ -143,20 +160,20 @@ export default function PlatformNotificationsPreferencesPage() {
     setChannelEnabled(channelState.enabled);
     setRuleEnabled(item.is_enabled);
     setNote(item.note || "");
-    setMessage("已帶入 user preference，可直接修改後儲存");
+    setFeedback({ type: "success", message: "Loaded user preference into form." });
   }
 
   async function save() {
     if (!canLoad) {
-      setError("tenant_id 是必填");
+      setFeedback({ type: "error", message: "tenant_id is required." });
       return;
     }
     if (activeTab === "user" && userId.trim().length === 0) {
-      setError("user scope 需要 user_id");
+      setFeedback({ type: "error", message: "user_id is required for user scope." });
       return;
     }
     setSaving(true);
-    resetFeedback();
+    setFeedback(null);
 
     const payload: NotificationPreferenceFormPayload = {
       tenantId: tenantId.trim(),
@@ -176,13 +193,13 @@ export default function PlatformNotificationsPreferencesPage() {
       body: JSON.stringify(payload),
     });
     if (!result.ok) {
-      setError(result.message);
+      setFeedback({ type: "error", message: result.message });
       setSaving(false);
       return;
     }
-    setMessage("儲存成功");
     await load();
     resetForm();
+    setFeedback({ type: "success", message: "Preference saved successfully." });
     setSaving(false);
   }
 
@@ -193,27 +210,30 @@ export default function PlatformNotificationsPreferencesPage() {
           <div className="fdGlassPanel">
             <div className="fdEyebrow">NOTIFICATION PRODUCTIZATION</div>
             <h1 className="h1" style={{ marginTop: 10, fontSize: 32 }}>Platform Notification Preferences</h1>
-            <p className="fdGlassText">可操作版本：角色 / 使用者偏好設定。</p>
+            <p className="fdGlassText">
+              Platform admin can manage role-level and user-level notification preferences for any tenant.
+            </p>
             <div className="actions" style={{ marginTop: 10 }}>
               <Link className="fdPillBtn" href="/platform-admin">Back</Link>
             </div>
           </div>
         </section>
 
-        {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
-        {message ? <div className="ok" style={{ marginBottom: 12 }}>{message}</div> : null}
+        {feedback?.type === "error" ? <div className="error" style={{ marginBottom: 12 }}>{feedback.message}</div> : null}
+        {feedback?.type === "success" ? <div className="ok" style={{ marginBottom: 12 }}>{feedback.message}</div> : null}
 
         <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
           <h2 className="sectionTitle">Tenant Scope</h2>
+          <p className="sub">Required: tenant_id. Manager pages are tenant-bound, but platform can switch tenant here.</p>
           <div className="actions" style={{ marginTop: 8 }}>
             <input
               className="input"
               value={tenantId}
               onChange={(event) => setTenantId(event.target.value)}
-              placeholder="tenant_id"
+              placeholder="tenant_id (required)"
             />
             <button type="button" className="fdPillBtn" disabled={loading || !canLoad} onClick={() => void load()}>
-              {loading ? "Loading..." : "Load"}
+              {loading ? "Loading..." : "Load Preferences"}
             </button>
           </div>
         </section>
@@ -221,7 +241,9 @@ export default function PlatformNotificationsPreferencesPage() {
         <section className="fdTwoCol">
           <section className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">Preference Form</h2>
-            <p className="sub">Platform 可指定任意 tenant；本頁不會接入 runtime dispatch。</p>
+            <p className="sub">
+              Scope required fields: role scope needs role_key; user scope needs user_id.
+            </p>
             <div className="actions" style={{ marginTop: 8 }}>
               <button
                 type="button"
@@ -241,7 +263,7 @@ export default function PlatformNotificationsPreferencesPage() {
 
             <div className="fdDataGrid" style={{ marginTop: 10 }}>
               <label className="sub">
-                event_key
+                event_key *
                 <select className="input" value={eventType} onChange={(event) => setEventType(event.target.value as NotificationEventKey)}>
                   {NOTIFICATION_EVENT_KEYS.map((key) => (
                     <option key={key} value={key}>{key}</option>
@@ -251,7 +273,7 @@ export default function PlatformNotificationsPreferencesPage() {
 
               {activeTab === "role" ? (
                 <label className="sub">
-                  role_key
+                  role_key *
                   <select className="input" value={role} onChange={(event) => setRole(event.target.value as NotificationRoleKey)}>
                     {NOTIFICATION_ROLE_KEYS.map((key) => (
                       <option key={key} value={key}>{key}</option>
@@ -260,13 +282,13 @@ export default function PlatformNotificationsPreferencesPage() {
                 </label>
               ) : (
                 <label className="sub">
-                  user_id
+                  user_id *
                   <input className="input" value={userId} onChange={(event) => setUserId(event.target.value)} placeholder="user uuid" />
                 </label>
               )}
 
               <label className="sub">
-                channel
+                channel *
                 <select className="input" value={channel} onChange={(event) => setChannel(event.target.value as NotificationChannelKey)}>
                   {NOTIFICATION_CHANNEL_KEYS.map((key) => (
                     <option key={key} value={key}>{key}</option>
@@ -285,7 +307,7 @@ export default function PlatformNotificationsPreferencesPage() {
               </label>
 
               <label className="sub">
-                note
+                note (optional)
                 <input className="input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="optional note" />
               </label>
 
@@ -294,7 +316,7 @@ export default function PlatformNotificationsPreferencesPage() {
                   {saving ? "Saving..." : "Save"}
                 </button>
                 <button type="button" className="fdPillBtn" onClick={resetForm}>
-                  Cancel / Reset
+                  Cancel / Reset Form
                 </button>
               </div>
             </div>
@@ -302,9 +324,10 @@ export default function PlatformNotificationsPreferencesPage() {
 
           <section className="fdGlassSubPanel" style={{ padding: 14 }}>
             <h2 className="sectionTitle">Role Preferences</h2>
+            {!hasLoaded ? <p className="sub">Load data to view preferences.</p> : null}
             {loading ? <p className="sub">Loading...</p> : null}
-            {!loading && roleItems.length === 0 ? <p className="sub">No role preferences</p> : null}
-            {!loading && roleItems.length > 0 ? (
+            {hasLoaded && !loading && roleItems.length === 0 ? <p className="sub">No role preferences found.</p> : null}
+            {hasLoaded && !loading && roleItems.length > 0 ? (
               <div style={{ overflowX: "auto" }}>
                 <table className="table">
                   <thead>
@@ -339,8 +362,8 @@ export default function PlatformNotificationsPreferencesPage() {
             ) : null}
 
             <h2 className="sectionTitle" style={{ marginTop: 16 }}>User Preferences</h2>
-            {!loading && userItems.length === 0 ? <p className="sub">No user preferences</p> : null}
-            {!loading && userItems.length > 0 ? (
+            {hasLoaded && !loading && userItems.length === 0 ? <p className="sub">No user preferences found.</p> : null}
+            {hasLoaded && !loading && userItems.length > 0 ? (
               <div style={{ overflowX: "auto" }}>
                 <table className="table">
                   <thead>

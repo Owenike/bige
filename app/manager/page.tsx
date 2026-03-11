@@ -540,6 +540,10 @@ export default function ManagerDashboardPage() {
             <Link className="fdPillBtn" href="/manager/crm">{zh ? "CRM / 線索" : "CRM / Leads"}</Link>
             <Link className="fdPillBtn" href="/manager/opportunities">{zh ? "續約 / 回購機會" : "Renewal Opportunities"}</Link>
             <Link className="fdPillBtn" href="/manager/notifications-ops">{zh ? "通知運維" : "Notification Ops"}</Link>
+            <Link className="fdPillBtn" href="/manager/notifications-audit">{zh ? "通知稽核" : "Notification Audit"}</Link>
+            <Link className="fdPillBtn" href="/manager/notifications-config-integrity">{zh ? "配置完整性" : "Config Integrity"}</Link>
+            <Link className="fdPillBtn" href="/manager/notifications-preflight">{zh ? "預檢報告" : "Runtime Preflight"}</Link>
+            <Link className="fdPillBtn" href="/manager/notifications-runtime-readiness">{zh ? "接線就緒度" : "Runtime Readiness"}</Link>
             <Link className="fdPillBtn" href="/manager/members">{zh ? "\u6703\u54e1" : "Members"}</Link>
           </div>
         </section>

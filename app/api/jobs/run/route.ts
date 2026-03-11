@@ -30,16 +30,38 @@ function readCronSignal(request: Request) {
   const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
   const xSecret = request.headers.get("x-cron-secret") || "";
   const vercelCron = request.headers.get("x-vercel-cron") || "";
+  const userAgent = (request.headers.get("user-agent") || "").toLowerCase();
+  const isVercelCronUserAgent = userAgent.includes("vercel-cron/");
   if (bearer) {
-    return { value: bearer, source: "authorization_bearer" as const, hasVercelCronHeader: request.headers.has("x-vercel-cron") };
+    return {
+      value: bearer,
+      source: "authorization_bearer" as const,
+      hasVercelCronHeader: request.headers.has("x-vercel-cron"),
+      isVercelCronUserAgent,
+    };
   }
   if (xSecret) {
-    return { value: xSecret, source: "x-cron-secret" as const, hasVercelCronHeader: request.headers.has("x-vercel-cron") };
+    return {
+      value: xSecret,
+      source: "x-cron-secret" as const,
+      hasVercelCronHeader: request.headers.has("x-vercel-cron"),
+      isVercelCronUserAgent,
+    };
   }
   if (vercelCron) {
-    return { value: vercelCron, source: "x-vercel-cron" as const, hasVercelCronHeader: request.headers.has("x-vercel-cron") };
+    return {
+      value: vercelCron,
+      source: "x-vercel-cron" as const,
+      hasVercelCronHeader: request.headers.has("x-vercel-cron"),
+      isVercelCronUserAgent,
+    };
   }
-  return { value: "", source: "none" as const, hasVercelCronHeader: request.headers.has("x-vercel-cron") };
+  return {
+    value: "",
+    source: "none" as const,
+    hasVercelCronHeader: request.headers.has("x-vercel-cron"),
+    isVercelCronUserAgent,
+  };
 }
 
 async function resolveCronActorId() {
@@ -232,23 +254,37 @@ async function handleRunJobs(request: Request) {
   const debug = getDebugModeEnabled();
   const requestUrl = new URL(request.url);
   const requestId = request.headers.get("x-request-id");
+  const hostHeader = (request.headers.get("x-forwarded-host") || request.headers.get("host") || "").toLowerCase();
+  const normalizedHost = hostHeader.split(":")[0] || "";
+  const vercelUrl = (process.env.VERCEL_URL || "").toLowerCase();
+  const hasVercelHostContext = normalizedHost.endsWith(".vercel.app") || (vercelUrl.length > 0 && normalizedHost === vercelUrl);
+  const hasVercelRequestId = Boolean(request.headers.get("x-vercel-id"));
+  const hasVercelRuntimeContext = hasVercelHostContext && hasVercelRequestId;
   console.info(`${JOBS_RUN_LOG_PREFIX}[entry]`, {
     method: request.method,
     pathname: requestUrl.pathname,
     requestId,
+    userAgent: request.headers.get("user-agent"),
     host: request.headers.get("host"),
     xForwardedHost: request.headers.get("x-forwarded-host"),
     xForwardedProto: request.headers.get("x-forwarded-proto"),
     xVercelId: request.headers.get("x-vercel-id"),
+    hasXVercelCron: request.headers.has("x-vercel-cron"),
+    hasAuthorization: request.headers.has("authorization") || request.headers.has("Authorization"),
     vercelEnv: process.env.VERCEL_ENV ?? null,
     vercelUrl: process.env.VERCEL_URL ?? null,
     nodeEnv: process.env.NODE_ENV ?? null,
+    hasVercelRuntimeContext,
   });
 
-  const cronSecret = process.env.JOBS_CRON_SECRET || process.env.CRON_SECRET || "";
+  const jobsCronSecret = process.env.JOBS_CRON_SECRET || "";
+  const vercelCronSecret = process.env.CRON_SECRET || "";
+  const cronSecret = jobsCronSecret || vercelCronSecret;
+  const hasVercelManagedCronSecret = vercelCronSecret.length > 0;
   const cronSignal = readCronSignal(request);
   const incomingSecret = cronSignal.value;
   const isVercelCron = cronSignal.hasVercelCronHeader;
+  const isVercelCronUserAgent = cronSignal.isVercelCronUserAgent;
   let scheduledReason = "none";
   const isScheduled =
     (() => {
@@ -259,6 +295,31 @@ async function handleRunJobs(request: Request) {
       if (isVercelCron && cronSecret.length === 0) {
         scheduledReason = "x-vercel-cron_without_secret";
         return true;
+      }
+      if (!hasVercelManagedCronSecret && isVercelCron && isVercelCronUserAgent && hasVercelRuntimeContext) {
+        scheduledReason = "x-vercel-cron_ua_runtime_fallback";
+        return true;
+      }
+      if (isVercelCron && hasVercelManagedCronSecret && incomingSecret.length === 0) {
+        scheduledReason = "x-vercel-cron_missing_secret_with_cron_secret_env";
+      } else if (isVercelCron && hasVercelManagedCronSecret && incomingSecret.length > 0 && incomingSecret !== cronSecret) {
+        scheduledReason = "x-vercel-cron_secret_mismatch";
+      } else if (isVercelCron && !isVercelCronUserAgent) {
+        scheduledReason = "x-vercel-cron_missing_cron_user_agent";
+      } else if (isVercelCron && isVercelCronUserAgent && !hasVercelRuntimeContext) {
+        scheduledReason = "x-vercel-cron_ua_missing_runtime_context";
+      }
+      if (!isVercelCron && isVercelCronUserAgent && cronSecret.length === 0) {
+        scheduledReason = "cron_ua_without_secret_missing_x_vercel_cron";
+      } else if (isVercelCronUserAgent && hasVercelManagedCronSecret && incomingSecret.length === 0) {
+        scheduledReason = "cron_ua_missing_secret_header";
+      } else if (
+        isVercelCronUserAgent &&
+        hasVercelManagedCronSecret &&
+        incomingSecret.length > 0 &&
+        incomingSecret !== cronSecret
+      ) {
+        scheduledReason = "cron_ua_secret_mismatch";
       }
       return false;
     })();
@@ -273,6 +334,9 @@ async function handleRunJobs(request: Request) {
     incomingSecretLength: incomingSecret.length,
     incomingSecretSource: cronSignal.source,
     hasVercelCronHeader: isVercelCron,
+    isVercelCronUserAgent,
+    hasVercelManagedCronSecret,
+    hasVercelRuntimeContext,
   });
 
   let actorRole: AppRole;
@@ -291,11 +355,19 @@ async function handleRunJobs(request: Request) {
   } else {
     const auth = await requireProfile(["platform_admin", "manager"], request);
     if (!auth.ok) {
-      console.warn(`${JOBS_RUN_LOG_PREFIX}[api] auth-denied`, {
+      console.warn(`${JOBS_RUN_LOG_PREFIX}[auth-denied]`, {
         requestId,
+        mode: "api",
         scheduledReason,
         hasVercelCronHeader: isVercelCron,
+        isVercelCronUserAgent,
+        hasCronSecret: cronSecret.length > 0,
+        hasVercelManagedCronSecret,
+        hasIncomingSecret: incomingSecret.length > 0,
         incomingSecretSource: cronSignal.source,
+        hasVercelRuntimeContext,
+        userAgent: request.headers.get("user-agent"),
+        xVercelId: request.headers.get("x-vercel-id"),
       });
       return auth.response;
     }

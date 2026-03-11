@@ -1,4 +1,4 @@
-import { createSupabaseAdminClient } from "./supabase/admin";
+﻿import { createSupabaseAdminClient } from "./supabase/admin";
 import { dispatchNotificationDeliveries } from "./notification-dispatch";
 import { createJobRun, completeJobRun, listDeliveryRows, type DeliveryStatus } from "./notification-ops";
 import type { NotificationChannelKey, NotificationEventKey } from "./notification-productization";
@@ -166,7 +166,7 @@ export async function executeRetryPlan(params: {
     limit: Math.min(500, Math.max(1, Number(params.limit || params.deliveryIds.length || 200))),
   });
 
-  if (!result.ok) {
+  if (result.ok === false) {
     const failedReason = result.error;
     await completeJobRun({
       jobRunId: job.ok ? job.jobRunId : null,
@@ -242,3 +242,6 @@ export async function validateRetryTargets(params: {
   }
   return { ok: true as const, items: accepted, rejected };
 }
+
+
+

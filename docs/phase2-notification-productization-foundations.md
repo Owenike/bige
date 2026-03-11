@@ -1,93 +1,85 @@
-# Phase 2 Notification Productization Foundations
+﻿# Phase 2 Notification Productization Foundations
 
-## Scope in this step
-This step delivers a low-risk, operational first version of Notification Productization without wiring new behavior into scheduled runtime flow.
+## Intent
+Provide low-risk, tenant-safe productization controls for notifications without changing runtime dispatch/scheduled chains.
 
-Implemented in this stage:
-1. Preference center schema + service + API + operable platform/manager UI
-2. Template management schema + service + API + operable platform/manager UI (with preview)
-3. Retry operations schema/service + API + operable platform/manager UI (query, dry-run, execute)
+## Delivered foundations
 
-## Data model
+### 1) Preferences
+- Data tables: `notification_role_preferences`, `notification_user_preferences`
+- APIs:
+  - `GET/PUT /api/platform/notifications/preferences`
+  - `GET/PUT /api/manager/notifications/preferences`
+- UI:
+  - `/platform-admin/notifications-preferences`
+  - `/manager/notifications-preferences`
+- Features:
+  - role/user scope switch
+  - validation feedback
+  - list auto-refresh on save
+  - reset/cancel flow
+  - filter state retained with URL params where applicable
 
-### 1) Role preference
-Table: `notification_role_preferences`
-- tenant_id
-- role
-- event_type
-- channels (jsonb)
-- is_enabled
-- source (`platform_default` / `tenant_default` / `custom`)
+### 2) Templates
+- Data table: `notification_templates`
+- APIs:
+  - `GET/PUT /api/platform/notifications/templates`
+  - `GET/PUT /api/manager/notifications/templates`
+- UI:
+  - `/platform-admin/notification-templates`
+  - `/manager/notification-templates`
+- Features:
+  - list + editor + preview separation
+  - policy JSON validation
+  - active/inactive visibility
+  - template key preview
 
-### 2) User override preference
-Table: `notification_user_preferences`
-- tenant_id
-- user_id
-- event_type
-- channels (jsonb)
-- is_enabled
+### 3) Retry operations
+- Services:
+  - `buildRetryPlan`
+  - `validateRetryTargets`
+  - `executeRetryPlan`
+- APIs:
+  - `GET/POST /api/platform/notifications/retry`
+  - `GET/POST /api/manager/notifications/retry`
+- UI:
+  - `/platform-admin/notification-retry`
+  - `/manager/notification-retry`
+- Features:
+  - query filters
+  - dry-run vs execute
+  - blocked reason visibility
+  - explicit execute confirmation
 
-### 3) Templates
-Table: `notification_templates`
-- tenant_id (nullable, null = global template)
-- event_type
-- channel (`in_app` / `email` / `line` / `sms` / `webhook`)
-- locale
-- title_template
-- message_template
-- email_subject
-- action_url
-- priority
-- channel_policy
-- is_active
-- version
+## Shared contracts and helper layer
+- Core constants/schema: `lib/notification-productization.ts`
+- UI helper/contracts: `lib/notification-productization-ui.ts`
+- Retry evaluation logic: `lib/notification-retry-policy.ts`
 
-## API status (operable)
+Shared helper capabilities:
+- API envelope parsing
+- template payload normalization
+- policy JSON parsing
+- CSV parsing for filter params
+- retry limit clamping
 
-### Platform (global/admin)
-- `GET/PUT /api/platform/notifications/preferences`
-- `GET/PUT /api/platform/notifications/templates`
-- `GET/POST /api/platform/notifications/retry`
+## Permission and tenant boundaries
+- Platform routes require `platform_admin`.
+- Manager routes are tenant-scoped and reject tenant mismatch.
+- No privilege widening introduced in this phase.
 
-### Manager (tenant-scoped)
-- `GET/PUT /api/manager/notifications/preferences`
-- `GET/PUT /api/manager/notifications/templates`
-- `GET/POST /api/manager/notifications/retry`
+## Test coverage in this phase
+- preference payload validation
+- template payload/policy normalization
+- retry eligibility blocked reasons
+- retry request schema validation
+- manager tenant mismatch guard behavior
+- helper normalization routines
 
-## Retry operations behavior in this step
-- `GET` supports:
-  - retry plan summary
-  - optional rows (`includeRows=true`)
-  - filters: `deliveryId`, `statuses`, `channels`, `eventType`, `tenantId`(platform only)
-- `POST` supports:
-  - `action=dry_run`
-  - `action=execute`
-  - validated target sets and blocked reason output
-- Execute path still uses existing delivery dispatch pipeline, with no scheduled chain rewiring.
-
-## Permission matrix (foundation)
-- `platform_admin`
-  - full access in platform notification preference/template/retry routes
-- `manager`
-  - tenant-scoped update access in manager routes
-- `supervisor` / `branch_manager`
-  - read access for manager routes where applicable
-
-## UI pages now available
-- `/platform-admin/notifications-preferences`
-- `/manager/notifications-preferences`
-- `/platform-admin/notification-templates`
-- `/manager/notification-templates`
-- `/platform-admin/notification-retry`
-- `/manager/notification-retry`
-
-## Operator assets added
-- `docs/phase2-notification-productization-demo.md`
-- `docs/phase2-notification-productization-demo-seed.json`
-- Includes required/optional fields, payload examples, manager/platform usage notes, and safe enable/disable strategy.
-
-## Deliberately postponed (after Scheduled Jobs validation acceptance)
-1. Wiring preferences/templates into `createInAppNotifications` runtime resolution
-2. Wiring template/policy resolution into dispatch runtime
-3. Scheduled auto-use of retry plan in jobs flow
-4. Advanced bulk retry approvals / workflow
+## Explicitly deferred
+The following are intentionally not connected yet:
+- `/api/jobs/run`
+- cron behavior (`vercel.json`)
+- `createInAppNotifications` runtime creation path
+- dispatch core loop runtime decisions
+- scheduled flow integration of preferences/templates/retry

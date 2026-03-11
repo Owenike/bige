@@ -2,6 +2,31 @@ import type { NotificationRolePreferenceRow, NotificationUserPreferenceRow } fro
 import type { NotificationTemplateRow } from "./notification-templates";
 import type { RetryCandidateRow, RetryPlanSummary } from "./notification-retry-operations";
 import {
+  buildSingleChannelPreferences,
+  buildTemplateKeyPreview,
+  mapPreferenceFormToApiPayload,
+  mapRetryFilterPayload,
+  mapTemplateFormToApiPayload,
+  normalizeLocale,
+  normalizeOptionalText,
+  NOTIFICATION_API_ERROR_CODES,
+  NOTIFICATION_CHANNEL_POLICY_KEYS,
+  parseChannelQueryValue,
+  parseCsvQueryParam,
+  parseEventQueryValue,
+  parsePriorityQueryValue,
+  parseRoleQueryValue,
+  parseUuidQueryValue,
+  resolveSelectedChannelState,
+  type NotificationApiEnvelope,
+  type NotificationApiErrorCode,
+  type NotificationRolePreferenceRecord,
+  type NotificationTemplateRecordContract,
+  type NotificationUserPreferenceRecord,
+  type NotificationRetryBlockedReason,
+  type NotificationQueryStatusKey,
+} from "./notification-productization-contracts";
+import {
   MANAGER_EDITABLE_ROLE_KEYS,
   NOTIFICATION_CHANNEL_KEYS,
   NOTIFICATION_EVENT_KEYS,
@@ -17,18 +42,40 @@ import {
 } from "./notification-productization";
 
 export {
+  buildSingleChannelPreferences,
+  buildTemplateKeyPreview,
   MANAGER_EDITABLE_ROLE_KEYS,
+  mapPreferenceFormToApiPayload,
+  mapRetryFilterPayload,
+  mapTemplateFormToApiPayload,
+  normalizeLocale,
+  normalizeOptionalText,
+  NOTIFICATION_API_ERROR_CODES,
   NOTIFICATION_CHANNEL_KEYS,
+  NOTIFICATION_CHANNEL_POLICY_KEYS,
   NOTIFICATION_EVENT_KEYS,
   NOTIFICATION_PRIORITY_KEYS,
   NOTIFICATION_ROLE_KEYS,
+  parseChannelQueryValue,
+  parseEventQueryValue,
+  parsePriorityQueryValue,
+  parseRoleQueryValue,
+  parseUuidQueryValue,
+  resolveSelectedChannelState,
   type NotificationChannelKey,
   type NotificationEventKey,
+  type NotificationApiErrorCode,
+  type NotificationApiEnvelope,
   type NotificationPreferenceFormPayload,
   type NotificationRoleKey,
+  type NotificationRolePreferenceRecord,
+  type NotificationRetryBlockedReason,
   type NotificationTemplateFormPayload,
+  type NotificationTemplateRecordContract,
   type NotificationPriorityKey,
+  type NotificationQueryStatusKey,
   type NotificationRetryActionPayload,
+  type NotificationUserPreferenceRecord,
 };
 
 export type NotificationPreferenceRecord = NotificationRolePreferenceRow | NotificationUserPreferenceRow;
@@ -88,7 +135,7 @@ export function getApiErrorMessage(payload: unknown, fallback: string) {
 
 export async function fetchApiJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<{ ok: true; data: T } | { ok: false; message: string; status: number }> {
   const response = await fetch(input, init);
-  const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
+  const payload = (await response.json().catch(() => null)) as NotificationApiEnvelope<T> | ApiEnvelope<T> | null;
   if (!response.ok) {
     return {
       ok: false,
@@ -111,7 +158,7 @@ export async function fetchApiJson<T>(input: RequestInfo | URL, init?: RequestIn
 }
 
 export function normalizeTemplatePayload(payload: NotificationTemplateFormPayload): NotificationTemplateFormPayload {
-  const locale = (payload.locale || "zh-TW").trim() || "zh-TW";
+  const locale = normalizeLocale(payload.locale || "zh-TW");
   const normalizedPriority = (payload.priority || "info") as NotificationPriorityKey;
   return {
     ...payload,
@@ -119,7 +166,35 @@ export function normalizeTemplatePayload(payload: NotificationTemplateFormPayloa
     priority: normalizedPriority,
     titleTemplate: payload.titleTemplate.trim(),
     messageTemplate: payload.messageTemplate.trim(),
-    emailSubject: payload.emailSubject?.trim() || null,
-    actionUrl: payload.actionUrl?.trim() || null,
+    emailSubject: normalizeOptionalText(payload.emailSubject || ""),
+    actionUrl: normalizeOptionalText(payload.actionUrl || ""),
   };
+}
+
+export function parseJsonObjectText(text: string, fieldName: string) {
+  const raw = text.trim() || "{}";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`${fieldName} must be valid JSON.`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${fieldName} must be a JSON object.`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
+export function parseCsvInput(input: string | null | undefined) {
+  return parseCsvQueryParam(input);
+}
+
+export function toOptionalTrimmed(value: string) {
+  return normalizeOptionalText(value);
+}
+
+export function clampRetryLimit(input: string, fallback = 200) {
+  const numeric = Number(input || fallback);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(500, Math.max(1, Math.floor(numeric)));
 }

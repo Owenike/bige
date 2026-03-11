@@ -1,4 +1,4 @@
-export type NotifyChannel = "line" | "sms" | "email";
+﻿export type NotifyChannel = "line" | "sms" | "email";
 type NotifyProvider = "generic" | "mock";
 
 export interface NotifyInput {
@@ -196,9 +196,10 @@ export async function sendNotificationWithFallback(input: NotifyFallbackInput): 
   return {
     ok: false,
     providerRef: null,
-    error: attempts.at(-1)?.error || "No valid target found",
+    error: (attempts.length > 0 ? attempts[attempts.length - 1]?.error : null) || "No valid target found",
     channelUsed: null,
     targetUsed: null,
     attempts,
   };
 }
+

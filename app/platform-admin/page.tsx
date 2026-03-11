@@ -426,6 +426,10 @@ export default function PlatformAdminPage() {
               <a className="fdPillBtn" href="/platform-admin/audit">Audit Explorer</a>
               <a className="fdPillBtn" href="/platform-admin/tenant-ops">Tenant Ops</a>
               <a className="fdPillBtn" href="/platform-admin/notifications-ops">Notification Ops</a>
+              <a className="fdPillBtn" href="/platform-admin/notifications-audit">Notification Audit</a>
+              <a className="fdPillBtn" href="/platform-admin/notifications-config-integrity">Config Integrity</a>
+              <a className="fdPillBtn" href="/platform-admin/notifications-preflight">Runtime Preflight</a>
+              <a className="fdPillBtn" href="/platform-admin/notifications-runtime-readiness">Runtime Readiness</a>
             </div>
           </section>
         </section>

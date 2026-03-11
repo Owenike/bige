@@ -1,7 +1,6 @@
 import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-context";
 import { requirePermission } from "../../../../../lib/permissions";
 import { getNotificationTemplateDetail, listNotificationTemplates, upsertNotificationTemplate } from "../../../../../lib/notification-templates";
-import type { NotificationChannel } from "../../../../../lib/notification-preferences";
 import {
   buildTemplateKey,
   isManagerTenantScopeAllowed,
@@ -12,14 +11,9 @@ import {
   templateChannelPolicySchema,
   uuidLikeSchema,
 } from "../../../../../lib/notification-productization";
+import { parseChannelQueryValue } from "../../../../../lib/notification-productization-contracts";
+import { writeNotificationAdminAuditNonBlocking } from "../../../../../lib/notification-admin-audit";
 import { z } from "zod";
-
-function parseChannel(input: unknown): NotificationChannel | null {
-  if (input === "in_app" || input === "email" || input === "line" || input === "sms" || input === "webhook") {
-    return input;
-  }
-  return null;
-}
 
 const managerTemplatesGetQuerySchema = z.object({
   eventType: notificationEventKeySchema.optional(),
@@ -48,6 +42,23 @@ const managerTemplatesPutBodySchema = z.object({
   templateKey: z.string().trim().min(1).max(500).optional(),
 });
 
+function toAuditTemplateSnapshot(item: Record<string, unknown> | null) {
+  if (!item) return {};
+  return {
+    id: item.id || null,
+    tenantId: item.tenant_id || null,
+    eventType: item.event_type || null,
+    channel: item.channel || null,
+    locale: item.locale || null,
+    priority: item.priority || null,
+    channelPolicy: item.channel_policy || {},
+    isActive: item.is_active !== false,
+    version: item.version || null,
+    templateKey: item.template_key || null,
+    updatedAt: item.updated_at || null,
+  };
+}
+
 export async function GET(request: Request) {
   const auth = await requireProfile(["manager", "supervisor", "branch_manager"], request);
   if (!auth.ok) return auth.response;
@@ -58,7 +69,7 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const parsed = managerTemplatesGetQuerySchema.safeParse({
     eventType: params.get("eventType") || undefined,
-    channel: parseChannel(params.get("channel")) || undefined,
+    channel: parseChannelQueryValue(params.get("channel")) || undefined,
     includeGlobal: parseBooleanQuery(params.get("includeGlobal"), true),
     activeOnly: parseBooleanQuery(params.get("activeOnly"), true),
     detail: parseBooleanQuery(params.get("detail"), false),
@@ -143,6 +154,24 @@ export async function PUT(request: Request) {
     return apiError(400, "FORBIDDEN", `templateKey mismatch; expected ${safeTemplateKey}`);
   }
 
+  const before = await getNotificationTemplateDetail({
+    id: id || undefined,
+    tenantId: auth.context.tenantId,
+    eventType,
+    channel,
+    locale: locale || "zh-TW",
+  });
+  if (!before.ok) {
+    console.warn("[notifications/templates][audit-before-read-failed]", {
+      scope: "tenant",
+      tenantId: auth.context.tenantId,
+      eventType,
+      channel,
+      locale: locale || "zh-TW",
+      error: before.error,
+    });
+  }
+
   const write = await upsertNotificationTemplate({
     id: id || null,
     tenantId: auth.context.tenantId,
@@ -160,6 +189,26 @@ export async function PUT(request: Request) {
     actorId: auth.context.userId,
   });
   if (!write.ok) return apiError(500, "INTERNAL_ERROR", write.error);
+
+  await writeNotificationAdminAuditNonBlocking({
+    scope: "tenant",
+    action: "template_upsert",
+    tenantId: auth.context.tenantId,
+    actorUserId: auth.context.userId,
+    actorRole: auth.context.role,
+    targetType: "notification_template",
+    targetId: write.item?.id || safeTemplateKey,
+    beforeData: toAuditTemplateSnapshot(before.ok ? (before.item as unknown as Record<string, unknown> | null) : null),
+    afterData: toAuditTemplateSnapshot(write.item as unknown as Record<string, unknown> | null),
+    metadata: {
+      eventType,
+      channel,
+      locale: locale || "zh-TW",
+      tenantId: auth.context.tenantId,
+      templateKey: safeTemplateKey,
+    },
+    logContext: "manager/templates:put",
+  });
 
   return apiSuccess({
     tenantId: auth.context.tenantId,

@@ -1,12 +1,17 @@
 import type { DeliveryStatus } from "./notification-ops";
 
-export type RetryDecisionCode =
-  | "RETRYABLE"
-  | "IN_APP_NOT_RETRYABLE"
-  | "STATUS_NOT_RETRYABLE"
-  | "MAX_ATTEMPTS_REACHED"
-  | "RETRY_NOT_DUE_YET"
-  | "NON_RETRYABLE_ERROR";
+export const RETRY_DECISION_CODES = [
+  "RETRYABLE",
+  "IN_APP_NOT_RETRYABLE",
+  "STATUS_NOT_RETRYABLE",
+  "MAX_ATTEMPTS_REACHED",
+  "RETRY_NOT_DUE_YET",
+  "NON_RETRYABLE_ERROR",
+] as const;
+
+export type RetryDecisionCode = (typeof RETRY_DECISION_CODES)[number];
+
+export const RETRY_BLOCKED_REASON_CODES = RETRY_DECISION_CODES.filter((code) => code !== "RETRYABLE");
 
 export type RetryDecision = {
   eligible: boolean;

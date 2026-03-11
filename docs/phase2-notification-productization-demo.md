@@ -1,130 +1,120 @@
-# Phase 2 Notification Productization Demo & Validation Guide
+﻿# Phase 2 Notification Productization Demo Guide
 
-## 1) Demo data strategy (no runtime-chain impact)
-This demo flow only calls Phase 2 APIs and does **not** touch `/api/jobs/run` or scheduled jobs.
+This guide is for validating Phase 2 (`Preferences / Templates / Retry`) without touching runtime dispatch chains.
 
-Recommended order:
-1. Create role preferences
-2. Create user preferences
-3. Create templates
-4. Load retry plan (dry-run first, execute only in test tenant)
+## Scope and safety
+- Safe in this phase:
+  - `/platform-admin/notifications-preferences`
+  - `/manager/notifications-preferences`
+  - `/platform-admin/notification-templates`
+  - `/manager/notification-templates`
+  - `/platform-admin/notification-retry`
+  - `/manager/notification-retry`
+- Out of scope (intentionally not wired here):
+  - `/api/jobs/run`
+  - `createInAppNotifications` runtime creation path
+  - dispatch runtime main loop
+  - scheduled/cron flow
 
-## 2) Required vs optional fields
+## Required vs optional fields
 
-### Preferences `PUT /api/platform/notifications/preferences` / `PUT /api/manager/notifications/preferences`
-- Required:
-  - `mode` (`role` or `user`)
-  - `eventType`
-  - `channels`
-- Conditionally required:
-  - `role` when `mode=role`
-  - `userId` when `mode=user`
-  - `tenantId` required for platform API; manager API uses current tenant scope
-- Optional:
-  - `isEnabled`
-  - `source` (role mode only)
-  - `note`
+### Preferences
+#### Required
+- `mode`: `role` or `user`
+- `eventType`
+- `channels`
+- `role` when `mode=role`
+- `userId` when `mode=user`
+- `tenantId` for platform API
 
-### Templates `PUT /api/platform/notifications/templates` / `PUT /api/manager/notifications/templates`
-- Required:
-  - `eventType`
-  - `channel`
-  - `titleTemplate`
-  - `messageTemplate`
-- Optional:
-  - `tenantId` (platform only; manager auto-tenant)
-  - `locale` (default `zh-TW`)
-  - `emailSubject`
-  - `actionUrl`
-  - `priority`
-  - `channelPolicy`
-  - `isActive`
-  - `version`
-  - `templateKey` (must match generated key if provided)
+#### Optional
+- `isEnabled`
+- `source` (`role` mode only)
+- `note`
 
-### Retry `POST /api/platform/notifications/retry` / `POST /api/manager/notifications/retry`
-- Required:
-  - `action` (`dry_run` or `execute`)
-- Optional:
-  - `deliveryIds`
-  - `statuses`
-  - `channels`
-  - `eventType`
-  - `limit`
-  - `tenantId` (platform only; manager is tenant-scoped)
+### Templates
+#### Required
+- `eventType`
+- `channel`
+- `titleTemplate`
+- `messageTemplate`
 
-## 3) Example payloads
+#### Optional
+- `tenantId` (platform only)
+- `locale` (default `zh-TW`)
+- `emailSubject`
+- `actionUrl`
+- `priority`
+- `channelPolicy`
+- `isActive`
+- `templateKey` (if provided, must match generated key)
 
-### Role preference (platform)
-```json
-{
-  "tenantId": "11111111-1111-1111-1111-111111111111",
-  "mode": "role",
-  "eventType": "member_contract_expiring",
-  "role": "manager",
-  "channels": { "in_app": true, "email": true, "line": false, "sms": false, "webhook": false },
-  "isEnabled": true,
-  "source": "custom",
-  "note": "manager should receive expiry reminders"
-}
-```
+### Retry
+#### Required
+- `action`: `dry_run` or `execute`
 
-### User preference (manager)
-```json
-{
-  "mode": "user",
-  "eventType": "opportunity_due",
-  "userId": "22222222-2222-2222-2222-222222222222",
-  "channels": { "in_app": true, "email": true, "line": false, "sms": false, "webhook": false },
-  "isEnabled": true
-}
-```
+#### Optional
+- `deliveryIds`
+- `statuses`
+- `channels`
+- `eventType`
+- `limit`
+- `tenantId` (platform only)
 
-### Template (manager)
-```json
-{
-  "eventType": "opportunity_due",
-  "channel": "email",
-  "locale": "zh-TW",
-  "titleTemplate": "機會即將到期",
-  "messageTemplate": "請在 {{due_at}} 前處理機會：{{target_name}}",
-  "emailSubject": "【提醒】機會即將到期",
-  "actionUrl": "/manager/opportunities",
-  "priority": "warning",
-  "channelPolicy": { "allowExternal": true, "maxRetries": 2 },
-  "isActive": true
-}
-```
+## Platform vs manager behavior
+- Platform admin:
+  - can specify tenant scope for preferences/templates/retry
+  - can inspect cross-tenant datasets from platform pages
+- Manager:
+  - always tenant-scoped
+  - tenant mismatch payloads are rejected by API
 
-### Retry dry-run (platform)
-```json
-{
-  "action": "dry_run",
-  "tenantId": "11111111-1111-1111-1111-111111111111",
-  "statuses": ["failed", "retrying"],
-  "channels": ["email", "webhook"],
-  "eventType": "member_contract_expiring",
-  "limit": 200
-}
-```
+## Page operation steps
 
-## 4) Platform vs manager operation notes
-- Platform pages can set `tenantId` and inspect cross-tenant data.
-- Manager pages always run under current tenant scope and reject cross-tenant payloads.
-- Retry execute requires explicit confirmation text in UI to reduce accidental actions.
+### 1) Preferences pages
+1. Load list data.
+2. Choose `Role Scope` or `User Scope`.
+3. Fill required fields.
+4. Save and confirm success message.
+5. Confirm list auto-refreshes and form resets.
 
-## 5) Enable/disable strategy (Phase 2 scope only)
-- Preference enable/disable:
-  - controlled by `isEnabled`
-  - selected channel toggle determines channel-level enable state
-- Template enable/disable:
-  - controlled by `isActive`
-- Retry safety:
-  - execute path requires dry-run visible result + explicit confirm string
-  - non-retryable decisions are returned with blocked reasons
+### 2) Templates pages
+1. Load list data.
+2. Create/update template with required fields.
+3. Validate `template_key` preview and content preview panel.
+4. Save and confirm list auto-refreshes.
+5. Confirm active status is visible in list.
 
-## 6) Out of scope in this stage
-- No wiring into runtime dispatch path
-- No scheduled flow changes
-- No `/api/jobs/run` changes
-- No cron configuration changes
+### 3) Retry pages
+1. Set filters and load retry plan.
+2. Review retryable vs blocked summary.
+3. Run `dry_run` and check blocked reasons.
+4. Type `EXECUTE` and run execute (if needed in test data only).
+5. Confirm execute result summary is shown.
+
+## Common error handling hints
+- `tenantId mismatch`: manager payload attempted cross-tenant scope.
+- `Invalid payload`: schema validation failure (event/channel/role/policy format).
+- `channel_policy must be a JSON object`: policy field is not valid JSON object.
+- Empty list after load: filter too strict or no seed data.
+
+## Dry-run vs Execute
+- `dry_run`: no retry execution, only plan/eligibility output.
+- `execute`: calls controlled retry operation service and returns retried/blocked summary.
+
+## Recommended demo order
+1. Platform role preference create
+2. Manager user preference create
+3. Platform template create
+4. Manager template update
+5. Platform retry dry-run
+6. Manager retry dry-run
+7. Optional execute in isolated test tenant
+
+## Validation checklist
+- [ ] Preferences can create/update for role/user scope
+- [ ] Templates can create/update with preview
+- [ ] Retry plan shows blocked reasons
+- [ ] Manager cannot cross tenant scope
+- [ ] Platform can specify tenant scope
+- [ ] No runtime chain endpoint changed in this phase

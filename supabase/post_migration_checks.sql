@@ -21,6 +21,10 @@ select 'table.checkins' as check_name, to_regclass('public.checkins') is not nul
 select 'table.qr_token_uses' as check_name, to_regclass('public.qr_token_uses') is not null as ok;
 select 'table.notification_logs' as check_name, to_regclass('public.notification_logs') is not null as ok;
 select 'table.cron_probe_runs' as check_name, to_regclass('public.cron_probe_runs') is not null as ok;
+select 'table.notification_role_preferences' as check_name, to_regclass('public.notification_role_preferences') is not null as ok;
+select 'table.notification_user_preferences' as check_name, to_regclass('public.notification_user_preferences') is not null as ok;
+select 'table.notification_templates' as check_name, to_regclass('public.notification_templates') is not null as ok;
+select 'table.notification_admin_audit_logs' as check_name, to_regclass('public.notification_admin_audit_logs') is not null as ok;
 
 -- 2) Critical functions
 select

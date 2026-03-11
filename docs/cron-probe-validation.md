@@ -22,7 +22,7 @@ without touching notification job business semantics.
 1. Confirm latest production deployment is Ready and aliased to `www.olinextech.com`.
 2. Confirm `vercel.json` contains both cron entries:
    - `/api/jobs/run` (existing schedule)
-   - `/api/cron-probe` (temporary 15-minute debug schedule)
+   - `/api/cron-probe` (temporary daily debug schedule: `15 14 * * *`, 22:15 Asia/Taipei)
 3. Wait for next 22:15 Asia/Taipei probe window.
 4. Query DB evidence:
 
