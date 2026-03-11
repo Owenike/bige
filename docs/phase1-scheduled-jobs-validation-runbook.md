@@ -8,14 +8,14 @@ Validate the production/staging chain:
 without mixing manual/API triggers into scheduled acceptance.
 
 ## Validation window
-- Taiwan time: `20:00~21:00` (`Asia/Taipei`)
-- Cron spec currently: `0 12 * * *` (UTC), which maps to 20:00 Taiwan.
+- Taiwan time: `22:00~23:00` (`Asia/Taipei`)
+- Cron spec currently: `0 14 * * *` (UTC), which maps to 22:00 Taiwan.
 
 ## Preconditions
 1. Latest deployment includes `GET/POST` shared handler in `/api/jobs/run`.
 2. `vercel.json` contains:
    - `path: /api/jobs/run`
-   - `schedule: 0 12 * * *`
+   - `schedule: 0 14 * * *`
 3. Env is set correctly:
    - Secret mode priority: incoming bearer / `x-cron-secret` must match `JOBS_CRON_SECRET` or `CRON_SECRET`.
    - Prefer setting `CRON_SECRET` in Production to force secret match.
@@ -34,12 +34,12 @@ without mixing manual/API triggers into scheduled acceptance.
 npm run check:job-runs
 ```
 
-### B. Taiwan 20:00~21:00 window
+### B. Taiwan 22:00~23:00 window
 ```bash
-npm run check:job-runs -- --from 2026-03-11T12:00:00Z --to 2026-03-11T13:00:00Z
+npm run check:job-runs -- --from 2026-03-11T14:00:00Z --to 2026-03-11T15:00:00Z
 ```
 
-### C. Runtime logs stream (start at T-2 min before 20:00 Asia/Taipei)
+### C. Runtime logs stream (start at T-2 min before 22:00 Asia/Taipei)
 ```powershell
 vercel logs https://<LATEST_PROD_DEPLOYMENT>.vercel.app --json | rg "\[jobs/run\]"
 ```
@@ -51,17 +51,17 @@ vercel ls bige
 Use the newest `Production` deployment URL from the first rows.
 
 ## Fastest verification flow (single cron window)
-1. At `19:58` Asia/Taipei, start logs stream command above.
-2. At `20:00` Asia/Taipei (=`12:00 UTC`), wait for logs and check for:
+1. At `21:58` Asia/Taipei, start logs stream command above.
+2. At `22:00` Asia/Taipei (=`14:00 UTC`), wait for logs and check for:
    - `[jobs/run][entry]`
    - `[jobs/run][scheduled]`
    - `scheduledReason` and flags (`hasCronSecret`, `hasIncomingSecret`, `isVercelCronUserAgent`)
    - `[jobs/run][job:created]`
-3. At `20:02~20:05` Asia/Taipei, run:
+3. At `22:02~22:05` Asia/Taipei, run:
 ```bash
-npm run check:job-runs -- --from 2026-03-11T12:00:00Z --to 2026-03-11T12:10:00Z
+npm run check:job-runs -- --from 2026-03-11T14:00:00Z --to 2026-03-11T14:10:00Z
 ```
-4. If no rows, keep logs open until `20:06` and classify by first missing marker:
+4. If no rows, keep logs open until `22:06` and classify by first missing marker:
    - no `[entry]`
    - has `[entry]` but no `[scheduled]`
    - has `[auth-denied]` with `scheduledReason` in secret mismatch / missing secret categories
@@ -92,6 +92,7 @@ Search by route/function logs with:
 1. Queried UTC window contains no scheduled rows.
 2. Scheduled logs missing or incomplete in the expected time window.
 3. Logs show `[jobs/run][auth-denied]` during cron window.
+4. Cron-like request returns HTTP `401` with message `Invalid or missing cron secret`.
 
 ## Four-layer troubleshooting order
 1. **No `[jobs/run][entry]`**
@@ -113,5 +114,5 @@ Search by route/function logs with:
 
 ## Notes on sample purity
 - Keep scheduled acceptance sample clean:
-  - avoid manual `/api/jobs/run` execution during 20:00~21:00 validation window.
+  - avoid manual `/api/jobs/run` execution during 22:00~23:00 validation window.
   - avoid manual sweep/retry actions in ops pages during the same window.

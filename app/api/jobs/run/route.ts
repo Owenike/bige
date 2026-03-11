@@ -277,22 +277,40 @@ async function handleRunJobs(request: Request) {
     hasVercelRuntimeContext,
   });
 
-  const jobsCronSecret = process.env.JOBS_CRON_SECRET || "";
-  const vercelCronSecret = process.env.CRON_SECRET || "";
-  const cronSecret = jobsCronSecret || vercelCronSecret;
+  const jobsCronSecret = (process.env.JOBS_CRON_SECRET || "").trim();
+  const vercelCronSecret = (process.env.CRON_SECRET || "").trim();
+  const configuredCronSecrets = [vercelCronSecret, jobsCronSecret].filter((value, index, arr) => Boolean(value) && arr.indexOf(value) === index);
+  const hasCronSecretConfigured = configuredCronSecrets.length > 0;
   const hasVercelManagedCronSecret = vercelCronSecret.length > 0;
   const cronSignal = readCronSignal(request);
   const incomingSecret = cronSignal.value;
+  const incomingSecretMatchesConfiguredSecret =
+    incomingSecret.length > 0 && configuredCronSecrets.some((secret) => secret === incomingSecret);
+  const matchedCronSecretSource =
+    incomingSecret.length > 0 && incomingSecret === vercelCronSecret
+      ? "CRON_SECRET"
+      : incomingSecret.length > 0 && incomingSecret === jobsCronSecret
+        ? "JOBS_CRON_SECRET"
+        : "none";
+  const configuredCronSecretMode =
+    vercelCronSecret.length > 0 && jobsCronSecret.length > 0
+      ? "dual"
+      : vercelCronSecret.length > 0
+        ? "vercel"
+        : jobsCronSecret.length > 0
+          ? "jobs"
+          : "none";
   const isVercelCron = cronSignal.hasVercelCronHeader;
   const isVercelCronUserAgent = cronSignal.isVercelCronUserAgent;
+  const isCronLikeRequest = isVercelCron || isVercelCronUserAgent;
   let scheduledReason = "none";
   const isScheduled =
     (() => {
-      if (cronSecret.length > 0 && incomingSecret.length > 0 && incomingSecret === cronSecret) {
-        scheduledReason = "cron_secret_match";
+      if (incomingSecretMatchesConfiguredSecret) {
+        scheduledReason = matchedCronSecretSource === "CRON_SECRET" ? "cron_secret_match" : "jobs_cron_secret_match";
         return true;
       }
-      if (isVercelCron && cronSecret.length === 0) {
+      if (isVercelCron && !hasCronSecretConfigured) {
         scheduledReason = "x-vercel-cron_without_secret";
         return true;
       }
@@ -300,24 +318,24 @@ async function handleRunJobs(request: Request) {
         scheduledReason = "x-vercel-cron_ua_runtime_fallback";
         return true;
       }
-      if (isVercelCron && hasVercelManagedCronSecret && incomingSecret.length === 0) {
+      if (isVercelCron && hasCronSecretConfigured && incomingSecret.length === 0) {
         scheduledReason = "x-vercel-cron_missing_secret_with_cron_secret_env";
-      } else if (isVercelCron && hasVercelManagedCronSecret && incomingSecret.length > 0 && incomingSecret !== cronSecret) {
+      } else if (isVercelCron && hasCronSecretConfigured && incomingSecret.length > 0 && !incomingSecretMatchesConfiguredSecret) {
         scheduledReason = "x-vercel-cron_secret_mismatch";
       } else if (isVercelCron && !isVercelCronUserAgent) {
         scheduledReason = "x-vercel-cron_missing_cron_user_agent";
       } else if (isVercelCron && isVercelCronUserAgent && !hasVercelRuntimeContext) {
         scheduledReason = "x-vercel-cron_ua_missing_runtime_context";
       }
-      if (!isVercelCron && isVercelCronUserAgent && cronSecret.length === 0) {
+      if (!isVercelCron && isVercelCronUserAgent && !hasCronSecretConfigured) {
         scheduledReason = "cron_ua_without_secret_missing_x_vercel_cron";
-      } else if (isVercelCronUserAgent && hasVercelManagedCronSecret && incomingSecret.length === 0) {
+      } else if (isVercelCronUserAgent && hasCronSecretConfigured && incomingSecret.length === 0) {
         scheduledReason = "cron_ua_missing_secret_header";
       } else if (
         isVercelCronUserAgent &&
-        hasVercelManagedCronSecret &&
+        hasCronSecretConfigured &&
         incomingSecret.length > 0 &&
-        incomingSecret !== cronSecret
+        !incomingSecretMatchesConfiguredSecret
       ) {
         scheduledReason = "cron_ua_secret_mismatch";
       }
@@ -329,10 +347,12 @@ async function handleRunJobs(request: Request) {
     requestId,
     isScheduled,
     scheduledReason,
-    hasCronSecret: cronSecret.length > 0,
+    hasCronSecret: hasCronSecretConfigured,
+    configuredCronSecretMode,
     hasIncomingSecret: incomingSecret.length > 0,
     incomingSecretLength: incomingSecret.length,
     incomingSecretSource: cronSignal.source,
+    matchedCronSecretSource,
     hasVercelCronHeader: isVercelCron,
     isVercelCronUserAgent,
     hasVercelManagedCronSecret,
@@ -353,6 +373,25 @@ async function handleRunJobs(request: Request) {
       });
     }
   } else {
+    if (hasVercelManagedCronSecret && isCronLikeRequest) {
+      console.warn(`${JOBS_RUN_LOG_PREFIX}[auth-denied]`, {
+        requestId,
+        mode: "cron",
+        scheduledReason,
+        hasVercelCronHeader: isVercelCron,
+        isVercelCronUserAgent,
+        hasCronSecret: hasCronSecretConfigured,
+        configuredCronSecretMode,
+        hasVercelManagedCronSecret,
+        hasIncomingSecret: incomingSecret.length > 0,
+        incomingSecretSource: cronSignal.source,
+        hasVercelRuntimeContext,
+        userAgent: request.headers.get("user-agent"),
+        xVercelId: request.headers.get("x-vercel-id"),
+      });
+      return apiError(401, "UNAUTHORIZED", "Invalid or missing cron secret");
+    }
+
     const auth = await requireProfile(["platform_admin", "manager"], request);
     if (!auth.ok) {
       console.warn(`${JOBS_RUN_LOG_PREFIX}[auth-denied]`, {
@@ -361,7 +400,8 @@ async function handleRunJobs(request: Request) {
         scheduledReason,
         hasVercelCronHeader: isVercelCron,
         isVercelCronUserAgent,
-        hasCronSecret: cronSecret.length > 0,
+        hasCronSecret: hasCronSecretConfigured,
+        configuredCronSecretMode,
         hasVercelManagedCronSecret,
         hasIncomingSecret: incomingSecret.length > 0,
         incomingSecretSource: cronSignal.source,
