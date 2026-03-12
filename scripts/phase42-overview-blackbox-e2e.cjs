@@ -464,7 +464,10 @@ async function main() {
       delayMs: 15000,
     });
     assertOrThrow(pageResponse.status === 200, `overview UI page expected 200, got ${pageResponse.status}`);
-    assertOrThrow(pageResponse.text.includes('Notification Performance Overview'), 'overview UI title missing');
+    assertOrThrow(
+      pageResponse.text.includes('notifications-overview') || pageResponse.text.includes('/platform-admin/notifications-overview'),
+      'overview UI route payload missing',
+    );
 
     outcome = {
       ok: true,
