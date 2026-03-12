@@ -79,6 +79,54 @@ type OverviewSnapshot = {
   byTenant: TenantItem[];
 };
 
+type AnomalyReasonItem = {
+  key: string;
+  label: string;
+  sample: string | null;
+  count: number;
+  deadLetter: number;
+  failed: number;
+  retrying: number;
+  tenantCount: number;
+  channelCount: number;
+};
+
+type TenantPriorityItem = {
+  tenantId: string;
+  priority: "P1" | "P2" | "P3" | "P4";
+  severity: "critical" | "high" | "medium" | "low";
+  score: number;
+  deadLetter: number;
+  failedRate: number;
+  retrying: number;
+  anomalyTotal: number;
+  recentAnomalies: number;
+  previousAnomalies: number;
+  surgeRatio: number;
+  summary: string;
+};
+
+type AnomalyInsightsSnapshot = {
+  from: string;
+  to: string;
+  tenantId: string | null;
+  channel: DeliveryChannel | null;
+  totalAnomalies: number;
+  reasonClusters: AnomalyReasonItem[];
+  tenantPriorities: TenantPriorityItem[];
+  priorityRule: {
+    scoreFormula: string;
+    weights: {
+      deadLetter: number;
+      failed: number;
+      retrying: number;
+      failedRateBands: Array<{ threshold: number; bonus: number }>;
+      surgeBands: Array<{ condition: string; bonus: number }>;
+    };
+    severityBands: Array<{ severity: "critical" | "high" | "medium" | "low"; minScore: number }>;
+  };
+};
+
 type FilterState = {
   tenantId: string;
   channel: "" | DeliveryChannel;
@@ -138,6 +186,7 @@ export default function NotificationOverviewDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<OverviewSnapshot | null>(null);
+  const [insights, setInsights] = useState<AnomalyInsightsSnapshot | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -153,23 +202,40 @@ export default function NotificationOverviewDashboard() {
 
     setLoading(true);
     setError(null);
-    void fetch(`/api/platform/notifications/overview?${params.toString()}`, { cache: "no-store" })
-      .then(async (response) => {
+    const overviewPath = `/api/platform/notifications/overview?${params.toString()}`;
+    const anomaliesPath = `/api/platform/notifications/anomalies?${params.toString()}`;
+    void Promise.all([
+      fetch(overviewPath, { cache: "no-store" }).then(async (response) => {
         const payload = await response.json().catch(() => null);
         if (!response.ok) {
           const message = payload?.error?.message || payload?.message || "Load overview failed";
           throw new Error(String(message));
         }
         return payload?.snapshot || payload?.data?.snapshot || null;
-      })
-      .then((data) => {
+      }),
+      fetch(anomaliesPath, { cache: "no-store" }).then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          const message = payload?.error?.message || payload?.message || "Load anomalies failed";
+          throw new Error(String(message));
+        }
+        return payload?.snapshot || payload?.data?.snapshot || null;
+      }),
+    ])
+      .then(([overviewData, anomaliesData]) => {
         if (!active) return;
-        if (!data) {
+        if (!overviewData) {
           setError("Overview payload is empty.");
           setLoading(false);
           return;
         }
-        setSnapshot(data as OverviewSnapshot);
+        if (!anomaliesData) {
+          setError("Anomaly insights payload is empty.");
+          setLoading(false);
+          return;
+        }
+        setSnapshot(overviewData as OverviewSnapshot);
+        setInsights(anomaliesData as AnomalyInsightsSnapshot);
         setLoading(false);
       })
       .catch((fetchError) => {
@@ -347,6 +413,51 @@ export default function NotificationOverviewDashboard() {
                 Rate definition: success/fail denominator = sent + failed; open/click/conversion denominator = sent.
               </p>
             </section>
+
+            {insights ? (
+              <>
+                <section className="fdTwoCol" style={{ marginBottom: 14 }}>
+                  <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+                    <h2 className="sectionTitle">Tenant Alert Priority</h2>
+                    <p className="sub" style={{ marginTop: 0 }}>
+                      Rule: {insights.priorityRule.scoreFormula}
+                    </p>
+                    <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                      {insights.tenantPriorities.map((item) => (
+                        <div key={item.tenantId} className="fdGlassSubPanel" style={{ padding: 10 }}>
+                          <p className="sub" style={{ marginTop: 0 }}>
+                            [{item.priority}/{item.severity}] score {item.score} - {item.tenantId}
+                          </p>
+                          <p className="sub" style={{ marginTop: 0 }}>
+                            {item.summary}
+                          </p>
+                          <div className="actions" style={{ marginTop: 6 }}>
+                            <Link className="fdPillBtn" href={buildTenantDrilldownHref(snapshot, item.tenantId)}>
+                              Open Tenant Drilldown
+                            </Link>
+                          </div>
+                        </div>
+                      ))}
+                      {insights.tenantPriorities.length === 0 ? <p className="fdGlassText">No tenant alerts.</p> : null}
+                    </div>
+                  </section>
+
+                  <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+                    <h2 className="sectionTitle">Top Anomaly Reasons</h2>
+                    <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                      {insights.reasonClusters.map((item) => (
+                        <p key={item.key} className="sub" style={{ marginTop: 0 }}>
+                          {item.label}: {item.count} (dead_letter {item.deadLetter}, failed {item.failed}, retrying {item.retrying}) |
+                          tenants {item.tenantCount} | channels {item.channelCount}
+                          {item.sample ? ` | sample: ${item.sample}` : ""}
+                        </p>
+                      ))}
+                      {insights.reasonClusters.length === 0 ? <p className="fdGlassText">No anomaly reasons.</p> : null}
+                    </div>
+                  </section>
+                </section>
+              </>
+            ) : null}
 
             {!hasData ? (
               <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
