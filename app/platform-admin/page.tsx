@@ -429,6 +429,7 @@ export default function PlatformAdminPage() {
               <Link className="fdPillBtn" href="/platform-admin/jobs">Jobs Monitor</Link>
               <Link className="fdPillBtn" href="/platform-admin/jobs/settings">Job Settings</Link>
               <a className="fdPillBtn" href="/platform-admin/notifications-ops">Notification Ops</a>
+              <a className="fdPillBtn" href="/platform-admin/notifications-overview">Notifications Overview</a>
               <a className="fdPillBtn" href="/platform-admin/notifications-audit">Notification Audit</a>
               <a className="fdPillBtn" href="/platform-admin/notifications-config-integrity">Config Integrity</a>
               <a className="fdPillBtn" href="/platform-admin/notifications-preflight">Runtime Preflight</a>

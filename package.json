@@ -17,6 +17,7 @@
         "test:e2e:rerun:blackbox": "powershell -ExecutionPolicy Bypass -File scripts/phase22-rerun-blackbox-e2e.ps1",
         "test:e2e:settings:blackbox": "powershell -ExecutionPolicy Bypass -File scripts/phase31-settings-blackbox-e2e.ps1",
         "test:e2e:delivery:blackbox": "powershell -ExecutionPolicy Bypass -File scripts/phase41-delivery-blackbox-e2e.ps1",
+        "test:e2e:overview:blackbox": "powershell -ExecutionPolicy Bypass -File scripts/phase42-overview-blackbox-e2e.ps1",
         "check:phase41:migration": "powershell -ExecutionPolicy Bypass -File scripts/phase41-migration-verify.ps1",
         "check:job-runs": "node scripts/check-job-runs.mjs",
         "check:cron-probe": "node scripts/check-cron-probe.mjs"
