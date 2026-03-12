@@ -7,7 +7,7 @@ export type JobTriggerMode = "scheduled" | "manual" | "api" | "inline";
 export type JobStatus = "running" | "success" | "failed" | "partial";
 
 export type DeliveryChannel = "in_app" | "email" | "line" | "sms" | "webhook" | "other";
-export type DeliveryStatus = "pending" | "sent" | "failed" | "skipped" | "retrying";
+export type DeliveryStatus = "pending" | "retrying" | "sent" | "failed" | "skipped" | "dead_letter";
 
 export type DeliveryRow = {
   id: string;
@@ -22,11 +22,15 @@ export type DeliveryRow = {
   channel: DeliveryChannel;
   status: DeliveryStatus;
   attempts: number;
+  retry_count: number;
   max_attempts: number;
   last_attempt_at: string | null;
   next_retry_at: string | null;
   sent_at: string | null;
+  delivered_at: string | null;
   failed_at: string | null;
+  dead_letter_at: string | null;
+  last_error: string | null;
   error_code: string | null;
   error_message: string | null;
   provider_message_id: string | null;
@@ -72,11 +76,15 @@ type DeliveryInsertInput = {
     channel: DeliveryChannel;
     status: DeliveryStatus;
     attempts?: number;
+    retryCount?: number;
     maxAttempts?: number;
     lastAttemptAt?: string | null;
     nextRetryAt?: string | null;
     sentAt?: string | null;
+    deliveredAt?: string | null;
     failedAt?: string | null;
+    deadLetterAt?: string | null;
+    lastError?: string | null;
     errorCode?: string | null;
     errorMessage?: string | null;
     providerMessageId?: string | null;
@@ -150,15 +158,19 @@ export async function insertDeliveryRows(input: DeliveryInsertInput) {
     recipient_user_id: row.recipientUserId ?? null,
     recipient_role: row.recipientRole ?? null,
     channel: row.channel,
-    status: row.status,
-    attempts: typeof row.attempts === "number" ? row.attempts : 0,
-    max_attempts: typeof row.maxAttempts === "number" ? row.maxAttempts : 3,
-    last_attempt_at: row.lastAttemptAt ?? null,
-    next_retry_at: row.nextRetryAt ?? null,
-    sent_at: row.sentAt ?? null,
-    failed_at: row.failedAt ?? null,
-    error_code: row.errorCode ?? null,
-    error_message: row.errorMessage ?? null,
+      status: row.status,
+      attempts: typeof row.attempts === "number" ? row.attempts : 0,
+      retry_count: typeof row.retryCount === "number" ? row.retryCount : Math.max((typeof row.attempts === "number" ? row.attempts : 0) - 1, 0),
+      max_attempts: typeof row.maxAttempts === "number" ? row.maxAttempts : 3,
+      last_attempt_at: row.lastAttemptAt ?? null,
+      next_retry_at: row.nextRetryAt ?? null,
+      sent_at: row.sentAt ?? null,
+      delivered_at: row.deliveredAt ?? null,
+      failed_at: row.failedAt ?? null,
+      dead_letter_at: row.deadLetterAt ?? null,
+      last_error: row.lastError ?? row.errorMessage ?? null,
+      error_code: row.errorCode ?? null,
+      error_message: row.errorMessage ?? null,
     provider_message_id: row.providerMessageId ?? null,
     provider_response: row.providerResponse || {},
     dedupe_key: row.dedupeKey ?? null,
@@ -169,7 +181,7 @@ export async function insertDeliveryRows(input: DeliveryInsertInput) {
   const insert = await supabase
     .from("notification_deliveries")
     .upsert(rows, { onConflict: "channel,dedupe_key", ignoreDuplicates: true })
-    .select("id, tenant_id, branch_id, notification_id, opportunity_id, source_ref_type, source_ref_id, recipient_user_id, recipient_role, channel, status, attempts, max_attempts, last_attempt_at, next_retry_at, sent_at, failed_at, error_code, error_message, provider_message_id, provider_response, dedupe_key, payload, created_by, created_at, updated_at");
+    .select("id, tenant_id, branch_id, notification_id, opportunity_id, source_ref_type, source_ref_id, recipient_user_id, recipient_role, channel, status, attempts, retry_count, max_attempts, last_attempt_at, next_retry_at, sent_at, delivered_at, failed_at, dead_letter_at, last_error, error_code, error_message, provider_message_id, provider_response, dedupe_key, payload, created_by, created_at, updated_at");
   if (insert.error) return { ok: false as const, error: insert.error.message, items: [] as DeliveryRow[] };
   return { ok: true as const, items: (insert.data || []) as DeliveryRow[] };
 }
@@ -179,10 +191,14 @@ export async function updateDeliveryStatus(params: {
   id: string;
   status: DeliveryStatus;
   attempts: number;
+  retryCount?: number | null;
   lastAttemptAt?: string | null;
   nextRetryAt?: string | null;
   sentAt?: string | null;
+  deliveredAt?: string | null;
   failedAt?: string | null;
+  deadLetterAt?: string | null;
+  lastError?: string | null;
   errorCode?: string | null;
   errorMessage?: string | null;
   providerMessageId?: string | null;
@@ -192,10 +208,14 @@ export async function updateDeliveryStatus(params: {
   const patch: {
     status: DeliveryStatus;
     attempts: number;
+    retry_count: number;
     last_attempt_at: string | null;
     next_retry_at: string | null;
     sent_at: string | null;
+    delivered_at: string | null;
     failed_at: string | null;
+    dead_letter_at: string | null;
+    last_error: string | null;
     error_code: string | null;
     error_message: string | null;
     provider_message_id?: string | null;
@@ -204,10 +224,14 @@ export async function updateDeliveryStatus(params: {
   } = {
     status: params.status,
     attempts: params.attempts,
+    retry_count: Math.max(0, Number(params.retryCount ?? Math.max(params.attempts - 1, 0))),
     last_attempt_at: params.lastAttemptAt ?? null,
     next_retry_at: params.nextRetryAt ?? null,
     sent_at: params.sentAt ?? null,
+    delivered_at: params.deliveredAt ?? null,
     failed_at: params.failedAt ?? null,
+    dead_letter_at: params.deadLetterAt ?? null,
+    last_error: params.lastError ?? params.errorMessage ?? null,
     error_code: params.errorCode ?? null,
     error_message: params.errorMessage ?? null,
     updated_at: nowIso(),
@@ -254,7 +278,7 @@ export async function listDeliveryRows(params: {
   const supabase = params.supabase ?? createSupabaseAdminClient();
   let query = supabase
     .from("notification_deliveries")
-    .select("id, tenant_id, branch_id, notification_id, opportunity_id, source_ref_type, source_ref_id, recipient_user_id, recipient_role, channel, status, attempts, max_attempts, last_attempt_at, next_retry_at, sent_at, failed_at, error_code, error_message, provider_message_id, provider_response, dedupe_key, payload, created_by, created_at, updated_at")
+    .select("id, tenant_id, branch_id, notification_id, opportunity_id, source_ref_type, source_ref_id, recipient_user_id, recipient_role, channel, status, attempts, retry_count, max_attempts, last_attempt_at, next_retry_at, sent_at, delivered_at, failed_at, dead_letter_at, last_error, error_code, error_message, provider_message_id, provider_response, dedupe_key, payload, created_by, created_at, updated_at")
     .order("created_at", { ascending: false })
     .limit(Math.min(500, Math.max(1, params.limit || 120)));
   if (params.tenantId) query = query.eq("tenant_id", params.tenantId);

@@ -88,7 +88,7 @@ export type NotificationRetryBlockedReason = {
   reason: string;
 };
 
-export const NOTIFICATION_QUERY_STATUS_KEYS = ["failed", "retrying", "pending", "sent", "skipped"] as const;
+export const NOTIFICATION_QUERY_STATUS_KEYS = ["failed", "retrying", "pending", "sent", "skipped", "dead_letter"] as const;
 export type NotificationQueryStatusKey = (typeof NOTIFICATION_QUERY_STATUS_KEYS)[number];
 
 export const notificationQueryStatusesSchema = NOTIFICATION_QUERY_STATUS_KEYS;

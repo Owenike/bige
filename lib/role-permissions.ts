@@ -34,6 +34,8 @@ export const PERMISSION_ACTIONS = [
   "jobs.rerun.execute",
   "jobs.settings.read",
   "jobs.settings.write",
+  "notifications.delivery_events.read",
+  "notifications.delivery_events.write",
   "orders.read",
   "orders.write",
   "payments.read",

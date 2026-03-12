@@ -115,7 +115,7 @@ export async function buildRetryPlan(params: {
       totalCandidates: candidates.length,
       retryable: retryableRows.length,
       blocked: candidates.length - retryableRows.length,
-      failed: filteredRows.filter((item) => item.status === "failed").length,
+      failed: filteredRows.filter((item) => item.status === "failed" || item.status === "dead_letter").length,
       retrying: filteredRows.filter((item) => item.status === "retrying").length,
       byErrorCode,
       byDecisionCode,

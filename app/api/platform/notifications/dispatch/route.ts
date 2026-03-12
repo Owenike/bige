@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       skipped: result.summary.skipped,
       failed: result.summary.failed,
       retrying: result.summary.retrying,
+      deadLetter: result.summary.deadLetter,
     },
   });
 

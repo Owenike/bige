@@ -27,6 +27,7 @@ type DispatchSummary = {
   skipped: number;
   failed: number;
   retrying: number;
+  deadLetter: number;
 };
 
 const PROVIDER_RESPONSE_MAX_STRING = 300;
@@ -333,10 +334,14 @@ async function dispatchOne(params: {
       id: params.row.id,
       status: "sent",
       attempts,
+      retryCount: Math.max(0, attempts - 1),
       lastAttemptAt,
       sentAt: lastAttemptAt,
+      deliveredAt: lastAttemptAt,
       nextRetryAt: null,
       failedAt: null,
+      deadLetterAt: null,
+      lastError: null,
       errorCode: null,
       errorMessage: null,
       providerMessageId: params.row.provider_message_id,
@@ -356,9 +361,13 @@ async function dispatchOne(params: {
       id: params.row.id,
       status: "skipped",
       attempts,
+      retryCount: Math.max(0, attempts - 1),
       lastAttemptAt,
       sentAt: null,
+      deliveredAt: null,
       failedAt: null,
+      deadLetterAt: null,
+      lastError: null,
       nextRetryAt: null,
       errorCode: "CHANNEL_POLICY_SKIPPED",
       errorMessage: `Dispatch policy skipped channel ${params.row.channel}`,
@@ -402,9 +411,13 @@ async function dispatchOne(params: {
       id: params.row.id,
       status: "sent",
       attempts,
+      retryCount: Math.max(0, attempts - 1),
       lastAttemptAt,
       sentAt: lastAttemptAt,
+      deliveredAt: null,
       failedAt: null,
+      deadLetterAt: null,
+      lastError: null,
       nextRetryAt: null,
       errorCode: null,
       errorMessage: null,
@@ -422,21 +435,30 @@ async function dispatchOne(params: {
       errorMessage: outcome.errorMessage,
     });
   const canRetry = outcomeAllowsRetry && attempts < maxAttempts;
+  const terminalStatus: DeliveryStatus = canRetry
+    ? "retrying"
+    : outcome.status === "skipped"
+      ? "skipped"
+      : "dead_letter";
   const updated = await updateDeliveryStatus({
     supabase: params.supabase,
     id: params.row.id,
-    status: canRetry ? "retrying" : outcome.status === "skipped" ? "skipped" : "failed",
+    status: terminalStatus,
     attempts,
+    retryCount: Math.max(0, attempts - 1),
     lastAttemptAt,
     sentAt: null,
-    failedAt: canRetry ? null : lastAttemptAt,
+    deliveredAt: null,
+    failedAt: canRetry || terminalStatus === "skipped" ? null : lastAttemptAt,
+    deadLetterAt: terminalStatus === "dead_letter" ? lastAttemptAt : null,
     nextRetryAt: canRetry ? nextRetryIso(15) : null,
     errorCode: outcome.errorCode,
     errorMessage: outcome.errorMessage,
+    lastError: outcome.errorMessage,
     providerMessageId: outcome.providerMessageId,
     providerResponse: sanitizeProviderResponse(outcome.providerResponse),
   });
-  return { ok: updated.ok, status: canRetry ? ("retrying" as DeliveryStatus) : outcome.status };
+  return { ok: updated.ok, status: terminalStatus };
 }
 
 export async function dispatchNotificationDeliveries(params: DispatchParams): Promise<{ ok: true; summary: DispatchSummary } | { ok: false; error: string }> {
@@ -461,6 +483,7 @@ export async function dispatchNotificationDeliveries(params: DispatchParams): Pr
     skipped: 0,
     failed: 0,
     retrying: 0,
+    deadLetter: 0,
   };
   const recipientCache = new Map<string, string | null>();
 
@@ -477,6 +500,10 @@ export async function dispatchNotificationDeliveries(params: DispatchParams): Pr
     if (outcome.status === "skipped") summary.skipped += 1;
     if (outcome.status === "failed") summary.failed += 1;
     if (outcome.status === "retrying") summary.retrying += 1;
+    if (outcome.status === "dead_letter") {
+      summary.deadLetter += 1;
+      summary.failed += 1;
+    }
   }
 
   return { ok: true, summary };

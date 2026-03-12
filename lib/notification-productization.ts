@@ -128,7 +128,7 @@ export function parseBooleanQuery(input: string | null, fallback: boolean) {
   return fallback;
 }
 
-export const retryStatusesSchema = z.array(z.enum(["failed", "retrying", "pending", "sent", "skipped"])).max(5).optional();
+export const retryStatusesSchema = z.array(z.enum(["failed", "retrying", "pending", "sent", "skipped", "dead_letter"])).max(6).optional();
 
 export const retryRequestSchema = z
   .object({

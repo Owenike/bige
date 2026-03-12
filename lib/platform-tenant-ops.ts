@@ -508,7 +508,7 @@ async function loadOverviewData(input: { tenantId?: string | null; rangeDays: nu
     if (!row.tenant_id) continue;
     const summary = summaryByTenant.get(row.tenant_id);
     if (!summary) continue;
-    if (row.status === "failed") summary.notificationOps.failedDeliveries += 1;
+    if (row.status === "failed" || row.status === "dead_letter") summary.notificationOps.failedDeliveries += 1;
     if (row.status === "retrying") summary.notificationOps.retryingDeliveries += 1;
   }
 
@@ -772,7 +772,7 @@ export async function getPlatformTenantOpsDetail(input: {
   const tenantId = tenant.tenantId;
 
   const failedDeliveries = loaded.deliveries
-    .filter((row) => row.tenant_id === tenantId && (row.status === "failed" || row.status === "retrying"))
+    .filter((row) => row.tenant_id === tenantId && (row.status === "failed" || row.status === "dead_letter" || row.status === "retrying"))
     .slice(0, 30)
     .map((row) => ({
       createdAt: row.created_at,
@@ -866,4 +866,3 @@ export async function getPlatformTenantOpsDetail(input: {
     },
   };
 }
-

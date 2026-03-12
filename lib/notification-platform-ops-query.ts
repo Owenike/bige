@@ -15,6 +15,7 @@ export type NotificationHealthSummary = {
   total: number;
   sent: number;
   failed: number;
+  deadLetter: number;
   retrying: number;
   skipped: number;
   pending: number;
@@ -253,7 +254,8 @@ export async function getTenantNotificationHealthSummary(params: SharedQueryPara
   const summary: NotificationHealthSummary = {
     total: rows.length,
     sent: byStatus.sent || 0,
-    failed: byStatus.failed || 0,
+    failed: (byStatus.failed || 0) + (byStatus.dead_letter || 0),
+    deadLetter: byStatus.dead_letter || 0,
     retrying: byStatus.retrying || 0,
     skipped: byStatus.skipped || 0,
     pending: byStatus.pending || 0,

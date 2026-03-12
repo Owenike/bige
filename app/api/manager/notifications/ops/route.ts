@@ -41,6 +41,8 @@ export async function GET(request: Request) {
   const externalDeliveries = deliveries.items.filter((item) => item.channel !== "in_app");
   const externalByStatus = toRecordCount(externalDeliveries.map((item) => ({ key: item.status })));
   const externalByChannel = toRecordCount(externalDeliveries.map((item) => ({ key: item.channel })));
+  const failedTotal = (byStatus.failed || 0) + (byStatus.dead_letter || 0);
+  const externalFailedTotal = (externalByStatus.failed || 0) + (externalByStatus.dead_letter || 0);
   const channelNotConfigured = externalDeliveries.filter((item) => item.error_code === "CHANNEL_NOT_CONFIGURED").length;
   const providerErrors = toRecordCount(
     externalDeliveries
@@ -53,7 +55,8 @@ export async function GET(request: Request) {
     summary: {
       jobRuns: jobRuns.items.length,
       deliveryRows: deliveries.items.length,
-      failed: byStatus.failed || 0,
+      failed: failedTotal,
+      deadLetter: byStatus.dead_letter || 0,
       retrying: byStatus.retrying || 0,
       sent: byStatus.sent || 0,
       skipped: byStatus.skipped || 0,
@@ -62,7 +65,8 @@ export async function GET(request: Request) {
       external: {
         total: externalDeliveries.length,
         sent: externalByStatus.sent || 0,
-        failed: externalByStatus.failed || 0,
+        failed: externalFailedTotal,
+        deadLetter: externalByStatus.dead_letter || 0,
         retrying: externalByStatus.retrying || 0,
         skipped: externalByStatus.skipped || 0,
         pending: externalByStatus.pending || 0,
@@ -73,7 +77,7 @@ export async function GET(request: Request) {
       },
     },
     runs: jobRuns.items,
-    failedDeliveries: deliveries.items.filter((item) => item.status === "failed").slice(0, 80),
+    failedDeliveries: deliveries.items.filter((item) => item.status === "failed" || item.status === "dead_letter").slice(0, 80),
     retryingDeliveries: deliveries.items.filter((item) => item.status === "retrying").slice(0, 80),
   });
 }
@@ -178,6 +182,7 @@ export async function POST(request: Request) {
             skipped: dispatch.summary.skipped,
             failed: dispatch.summary.failed,
             retrying: dispatch.summary.retrying,
+            deadLetter: dispatch.summary.deadLetter,
           }
         : {},
     });
