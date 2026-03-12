@@ -14,7 +14,7 @@ const querySchema = z.object({
 export async function GET(request: Request) {
   const auth = await requireProfile(["platform_admin"], request);
   if (!auth.ok) return auth.response;
-  const permission = requirePermission(auth.context, "audit.read");
+  const permission = requirePermission(auth.context, "notifications.analytics.read");
   if (!permission.ok) return permission.response;
 
   const params = new URL(request.url).searchParams;
