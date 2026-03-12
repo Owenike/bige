@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   canUseDailyRollupWindow,
+  isUtcDayBoundary,
   readNotificationDailyAnomalyRollups,
   readNotificationDailyRollups,
 } from "./notification-rollup";
@@ -242,6 +243,16 @@ function asTimestamp(iso: string, fallback: number) {
   const time = date.getTime();
   if (Number.isNaN(time)) return fallback;
   return time;
+}
+
+function countUtcDaysInclusive(fromIso: string, toIso: string) {
+  const fromDate = new Date(fromIso);
+  const toDate = new Date(toIso);
+  if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) return 1;
+  const fromDay = Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth(), fromDate.getUTCDate());
+  const toDay = Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth(), toDate.getUTCDate());
+  const diff = Math.floor((toDay - fromDay) / (24 * 60 * 60 * 1000));
+  return Math.max(1, diff + 1);
 }
 
 function sortByWorsening<T extends NotificationTrendComparisonItem>(rows: T[]) {
@@ -618,8 +629,13 @@ export async function getNotificationAlertTrendComparison(params: {
   if (currentToTs <= currentFromTs) return { ok: false, error: "Invalid window: to must be greater than from" };
 
   const durationMs = currentToTs - currentFromTs;
+  const currentIsWholeDay = isUtcDayBoundary(currentFromIso, "start") && isUtcDayBoundary(currentToIso, "end");
   const previousToTs = currentFromTs - 1;
-  const previousFromTs = currentFromTs - durationMs;
+  let previousFromTs = currentFromTs - durationMs;
+  if (currentIsWholeDay) {
+    const dayCount = countUtcDaysInclusive(currentFromIso, currentToIso);
+    previousFromTs = previousToTs - dayCount * 24 * 60 * 60 * 1000 + 1;
+  }
   const previousFromIso = new Date(previousFromTs).toISOString();
   const previousToIso = new Date(previousToTs).toISOString();
 
