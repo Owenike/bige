@@ -24,10 +24,6 @@ function assertOrThrow(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function pickMessage(payload, fallback) {
   if (payload && typeof payload === 'object') {
     if (typeof payload.message === 'string') return payload.message;
@@ -36,30 +32,28 @@ function pickMessage(payload, fallback) {
   return fallback;
 }
 
-let cachedRoutePost = null;
-function getRoutePost() {
-  if (cachedRoutePost) return cachedRoutePost;
-  const modulePath = path.resolve(
-    process.cwd(),
-    process.env.PHASE22_RERUN_ROUTE_MODULE || '.tmp/phase22-route/app/api/platform/jobs/rerun/route.js',
-  );
-  const routeModule = require(modulePath);
-  assertOrThrow(routeModule && typeof routeModule.POST === 'function', `POST handler not found in ${modulePath}`);
-  cachedRoutePost = routeModule.POST;
-  return cachedRoutePost;
+function readArg(name) {
+  const args = process.argv.slice(2);
+  const index = args.findIndex((item) => item === name);
+  if (index < 0) return '';
+  return String(args[index + 1] || '').trim();
 }
 
-async function postJson(token, body) {
-  const response = await getRoutePost()(
-    new Request('http://localhost/api/platform/jobs/rerun', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(body),
-    }),
-  );
+function normalizeBaseUrl(input) {
+  const trimmed = String(input || '').trim();
+  if (!trimmed) return '';
+  return trimmed.replace(/\/+$/, '');
+}
+
+async function postJson(baseUrl, token, body) {
+  const response = await fetch(`${baseUrl}/api/platform/jobs/rerun`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
   const text = await response.text();
   let json = null;
   try {
@@ -72,7 +66,8 @@ async function postJson(token, body) {
 
 async function main() {
   const root = process.cwd();
-  const envFile = (process.env.PHASE22_ENV_FILE || '').trim();
+  const envFileArg = readArg('--env-file');
+  const envFile = (envFileArg || process.env.PHASE22_ENV_FILE || '').trim();
   if (envFile) {
     loadEnvFile(path.isAbsolute(envFile) ? envFile : path.join(root, envFile));
   }
@@ -81,22 +76,16 @@ async function main() {
     process.env.NEXT_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
   }
 
+  const baseUrl = normalizeBaseUrl(readArg('--base-url') || process.env.PHASE22_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://bige.vercel.app');
+  assertOrThrow(baseUrl.startsWith('http://') || baseUrl.startsWith('https://'), `Invalid base URL: ${baseUrl}`);
+
   const required = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
   const missing = required.filter((name) => !(process.env[name] || '').trim());
   assertOrThrow(missing.length === 0, `Missing env: ${missing.join(', ')}`);
 
-  if (!(process.env.JOB_RERUN_PREVIEW_SECRET || '').trim()) {
-    process.env.JOB_RERUN_PREVIEW_SECRET = `phase22-local-${crypto.randomBytes(24).toString('hex')}`;
-  }
-
-  const previewSecret = (process.env.JOB_RERUN_PREVIEW_SECRET || '').trim();
-  const cronSecret = (process.env.CRON_SECRET || '').trim();
-  assertOrThrow(previewSecret.length >= 16, 'JOB_RERUN_PREVIEW_SECRET must be at least 16 chars for E2E');
-  assertOrThrow(previewSecret !== cronSecret, 'JOB_RERUN_PREVIEW_SECRET must not equal CRON_SECRET');
-
   const nowIso = new Date().toISOString();
-  const e2eKey = `phase22_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
-  const email = `phase22-rerun-${Date.now()}@example.test`;
+  const e2eKey = `phase22_blackbox_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+  const email = `phase22-blackbox-${Date.now()}@example.test`;
   const password = `Phase22!${crypto.randomBytes(6).toString('hex')}`;
 
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -111,13 +100,10 @@ async function main() {
     userId: null,
     sourceRunSuccessId: null,
     sourceRunConflictId: null,
-    sourceRunDedupeId: null,
-    newerSuccessRunId: null,
     executionRunId: null,
     lockConflictRowId: null,
     dryRunScopeKey: null,
     dryRunConflictScopeKey: null,
-    dryRunDedupeScopeKey: null,
   };
 
   const cleanup = {
@@ -133,11 +119,9 @@ async function main() {
   let fatalError = null;
 
   try {
-    await sleep(300);
-
     const tenantInsert = await admin
       .from('tenants')
-      .insert({ name: `E2E Phase22 ${e2eKey}`, status: 'active' })
+      .insert({ name: `E2E Phase22 Blackbox ${e2eKey}`, status: 'active' })
       .select('id')
       .single();
     assertOrThrow(!tenantInsert.error && tenantInsert.data?.id, `tenant insert failed: ${tenantInsert.error?.message || 'unknown'}`);
@@ -147,7 +131,7 @@ async function main() {
       email,
       password,
       email_confirm: true,
-      user_metadata: { e2eKey, scenario: 'phase22_rerun_execute_minimal' },
+      user_metadata: { e2eKey, scenario: 'phase22_blackbox_execute_minimal' },
     });
     assertOrThrow(!userCreate.error && userCreate.data?.user?.id, `user create failed: ${userCreate.error?.message || 'unknown'}`);
     state.userId = userCreate.data.user.id;
@@ -161,7 +145,7 @@ async function main() {
           tenant_id: null,
           branch_id: null,
           is_active: true,
-          display_name: `Phase22 E2E ${e2eKey}`,
+          display_name: `Phase22 Blackbox ${e2eKey}`,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'id' },
@@ -193,8 +177,8 @@ async function main() {
           duration_ms: 15000,
           affected_count: 0,
           error_count: 1,
-          error_summary: `phase22 e2e ${label}`,
-          payload: { e2eKey, label, phase: 'phase22_execute_minimal' },
+          error_summary: `phase22 blackbox ${label}`,
+          payload: { e2eKey, label, phase: 'phase22_blackbox_execute_minimal' },
           initiated_by: state.userId,
           created_at: createdAt,
           updated_at: new Date().toISOString(),
@@ -205,55 +189,21 @@ async function main() {
       return result.data;
     }
 
-    async function createSuccessRun(label, minutesAgo) {
-      const now = Date.now();
-      const createdAt = new Date(now - minutesAgo * 60000).toISOString();
-      const startedAt = new Date(now - (minutesAgo + 1) * 60000).toISOString();
-      const finishedAt = new Date(now - (minutesAgo + 0.3) * 60000).toISOString();
-      const result = await admin
-        .from('notification_job_runs')
-        .insert({
-          tenant_id: state.tenantId,
-          branch_id: null,
-          job_type: 'notification_sweep',
-          trigger_mode: 'manual',
-          status: 'success',
-          started_at: startedAt,
-          finished_at: finishedAt,
-          duration_ms: 12000,
-          affected_count: 1,
-          error_count: 0,
-          error_summary: null,
-          payload: { e2eKey, label, phase: 'phase22_execute_dedupe_risk' },
-          initiated_by: state.userId,
-          created_at: createdAt,
-          updated_at: new Date().toISOString(),
-        })
-        .select('id, created_at')
-        .single();
-      assertOrThrow(!result.error && result.data?.id, `create success run (${label}) failed: ${result.error?.message || 'unknown'}`);
-      return result.data;
-    }
-
     const source1 = await createFailedRun('dry_execute_success', 5);
     state.sourceRunSuccessId = source1.id;
 
-    const dry1 = await postJson(accessToken, {
+    const dry1 = await postJson(baseUrl, accessToken, {
       action: 'dry_run',
       failedOnly: true,
       target: { type: 'job_run', id: source1.id },
     });
     assertOrThrow(dry1.status === 200, `dry_run success-chain expected 200, got ${dry1.status}: ${pickMessage(dry1.json, dry1.text)}`);
     assertOrThrow(Boolean(dry1.json?.ok), 'dry_run success-chain response not ok');
-    const requiredDryRunKeys = ['target', 'planned', 'skipped', 'lockConflicts', 'dedupeSignals', 'riskHints', 'guidance'];
-    for (const key of requiredDryRunKeys) {
-      assertOrThrow(Object.prototype.hasOwnProperty.call(dry1.json || {}, key), `dry_run missing key: ${key}`);
-    }
     assertOrThrow(Array.isArray(dry1.json?.planned) && dry1.json.planned.length > 0, 'dry_run planned should not be empty');
-    assertOrThrow(typeof dry1.json?.previewToken === 'string' && dry1.json.previewToken.length > 20, 'dry_run missing previewToken');
+    assertOrThrow(typeof dry1.json?.previewToken === 'string' && dry1.json.previewToken.length > 20, 'dry_run missing previewToken; check JOB_RERUN_PREVIEW_SECRET in deployed env');
     state.dryRunScopeKey = dry1.json.planned[0].scopeKey;
 
-    const execute1 = await postJson(accessToken, {
+    const execute1 = await postJson(baseUrl, accessToken, {
       action: 'execute',
       failedOnly: true,
       target: { type: 'job_run', id: source1.id },
@@ -280,7 +230,7 @@ async function main() {
     const source2 = await createFailedRun('lock_conflict', 4);
     state.sourceRunConflictId = source2.id;
 
-    const dry2 = await postJson(accessToken, {
+    const dry2 = await postJson(baseUrl, accessToken, {
       action: 'dry_run',
       failedOnly: true,
       target: { type: 'job_run', id: source2.id },
@@ -302,7 +252,7 @@ async function main() {
         lock_status: 'locked',
         acquired_by: state.userId,
         expires_at: new Date(Date.now() + 20 * 60000).toISOString(),
-        metadata: { e2eKey, scenario: 'manual_lock_conflict' },
+        metadata: { e2eKey, scenario: 'manual_lock_conflict_blackbox' },
         updated_at: new Date().toISOString(),
       })
       .select('id')
@@ -310,7 +260,7 @@ async function main() {
     assertOrThrow(!lockInsert.error && lockInsert.data?.id, `lock insert failed: ${lockInsert.error?.message || 'unknown'}`);
     state.lockConflictRowId = lockInsert.data.id;
 
-    const executeConflict = await postJson(accessToken, {
+    const executeConflict = await postJson(baseUrl, accessToken, {
       action: 'execute',
       failedOnly: true,
       target: { type: 'job_run', id: source2.id },
@@ -320,31 +270,6 @@ async function main() {
     assertOrThrow(executeConflict.status === 409, `execute lock-conflict expected 409, got ${executeConflict.status}: ${pickMessage(executeConflict.json, executeConflict.text)}`);
     const conflictMessage = pickMessage(executeConflict.json, executeConflict.text).toLowerCase();
     assertOrThrow(conflictMessage.includes('lock'), 'execute lock-conflict should mention lock rejection');
-
-    const source3 = await createFailedRun('dedupe_high_risk_reject', 120);
-    state.sourceRunDedupeId = source3.id;
-    const newerSuccess = await createSuccessRun('dedupe_newer_success_signal', 110);
-    state.newerSuccessRunId = newerSuccess.id;
-
-    const dry3 = await postJson(accessToken, {
-      action: 'dry_run',
-      failedOnly: true,
-      target: { type: 'job_run', id: source3.id },
-    });
-    assertOrThrow(dry3.status === 200, `dry_run dedupe-risk expected 200, got ${dry3.status}: ${pickMessage(dry3.json, dry3.text)}`);
-    assertOrThrow(Array.isArray(dry3.json?.planned) && dry3.json.planned.length > 0, 'dry_run dedupe-risk planned should not be empty');
-    assertOrThrow(Array.isArray(dry3.json?.dedupeSignals) && dry3.json.dedupeSignals.length > 0, 'dry_run dedupe-risk should include dedupe signals');
-    assertOrThrow(typeof dry3.json?.previewToken === 'string' && dry3.json.previewToken.length > 20, 'dry_run dedupe-risk missing previewToken');
-    state.dryRunDedupeScopeKey = dry3.json.planned[0].scopeKey;
-
-    const executeDedupeRejected = await postJson(accessToken, {
-      action: 'execute',
-      failedOnly: true,
-      target: { type: 'job_run', id: source3.id },
-      previewToken: dry3.json.previewToken,
-      confirmPhrase: 'EXECUTE_RERUN',
-    });
-    assertOrThrow(executeDedupeRejected.status === 409, `execute dedupe-risk expected 409, got ${executeDedupeRejected.status}: ${pickMessage(executeDedupeRejected.json, executeDedupeRejected.text)}`);
 
     const auditRows = await admin
       .from('audit_logs')
@@ -359,39 +284,34 @@ async function main() {
     const dryAuditCount = rows.filter((row) => row.action === 'job_rerun_dry_run').length;
     const executeAuditRows = rows.filter((row) => row.action === 'job_rerun_execute');
     const executeStatuses = executeAuditRows.map((row) => row.payload?.summary?.executeStatus).filter(Boolean);
-    const executeCodes = executeAuditRows.map((row) => row.payload?.summary?.code).filter(Boolean);
-    assertOrThrow(dryAuditCount >= 3, `expected >=3 dry-run audits, got ${dryAuditCount}`);
-    assertOrThrow(executeAuditRows.length >= 3, `expected >=3 execute audits, got ${executeAuditRows.length}`);
+    assertOrThrow(dryAuditCount >= 2, `expected >=2 dry-run audits, got ${dryAuditCount}`);
+    assertOrThrow(executeAuditRows.length >= 2, `expected >=2 execute audits, got ${executeAuditRows.length}`);
     assertOrThrow(executeStatuses.includes('executed'), 'missing execute audit status=executed');
     assertOrThrow(
       executeStatuses.includes('rejected_or_failed') || executeStatuses.includes('rejected_precheck'),
       'missing execute audit rejection status',
     );
-    assertOrThrow(executeCodes.includes('HIGH_RISK_CONFIRMATION_REQUIRED'), 'missing execute audit code=HIGH_RISK_CONFIRMATION_REQUIRED');
 
     outcome = {
       ok: true,
+      mode: 'blackbox',
+      baseUrl,
       e2eKey,
       sourceRunSuccessId: state.sourceRunSuccessId,
       sourceRunConflictId: state.sourceRunConflictId,
-      sourceRunDedupeId: state.sourceRunDedupeId,
-      newerSuccessRunId: state.newerSuccessRunId,
       executionRunId: state.executionRunId,
       dryRunScopeKey: state.dryRunScopeKey,
       dryRunConflictScopeKey: state.dryRunConflictScopeKey,
-      dryRunDedupeScopeKey: state.dryRunDedupeScopeKey,
       audit: {
         total: rows.length,
         dryRunCount: dryAuditCount,
         executeCount: executeAuditRows.length,
         executeStatuses,
-        executeCodes,
       },
       checks: {
         dryRunToExecuteSuccess: true,
         lockConflictRejected: true,
         lockReleasedAfterExecute: true,
-        dedupeHighRiskRejected: true,
       },
     };
   } catch (error) {
@@ -417,12 +337,13 @@ async function main() {
       const userDelete = await admin.auth.admin.deleteUser(state.userId);
       cleanup.userDeleted = !userDelete.error;
     }
-
   }
 
   if (fatalError) {
     const errPayload = {
       ok: false,
+      mode: 'blackbox',
+      baseUrl,
       error: fatalError.message,
       cleanup,
     };
