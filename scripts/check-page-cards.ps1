@@ -23,8 +23,16 @@ foreach ($full in $pages) {
     ($txt -match '<div\b') -or
     ($txt -match '<form\b')
 
+  $importedComponents = [regex]::Matches($txt, 'import\s+([A-Z][A-Za-z0-9_]*)\s+from\s+"[^"]+"') |
+    ForEach-Object { $_.Groups[1].Value }
+  $returnedComponentMatch = [regex]::Match($txt, 'return\s*<([A-Z][A-Za-z0-9_]*)[^>]*\/>;')
+  $returnedComponent = if ($returnedComponentMatch.Success) { $returnedComponentMatch.Groups[1].Value } else { $null }
+
   $isProxyPage =
-    ($txt -match 'import\s+\w+\s+from\s+"\.\/ClientPage"') -and
+    (
+      ($txt -match 'import\s+\w+\s+from\s+"\.\/ClientPage"') -or
+      ($returnedComponent -and ($importedComponents -contains $returnedComponent))
+    ) -and
     ($txt -match 'return\s*<\w+[^>]*\/>;')
 
   if ($isProxyPage -and -not $hasUiMarkup) {
@@ -46,4 +54,3 @@ Write-Output ("Pages missing card classes: " + $noCard.Count)
 if ($noCard.Count -gt 0) {
   exit 1
 }
-
