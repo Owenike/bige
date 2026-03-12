@@ -127,6 +127,60 @@ type AnomalyInsightsSnapshot = {
   };
 };
 
+type TrendDirection = "up" | "flat" | "down";
+
+type TrendItem = {
+  currentCount: number;
+  previousCount: number;
+  countDelta: number;
+  currentRate: number;
+  previousRate: number;
+  rateDelta: number;
+  direction: TrendDirection;
+};
+
+type TrendTenantItem = TrendItem & {
+  tenantId: string;
+};
+
+type TrendChannelItem = TrendItem & {
+  channel: string;
+};
+
+type TrendAnomalyTypeItem = TrendItem & {
+  key: string;
+  label: string;
+  sample: string | null;
+};
+
+type TrendComparisonSnapshot = {
+  tenantId: string | null;
+  channel: DeliveryChannel | null;
+  currentWindow: {
+    from: string;
+    to: string;
+    durationMinutes: number;
+    totalDeliveries: number;
+    anomalyCount: number;
+    anomalyRate: number;
+  };
+  previousWindow: {
+    from: string;
+    to: string;
+    durationMinutes: number;
+    totalDeliveries: number;
+    anomalyCount: number;
+    anomalyRate: number;
+  };
+  overall: TrendItem;
+  topWorseningTenants: TrendTenantItem[];
+  topWorseningAnomalyTypes: TrendAnomalyTypeItem[];
+  topWorseningChannels: TrendChannelItem[];
+  rateDefinitions: {
+    anomalyRateDenominator: "total_deliveries_in_window";
+  };
+};
+
 type FilterState = {
   tenantId: string;
   channel: "" | DeliveryChannel;
@@ -170,6 +224,12 @@ function toPercent(value: number | null | undefined) {
   return `${Number(value || 0).toFixed(2)}%`;
 }
 
+function trendDirectionLabel(direction: TrendDirection) {
+  if (direction === "up") return "up";
+  if (direction === "down") return "down";
+  return "flat";
+}
+
 function buildTenantDrilldownHref(snapshot: OverviewSnapshot, tenantId: string) {
   const params = new URLSearchParams();
   params.set("from", snapshot.from);
@@ -197,6 +257,7 @@ export default function NotificationOverviewDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<OverviewSnapshot | null>(null);
   const [insights, setInsights] = useState<AnomalyInsightsSnapshot | null>(null);
+  const [trend, setTrend] = useState<TrendComparisonSnapshot | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -214,6 +275,7 @@ export default function NotificationOverviewDashboard() {
     setError(null);
     const overviewPath = `/api/platform/notifications/overview?${params.toString()}`;
     const anomaliesPath = `/api/platform/notifications/anomalies?${params.toString()}`;
+    const trendsPath = `/api/platform/notifications/trends?${params.toString()}&topLimit=8`;
     void Promise.all([
       fetch(overviewPath, { cache: "no-store" }).then(async (response) => {
         const payload = await response.json().catch(() => null);
@@ -231,8 +293,16 @@ export default function NotificationOverviewDashboard() {
         }
         return payload?.snapshot || payload?.data?.snapshot || null;
       }),
+      fetch(trendsPath, { cache: "no-store" }).then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          const message = payload?.error?.message || payload?.message || "Load trend comparison failed";
+          throw new Error(String(message));
+        }
+        return payload?.snapshot || payload?.data?.snapshot || null;
+      }),
     ])
-      .then(([overviewData, anomaliesData]) => {
+      .then(([overviewData, anomaliesData, trendsData]) => {
         if (!active) return;
         if (!overviewData) {
           setError("Overview payload is empty.");
@@ -244,8 +314,14 @@ export default function NotificationOverviewDashboard() {
           setLoading(false);
           return;
         }
+        if (!trendsData) {
+          setError("Trend comparison payload is empty.");
+          setLoading(false);
+          return;
+        }
         setSnapshot(overviewData as OverviewSnapshot);
         setInsights(anomaliesData as AnomalyInsightsSnapshot);
+        setTrend(trendsData as TrendComparisonSnapshot);
         setLoading(false);
       })
       .catch((fetchError) => {
@@ -473,6 +549,80 @@ export default function NotificationOverviewDashboard() {
                   </section>
                 </section>
               </>
+            ) : null}
+
+            {trend ? (
+              <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+                <h2 className="sectionTitle">Alert Trend Comparison (Current vs Previous Window)</h2>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Current {new Date(trend.currentWindow.from).toLocaleString()} ~ {new Date(trend.currentWindow.to).toLocaleString()} vs Previous{" "}
+                  {new Date(trend.previousWindow.from).toLocaleString()} ~ {new Date(trend.previousWindow.to).toLocaleString()}
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Overall anomalies: current {toCount(trend.currentWindow.anomalyCount)} / previous {toCount(trend.previousWindow.anomalyCount)} | delta{" "}
+                  {trend.overall.countDelta >= 0 ? "+" : ""}
+                  {toCount(trend.overall.countDelta)} | rate delta {trend.overall.rateDelta >= 0 ? "+" : ""}
+                  {toPercent(trend.overall.rateDelta)} ({trendDirectionLabel(trend.overall.direction)})
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Rate definition: anomaly rate denominator = total deliveries in each window.
+                </p>
+
+                <section className="fdTwoCol" style={{ marginTop: 10 }}>
+                  <section className="fdGlassSubPanel" style={{ padding: 12 }}>
+                    <h3 className="sectionTitle">Top Worsening Tenants</h3>
+                    <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                      {trend.topWorseningTenants.map((item) => (
+                        <div key={`trend-tenant-${item.tenantId}`} className="fdGlassSubPanel" style={{ padding: 10 }}>
+                          <p className="sub" style={{ marginTop: 0 }}>
+                            {item.tenantId}: {toCount(item.previousCount)} {"->"} {toCount(item.currentCount)} (delta{" "}
+                            {item.countDelta >= 0 ? "+" : ""}
+                            {toCount(item.countDelta)}, rate delta {item.rateDelta >= 0 ? "+" : ""}
+                            {toPercent(item.rateDelta)})
+                          </p>
+                          <div className="actions" style={{ marginTop: 6 }}>
+                            <Link className="fdPillBtn" href={buildTenantDrilldownHref(snapshot, item.tenantId)}>
+                              Open Tenant Drilldown
+                            </Link>
+                            <Link className="fdPillBtn" href={buildAlertWorkflowHref(snapshot, item.tenantId)}>
+                              Open Alert Workflow
+                            </Link>
+                          </div>
+                        </div>
+                      ))}
+                      {trend.topWorseningTenants.length === 0 ? <p className="fdGlassText">No worsening tenants in current window.</p> : null}
+                    </div>
+                  </section>
+
+                  <section className="fdGlassSubPanel" style={{ padding: 12 }}>
+                    <h3 className="sectionTitle">Top Worsening Anomaly Types</h3>
+                    <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                      {trend.topWorseningAnomalyTypes.map((item) => (
+                        <p key={`trend-type-${item.key}`} className="sub" style={{ marginTop: 0 }}>
+                          {item.label}: {toCount(item.previousCount)} {"->"} {toCount(item.currentCount)} (delta {item.countDelta >= 0 ? "+" : ""}
+                          {toCount(item.countDelta)}, rate delta {item.rateDelta >= 0 ? "+" : ""}
+                          {toPercent(item.rateDelta)}){item.sample ? ` | sample: ${item.sample}` : ""}
+                        </p>
+                      ))}
+                      {trend.topWorseningAnomalyTypes.length === 0 ? <p className="fdGlassText">No worsening anomaly types.</p> : null}
+                    </div>
+                    <h3 className="sectionTitle" style={{ marginTop: 12 }}>
+                      Worsening Channels
+                    </h3>
+                    <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                      {trend.topWorseningChannels.map((item) => (
+                        <p key={`trend-channel-${item.channel}`} className="sub" style={{ marginTop: 0 }}>
+                          {item.channel}: {toCount(item.previousCount)} {"->"} {toCount(item.currentCount)} (delta{" "}
+                          {item.countDelta >= 0 ? "+" : ""}
+                          {toCount(item.countDelta)}, rate delta {item.rateDelta >= 0 ? "+" : ""}
+                          {toPercent(item.rateDelta)})
+                        </p>
+                      ))}
+                      {trend.topWorseningChannels.length === 0 ? <p className="fdGlassText">No worsening channels.</p> : null}
+                    </div>
+                  </section>
+                </section>
+              </section>
             ) : null}
 
             {!hasData ? (

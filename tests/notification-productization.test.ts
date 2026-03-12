@@ -91,6 +91,10 @@ import {
   isNotificationAlertTransitionAllowed,
 } from "../lib/notification-alert-workflow";
 import {
+  buildNotificationTrendComparisonItem,
+  resolveNotificationTrendDirection,
+} from "../lib/notification-alert-trends";
+import {
   getNotificationRuntimeSimulationScenario,
   listNotificationRuntimeSimulationScenarios,
 } from "../lib/notification-runtime-simulation-fixtures";
@@ -1266,6 +1270,35 @@ test("alert workflow assignment change helper classifies assign/reassign/unassig
   });
   assert.equal(unchanged.kind, "unchanged");
   assert.equal(unchanged.changed, false);
+});
+
+test("trend comparison helper computes count/rate delta with direction", () => {
+  const compared = buildNotificationTrendComparisonItem({
+    currentCount: 10,
+    previousCount: 4,
+    currentDenominator: 20,
+    previousDenominator: 20,
+  });
+  assert.equal(compared.countDelta, 6);
+  assert.equal(compared.currentRate, 50);
+  assert.equal(compared.previousRate, 20);
+  assert.equal(compared.rateDelta, 30);
+  assert.equal(compared.direction, "up");
+
+  const flat = buildNotificationTrendComparisonItem({
+    currentCount: 3,
+    previousCount: 3,
+    currentDenominator: 10,
+    previousDenominator: 10,
+  });
+  assert.equal(flat.direction, "flat");
+});
+
+test("trend direction helper classifies up/down/flat with epsilon", () => {
+  assert.equal(resolveNotificationTrendDirection({ countDelta: 1, rateDelta: 0 }), "up");
+  assert.equal(resolveNotificationTrendDirection({ countDelta: -1, rateDelta: 0 }), "down");
+  assert.equal(resolveNotificationTrendDirection({ countDelta: 0, rateDelta: 0.01, epsilon: 0.05 }), "flat");
+  assert.equal(resolveNotificationTrendDirection({ countDelta: 0, rateDelta: -0.2, epsilon: 0.05 }), "down");
 });
 
 test("runtime integration contracts normalize event input and template fallback reason", () => {

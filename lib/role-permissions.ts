@@ -36,6 +36,7 @@ export const PERMISSION_ACTIONS = [
   "jobs.settings.write",
   "notifications.analytics.read",
   "notifications.anomalies.read",
+  "notifications.trends.read",
   "notifications.alerts.read",
   "notifications.alerts.write",
   "notifications.alerts.assign",
