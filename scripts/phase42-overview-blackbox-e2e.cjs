@@ -103,6 +103,18 @@ function getSnapshot(payload) {
   return null;
 }
 
+function toDateStringUtc(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function dayStartIsoUtc(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0)).toISOString();
+}
+
+function dayEndIsoUtc(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999)).toISOString();
+}
+
 async function main() {
   const root = process.cwd();
   const envFileArg = readArg('--env-file');
@@ -138,6 +150,10 @@ async function main() {
   const now = new Date();
   const from = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
   const to = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
+  const rollupDayDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  const rollupFrom = dayStartIsoUtc(rollupDayDate);
+  const rollupTo = dayEndIsoUtc(rollupDayDate);
+  const rollupDate = toDateStringUtc(rollupDayDate);
   const adminEmail = `phase42-admin-${Date.now()}@example.test`;
   const managerEmail = `phase42-manager-${Date.now()}@example.test`;
   const password = `Phase42!${crypto.randomBytes(6).toString('hex')}`;
@@ -163,6 +179,8 @@ async function main() {
     managerUserDeleted: false,
     remainingDeliveries: 0,
     remainingEvents: 0,
+    remainingDailyRollups: 0,
+    remainingAnomalyRollups: 0,
     remainingAudit: 0,
   };
   let fatalError = null;
@@ -369,7 +387,99 @@ async function main() {
     ]);
     assertOrThrow(!eventInsert.error, `event insert failed: ${eventInsert.error?.message || 'unknown'}`);
 
-    const overviewPath = `/api/platform/notifications/overview?tenantId=${state.tenantId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=2000`;
+    const rollupAt = new Date(new Date(rollupFrom).getTime() + 8 * 60 * 60 * 1000).toISOString();
+    const rollupDeliveries = await admin
+      .from('notification_deliveries')
+      .insert([
+        {
+          tenant_id: state.tenantId,
+          channel: 'email',
+          status: 'sent',
+          attempts: 1,
+          retry_count: 0,
+          created_at: rollupAt,
+          sent_at: rollupAt,
+          delivered_at: rollupAt,
+          dedupe_key: `${e2eKey}:rollup:d1`,
+          source_ref_type: 'phase42_e2e_rollup',
+          source_ref_id: 'rollup_d1',
+          payload: { e2eKey, label: 'rollup_d1' },
+          created_by: state.adminUserId,
+        },
+        {
+          tenant_id: state.tenantId,
+          channel: 'sms',
+          status: 'dead_letter',
+          attempts: 3,
+          retry_count: 2,
+          created_at: rollupAt,
+          failed_at: rollupAt,
+          dead_letter_at: rollupAt,
+          last_error: 'phase42 rollup dead letter',
+          error_message: 'phase42 rollup dead letter',
+          dedupe_key: `${e2eKey}:rollup:d2`,
+          source_ref_type: 'phase42_e2e_rollup',
+          source_ref_id: 'rollup_d2',
+          payload: { e2eKey, label: 'rollup_d2' },
+          created_by: state.adminUserId,
+        },
+        {
+          tenant_id: state.tenantId,
+          channel: 'line',
+          status: 'failed',
+          attempts: 2,
+          retry_count: 1,
+          created_at: rollupAt,
+          failed_at: rollupAt,
+          last_error: 'phase42 rollup failed',
+          error_message: 'phase42 rollup failed',
+          dedupe_key: `${e2eKey}:rollup:d3`,
+          source_ref_type: 'phase42_e2e_rollup',
+          source_ref_id: 'rollup_d3',
+          payload: { e2eKey, label: 'rollup_d3' },
+          created_by: state.adminUserId,
+        },
+      ])
+      .select('id, source_ref_id');
+    assertOrThrow(!rollupDeliveries.error, `rollup delivery insert failed: ${rollupDeliveries.error?.message || 'unknown'}`);
+
+    for (const row of rollupDeliveries.data || []) {
+      state.deliveryIds[row.source_ref_id] = row.id;
+    }
+    assertOrThrow(state.deliveryIds.rollup_d1 && state.deliveryIds.rollup_d2, 'missing rollup delivery ids');
+
+    const rollupEvents = await admin.from('notification_delivery_events').insert([
+      {
+        tenant_id: state.tenantId,
+        delivery_id: state.deliveryIds.rollup_d1,
+        channel: 'email',
+        event_type: 'opened',
+        event_at: rollupAt,
+        provider: 'phase42_provider',
+        provider_event_id: `${e2eKey}:rollup:opened`,
+      },
+      {
+        tenant_id: state.tenantId,
+        delivery_id: state.deliveryIds.rollup_d1,
+        channel: 'email',
+        event_type: 'clicked',
+        event_at: rollupAt,
+        provider: 'phase42_provider',
+        provider_event_id: `${e2eKey}:rollup:clicked`,
+      },
+      {
+        tenant_id: state.tenantId,
+        delivery_id: state.deliveryIds.rollup_d1,
+        channel: 'email',
+        event_type: 'conversion',
+        event_at: rollupAt,
+        provider: 'phase42_provider',
+        provider_event_id: `${e2eKey}:rollup:conversion`,
+      },
+    ]);
+    assertOrThrow(!rollupEvents.error, `rollup event insert failed: ${rollupEvents.error?.message || 'unknown'}`);
+
+    const overviewPath = `/api/platform/notifications/overview?tenantId=${state.tenantId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=2000&aggregationMode=auto`;
     const overview = await apiGetWithRetry({
       baseUrl,
       path: overviewPath,
@@ -385,6 +495,7 @@ async function main() {
 
     const snapshot = getSnapshot(overview.json);
     assertOrThrow(snapshot, 'overview snapshot missing');
+    assertOrThrow(snapshot.dataSource === 'raw', `overview auto(non-day) expected raw source, got ${snapshot.dataSource}`);
     assertOrThrow(snapshot.totalRows === 6, `overview totalRows expected 6, got ${snapshot.totalRows}`);
     assertOrThrow(snapshot.sent === 2, `overview sent expected 2, got ${snapshot.sent}`);
     assertOrThrow(snapshot.failed === 2, `overview failed expected 2, got ${snapshot.failed}`);
@@ -437,6 +548,98 @@ async function main() {
       'overview and analytics core counters mismatch',
     );
 
+    const refreshUnauthorized = await apiRequest({
+      method: 'POST',
+      baseUrl,
+      path: '/api/platform/notifications/rollups/refresh',
+      token: '',
+      bypassSecret,
+      body: { mode: 'rebuild', fromDate: rollupDate, toDate: rollupDate, tenantId: state.tenantId },
+    });
+    assertOrThrow(refreshUnauthorized.status === 401, `rollup refresh unauthorized expected 401, got ${refreshUnauthorized.status}`);
+
+    const refreshManagerDenied = await apiRequest({
+      method: 'POST',
+      baseUrl,
+      path: '/api/platform/notifications/rollups/refresh',
+      token: managerToken,
+      bypassSecret,
+      body: { mode: 'rebuild', fromDate: rollupDate, toDate: rollupDate, tenantId: state.tenantId },
+    });
+    assertOrThrow(refreshManagerDenied.status === 403, `rollup refresh manager denied expected 403, got ${refreshManagerDenied.status}`);
+
+    const refreshRebuild = await apiRequest({
+      method: 'POST',
+      baseUrl,
+      path: '/api/platform/notifications/rollups/refresh',
+      token: adminToken,
+      bypassSecret,
+      body: { mode: 'rebuild', fromDate: rollupDate, toDate: rollupDate, tenantId: state.tenantId },
+    });
+    assertOrThrow(
+      refreshRebuild.status === 200,
+      `rollup refresh rebuild expected 200, got ${refreshRebuild.status}: ${pickMessage(refreshRebuild.json, refreshRebuild.text)}`,
+    );
+
+    const rollupBasePath = `/api/platform/notifications/overview?tenantId=${state.tenantId}&from=${encodeURIComponent(
+      rollupFrom,
+    )}&to=${encodeURIComponent(rollupTo)}&limit=2000`;
+    const overviewRollup = await apiRequest({
+      method: 'GET',
+      baseUrl,
+      path: `${rollupBasePath}&aggregationMode=rollup`,
+      token: adminToken,
+      bypassSecret,
+    });
+    assertOrThrow(
+      overviewRollup.status === 200,
+      `overview rollup expected 200, got ${overviewRollup.status}: ${pickMessage(overviewRollup.json, overviewRollup.text)}`,
+    );
+    const rollupSnapshot = getSnapshot(overviewRollup.json);
+    assertOrThrow(rollupSnapshot, 'overview rollup snapshot missing');
+    assertOrThrow(rollupSnapshot.dataSource === 'rollup', `overview rollup dataSource expected rollup, got ${rollupSnapshot.dataSource}`);
+
+    const overviewRaw = await apiRequest({
+      method: 'GET',
+      baseUrl,
+      path: `${rollupBasePath}&aggregationMode=raw`,
+      token: adminToken,
+      bypassSecret,
+    });
+    assertOrThrow(
+      overviewRaw.status === 200,
+      `overview raw expected 200, got ${overviewRaw.status}: ${pickMessage(overviewRaw.json, overviewRaw.text)}`,
+    );
+    const rawSnapshot = getSnapshot(overviewRaw.json);
+    assertOrThrow(rawSnapshot, 'overview raw snapshot missing');
+    assertOrThrow(rawSnapshot.dataSource === 'raw', `overview raw dataSource expected raw, got ${rawSnapshot.dataSource}`);
+
+    const comparedKeys = ['sent', 'failed', 'deadLetter', 'opened', 'clicked', 'conversion'];
+    for (const key of comparedKeys) {
+      assertOrThrow(
+        Number(rollupSnapshot[key] || 0) === Number(rawSnapshot[key] || 0),
+        `overview rollup/raw mismatch on ${key}: rollup=${rollupSnapshot[key]} raw=${rawSnapshot[key]}`,
+      );
+    }
+
+    const overviewAutoRollup = await apiRequest({
+      method: 'GET',
+      baseUrl,
+      path: `${rollupBasePath}&aggregationMode=auto`,
+      token: adminToken,
+      bypassSecret,
+    });
+    assertOrThrow(
+      overviewAutoRollup.status === 200,
+      `overview auto(whole-day) expected 200, got ${overviewAutoRollup.status}: ${pickMessage(overviewAutoRollup.json, overviewAutoRollup.text)}`,
+    );
+    const autoRollupSnapshot = getSnapshot(overviewAutoRollup.json);
+    assertOrThrow(autoRollupSnapshot, 'overview auto(whole-day) snapshot missing');
+    assertOrThrow(
+      autoRollupSnapshot.dataSource === 'rollup',
+      `overview auto(whole-day) expected rollup source, got ${autoRollupSnapshot.dataSource}`,
+    );
+
     const unauthorized = await apiRequest({
       method: 'GET',
       baseUrl,
@@ -482,6 +685,10 @@ async function main() {
         channelFilter: true,
         tenantFilter: true,
         aggregateConsistency: true,
+        autoNonDayFallbackRaw: true,
+        autoWholeDayUsesRollup: true,
+        rawRollupReconciled: true,
+        rollupRefreshRebuild: true,
         unauthorizedDenied: true,
         managerDenied: true,
       },
@@ -501,6 +708,8 @@ async function main() {
     if (state.tenantId) {
       await admin.from('notification_delivery_events').delete().eq('tenant_id', state.tenantId);
       await admin.from('notification_deliveries').delete().eq('tenant_id', state.tenantId);
+      await admin.from('notification_delivery_anomaly_daily_rollups').delete().eq('tenant_id', state.tenantId);
+      await admin.from('notification_delivery_daily_rollups').delete().eq('tenant_id', state.tenantId);
       await admin.from('audit_logs').delete().eq('tenant_id', state.tenantId);
 
       const remainDeliveries = await admin
@@ -511,12 +720,22 @@ async function main() {
         .from('notification_delivery_events')
         .select('id', { count: 'exact', head: true })
         .eq('tenant_id', state.tenantId);
+      const remainDailyRollups = await admin
+        .from('notification_delivery_daily_rollups')
+        .select('day', { count: 'exact', head: true })
+        .eq('tenant_id', state.tenantId);
+      const remainAnomalyRollups = await admin
+        .from('notification_delivery_anomaly_daily_rollups')
+        .select('day', { count: 'exact', head: true })
+        .eq('tenant_id', state.tenantId);
       const remainAudit = await admin
         .from('audit_logs')
         .select('id', { count: 'exact', head: true })
         .eq('tenant_id', state.tenantId);
       cleanup.remainingDeliveries = remainDeliveries.count ?? 0;
       cleanup.remainingEvents = remainEvents.count ?? 0;
+      cleanup.remainingDailyRollups = remainDailyRollups.count ?? 0;
+      cleanup.remainingAnomalyRollups = remainAnomalyRollups.count ?? 0;
       cleanup.remainingAudit = remainAudit.count ?? 0;
 
       const tenantDelete = await admin.from('tenants').delete().eq('id', state.tenantId);

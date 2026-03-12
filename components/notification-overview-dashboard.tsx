@@ -60,6 +60,7 @@ type OverviewSnapshot = {
   to: string;
   tenantId: string | null;
   channel: DeliveryChannel | null;
+  dataSource: "raw" | "rollup";
   totalRows: number;
   sent: number;
   failed: number;
@@ -273,7 +274,7 @@ export default function NotificationOverviewDashboard() {
 
     setLoading(true);
     setError(null);
-    const overviewPath = `/api/platform/notifications/overview?${params.toString()}`;
+    const overviewPath = `/api/platform/notifications/overview?${params.toString()}&aggregationMode=auto`;
     const anomaliesPath = `/api/platform/notifications/anomalies?${params.toString()}`;
     const trendsPath = `/api/platform/notifications/trends?${params.toString()}&topLimit=8`;
     void Promise.all([
@@ -500,6 +501,9 @@ export default function NotificationOverviewDashboard() {
             <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
               <p className="sub" style={{ marginTop: 0 }}>
                 Rate definition: success/fail denominator = sent + failed; open/click/conversion denominator = sent.
+              </p>
+              <p className="sub" style={{ marginTop: 0 }}>
+                Aggregation source: {snapshot.dataSource === "rollup" ? "daily rollup" : "raw query fallback"}.
               </p>
             </section>
 

@@ -95,6 +95,7 @@ import {
   resolveNotificationTrendDirection,
 } from "../lib/notification-alert-trends";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
+import { canUseOverviewDailyRollupWindow } from "../lib/notification-overview-query";
 import {
   getNotificationRuntimeSimulationScenario,
   listNotificationRuntimeSimulationScenarios,
@@ -1322,6 +1323,11 @@ test("daily rollup window guard only allows whole-day UTC windows", () => {
     }),
     false,
   );
+});
+
+test("overview rollup guard only allows whole-day UTC windows", () => {
+  assert.equal(canUseOverviewDailyRollupWindow("2026-03-10T00:00:00.000Z", "2026-03-10T23:59:59.999Z"), true);
+  assert.equal(canUseOverviewDailyRollupWindow("2026-03-10T08:00:00.000Z", "2026-03-10T20:00:00.000Z"), false);
 });
 
 test("runtime integration contracts normalize event input and template fallback reason", () => {
