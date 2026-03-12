@@ -180,6 +180,16 @@ function buildTenantDrilldownHref(snapshot: OverviewSnapshot, tenantId: string) 
   return `/platform-admin/notifications-overview/${encodeURIComponent(tenantId)}?${params.toString()}`;
 }
 
+function buildAlertWorkflowHref(snapshot: OverviewSnapshot, tenantId?: string) {
+  const params = new URLSearchParams();
+  params.set("from", snapshot.from);
+  params.set("to", snapshot.to);
+  params.set("statuses", "open,acknowledged,investigating");
+  params.set("limit", "120");
+  if (tenantId) params.set("tenantId", tenantId);
+  return `/platform-admin/notifications-alerts?${params.toString()}`;
+}
+
 export default function NotificationOverviewDashboard() {
   const [filters, setFilters] = useState<FilterState>(() => defaultFilters());
   const [draft, setDraft] = useState<FilterState>(() => defaultFilters());
@@ -283,6 +293,9 @@ export default function NotificationOverviewDashboard() {
               </Link>
               <Link className="fdPillBtn" href="/platform-admin/notifications-ops">
                 Notification Ops
+              </Link>
+              <Link className="fdPillBtn" href={snapshot ? buildAlertWorkflowHref(snapshot) : "/platform-admin/notifications-alerts"}>
+                Alert Workflow
               </Link>
               <button type="button" className="fdPillBtn" onClick={() => setRefreshKey((current) => current + 1)} disabled={loading}>
                 Refresh
@@ -434,6 +447,9 @@ export default function NotificationOverviewDashboard() {
                           <div className="actions" style={{ marginTop: 6 }}>
                             <Link className="fdPillBtn" href={buildTenantDrilldownHref(snapshot, item.tenantId)}>
                               Open Tenant Drilldown
+                            </Link>
+                            <Link className="fdPillBtn" href={buildAlertWorkflowHref(snapshot, item.tenantId)}>
+                              Open Alert Workflow
                             </Link>
                           </div>
                         </div>

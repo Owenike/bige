@@ -19,7 +19,8 @@ npx tsc `
   lib/member-progress-events.ts `
   lib/member-progress-feedback.ts `
   lib/notification-productization.ts `
-  lib/notification-retry-policy.ts
+  lib/notification-retry-policy.ts `
+  lib/notification-alert-workflow.ts
 
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE

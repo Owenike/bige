@@ -86,6 +86,10 @@ import {
   toRuntimeTemplateResolutionContract,
 } from "../lib/notification-runtime-integration-contracts";
 import {
+  buildNotificationAlertDiffSummary,
+  isNotificationAlertTransitionAllowed,
+} from "../lib/notification-alert-workflow";
+import {
   getNotificationRuntimeSimulationScenario,
   listNotificationRuntimeSimulationScenarios,
 } from "../lib/notification-runtime-simulation-fixtures";
@@ -1205,6 +1209,32 @@ test("governance tone and truncation helpers stay stable", () => {
   assert.equal(resolveNotificationGovernanceTone("stale"), "danger");
   assert.equal(resolveNotificationGovernanceTone("no_runs"), "neutral");
   assert.equal(truncateDisplayValue("1234567890", 6).includes("…"), true);
+});
+
+test("alert workflow transition guard keeps state machine boundaries", () => {
+  assert.equal(isNotificationAlertTransitionAllowed("open", "acknowledged"), true);
+  assert.equal(isNotificationAlertTransitionAllowed("acknowledged", "resolved"), true);
+  assert.equal(isNotificationAlertTransitionAllowed("resolved", "open"), true);
+  assert.equal(isNotificationAlertTransitionAllowed("dismissed", "resolved"), false);
+  assert.equal(isNotificationAlertTransitionAllowed("resolved", "dismissed"), false);
+});
+
+test("alert workflow diff summary tracks before/after changes", () => {
+  const diff = buildNotificationAlertDiffSummary({
+    before: {
+      status: "open",
+      note: "old",
+      resolutionNote: null,
+    },
+    after: {
+      status: "resolved",
+      note: "old",
+      resolutionNote: "fixed provider config",
+    },
+  });
+  assert.equal(diff.changedCount, 2);
+  assert.equal(diff.changedKeys.includes("status"), true);
+  assert.equal(diff.changedKeys.includes("resolutionNote"), true);
 });
 
 test("runtime integration contracts normalize event input and template fallback reason", () => {
