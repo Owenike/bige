@@ -189,6 +189,9 @@ export default function PlatformJobsPage() {
               <Link className="fdPillBtn" href="/platform-admin">
                 Back
               </Link>
+              <Link className="fdPillBtn" href="/platform-admin/jobs/settings">
+                Settings
+              </Link>
               <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={() => void load(page)} disabled={loading}>
                 {loading ? "Loading..." : "Refresh"}
               </button>
@@ -335,4 +338,3 @@ export default function PlatformJobsPage() {
     </main>
   );
 }
-

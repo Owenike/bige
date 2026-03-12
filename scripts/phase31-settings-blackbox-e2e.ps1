@@ -17,7 +17,7 @@ function Import-DotEnv {
   }
 }
 
-$envFile = if ($env:PHASE22_ENV_FILE) { $env:PHASE22_ENV_FILE } elseif (Test-Path ".env.production.current") { ".env.production.current" } elseif (Test-Path ".env.preview.current") { ".env.preview.current" } else { ".env.preview" }
+$envFile = if ($env:PHASE31_ENV_FILE) { $env:PHASE31_ENV_FILE } elseif (Test-Path ".env.production.current") { ".env.production.current" } elseif (Test-Path ".env.preview.current") { ".env.preview.current" } else { ".env.preview" }
 Write-Host "Using env file: $envFile"
 Import-DotEnv $envFile
 Import-DotEnv ".env.local"
@@ -37,28 +37,36 @@ if ($missing.Count -gt 0) {
   throw "Missing env: $($missing -join ', ')"
 }
 
-if (-not $env:PHASE22_BASE_URL) {
-  $env:PHASE22_BASE_URL = "https://bige.vercel.app"
+if (-not $env:PHASE31_BASE_URL) {
+  if ($env:PHASE22_BASE_URL) {
+    $env:PHASE31_BASE_URL = $env:PHASE22_BASE_URL
+  } else {
+    $env:PHASE31_BASE_URL = "https://bige.vercel.app"
+  }
 }
 
-if (-not $env:PHASE22_VERCEL_BYPASS_SECRET -and $env:VERCEL_AUTOMATION_BYPASS_SECRET) {
-  $env:PHASE22_VERCEL_BYPASS_SECRET = $env:VERCEL_AUTOMATION_BYPASS_SECRET
+if (-not $env:PHASE31_VERCEL_BYPASS_SECRET) {
+  if ($env:PHASE22_VERCEL_BYPASS_SECRET) {
+    $env:PHASE31_VERCEL_BYPASS_SECRET = $env:PHASE22_VERCEL_BYPASS_SECRET
+  } elseif ($env:VERCEL_AUTOMATION_BYPASS_SECRET) {
+    $env:PHASE31_VERCEL_BYPASS_SECRET = $env:VERCEL_AUTOMATION_BYPASS_SECRET
+  }
 }
 
-Write-Host "Target base URL: $($env:PHASE22_BASE_URL)"
-$bypassEnabled = [bool]$env:PHASE22_VERCEL_BYPASS_SECRET
+Write-Host "Target base URL: $($env:PHASE31_BASE_URL)"
+$bypassEnabled = [bool]$env:PHASE31_VERCEL_BYPASS_SECRET
 Write-Host "Bypass secret provided: $bypassEnabled"
 
 $nodeArgs = @(
-  "scripts/phase22-rerun-blackbox-e2e.cjs",
-  "--base-url", $env:PHASE22_BASE_URL,
+  "scripts/phase31-settings-blackbox-e2e.cjs",
+  "--base-url", $env:PHASE31_BASE_URL,
   "--env-file", $envFile
 )
 if ($bypassEnabled) {
-  $nodeArgs += @("--bypass-secret", $env:PHASE22_VERCEL_BYPASS_SECRET)
+  $nodeArgs += @("--bypass-secret", $env:PHASE31_VERCEL_BYPASS_SECRET)
 }
 
 node @nodeArgs
 if ($LASTEXITCODE -ne 0) {
-  throw "Blackbox E2E runner failed with exit code $LASTEXITCODE"
+  throw "Settings blackbox E2E runner failed with exit code $LASTEXITCODE"
 }

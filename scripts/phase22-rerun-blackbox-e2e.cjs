@@ -45,12 +45,23 @@ function normalizeBaseUrl(input) {
   return trimmed.replace(/\/+$/, '');
 }
 
-async function postJson(baseUrl, token, body) {
-  const response = await fetch(`${baseUrl}/api/platform/jobs/rerun`, {
+function withBypass(url, bypassSecret) {
+  const secret = String(bypassSecret || '').trim();
+  if (!secret) return url;
+  const parsed = new URL(url);
+  parsed.searchParams.set('x-vercel-protection-bypass', secret);
+  parsed.searchParams.set('x-vercel-set-bypass-cookie', 'true');
+  return parsed.toString();
+}
+
+async function postJson(baseUrl, token, body, bypassSecret) {
+  const secret = String(bypassSecret || '').trim();
+  const response = await fetch(withBypass(`${baseUrl}/api/platform/jobs/rerun`, secret), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${token}`,
+      ...(secret ? { 'x-vercel-protection-bypass': secret } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -77,6 +88,9 @@ async function main() {
   }
 
   const baseUrl = normalizeBaseUrl(readArg('--base-url') || process.env.PHASE22_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://bige.vercel.app');
+  const bypassSecret = String(
+    readArg('--bypass-secret') || process.env.PHASE22_VERCEL_BYPASS_SECRET || process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '',
+  ).trim();
   assertOrThrow(baseUrl.startsWith('http://') || baseUrl.startsWith('https://'), `Invalid base URL: ${baseUrl}`);
 
   const required = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
@@ -196,7 +210,7 @@ async function main() {
       action: 'dry_run',
       failedOnly: true,
       target: { type: 'job_run', id: source1.id },
-    });
+    }, bypassSecret);
     assertOrThrow(dry1.status === 200, `dry_run success-chain expected 200, got ${dry1.status}: ${pickMessage(dry1.json, dry1.text)}`);
     assertOrThrow(Boolean(dry1.json?.ok), 'dry_run success-chain response not ok');
     assertOrThrow(Array.isArray(dry1.json?.planned) && dry1.json.planned.length > 0, 'dry_run planned should not be empty');
@@ -209,7 +223,7 @@ async function main() {
       target: { type: 'job_run', id: source1.id },
       previewToken: dry1.json.previewToken,
       confirmPhrase: 'EXECUTE_RERUN',
-    });
+    }, bypassSecret);
     assertOrThrow(execute1.status === 200, `execute success-chain expected 200, got ${execute1.status}: ${pickMessage(execute1.json, execute1.text)}`);
     assertOrThrow(Boolean(execute1.json?.ok), 'execute success-chain response not ok');
     assertOrThrow(Boolean(execute1.json?.result?.executionJobRunId), 'execute success-chain missing executionJobRunId');
@@ -234,7 +248,7 @@ async function main() {
       action: 'dry_run',
       failedOnly: true,
       target: { type: 'job_run', id: source2.id },
-    });
+    }, bypassSecret);
     assertOrThrow(dry2.status === 200, `dry_run lock-conflict expected 200, got ${dry2.status}: ${pickMessage(dry2.json, dry2.text)}`);
     assertOrThrow(Array.isArray(dry2.json?.planned) && dry2.json.planned.length > 0, 'dry_run lock-conflict planned should not be empty');
     assertOrThrow(typeof dry2.json?.previewToken === 'string' && dry2.json.previewToken.length > 20, 'dry_run lock-conflict missing previewToken');
@@ -266,7 +280,7 @@ async function main() {
       target: { type: 'job_run', id: source2.id },
       previewToken: dry2.json.previewToken,
       confirmPhrase: 'EXECUTE_RERUN',
-    });
+    }, bypassSecret);
     assertOrThrow(executeConflict.status === 409, `execute lock-conflict expected 409, got ${executeConflict.status}: ${pickMessage(executeConflict.json, executeConflict.text)}`);
     const conflictMessage = pickMessage(executeConflict.json, executeConflict.text).toLowerCase();
     assertOrThrow(conflictMessage.includes('lock'), 'execute lock-conflict should mention lock rejection');
@@ -296,6 +310,7 @@ async function main() {
       ok: true,
       mode: 'blackbox',
       baseUrl,
+      bypassEnabled: Boolean(bypassSecret),
       e2eKey,
       sourceRunSuccessId: state.sourceRunSuccessId,
       sourceRunConflictId: state.sourceRunConflictId,
@@ -344,6 +359,7 @@ async function main() {
       ok: false,
       mode: 'blackbox',
       baseUrl,
+      bypassEnabled: Boolean(bypassSecret),
       error: fatalError.message,
       cleanup,
     };
