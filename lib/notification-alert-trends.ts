@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createSupabaseAdminClient } from "./supabase/admin";
+import {
+  canUseDailyRollupWindow,
+  readNotificationDailyAnomalyRollups,
+  readNotificationDailyRollups,
+} from "./notification-rollup";
 import type { DeliveryChannel } from "./notification-ops";
+import { createSupabaseAdminClient } from "./supabase/admin";
 
 type DeliveryAnomalyRow = {
   tenant_id: string | null;
@@ -65,9 +70,12 @@ export type NotificationTrendAnomalyTypeItem = NotificationTrendComparisonItem &
   sample: string | null;
 };
 
+export type NotificationTrendAggregationMode = "auto" | "raw" | "rollup";
+
 export type NotificationAlertTrendComparisonSnapshot = {
   tenantId: string | null;
   channel: DeliveryChannel | null;
+  dataSource: "raw" | "rollup";
   currentWindow: {
     from: string;
     to: string;
@@ -153,12 +161,37 @@ function toAnomalyType(row: DeliveryAnomalyRow) {
   };
 }
 
+function toAnomalyTypeFromRollup(row: { anomaly_key: string; anomaly_label: string; sample_error: string | null }) {
+  const key = String(row.anomaly_key || "");
+  if (key.startsWith("CODE:")) {
+    const code = key.slice(5).trim() || String(row.anomaly_label || "").trim() || "unknown_code";
+    return {
+      key: `CODE:${code}`,
+      label: code,
+      sample: normalizeMessage(row.sample_error || ""),
+    };
+  }
+  const normalized = normalizeMessage(row.anomaly_label || row.sample_error || "");
+  const category = inferMessageCategory(normalized);
+  return {
+    key: `MSG:${category}`,
+    label: category,
+    sample: normalized || null,
+  };
+}
+
 function isInWindow(input: string, fromTime: number, toTime: number) {
   const date = new Date(input);
   const time = date.getTime();
   if (Number.isNaN(time)) return null;
   if (time < fromTime || time > toTime) return null;
   return time;
+}
+
+function isInDayWindow(input: string, fromDay: string, toDay: string) {
+  const day = input.slice(0, 10);
+  if (!day) return false;
+  return day >= fromDay && day <= toDay;
 }
 
 export function resolveNotificationTrendDirection(params: {
@@ -217,53 +250,137 @@ function sortByWorsening<T extends NotificationTrendComparisonItem>(rows: T[]) {
   );
 }
 
-export async function getNotificationAlertTrendComparison(params: {
-  supabase?: SupabaseClient;
-  tenantId?: string | null;
-  channel?: DeliveryChannel | null;
-  from?: string | null;
-  to?: string | null;
-  limit?: number;
-  topLimit?: number;
-}): Promise<{ ok: true; snapshot: NotificationAlertTrendComparisonSnapshot } | { ok: false; error: string }> {
-  const supabase = params.supabase ?? createSupabaseAdminClient();
-  const now = new Date();
-  const defaultFrom = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  const currentFromIso = normalizeIso(params.from, defaultFrom);
-  const currentToIso = normalizeIso(params.to, now.toISOString());
-
-  const currentFromTs = asTimestamp(currentFromIso, now.getTime() - 24 * 60 * 60 * 1000);
-  const currentToTs = asTimestamp(currentToIso, now.getTime());
-  if (currentToTs <= currentFromTs) {
-    return { ok: false, error: "Invalid window: to must be greater than from" };
+function buildSnapshotFromMaps(params: {
+  tenantId: string | null;
+  channel: DeliveryChannel | null;
+  currentFromIso: string;
+  currentToIso: string;
+  previousFromIso: string;
+  previousToIso: string;
+  durationMs: number;
+  topLimit: number;
+  currentTotalDeliveries: number;
+  previousTotalDeliveries: number;
+  currentAnomalyCount: number;
+  previousAnomalyCount: number;
+  tenantMap: Map<string, TenantAccumulator>;
+  channelMap: Map<string, ChannelAccumulator>;
+  anomalyTypeMap: Map<string, AnomalyTypeAccumulator>;
+  dataSource: "raw" | "rollup";
+}) {
+  for (const tenant of params.tenantMap.values()) {
+    tenant.currentDenominator = tenant.currentDenominator || params.currentTotalDeliveries;
+    tenant.previousDenominator = tenant.previousDenominator || params.previousTotalDeliveries;
+  }
+  for (const channel of params.channelMap.values()) {
+    channel.currentDenominator = channel.currentDenominator || params.currentTotalDeliveries;
+    channel.previousDenominator = channel.previousDenominator || params.previousTotalDeliveries;
+  }
+  for (const item of params.anomalyTypeMap.values()) {
+    item.currentDenominator = params.currentTotalDeliveries;
+    item.previousDenominator = params.previousTotalDeliveries;
   }
 
-  const durationMs = currentToTs - currentFromTs;
-  const previousToTs = currentFromTs - 1;
-  const previousFromTs = currentFromTs - durationMs;
-  const previousFromIso = new Date(previousFromTs).toISOString();
-  const previousToIso = new Date(previousToTs).toISOString();
-  const combinedFromIso = previousFromIso;
-  const combinedToIso = currentToIso;
+  const byTenant = sortByWorsening(
+    Array.from(params.tenantMap.values()).map((item) => ({
+      tenantId: item.tenantId,
+      ...buildNotificationTrendComparisonItem(item),
+    })),
+  );
 
-  const limit = Math.min(80000, Math.max(200, Number(params.limit || 12000)));
-  const topLimit = Math.min(30, Math.max(3, Number(params.topLimit || 10)));
+  const byAnomalyType = sortByWorsening(
+    Array.from(params.anomalyTypeMap.values()).map((item) => ({
+      key: item.key,
+      label: item.label,
+      sample: item.sample,
+      ...buildNotificationTrendComparisonItem(item),
+    })),
+  );
 
-  let anomalyQuery = supabase
+  const byChannel = sortByWorsening(
+    Array.from(params.channelMap.values()).map((item) => ({
+      channel: item.channel,
+      ...buildNotificationTrendComparisonItem(item),
+    })),
+  );
+
+  const topWorseningTenants = byTenant.filter((item) => item.direction === "up" && item.countDelta > 0).slice(0, params.topLimit);
+  const topWorseningAnomalyTypes = byAnomalyType
+    .filter((item) => item.direction === "up" && item.countDelta > 0)
+    .slice(0, params.topLimit);
+  const topWorseningChannels = byChannel.filter((item) => item.direction === "up" && item.countDelta > 0).slice(0, params.topLimit);
+
+  const overall = buildNotificationTrendComparisonItem({
+    currentCount: params.currentAnomalyCount,
+    previousCount: params.previousAnomalyCount,
+    currentDenominator: params.currentTotalDeliveries,
+    previousDenominator: params.previousTotalDeliveries,
+  });
+
+  return {
+    tenantId: params.tenantId,
+    channel: params.channel,
+    dataSource: params.dataSource,
+    currentWindow: {
+      from: params.currentFromIso,
+      to: params.currentToIso,
+      durationMinutes: Math.round(params.durationMs / 60000),
+      totalDeliveries: params.currentTotalDeliveries,
+      anomalyCount: params.currentAnomalyCount,
+      anomalyRate: toRate(params.currentAnomalyCount, params.currentTotalDeliveries),
+    },
+    previousWindow: {
+      from: params.previousFromIso,
+      to: params.previousToIso,
+      durationMinutes: Math.round(params.durationMs / 60000),
+      totalDeliveries: params.previousTotalDeliveries,
+      anomalyCount: params.previousAnomalyCount,
+      anomalyRate: toRate(params.previousAnomalyCount, params.previousTotalDeliveries),
+    },
+    overall,
+    byTenant,
+    byAnomalyType,
+    byChannel,
+    topWorseningTenants,
+    topWorseningAnomalyTypes,
+    topWorseningChannels,
+    rateDefinitions: {
+      anomalyRateDenominator: "total_deliveries_in_window" as const,
+    },
+  };
+}
+
+async function buildFromRaw(params: {
+  supabase: SupabaseClient;
+  tenantId?: string | null;
+  channel?: DeliveryChannel | null;
+  currentFromIso: string;
+  currentToIso: string;
+  previousFromIso: string;
+  previousToIso: string;
+  currentFromTs: number;
+  currentToTs: number;
+  previousFromTs: number;
+  previousToTs: number;
+  durationMs: number;
+  limit: number;
+  topLimit: number;
+}): Promise<{ ok: true; snapshot: NotificationAlertTrendComparisonSnapshot } | { ok: false; error: string }> {
+  let anomalyQuery = params.supabase
     .from("notification_deliveries")
     .select("tenant_id, channel, status, error_code, error_message, last_error, created_at")
     .in("status", ["dead_letter", "failed", "retrying"])
-    .gte("created_at", combinedFromIso)
-    .lte("created_at", combinedToIso)
+    .gte("created_at", params.previousFromIso)
+    .lte("created_at", params.currentToIso)
     .order("created_at", { ascending: false })
-    .limit(limit);
-  let volumeQuery = supabase
+    .limit(params.limit);
+  let volumeQuery = params.supabase
     .from("notification_deliveries")
     .select("tenant_id, channel, created_at")
-    .gte("created_at", combinedFromIso)
-    .lte("created_at", combinedToIso)
+    .gte("created_at", params.previousFromIso)
+    .lte("created_at", params.currentToIso)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .limit(params.limit);
 
   if (params.tenantId) {
     anomalyQuery = anomalyQuery.eq("tenant_id", params.tenantId);
@@ -291,8 +408,8 @@ export async function getNotificationAlertTrendComparison(params: {
   let previousAnomalyCount = 0;
 
   for (const row of volumes) {
-    const inCurrent = isInWindow(row.created_at, currentFromTs, currentToTs);
-    const inPrevious = isInWindow(row.created_at, previousFromTs, previousToTs);
+    const inCurrent = isInWindow(row.created_at, params.currentFromTs, params.currentToTs);
+    const inPrevious = isInWindow(row.created_at, params.previousFromTs, params.previousToTs);
     if (!inCurrent && !inPrevious) continue;
 
     const tenantId = row.tenant_id || "unknown";
@@ -315,8 +432,8 @@ export async function getNotificationAlertTrendComparison(params: {
   }
 
   for (const row of anomalies) {
-    const inCurrent = isInWindow(row.created_at, currentFromTs, currentToTs);
-    const inPrevious = isInWindow(row.created_at, previousFromTs, previousToTs);
+    const inCurrent = isInWindow(row.created_at, params.currentFromTs, params.currentToTs);
+    const inPrevious = isInWindow(row.created_at, params.previousFromTs, params.previousToTs);
     if (!inCurrent && !inPrevious) continue;
 
     const tenantId = row.tenant_id || "unknown";
@@ -343,86 +460,214 @@ export async function getNotificationAlertTrendComparison(params: {
     anomalyTypeMap.set(anomalyType.key, anomalyTypeItem);
   }
 
-  for (const tenant of tenantMap.values()) {
-    tenant.currentDenominator = tenant.currentDenominator || currentTotalDeliveries;
-    tenant.previousDenominator = tenant.previousDenominator || previousTotalDeliveries;
-  }
-  for (const channel of channelMap.values()) {
-    channel.currentDenominator = channel.currentDenominator || currentTotalDeliveries;
-    channel.previousDenominator = channel.previousDenominator || previousTotalDeliveries;
-  }
-  for (const item of anomalyTypeMap.values()) {
-    item.currentDenominator = currentTotalDeliveries;
-    item.previousDenominator = previousTotalDeliveries;
-  }
+  return {
+    ok: true,
+    snapshot: buildSnapshotFromMaps({
+      tenantId: params.tenantId || null,
+      channel: params.channel || null,
+      currentFromIso: params.currentFromIso,
+      currentToIso: params.currentToIso,
+      previousFromIso: params.previousFromIso,
+      previousToIso: params.previousToIso,
+      durationMs: params.durationMs,
+      topLimit: params.topLimit,
+      currentTotalDeliveries,
+      previousTotalDeliveries,
+      currentAnomalyCount,
+      previousAnomalyCount,
+      tenantMap,
+      channelMap,
+      anomalyTypeMap,
+      dataSource: "raw",
+    }),
+  };
+}
 
-  const byTenant = sortByWorsening(
-    Array.from(tenantMap.values()).map((item) => ({
-      tenantId: item.tenantId,
-      ...buildNotificationTrendComparisonItem(item),
-    })),
-  );
-
-  const byAnomalyType = sortByWorsening(
-    Array.from(anomalyTypeMap.values()).map((item) => ({
-      key: item.key,
-      label: item.label,
-      sample: item.sample,
-      ...buildNotificationTrendComparisonItem(item),
-    })),
-  );
-
-  const byChannel = sortByWorsening(
-    Array.from(channelMap.values()).map((item) => ({
-      channel: item.channel,
-      ...buildNotificationTrendComparisonItem(item),
-    })),
-  );
-
-  const topWorseningTenants = byTenant.filter((item) => item.direction === "up" && item.countDelta > 0).slice(0, topLimit);
-  const topWorseningAnomalyTypes = byAnomalyType
-    .filter((item) => item.direction === "up" && item.countDelta > 0)
-    .slice(0, topLimit);
-  const topWorseningChannels = byChannel.filter((item) => item.direction === "up" && item.countDelta > 0).slice(0, topLimit);
-
-  const overall = buildNotificationTrendComparisonItem({
-    currentCount: currentAnomalyCount,
-    previousCount: previousAnomalyCount,
-    currentDenominator: currentTotalDeliveries,
-    previousDenominator: previousTotalDeliveries,
+async function buildFromRollup(params: {
+  supabase: SupabaseClient;
+  tenantId?: string | null;
+  channel?: DeliveryChannel | null;
+  currentFromIso: string;
+  currentToIso: string;
+  previousFromIso: string;
+  previousToIso: string;
+  durationMs: number;
+  topLimit: number;
+}): Promise<{ ok: true; snapshot: NotificationAlertTrendComparisonSnapshot } | { ok: false; error: string }> {
+  const baseRowsResult = await readNotificationDailyRollups({
+    supabase: params.supabase,
+    fromIso: params.previousFromIso,
+    toIso: params.currentToIso,
+    tenantId: params.tenantId || null,
+    channel: params.channel || null,
   });
+  if ("error" in baseRowsResult) return { ok: false, error: baseRowsResult.error };
+
+  const anomalyRowsResult = await readNotificationDailyAnomalyRollups({
+    supabase: params.supabase,
+    fromIso: params.previousFromIso,
+    toIso: params.currentToIso,
+    tenantId: params.tenantId || null,
+    channel: params.channel || null,
+  });
+  if ("error" in anomalyRowsResult) return { ok: false, error: anomalyRowsResult.error };
+
+  const tenantMap = new Map<string, TenantAccumulator>();
+  const anomalyTypeMap = new Map<string, AnomalyTypeAccumulator>();
+  const channelMap = new Map<string, ChannelAccumulator>();
+
+  const currentFromDay = params.currentFromIso.slice(0, 10);
+  const currentToDay = params.currentToIso.slice(0, 10);
+  const previousFromDay = params.previousFromIso.slice(0, 10);
+  const previousToDay = params.previousToIso.slice(0, 10);
+
+  let currentTotalDeliveries = 0;
+  let previousTotalDeliveries = 0;
+  let currentAnomalyCount = 0;
+  let previousAnomalyCount = 0;
+
+  for (const row of baseRowsResult.rows) {
+    const rowDay = String(row.day || "").slice(0, 10);
+    const inCurrent = isInDayWindow(rowDay, currentFromDay, currentToDay);
+    const inPrevious = isInDayWindow(rowDay, previousFromDay, previousToDay);
+    if (!inCurrent && !inPrevious) continue;
+
+    const tenantId = row.tenant_id || "unknown";
+    const tenant = tenantMap.get(tenantId) || { ...createAccumulator(), tenantId };
+    const channel = String(row.channel || "unknown");
+    const channelItem = channelMap.get(channel) || { ...createAccumulator(), channel };
+    const deliveryTotal = Number(row.total_count || 0);
+    const anomalyCount = Number(row.anomaly_count || 0);
+
+    if (inCurrent) {
+      currentTotalDeliveries += deliveryTotal;
+      currentAnomalyCount += anomalyCount;
+      tenant.currentDenominator += deliveryTotal;
+      tenant.currentCount += anomalyCount;
+      channelItem.currentDenominator += deliveryTotal;
+      channelItem.currentCount += anomalyCount;
+    } else if (inPrevious) {
+      previousTotalDeliveries += deliveryTotal;
+      previousAnomalyCount += anomalyCount;
+      tenant.previousDenominator += deliveryTotal;
+      tenant.previousCount += anomalyCount;
+      channelItem.previousDenominator += deliveryTotal;
+      channelItem.previousCount += anomalyCount;
+    }
+
+    tenantMap.set(tenantId, tenant);
+    channelMap.set(channel, channelItem);
+  }
+
+  for (const row of anomalyRowsResult.rows) {
+    const rowDay = String(row.day || "").slice(0, 10);
+    const inCurrent = isInDayWindow(rowDay, currentFromDay, currentToDay);
+    const inPrevious = isInDayWindow(rowDay, previousFromDay, previousToDay);
+    if (!inCurrent && !inPrevious) continue;
+
+    const normalizedType = toAnomalyTypeFromRollup(row);
+    const anomalyTypeItem = anomalyTypeMap.get(normalizedType.key) || { ...createAccumulator(), ...normalizedType };
+    const count = Number(row.anomaly_count || 0);
+
+    if (inCurrent) anomalyTypeItem.currentCount += count;
+    else if (inPrevious) anomalyTypeItem.previousCount += count;
+    anomalyTypeMap.set(normalizedType.key, anomalyTypeItem);
+  }
 
   return {
     ok: true,
-    snapshot: {
+    snapshot: buildSnapshotFromMaps({
       tenantId: params.tenantId || null,
       channel: params.channel || null,
-      currentWindow: {
-        from: currentFromIso,
-        to: currentToIso,
-        durationMinutes: Math.round(durationMs / 60000),
-        totalDeliveries: currentTotalDeliveries,
-        anomalyCount: currentAnomalyCount,
-        anomalyRate: toRate(currentAnomalyCount, currentTotalDeliveries),
-      },
-      previousWindow: {
-        from: previousFromIso,
-        to: previousToIso,
-        durationMinutes: Math.round(durationMs / 60000),
-        totalDeliveries: previousTotalDeliveries,
-        anomalyCount: previousAnomalyCount,
-        anomalyRate: toRate(previousAnomalyCount, previousTotalDeliveries),
-      },
-      overall,
-      byTenant,
-      byAnomalyType,
-      byChannel,
-      topWorseningTenants,
-      topWorseningAnomalyTypes,
-      topWorseningChannels,
-      rateDefinitions: {
-        anomalyRateDenominator: "total_deliveries_in_window",
-      },
-    },
+      currentFromIso: params.currentFromIso,
+      currentToIso: params.currentToIso,
+      previousFromIso: params.previousFromIso,
+      previousToIso: params.previousToIso,
+      durationMs: params.durationMs,
+      topLimit: params.topLimit,
+      currentTotalDeliveries,
+      previousTotalDeliveries,
+      currentAnomalyCount,
+      previousAnomalyCount,
+      tenantMap,
+      channelMap,
+      anomalyTypeMap,
+      dataSource: "rollup",
+    }),
   };
+}
+
+export async function getNotificationAlertTrendComparison(params: {
+  supabase?: SupabaseClient;
+  tenantId?: string | null;
+  channel?: DeliveryChannel | null;
+  from?: string | null;
+  to?: string | null;
+  limit?: number;
+  topLimit?: number;
+  aggregationMode?: NotificationTrendAggregationMode;
+}): Promise<{ ok: true; snapshot: NotificationAlertTrendComparisonSnapshot } | { ok: false; error: string }> {
+  const supabase = params.supabase ?? createSupabaseAdminClient();
+  const now = new Date();
+  const defaultFrom = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const currentFromIso = normalizeIso(params.from, defaultFrom);
+  const currentToIso = normalizeIso(params.to, now.toISOString());
+
+  const currentFromTs = asTimestamp(currentFromIso, now.getTime() - 24 * 60 * 60 * 1000);
+  const currentToTs = asTimestamp(currentToIso, now.getTime());
+  if (currentToTs <= currentFromTs) return { ok: false, error: "Invalid window: to must be greater than from" };
+
+  const durationMs = currentToTs - currentFromTs;
+  const previousToTs = currentFromTs - 1;
+  const previousFromTs = currentFromTs - durationMs;
+  const previousFromIso = new Date(previousFromTs).toISOString();
+  const previousToIso = new Date(previousToTs).toISOString();
+
+  const mode = params.aggregationMode || "auto";
+  const canUseRollup = canUseDailyRollupWindow({
+    currentFromIso,
+    currentToIso,
+    previousFromIso,
+    previousToIso,
+  });
+  const shouldUseRollup = mode === "rollup" || (mode === "auto" && canUseRollup);
+
+  if (shouldUseRollup) {
+    if (!canUseRollup) {
+      if (mode === "rollup") {
+        return { ok: false, error: "Rollup mode requires whole-day windows (UTC 00:00:00 to 23:59:59)." };
+      }
+    } else {
+      const rollup = await buildFromRollup({
+        supabase,
+        tenantId: params.tenantId || null,
+        channel: params.channel || null,
+        currentFromIso,
+        currentToIso,
+        previousFromIso,
+        previousToIso,
+        durationMs,
+        topLimit: Math.min(30, Math.max(3, Number(params.topLimit || 10))),
+      });
+      if (rollup.ok) return rollup;
+      if (mode === "rollup") return rollup;
+    }
+  }
+
+  return buildFromRaw({
+    supabase,
+    tenantId: params.tenantId || null,
+    channel: params.channel || null,
+    currentFromIso,
+    currentToIso,
+    previousFromIso,
+    previousToIso,
+    currentFromTs,
+    currentToTs,
+    previousFromTs,
+    previousToTs,
+    durationMs,
+    limit: Math.min(80000, Math.max(200, Number(params.limit || 12000))),
+    topLimit: Math.min(30, Math.max(3, Number(params.topLimit || 10))),
+  });
 }

@@ -13,6 +13,7 @@ const querySchema = z.object({
   to: z.string().trim().datetime().optional(),
   limit: z.coerce.number().int().min(200).max(80000).optional(),
   topLimit: z.coerce.number().int().min(3).max(30).optional(),
+  aggregationMode: z.enum(["auto", "raw", "rollup"]).optional(),
 });
 
 export async function GET(request: Request) {
@@ -29,6 +30,7 @@ export async function GET(request: Request) {
     to: params.get("to") || undefined,
     limit: params.get("limit") || undefined,
     topLimit: params.get("topLimit") || undefined,
+    aggregationMode: params.get("aggregationMode") || undefined,
   });
   if (!parsed.success) return apiError(400, "FORBIDDEN", parsed.error.issues[0]?.message || "Invalid query");
 
@@ -39,6 +41,7 @@ export async function GET(request: Request) {
     to: parsed.data.to || null,
     limit: parsed.data.limit || 12000,
     topLimit: parsed.data.topLimit || 10,
+    aggregationMode: parsed.data.aggregationMode || "auto",
   });
   if (!compared.ok) return apiError(500, "INTERNAL_ERROR", compared.error);
 

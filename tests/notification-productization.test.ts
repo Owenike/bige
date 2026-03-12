@@ -94,6 +94,7 @@ import {
   buildNotificationTrendComparisonItem,
   resolveNotificationTrendDirection,
 } from "../lib/notification-alert-trends";
+import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
   getNotificationRuntimeSimulationScenario,
   listNotificationRuntimeSimulationScenarios,
@@ -1299,6 +1300,28 @@ test("trend direction helper classifies up/down/flat with epsilon", () => {
   assert.equal(resolveNotificationTrendDirection({ countDelta: -1, rateDelta: 0 }), "down");
   assert.equal(resolveNotificationTrendDirection({ countDelta: 0, rateDelta: 0.01, epsilon: 0.05 }), "flat");
   assert.equal(resolveNotificationTrendDirection({ countDelta: 0, rateDelta: -0.2, epsilon: 0.05 }), "down");
+});
+
+test("daily rollup window guard only allows whole-day UTC windows", () => {
+  assert.equal(
+    canUseDailyRollupWindow({
+      currentFromIso: "2026-03-10T00:00:00.000Z",
+      currentToIso: "2026-03-10T23:59:59.999Z",
+      previousFromIso: "2026-03-09T00:00:00.000Z",
+      previousToIso: "2026-03-09T23:59:59.999Z",
+    }),
+    true,
+  );
+
+  assert.equal(
+    canUseDailyRollupWindow({
+      currentFromIso: "2026-03-10T08:00:00.000Z",
+      currentToIso: "2026-03-11T07:59:59.000Z",
+      previousFromIso: "2026-03-09T08:00:00.000Z",
+      previousToIso: "2026-03-10T07:59:59.000Z",
+    }),
+    false,
+  );
 });
 
 test("runtime integration contracts normalize event input and template fallback reason", () => {
