@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isUtcDayBoundary, readNotificationDailyRollups } from "./notification-rollup";
 import { createSupabaseAdminClient } from "./supabase/admin";
 
 type DeliveryAnalyticsRow = {
@@ -11,10 +12,21 @@ type DeliveryAnalyticsRow = {
   dead_letter_at: string | null;
 };
 
+type EventAnalyticsRow = {
+  tenant_id: string | null;
+  channel: string;
+  event_type: string;
+  event_at: string;
+};
+
 export type NotificationDeliveryDailyStat = {
   day: string;
   sent: number;
   failed: number;
+  deadLetter: number;
+  opened: number;
+  clicked: number;
+  conversion: number;
   total: number;
   successRate: number;
   failRate: number;
@@ -28,8 +40,14 @@ export type NotificationDeliveryChannelStat = {
   pending: number;
   retrying: number;
   deadLetter: number;
+  opened: number;
+  clicked: number;
+  conversion: number;
   successRate: number;
   failRate: number;
+  openRate: number;
+  clickRate: number;
+  conversionRate: number;
 };
 
 export type NotificationDeliveryTenantStat = {
@@ -40,25 +58,56 @@ export type NotificationDeliveryTenantStat = {
   pending: number;
   retrying: number;
   deadLetter: number;
+  opened: number;
+  clicked: number;
+  conversion: number;
   successRate: number;
   failRate: number;
+  openRate: number;
+  clickRate: number;
+  conversionRate: number;
 };
+
+export type NotificationDeliveryAnalyticsAggregationMode = "auto" | "raw" | "rollup";
 
 export type NotificationDeliveryAnalyticsSnapshot = {
   from: string;
   to: string;
   tenantId: string | null;
+  dataSource: "raw" | "rollup";
   totalRows: number;
   sent: number;
   failed: number;
   pending: number;
   retrying: number;
   deadLetter: number;
+  opened: number;
+  clicked: number;
+  conversion: number;
   successRate: number;
   failRate: number;
+  openRate: number;
+  clickRate: number;
+  conversionRate: number;
+  rateDefinitions: {
+    successFailDenominator: "sent_plus_failed";
+    engagementDenominator: "sent";
+  };
   daily: NotificationDeliveryDailyStat[];
   byChannel: NotificationDeliveryChannelStat[];
   byTenant: NotificationDeliveryTenantStat[];
+};
+
+type DeliveryAnalyticsBucket = {
+  total: number;
+  sent: number;
+  failed: number;
+  pending: number;
+  retrying: number;
+  deadLetter: number;
+  opened: number;
+  clicked: number;
+  conversion: number;
 };
 
 function normalizeIso(input: string | null | undefined, fallback: string) {
@@ -79,7 +128,7 @@ function toRate(numerator: number, denominator: number) {
   return Math.round((numerator / denominator) * 10000) / 100;
 }
 
-function bucketInit() {
+function bucketInit(): DeliveryAnalyticsBucket {
   return {
     total: 0,
     sent: 0,
@@ -87,10 +136,13 @@ function bucketInit() {
     pending: 0,
     retrying: 0,
     deadLetter: 0,
+    opened: 0,
+    clicked: 0,
+    conversion: 0,
   };
 }
 
-function applyStatusBucket(bucket: ReturnType<typeof bucketInit>, status: string) {
+function applyStatusBucket(bucket: DeliveryAnalyticsBucket, status: string) {
   bucket.total += 1;
   if (status === "sent") bucket.sent += 1;
   if (status === "pending") bucket.pending += 1;
@@ -102,39 +154,183 @@ function applyStatusBucket(bucket: ReturnType<typeof bucketInit>, status: string
   }
 }
 
-export async function getNotificationDeliveryAnalytics(params: {
-  supabase?: SupabaseClient;
-  tenantId?: string | null;
-  from?: string | null;
-  to?: string | null;
-  limit?: number;
-}): Promise<{ ok: true; snapshot: NotificationDeliveryAnalyticsSnapshot } | { ok: false; error: string }> {
-  const supabase = params.supabase ?? createSupabaseAdminClient();
-  const now = new Date();
-  const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const fromIso = normalizeIso(params.from, defaultFrom);
-  const toIso = normalizeIso(params.to, now.toISOString());
-  const limit = Math.min(50000, Math.max(200, Number(params.limit || 10000)));
+function applyEventBucket(bucket: DeliveryAnalyticsBucket, eventType: string) {
+  if (eventType === "opened") bucket.opened += 1;
+  if (eventType === "clicked") bucket.clicked += 1;
+  if (eventType === "conversion") bucket.conversion += 1;
+}
 
-  let query = supabase
+function mergeRollupBucket(bucket: DeliveryAnalyticsBucket, row: {
+  total_count: number;
+  sent_count: number;
+  failed_count: number;
+  pending_count: number;
+  retrying_count: number;
+  dead_letter_count: number;
+  opened_count: number;
+  clicked_count: number;
+  conversion_count: number;
+}) {
+  bucket.total += Number(row.total_count || 0);
+  bucket.sent += Number(row.sent_count || 0);
+  bucket.failed += Number(row.failed_count || 0);
+  bucket.pending += Number(row.pending_count || 0);
+  bucket.retrying += Number(row.retrying_count || 0);
+  bucket.deadLetter += Number(row.dead_letter_count || 0);
+  bucket.opened += Number(row.opened_count || 0);
+  bucket.clicked += Number(row.clicked_count || 0);
+  bucket.conversion += Number(row.conversion_count || 0);
+}
+
+function toChannelStat(channel: string, bucket: DeliveryAnalyticsBucket): NotificationDeliveryChannelStat {
+  return {
+    channel,
+    total: bucket.total,
+    sent: bucket.sent,
+    failed: bucket.failed,
+    pending: bucket.pending,
+    retrying: bucket.retrying,
+    deadLetter: bucket.deadLetter,
+    opened: bucket.opened,
+    clicked: bucket.clicked,
+    conversion: bucket.conversion,
+    successRate: toRate(bucket.sent, bucket.sent + bucket.failed),
+    failRate: toRate(bucket.failed, bucket.sent + bucket.failed),
+    openRate: toRate(bucket.opened, bucket.sent),
+    clickRate: toRate(bucket.clicked, bucket.sent),
+    conversionRate: toRate(bucket.conversion, bucket.sent),
+  };
+}
+
+function toTenantStat(tenantId: string, bucket: DeliveryAnalyticsBucket): NotificationDeliveryTenantStat {
+  return {
+    tenantId,
+    total: bucket.total,
+    sent: bucket.sent,
+    failed: bucket.failed,
+    pending: bucket.pending,
+    retrying: bucket.retrying,
+    deadLetter: bucket.deadLetter,
+    opened: bucket.opened,
+    clicked: bucket.clicked,
+    conversion: bucket.conversion,
+    successRate: toRate(bucket.sent, bucket.sent + bucket.failed),
+    failRate: toRate(bucket.failed, bucket.sent + bucket.failed),
+    openRate: toRate(bucket.opened, bucket.sent),
+    clickRate: toRate(bucket.clicked, bucket.sent),
+    conversionRate: toRate(bucket.conversion, bucket.sent),
+  };
+}
+
+function toDailyStat(day: string, bucket: DeliveryAnalyticsBucket): NotificationDeliveryDailyStat {
+  return {
+    day,
+    sent: bucket.sent,
+    failed: bucket.failed,
+    deadLetter: bucket.deadLetter,
+    opened: bucket.opened,
+    clicked: bucket.clicked,
+    conversion: bucket.conversion,
+    total: bucket.sent + bucket.failed,
+    successRate: toRate(bucket.sent, bucket.sent + bucket.failed),
+    failRate: toRate(bucket.failed, bucket.sent + bucket.failed),
+  };
+}
+
+function buildSnapshot(params: {
+  fromIso: string;
+  toIso: string;
+  tenantId: string | null;
+  dataSource: "raw" | "rollup";
+  totalBucket: DeliveryAnalyticsBucket;
+  dayBuckets: Map<string, DeliveryAnalyticsBucket>;
+  channelBuckets: Map<string, DeliveryAnalyticsBucket>;
+  tenantBuckets: Map<string, DeliveryAnalyticsBucket>;
+}): NotificationDeliveryAnalyticsSnapshot {
+  const daily: NotificationDeliveryDailyStat[] = Array.from(params.dayBuckets.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([day, bucket]) => toDailyStat(day, bucket));
+
+  const byChannel: NotificationDeliveryChannelStat[] = Array.from(params.channelBuckets.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([channel, bucket]) => toChannelStat(channel, bucket));
+
+  const byTenant: NotificationDeliveryTenantStat[] = Array.from(params.tenantBuckets.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([tenantId, bucket]) => toTenantStat(tenantId, bucket));
+
+  return {
+    from: params.fromIso,
+    to: params.toIso,
+    tenantId: params.tenantId,
+    dataSource: params.dataSource,
+    totalRows: params.totalBucket.total,
+    sent: params.totalBucket.sent,
+    failed: params.totalBucket.failed,
+    pending: params.totalBucket.pending,
+    retrying: params.totalBucket.retrying,
+    deadLetter: params.totalBucket.deadLetter,
+    opened: params.totalBucket.opened,
+    clicked: params.totalBucket.clicked,
+    conversion: params.totalBucket.conversion,
+    successRate: toRate(params.totalBucket.sent, params.totalBucket.sent + params.totalBucket.failed),
+    failRate: toRate(params.totalBucket.failed, params.totalBucket.sent + params.totalBucket.failed),
+    openRate: toRate(params.totalBucket.opened, params.totalBucket.sent),
+    clickRate: toRate(params.totalBucket.clicked, params.totalBucket.sent),
+    conversionRate: toRate(params.totalBucket.conversion, params.totalBucket.sent),
+    rateDefinitions: {
+      successFailDenominator: "sent_plus_failed",
+      engagementDenominator: "sent",
+    },
+    daily,
+    byChannel,
+    byTenant,
+  };
+}
+
+export function canUseAnalyticsDailyRollupWindow(fromIso: string, toIso: string) {
+  return isUtcDayBoundary(fromIso, "start") && isUtcDayBoundary(toIso, "end");
+}
+
+async function getAnalyticsFromRaw(params: {
+  supabase: SupabaseClient;
+  tenantId?: string | null;
+  fromIso: string;
+  toIso: string;
+  limit: number;
+}): Promise<{ ok: true; snapshot: NotificationDeliveryAnalyticsSnapshot } | { ok: false; error: string }> {
+  let deliveryQuery = params.supabase
     .from("notification_deliveries")
     .select("tenant_id, channel, status, created_at, sent_at, failed_at, dead_letter_at")
-    .gte("created_at", fromIso)
-    .lte("created_at", toIso)
+    .gte("created_at", params.fromIso)
+    .lte("created_at", params.toIso)
     .order("created_at", { ascending: false })
-    .limit(limit);
-  if (params.tenantId) query = query.eq("tenant_id", params.tenantId);
+    .limit(params.limit);
+  if (params.tenantId) deliveryQuery = deliveryQuery.eq("tenant_id", params.tenantId);
 
-  const result = await query;
-  if (result.error) return { ok: false, error: result.error.message };
-  const rows = (result.data || []) as DeliveryAnalyticsRow[];
+  let eventQuery = params.supabase
+    .from("notification_delivery_events")
+    .select("tenant_id, channel, event_type, event_at")
+    .in("event_type", ["opened", "clicked", "conversion"])
+    .gte("event_at", params.fromIso)
+    .lte("event_at", params.toIso)
+    .order("event_at", { ascending: false })
+    .limit(params.limit);
+  if (params.tenantId) eventQuery = eventQuery.eq("tenant_id", params.tenantId);
+
+  const [deliveryResult, eventResult] = await Promise.all([deliveryQuery, eventQuery]);
+  if (deliveryResult.error) return { ok: false, error: deliveryResult.error.message };
+  if (eventResult.error) return { ok: false, error: eventResult.error.message };
+
+  const deliveryRows = (deliveryResult.data || []) as DeliveryAnalyticsRow[];
+  const eventRows = (eventResult.data || []) as EventAnalyticsRow[];
 
   const totalBucket = bucketInit();
-  const dayBuckets = new Map<string, ReturnType<typeof bucketInit>>();
-  const channelBuckets = new Map<string, ReturnType<typeof bucketInit>>();
-  const tenantBuckets = new Map<string, ReturnType<typeof bucketInit>>();
+  const dayBuckets = new Map<string, DeliveryAnalyticsBucket>();
+  const channelBuckets = new Map<string, DeliveryAnalyticsBucket>();
+  const tenantBuckets = new Map<string, DeliveryAnalyticsBucket>();
 
-  for (const row of rows) {
+  for (const row of deliveryRows) {
     const status = String(row.status || "");
     applyStatusBucket(totalBucket, status);
 
@@ -155,62 +351,133 @@ export async function getNotificationDeliveryAnalytics(params: {
     tenantBuckets.set(tenantId, tenantBucket);
   }
 
-  const daily: NotificationDeliveryDailyStat[] = Array.from(dayBuckets.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([day, bucket]) => ({
-      day,
-      sent: bucket.sent,
-      failed: bucket.failed,
-      total: bucket.sent + bucket.failed,
-      successRate: toRate(bucket.sent, bucket.sent + bucket.failed),
-      failRate: toRate(bucket.failed, bucket.sent + bucket.failed),
-    }));
+  for (const row of eventRows) {
+    const eventType = String(row.event_type || "");
+    applyEventBucket(totalBucket, eventType);
 
-  const byChannel: NotificationDeliveryChannelStat[] = Array.from(channelBuckets.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([channel, bucket]) => ({
-      channel,
-      total: bucket.total,
-      sent: bucket.sent,
-      failed: bucket.failed,
-      pending: bucket.pending,
-      retrying: bucket.retrying,
-      deadLetter: bucket.deadLetter,
-      successRate: toRate(bucket.sent, bucket.sent + bucket.failed),
-      failRate: toRate(bucket.failed, bucket.sent + bucket.failed),
-    }));
+    const day = dateKey(row.event_at);
+    const dayBucket = dayBuckets.get(day) || bucketInit();
+    applyEventBucket(dayBucket, eventType);
+    dayBuckets.set(day, dayBucket);
 
-  const byTenant: NotificationDeliveryTenantStat[] = Array.from(tenantBuckets.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([tenantId, bucket]) => ({
-      tenantId,
-      total: bucket.total,
-      sent: bucket.sent,
-      failed: bucket.failed,
-      pending: bucket.pending,
-      retrying: bucket.retrying,
-      deadLetter: bucket.deadLetter,
-      successRate: toRate(bucket.sent, bucket.sent + bucket.failed),
-      failRate: toRate(bucket.failed, bucket.sent + bucket.failed),
-    }));
+    const channel = String(row.channel || "unknown");
+    const channelBucket = channelBuckets.get(channel) || bucketInit();
+    applyEventBucket(channelBucket, eventType);
+    channelBuckets.set(channel, channelBucket);
+
+    const tenantId = row.tenant_id || "unknown";
+    const tenantBucket = tenantBuckets.get(tenantId) || bucketInit();
+    applyEventBucket(tenantBucket, eventType);
+    tenantBuckets.set(tenantId, tenantBucket);
+  }
 
   return {
     ok: true,
-    snapshot: {
-      from: fromIso,
-      to: toIso,
+    snapshot: buildSnapshot({
+      fromIso: params.fromIso,
+      toIso: params.toIso,
       tenantId: params.tenantId || null,
-      totalRows: totalBucket.total,
-      sent: totalBucket.sent,
-      failed: totalBucket.failed,
-      pending: totalBucket.pending,
-      retrying: totalBucket.retrying,
-      deadLetter: totalBucket.deadLetter,
-      successRate: toRate(totalBucket.sent, totalBucket.sent + totalBucket.failed),
-      failRate: toRate(totalBucket.failed, totalBucket.sent + totalBucket.failed),
-      daily,
-      byChannel,
-      byTenant,
-    },
+      dataSource: "raw",
+      totalBucket,
+      dayBuckets,
+      channelBuckets,
+      tenantBuckets,
+    }),
   };
+}
+
+async function getAnalyticsFromRollup(params: {
+  supabase: SupabaseClient;
+  tenantId?: string | null;
+  fromIso: string;
+  toIso: string;
+}): Promise<{ ok: true; snapshot: NotificationDeliveryAnalyticsSnapshot } | { ok: false; error: string }> {
+  const rollupRowsResult = await readNotificationDailyRollups({
+    supabase: params.supabase,
+    fromIso: params.fromIso,
+    toIso: params.toIso,
+    tenantId: params.tenantId || null,
+    channel: null,
+  });
+  if ("error" in rollupRowsResult) return { ok: false, error: rollupRowsResult.error };
+
+  const totalBucket = bucketInit();
+  const dayBuckets = new Map<string, DeliveryAnalyticsBucket>();
+  const channelBuckets = new Map<string, DeliveryAnalyticsBucket>();
+  const tenantBuckets = new Map<string, DeliveryAnalyticsBucket>();
+
+  for (const row of rollupRowsResult.rows) {
+    mergeRollupBucket(totalBucket, row);
+
+    const day = String(row.day || "").slice(0, 10);
+    const dayBucket = dayBuckets.get(day) || bucketInit();
+    mergeRollupBucket(dayBucket, row);
+    dayBuckets.set(day, dayBucket);
+
+    const channel = String(row.channel || "unknown");
+    const channelBucket = channelBuckets.get(channel) || bucketInit();
+    mergeRollupBucket(channelBucket, row);
+    channelBuckets.set(channel, channelBucket);
+
+    const tenantId = row.tenant_id || "unknown";
+    const tenantBucket = tenantBuckets.get(tenantId) || bucketInit();
+    mergeRollupBucket(tenantBucket, row);
+    tenantBuckets.set(tenantId, tenantBucket);
+  }
+
+  return {
+    ok: true,
+    snapshot: buildSnapshot({
+      fromIso: params.fromIso,
+      toIso: params.toIso,
+      tenantId: params.tenantId || null,
+      dataSource: "rollup",
+      totalBucket,
+      dayBuckets,
+      channelBuckets,
+      tenantBuckets,
+    }),
+  };
+}
+
+export async function getNotificationDeliveryAnalytics(params: {
+  supabase?: SupabaseClient;
+  tenantId?: string | null;
+  from?: string | null;
+  to?: string | null;
+  limit?: number;
+  aggregationMode?: NotificationDeliveryAnalyticsAggregationMode;
+}): Promise<{ ok: true; snapshot: NotificationDeliveryAnalyticsSnapshot } | { ok: false; error: string }> {
+  const supabase = params.supabase ?? createSupabaseAdminClient();
+  const now = new Date();
+  const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const fromIso = normalizeIso(params.from, defaultFrom);
+  const toIso = normalizeIso(params.to, now.toISOString());
+  const limit = Math.min(50000, Math.max(200, Number(params.limit || 10000)));
+  const mode = params.aggregationMode || "auto";
+
+  const canUseRollup = canUseAnalyticsDailyRollupWindow(fromIso, toIso);
+  const shouldUseRollup = mode === "rollup" || (mode === "auto" && canUseRollup);
+  if (shouldUseRollup) {
+    if (!canUseRollup) {
+      if (mode === "rollup") return { ok: false, error: "Rollup mode requires whole-day windows (UTC 00:00:00 to 23:59:59)." };
+    } else {
+      const rollup = await getAnalyticsFromRollup({
+        supabase,
+        tenantId: params.tenantId || null,
+        fromIso,
+        toIso,
+      });
+      if (rollup.ok) return rollup;
+      if (mode === "rollup") return rollup;
+    }
+  }
+
+  return getAnalyticsFromRaw({
+    supabase,
+    tenantId: params.tenantId || null,
+    fromIso,
+    toIso,
+    limit,
+  });
 }
