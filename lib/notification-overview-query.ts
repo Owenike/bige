@@ -19,6 +19,24 @@ type EventOverviewRow = {
   event_at: string;
 };
 
+type DeliveryAnomalyRow = {
+  id: string;
+  channel: string;
+  status: string;
+  error_code: string | null;
+  error_message: string | null;
+  last_error: string | null;
+  attempts: number;
+  retry_count: number;
+  max_attempts: number;
+  next_retry_at: string | null;
+  last_attempt_at: string | null;
+  failed_at: string | null;
+  dead_letter_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type OverviewBucket = {
   total: number;
   sent: number;
@@ -99,9 +117,64 @@ export type NotificationPerformanceOverviewSnapshot = {
   openRate: number;
   clickRate: number;
   conversionRate: number;
+  rateDefinitions: {
+    successFailDenominator: "sent_plus_failed";
+    engagementDenominator: "sent";
+  };
   daily: NotificationOverviewDailyStat[];
   byChannel: NotificationOverviewChannelStat[];
   byTenant: NotificationOverviewTenantStat[];
+};
+
+export type NotificationTenantAnomalyItem = {
+  id: string;
+  channel: string;
+  status: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+  lastError: string | null;
+  attempts: number;
+  retryCount: number;
+  maxAttempts: number;
+  nextRetryAt: string | null;
+  lastAttemptAt: string | null;
+  failedAt: string | null;
+  deadLetterAt: string | null;
+  occurredAt: string;
+};
+
+export type NotificationTenantDrilldownSnapshot = {
+  from: string;
+  to: string;
+  tenantId: string;
+  channel: DeliveryChannel | null;
+  totalRows: number;
+  sent: number;
+  failed: number;
+  pending: number;
+  retrying: number;
+  deadLetter: number;
+  opened: number;
+  clicked: number;
+  conversion: number;
+  successRate: number;
+  failRate: number;
+  openRate: number;
+  clickRate: number;
+  conversionRate: number;
+  rateDefinitions: {
+    successFailDenominator: "sent_plus_failed";
+    engagementDenominator: "sent";
+  };
+  daily: NotificationOverviewDailyStat[];
+  byChannel: NotificationOverviewChannelStat[];
+  recentAnomalies: NotificationTenantAnomalyItem[];
+  anomalySummary: {
+    total: number;
+    failed: number;
+    deadLetter: number;
+    retrying: number;
+  };
 };
 
 function normalizeIso(input: string | null | undefined, fallback: string) {
@@ -331,9 +404,105 @@ export async function getNotificationPerformanceOverview(params: {
       openRate: toRate(totalBucket.opened, totalBucket.sent),
       clickRate: toRate(totalBucket.clicked, totalBucket.sent),
       conversionRate: toRate(totalBucket.conversion, totalBucket.sent),
+      rateDefinitions: {
+        successFailDenominator: "sent_plus_failed",
+        engagementDenominator: "sent",
+      },
       daily,
       byChannel,
       byTenant,
+    },
+  };
+}
+
+export async function getNotificationTenantPerformanceDrilldown(params: {
+  supabase?: SupabaseClient;
+  tenantId: string;
+  channel?: DeliveryChannel | null;
+  from?: string | null;
+  to?: string | null;
+  limit?: number;
+  anomalyLimit?: number;
+}): Promise<{ ok: true; snapshot: NotificationTenantDrilldownSnapshot } | { ok: false; error: string }> {
+  const overview = await getNotificationPerformanceOverview({
+    supabase: params.supabase,
+    tenantId: params.tenantId,
+    channel: params.channel || null,
+    from: params.from || null,
+    to: params.to || null,
+    limit: params.limit || 10000,
+  });
+  if (!overview.ok) return overview;
+
+  const supabase = params.supabase ?? createSupabaseAdminClient();
+  const anomalyLimit = Math.min(120, Math.max(10, Number(params.anomalyLimit || 40)));
+  let anomalyQuery = supabase
+    .from("notification_deliveries")
+    .select("id, channel, status, error_code, error_message, last_error, attempts, retry_count, max_attempts, next_retry_at, last_attempt_at, failed_at, dead_letter_at, created_at, updated_at")
+    .eq("tenant_id", params.tenantId)
+    .in("status", ["failed", "dead_letter", "retrying"])
+    .gte("created_at", overview.snapshot.from)
+    .lte("created_at", overview.snapshot.to)
+    .order("updated_at", { ascending: false })
+    .limit(anomalyLimit);
+  if (params.channel) anomalyQuery = anomalyQuery.eq("channel", params.channel);
+  const anomaliesResult = await anomalyQuery;
+  if (anomaliesResult.error) return { ok: false, error: anomaliesResult.error.message };
+  const anomalies = (anomaliesResult.data || []) as DeliveryAnomalyRow[];
+
+  const recentAnomalies: NotificationTenantAnomalyItem[] = anomalies.map((row) => {
+    const occurredAt = row.dead_letter_at || row.failed_at || row.last_attempt_at || row.updated_at || row.created_at;
+    return {
+      id: row.id,
+      channel: row.channel,
+      status: row.status,
+      errorCode: row.error_code,
+      errorMessage: row.error_message,
+      lastError: row.last_error,
+      attempts: Number(row.attempts || 0),
+      retryCount: Number(row.retry_count || 0),
+      maxAttempts: Number(row.max_attempts || 0),
+      nextRetryAt: row.next_retry_at,
+      lastAttemptAt: row.last_attempt_at,
+      failedAt: row.failed_at,
+      deadLetterAt: row.dead_letter_at,
+      occurredAt,
+    };
+  });
+
+  const anomalySummary = {
+    total: recentAnomalies.length,
+    failed: recentAnomalies.filter((item) => item.status === "failed").length,
+    deadLetter: recentAnomalies.filter((item) => item.status === "dead_letter").length,
+    retrying: recentAnomalies.filter((item) => item.status === "retrying").length,
+  };
+
+  return {
+    ok: true,
+    snapshot: {
+      from: overview.snapshot.from,
+      to: overview.snapshot.to,
+      tenantId: params.tenantId,
+      channel: overview.snapshot.channel,
+      totalRows: overview.snapshot.totalRows,
+      sent: overview.snapshot.sent,
+      failed: overview.snapshot.failed,
+      pending: overview.snapshot.pending,
+      retrying: overview.snapshot.retrying,
+      deadLetter: overview.snapshot.deadLetter,
+      opened: overview.snapshot.opened,
+      clicked: overview.snapshot.clicked,
+      conversion: overview.snapshot.conversion,
+      successRate: overview.snapshot.successRate,
+      failRate: overview.snapshot.failRate,
+      openRate: overview.snapshot.openRate,
+      clickRate: overview.snapshot.clickRate,
+      conversionRate: overview.snapshot.conversionRate,
+      rateDefinitions: overview.snapshot.rateDefinitions,
+      daily: overview.snapshot.daily,
+      byChannel: overview.snapshot.byChannel,
+      recentAnomalies,
+      anomalySummary,
     },
   };
 }
