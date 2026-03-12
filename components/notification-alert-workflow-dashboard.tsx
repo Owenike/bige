@@ -20,6 +20,9 @@ type AlertItem = {
   summary: string;
   ownerUserId: string | null;
   assigneeUserId: string | null;
+  assignedAt: string | null;
+  assignedBy: string | null;
+  assignmentNote: string | null;
   note: string | null;
   resolutionNote: string | null;
   sourceData: Record<string, unknown>;
@@ -29,6 +32,14 @@ type AlertItem = {
   dismissedAt: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+type AssigneeOption = {
+  id: string;
+  tenantId: string | null;
+  displayName: string | null;
+  role: string;
+  isActive: boolean;
 };
 
 type TenantPriorityItem = {
@@ -60,6 +71,8 @@ type FilterState = {
 
 type AlertDraft = {
   status: AlertStatus;
+  assigneeUserId: string;
+  assignmentNote: string;
   note: string;
   resolutionNote: string;
 };
@@ -137,6 +150,7 @@ export default function NotificationAlertWorkflowDashboard() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [insights, setInsights] = useState<AnomalyInsightsSnapshot | null>(null);
   const [alertDrafts, setAlertDrafts] = useState<Record<string, AlertDraft>>({});
+  const [assigneesByTenant, setAssigneesByTenant] = useState<Record<string, AssigneeOption[]>>({});
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -183,6 +197,8 @@ export default function NotificationAlertWorkflowDashboard() {
           for (const item of alertsData) {
             next[item.id] = prev[item.id] || {
               status: item.status,
+              assigneeUserId: item.assigneeUserId || "",
+              assignmentNote: item.assignmentNote || "",
               note: item.note || "",
               resolutionNote: item.resolutionNote || "",
             };
@@ -201,6 +217,53 @@ export default function NotificationAlertWorkflowDashboard() {
       active = false;
     };
   }, [filters, refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    const tenantIds = Array.from(new Set(alerts.map((item) => item.tenantId))).filter(Boolean);
+    if (tenantIds.length === 0) {
+      setAssigneesByTenant({});
+      return () => {
+        active = false;
+      };
+    }
+
+    void Promise.all(
+      tenantIds.map(async (tenantId) => {
+        const response = await fetch(
+          `/api/platform/users?tenantId=${encodeURIComponent(tenantId)}&activeOnly=1&limit=200`,
+          { cache: "no-store" },
+        );
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) return [tenantId, []] as const;
+        const items = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.data?.items) ? payload.data.items : [];
+        const normalized = items
+          .map((row: Record<string, unknown>) => ({
+            id: String(row.id || ""),
+            tenantId: row.tenant_id ? String(row.tenant_id) : null,
+            displayName: row.display_name ? String(row.display_name) : null,
+            role: String(row.role || "unknown"),
+            isActive: Boolean(row.is_active),
+          }))
+          .filter((row: AssigneeOption) => row.id && row.isActive)
+          .sort((a: AssigneeOption, b: AssigneeOption) => {
+            const aLabel = `${a.displayName || ""}${a.id}`;
+            const bLabel = `${b.displayName || ""}${b.id}`;
+            return aLabel.localeCompare(bLabel);
+          });
+        return [tenantId, normalized] as const;
+      }),
+    ).then((rows) => {
+      if (!active) return;
+      const next: Record<string, AssigneeOption[]> = {};
+      for (const [tenantId, items] of rows) next[tenantId] = items;
+      setAssigneesByTenant(next);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [alerts]);
 
   const highPriorityOpenAlerts = useMemo(
     () => alerts.filter((item) => ["open", "acknowledged", "investigating"].includes(item.status) && (item.priority === "P1" || item.priority === "P2")),
@@ -267,6 +330,34 @@ export default function NotificationAlertWorkflowDashboard() {
       setRefreshKey((value) => value + 1);
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "Update alert failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function assignAlert(id: string) {
+    const draft = alertDrafts[id];
+    if (!draft) return;
+    setSubmitting(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/platform/notifications/alerts", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "assign_alert",
+          id,
+          assigneeUserId: draft.assigneeUserId || null,
+          assignmentNote: draft.assignmentNote,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(safeMessage(payload, "Assign alert failed"));
+      setMessage(`Alert ${id.slice(0, 8)} assignment updated`);
+      setRefreshKey((value) => value + 1);
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "Assign alert failed");
     } finally {
       setSubmitting(false);
     }
@@ -380,7 +471,8 @@ export default function NotificationAlertWorkflowDashboard() {
           <div className="fdDataGrid" style={{ marginTop: 8 }}>
             {highPriorityOpenAlerts.map((item) => (
               <p key={`high-${item.id}`} className="sub" style={{ marginTop: 0 }}>
-                [{item.priority}/{item.severity}] {item.status} - {item.tenantId} - {item.summary}
+                [{item.priority}/{item.severity}] {item.status} - {item.tenantId} - assignee{" "}
+                {item.assigneeUserId ? item.assigneeUserId : "unassigned"} - {item.summary}
               </p>
             ))}
             {highPriorityOpenAlerts.length === 0 ? <p className="fdGlassText">No open P1/P2 alerts in current scope.</p> : null}
@@ -416,7 +508,14 @@ export default function NotificationAlertWorkflowDashboard() {
           <h2 className="sectionTitle">Alert Backlog</h2>
           <div className="fdDataGrid" style={{ marginTop: 8 }}>
             {alerts.map((item) => {
-              const draft = alertDrafts[item.id] || { status: item.status, note: item.note || "", resolutionNote: item.resolutionNote || "" };
+              const draft = alertDrafts[item.id] || {
+                status: item.status,
+                assigneeUserId: item.assigneeUserId || "",
+                assignmentNote: item.assignmentNote || "",
+                note: item.note || "",
+                resolutionNote: item.resolutionNote || "",
+              };
+              const assigneeOptions = assigneesByTenant[item.tenantId] || [];
               return (
                 <div key={item.id} className="fdGlassSubPanel" style={{ padding: 10 }}>
                   <p className="sub" style={{ marginTop: 0 }}>
@@ -429,10 +528,53 @@ export default function NotificationAlertWorkflowDashboard() {
                     {item.summary}
                   </p>
                   <p className="sub" style={{ marginTop: 0 }}>
+                    assignee: {item.assigneeUserId || "unassigned"} | assigned_at:{" "}
+                    {item.assignedAt ? new Date(item.assignedAt).toLocaleString() : "-"} | assigned_by: {item.assignedBy || "-"}
+                  </p>
+                  <p className="sub" style={{ marginTop: 0 }}>
+                    assignment_note: {item.assignmentNote || "-"}
+                  </p>
+                  <p className="sub" style={{ marginTop: 0 }}>
                     updated: {new Date(item.updatedAt).toLocaleString()} | resolved:{" "}
                     {item.resolvedAt ? new Date(item.resolvedAt).toLocaleString() : "-"} | dismissed:{" "}
                     {item.dismissedAt ? new Date(item.dismissedAt).toLocaleString() : "-"}
                   </p>
+
+                  <div className="fdThreeCol" style={{ gap: 10, marginTop: 8 }}>
+                    <select
+                      className="input"
+                      value={draft.assigneeUserId}
+                      onChange={(event) =>
+                        setAlertDrafts((prev) => ({
+                          ...prev,
+                          [item.id]: { ...draft, assigneeUserId: event.target.value },
+                        }))
+                      }
+                    >
+                      <option value="">unassigned</option>
+                      {assigneeOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.displayName || option.id} ({option.role})
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="input"
+                      value={draft.assignmentNote}
+                      onChange={(event) =>
+                        setAlertDrafts((prev) => ({
+                          ...prev,
+                          [item.id]: { ...draft, assignmentNote: event.target.value },
+                        }))
+                      }
+                      placeholder="assignment note"
+                    />
+                    <div className="actions">
+                      <button type="button" className="fdPillBtn" onClick={() => void assignAlert(item.id)} disabled={submitting}>
+                        Save Assignment
+                      </button>
+                    </div>
+                  </div>
 
                   <div className="fdThreeCol" style={{ gap: 10, marginTop: 8 }}>
                     <select

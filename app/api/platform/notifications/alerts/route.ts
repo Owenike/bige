@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-context";
 import {
+  assignNotificationAlert,
   listNotificationAlerts,
   upsertNotificationAlertFromAnomaly,
   updateNotificationAlert,
@@ -15,6 +16,7 @@ const anomalyTypeSchema = z.enum(["tenant_priority", "reason_cluster", "delivery
 
 const querySchema = z.object({
   tenantId: uuidLikeSchema.optional(),
+  assigneeUserId: uuidLikeSchema.optional(),
   statuses: z.array(statusSchema).optional(),
   priorities: z.array(prioritySchema).optional(),
   severities: z.array(severitySchema).optional(),
@@ -33,6 +35,7 @@ const upsertBodySchema = z.object({
   summary: z.string().trim().min(1).max(1000),
   ownerUserId: uuidLikeSchema.optional().nullable(),
   assigneeUserId: uuidLikeSchema.optional().nullable(),
+  assignmentNote: z.string().trim().max(4000).optional().nullable(),
   note: z.string().trim().max(4000).optional().nullable(),
   sourceData: z.record(z.string(), z.unknown()).optional(),
 });
@@ -44,12 +47,20 @@ const updateBodySchema = z.object({
   summary: z.string().trim().max(1000).optional(),
   ownerUserId: uuidLikeSchema.optional().nullable(),
   assigneeUserId: uuidLikeSchema.optional().nullable(),
+  assignmentNote: z.string().trim().max(4000).optional().nullable(),
   note: z.string().trim().max(4000).optional().nullable(),
   resolutionNote: z.string().trim().max(4000).optional().nullable(),
   sourceDataPatch: z.record(z.string(), z.unknown()).optional(),
 });
 
-const putBodySchema = z.discriminatedUnion("action", [upsertBodySchema, updateBodySchema]);
+const assignBodySchema = z.object({
+  action: z.literal("assign_alert"),
+  id: uuidLikeSchema,
+  assigneeUserId: uuidLikeSchema.optional().nullable(),
+  assignmentNote: z.string().trim().max(4000).optional().nullable(),
+});
+
+const putBodySchema = z.discriminatedUnion("action", [upsertBodySchema, updateBodySchema, assignBodySchema]);
 
 function parseCsvParam(input: string | null) {
   if (!input) return [];
@@ -68,6 +79,7 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const parsed = querySchema.safeParse({
     tenantId: params.get("tenantId") || undefined,
+    assigneeUserId: params.get("assigneeUserId") || undefined,
     statuses: parseCsvParam(params.get("statuses")),
     priorities: parseCsvParam(params.get("priorities")),
     severities: parseCsvParam(params.get("severities")),
@@ -79,6 +91,7 @@ export async function GET(request: Request) {
 
   const listed = await listNotificationAlerts({
     tenantId: parsed.data.tenantId || null,
+    assigneeUserId: parsed.data.assigneeUserId || null,
     statuses: parsed.data.statuses || [],
     priorities: parsed.data.priorities || [],
     severities: parsed.data.severities || [],
@@ -97,12 +110,14 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const auth = await requireProfile(["platform_admin"], request);
   if (!auth.ok) return auth.response;
-  const permission = requirePermission(auth.context, "notifications.alerts.write");
-  if (!permission.ok) return permission.response;
 
   const body = await request.json().catch(() => null);
   const parsed = putBodySchema.safeParse(body || {});
   if (!parsed.success) return apiError(400, "FORBIDDEN", parsed.error.issues[0]?.message || "Invalid payload");
+
+  const requiredPermission = parsed.data.action === "assign_alert" ? "notifications.alerts.assign" : "notifications.alerts.write";
+  const permission = requirePermission(auth.context, requiredPermission);
+  if (!permission.ok) return permission.response;
 
   if (parsed.data.action === "upsert_from_anomaly") {
     const upserted = await upsertNotificationAlertFromAnomaly({
@@ -114,6 +129,7 @@ export async function PUT(request: Request) {
       summary: parsed.data.summary,
       ownerUserId: parsed.data.ownerUserId || null,
       assigneeUserId: parsed.data.assigneeUserId || null,
+      assignmentNote: parsed.data.assignmentNote || null,
       note: parsed.data.note || null,
       sourceData: parsed.data.sourceData || {},
       actorId: auth.context.userId,
@@ -128,12 +144,30 @@ export async function PUT(request: Request) {
     });
   }
 
+  if (parsed.data.action === "assign_alert") {
+    const assigned = await assignNotificationAlert({
+      id: parsed.data.id,
+      assigneeUserId: parsed.data.assigneeUserId || null,
+      assignmentNote: parsed.data.assignmentNote || null,
+      actorId: auth.context.userId,
+    });
+    if (!assigned.ok) return apiError(500, "INTERNAL_ERROR", assigned.error || "Assign alert failed");
+
+    return apiSuccess({
+      item: assigned.item,
+      before: assigned.before,
+      diffSummary: assigned.diffSummary,
+      assignment: assigned.assignment,
+    });
+  }
+
   const updated = await updateNotificationAlert({
     id: parsed.data.id,
     status: parsed.data.status,
     summary: parsed.data.summary,
     ownerUserId: parsed.data.ownerUserId,
     assigneeUserId: parsed.data.assigneeUserId,
+    assignmentNote: parsed.data.assignmentNote,
     note: parsed.data.note,
     resolutionNote: parsed.data.resolutionNote,
     sourceDataPatch: parsed.data.sourceDataPatch,

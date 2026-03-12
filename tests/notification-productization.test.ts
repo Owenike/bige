@@ -87,6 +87,7 @@ import {
 } from "../lib/notification-runtime-integration-contracts";
 import {
   buildNotificationAlertDiffSummary,
+  getNotificationAlertAssignmentChange,
   isNotificationAlertTransitionAllowed,
 } from "../lib/notification-alert-workflow";
 import {
@@ -1235,6 +1236,36 @@ test("alert workflow diff summary tracks before/after changes", () => {
   assert.equal(diff.changedCount, 2);
   assert.equal(diff.changedKeys.includes("status"), true);
   assert.equal(diff.changedKeys.includes("resolutionNote"), true);
+});
+
+test("alert workflow assignment change helper classifies assign/reassign/unassign", () => {
+  const assigned = getNotificationAlertAssignmentChange({
+    beforeAssigneeUserId: null,
+    afterAssigneeUserId: "11111111-1111-4111-8111-111111111111",
+  });
+  assert.equal(assigned.kind, "assigned");
+  assert.equal(assigned.changed, true);
+
+  const reassigned = getNotificationAlertAssignmentChange({
+    beforeAssigneeUserId: "11111111-1111-4111-8111-111111111111",
+    afterAssigneeUserId: "22222222-2222-4222-8222-222222222222",
+  });
+  assert.equal(reassigned.kind, "reassigned");
+  assert.equal(reassigned.changed, true);
+
+  const unassigned = getNotificationAlertAssignmentChange({
+    beforeAssigneeUserId: "11111111-1111-4111-8111-111111111111",
+    afterAssigneeUserId: null,
+  });
+  assert.equal(unassigned.kind, "unassigned");
+  assert.equal(unassigned.changed, true);
+
+  const unchanged = getNotificationAlertAssignmentChange({
+    beforeAssigneeUserId: "11111111-1111-4111-8111-111111111111",
+    afterAssigneeUserId: "11111111-1111-4111-8111-111111111111",
+  });
+  assert.equal(unchanged.kind, "unchanged");
+  assert.equal(unchanged.changed, false);
 });
 
 test("runtime integration contracts normalize event input and template fallback reason", () => {

@@ -17,6 +17,9 @@ type NotificationAlertRow = {
   summary: string;
   owner_user_id: string | null;
   assignee_user_id: string | null;
+  assigned_at: string | null;
+  assigned_by: string | null;
+  assignment_note: string | null;
   note: string | null;
   resolution_note: string | null;
   source_data: Record<string, unknown> | null;
@@ -41,6 +44,9 @@ export type NotificationAlertItem = {
   summary: string;
   ownerUserId: string | null;
   assigneeUserId: string | null;
+  assignedAt: string | null;
+  assignedBy: string | null;
+  assignmentNote: string | null;
   note: string | null;
   resolutionNote: string | null;
   sourceData: Record<string, unknown>;
@@ -57,6 +63,7 @@ export type NotificationAlertItem = {
 type ListNotificationAlertsParams = {
   supabase?: SupabaseClient;
   tenantId?: string | null;
+  assigneeUserId?: string | null;
   statuses?: NotificationAlertStatus[];
   priorities?: NotificationAlertPriority[];
   severities?: NotificationAlertSeverity[];
@@ -75,6 +82,7 @@ type UpsertNotificationAlertFromAnomalyParams = {
   summary: string;
   ownerUserId?: string | null;
   assigneeUserId?: string | null;
+  assignmentNote?: string | null;
   note?: string | null;
   sourceData?: Record<string, unknown>;
   actorId?: string | null;
@@ -87,9 +95,18 @@ type UpdateNotificationAlertParams = {
   summary?: string | null;
   ownerUserId?: string | null;
   assigneeUserId?: string | null;
+  assignmentNote?: string | null;
   note?: string | null;
   resolutionNote?: string | null;
   sourceDataPatch?: Record<string, unknown>;
+  actorId?: string | null;
+};
+
+type AssignNotificationAlertParams = {
+  supabase?: SupabaseClient;
+  id: string;
+  assigneeUserId: string | null;
+  assignmentNote?: string | null;
   actorId?: string | null;
 };
 
@@ -117,6 +134,23 @@ export type NotificationAlertUpdateResult = {
   };
 };
 
+export type NotificationAlertAssignmentChangeKind = "assigned" | "reassigned" | "unassigned" | "unchanged";
+
+export type NotificationAlertAssignResult = {
+  item: NotificationAlertItem;
+  before: NotificationAlertItem;
+  diffSummary: NotificationAlertDiffSummary;
+  assignment: {
+    from: string | null;
+    to: string | null;
+    changed: boolean;
+    kind: NotificationAlertAssignmentChangeKind;
+  };
+};
+
+const ALERT_SELECT =
+  "id, tenant_id, anomaly_key, anomaly_type, priority, severity, status, summary, owner_user_id, assignee_user_id, assigned_at, assigned_by, assignment_note, note, resolution_note, source_data, first_seen_at, last_seen_at, resolved_at, dismissed_at, created_by, updated_by, created_at, updated_at";
+
 const STATUS_TRANSITIONS: Record<NotificationAlertStatus, readonly NotificationAlertStatus[]> = {
   open: ["open", "acknowledged", "investigating", "resolved", "dismissed"],
   acknowledged: ["acknowledged", "investigating", "resolved", "dismissed", "open"],
@@ -137,6 +171,9 @@ function toAlertItem(row: NotificationAlertRow): NotificationAlertItem {
     summary: row.summary,
     ownerUserId: row.owner_user_id,
     assigneeUserId: row.assignee_user_id,
+    assignedAt: row.assigned_at,
+    assignedBy: row.assigned_by,
+    assignmentNote: row.assignment_note,
     note: row.note,
     resolutionNote: row.resolution_note,
     sourceData: row.source_data || {},
@@ -172,20 +209,42 @@ function mergeSourceData(
   };
 }
 
+export function getNotificationAlertAssignmentChange(params: {
+  beforeAssigneeUserId: string | null | undefined;
+  afterAssigneeUserId: string | null | undefined;
+}) {
+  const before = params.beforeAssigneeUserId || null;
+  const after = params.afterAssigneeUserId || null;
+  if (before === after) return { changed: false, kind: "unchanged" as const, from: before, to: after };
+  if (!before && after) return { changed: true, kind: "assigned" as const, from: before, to: after };
+  if (before && !after) return { changed: true, kind: "unassigned" as const, from: before, to: after };
+  return { changed: true, kind: "reassigned" as const, from: before, to: after };
+}
+
 function chooseAuditAction(params: {
   created: boolean;
-  from: NotificationAlertStatus;
-  to: NotificationAlertStatus;
+  before: NotificationAlertItem | null;
+  after: NotificationAlertItem;
   diffSummary: NotificationAlertDiffSummary;
 }) {
   if (params.created) return "notification_alert_upsert";
-  if (params.from !== params.to) {
-    if (params.to === "acknowledged") return "notification_alert_acknowledged";
-    if (params.to === "investigating") return "notification_alert_investigating";
-    if (params.to === "resolved") return "notification_alert_resolved";
-    if (params.to === "dismissed") return "notification_alert_dismissed";
-    if (params.to === "open") return "notification_alert_reopened";
+  const beforeStatus = params.before?.status || params.after.status;
+  const afterStatus = params.after.status;
+  if (beforeStatus !== afterStatus) {
+    if (afterStatus === "acknowledged") return "notification_alert_acknowledged";
+    if (afterStatus === "investigating") return "notification_alert_investigating";
+    if (afterStatus === "resolved") return "notification_alert_resolved";
+    if (afterStatus === "dismissed") return "notification_alert_dismissed";
+    if (afterStatus === "open") return "notification_alert_reopened";
   }
+  const assignmentChange = getNotificationAlertAssignmentChange({
+    beforeAssigneeUserId: params.before?.assigneeUserId || null,
+    afterAssigneeUserId: params.after.assigneeUserId,
+  });
+  if (assignmentChange.kind === "assigned") return "notification_alert_assigned";
+  if (assignmentChange.kind === "reassigned") return "notification_alert_reassigned";
+  if (assignmentChange.kind === "unassigned") return "notification_alert_unassigned";
+  if (params.diffSummary.changedKeys.includes("assignmentNote")) return "notification_alert_assignment_note_updated";
   if (params.diffSummary.changedKeys.includes("note") || params.diffSummary.changedKeys.includes("resolutionNote")) {
     return "notification_alert_note_updated";
   }
@@ -266,9 +325,7 @@ async function writeAlertAuditNonBlocking(params: {
 async function findActiveAlertByKey(supabase: SupabaseClient, tenantId: string, anomalyKey: string) {
   const result = await supabase
     .from("notification_alert_workflows")
-    .select(
-      "id, tenant_id, anomaly_key, anomaly_type, priority, severity, status, summary, owner_user_id, assignee_user_id, note, resolution_note, source_data, first_seen_at, last_seen_at, resolved_at, dismissed_at, created_by, updated_by, created_at, updated_at",
-    )
+    .select(ALERT_SELECT)
     .eq("tenant_id", tenantId)
     .eq("anomaly_key", anomalyKey)
     .in("status", ["open", "acknowledged", "investigating"])
@@ -280,13 +337,7 @@ async function findActiveAlertByKey(supabase: SupabaseClient, tenantId: string, 
 }
 
 async function getAlertById(supabase: SupabaseClient, id: string) {
-  const result = await supabase
-    .from("notification_alert_workflows")
-    .select(
-      "id, tenant_id, anomaly_key, anomaly_type, priority, severity, status, summary, owner_user_id, assignee_user_id, note, resolution_note, source_data, first_seen_at, last_seen_at, resolved_at, dismissed_at, created_by, updated_by, created_at, updated_at",
-    )
-    .eq("id", id)
-    .maybeSingle();
+  const result = await supabase.from("notification_alert_workflows").select(ALERT_SELECT).eq("id", id).maybeSingle();
   if (result.error) return { ok: false as const, error: result.error.message, item: null as NotificationAlertRow | null };
   if (!result.data) return { ok: false as const, error: "Alert not found", item: null as NotificationAlertRow | null };
   return { ok: true as const, item: result.data as NotificationAlertRow };
@@ -296,12 +347,11 @@ export async function listNotificationAlerts(params: ListNotificationAlertsParam
   const supabase = params.supabase ?? createSupabaseAdminClient();
   let query = supabase
     .from("notification_alert_workflows")
-    .select(
-      "id, tenant_id, anomaly_key, anomaly_type, priority, severity, status, summary, owner_user_id, assignee_user_id, note, resolution_note, source_data, first_seen_at, last_seen_at, resolved_at, dismissed_at, created_by, updated_by, created_at, updated_at",
-    )
+    .select(ALERT_SELECT)
     .order("updated_at", { ascending: false })
     .limit(Math.min(500, Math.max(1, Number(params.limit || 120))));
   if (params.tenantId) query = query.eq("tenant_id", params.tenantId);
+  if (params.assigneeUserId) query = query.eq("assignee_user_id", params.assigneeUserId);
   if (params.statuses && params.statuses.length > 0) query = query.in("status", params.statuses);
   if (params.priorities && params.priorities.length > 0) query = query.in("priority", params.priorities);
   if (params.severities && params.severities.length > 0) query = query.in("severity", params.severities);
@@ -328,27 +378,26 @@ export async function upsertNotificationAlertFromAnomaly(params: UpsertNotificat
 
   if (active.item) {
     const before = toAlertItem(active.item);
+    const beforeAssignee = active.item.assignee_user_id;
+    const requestedAssignee = params.assigneeUserId === undefined ? beforeAssignee : params.assigneeUserId || null;
+    const assignmentChanged = beforeAssignee !== requestedAssignee;
     const updatePayload = {
       anomaly_type: params.anomalyType,
       priority: params.priority,
       severity: params.severity,
       summary,
       owner_user_id: params.ownerUserId === undefined ? active.item.owner_user_id : params.ownerUserId,
-      assignee_user_id: params.assigneeUserId === undefined ? active.item.assignee_user_id : params.assigneeUserId,
+      assignee_user_id: requestedAssignee,
+      assigned_at: assignmentChanged ? (requestedAssignee ? nowIso : null) : active.item.assigned_at,
+      assigned_by: assignmentChanged ? (requestedAssignee ? (params.actorId || null) : null) : active.item.assigned_by,
+      assignment_note: params.assignmentNote === undefined ? active.item.assignment_note : normalizeText(params.assignmentNote, 4000),
       note: params.note === undefined ? active.item.note : normalizeText(params.note, 4000),
       source_data: mergeSourceData(active.item.source_data, params.sourceData || {}),
       last_seen_at: nowIso,
       updated_by: params.actorId || null,
       updated_at: nowIso,
     };
-    const updated = await supabase
-      .from("notification_alert_workflows")
-      .update(updatePayload)
-      .eq("id", active.item.id)
-      .select(
-        "id, tenant_id, anomaly_key, anomaly_type, priority, severity, status, summary, owner_user_id, assignee_user_id, note, resolution_note, source_data, first_seen_at, last_seen_at, resolved_at, dismissed_at, created_by, updated_by, created_at, updated_at",
-      )
-      .maybeSingle();
+    const updated = await supabase.from("notification_alert_workflows").update(updatePayload).eq("id", active.item.id).select(ALERT_SELECT).maybeSingle();
     if (updated.error || !updated.data) {
       return { ok: false as const, error: updated.error?.message || "Update alert failed", item: null as NotificationAlertItem | null };
     }
@@ -358,7 +407,7 @@ export async function upsertNotificationAlertFromAnomaly(params: UpsertNotificat
       supabase,
       tenantId: after.tenantId,
       actorId: params.actorId || null,
-      action: chooseAuditAction({ created: false, from: before.status, to: after.status, diffSummary }),
+      action: chooseAuditAction({ created: false, before, after, diffSummary }),
       targetId: after.id,
       before,
       after,
@@ -373,6 +422,7 @@ export async function upsertNotificationAlertFromAnomaly(params: UpsertNotificat
     };
   }
 
+  const initialAssignee = params.assigneeUserId || null;
   const insertPayload = {
     tenant_id: params.tenantId,
     anomaly_key: params.anomalyKey,
@@ -382,7 +432,10 @@ export async function upsertNotificationAlertFromAnomaly(params: UpsertNotificat
     status: "open" as NotificationAlertStatus,
     summary,
     owner_user_id: params.ownerUserId || null,
-    assignee_user_id: params.assigneeUserId || null,
+    assignee_user_id: initialAssignee,
+    assigned_at: initialAssignee ? nowIso : null,
+    assigned_by: initialAssignee ? (params.actorId || null) : null,
+    assignment_note: normalizeText(params.assignmentNote, 4000) || null,
     note: normalizeText(params.note, 4000) || null,
     resolution_note: null,
     source_data: params.sourceData || {},
@@ -393,13 +446,7 @@ export async function upsertNotificationAlertFromAnomaly(params: UpsertNotificat
     created_at: nowIso,
     updated_at: nowIso,
   };
-  const inserted = await supabase
-    .from("notification_alert_workflows")
-    .insert(insertPayload)
-    .select(
-      "id, tenant_id, anomaly_key, anomaly_type, priority, severity, status, summary, owner_user_id, assignee_user_id, note, resolution_note, source_data, first_seen_at, last_seen_at, resolved_at, dismissed_at, created_by, updated_by, created_at, updated_at",
-    )
-    .maybeSingle();
+  const inserted = await supabase.from("notification_alert_workflows").insert(insertPayload).select(ALERT_SELECT).maybeSingle();
 
   if (inserted.error) {
     if (inserted.error.code === "23505") {
@@ -420,7 +467,7 @@ export async function upsertNotificationAlertFromAnomaly(params: UpsertNotificat
     supabase,
     tenantId: after.tenantId,
     actorId: params.actorId || null,
-    action: chooseAuditAction({ created: true, from: "open", to: "open", diffSummary }),
+    action: chooseAuditAction({ created: true, before: null, after, diffSummary }),
     targetId: after.id,
     before: null,
     after,
@@ -432,6 +479,59 @@ export async function upsertNotificationAlertFromAnomaly(params: UpsertNotificat
     before: null,
     diffSummary,
     created: true as const,
+  };
+}
+
+export async function assignNotificationAlert(params: AssignNotificationAlertParams) {
+  const supabase = params.supabase ?? createSupabaseAdminClient();
+  const current = await getAlertById(supabase, params.id);
+  if (!current.ok || !current.item) return { ok: false as const, error: current.error, item: null as NotificationAlertItem | null };
+
+  const before = toAlertItem(current.item);
+  const nextAssignee = params.assigneeUserId || null;
+  const assignmentChange = getNotificationAlertAssignmentChange({
+    beforeAssigneeUserId: before.assigneeUserId,
+    afterAssigneeUserId: nextAssignee,
+  });
+  const nowIso = toNowIso();
+  const updatePayload: Record<string, unknown> = {
+    assignee_user_id: nextAssignee,
+    assigned_at: assignmentChange.changed ? (nextAssignee ? nowIso : null) : current.item.assigned_at,
+    assigned_by: assignmentChange.changed ? (nextAssignee ? (params.actorId || null) : null) : current.item.assigned_by,
+    updated_by: params.actorId || null,
+    updated_at: nowIso,
+  };
+  if (params.assignmentNote !== undefined) updatePayload.assignment_note = normalizeText(params.assignmentNote, 4000);
+
+  const updated = await supabase.from("notification_alert_workflows").update(updatePayload).eq("id", params.id).select(ALERT_SELECT).maybeSingle();
+  if (updated.error || !updated.data) {
+    return { ok: false as const, error: updated.error?.message || "Assign alert failed", item: null as NotificationAlertItem | null };
+  }
+
+  const after = toAlertItem(updated.data as NotificationAlertRow);
+  const diffSummary = buildNotificationAlertDiffSummary({ before, after });
+  await writeAlertAuditNonBlocking({
+    supabase,
+    tenantId: after.tenantId,
+    actorId: params.actorId || null,
+    action: chooseAuditAction({
+      created: false,
+      before,
+      after,
+      diffSummary,
+    }),
+    targetId: after.id,
+    before,
+    after,
+    diffSummary,
+  });
+
+  return {
+    ok: true as const,
+    item: after,
+    before,
+    diffSummary,
+    assignment: assignmentChange,
   };
 }
 
@@ -464,7 +564,16 @@ export async function updateNotificationAlert(params: UpdateNotificationAlertPar
     updatePayload.summary = summary;
   }
   if (params.ownerUserId !== undefined) updatePayload.owner_user_id = params.ownerUserId;
-  if (params.assigneeUserId !== undefined) updatePayload.assignee_user_id = params.assigneeUserId;
+  if (params.assigneeUserId !== undefined) {
+    const assignmentChange = getNotificationAlertAssignmentChange({
+      beforeAssigneeUserId: before.assigneeUserId,
+      afterAssigneeUserId: params.assigneeUserId,
+    });
+    updatePayload.assignee_user_id = params.assigneeUserId;
+    updatePayload.assigned_at = assignmentChange.changed ? (params.assigneeUserId ? nowIso : null) : current.item.assigned_at;
+    updatePayload.assigned_by = assignmentChange.changed ? (params.assigneeUserId ? (params.actorId || null) : null) : current.item.assigned_by;
+  }
+  if (params.assignmentNote !== undefined) updatePayload.assignment_note = normalizeText(params.assignmentNote, 4000);
   if (params.note !== undefined) updatePayload.note = normalizeText(params.note, 4000);
   if (params.resolutionNote !== undefined) updatePayload.resolution_note = normalizeText(params.resolutionNote, 4000);
   if (params.sourceDataPatch) {
@@ -482,14 +591,7 @@ export async function updateNotificationAlert(params: UpdateNotificationAlertPar
     updatePayload.dismissed_at = null;
   }
 
-  const updated = await supabase
-    .from("notification_alert_workflows")
-    .update(updatePayload)
-    .eq("id", params.id)
-    .select(
-      "id, tenant_id, anomaly_key, anomaly_type, priority, severity, status, summary, owner_user_id, assignee_user_id, note, resolution_note, source_data, first_seen_at, last_seen_at, resolved_at, dismissed_at, created_by, updated_by, created_at, updated_at",
-    )
-    .maybeSingle();
+  const updated = await supabase.from("notification_alert_workflows").update(updatePayload).eq("id", params.id).select(ALERT_SELECT).maybeSingle();
   if (updated.error || !updated.data) {
     return { ok: false as const, error: updated.error?.message || "Update alert failed", item: null as NotificationAlertItem | null };
   }
@@ -502,8 +604,8 @@ export async function updateNotificationAlert(params: UpdateNotificationAlertPar
     actorId: params.actorId || null,
     action: chooseAuditAction({
       created: false,
-      from: before.status,
-      to: after.status,
+      before,
+      after,
       diffSummary,
     }),
     targetId: after.id,
