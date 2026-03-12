@@ -103,6 +103,28 @@ function getSnapshot(payload) {
   return null;
 }
 
+function dayStartIsoUtc(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0)).toISOString();
+}
+
+function dayEndIsoUtc(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999)).toISOString();
+}
+
+function toDateStringUtc(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function toByKey(items, keyName) {
+  const map = new Map();
+  for (const item of items || []) {
+    const key = String(item?.[keyName] || '');
+    if (!key) continue;
+    map.set(key, item);
+  }
+  return map;
+}
+
 async function main() {
   const root = process.cwd();
   const envFileArg = readArg('--env-file');
@@ -137,6 +159,11 @@ async function main() {
   const now = new Date();
   const from = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
   const to = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
+  const rollupDayDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  const rollupFrom = dayStartIsoUtc(rollupDayDate);
+  const rollupTo = dayEndIsoUtc(rollupDayDate);
+  const rollupDate = toDateStringUtc(rollupDayDate);
+  const rollupCreatedAt = new Date(new Date(rollupFrom).getTime() + 9 * 60 * 60 * 1000).toISOString();
   const e2eKey = `phase42_tenant_drilldown_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
   const adminEmail = `phase42-drill-admin-${Date.now()}@example.test`;
   const managerEmail = `phase42-drill-manager-${Date.now()}@example.test`;
@@ -163,6 +190,8 @@ async function main() {
     managerUserDeleted: false,
     remainingDeliveries: 0,
     remainingEvents: 0,
+    remainingDailyRollups: 0,
+    remainingAnomalyRollups: 0,
     remainingAudit: 0,
   };
   let fatalError = null;
@@ -336,6 +365,138 @@ async function main() {
     ]);
     assertOrThrow(!eventInsert.error, `event insert failed: ${eventInsert.error?.message || 'unknown'}`);
 
+    const rollupDeliveryInsert = await admin
+      .from('notification_deliveries')
+      .insert([
+        {
+          tenant_id: state.tenantId,
+          channel: 'email',
+          status: 'sent',
+          attempts: 1,
+          retry_count: 0,
+          created_at: rollupCreatedAt,
+          sent_at: rollupCreatedAt,
+          delivered_at: rollupCreatedAt,
+          dedupe_key: `${e2eKey}:rollup:d1`,
+          source_ref_type: 'phase42_drilldown_rollup',
+          source_ref_id: 'rollup_d1',
+          payload: { e2eKey, label: 'rollup_d1' },
+          created_by: state.adminUserId,
+        },
+        {
+          tenant_id: state.tenantId,
+          channel: 'webhook',
+          status: 'sent',
+          attempts: 1,
+          retry_count: 0,
+          created_at: rollupCreatedAt,
+          sent_at: rollupCreatedAt,
+          delivered_at: rollupCreatedAt,
+          dedupe_key: `${e2eKey}:rollup:d2`,
+          source_ref_type: 'phase42_drilldown_rollup',
+          source_ref_id: 'rollup_d2',
+          payload: { e2eKey, label: 'rollup_d2' },
+          created_by: state.adminUserId,
+        },
+        {
+          tenant_id: state.tenantId,
+          channel: 'sms',
+          status: 'dead_letter',
+          attempts: 3,
+          retry_count: 2,
+          created_at: rollupCreatedAt,
+          failed_at: rollupCreatedAt,
+          dead_letter_at: rollupCreatedAt,
+          error_code: 'PERM_FAIL',
+          error_message: 'rollup permanent failure',
+          last_error: 'rollup permanent failure',
+          dedupe_key: `${e2eKey}:rollup:d3`,
+          source_ref_type: 'phase42_drilldown_rollup',
+          source_ref_id: 'rollup_d3',
+          payload: { e2eKey, label: 'rollup_d3' },
+          created_by: state.adminUserId,
+        },
+        {
+          tenant_id: state.tenantId,
+          channel: 'line',
+          status: 'failed',
+          attempts: 1,
+          retry_count: 0,
+          created_at: rollupCreatedAt,
+          failed_at: rollupCreatedAt,
+          error_code: 'ROLLUP_FAIL',
+          error_message: 'rollup failed row',
+          last_error: 'rollup failed row',
+          dedupe_key: `${e2eKey}:rollup:d4`,
+          source_ref_type: 'phase42_drilldown_rollup',
+          source_ref_id: 'rollup_d4',
+          payload: { e2eKey, label: 'rollup_d4' },
+          created_by: state.adminUserId,
+        },
+        {
+          tenant_id: state.tenantId,
+          channel: 'sms',
+          status: 'retrying',
+          attempts: 2,
+          retry_count: 1,
+          created_at: rollupCreatedAt,
+          next_retry_at: new Date(new Date(rollupCreatedAt).getTime() + 20 * 60 * 1000).toISOString(),
+          error_code: 'ROLLUP_RETRY',
+          error_message: 'rollup retry row',
+          last_error: 'rollup retry row',
+          dedupe_key: `${e2eKey}:rollup:d5`,
+          source_ref_type: 'phase42_drilldown_rollup',
+          source_ref_id: 'rollup_d5',
+          payload: { e2eKey, label: 'rollup_d5' },
+          created_by: state.adminUserId,
+        },
+      ])
+      .select('id, source_ref_id');
+    assertOrThrow(!rollupDeliveryInsert.error, `rollup delivery insert failed: ${rollupDeliveryInsert.error?.message || 'unknown'}`);
+    for (const row of rollupDeliveryInsert.data || []) {
+      state.deliveryIds[row.source_ref_id] = row.id;
+    }
+
+    const rollupEventInsert = await admin.from('notification_delivery_events').insert([
+      {
+        tenant_id: state.tenantId,
+        delivery_id: state.deliveryIds.rollup_d1,
+        channel: 'email',
+        event_type: 'opened',
+        event_at: rollupCreatedAt,
+        provider: 'phase42_drill_provider',
+        provider_event_id: `${e2eKey}:rollup:open:d1`,
+      },
+      {
+        tenant_id: state.tenantId,
+        delivery_id: state.deliveryIds.rollup_d1,
+        channel: 'email',
+        event_type: 'clicked',
+        event_at: rollupCreatedAt,
+        provider: 'phase42_drill_provider',
+        provider_event_id: `${e2eKey}:rollup:click:d1`,
+      },
+      {
+        tenant_id: state.tenantId,
+        delivery_id: state.deliveryIds.rollup_d2,
+        channel: 'webhook',
+        event_type: 'opened',
+        event_at: rollupCreatedAt,
+        provider: 'phase42_drill_provider',
+        provider_event_id: `${e2eKey}:rollup:open:d2`,
+      },
+      {
+        tenant_id: state.tenantId,
+        delivery_id: state.deliveryIds.rollup_d2,
+        channel: 'webhook',
+        event_type: 'conversion',
+        event_at: rollupCreatedAt,
+        provider: 'phase42_drill_provider',
+        provider_event_id: `${e2eKey}:rollup:conv:d2`,
+      },
+    ]);
+    assertOrThrow(!rollupEventInsert.error, `rollup event insert failed: ${rollupEventInsert.error?.message || 'unknown'}`);
+
     const overviewPath = `/api/platform/notifications/overview?tenantId=${state.tenantId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=2000`;
     const overview = await apiGetWithRetry({
       baseUrl,
@@ -349,7 +510,9 @@ async function main() {
     const overviewSnapshot = getSnapshot(overview.json);
     assertOrThrow(overviewSnapshot, 'overview snapshot missing');
 
-    const drilldownPath = `/api/platform/notifications/overview/tenants/${state.tenantId}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=2000&anomalyLimit=40`;
+    const drilldownPath = `/api/platform/notifications/overview/tenants/${state.tenantId}?from=${encodeURIComponent(
+      from,
+    )}&to=${encodeURIComponent(to)}&limit=2000&anomalyLimit=40&aggregationMode=auto`;
     const drilldown = await apiGetWithRetry({
       baseUrl,
       path: drilldownPath,
@@ -361,6 +524,7 @@ async function main() {
     assertOrThrow(drilldown.status === 200, `drilldown expected 200, got ${drilldown.status}: ${pickMessage(drilldown.json, drilldown.text)}`);
     const drillSnapshot = getSnapshot(drilldown.json);
     assertOrThrow(drillSnapshot, 'drilldown snapshot missing');
+    assertOrThrow(drillSnapshot.dataSource === 'raw', `drilldown auto(non-day) expected raw source, got ${drillSnapshot.dataSource}`);
 
     assertOrThrow(drillSnapshot.tenantId === state.tenantId, 'drilldown tenantId mismatch');
     assertOrThrow(drillSnapshot.sent === overviewSnapshot.sent, `sent mismatch: drilldown=${drillSnapshot.sent}, overview=${overviewSnapshot.sent}`);
@@ -389,6 +553,113 @@ async function main() {
     assertOrThrow(filteredSnapshot && filteredSnapshot.channel === 'email', 'drilldown channel filter not applied');
     assertOrThrow(filteredSnapshot.sent === 1, `drilldown email sent expected 1, got ${filteredSnapshot.sent}`);
     assertOrThrow(filteredSnapshot.deadLetter === 0, `drilldown email deadLetter expected 0, got ${filteredSnapshot.deadLetter}`);
+
+    const refreshRebuild = await apiRequest({
+      method: 'POST',
+      baseUrl,
+      path: '/api/platform/notifications/rollups/refresh',
+      token: adminToken,
+      bypassSecret,
+      body: {
+        mode: 'rebuild',
+        fromDate: rollupDate,
+        toDate: rollupDate,
+        tenantId: state.tenantId,
+      },
+    });
+    assertOrThrow(
+      refreshRebuild.status === 200,
+      `rollup refresh rebuild expected 200, got ${refreshRebuild.status}: ${pickMessage(refreshRebuild.json, refreshRebuild.text)}`,
+    );
+
+    const rollupDrilldownPath = `/api/platform/notifications/overview/tenants/${state.tenantId}?from=${encodeURIComponent(
+      rollupFrom,
+    )}&to=${encodeURIComponent(rollupTo)}&limit=2000&anomalyLimit=60`;
+
+    const drillRollup = await apiRequest({
+      method: 'GET',
+      baseUrl,
+      path: `${rollupDrilldownPath}&aggregationMode=rollup`,
+      token: adminToken,
+      bypassSecret,
+    });
+    assertOrThrow(
+      drillRollup.status === 200,
+      `drilldown rollup expected 200, got ${drillRollup.status}: ${pickMessage(drillRollup.json, drillRollup.text)}`,
+    );
+    const rollupSnapshot = getSnapshot(drillRollup.json);
+    assertOrThrow(rollupSnapshot, 'drilldown rollup snapshot missing');
+    assertOrThrow(rollupSnapshot.dataSource === 'rollup', `drilldown rollup expected rollup source, got ${rollupSnapshot.dataSource}`);
+
+    const drillRaw = await apiRequest({
+      method: 'GET',
+      baseUrl,
+      path: `${rollupDrilldownPath}&aggregationMode=raw`,
+      token: adminToken,
+      bypassSecret,
+    });
+    assertOrThrow(
+      drillRaw.status === 200,
+      `drilldown raw expected 200, got ${drillRaw.status}: ${pickMessage(drillRaw.json, drillRaw.text)}`,
+    );
+    const rawSnapshot = getSnapshot(drillRaw.json);
+    assertOrThrow(rawSnapshot, 'drilldown raw snapshot missing');
+    assertOrThrow(rawSnapshot.dataSource === 'raw', `drilldown raw expected raw source, got ${rawSnapshot.dataSource}`);
+
+    const compareKeys = ['sent', 'failed', 'deadLetter', 'opened', 'clicked', 'conversion'];
+    for (const key of compareKeys) {
+      assertOrThrow(
+        Number(rollupSnapshot[key] || 0) === Number(rawSnapshot[key] || 0),
+        `drilldown rollup/raw mismatch on ${key}: rollup=${rollupSnapshot[key]} raw=${rawSnapshot[key]}`,
+      );
+    }
+
+    const rollupDailyByDay = toByKey(rollupSnapshot.daily || [], 'day');
+    const rawDailyByDay = toByKey(rawSnapshot.daily || [], 'day');
+    for (const [day, rollupDay] of rollupDailyByDay.entries()) {
+      const rawDay = rawDailyByDay.get(day);
+      assertOrThrow(Boolean(rawDay), `drilldown daily missing day=${day} in raw snapshot`);
+      for (const key of compareKeys) {
+        assertOrThrow(
+          Number(rollupDay[key] || 0) === Number(rawDay[key] || 0),
+          `drilldown daily mismatch day=${day} key=${key}: rollup=${rollupDay[key]} raw=${rawDay[key]}`,
+        );
+      }
+    }
+
+    const rollupChannelByName = toByKey(rollupSnapshot.byChannel || [], 'channel');
+    const rawChannelByName = toByKey(rawSnapshot.byChannel || [], 'channel');
+    for (const [channel, rollupChannel] of rollupChannelByName.entries()) {
+      const rawChannel = rawChannelByName.get(channel);
+      assertOrThrow(Boolean(rawChannel), `drilldown channel missing channel=${channel} in raw snapshot`);
+      for (const key of compareKeys) {
+        assertOrThrow(
+          Number(rollupChannel[key] || 0) === Number(rawChannel[key] || 0),
+          `drilldown channel mismatch channel=${channel} key=${key}: rollup=${rollupChannel[key]} raw=${rawChannel[key]}`,
+        );
+      }
+    }
+
+    const drillAutoWholeDay = await apiRequest({
+      method: 'GET',
+      baseUrl,
+      path: `${rollupDrilldownPath}&aggregationMode=auto`,
+      token: adminToken,
+      bypassSecret,
+    });
+    assertOrThrow(
+      drillAutoWholeDay.status === 200,
+      `drilldown auto(whole-day) expected 200, got ${drillAutoWholeDay.status}: ${pickMessage(
+        drillAutoWholeDay.json,
+        drillAutoWholeDay.text,
+      )}`,
+    );
+    const autoWholeDaySnapshot = getSnapshot(drillAutoWholeDay.json);
+    assertOrThrow(autoWholeDaySnapshot, 'drilldown auto(whole-day) snapshot missing');
+    assertOrThrow(
+      autoWholeDaySnapshot.dataSource === 'rollup',
+      `drilldown auto(whole-day) expected rollup source, got ${autoWholeDaySnapshot.dataSource}`,
+    );
 
     const unauthorized = await apiRequest({
       method: 'GET',
@@ -436,6 +707,10 @@ async function main() {
         channelFilter: true,
         dailyTrend: true,
         anomalySummary: true,
+        autoNonDayFallbackRaw: true,
+        autoWholeDayUsesRollup: true,
+        rawRollupReconciled: true,
+        refreshRebuild: true,
         unauthorizedDenied: true,
         managerDenied: true,
       },
@@ -455,6 +730,8 @@ async function main() {
     if (state.tenantId) {
       await admin.from('notification_delivery_events').delete().eq('tenant_id', state.tenantId);
       await admin.from('notification_deliveries').delete().eq('tenant_id', state.tenantId);
+      await admin.from('notification_delivery_anomaly_daily_rollups').delete().eq('tenant_id', state.tenantId);
+      await admin.from('notification_delivery_daily_rollups').delete().eq('tenant_id', state.tenantId);
       await admin.from('audit_logs').delete().eq('tenant_id', state.tenantId);
 
       const remainDeliveries = await admin
@@ -465,12 +742,22 @@ async function main() {
         .from('notification_delivery_events')
         .select('id', { count: 'exact', head: true })
         .eq('tenant_id', state.tenantId);
+      const remainDailyRollups = await admin
+        .from('notification_delivery_daily_rollups')
+        .select('day', { count: 'exact', head: true })
+        .eq('tenant_id', state.tenantId);
+      const remainAnomalyRollups = await admin
+        .from('notification_delivery_anomaly_daily_rollups')
+        .select('day', { count: 'exact', head: true })
+        .eq('tenant_id', state.tenantId);
       const remainAudit = await admin
         .from('audit_logs')
         .select('id', { count: 'exact', head: true })
         .eq('tenant_id', state.tenantId);
       cleanup.remainingDeliveries = remainDeliveries.count ?? 0;
       cleanup.remainingEvents = remainEvents.count ?? 0;
+      cleanup.remainingDailyRollups = remainDailyRollups.count ?? 0;
+      cleanup.remainingAnomalyRollups = remainAnomalyRollups.count ?? 0;
       cleanup.remainingAudit = remainAudit.count ?? 0;
 
       const tenantDelete = await admin.from('tenants').delete().eq('id', state.tenantId);

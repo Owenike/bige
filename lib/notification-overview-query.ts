@@ -182,6 +182,8 @@ export type NotificationTenantDrilldownSnapshot = {
   };
 };
 
+export type NotificationTenantDrilldownAggregationMode = "auto" | "raw" | "rollup";
+
 function normalizeIso(input: string | null | undefined, fallback: string) {
   if (!input) return fallback;
   const date = new Date(input);
@@ -364,6 +366,10 @@ function buildOverviewSnapshot(params: {
 
 export function canUseOverviewDailyRollupWindow(fromIso: string, toIso: string) {
   return isUtcDayBoundary(fromIso, "start") && isUtcDayBoundary(toIso, "end");
+}
+
+export function canUseTenantDrilldownDailyRollupWindow(fromIso: string, toIso: string) {
+  return canUseOverviewDailyRollupWindow(fromIso, toIso);
 }
 
 async function getOverviewFromRaw(params: {
@@ -575,6 +581,7 @@ export async function getNotificationTenantPerformanceDrilldown(params: {
   to?: string | null;
   limit?: number;
   anomalyLimit?: number;
+  aggregationMode?: NotificationTenantDrilldownAggregationMode;
 }): Promise<{ ok: true; snapshot: NotificationTenantDrilldownSnapshot } | { ok: false; error: string }> {
   const overview = await getNotificationPerformanceOverview({
     supabase: params.supabase,
@@ -583,7 +590,7 @@ export async function getNotificationTenantPerformanceDrilldown(params: {
     from: params.from || null,
     to: params.to || null,
     limit: params.limit || 10000,
-    aggregationMode: "raw",
+    aggregationMode: params.aggregationMode || "auto",
   });
   if ("error" in overview) return { ok: false, error: overview.error };
 

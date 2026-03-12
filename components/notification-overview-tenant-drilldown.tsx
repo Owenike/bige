@@ -56,6 +56,7 @@ type DrilldownSnapshot = {
   to: string;
   tenantId: string;
   channel: DeliveryChannel | null;
+  dataSource: "raw" | "rollup";
   totalRows: number;
   sent: number;
   failed: number;
@@ -87,6 +88,7 @@ type DrilldownSnapshot = {
 
 type FilterState = {
   channel: "" | DeliveryChannel;
+  aggregationMode: "auto" | "raw" | "rollup";
   from: string;
   to: string;
   limit: number;
@@ -131,6 +133,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
     const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     return {
       channel: (searchParams.get("channel") as FilterState["channel"]) || "",
+      aggregationMode: (searchParams.get("aggregationMode") as FilterState["aggregationMode"]) || "auto",
       from: parseIsoInput(searchParams.get("from")) || toLocalDateTimeInput(last7d.toISOString()),
       to: parseIsoInput(searchParams.get("to")) || toLocalDateTimeInput(now.toISOString()),
       limit: Math.max(200, Math.min(50000, Number(searchParams.get("limit") || 2000))),
@@ -147,6 +150,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
     let active = true;
     const params = new URLSearchParams();
     if (filters.channel) params.set("channel", filters.channel);
+    params.set("aggregationMode", filters.aggregationMode);
     const fromIso = fromLocalDateTimeInput(filters.from);
     const toIso = fromLocalDateTimeInput(filters.to);
     if (fromIso) params.set("from", fromIso);
@@ -194,6 +198,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
     if (fromIso) params.set("from", fromIso);
     if (toIso) params.set("to", toIso);
     if (filters.channel) params.set("channel", filters.channel);
+    params.set("aggregationMode", filters.aggregationMode);
     params.set("limit", String(filters.limit));
     return `/platform-admin/notifications-overview?${params.toString()}`;
   }, [filters, props.tenantId]);
@@ -201,6 +206,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
   function applyFilters() {
     setFilters({
       channel: draft.channel,
+      aggregationMode: draft.aggregationMode,
       from: draft.from,
       to: draft.to,
       limit: Math.max(200, Math.min(50000, Number(draft.limit || 2000))),
@@ -213,6 +219,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
     const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const next = {
       channel: "" as FilterState["channel"],
+      aggregationMode: "auto" as FilterState["aggregationMode"],
       from: toLocalDateTimeInput(last7d.toISOString()),
       to: toLocalDateTimeInput(now.toISOString()),
       limit: 2000,
@@ -258,6 +265,17 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
               <option value="sms">sms</option>
               <option value="webhook">webhook</option>
               <option value="other">other</option>
+            </select>
+            <select
+              className="input"
+              value={draft.aggregationMode}
+              onChange={(event) =>
+                setDraft((prev) => ({ ...prev, aggregationMode: event.target.value as FilterState["aggregationMode"] }))
+              }
+            >
+              <option value="auto">aggregation auto</option>
+              <option value="raw">aggregation raw</option>
+              <option value="rollup">aggregation rollup</option>
             </select>
             <select
               className="input"
@@ -359,7 +377,13 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
 
             <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
               <p className="sub" style={{ marginTop: 0 }}>
+                Aggregation source: {snapshot.dataSource === "rollup" ? "daily rollup" : "raw query fallback"}.
+              </p>
+              <p className="sub" style={{ marginTop: 0 }}>
                 Rate definition: success/fail denominator = sent + failed; open/click/conversion denominator = sent.
+              </p>
+              <p className="sub" style={{ marginTop: 0 }}>
+                Recent anomalies are always read from raw deliveries for latest error context.
               </p>
             </section>
 

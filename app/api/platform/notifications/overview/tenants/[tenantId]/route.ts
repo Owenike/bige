@@ -12,6 +12,7 @@ const querySchema = z.object({
   to: z.string().trim().datetime().optional(),
   limit: z.coerce.number().int().min(200).max(50000).optional(),
   anomalyLimit: z.coerce.number().int().min(10).max(120).optional(),
+  aggregationMode: z.enum(["auto", "raw", "rollup"]).optional(),
 });
 
 export async function GET(request: Request, context: { params: Promise<{ tenantId: string }> }) {
@@ -31,6 +32,7 @@ export async function GET(request: Request, context: { params: Promise<{ tenantI
     to: params.get("to") || undefined,
     limit: params.get("limit") || undefined,
     anomalyLimit: params.get("anomalyLimit") || undefined,
+    aggregationMode: params.get("aggregationMode") || undefined,
   });
   if (!parsed.success) return apiError(400, "FORBIDDEN", parsed.error.issues[0]?.message || "Invalid query");
 
@@ -41,6 +43,7 @@ export async function GET(request: Request, context: { params: Promise<{ tenantI
     to: parsed.data.to || null,
     limit: parsed.data.limit || 10000,
     anomalyLimit: parsed.data.anomalyLimit || 40,
+    aggregationMode: parsed.data.aggregationMode || "auto",
   });
   if (!drilldown.ok) return apiError(500, "INTERNAL_ERROR", drilldown.error);
 
