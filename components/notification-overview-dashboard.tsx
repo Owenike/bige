@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
 import NotificationGovernanceNav from "./notification-governance-nav";
 
 type DeliveryChannel = "in_app" | "email" | "line" | "sms" | "webhook" | "other";
@@ -503,7 +504,7 @@ export default function NotificationOverviewDashboard() {
                 Rate definition: success/fail denominator = sent + failed; open/click/conversion denominator = sent.
               </p>
               <p className="sub" style={{ marginTop: 0 }}>
-                Aggregation source: {snapshot.dataSource === "rollup" ? "daily rollup" : "raw query fallback"}.
+                {formatNotificationAggregationDataSourceLabel(snapshot.dataSource)}
               </p>
             </section>
 

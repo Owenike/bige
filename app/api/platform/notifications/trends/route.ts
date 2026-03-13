@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-context";
+import { buildNotificationAggregationMetadata, buildTrendRollupEligibilityMetadata } from "../../../../../lib/notification-aggregation-contract";
 import { getNotificationAlertTrendComparison } from "../../../../../lib/notification-alert-trends";
 import { requirePermission } from "../../../../../lib/permissions";
 import { uuidLikeSchema } from "../../../../../lib/notification-productization";
@@ -34,6 +35,7 @@ export async function GET(request: Request) {
   });
   if (!parsed.success) return apiError(400, "FORBIDDEN", parsed.error.issues[0]?.message || "Invalid query");
 
+  const requestedAggregationMode = parsed.data.aggregationMode || "auto";
   const compared = await getNotificationAlertTrendComparison({
     tenantId: parsed.data.tenantId || null,
     channel: parsed.data.channel || null,
@@ -41,11 +43,25 @@ export async function GET(request: Request) {
     to: parsed.data.to || null,
     limit: parsed.data.limit || 12000,
     topLimit: parsed.data.topLimit || 10,
-    aggregationMode: parsed.data.aggregationMode || "auto",
+    aggregationMode: requestedAggregationMode,
   });
   if (!compared.ok) return apiError(500, "INTERNAL_ERROR", compared.error);
 
+  const eligibility = buildTrendRollupEligibilityMetadata({
+    currentFromIso: compared.snapshot.currentWindow.from,
+    currentToIso: compared.snapshot.currentWindow.to,
+    previousFromIso: compared.snapshot.previousWindow.from,
+    previousToIso: compared.snapshot.previousWindow.to,
+  });
+  const aggregation = buildNotificationAggregationMetadata({
+    aggregationModeRequested: requestedAggregationMode,
+    dataSource: compared.snapshot.dataSource,
+    isWholeUtcDayWindow: eligibility.isWholeUtcDayWindow,
+    rollupEligible: eligibility.rollupEligible,
+  });
+
   return apiSuccess({
     snapshot: compared.snapshot,
+    ...aggregation,
   });
 }

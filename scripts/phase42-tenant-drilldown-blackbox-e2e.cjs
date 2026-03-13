@@ -103,6 +103,44 @@ function getSnapshot(payload) {
   return null;
 }
 
+function getAggregationMetadata(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  const root = payload;
+  const data = payload.data && typeof payload.data === 'object' ? payload.data : {};
+  const pick = (key) => (Object.prototype.hasOwnProperty.call(data, key) ? data[key] : root[key]);
+  const metadata = {
+    aggregationModeRequested: pick('aggregationModeRequested'),
+    aggregationModeResolved: pick('aggregationModeResolved'),
+    dataSource: pick('dataSource'),
+    isWholeUtcDayWindow: pick('isWholeUtcDayWindow'),
+    rollupEligible: pick('rollupEligible'),
+  };
+  if (!metadata.aggregationModeRequested || !metadata.aggregationModeResolved || !metadata.dataSource) return null;
+  return metadata;
+}
+
+function assertAggregationMetadata(payload, expected, label) {
+  const metadata = getAggregationMetadata(payload);
+  assertOrThrow(Boolean(metadata), `${label} aggregation metadata missing`);
+  assertOrThrow(
+    metadata.aggregationModeRequested === expected.aggregationModeRequested,
+    `${label} aggregationModeRequested expected ${expected.aggregationModeRequested}, got ${metadata.aggregationModeRequested}`,
+  );
+  assertOrThrow(
+    metadata.aggregationModeResolved === expected.aggregationModeResolved,
+    `${label} aggregationModeResolved expected ${expected.aggregationModeResolved}, got ${metadata.aggregationModeResolved}`,
+  );
+  assertOrThrow(metadata.dataSource === expected.dataSource, `${label} dataSource expected ${expected.dataSource}, got ${metadata.dataSource}`);
+  assertOrThrow(
+    metadata.isWholeUtcDayWindow === expected.isWholeUtcDayWindow,
+    `${label} isWholeUtcDayWindow expected ${expected.isWholeUtcDayWindow}, got ${metadata.isWholeUtcDayWindow}`,
+  );
+  assertOrThrow(
+    metadata.rollupEligible === expected.rollupEligible,
+    `${label} rollupEligible expected ${expected.rollupEligible}, got ${metadata.rollupEligible}`,
+  );
+}
+
 function dayStartIsoUtc(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0)).toISOString();
 }
@@ -525,6 +563,17 @@ async function main() {
     const drillSnapshot = getSnapshot(drilldown.json);
     assertOrThrow(drillSnapshot, 'drilldown snapshot missing');
     assertOrThrow(drillSnapshot.dataSource === 'raw', `drilldown auto(non-day) expected raw source, got ${drillSnapshot.dataSource}`);
+    assertAggregationMetadata(
+      drilldown.json,
+      {
+        aggregationModeRequested: 'auto',
+        aggregationModeResolved: 'raw',
+        dataSource: 'raw',
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      },
+      'drilldown auto(non-day)',
+    );
 
     assertOrThrow(drillSnapshot.tenantId === state.tenantId, 'drilldown tenantId mismatch');
     assertOrThrow(drillSnapshot.sent === overviewSnapshot.sent, `sent mismatch: drilldown=${drillSnapshot.sent}, overview=${overviewSnapshot.sent}`);
@@ -572,6 +621,18 @@ async function main() {
       `rollup refresh rebuild expected 200, got ${refreshRebuild.status}: ${pickMessage(refreshRebuild.json, refreshRebuild.text)}`,
     );
 
+    const rawMutationMarker = `phase42-raw-only-${e2eKey}`;
+    const mutateAnomaly = await admin
+      .from('notification_deliveries')
+      .update({
+        last_error: rawMutationMarker,
+        error_message: rawMutationMarker,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', state.deliveryIds.rollup_d3)
+      .eq('tenant_id', state.tenantId);
+    assertOrThrow(!mutateAnomaly.error, `drilldown raw mutation failed: ${mutateAnomaly.error?.message || 'unknown'}`);
+
     const rollupDrilldownPath = `/api/platform/notifications/overview/tenants/${state.tenantId}?from=${encodeURIComponent(
       rollupFrom,
     )}&to=${encodeURIComponent(rollupTo)}&limit=2000&anomalyLimit=60`;
@@ -590,6 +651,22 @@ async function main() {
     const rollupSnapshot = getSnapshot(drillRollup.json);
     assertOrThrow(rollupSnapshot, 'drilldown rollup snapshot missing');
     assertOrThrow(rollupSnapshot.dataSource === 'rollup', `drilldown rollup expected rollup source, got ${rollupSnapshot.dataSource}`);
+    assertAggregationMetadata(
+      drillRollup.json,
+      {
+        aggregationModeRequested: 'rollup',
+        aggregationModeResolved: 'rollup',
+        dataSource: 'rollup',
+        isWholeUtcDayWindow: true,
+        rollupEligible: true,
+      },
+      'drilldown rollup',
+    );
+    assertOrThrow(
+      Array.isArray(rollupSnapshot.recentAnomalies) &&
+        rollupSnapshot.recentAnomalies.some((item) => String(item.lastError || item.errorMessage || '').includes(rawMutationMarker)),
+      'drilldown rollup recentAnomalies should include post-refresh raw mutation marker',
+    );
 
     const drillRaw = await apiRequest({
       method: 'GET',
@@ -605,6 +682,17 @@ async function main() {
     const rawSnapshot = getSnapshot(drillRaw.json);
     assertOrThrow(rawSnapshot, 'drilldown raw snapshot missing');
     assertOrThrow(rawSnapshot.dataSource === 'raw', `drilldown raw expected raw source, got ${rawSnapshot.dataSource}`);
+    assertAggregationMetadata(
+      drillRaw.json,
+      {
+        aggregationModeRequested: 'raw',
+        aggregationModeResolved: 'raw',
+        dataSource: 'raw',
+        isWholeUtcDayWindow: true,
+        rollupEligible: true,
+      },
+      'drilldown raw',
+    );
 
     const compareKeys = ['sent', 'failed', 'deadLetter', 'opened', 'clicked', 'conversion'];
     for (const key of compareKeys) {
@@ -660,6 +748,17 @@ async function main() {
       autoWholeDaySnapshot.dataSource === 'rollup',
       `drilldown auto(whole-day) expected rollup source, got ${autoWholeDaySnapshot.dataSource}`,
     );
+    assertAggregationMetadata(
+      drillAutoWholeDay.json,
+      {
+        aggregationModeRequested: 'auto',
+        aggregationModeResolved: 'rollup',
+        dataSource: 'rollup',
+        isWholeUtcDayWindow: true,
+        rollupEligible: true,
+      },
+      'drilldown auto(whole-day)',
+    );
 
     const unauthorized = await apiRequest({
       method: 'GET',
@@ -707,6 +806,8 @@ async function main() {
         channelFilter: true,
         dailyTrend: true,
         anomalySummary: true,
+        aggregationMetadataContract: true,
+        recentAnomaliesRawBacked: true,
         autoNonDayFallbackRaw: true,
         autoWholeDayUsesRollup: true,
         rawRollupReconciled: true,

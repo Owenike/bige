@@ -100,6 +100,9 @@ export type NotificationOverviewTenantStat = {
 };
 
 export type NotificationOverviewAggregationMode = "auto" | "raw" | "rollup";
+export const TENANT_DRILLDOWN_RECENT_ANOMALIES_DATA_SOURCE = "raw" as const;
+export const TENANT_DRILLDOWN_RECENT_ANOMALIES_RAW_REASON =
+  "Recent anomalies and anomaly summary stay raw-backed to preserve latest per-delivery error context and retry state that rollups do not store.";
 
 export type NotificationPerformanceOverviewSnapshot = {
   from: string;
@@ -596,6 +599,8 @@ export async function getNotificationTenantPerformanceDrilldown(params: {
 
   const supabase = params.supabase ?? createSupabaseAdminClient();
   const anomalyLimit = Math.min(120, Math.max(10, Number(params.anomalyLimit || 40)));
+  // Keep recent anomalies/anomalySummary raw-backed by design.
+  // Rollup rows only keep aggregates and cannot preserve per-delivery retry/error details for triage.
   let anomalyQuery = supabase
     .from("notification_deliveries")
     .select(

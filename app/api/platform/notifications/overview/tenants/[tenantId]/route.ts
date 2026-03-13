@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { apiError, apiSuccess, requireProfile } from "../../../../../../../lib/auth-context";
-import { getNotificationTenantPerformanceDrilldown } from "../../../../../../../lib/notification-overview-query";
+import { buildNotificationAggregationMetadata } from "../../../../../../../lib/notification-aggregation-contract";
+import {
+  canUseTenantDrilldownDailyRollupWindow,
+  getNotificationTenantPerformanceDrilldown,
+} from "../../../../../../../lib/notification-overview-query";
 import { requirePermission } from "../../../../../../../lib/permissions";
 import { uuidLikeSchema } from "../../../../../../../lib/notification-productization";
 
@@ -36,6 +40,7 @@ export async function GET(request: Request, context: { params: Promise<{ tenantI
   });
   if (!parsed.success) return apiError(400, "FORBIDDEN", parsed.error.issues[0]?.message || "Invalid query");
 
+  const requestedAggregationMode = parsed.data.aggregationMode || "auto";
   const drilldown = await getNotificationTenantPerformanceDrilldown({
     tenantId: tenantIdParsed.data,
     channel: parsed.data.channel || null,
@@ -43,11 +48,20 @@ export async function GET(request: Request, context: { params: Promise<{ tenantI
     to: parsed.data.to || null,
     limit: parsed.data.limit || 10000,
     anomalyLimit: parsed.data.anomalyLimit || 40,
-    aggregationMode: parsed.data.aggregationMode || "auto",
+    aggregationMode: requestedAggregationMode,
   });
   if (!drilldown.ok) return apiError(500, "INTERNAL_ERROR", drilldown.error);
 
+  const isWholeWindow = canUseTenantDrilldownDailyRollupWindow(drilldown.snapshot.from, drilldown.snapshot.to);
+  const aggregation = buildNotificationAggregationMetadata({
+    aggregationModeRequested: requestedAggregationMode,
+    dataSource: drilldown.snapshot.dataSource,
+    isWholeUtcDayWindow: isWholeWindow,
+    rollupEligible: isWholeWindow,
+  });
+
   return apiSuccess({
     snapshot: drilldown.snapshot,
+    ...aggregation,
   });
 }

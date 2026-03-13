@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
 
 type DeliveryChannel = "in_app" | "email" | "line" | "sms" | "webhook" | "other";
 
@@ -377,7 +378,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
 
             <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
               <p className="sub" style={{ marginTop: 0 }}>
-                Aggregation source: {snapshot.dataSource === "rollup" ? "daily rollup" : "raw query fallback"}.
+                {formatNotificationAggregationDataSourceLabel(snapshot.dataSource)}
               </p>
               <p className="sub" style={{ marginTop: 0 }}>
                 Rate definition: success/fail denominator = sent + failed; open/click/conversion denominator = sent.

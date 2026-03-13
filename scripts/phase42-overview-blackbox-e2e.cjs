@@ -103,6 +103,44 @@ function getSnapshot(payload) {
   return null;
 }
 
+function getAggregationMetadata(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  const root = payload;
+  const data = payload.data && typeof payload.data === 'object' ? payload.data : {};
+  const pick = (key) => (Object.prototype.hasOwnProperty.call(data, key) ? data[key] : root[key]);
+  const metadata = {
+    aggregationModeRequested: pick('aggregationModeRequested'),
+    aggregationModeResolved: pick('aggregationModeResolved'),
+    dataSource: pick('dataSource'),
+    isWholeUtcDayWindow: pick('isWholeUtcDayWindow'),
+    rollupEligible: pick('rollupEligible'),
+  };
+  if (!metadata.aggregationModeRequested || !metadata.aggregationModeResolved || !metadata.dataSource) return null;
+  return metadata;
+}
+
+function assertAggregationMetadata(payload, expected, label) {
+  const metadata = getAggregationMetadata(payload);
+  assertOrThrow(Boolean(metadata), `${label} aggregation metadata missing`);
+  assertOrThrow(
+    metadata.aggregationModeRequested === expected.aggregationModeRequested,
+    `${label} aggregationModeRequested expected ${expected.aggregationModeRequested}, got ${metadata.aggregationModeRequested}`,
+  );
+  assertOrThrow(
+    metadata.aggregationModeResolved === expected.aggregationModeResolved,
+    `${label} aggregationModeResolved expected ${expected.aggregationModeResolved}, got ${metadata.aggregationModeResolved}`,
+  );
+  assertOrThrow(metadata.dataSource === expected.dataSource, `${label} dataSource expected ${expected.dataSource}, got ${metadata.dataSource}`);
+  assertOrThrow(
+    metadata.isWholeUtcDayWindow === expected.isWholeUtcDayWindow,
+    `${label} isWholeUtcDayWindow expected ${expected.isWholeUtcDayWindow}, got ${metadata.isWholeUtcDayWindow}`,
+  );
+  assertOrThrow(
+    metadata.rollupEligible === expected.rollupEligible,
+    `${label} rollupEligible expected ${expected.rollupEligible}, got ${metadata.rollupEligible}`,
+  );
+}
+
 function toDateStringUtc(date) {
   return date.toISOString().slice(0, 10);
 }
@@ -496,6 +534,17 @@ async function main() {
     const snapshot = getSnapshot(overview.json);
     assertOrThrow(snapshot, 'overview snapshot missing');
     assertOrThrow(snapshot.dataSource === 'raw', `overview auto(non-day) expected raw source, got ${snapshot.dataSource}`);
+    assertAggregationMetadata(
+      overview.json,
+      {
+        aggregationModeRequested: 'auto',
+        aggregationModeResolved: 'raw',
+        dataSource: 'raw',
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      },
+      'overview auto(non-day)',
+    );
     assertOrThrow(snapshot.totalRows === 6, `overview totalRows expected 6, got ${snapshot.totalRows}`);
     assertOrThrow(snapshot.sent === 2, `overview sent expected 2, got ${snapshot.sent}`);
     assertOrThrow(snapshot.failed === 2, `overview failed expected 2, got ${snapshot.failed}`);
@@ -541,11 +590,84 @@ async function main() {
     );
     const analyticsSnapshot = getSnapshot(analytics.json);
     assertOrThrow(analyticsSnapshot, 'analytics snapshot missing');
+    assertAggregationMetadata(
+      analytics.json,
+      {
+        aggregationModeRequested: 'auto',
+        aggregationModeResolved: 'raw',
+        dataSource: 'raw',
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      },
+      'analytics auto(non-day)',
+    );
     assertOrThrow(
       analyticsSnapshot.sent === snapshot.sent &&
         analyticsSnapshot.failed === snapshot.failed &&
         analyticsSnapshot.deadLetter === snapshot.deadLetter,
       'overview and analytics core counters mismatch',
+    );
+
+    const trendsNonDay = await apiRequest({
+      method: 'GET',
+      baseUrl,
+      path: `/api/platform/notifications/trends?tenantId=${state.tenantId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(
+        to,
+      )}&limit=2000&topLimit=8&aggregationMode=auto`,
+      token: adminToken,
+      bypassSecret,
+    });
+    assertOrThrow(
+      trendsNonDay.status === 200,
+      `trends auto(non-day) expected 200, got ${trendsNonDay.status}: ${pickMessage(trendsNonDay.json, trendsNonDay.text)}`,
+    );
+    const trendsNonDaySnapshot = getSnapshot(trendsNonDay.json);
+    assertOrThrow(trendsNonDaySnapshot, 'trends auto(non-day) snapshot missing');
+    assertOrThrow(
+      trendsNonDaySnapshot.dataSource === 'raw',
+      `trends auto(non-day) expected raw source, got ${trendsNonDaySnapshot.dataSource}`,
+    );
+    assertAggregationMetadata(
+      trendsNonDay.json,
+      {
+        aggregationModeRequested: 'auto',
+        aggregationModeResolved: 'raw',
+        dataSource: 'raw',
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      },
+      'trends auto(non-day)',
+    );
+
+    const drilldownNonDay = await apiRequest({
+      method: 'GET',
+      baseUrl,
+      path: `/api/platform/notifications/overview/tenants/${state.tenantId}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(
+        to,
+      )}&limit=2000&anomalyLimit=40&aggregationMode=auto`,
+      token: adminToken,
+      bypassSecret,
+    });
+    assertOrThrow(
+      drilldownNonDay.status === 200,
+      `drilldown auto(non-day) expected 200, got ${drilldownNonDay.status}: ${pickMessage(drilldownNonDay.json, drilldownNonDay.text)}`,
+    );
+    const drilldownNonDaySnapshot = getSnapshot(drilldownNonDay.json);
+    assertOrThrow(drilldownNonDaySnapshot, 'drilldown auto(non-day) snapshot missing');
+    assertOrThrow(
+      drilldownNonDaySnapshot.dataSource === 'raw',
+      `drilldown auto(non-day) expected raw source, got ${drilldownNonDaySnapshot.dataSource}`,
+    );
+    assertAggregationMetadata(
+      drilldownNonDay.json,
+      {
+        aggregationModeRequested: 'auto',
+        aggregationModeResolved: 'raw',
+        dataSource: 'raw',
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      },
+      'drilldown auto(non-day)',
     );
 
     const refreshUnauthorized = await apiRequest({
@@ -598,6 +720,17 @@ async function main() {
     const rollupSnapshot = getSnapshot(overviewRollup.json);
     assertOrThrow(rollupSnapshot, 'overview rollup snapshot missing');
     assertOrThrow(rollupSnapshot.dataSource === 'rollup', `overview rollup dataSource expected rollup, got ${rollupSnapshot.dataSource}`);
+    assertAggregationMetadata(
+      overviewRollup.json,
+      {
+        aggregationModeRequested: 'rollup',
+        aggregationModeResolved: 'rollup',
+        dataSource: 'rollup',
+        isWholeUtcDayWindow: true,
+        rollupEligible: true,
+      },
+      'overview rollup',
+    );
 
     const overviewRaw = await apiRequest({
       method: 'GET',
@@ -613,6 +746,17 @@ async function main() {
     const rawSnapshot = getSnapshot(overviewRaw.json);
     assertOrThrow(rawSnapshot, 'overview raw snapshot missing');
     assertOrThrow(rawSnapshot.dataSource === 'raw', `overview raw dataSource expected raw, got ${rawSnapshot.dataSource}`);
+    assertAggregationMetadata(
+      overviewRaw.json,
+      {
+        aggregationModeRequested: 'raw',
+        aggregationModeResolved: 'raw',
+        dataSource: 'raw',
+        isWholeUtcDayWindow: true,
+        rollupEligible: true,
+      },
+      'overview raw',
+    );
 
     const comparedKeys = ['sent', 'failed', 'deadLetter', 'opened', 'clicked', 'conversion'];
     for (const key of comparedKeys) {
@@ -638,6 +782,116 @@ async function main() {
     assertOrThrow(
       autoRollupSnapshot.dataSource === 'rollup',
       `overview auto(whole-day) expected rollup source, got ${autoRollupSnapshot.dataSource}`,
+    );
+    assertAggregationMetadata(
+      overviewAutoRollup.json,
+      {
+        aggregationModeRequested: 'auto',
+        aggregationModeResolved: 'rollup',
+        dataSource: 'rollup',
+        isWholeUtcDayWindow: true,
+        rollupEligible: true,
+      },
+      'overview auto(whole-day)',
+    );
+
+    const analyticsAutoWholeDay = await apiRequest({
+      method: 'GET',
+      baseUrl,
+      path: `/api/platform/notifications/analytics?tenantId=${state.tenantId}&from=${encodeURIComponent(
+        rollupFrom,
+      )}&to=${encodeURIComponent(rollupTo)}&limit=2000&aggregationMode=auto`,
+      token: adminToken,
+      bypassSecret,
+    });
+    assertOrThrow(
+      analyticsAutoWholeDay.status === 200,
+      `analytics auto(whole-day) expected 200, got ${analyticsAutoWholeDay.status}: ${pickMessage(
+        analyticsAutoWholeDay.json,
+        analyticsAutoWholeDay.text,
+      )}`,
+    );
+    const analyticsAutoWholeDaySnapshot = getSnapshot(analyticsAutoWholeDay.json);
+    assertOrThrow(analyticsAutoWholeDaySnapshot, 'analytics auto(whole-day) snapshot missing');
+    assertOrThrow(
+      analyticsAutoWholeDaySnapshot.dataSource === 'rollup',
+      `analytics auto(whole-day) expected rollup source, got ${analyticsAutoWholeDaySnapshot.dataSource}`,
+    );
+    assertAggregationMetadata(
+      analyticsAutoWholeDay.json,
+      {
+        aggregationModeRequested: 'auto',
+        aggregationModeResolved: 'rollup',
+        dataSource: 'rollup',
+        isWholeUtcDayWindow: true,
+        rollupEligible: true,
+      },
+      'analytics auto(whole-day)',
+    );
+
+    const trendsAutoWholeDay = await apiRequest({
+      method: 'GET',
+      baseUrl,
+      path: `/api/platform/notifications/trends?tenantId=${state.tenantId}&from=${encodeURIComponent(
+        rollupFrom,
+      )}&to=${encodeURIComponent(rollupTo)}&limit=2000&topLimit=8&aggregationMode=auto`,
+      token: adminToken,
+      bypassSecret,
+    });
+    assertOrThrow(
+      trendsAutoWholeDay.status === 200,
+      `trends auto(whole-day) expected 200, got ${trendsAutoWholeDay.status}: ${pickMessage(trendsAutoWholeDay.json, trendsAutoWholeDay.text)}`,
+    );
+    const trendsAutoWholeDaySnapshot = getSnapshot(trendsAutoWholeDay.json);
+    assertOrThrow(trendsAutoWholeDaySnapshot, 'trends auto(whole-day) snapshot missing');
+    assertOrThrow(
+      trendsAutoWholeDaySnapshot.dataSource === 'rollup',
+      `trends auto(whole-day) expected rollup source, got ${trendsAutoWholeDaySnapshot.dataSource}`,
+    );
+    assertAggregationMetadata(
+      trendsAutoWholeDay.json,
+      {
+        aggregationModeRequested: 'auto',
+        aggregationModeResolved: 'rollup',
+        dataSource: 'rollup',
+        isWholeUtcDayWindow: true,
+        rollupEligible: true,
+      },
+      'trends auto(whole-day)',
+    );
+
+    const drilldownAutoWholeDay = await apiRequest({
+      method: 'GET',
+      baseUrl,
+      path: `/api/platform/notifications/overview/tenants/${state.tenantId}?from=${encodeURIComponent(
+        rollupFrom,
+      )}&to=${encodeURIComponent(rollupTo)}&limit=2000&anomalyLimit=40&aggregationMode=auto`,
+      token: adminToken,
+      bypassSecret,
+    });
+    assertOrThrow(
+      drilldownAutoWholeDay.status === 200,
+      `drilldown auto(whole-day) expected 200, got ${drilldownAutoWholeDay.status}: ${pickMessage(
+        drilldownAutoWholeDay.json,
+        drilldownAutoWholeDay.text,
+      )}`,
+    );
+    const drilldownAutoWholeDaySnapshot = getSnapshot(drilldownAutoWholeDay.json);
+    assertOrThrow(drilldownAutoWholeDaySnapshot, 'drilldown auto(whole-day) snapshot missing');
+    assertOrThrow(
+      drilldownAutoWholeDaySnapshot.dataSource === 'rollup',
+      `drilldown auto(whole-day) expected rollup source, got ${drilldownAutoWholeDaySnapshot.dataSource}`,
+    );
+    assertAggregationMetadata(
+      drilldownAutoWholeDay.json,
+      {
+        aggregationModeRequested: 'auto',
+        aggregationModeResolved: 'rollup',
+        dataSource: 'rollup',
+        isWholeUtcDayWindow: true,
+        rollupEligible: true,
+      },
+      'drilldown auto(whole-day)',
     );
 
     const unauthorized = await apiRequest({
@@ -685,8 +939,10 @@ async function main() {
         channelFilter: true,
         tenantFilter: true,
         aggregateConsistency: true,
+        aggregationMetadataContract: true,
         autoNonDayFallbackRaw: true,
         autoWholeDayUsesRollup: true,
+        allReadApisAligned: true,
         rawRollupReconciled: true,
         rollupRefreshRebuild: true,
         unauthorizedDenied: true,

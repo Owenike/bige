@@ -94,8 +94,18 @@ import {
   buildNotificationTrendComparisonItem,
   resolveNotificationTrendDirection,
 } from "../lib/notification-alert-trends";
+import {
+  buildNotificationAggregationMetadata,
+  buildTrendRollupEligibilityMetadata,
+  formatNotificationAggregationDataSourceLabel,
+} from "../lib/notification-aggregation-contract";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
-import { canUseOverviewDailyRollupWindow, canUseTenantDrilldownDailyRollupWindow } from "../lib/notification-overview-query";
+import {
+  canUseOverviewDailyRollupWindow,
+  canUseTenantDrilldownDailyRollupWindow,
+  TENANT_DRILLDOWN_RECENT_ANOMALIES_DATA_SOURCE,
+  TENANT_DRILLDOWN_RECENT_ANOMALIES_RAW_REASON,
+} from "../lib/notification-overview-query";
 import { canUseAnalyticsDailyRollupWindow } from "../lib/notification-delivery-analytics";
 import {
   getNotificationRuntimeSimulationScenario,
@@ -1339,6 +1349,67 @@ test("tenant drilldown rollup guard only allows whole-day UTC windows", () => {
 test("analytics rollup guard only allows whole-day UTC windows", () => {
   assert.equal(canUseAnalyticsDailyRollupWindow("2026-03-10T00:00:00.000Z", "2026-03-10T23:59:59.999Z"), true);
   assert.equal(canUseAnalyticsDailyRollupWindow("2026-03-10T08:00:00.000Z", "2026-03-10T20:00:00.000Z"), false);
+});
+
+test("aggregation metadata contract resolves auto non-day to raw", () => {
+  assert.deepEqual(
+    buildNotificationAggregationMetadata({
+      aggregationModeRequested: "auto",
+      dataSource: "raw",
+      isWholeUtcDayWindow: false,
+      rollupEligible: false,
+    }),
+    {
+      aggregationModeRequested: "auto",
+      aggregationModeResolved: "raw",
+      dataSource: "raw",
+      isWholeUtcDayWindow: false,
+      rollupEligible: false,
+    },
+  );
+});
+
+test("aggregation metadata contract resolves auto whole-day to rollup", () => {
+  assert.deepEqual(
+    buildNotificationAggregationMetadata({
+      aggregationModeRequested: "auto",
+      dataSource: "rollup",
+      isWholeUtcDayWindow: true,
+      rollupEligible: true,
+    }),
+    {
+      aggregationModeRequested: "auto",
+      aggregationModeResolved: "rollup",
+      dataSource: "rollup",
+      isWholeUtcDayWindow: true,
+      rollupEligible: true,
+    },
+  );
+});
+
+test("trend rollup eligibility metadata keeps whole-day and previous-window checks separate", () => {
+  assert.deepEqual(
+    buildTrendRollupEligibilityMetadata({
+      currentFromIso: "2026-03-10T00:00:00.000Z",
+      currentToIso: "2026-03-10T23:59:59.999Z",
+      previousFromIso: "2026-03-09T08:00:00.000Z",
+      previousToIso: "2026-03-10T07:59:59.000Z",
+    }),
+    {
+      isWholeUtcDayWindow: true,
+      rollupEligible: false,
+    },
+  );
+});
+
+test("aggregation data source labels are unified for overview and drilldown UI", () => {
+  assert.equal(formatNotificationAggregationDataSourceLabel("raw"), "Aggregation source: raw query aggregation.");
+  assert.equal(formatNotificationAggregationDataSourceLabel("rollup"), "Aggregation source: daily rollup aggregation.");
+});
+
+test("tenant drilldown recent anomalies contract stays raw-backed", () => {
+  assert.equal(TENANT_DRILLDOWN_RECENT_ANOMALIES_DATA_SOURCE, "raw");
+  assert.equal(TENANT_DRILLDOWN_RECENT_ANOMALIES_RAW_REASON.includes("rollups do not store"), true);
 });
 
 test("runtime integration contracts normalize event input and template fallback reason", () => {

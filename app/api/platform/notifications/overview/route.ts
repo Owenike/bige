@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-context";
-import { getNotificationPerformanceOverview } from "../../../../../lib/notification-overview-query";
+import { buildNotificationAggregationMetadata } from "../../../../../lib/notification-aggregation-contract";
+import { canUseOverviewDailyRollupWindow, getNotificationPerformanceOverview } from "../../../../../lib/notification-overview-query";
 import { requirePermission } from "../../../../../lib/permissions";
 import { uuidLikeSchema } from "../../../../../lib/notification-productization";
 
@@ -32,17 +33,27 @@ export async function GET(request: Request) {
   });
   if (!parsed.success) return apiError(400, "FORBIDDEN", parsed.error.issues[0]?.message || "Invalid query");
 
+  const requestedAggregationMode = parsed.data.aggregationMode || "auto";
   const overview = await getNotificationPerformanceOverview({
     tenantId: parsed.data.tenantId || null,
     channel: parsed.data.channel || null,
     from: parsed.data.from || null,
     to: parsed.data.to || null,
     limit: parsed.data.limit || 10000,
-    aggregationMode: parsed.data.aggregationMode || "auto",
+    aggregationMode: requestedAggregationMode,
   });
   if (!overview.ok) return apiError(500, "INTERNAL_ERROR", overview.error);
 
+  const isWholeWindow = canUseOverviewDailyRollupWindow(overview.snapshot.from, overview.snapshot.to);
+  const aggregation = buildNotificationAggregationMetadata({
+    aggregationModeRequested: requestedAggregationMode,
+    dataSource: overview.snapshot.dataSource,
+    isWholeUtcDayWindow: isWholeWindow,
+    rollupEligible: isWholeWindow,
+  });
+
   return apiSuccess({
     snapshot: overview.snapshot,
+    ...aggregation,
   });
 }
