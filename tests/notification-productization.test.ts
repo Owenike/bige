@@ -144,9 +144,14 @@ import {
 } from "../lib/notification-read-api-url-state";
 import {
   clearNotificationReadApiResultCache,
+  inspectNotificationReadApiResultCache,
   invalidateNotificationReadApiResultCache,
+  NOTIFICATION_READ_API_RESULT_CACHE_EXPIRED_MS,
+  NOTIFICATION_READ_API_RESULT_CACHE_MAX_ENTRIES,
   NOTIFICATION_READ_API_RESULT_CACHE_TTL_MS,
   NotificationReadApiRequestLifecycleController,
+  pruneNotificationReadApiResultCache,
+  shouldRevalidateNotificationReadApiOnVisible,
 } from "../lib/notification-read-api-request-state";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
@@ -2613,6 +2618,183 @@ test("read API result cache does not write failed or cancelled responses and doe
 
   assert.equal(afterInvalidate.getState().data, "good-again");
   assert.equal(invalidateCalls, 1);
+});
+
+test("read API cache policy evicts least-recently-used entries and prunes expired results", async () => {
+  clearNotificationReadApiResultCache();
+  let nowMs = 10_000;
+
+  for (let index = 0; index < NOTIFICATION_READ_API_RESULT_CACHE_MAX_ENTRIES + 2; index += 1) {
+    const controller = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+      onStateChange: () => {},
+      classifyError: (error) =>
+        classifyNotificationReadApiOrchestrationError(error, {
+          source: "overview",
+          message: "Load overview page failed",
+        }),
+      isCancelledError: (error) => error.kind === "cancelled",
+    });
+
+    controller.start({
+      requestKey: `overview:lru:${index}|refresh:0`,
+      cacheKey: `overview:lru:${index}`,
+      cause: "query",
+      now: () => nowMs,
+      loader: async () => `value-${index}`,
+    });
+    await flushAsyncWork();
+    nowMs += 1;
+  }
+
+  const evictedSnapshot = inspectNotificationReadApiResultCache({ now: () => nowMs });
+  assert.equal(evictedSnapshot.length, NOTIFICATION_READ_API_RESULT_CACHE_MAX_ENTRIES);
+  assert.equal(evictedSnapshot.some((entry) => entry.cacheKey === "overview:lru:0"), false);
+  assert.equal(evictedSnapshot.some((entry) => entry.cacheKey === "overview:lru:1"), false);
+  assert.equal(
+    evictedSnapshot.some((entry) => entry.cacheKey === `overview:lru:${NOTIFICATION_READ_API_RESULT_CACHE_MAX_ENTRIES + 1}`),
+    true,
+  );
+
+  pruneNotificationReadApiResultCache({
+    now: () => nowMs + NOTIFICATION_READ_API_RESULT_CACHE_EXPIRED_MS + 1,
+  });
+  assert.equal(inspectNotificationReadApiResultCache({ now: () => nowMs + NOTIFICATION_READ_API_RESULT_CACHE_EXPIRED_MS + 1 }).length, 0);
+});
+
+test("read API cache policy distinguishes stale versus expired visibility revalidation", async () => {
+  clearNotificationReadApiResultCache();
+  let nowMs = 1_000;
+  const controller = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  controller.start({
+    requestKey: "overview:visible|refresh:0",
+    cacheKey: "overview:visible",
+    cause: "query",
+    now: () => nowMs,
+    cacheTtlMs: 100,
+    cacheExpireMs: 300,
+    loader: async () => "visible-seed",
+  });
+  await flushAsyncWork();
+
+  assert.equal(
+    shouldRevalidateNotificationReadApiOnVisible({
+      cacheKey: "overview:visible",
+      loading: false,
+      now: () => nowMs + 50,
+      cacheTtlMs: 100,
+      cacheExpireMs: 300,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRevalidateNotificationReadApiOnVisible({
+      cacheKey: "overview:visible",
+      loading: false,
+      now: () => nowMs + 150,
+      cacheTtlMs: 100,
+      cacheExpireMs: 300,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldRevalidateNotificationReadApiOnVisible({
+      cacheKey: "overview:visible",
+      loading: true,
+      now: () => nowMs + 150,
+      cacheTtlMs: 100,
+      cacheExpireMs: 300,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRevalidateNotificationReadApiOnVisible({
+      cacheKey: "overview:visible",
+      loading: false,
+      now: () => nowMs + 350,
+      cacheTtlMs: 100,
+      cacheExpireMs: 300,
+    }),
+    true,
+  );
+});
+
+test("read API visibility revalidation keeps existing data, avoids duplicate in-flight requests, and refreshes stale cache", async () => {
+  clearNotificationReadApiResultCache();
+  let nowMs = 1_000;
+  let loaderCalls = 0;
+  const deferred = createDeferredPromise<string>();
+  const controller = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  controller.start({
+    requestKey: "tenant:visible|refresh:0",
+    cacheKey: "tenant:visible",
+    cause: "query",
+    now: () => nowMs,
+    cacheTtlMs: 100,
+    cacheExpireMs: 300,
+    loader: async () => {
+      loaderCalls += 1;
+      return "seed";
+    },
+  });
+  await flushAsyncWork();
+
+  nowMs += 150;
+  controller.start({
+    requestKey: "tenant:visible|refresh:0",
+    cacheKey: "tenant:visible",
+    cause: "visibility",
+    now: () => nowMs,
+    cacheTtlMs: 100,
+    cacheExpireMs: 300,
+    loader: async () => {
+      loaderCalls += 1;
+      return deferred.promise;
+    },
+  });
+  controller.start({
+    requestKey: "tenant:visible|refresh:0",
+    cacheKey: "tenant:visible",
+    cause: "visibility",
+    now: () => nowMs,
+    cacheTtlMs: 100,
+    cacheExpireMs: 300,
+    loader: async () => {
+      loaderCalls += 1;
+      return "duplicate";
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(loaderCalls, 2);
+  assert.equal(controller.getState().data, "seed");
+  assert.equal(controller.getState().phase, "refreshing");
+  assert.equal(controller.getState().cacheStatus, "stale");
+
+  deferred.resolve("revalidated");
+  await deferred.promise;
+  await flushAsyncWork();
+
+  assert.equal(controller.getState().data, "revalidated");
+  assert.equal(controller.getState().phase, "idle");
+  assert.equal(controller.getState().cacheStatus, "hit");
 });
 
 test("read API query-state defaults and search-param hydration stay aligned for overview and drilldown", () => {

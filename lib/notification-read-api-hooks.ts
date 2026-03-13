@@ -22,6 +22,7 @@ import {
 import {
   NotificationReadApiRequestLifecycleController,
   createNotificationReadApiRequestState,
+  shouldRevalidateNotificationReadApiOnVisible,
   type NotificationReadApiRequestCause,
   type NotificationReadApiRequestState,
 } from "./notification-read-api-request-state";
@@ -454,6 +455,36 @@ function useNotificationManagedRequest<TData>(params: {
       loader: loadRequest,
     });
   }, [controller, params.queryFingerprint, params.refreshKey]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    function handleVisibilityChange() {
+      if (document.visibilityState !== "visible") return;
+
+      const currentState = controller.getState();
+      if (
+        !shouldRevalidateNotificationReadApiOnVisible({
+          cacheKey: params.queryFingerprint,
+          loading: currentState.loading,
+        })
+      ) {
+        return;
+      }
+
+      controller.start({
+        requestKey: currentState.requestKey ?? `${params.queryFingerprint}|visibility`,
+        cacheKey: params.queryFingerprint,
+        cause: "visibility",
+        loader: loadRequest,
+      });
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [controller, params.queryFingerprint]);
 
   return state;
 }

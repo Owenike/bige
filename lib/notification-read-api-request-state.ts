@@ -1,6 +1,6 @@
 "use client";
 
-export type NotificationReadApiRequestCause = "query" | "refresh";
+export type NotificationReadApiRequestCause = "query" | "refresh" | "visibility";
 
 export type NotificationReadApiRequestPhase = "idle" | "initial_loading" | "reloading" | "refreshing";
 
@@ -29,9 +29,21 @@ type SharedRequestEntry<TData> = {
 type RequestLoader<TData> = (signal: AbortSignal) => Promise<TData>;
 
 const sharedRequestEntries = new Map<string, SharedRequestEntry<unknown>>();
-const sharedResultCache = new Map<string, { data: unknown; cachedAt: number }>();
+const sharedResultCache = new Map<string, { data: unknown; cachedAt: number; lastAccessedAt: number }>();
 
 export const NOTIFICATION_READ_API_RESULT_CACHE_TTL_MS = 30_000;
+export const NOTIFICATION_READ_API_RESULT_CACHE_EXPIRED_MS = 5 * 60_000;
+export const NOTIFICATION_READ_API_RESULT_CACHE_MAX_ENTRIES = 50;
+
+type NotificationReadApiCacheLookupStatus = "miss" | "hit" | "stale" | "expired";
+
+export type NotificationReadApiCacheDebugEntry = {
+  cacheKey: string;
+  cachedAt: number;
+  lastAccessedAt: number;
+  ageMs: number;
+  status: NotificationReadApiCacheLookupStatus;
+};
 
 function acquireSharedRequest<TData>(requestKey: string, loader: RequestLoader<TData>) {
   let entry = sharedRequestEntries.get(requestKey) as SharedRequestEntry<TData> | undefined;
@@ -108,11 +120,106 @@ function resolveNow(now?: () => number) {
   return typeof now === "function" ? now() : Date.now();
 }
 
+function getNotificationReadApiCacheStatus(params: {
+  cacheKey: string;
+  now?: () => number;
+  cacheTtlMs?: number;
+  cacheExpireMs?: number;
+}): NotificationReadApiCacheLookupStatus {
+  const entry = sharedResultCache.get(params.cacheKey);
+  if (!entry) return "miss";
+
+  const nowMs = resolveNow(params.now);
+  const ttl = typeof params.cacheTtlMs === "number" ? params.cacheTtlMs : NOTIFICATION_READ_API_RESULT_CACHE_TTL_MS;
+  const expireMs =
+    typeof params.cacheExpireMs === "number" ? params.cacheExpireMs : NOTIFICATION_READ_API_RESULT_CACHE_EXPIRED_MS;
+  const ageMs = Math.max(0, nowMs - entry.cachedAt);
+
+  if (ageMs > expireMs) return "expired";
+  if (ageMs > ttl) return "stale";
+  return "hit";
+}
+
+export function inspectNotificationReadApiResultCache(params: {
+  now?: () => number;
+  cacheTtlMs?: number;
+  cacheExpireMs?: number;
+} = {}) {
+  const nowMs = resolveNow(params.now);
+  return Array.from(sharedResultCache.entries())
+    .map(([cacheKey, entry]) => ({
+      cacheKey,
+      cachedAt: entry.cachedAt,
+      lastAccessedAt: entry.lastAccessedAt,
+      ageMs: Math.max(0, nowMs - entry.cachedAt),
+      status: getNotificationReadApiCacheStatus({
+        cacheKey,
+        now: params.now,
+        cacheTtlMs: params.cacheTtlMs,
+        cacheExpireMs: params.cacheExpireMs,
+      }),
+    }))
+    .sort((left, right) => left.lastAccessedAt - right.lastAccessedAt);
+}
+
+export function pruneNotificationReadApiResultCache(params: {
+  now?: () => number;
+  cacheExpireMs?: number;
+  maxEntries?: number;
+} = {}) {
+  const expiredKeys = inspectNotificationReadApiResultCache({
+    now: params.now,
+    cacheExpireMs: params.cacheExpireMs,
+  })
+    .filter((entry) => entry.status === "expired")
+    .map((entry) => entry.cacheKey);
+
+  for (const cacheKey of expiredKeys) {
+    sharedResultCache.delete(cacheKey);
+  }
+
+  const maxEntries =
+    typeof params.maxEntries === "number" ? params.maxEntries : NOTIFICATION_READ_API_RESULT_CACHE_MAX_ENTRIES;
+  const survivors = inspectNotificationReadApiResultCache({
+    now: params.now,
+    cacheExpireMs: params.cacheExpireMs,
+  });
+
+  if (survivors.length <= maxEntries) return;
+
+  for (const entry of survivors.slice(0, survivors.length - maxEntries)) {
+    sharedResultCache.delete(entry.cacheKey);
+  }
+}
+
+export function shouldRevalidateNotificationReadApiOnVisible(params: {
+  cacheKey: string | null;
+  loading: boolean;
+  now?: () => number;
+  cacheTtlMs?: number;
+  cacheExpireMs?: number;
+}) {
+  if (params.loading || !params.cacheKey) return false;
+  const status = getNotificationReadApiCacheStatus({
+    cacheKey: params.cacheKey,
+    now: params.now,
+    cacheTtlMs: params.cacheTtlMs,
+    cacheExpireMs: params.cacheExpireMs,
+  });
+  return status === "stale" || status === "expired";
+}
+
 function getNotificationReadApiCachedResult<TData>(params: {
   cacheKey: string;
   now?: () => number;
   cacheTtlMs?: number;
+  cacheExpireMs?: number;
 }) {
+  pruneNotificationReadApiResultCache({
+    now: params.now,
+    cacheExpireMs: params.cacheExpireMs,
+  });
+
   const entry = sharedResultCache.get(params.cacheKey);
   if (!entry) {
     return {
@@ -121,19 +228,36 @@ function getNotificationReadApiCachedResult<TData>(params: {
     };
   }
 
-  const ttl = typeof params.cacheTtlMs === "number" ? params.cacheTtlMs : NOTIFICATION_READ_API_RESULT_CACHE_TTL_MS;
-  const ageMs = Math.max(0, resolveNow(params.now) - entry.cachedAt);
+  const status = getNotificationReadApiCacheStatus({
+    cacheKey: params.cacheKey,
+    now: params.now,
+    cacheTtlMs: params.cacheTtlMs,
+    cacheExpireMs: params.cacheExpireMs,
+  });
+
+  if (status === "expired") {
+    sharedResultCache.delete(params.cacheKey);
+    return {
+      status: "miss" as const,
+      data: null,
+    };
+  }
+
+  entry.lastAccessedAt = resolveNow(params.now);
   return {
-    status: ageMs <= ttl ? ("hit" as const) : ("stale" as const),
+    status,
     data: entry.data as TData,
   };
 }
 
 function writeNotificationReadApiCachedResult<TData>(cacheKey: string, data: TData, now?: () => number) {
+  const nowMs = resolveNow(now);
   sharedResultCache.set(cacheKey, {
     data,
-    cachedAt: resolveNow(now),
+    cachedAt: nowMs,
+    lastAccessedAt: nowMs,
   });
+  pruneNotificationReadApiResultCache({ now });
 }
 
 export class NotificationReadApiRequestLifecycleController<TData, TError extends Error> {
@@ -167,6 +291,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
     cause: NotificationReadApiRequestCause;
     loader: RequestLoader<TData>;
     cacheTtlMs?: number;
+    cacheExpireMs?: number;
     now?: () => number;
   }) {
     if (this.disposed) return;
@@ -181,6 +306,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
             cacheKey,
             now: params.now,
             cacheTtlMs: params.cacheTtlMs,
+            cacheExpireMs: params.cacheExpireMs,
           });
 
     if (params.cause === "query" && cached.status === "hit") {
@@ -207,12 +333,12 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
     this.releaseCurrent?.();
 
     const nextData =
-      cached.data !== null ? cached.data : params.cause === "refresh" ? this.state.data : null;
+      cached.data !== null ? cached.data : params.cause === "query" ? null : this.state.data;
     const hasData = nextData !== null;
     const phase: NotificationReadApiRequestPhase = hasData
-      ? params.cause === "refresh"
-        ? "refreshing"
-        : "reloading"
+      ? params.cause === "query"
+        ? "reloading"
+        : "refreshing"
       : "initial_loading";
 
     this.commit({
@@ -256,7 +382,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
 
         if (this.isCancelledError(classified)) {
           const cancelledData =
-            cached.data !== null ? cached.data : params.cause === "refresh" ? this.state.data : null;
+            cached.data !== null ? cached.data : params.cause === "query" ? null : this.state.data;
           this.commit({
             data: cancelledData,
             loading: false,
@@ -273,7 +399,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
         }
 
         const failedData =
-          cached.data !== null ? cached.data : params.cause === "refresh" ? this.state.data : null;
+          cached.data !== null ? cached.data : params.cause === "query" ? null : this.state.data;
         this.commit({
           data: failedData,
           loading: false,

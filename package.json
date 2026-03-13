@@ -26,6 +26,7 @@
         "test:phase42:consumer": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:lifecycle": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:cache": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
+        "test:phase42:cache-policy": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:orchestration": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:query-state": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:url-sync": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
