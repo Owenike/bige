@@ -16,6 +16,7 @@ export type OrchestratorDiagnostics = {
     suggestedNextAction: string;
   }>;
   artifactSummary: {
+    backendType: string;
     queueStatus: string;
     patchStatus: string;
     promotionStatus: string;
@@ -26,9 +27,15 @@ export type OrchestratorDiagnostics = {
     workspaceStatus: string;
   };
   workerSummary: {
+    workerStatus: string;
+    supervisionStatus: string;
     workerId: string | null;
     leaseOwner: string | null;
     lastHeartbeatAt: string | null;
+    lastLeaseRenewalAt: string | null;
+    daemonHeartbeatAt: string | null;
+    cancellationStatus: string;
+    pauseStatus: string;
     retryCount: number;
   };
   recoverySummary: {
@@ -103,6 +110,7 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
     missingPrerequisites,
     blockedReasons,
     artifactSummary: {
+      backendType: state.backendType,
       queueStatus: state.queueStatus,
       patchStatus: state.patchStatus,
       promotionStatus: state.promotionStatus,
@@ -113,9 +121,15 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
       workspaceStatus: state.workspaceStatus,
     },
     workerSummary: {
+      workerStatus: state.workerStatus,
+      supervisionStatus: state.supervisionStatus,
       workerId: state.workerId,
       leaseOwner: state.leaseOwner,
       lastHeartbeatAt: state.lastHeartbeatAt,
+      lastLeaseRenewalAt: state.lastLeaseRenewalAt,
+      daemonHeartbeatAt: state.daemonHeartbeatAt,
+      cancellationStatus: state.cancellationStatus,
+      pauseStatus: state.pauseStatus,
       retryCount: state.retryCount,
     },
     recoverySummary: {
@@ -133,8 +147,8 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     `Planner: ${summary.plannerSummary}`,
     `Reviewer: ${summary.reviewerSummary}`,
     `Last iteration: ${summary.lastIterationSummary}`,
-    `Artifacts: queue=${summary.artifactSummary.queueStatus}, patch=${summary.artifactSummary.patchStatus}, promotion=${summary.artifactSummary.promotionStatus}, handoff=${summary.artifactSummary.handoffStatus}, prDraft=${summary.artifactSummary.prDraftStatus}, liveAcceptance=${summary.artifactSummary.liveAcceptanceStatus}, livePass=${summary.artifactSummary.livePassStatus}, workspace=${summary.artifactSummary.workspaceStatus}`,
-    `Worker: workerId=${summary.workerSummary.workerId ?? "none"}, leaseOwner=${summary.workerSummary.leaseOwner ?? "none"}, lastHeartbeat=${summary.workerSummary.lastHeartbeatAt ?? "none"}, retries=${summary.workerSummary.retryCount}`,
+    `Artifacts: backend=${summary.artifactSummary.backendType}, queue=${summary.artifactSummary.queueStatus}, patch=${summary.artifactSummary.patchStatus}, promotion=${summary.artifactSummary.promotionStatus}, handoff=${summary.artifactSummary.handoffStatus}, prDraft=${summary.artifactSummary.prDraftStatus}, liveAcceptance=${summary.artifactSummary.liveAcceptanceStatus}, livePass=${summary.artifactSummary.livePassStatus}, workspace=${summary.artifactSummary.workspaceStatus}`,
+    `Worker: status=${summary.workerSummary.workerStatus}, supervision=${summary.workerSummary.supervisionStatus}, workerId=${summary.workerSummary.workerId ?? "none"}, leaseOwner=${summary.workerSummary.leaseOwner ?? "none"}, lastHeartbeat=${summary.workerSummary.lastHeartbeatAt ?? "none"}, lastLeaseRenewal=${summary.workerSummary.lastLeaseRenewalAt ?? "none"}, daemonHeartbeat=${summary.workerSummary.daemonHeartbeatAt ?? "none"}, cancel=${summary.workerSummary.cancellationStatus}, pause=${summary.workerSummary.pauseStatus}, retries=${summary.workerSummary.retryCount}`,
     `Recovery: action=${summary.recoverySummary.action ?? "none"}, reason=${summary.recoverySummary.reason ?? "none"}`,
     `Blockers: ${summary.blockers.join(" | ") || "none"}`,
     `Missing prerequisites: ${summary.missingPrerequisites.join(", ") || "none"}`,

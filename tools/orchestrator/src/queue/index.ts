@@ -1,5 +1,12 @@
-import { queueRunCollectionSchema, queueRunItemSchema, type OrchestratorState, type QueueRunCollection, type QueueRunItem } from "../schemas";
-import type { StorageProvider } from "../storage";
+import {
+  orchestratorStateSchema,
+  queueRunCollectionSchema,
+  queueRunItemSchema,
+  type OrchestratorState,
+  type QueueRunCollection,
+  type QueueRunItem,
+} from "../schemas";
+import type { BackendProvider } from "../backend";
 import { buildLockScopeKeys, createLeaseTimestamps, hasLockConflict } from "../locking";
 
 function sortQueueItems(items: QueueRunItem[]) {
@@ -33,7 +40,7 @@ export function formatQueueSummary(items: QueueRunItem[]) {
   return sortQueueItems(items)
     .map(
       (item) =>
-        `${item.id} :: ${item.status} :: state=${item.stateId} :: priority=${item.priority} :: attempts=${item.attemptCount} :: worker=${item.workerId ?? "none"}`,
+        `${item.id} :: ${item.status} :: state=${item.stateId} :: priority=${item.priority} :: attempts=${item.attemptCount} :: worker=${item.workerId ?? "none"} :: cancel=${item.cancellationStatus} :: pause=${item.pauseStatus}`,
     )
     .join("\n");
 }
@@ -44,34 +51,41 @@ export function applyQueueItemToState(
   now: Date,
   recoveryDecision: OrchestratorState["lastRecoveryDecision"] = state.lastRecoveryDecision,
 ) {
-  return {
+  return orchestratorStateSchema.parse({
     ...state,
     queueStatus: item.status,
     workerId: item.workerId,
     leaseOwner: item.leaseOwner,
     lastHeartbeatAt: item.lastHeartbeatAt,
+    lastLeaseRenewalAt: item.lastLeaseRenewalAt,
+    cancellationStatus: item.cancellationStatus,
+    pauseStatus: item.pauseStatus,
     lastRecoveryDecision: recoveryDecision,
     retryCount: Math.max(item.attemptCount - 1, 0),
     queuedAt: item.queuedAt,
     startedAt: item.startedAt,
     finishedAt: item.finishedAt,
     updatedAt: now.toISOString(),
-  } satisfies Partial<OrchestratorState>;
+  });
 }
 
-export async function listQueueRuns(storage: StorageProvider) {
-  return sortQueueItems((await storage.loadQueue()).items);
+export async function listQueueRuns(backend: BackendProvider) {
+  return sortQueueItems((await backend.loadQueue()).items);
+}
+
+export async function getQueueRun(backend: BackendProvider, runId: string) {
+  return (await backend.loadQueue()).items.find((item) => item.id === runId) ?? null;
 }
 
 export async function enqueueStateRun(params: {
-  storage: StorageProvider;
+  backend: BackendProvider;
   state: OrchestratorState;
   priority?: number;
   scheduledAt?: string;
   requestedBy?: string | null;
 }) {
   const now = new Date();
-  const queue = await params.storage.loadQueue();
+  const queue = await params.backend.loadQueue();
   const existing = queue.items.find(
     (item) => item.stateId === params.state.id && ["queued", "running", "paused"].includes(item.status),
   );
@@ -107,6 +121,9 @@ export async function enqueueStateRun(params: {
     leaseOwner: null,
     leaseExpiresAt: null,
     lastHeartbeatAt: null,
+    lastLeaseRenewalAt: null,
+    cancellationStatus: "none",
+    pauseStatus: "none",
     queuedAt: now.toISOString(),
     startedAt: null,
     finishedAt: null,
@@ -117,7 +134,7 @@ export async function enqueueStateRun(params: {
     updatedAt: now.toISOString(),
     items: [...queue.items, item],
   });
-  await params.storage.saveQueue(nextQueue);
+  await params.backend.saveQueue(nextQueue);
   return {
     queue: nextQueue,
     item,
@@ -126,14 +143,14 @@ export async function enqueueStateRun(params: {
 }
 
 export async function acquireNextQueueRun(params: {
-  storage: StorageProvider;
+  backend: BackendProvider;
   workerId: string;
   leaseMs?: number;
   now?: Date;
 }) {
   const now = params.now ?? new Date();
   const leaseMs = params.leaseMs ?? 60_000;
-  const queue = await params.storage.loadQueue();
+  const queue = await params.backend.loadQueue();
   const sorted = sortQueueItems(queue.items);
   const candidate = sorted.find((item) => {
     if (item.status !== "queued") return false;
@@ -160,16 +177,19 @@ export async function acquireNextQueueRun(params: {
       startedAt: candidate.startedAt ?? now.toISOString(),
       finishedAt: null,
       ...lease,
+      lastLeaseRenewalAt: lease.lastHeartbeatAt,
       reason: null,
+      cancellationStatus: "none",
+      pauseStatus: "none",
     },
     now,
   );
-  await params.storage.saveQueue(nextQueue);
+  await params.backend.saveQueue(nextQueue);
   return nextQueue.items.find((item) => item.id === candidate.id) ?? null;
 }
 
 export async function renewQueueRunLease(params: {
-  storage: StorageProvider;
+  backend: BackendProvider;
   runId: string;
   workerId: string;
   leaseMs?: number;
@@ -177,27 +197,38 @@ export async function renewQueueRunLease(params: {
 }) {
   const now = params.now ?? new Date();
   const leaseMs = params.leaseMs ?? 60_000;
-  const queue = await params.storage.loadQueue();
+  const queue = await params.backend.loadQueue();
   const current = queue.items.find((item) => item.id === params.runId);
   if (!current || current.leaseOwner !== params.workerId || current.status !== "running") {
     return null;
   }
-  const nextQueue = updateItem(queue, params.runId, createLeaseTimestamps(now, leaseMs), now);
-  await params.storage.saveQueue(nextQueue);
+  const lease = createLeaseTimestamps(now, leaseMs);
+  const nextQueue = updateItem(
+    queue,
+    params.runId,
+    {
+      ...lease,
+      lastLeaseRenewalAt: lease.lastHeartbeatAt,
+    },
+    now,
+  );
+  await params.backend.saveQueue(nextQueue);
   return nextQueue.items.find((item) => item.id === params.runId) ?? null;
 }
 
 export async function updateQueueRunStatus(params: {
-  storage: StorageProvider;
+  backend: BackendProvider;
   runId: string;
   status: QueueRunItem["status"];
   reason?: string | null;
   workerId?: string | null;
   recoveryDecision?: QueueRunItem["recoveryDecision"];
+  cancellationStatus?: QueueRunItem["cancellationStatus"];
+  pauseStatus?: QueueRunItem["pauseStatus"];
   now?: Date;
 }) {
   const now = params.now ?? new Date();
-  const queue = await params.storage.loadQueue();
+  const queue = await params.backend.loadQueue();
   const current = queue.items.find((item) => item.id === params.runId);
   if (!current) {
     throw new Error(`Queue run ${params.runId} was not found.`);
@@ -211,35 +242,83 @@ export async function updateQueueRunStatus(params: {
       workerId: params.status === "running" ? (params.workerId ?? current.workerId) : null,
       leaseOwner: params.status === "running" ? (params.workerId ?? current.leaseOwner) : null,
       leaseExpiresAt: params.status === "running" ? current.leaseExpiresAt : null,
-      lastHeartbeatAt: params.status === "running" ? current.lastHeartbeatAt : current.lastHeartbeatAt,
+      lastHeartbeatAt: current.lastHeartbeatAt,
+      lastLeaseRenewalAt: current.lastLeaseRenewalAt,
+      cancellationStatus:
+        params.cancellationStatus ?? (params.status === "cancelled" ? "cancelled" : current.cancellationStatus),
+      pauseStatus: params.pauseStatus ?? (params.status === "paused" ? "paused" : current.pauseStatus),
       finishedAt: isTerminalStatus(params.status) ? now.toISOString() : current.finishedAt,
       recoveryDecision: params.recoveryDecision ?? current.recoveryDecision,
     },
     now,
   );
-  await params.storage.saveQueue(nextQueue);
+  await params.backend.saveQueue(nextQueue);
   return nextQueue.items.find((item) => item.id === params.runId) ?? null;
 }
 
-export async function cancelQueueRun(storage: StorageProvider, runId: string, reason?: string) {
-  const current = (await storage.loadQueue()).items.find((item) => item.id === runId);
-  if (current?.status === "running") {
-    throw new Error("Cannot cancel a running run without cooperative cancellation.");
-  }
-  return updateQueueRunStatus({ storage, runId, status: "cancelled", reason: reason ?? "Run was cancelled by the operator." });
-}
-
-export async function pauseQueueRun(storage: StorageProvider, runId: string, reason?: string) {
-  const current = (await storage.loadQueue()).items.find((item) => item.id === runId);
-  if (current?.status === "running") {
-    throw new Error("Cannot pause a running run without cooperative cancellation.");
-  }
-  return updateQueueRunStatus({ storage, runId, status: "paused", reason: reason ?? "Run was paused by the operator." });
-}
-
-export async function requeueRun(storage: StorageProvider, runId: string, reason?: string) {
+export async function requestCancelRun(backend: BackendProvider, runId: string, reason?: string) {
   const now = new Date();
-  const queue = await storage.loadQueue();
+  const queue = await backend.loadQueue();
+  const current = queue.items.find((item) => item.id === runId);
+  if (!current) {
+    throw new Error(`Queue run ${runId} was not found.`);
+  }
+  if (current.status !== "running") {
+    return updateQueueRunStatus({
+      backend,
+      runId,
+      status: "cancelled",
+      reason: reason ?? "Run was cancelled by the operator.",
+      cancellationStatus: "cancelled",
+      now,
+    });
+  }
+  const nextQueue = updateItem(
+    queue,
+    runId,
+    {
+      cancellationStatus: "cancel_requested",
+      reason: reason ?? "Cancellation was requested by the operator.",
+    },
+    now,
+  );
+  await backend.saveQueue(nextQueue);
+  return nextQueue.items.find((item) => item.id === runId) ?? null;
+}
+
+export async function requestPauseRun(backend: BackendProvider, runId: string, reason?: string) {
+  const now = new Date();
+  const queue = await backend.loadQueue();
+  const current = queue.items.find((item) => item.id === runId);
+  if (!current) {
+    throw new Error(`Queue run ${runId} was not found.`);
+  }
+  if (current.status !== "running") {
+    return updateQueueRunStatus({
+      backend,
+      runId,
+      status: "paused",
+      reason: reason ?? "Run was paused by the operator.",
+      pauseStatus: "paused",
+      now,
+    });
+  }
+  const nextQueue = updateItem(
+    queue,
+    runId,
+    {
+      pauseStatus: "pause_requested",
+      reason: reason ?? "Pause was requested by the operator.",
+    },
+    now,
+  );
+  await backend.saveQueue(nextQueue);
+  return nextQueue.items.find((item) => item.id === runId) ?? null;
+}
+
+export async function requeueRun(backend: BackendProvider, runId: string, reason?: string) {
+  const now = new Date();
+  const queue = await backend.loadQueue();
   const current = queue.items.find((item) => item.id === runId);
   if (!current) {
     throw new Error(`Queue run ${runId} was not found.`);
@@ -257,23 +336,26 @@ export async function requeueRun(storage: StorageProvider, runId: string, reason
       leaseOwner: null,
       leaseExpiresAt: null,
       lastHeartbeatAt: null,
+      lastLeaseRenewalAt: null,
       finishedAt: null,
+      cancellationStatus: "none",
+      pauseStatus: "none",
       reason: reason ?? "Run was requeued.",
     },
     now,
   );
-  await storage.saveQueue(nextQueue);
+  await backend.saveQueue(nextQueue);
   return nextQueue.items.find((item) => item.id === runId) ?? null;
 }
 
 export async function forceRequeueExpiredRun(params: {
-  storage: StorageProvider;
+  backend: BackendProvider;
   runId: string;
   reason?: string;
   now?: Date;
 }) {
   const now = params.now ?? new Date();
-  const queue = await params.storage.loadQueue();
+  const queue = await params.backend.loadQueue();
   const current = queue.items.find((item) => item.id === params.runId);
   if (!current) {
     throw new Error(`Queue run ${params.runId} was not found.`);
@@ -294,11 +376,14 @@ export async function forceRequeueExpiredRun(params: {
       leaseOwner: null,
       leaseExpiresAt: null,
       lastHeartbeatAt: null,
+      lastLeaseRenewalAt: null,
       finishedAt: null,
+      cancellationStatus: "none",
+      pauseStatus: "none",
       reason: params.reason ?? "Run was requeued after lease expiry.",
     },
     now,
   );
-  await params.storage.saveQueue(nextQueue);
+  await params.backend.saveQueue(nextQueue);
   return nextQueue.items.find((item) => item.id === params.runId) ?? null;
 }

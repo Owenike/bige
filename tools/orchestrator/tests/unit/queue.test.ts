@@ -36,17 +36,17 @@ test("queue can enqueue, dedupe the same state, and dequeue by priority", async 
   await dependencies.storage.saveState(high);
 
   const first = await enqueueStateRun({
-    storage: dependencies.storage,
+    backend: dependencies.backend,
     state: low,
     priority: 1,
   });
   const duplicate = await enqueueStateRun({
-    storage: dependencies.storage,
+    backend: dependencies.backend,
     state: low,
     priority: 5,
   });
   await enqueueStateRun({
-    storage: dependencies.storage,
+    backend: dependencies.backend,
     state: high,
     priority: 10,
   });
@@ -54,14 +54,14 @@ test("queue can enqueue, dedupe the same state, and dequeue by priority", async 
   assert.equal(duplicate.deduped, true);
   assert.equal(first.item.id, duplicate.item.id);
 
-  const queue = await listQueueRuns(dependencies.storage);
+  const queue = await listQueueRuns(dependencies.backend);
   assert.equal(queue.length, 2);
 
   const claimed = await acquireNextQueueRun({
-    storage: dependencies.storage,
+    backend: dependencies.backend,
     workerId: "worker-queue",
   });
   assert.equal(claimed?.stateId, "queue-high");
-  const updatedQueue = await listQueueRuns(dependencies.storage);
+  const updatedQueue = await listQueueRuns(dependencies.backend);
   assert.equal(updatedQueue.find((item) => item.stateId === "queue-low")?.status, "queued");
 });

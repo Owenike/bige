@@ -71,12 +71,14 @@ import { GhCliDraftPullRequestAdapter } from "./github-handoff";
 import { writeLiveEvidence } from "./live-evidence";
 import { runOrchestratorPreflight, type PreflightTargetName } from "./preflight";
 import { normalizeHandoffConfig, resolveTaskProfile } from "./profiles";
+import { FileBackendProvider, SqliteBackendProvider, type BackendProvider } from "./backend";
 
 type ProviderMap<T> = Record<PlannerProviderKind, T | null>;
 type ExecutorProviderMap = Record<ExecutorProviderKind, ExecutionProvider | null>;
 
 export type OrchestratorDependencies = {
   storage: StorageProvider;
+  backend: BackendProvider;
   plannerProviders: ProviderMap<PlannerProvider>;
   reviewerProviders: ProviderMap<ReviewerProvider>;
   executorProviders: ExecutorProviderMap;
@@ -340,6 +342,7 @@ export function createInitialState(params: {
     publishBranch?: boolean;
     createBranch?: boolean;
   };
+  backendType?: "file" | "sqlite";
   now?: Date;
 }) {
   const now = params.now ?? new Date();
@@ -428,6 +431,23 @@ export function createInitialState(params: {
       workspaceStatus: "unknown",
       liveAcceptanceStatus: "not_run",
       livePassStatus: "not_run",
+      backendType: params.backendType ?? "file",
+      queueStatus: "not_queued",
+      workerStatus: "idle",
+      cancellationStatus: "none",
+      pauseStatus: "none",
+      workerId: null,
+      leaseOwner: null,
+      lastHeartbeatAt: null,
+      lastLeaseRenewalAt: null,
+      daemonHeartbeatAt: null,
+      supervisionStatus: "inactive",
+      lastRecoveryDecision: null,
+      recoveryAttemptCount: 0,
+      retryCount: 0,
+      queuedAt: null,
+      startedAt: null,
+      finishedAt: null,
       exportArtifactPaths: [],
       handoffStatus: "not_ready",
       prDraftStatus: "not_ready",
@@ -1539,12 +1559,24 @@ export async function prepareHandoff(
 export function createDefaultDependencies(params: {
   repoPath: string;
   storageRoot?: string;
+  backendType?: "file" | "sqlite";
+  backendRoot?: string;
   executorMode?: ExecutorProviderKind;
   mockCiStatus?: CIStatusSummary;
   openaiClient?: OpenAIResponsesClient | null;
   workspaceRoot?: string;
 }) {
   const storage = new FileStorage(params.storageRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-state"));
+  const backendRoot = params.backendRoot ?? params.storageRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-state");
+  const backend =
+    params.backendType === "sqlite"
+      ? new SqliteBackendProvider({
+          rootDir: backendRoot,
+        })
+      : new FileBackendProvider({
+          rootDir: backendRoot,
+          storage,
+        });
   const responsesClient =
     params.openaiClient ??
     (process.env.OPENAI_API_KEY ? new NodeHttpsResponsesClient(process.env.OPENAI_API_KEY) : null);
@@ -1577,6 +1609,7 @@ export function createDefaultDependencies(params: {
   });
   return {
     storage,
+    backend,
     plannerProviders,
     reviewerProviders,
     executorProviders,

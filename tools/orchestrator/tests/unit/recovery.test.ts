@@ -28,9 +28,9 @@ test("recovery requeues a stale running run when it is safe to take over", async
     approvalMode: "auto",
   });
   await dependencies.storage.saveState(state);
-  await enqueueStateRun({ storage: dependencies.storage, state });
+  await enqueueStateRun({ backend: dependencies.backend, state });
   await acquireNextQueueRun({
-    storage: dependencies.storage,
+    backend: dependencies.backend,
     workerId: "worker-a",
     now: new Date("2026-03-14T00:00:00.000Z"),
     leaseMs: 60_000,
@@ -40,7 +40,7 @@ test("recovery requeues a stale running run when it is safe to take over", async
     dependencies,
     now: new Date("2026-03-14T00:02:00.000Z"),
   });
-  const queue = await listQueueRuns(dependencies.storage);
+  const queue = await listQueueRuns(dependencies.backend);
   assert.equal(decisions[0]?.decision.action, "requeued");
   assert.equal(queue[0]?.status, "queued");
 });
@@ -69,9 +69,9 @@ test("recovery keeps approval-pending work paused instead of taking it over", as
     pendingHumanApproval: true,
   });
   await dependencies.storage.saveState(state);
-  await enqueueStateRun({ storage: dependencies.storage, state });
+  await enqueueStateRun({ backend: dependencies.backend, state });
   await acquireNextQueueRun({
-    storage: dependencies.storage,
+    backend: dependencies.backend,
     workerId: "worker-a",
     now: new Date("2026-03-14T00:00:00.000Z"),
     leaseMs: 60_000,
@@ -81,7 +81,7 @@ test("recovery keeps approval-pending work paused instead of taking it over", as
     dependencies,
     now: new Date("2026-03-14T00:02:00.000Z"),
   });
-  const queue = await listQueueRuns(dependencies.storage);
+  const queue = await listQueueRuns(dependencies.backend);
   const updated = await dependencies.storage.loadState("recovery-paused");
   assert.equal(decisions[0]?.decision.action, "paused");
   assert.equal(queue[0]?.status, "paused");

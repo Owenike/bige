@@ -53,7 +53,11 @@ $suiteMap = @{
     "$outDir\tests\unit\queue.test.js",
     "$outDir\tests\unit\worker.test.js",
     "$outDir\tests\unit\locking.test.js",
-    "$outDir\tests\unit\recovery.test.js"
+    "$outDir\tests\unit\recovery.test.js",
+    "$outDir\tests\unit\backend-provider.test.js",
+    "$outDir\tests\unit\cancellation.test.js",
+    "$outDir\tests\unit\daemon.test.js",
+    "$outDir\tests\unit\supervision.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js",
@@ -139,6 +143,18 @@ $suiteMap = @{
   "recovery" = @(
     "$outDir\tests\unit\recovery.test.js"
   )
+  "backend-provider" = @(
+    "$outDir\tests\unit\backend-provider.test.js"
+  )
+  "cancellation" = @(
+    "$outDir\tests\unit\cancellation.test.js"
+  )
+  "daemon" = @(
+    "$outDir\tests\unit\daemon.test.js"
+  )
+  "supervision" = @(
+    "$outDir\tests\unit\supervision.test.js"
+  )
   "live-smoke" = @(
     "$outDir\tests\integration\live-smoke.test.js"
   )
@@ -183,6 +199,10 @@ $suiteMap = @{
     "$outDir\tests\unit\worker.test.js",
     "$outDir\tests\unit\locking.test.js",
     "$outDir\tests\unit\recovery.test.js",
+    "$outDir\tests\unit\backend-provider.test.js",
+    "$outDir\tests\unit\cancellation.test.js",
+    "$outDir\tests\unit\daemon.test.js",
+    "$outDir\tests\unit\supervision.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",

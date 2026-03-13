@@ -38,11 +38,11 @@ test("locking prevents a second worker from taking a conflicting run until the l
   });
   await dependencies.storage.saveState(firstState);
   await dependencies.storage.saveState(secondState);
-  await enqueueStateRun({ storage: dependencies.storage, state: firstState, priority: 5 });
-  await enqueueStateRun({ storage: dependencies.storage, state: secondState, priority: 4 });
+  await enqueueStateRun({ backend: dependencies.backend, state: firstState, priority: 5 });
+  await enqueueStateRun({ backend: dependencies.backend, state: secondState, priority: 4 });
 
   const claimed = await acquireNextQueueRun({
-    storage: dependencies.storage,
+    backend: dependencies.backend,
     workerId: "worker-a",
     now: new Date("2026-03-14T00:00:00.000Z"),
     leaseMs: 60_000,
@@ -50,7 +50,7 @@ test("locking prevents a second worker from taking a conflicting run until the l
   assert.equal(claimed?.stateId, "lock-first");
 
   const blocked = await acquireNextQueueRun({
-    storage: dependencies.storage,
+    backend: dependencies.backend,
     workerId: "worker-b",
     now: new Date("2026-03-14T00:00:10.000Z"),
     leaseMs: 60_000,
@@ -58,7 +58,7 @@ test("locking prevents a second worker from taking a conflicting run until the l
   assert.equal(blocked, null);
 
   const afterExpiry = await acquireNextQueueRun({
-    storage: dependencies.storage,
+    backend: dependencies.backend,
     workerId: "worker-b",
     now: new Date("2026-03-14T00:01:10.000Z"),
     leaseMs: 60_000,

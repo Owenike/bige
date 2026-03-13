@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   orchestratorStateJsonSchema,
@@ -28,6 +28,13 @@ export class FileStorage implements StorageProvider {
     return path.join(this.rootDir, `queue.json`);
   }
 
+  private async atomicWrite(filePath: string, value: string) {
+    await mkdir(this.rootDir, { recursive: true });
+    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    await writeFile(tempPath, value, "utf8");
+    await rename(tempPath, filePath);
+  }
+
   async loadState(id: string): Promise<OrchestratorState | null> {
     try {
       const content = await readFile(this.getStatePath(id), "utf8");
@@ -46,8 +53,7 @@ export class FileStorage implements StorageProvider {
   }
 
   async saveState(state: OrchestratorState) {
-    await mkdir(this.rootDir, { recursive: true });
-    await writeFile(this.getStatePath(state.id), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+    await this.atomicWrite(this.getStatePath(state.id), `${JSON.stringify(state, null, 2)}\n`);
   }
 
   async loadQueue(): Promise<QueueRunCollection> {
@@ -71,8 +77,7 @@ export class FileStorage implements StorageProvider {
   }
 
   async saveQueue(queue: QueueRunCollection) {
-    await mkdir(this.rootDir, { recursive: true });
-    await writeFile(this.getQueuePath(), `${JSON.stringify(queue, null, 2)}\n`, "utf8");
+    await this.atomicWrite(this.getQueuePath(), `${JSON.stringify(queue, null, 2)}\n`);
   }
 }
 

@@ -4,6 +4,7 @@
 - Optional: `OPENAI_API_KEY`
 - Optional: `ORCHESTRATOR_STORAGE_ROOT`
 - Optional: `ORCHESTRATOR_WORKSPACE_ROOT`
+- Optional: `ORCHESTRATOR_BACKEND_TYPE=file|sqlite`
 - Optional: `ORCHESTRATOR_GITHUB_HANDOFF=true`
 - Optional: `GITHUB_TOKEN` or `GH_TOKEN`
 - Optional: GitHub CLI auth for `GitHubCliStatusAdapter`
@@ -37,6 +38,12 @@ Blocked reasons use one shared shape:
 - `suggestedNextAction`
 
 These results are persisted into orchestrator state as `lastPreflightResult` and `lastBlockedReasons`.
+
+Preflight now also decides whether these operator paths are runnable before they start:
+- live smoke / live acceptance / live pass
+- GitHub handoff
+- promotion / branch publish
+- worker daemon processing for a given state profile
 
 ## Profiles
 Task/repo profiles centralize orchestrator-side defaults for:
@@ -191,6 +198,21 @@ Diagnostics summarize:
 ## Queue / Worker / Lock / Recovery
 The orchestrator can now run through a durable queue instead of only ad hoc CLI execution.
 
+Backend choices:
+- `file`
+  - simplest MVP
+  - queue/lease data lives in JSON files
+  - useful for local smoke and low-concurrency single-host runs
+- `sqlite`
+  - current recommended durable backend
+  - queue/lease/worker registry live in a single SQLite database file
+  - better for long-running single-host worker mode and validating lease/recovery semantics
+
+Why SQLite-first:
+- no external network dependency
+- easier to validate queue + lease + recovery than raw file locking
+- still preserves a future path for a shared remote backend later
+
 Queue items persist:
 - `taskId`
 - `runId`
@@ -219,6 +241,8 @@ Worker commands:
 ```powershell
 npm run orchestrator:worker:once -- --worker-id worker-1
 npm run orchestrator:worker:run -- --worker-id worker-1 --poll-ms 1000 --max-polls 10
+npm run orchestrator:worker:status -- --worker-id worker-1
+npm run orchestrator:backend:inspect
 ```
 
 Operator control commands:
@@ -231,11 +255,25 @@ npm run orchestrator:run:requeue -- --state-id demo
 
 Behavior summary:
 - `worker:once` performs one poll cycle and exits.
-- `worker:run` keeps polling for eligible queued runs.
+- `worker:run` keeps polling for eligible queued runs and now behaves like a lightweight daemon/supervised poll loop.
 - leases prevent two workers from taking the same task / repo / workspace scope at the same time.
 - running items renew a heartbeat-backed lease while work is in progress.
 - expired leases are eligible for recovery.
 - approval / handoff / promotion pending states are paused rather than force-taken-over.
+- diagnostics can now show backend type, queue depth, worker health, stale lease counts, pause/cancel requests, and recovery status.
+
+Cooperative cancellation / pause:
+- queued items can still be cancelled or paused immediately
+- running items move to `cancel_requested` or `pause_requested`
+- worker checks those requests at safe boundaries between orchestrator iterations/tool phases
+- resulting terminal state is recorded as `cancelled` or `paused`
+- approval pending / handoff pending / promotion pending data are preserved; cancellation and pause do not blindly delete artifacts
+
+Daemon / supervision notes:
+- `worker:run` records worker identity, daemon heartbeat, last error, consecutive error state, and supervision status
+- repeated worker failures back off instead of hot-looping
+- stale leases can be recovered without leaving the task permanently stuck
+- this is still an in-process daemon-style worker, not a full OS service manager
 
 Recovery summary:
 - stale running jobs with expired leases are requeued if safe to take over
@@ -302,6 +340,14 @@ npm run orchestrator:review -- --state-id demo
 - Default: `.tmp/orchestrator-state/<state-id>.json`
 - Override with `ORCHESTRATOR_STORAGE_ROOT` or `--storage-root`
 
+## Backend Storage Location
+- `file` backend:
+  - queue: `.tmp/orchestrator-state/queue.json`
+  - workers: `.tmp/orchestrator-state/workers.json`
+- `sqlite` backend:
+  - `.tmp/orchestrator-state/orchestrator-backend.sqlite`
+- Override backend type with `--backend-type file|sqlite`
+
 ## Workspace Location
 - Default: `.tmp/orchestrator-workspaces/<state-id>/iteration-<n>`
 - Override with `ORCHESTRATOR_WORKSPACE_ROOT` or `--workspace-root`
@@ -363,9 +409,14 @@ npm run test:orchestrator:queue
 npm run test:orchestrator:worker
 npm run test:orchestrator:locking
 npm run test:orchestrator:recovery
+npm run test:orchestrator:backend-provider
+npm run test:orchestrator:cancellation
+npm run test:orchestrator:daemon
+npm run test:orchestrator:supervision
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine
+npm run test:orchestrator:full-validation
 ```
 
 ## Provider Status
@@ -398,7 +449,8 @@ npm run test:orchestrator:state-machine
 - Preflight is fail-fast and safety-first. It does not relax any existing approval, promotion, or command safety rules.
 - GitHub handoff, live paths, and promotion all consume the same preflight/readiness model, so blocked or skipped paths should now explain themselves consistently.
 - Queue / worker mode is still MVP:
-  - queue persistence is file-backed
-  - recovery is lease/heartbeat based, not distributed consensus
-  - running runs cannot be operator-paused/cancelled without cooperative stop support
+  - queue/lock backend is now pluggable, but only `file` and `sqlite` are implemented
+  - recovery is still lease/heartbeat based, not distributed consensus
+  - cooperative pause/cancel only stop at safe boundaries; they are not hard interrupts in the middle of arbitrary commands
+  - `worker:run` is daemon-style supervision, not a fully managed OS/background service
   - approval, handoff, and promotion pending runs are preserved conservatively rather than aggressively reclaimed

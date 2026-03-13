@@ -21,7 +21,7 @@ export async function recoverStaleQueueRuns(params: {
   now?: Date;
 }) {
   const now = params.now ?? new Date();
-  const queueItems = await listQueueRuns(params.dependencies.storage);
+  const queueItems = await listQueueRuns(params.dependencies.backend);
   const decisions: Array<{
     run: QueueRunItem;
     decision: ReturnType<typeof recoveryDecisionSchema.parse>;
@@ -81,17 +81,18 @@ export async function recoverStaleQueueRuns(params: {
     const updatedRun =
       decision.action === "requeued"
         ? await forceRequeueExpiredRun({
-            storage: params.dependencies.storage,
+            backend: params.dependencies.backend,
             runId: item.id,
             reason: decision.reason,
             now,
           })
         : await updateQueueRunStatus({
-            storage: params.dependencies.storage,
+            backend: params.dependencies.backend,
             runId: item.id,
             status: "paused",
             reason: decision.reason,
             recoveryDecision: decision,
+            pauseStatus: "paused",
             now,
           });
 

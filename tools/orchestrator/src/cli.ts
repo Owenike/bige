@@ -17,12 +17,19 @@ import {
   runOrchestratorLoop,
   runOrchestratorOnce,
 } from "./orchestrator";
-import { orchestratorStateSchema, type ExecutionMode, type ExecutorFallbackMode, type ExecutorProviderKind, type PlannerProviderKind } from "./schemas";
+import {
+  orchestratorStateSchema,
+  type BackendType,
+  type ExecutionMode,
+  type ExecutorFallbackMode,
+  type ExecutorProviderKind,
+  type PlannerProviderKind,
+} from "./schemas";
 import { FileSystemWorkspaceManager } from "./workspace";
 import { runOrchestratorPreflight, formatPreflightSummary } from "./preflight";
 import { buildDiagnosticsSummary, formatDiagnosticsSummary } from "./diagnostics";
-import { acquireNextQueueRun, applyQueueItemToState, cancelQueueRun, enqueueStateRun, formatQueueSummary, listQueueRuns, pauseQueueRun, requeueRun } from "./queue";
-import { runQueueWorker } from "./worker";
+import { applyQueueItemToState, enqueueStateRun, formatQueueSummary, listQueueRuns, requeueRun, requestCancelRun, requestPauseRun } from "./queue";
+import { getWorkerStatus, runQueueWorker } from "./worker";
 
 async function resolveRunId(params: {
   stateId: string;
@@ -32,7 +39,7 @@ async function resolveRunId(params: {
   if (params.explicitRunId) {
     return params.explicitRunId;
   }
-  const queue = await listQueueRuns(params.dependencies.storage);
+  const queue = await listQueueRuns(params.dependencies.backend);
   const match = queue.find((item) => item.stateId === params.stateId && ["queued", "running", "paused", "blocked", "failed"].includes(item.status));
   if (!match) {
     throw new Error(`No queue run found for state ${params.stateId}.`);
@@ -65,14 +72,26 @@ function formatWorkerSummary(summary: {
   recovered: number;
   finalStatuses: string[];
   queueSize: number;
+  backendType: string;
+  daemon: boolean;
+  workerStatus: string;
+  supervisionStatus: string;
+  lastError: string | null;
+  heartbeatStatus: string | null;
 }) {
   return [
     `Worker: ${summary.workerId}`,
+    `Backend: ${summary.backendType}`,
+    `Daemon mode: ${summary.daemon}`,
+    `Worker status: ${summary.workerStatus}`,
+    `Supervision: ${summary.supervisionStatus}`,
     `Polls: ${summary.polls}`,
     `Processed: ${summary.processed}`,
     `Recovered stale runs: ${summary.recovered}`,
     `Final statuses: ${summary.finalStatuses.join(", ") || "none"}`,
     `Queue size: ${summary.queueSize}`,
+    `Heartbeat: ${summary.heartbeatStatus ?? "none"}`,
+    `Last error: ${summary.lastError ?? "none"}`,
   ].join("\n");
 }
 
@@ -107,15 +126,17 @@ async function main() {
   const executorMode = getOption(options, "executor", "mock") as ExecutorProviderKind;
   const executionMode = getOption(options, "execution-mode", executorMode === "mock" ? "mock" : "dry_run") as ExecutionMode;
   const executorFallbackMode = getOption(options, "executor-fallback", "blocked") as ExecutorFallbackMode;
+  const backendType = getOption(options, "backend-type", "file") as BackendType;
   const workspaceRoot = getOption(options, "workspace-root", path.join(repoPath, ".tmp", "orchestrator-workspaces"));
   const liveSmokeEnabled = getOption(options, "live-smoke", "false") === "true";
   const applyWorkspace = getOption(options, "apply-workspace", "false") === "true";
   const createBranch = getOption(options, "create-branch", "true") === "true";
   const publishBranch = getOption(options, "publish-branch", "false") === "true";
   const githubHandoffEnabled = getOption(options, "github-handoff", "false") === "true";
-  const dependencies = createDefaultDependencies({
+  let dependencies = createDefaultDependencies({
     repoPath,
     storageRoot,
+    backendType,
     executorMode,
     workspaceRoot,
   });
@@ -190,6 +211,7 @@ async function main() {
         publishBranch: getOption(options, "handoff-publish-branch", "false") === "true",
         createBranch: getOption(options, "handoff-create-branch", "true") === "true",
       },
+      backendType,
     });
     await dependencies.storage.saveState(state);
     process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
@@ -199,6 +221,15 @@ async function main() {
   const existingState = await dependencies.storage.loadState(stateId);
   if (!existingState) {
     throw new Error(`State ${stateId} was not found. Run init first.`);
+  }
+  if (existingState.backendType !== dependencies.backend.backendType) {
+    dependencies = createDefaultDependencies({
+      repoPath,
+      storageRoot,
+      backendType: existingState.backendType,
+      executorMode,
+      workspaceRoot,
+    });
   }
 
   if (command === "plan") {
@@ -230,7 +261,7 @@ async function main() {
 
   if (command === "queue:enqueue") {
     const result = await enqueueStateRun({
-      storage: dependencies.storage,
+      backend: dependencies.backend,
       state: existingState,
       priority: Number.parseInt(getOption(options, "priority", "0"), 10),
       scheduledAt: options.get("scheduled-at"),
@@ -245,7 +276,7 @@ async function main() {
   }
 
   if (command === "queue:list") {
-    const queue = await listQueueRuns(dependencies.storage);
+    const queue = await listQueueRuns(dependencies.backend);
     process.stdout.write(`${formatQueueSummary(queue)}\n`);
     return;
   }
@@ -266,11 +297,25 @@ async function main() {
       workerId: getOption(options, "worker-id", "worker-loop"),
       dependencies,
       continuous: true,
+      daemon: true,
       pollIntervalMs: Number.parseInt(getOption(options, "poll-ms", "1000"), 10),
       maxPolls: Number.parseInt(getOption(options, "max-polls", "10"), 10),
+      maxIdleCycles: Number.parseInt(getOption(options, "max-idle-cycles", "3"), 10),
       leaseMs: Number.parseInt(getOption(options, "lease-ms", "60000"), 10),
     });
     process.stdout.write(`${formatWorkerSummary(summary)}\n`);
+    return;
+  }
+
+  if (command === "worker:status") {
+    const summary = await getWorkerStatus(dependencies, options.get("worker-id"));
+    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "backend:inspect") {
+    const inspection = await dependencies.backend.inspect();
+    process.stdout.write(`${JSON.stringify(inspection, null, 2)}\n`);
     return;
   }
 
@@ -280,7 +325,7 @@ async function main() {
       dependencies,
       explicitRunId: options.get("run-id"),
     });
-    const updatedRun = await cancelQueueRun(dependencies.storage, runId, options.get("reason"));
+    const updatedRun = await requestCancelRun(dependencies.backend, runId, options.get("reason"));
     if (updatedRun) {
       const updatedState = orchestratorStateSchema.parse(applyQueueItemToState(existingState, updatedRun, new Date()));
       await dependencies.storage.saveState(updatedState);
@@ -295,7 +340,7 @@ async function main() {
       dependencies,
       explicitRunId: options.get("run-id"),
     });
-    const updatedRun = await pauseQueueRun(dependencies.storage, runId, options.get("reason"));
+    const updatedRun = await requestPauseRun(dependencies.backend, runId, options.get("reason"));
     if (updatedRun) {
       const updatedState = orchestratorStateSchema.parse(applyQueueItemToState(existingState, updatedRun, new Date()));
       await dependencies.storage.saveState(updatedState);
@@ -310,7 +355,7 @@ async function main() {
       dependencies,
       explicitRunId: options.get("run-id"),
     });
-    const updatedRun = await requeueRun(dependencies.storage, runId, options.get("reason"));
+    const updatedRun = await requeueRun(dependencies.backend, runId, options.get("reason"));
     if (updatedRun) {
       const updatedState = orchestratorStateSchema.parse(applyQueueItemToState(existingState, updatedRun, new Date()));
       await dependencies.storage.saveState(updatedState);
@@ -449,6 +494,8 @@ async function main() {
       "  node cli.js run-loop --state-id default --executor mock",
       "  node cli.js worker:once --worker-id worker-1",
       "  node cli.js worker:run --worker-id worker-1 --poll-ms 1000 --max-polls 10",
+      "  node cli.js worker:status --worker-id worker-1",
+      "  node cli.js backend:inspect",
       "  node cli.js run:pause --state-id default",
       "  node cli.js run:resume --state-id default",
       "  node cli.js run:cancel --state-id default",

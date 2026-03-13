@@ -197,7 +197,12 @@ export const liveAcceptanceStatusSchema = z.enum(["not_run", "skipped", "passed"
 export const livePassStatusSchema = z.enum(["not_run", "skipped", "passed", "failed", "blocked"]);
 export const handoffStatusSchema = z.enum(["not_ready", "exported", "handoff_ready", "branch_published", "handoff_failed"]);
 export const prDraftStatusSchema = z.enum(["not_ready", "metadata_ready", "payload_ready", "skipped", "failed"]);
+export const backendTypeSchema = z.enum(["file", "sqlite"]);
 export const queueStatusSchema = z.enum(["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"]);
+export const cancellationStatusSchema = z.enum(["none", "cancel_requested", "cancelled"]);
+export const pauseStatusSchema = z.enum(["none", "pause_requested", "paused"]);
+export const workerRuntimeStatusSchema = z.enum(["idle", "polling", "running", "backing_off", "stopped"]);
+export const supervisionStatusSchema = z.enum(["inactive", "healthy", "backing_off", "recovering", "stopped"]);
 export const recoveryDecisionSchema = z.object({
   runId: z.string(),
   action: z.enum(["none", "requeued", "retained", "paused", "blocked", "cancelled"]),
@@ -226,6 +231,9 @@ export const queueRunItemSchema = z.object({
   leaseOwner: z.string().nullable().default(null),
   leaseExpiresAt: z.string().nullable().default(null),
   lastHeartbeatAt: z.string().nullable().default(null),
+  lastLeaseRenewalAt: z.string().nullable().default(null),
+  cancellationStatus: cancellationStatusSchema.default("none"),
+  pauseStatus: pauseStatusSchema.default("none"),
   queuedAt: z.string(),
   startedAt: z.string().nullable().default(null),
   finishedAt: z.string().nullable().default(null),
@@ -235,6 +243,26 @@ export const queueRunItemSchema = z.object({
 export const queueRunCollectionSchema = z.object({
   updatedAt: z.string(),
   items: z.array(queueRunItemSchema).default([]),
+});
+export const queueWorkerRecordSchema = z.object({
+  workerId: z.string(),
+  status: workerRuntimeStatusSchema.default("idle"),
+  supervisionStatus: supervisionStatusSchema.default("inactive"),
+  currentRunId: z.string().nullable().default(null),
+  backendType: backendTypeSchema,
+  leaseOwner: z.string().nullable().default(null),
+  lastHeartbeatAt: z.string().nullable().default(null),
+  daemonHeartbeatAt: z.string().nullable().default(null),
+  lastError: z.string().nullable().default(null),
+  consecutiveErrors: z.number().int().nonnegative().default(0),
+  idleCycles: z.number().int().nonnegative().default(0),
+  pollCount: z.number().int().nonnegative().default(0),
+  startedAt: z.string(),
+  updatedAt: z.string(),
+});
+export const queueWorkerCollectionSchema = z.object({
+  updatedAt: z.string(),
+  workers: z.array(queueWorkerRecordSchema).default([]),
 });
 
 export const artifactPruneResultSchema = z.object({
@@ -525,11 +553,19 @@ export const orchestratorStateSchema = z.object({
   workspaceStatus: workspaceStatusSchema.default("unknown"),
   liveAcceptanceStatus: liveAcceptanceStatusSchema.default("not_run"),
   livePassStatus: livePassStatusSchema.default("not_run"),
+  backendType: backendTypeSchema.default("file"),
   queueStatus: queueStatusSchema.default("not_queued"),
+  workerStatus: workerRuntimeStatusSchema.default("idle"),
+  cancellationStatus: cancellationStatusSchema.default("none"),
+  pauseStatus: pauseStatusSchema.default("none"),
   workerId: z.string().nullable().default(null),
   leaseOwner: z.string().nullable().default(null),
   lastHeartbeatAt: z.string().nullable().default(null),
+  lastLeaseRenewalAt: z.string().nullable().default(null),
+  daemonHeartbeatAt: z.string().nullable().default(null),
+  supervisionStatus: supervisionStatusSchema.default("inactive"),
   lastRecoveryDecision: recoveryDecisionSchema.nullable().default(null),
+  recoveryAttemptCount: z.number().int().nonnegative().default(0),
   retryCount: z.number().int().nonnegative().default(0),
   queuedAt: z.string().nullable().default(null),
   startedAt: z.string().nullable().default(null),
@@ -579,10 +615,17 @@ export type AuditTrail = z.infer<typeof auditTrailSchema>;
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 export type PreflightTarget = z.infer<typeof preflightTargetSchema>;
 export type PreflightResult = z.infer<typeof preflightResultSchema>;
+export type BackendType = z.infer<typeof backendTypeSchema>;
 export type QueueStatus = z.infer<typeof queueStatusSchema>;
+export type CancellationStatus = z.infer<typeof cancellationStatusSchema>;
+export type PauseStatus = z.infer<typeof pauseStatusSchema>;
+export type WorkerRuntimeStatus = z.infer<typeof workerRuntimeStatusSchema>;
+export type SupervisionStatus = z.infer<typeof supervisionStatusSchema>;
 export type RecoveryDecision = z.infer<typeof recoveryDecisionSchema>;
 export type QueueRunItem = z.infer<typeof queueRunItemSchema>;
 export type QueueRunCollection = z.infer<typeof queueRunCollectionSchema>;
+export type QueueWorkerRecord = z.infer<typeof queueWorkerRecordSchema>;
+export type QueueWorkerCollection = z.infer<typeof queueWorkerCollectionSchema>;
 
 const stringArrayJsonSchema: JsonSchema = {
   type: "array",
@@ -620,6 +663,9 @@ export const queueRunCollectionJsonSchema: JsonSchema = {
           "leaseOwner",
           "leaseExpiresAt",
           "lastHeartbeatAt",
+          "lastLeaseRenewalAt",
+          "cancellationStatus",
+          "pauseStatus",
           "queuedAt",
           "startedAt",
           "finishedAt",
@@ -649,6 +695,9 @@ export const queueRunCollectionJsonSchema: JsonSchema = {
           leaseOwner: { type: "string", nullable: true },
           leaseExpiresAt: { type: "string", nullable: true },
           lastHeartbeatAt: { type: "string", nullable: true },
+          lastLeaseRenewalAt: { type: "string", nullable: true },
+          cancellationStatus: { type: "string", enum: ["none", "cancel_requested", "cancelled"] },
+          pauseStatus: { type: "string", enum: ["none", "pause_requested", "paused"] },
           queuedAt: { type: "string" },
           startedAt: { type: "string", nullable: true },
           finishedAt: { type: "string", nullable: true },
@@ -667,6 +716,54 @@ export const queueRunCollectionJsonSchema: JsonSchema = {
               decidedAt: { type: "string" },
             },
           },
+        },
+      },
+    },
+  },
+};
+
+export const queueWorkerCollectionJsonSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["updatedAt", "workers"],
+  properties: {
+    updatedAt: { type: "string" },
+    workers: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "workerId",
+          "status",
+          "supervisionStatus",
+          "currentRunId",
+          "backendType",
+          "leaseOwner",
+          "lastHeartbeatAt",
+          "daemonHeartbeatAt",
+          "lastError",
+          "consecutiveErrors",
+          "idleCycles",
+          "pollCount",
+          "startedAt",
+          "updatedAt",
+        ],
+        properties: {
+          workerId: { type: "string" },
+          status: { type: "string", enum: ["idle", "polling", "running", "backing_off", "stopped"] },
+          supervisionStatus: { type: "string", enum: ["inactive", "healthy", "backing_off", "recovering", "stopped"] },
+          currentRunId: { type: "string", nullable: true },
+          backendType: { type: "string", enum: ["file", "sqlite"] },
+          leaseOwner: { type: "string", nullable: true },
+          lastHeartbeatAt: { type: "string", nullable: true },
+          daemonHeartbeatAt: { type: "string", nullable: true },
+          lastError: { type: "string", nullable: true },
+          consecutiveErrors: { type: "number" },
+          idleCycles: { type: "number" },
+          pollCount: { type: "number" },
+          startedAt: { type: "string" },
+          updatedAt: { type: "string" },
         },
       },
     },
@@ -860,7 +957,24 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "workspaceStatus",
     "liveAcceptanceStatus",
     "livePassStatus",
+    "backendType",
     "exportArtifactPaths",
+    "queueStatus",
+    "workerStatus",
+    "cancellationStatus",
+    "pauseStatus",
+    "workerId",
+    "leaseOwner",
+    "lastHeartbeatAt",
+    "lastLeaseRenewalAt",
+    "daemonHeartbeatAt",
+    "supervisionStatus",
+    "lastRecoveryDecision",
+    "recoveryAttemptCount",
+    "retryCount",
+    "queuedAt",
+    "startedAt",
+    "finishedAt",
     "handoffStatus",
     "prDraftStatus",
     "handoffArtifactPaths",
@@ -1057,13 +1171,20 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       type: "string",
       enum: ["not_run", "skipped", "passed", "failed", "blocked"],
     },
+    backendType: { type: "string", enum: ["file", "sqlite"] },
     queueStatus: {
       type: "string",
       enum: ["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"],
     },
+    workerStatus: { type: "string", enum: ["idle", "polling", "running", "backing_off", "stopped"] },
+    cancellationStatus: { type: "string", enum: ["none", "cancel_requested", "cancelled"] },
+    pauseStatus: { type: "string", enum: ["none", "pause_requested", "paused"] },
     workerId: { type: "string", nullable: true },
     leaseOwner: { type: "string", nullable: true },
     lastHeartbeatAt: { type: "string", nullable: true },
+    lastLeaseRenewalAt: { type: "string", nullable: true },
+    daemonHeartbeatAt: { type: "string", nullable: true },
+    supervisionStatus: { type: "string", enum: ["inactive", "healthy", "backing_off", "recovering", "stopped"] },
     lastRecoveryDecision: {
       type: "object",
       nullable: true,
@@ -1078,6 +1199,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         decidedAt: { type: "string" },
       },
     },
+    recoveryAttemptCount: { type: "number" },
     retryCount: { type: "number" },
     queuedAt: { type: "string", nullable: true },
     startedAt: { type: "string", nullable: true },

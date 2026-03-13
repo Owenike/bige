@@ -59,7 +59,7 @@ test("worker once processes a queued run to completion", async () => {
     approvalMode: "auto",
   });
   await dependencies.storage.saveState(state);
-  await enqueueStateRun({ storage: dependencies.storage, state });
+  await enqueueStateRun({ backend: dependencies.backend, state });
 
   const result = await runQueueWorkerOnce({
     workerId: "worker-once",
@@ -92,7 +92,7 @@ test("worker respects approval mode and pauses the queue item", async () => {
     approvalMode: "human_approval",
   });
   await dependencies.storage.saveState(state);
-  await enqueueStateRun({ storage: dependencies.storage, state });
+  await enqueueStateRun({ backend: dependencies.backend, state });
 
   const result = await runQueueWorkerOnce({
     workerId: "worker-approval",
@@ -127,7 +127,7 @@ test("continuous worker can process more than one queued run", async () => {
       approvalMode: "auto",
     });
     await dependencies.storage.saveState(state);
-    await enqueueStateRun({ storage: dependencies.storage, state });
+    await enqueueStateRun({ backend: dependencies.backend, state });
   }
 
   const summary = await runQueueWorker({
@@ -137,7 +137,7 @@ test("continuous worker can process more than one queued run", async () => {
     pollIntervalMs: 10,
     maxPolls: 3,
   });
-  const queue = await listQueueRuns(dependencies.storage);
+  const queue = await listQueueRuns(dependencies.backend);
   assert.equal(summary.processed >= 2, true);
   assert.equal(queue.every((item) => item.status === "completed"), true);
 });
