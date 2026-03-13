@@ -114,6 +114,46 @@ const AGGREGATION_METADATA_FIELDS = [
   'snapshotWindowType',
 ];
 
+const AGGREGATION_METADATA_FIELD_VALIDATORS = {
+  aggregationModeRequested: (value) => value === 'auto' || value === 'raw' || value === 'rollup',
+  aggregationModeResolved: (value) => value === 'raw' || value === 'rollup',
+  dataSource: (value) => value === 'raw' || value === 'rollup',
+  isWholeUtcDayWindow: (value) => typeof value === 'boolean',
+  rollupEligible: (value) => typeof value === 'boolean',
+  resolutionReason: (value) => typeof value === 'string' && value.length > 0,
+  requestedWindowType: (value) => value === 'whole_utc_day' || value === 'partial_utc_window',
+  snapshotWindowType: (value) => value === 'whole_utc_day' || value === 'partial_utc_window',
+};
+
+const READ_API_SNAPSHOT_SHAPES = {
+  overview: {
+    totalRows: 'number',
+    daily: 'array',
+    byChannel: 'array',
+    byTenant: 'array',
+  },
+  analytics: {
+    totalRows: 'number',
+    daily: 'array',
+    byChannel: 'array',
+    byTenant: 'array',
+  },
+  trends: {
+    currentWindow: 'object',
+    previousWindow: 'object',
+    byTenant: 'array',
+    byAnomalyType: 'array',
+    byChannel: 'array',
+  },
+  tenant_drilldown: {
+    totalRows: 'number',
+    daily: 'array',
+    byChannel: 'array',
+    recentAnomalies: 'array',
+    anomalySummary: 'object',
+  },
+};
+
 function getAggregationWindowType(isWholeUtcDayWindow) {
   return isWholeUtcDayWindow ? 'whole_utc_day' : 'partial_utc_window';
 }
@@ -187,32 +227,195 @@ function getAggregationMetadata(payload) {
   return { metadata, missingFields: [] };
 }
 
-function describeAggregationMetadataContractIssues(payload, expected) {
+function getValueType(value) {
+  if (Array.isArray(value)) return 'array';
+  if (value === null) return 'null';
+  return typeof value;
+}
+
+function validateAggregationMetadataSchema(payload, expected) {
   const { metadata, missingFields } = getAggregationMetadata(payload);
   const issues = [];
-  if (missingFields.length > 0) {
-    issues.push(`missing fields: ${missingFields.join(', ')}`);
-    return issues;
+  for (const field of missingFields) {
+    issues.push({ kind: 'missing', path: field, message: `${field} missing` });
   }
-  if (!metadata) {
-    issues.push('metadata payload unreadable');
-    return issues;
+  if (missingFields.length > 0 || !metadata) return issues;
+
+  for (const field of AGGREGATION_METADATA_FIELDS) {
+    if (!AGGREGATION_METADATA_FIELD_VALIDATORS[field](metadata[field])) {
+      issues.push({
+        kind: 'type_mismatch',
+        path: field,
+        message: `${field} expected valid aggregation metadata type, got ${String(metadata[field])}`,
+      });
+    }
   }
+
   if (metadata.aggregationModeResolved !== metadata.dataSource) {
-    issues.push(`aggregationModeResolved/dataSource mismatch: ${metadata.aggregationModeResolved} vs ${metadata.dataSource}`);
+    issues.push({
+      kind: 'rule_mismatch',
+      path: 'aggregationModeResolved',
+      message: `aggregationModeResolved/dataSource mismatch: ${metadata.aggregationModeResolved} vs ${metadata.dataSource}`,
+    });
   }
+
   for (const [key, expectedValue] of Object.entries(expected || {})) {
     if (typeof expectedValue === 'undefined') continue;
     if (metadata[key] !== expectedValue) {
-      issues.push(`${key} expected ${expectedValue}, got ${metadata[key]}`);
+      issues.push({
+        kind: 'rule_mismatch',
+        path: key,
+        message: `${key} expected ${expectedValue}, got ${metadata[key]}`,
+      });
     }
   }
+
   return issues;
+}
+
+function normalizeReadApiFixture(params) {
+  const { metadata, missingFields } = getAggregationMetadata(params.payload);
+  const snapshot = getSnapshot(params.payload);
+  if (!metadata || missingFields.length > 0 || !snapshot) return null;
+  return {
+    api: params.api,
+    scenario: params.scenario,
+    metadata,
+    snapshot: {
+      dataSource: snapshot.dataSource,
+      hasDaily: Array.isArray(snapshot.daily),
+      hasByChannel: Array.isArray(snapshot.byChannel),
+      hasByTenant: Array.isArray(snapshot.byTenant),
+      hasCurrentWindow: Boolean(snapshot.currentWindow && typeof snapshot.currentWindow === 'object'),
+      hasPreviousWindow: Boolean(snapshot.previousWindow && typeof snapshot.previousWindow === 'object'),
+      hasByAnomalyType: Array.isArray(snapshot.byAnomalyType),
+      hasRecentAnomalies: Array.isArray(snapshot.recentAnomalies),
+      hasAnomalySummary: Boolean(snapshot.anomalySummary && typeof snapshot.anomalySummary === 'object'),
+    },
+  };
+}
+
+function expectedReadApiFixture(params) {
+  const metadata = expectedAggregationMetadata(params);
+  return {
+    api: params.api,
+    scenario: params.scenario,
+    metadata,
+    snapshot: {
+      dataSource: metadata.dataSource,
+      hasDaily: params.api === 'overview' || params.api === 'analytics' || params.api === 'tenant_drilldown',
+      hasByChannel: true,
+      hasByTenant: params.api === 'overview' || params.api === 'analytics' || params.api === 'trends',
+      hasCurrentWindow: params.api === 'trends',
+      hasPreviousWindow: params.api === 'trends',
+      hasByAnomalyType: params.api === 'trends',
+      hasRecentAnomalies: params.api === 'tenant_drilldown',
+      hasAnomalySummary: params.api === 'tenant_drilldown',
+    },
+  };
+}
+
+function appendFixtureDiffs(issues, actual, expected, path) {
+  if (Array.isArray(actual) || Array.isArray(expected)) {
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      issues.push({
+        kind: 'fixture_drift',
+        path: path.join('.'),
+        message: `${path.join('.')} expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
+      });
+    }
+    return;
+  }
+  if (actual && typeof actual === 'object' && expected && typeof expected === 'object') {
+    const keys = [...new Set([...Object.keys(actual), ...Object.keys(expected)])].sort();
+    for (const key of keys) {
+      appendFixtureDiffs(issues, actual[key], expected[key], [...path, key]);
+    }
+    return;
+  }
+  if (actual !== expected) {
+    issues.push({
+      kind: 'fixture_drift',
+      path: path.join('.'),
+      message: `${path.join('.')} expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
+    });
+  }
+}
+
+function describeReadApiResponseContractIssues(params) {
+  const issues = validateAggregationMetadataSchema(params.payload, params.expectedMetadata);
+  const snapshot = getSnapshot(params.payload);
+  if (!snapshot) {
+    issues.push({ kind: 'missing', path: 'snapshot', message: 'snapshot missing' });
+    return issues;
+  }
+
+  if (!AGGREGATION_METADATA_FIELD_VALIDATORS.dataSource(snapshot.dataSource)) {
+    issues.push({
+      kind: 'type_mismatch',
+      path: 'snapshot.dataSource',
+      message: `snapshot.dataSource expected raw|rollup, got ${String(snapshot.dataSource)}`,
+    });
+  }
+
+  if (snapshot.dataSource !== params.expectedMetadata.dataSource) {
+    issues.push({
+      kind: 'rule_mismatch',
+      path: 'snapshot.dataSource',
+      message: `snapshot.dataSource expected ${params.expectedMetadata.dataSource}, got ${snapshot.dataSource}`,
+    });
+  }
+
+  const snapshotShape = READ_API_SNAPSHOT_SHAPES[params.api];
+  for (const [key, expectedType] of Object.entries(snapshotShape)) {
+    const value = snapshot[key];
+    const actualType = getValueType(value);
+    const valid =
+      expectedType === 'array'
+        ? Array.isArray(value)
+        : expectedType === 'object'
+          ? Boolean(value && typeof value === 'object' && !Array.isArray(value))
+          : typeof value === expectedType;
+    if (!valid) {
+      issues.push({
+        kind: typeof value === 'undefined' ? 'missing' : 'type_mismatch',
+        path: `snapshot.${key}`,
+        message: `snapshot.${key} expected ${expectedType}, got ${actualType}`,
+      });
+    }
+  }
+
+  const actualFixture = normalizeReadApiFixture(params);
+  const expectedFixture = expectedReadApiFixture({
+    api: params.api,
+    scenario: params.scenario,
+    ...params.expectedMetadata,
+  });
+  if (actualFixture) {
+    appendFixtureDiffs(issues, actualFixture, expectedFixture, ['fixture']);
+  }
+
+  return issues;
+}
+
+function describeAggregationMetadataContractIssues(payload, expected) {
+  const issues = validateAggregationMetadataSchema(payload, expected);
+  const missing = issues.filter((issue) => issue.kind === 'missing');
+  if (missing.length > 0) return [`missing fields: ${missing.map((issue) => issue.path).join(', ')}`];
+  return issues.map((issue) => issue.message);
 }
 
 function assertAggregationMetadata(payload, expected, label) {
   const issues = describeAggregationMetadataContractIssues(payload, expected);
   assertOrThrow(issues.length === 0, `${label} aggregation metadata contract failed: ${issues.join('; ')}`);
+}
+
+function assertReadApiResponseContract(params) {
+  const issues = describeReadApiResponseContractIssues(params);
+  assertOrThrow(
+    issues.length === 0,
+    `${params.scenario} response contract failed: ${issues.map((issue) => `${issue.kind}: ${issue.message}`).join('; ')}`,
+  );
 }
 
 function toDateStringUtc(date) {
@@ -608,16 +811,17 @@ async function main() {
     const snapshot = getSnapshot(overview.json);
     assertOrThrow(snapshot, 'overview snapshot missing');
     assertOrThrow(snapshot.dataSource === 'raw', `overview auto(non-day) expected raw source, got ${snapshot.dataSource}`);
-    assertAggregationMetadata(
-      overview.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'overview',
+      scenario: 'overview auto(non-day)',
+      payload: overview.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
         dataSource: 'raw',
         isWholeUtcDayWindow: false,
         rollupEligible: false,
       }),
-      'overview auto(non-day)',
-    );
+    });
     assertOrThrow(snapshot.totalRows === 6, `overview totalRows expected 6, got ${snapshot.totalRows}`);
     assertOrThrow(snapshot.sent === 2, `overview sent expected 2, got ${snapshot.sent}`);
     assertOrThrow(snapshot.failed === 2, `overview failed expected 2, got ${snapshot.failed}`);
@@ -663,16 +867,17 @@ async function main() {
     );
     const analyticsSnapshot = getSnapshot(analytics.json);
     assertOrThrow(analyticsSnapshot, 'analytics snapshot missing');
-    assertAggregationMetadata(
-      analytics.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'analytics',
+      scenario: 'analytics auto(non-day)',
+      payload: analytics.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
         dataSource: 'raw',
         isWholeUtcDayWindow: false,
         rollupEligible: false,
       }),
-      'analytics auto(non-day)',
-    );
+    });
     assertOrThrow(
       analyticsSnapshot.sent === snapshot.sent &&
         analyticsSnapshot.failed === snapshot.failed &&
@@ -699,17 +904,18 @@ async function main() {
       trendsNonDaySnapshot.dataSource === 'raw',
       `trends auto(non-day) expected raw source, got ${trendsNonDaySnapshot.dataSource}`,
     );
-    assertAggregationMetadata(
-      trendsNonDay.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'trends',
+      scenario: 'trends auto(non-day)',
+      payload: trendsNonDay.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
         dataSource: 'raw',
         isWholeUtcDayWindow: false,
         rollupEligible: false,
         reasonScope: 'trends',
       }),
-      'trends auto(non-day)',
-    );
+    });
 
     const drilldownNonDay = await apiRequest({
       method: 'GET',
@@ -730,16 +936,17 @@ async function main() {
       drilldownNonDaySnapshot.dataSource === 'raw',
       `drilldown auto(non-day) expected raw source, got ${drilldownNonDaySnapshot.dataSource}`,
     );
-    assertAggregationMetadata(
-      drilldownNonDay.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'tenant_drilldown',
+      scenario: 'drilldown auto(non-day)',
+      payload: drilldownNonDay.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
         dataSource: 'raw',
         isWholeUtcDayWindow: false,
         rollupEligible: false,
       }),
-      'drilldown auto(non-day)',
-    );
+    });
 
     const refreshUnauthorized = await apiRequest({
       method: 'POST',
@@ -791,16 +998,17 @@ async function main() {
     const rollupSnapshot = getSnapshot(overviewRollup.json);
     assertOrThrow(rollupSnapshot, 'overview rollup snapshot missing');
     assertOrThrow(rollupSnapshot.dataSource === 'rollup', `overview rollup dataSource expected rollup, got ${rollupSnapshot.dataSource}`);
-    assertAggregationMetadata(
-      overviewRollup.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'overview',
+      scenario: 'overview rollup',
+      payload: overviewRollup.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'rollup',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
       }),
-      'overview rollup',
-    );
+    });
 
     const overviewRaw = await apiRequest({
       method: 'GET',
@@ -816,16 +1024,17 @@ async function main() {
     const rawSnapshot = getSnapshot(overviewRaw.json);
     assertOrThrow(rawSnapshot, 'overview raw snapshot missing');
     assertOrThrow(rawSnapshot.dataSource === 'raw', `overview raw dataSource expected raw, got ${rawSnapshot.dataSource}`);
-    assertAggregationMetadata(
-      overviewRaw.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'overview',
+      scenario: 'overview raw',
+      payload: overviewRaw.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'raw',
         dataSource: 'raw',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
       }),
-      'overview raw',
-    );
+    });
 
     const comparedKeys = ['sent', 'failed', 'deadLetter', 'opened', 'clicked', 'conversion'];
     for (const key of comparedKeys) {
@@ -852,16 +1061,17 @@ async function main() {
       autoRollupSnapshot.dataSource === 'rollup',
       `overview auto(whole-day) expected rollup source, got ${autoRollupSnapshot.dataSource}`,
     );
-    assertAggregationMetadata(
-      overviewAutoRollup.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'overview',
+      scenario: 'overview auto(whole-day)',
+      payload: overviewAutoRollup.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
       }),
-      'overview auto(whole-day)',
-    );
+    });
 
     const analyticsAutoWholeDay = await apiRequest({
       method: 'GET',
@@ -885,16 +1095,17 @@ async function main() {
       analyticsAutoWholeDaySnapshot.dataSource === 'rollup',
       `analytics auto(whole-day) expected rollup source, got ${analyticsAutoWholeDaySnapshot.dataSource}`,
     );
-    assertAggregationMetadata(
-      analyticsAutoWholeDay.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'analytics',
+      scenario: 'analytics auto(whole-day)',
+      payload: analyticsAutoWholeDay.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
       }),
-      'analytics auto(whole-day)',
-    );
+    });
 
     const trendsAutoWholeDay = await apiRequest({
       method: 'GET',
@@ -915,17 +1126,18 @@ async function main() {
       trendsAutoWholeDaySnapshot.dataSource === 'rollup',
       `trends auto(whole-day) expected rollup source, got ${trendsAutoWholeDaySnapshot.dataSource}`,
     );
-    assertAggregationMetadata(
-      trendsAutoWholeDay.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'trends',
+      scenario: 'trends auto(whole-day)',
+      payload: trendsAutoWholeDay.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
         reasonScope: 'trends',
       }),
-      'trends auto(whole-day)',
-    );
+    });
 
     const drilldownAutoWholeDay = await apiRequest({
       method: 'GET',
@@ -949,16 +1161,17 @@ async function main() {
       drilldownAutoWholeDaySnapshot.dataSource === 'rollup',
       `drilldown auto(whole-day) expected rollup source, got ${drilldownAutoWholeDaySnapshot.dataSource}`,
     );
-    assertAggregationMetadata(
-      drilldownAutoWholeDay.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'tenant_drilldown',
+      scenario: 'drilldown auto(whole-day)',
+      payload: drilldownAutoWholeDay.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
       }),
-      'drilldown auto(whole-day)',
-    );
+    });
 
     const unauthorized = await apiRequest({
       method: 'GET',
@@ -1111,11 +1324,15 @@ async function main() {
 module.exports = {
   AGGREGATION_METADATA_FIELDS,
   assertAggregationMetadata,
+  assertReadApiResponseContract,
   expectedAggregationMetadata,
+  expectedReadApiFixture,
   buildAggregationResolutionReason,
+  describeReadApiResponseContractIssues,
   describeAggregationMetadataContractIssues,
   getAggregationMetadata,
   getAggregationWindowType,
+  normalizeReadApiFixture,
   getSnapshot,
 };
 

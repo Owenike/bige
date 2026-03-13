@@ -22,6 +22,8 @@
         "test:phase42:contract:unit": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:contract:blackbox": "powershell -ExecutionPolicy Bypass -File scripts/phase42-overview-blackbox-e2e.ps1 && powershell -ExecutionPolicy Bypass -File scripts/phase42-tenant-drilldown-blackbox-e2e.ps1",
         "test:phase42:contract": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1 && powershell -ExecutionPolicy Bypass -File scripts/phase42-overview-blackbox-e2e.ps1 && powershell -ExecutionPolicy Bypass -File scripts/phase42-tenant-drilldown-blackbox-e2e.ps1",
+        "test:phase42:schema": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
+        "test:phase42:fixtures": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:e2e:anomaly-priority:blackbox": "powershell -ExecutionPolicy Bypass -File scripts/phase42-anomaly-priority-blackbox-e2e.ps1",
         "test:e2e:alert-workflow:blackbox": "powershell -ExecutionPolicy Bypass -File scripts/phase42-alert-workflow-blackbox-e2e.ps1",
         "test:e2e:alert-assignment:blackbox": "powershell -ExecutionPolicy Bypass -File scripts/phase42-alert-assignment-blackbox-e2e.ps1",

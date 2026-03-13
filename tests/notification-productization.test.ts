@@ -97,15 +97,20 @@ import {
 import {
   buildNotificationAggregationMetadata,
   buildNotificationAggregationResolutionReason,
+  describeNotificationReadApiResponseSchemaIssues,
   describeNotificationAggregationMetadataContractIssues,
   buildTrendRollupEligibilityMetadata,
   formatNotificationAggregationDataSourceLabel,
   getNotificationAggregationMetadata,
   getNotificationAggregationWindowType,
   listMissingNotificationAggregationMetadataFields,
+  normalizeNotificationReadApiRegressionFixture,
   NOTIFICATION_AGGREGATION_CORE_METADATA_FIELDS,
   NOTIFICATION_AGGREGATION_EXPLAINABILITY_FIELDS,
   NOTIFICATION_AGGREGATION_METADATA_FIELDS,
+  notificationAggregationMetadataSchema,
+  validateNotificationAggregationMetadataSchema,
+  validateNotificationReadApiResponseSchema,
 } from "../lib/notification-aggregation-contract";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
@@ -120,6 +125,7 @@ import {
   listNotificationRuntimeSimulationScenarios,
 } from "../lib/notification-runtime-simulation-fixtures";
 import { validateNotificationRuntimeReadiness } from "../lib/notification-runtime-readiness-validator";
+import { NOTIFICATION_READ_API_REGRESSION_CASES } from "./notification-read-api-regression-fixtures";
 
 test("preference payload validation accepts known event/role/channel", () => {
   const eventKey = notificationEventKeySchema.parse("member_contract_expiring");
@@ -1468,6 +1474,122 @@ test("aggregation metadata contract guardrail reports field drift and resolved/s
   assert.equal(NOTIFICATION_AGGREGATION_CORE_METADATA_FIELDS.length, 5);
   assert.equal(NOTIFICATION_AGGREGATION_EXPLAINABILITY_FIELDS.length, 3);
   assert.equal(NOTIFICATION_AGGREGATION_METADATA_FIELDS.length, 8);
+});
+
+test("aggregation metadata schema validates types and emits structured guardrail issues", () => {
+  const validPayload = {
+    ok: true,
+    ...buildNotificationAggregationMetadata({
+      aggregationModeRequested: "auto",
+      dataSource: "raw",
+      isWholeUtcDayWindow: false,
+      rollupEligible: false,
+    }),
+  };
+  const validMetadata = getNotificationAggregationMetadata(validPayload);
+  assert.equal(Boolean(validMetadata), true);
+  assert.equal(notificationAggregationMetadataSchema.safeParse(validMetadata).success, true);
+  assert.deepEqual(validateNotificationAggregationMetadataSchema({ payload: validPayload }), []);
+
+  const invalidPayload = {
+    ok: true,
+    aggregationModeRequested: "auto",
+    aggregationModeResolved: "raw",
+    dataSource: "raw",
+    isWholeUtcDayWindow: "false",
+    rollupEligible: false,
+    resolutionReason: "",
+    requestedWindowType: "partial_utc_window",
+    snapshotWindowType: "partial_utc_window",
+  };
+  const issues = validateNotificationAggregationMetadataSchema({ payload: invalidPayload as never });
+  assert.equal(issues.some((item) => item.kind === "type_mismatch" && item.path === "isWholeUtcDayWindow"), true);
+  assert.equal(issues.some((item) => item.kind === "type_mismatch" && item.path === "resolutionReason"), true);
+});
+
+test("read API schema and fixture regression stay locked for overview, analytics, trends, and tenant drilldown", () => {
+  for (const item of NOTIFICATION_READ_API_REGRESSION_CASES) {
+    assert.deepEqual(
+      validateNotificationReadApiResponseSchema({
+        api: item.api,
+        scenario: item.scenario,
+        payload: item.payload,
+        expectedMetadata: item.expectedMetadata,
+        expectedFixture: item.expectedFixture,
+      }),
+      [],
+      `${item.scenario} schema issues`,
+    );
+    assert.deepEqual(
+      normalizeNotificationReadApiRegressionFixture({
+        api: item.api,
+        scenario: item.scenario,
+        payload: item.payload,
+      }),
+      item.expectedFixture,
+      `${item.scenario} normalized fixture`,
+    );
+  }
+});
+
+test("read API schema guardrail reports schema drift, rule mismatch, and fixture drift clearly", () => {
+  const caseItem = NOTIFICATION_READ_API_REGRESSION_CASES.find((item) => item.scenario === "overview_auto_non_day");
+  assert.equal(Boolean(caseItem), true);
+  if (!caseItem) return;
+
+  const driftPayload = {
+    ...caseItem.payload,
+    snapshot: {
+      ...(caseItem.payload.snapshot as Record<string, unknown>),
+      byTenant: "broken-shape",
+    },
+    data: {
+      ...(caseItem.payload.data as Record<string, unknown>),
+      snapshot: {
+        ...((caseItem.payload.data as Record<string, unknown>).snapshot as Record<string, unknown>),
+        byTenant: "broken-shape",
+      },
+      aggregationModeResolved: "rollup",
+      dataSource: "raw",
+    },
+    aggregationModeResolved: "rollup",
+    dataSource: "raw",
+  };
+
+  const issues = validateNotificationReadApiResponseSchema({
+    api: "overview",
+    scenario: caseItem.scenario,
+    payload: driftPayload,
+    expectedMetadata: caseItem.expectedMetadata,
+    expectedFixture: caseItem.expectedFixture,
+  });
+  assert.equal(issues.some((item) => item.kind === "rule_mismatch" && item.path === "aggregationModeResolved"), true);
+  assert.equal(issues.some((item) => item.kind === "type_mismatch" && item.path === "snapshot.byTenant"), true);
+
+  const described = describeNotificationReadApiResponseSchemaIssues({
+    api: "overview",
+    scenario: caseItem.scenario,
+    payload: driftPayload,
+    expectedMetadata: caseItem.expectedMetadata,
+    expectedFixture: caseItem.expectedFixture,
+  });
+  assert.equal(described.some((item) => item.includes("rule_mismatch: aggregationModeResolved/dataSource mismatch")), true);
+  assert.equal(described.some((item) => item.includes("type_mismatch: snapshot.byTenant")), true);
+
+  const fixtureIssues = validateNotificationReadApiResponseSchema({
+    api: "overview",
+    scenario: caseItem.scenario,
+    payload: caseItem.payload,
+    expectedMetadata: caseItem.expectedMetadata,
+    expectedFixture: {
+      ...caseItem.expectedFixture,
+      snapshot: {
+        ...caseItem.expectedFixture.snapshot,
+        hasByTenant: false,
+      },
+    },
+  });
+  assert.equal(fixtureIssues.some((item) => item.kind === "fixture_drift" && item.path === "fixture.snapshot.hasByTenant"), true);
 });
 
 test("aggregation explainability describes explicit raw, explicit rollup, and auto window resolution", () => {

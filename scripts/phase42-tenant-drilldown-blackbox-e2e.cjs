@@ -3,7 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const {
-  assertAggregationMetadata,
+  assertReadApiResponseContract,
   expectedAggregationMetadata,
   getSnapshot,
 } = require('./phase42-overview-blackbox-e2e.cjs');
@@ -523,16 +523,17 @@ async function main() {
     const drillSnapshot = getSnapshot(drilldown.json);
     assertOrThrow(drillSnapshot, 'drilldown snapshot missing');
     assertOrThrow(drillSnapshot.dataSource === 'raw', `drilldown auto(non-day) expected raw source, got ${drillSnapshot.dataSource}`);
-    assertAggregationMetadata(
-      drilldown.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'tenant_drilldown',
+      scenario: 'drilldown auto(non-day)',
+      payload: drilldown.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
         dataSource: 'raw',
         isWholeUtcDayWindow: false,
         rollupEligible: false,
       }),
-      'drilldown auto(non-day)',
-    );
+    });
 
     assertOrThrow(drillSnapshot.tenantId === state.tenantId, 'drilldown tenantId mismatch');
     assertOrThrow(drillSnapshot.sent === overviewSnapshot.sent, `sent mismatch: drilldown=${drillSnapshot.sent}, overview=${overviewSnapshot.sent}`);
@@ -610,16 +611,17 @@ async function main() {
     const rollupSnapshot = getSnapshot(drillRollup.json);
     assertOrThrow(rollupSnapshot, 'drilldown rollup snapshot missing');
     assertOrThrow(rollupSnapshot.dataSource === 'rollup', `drilldown rollup expected rollup source, got ${rollupSnapshot.dataSource}`);
-    assertAggregationMetadata(
-      drillRollup.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'tenant_drilldown',
+      scenario: 'drilldown rollup',
+      payload: drillRollup.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'rollup',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
       }),
-      'drilldown rollup',
-    );
+    });
     assertOrThrow(
       Array.isArray(rollupSnapshot.recentAnomalies) &&
         rollupSnapshot.recentAnomalies.some((item) => String(item.lastError || item.errorMessage || '').includes(rawMutationMarker)),
@@ -640,16 +642,17 @@ async function main() {
     const rawSnapshot = getSnapshot(drillRaw.json);
     assertOrThrow(rawSnapshot, 'drilldown raw snapshot missing');
     assertOrThrow(rawSnapshot.dataSource === 'raw', `drilldown raw expected raw source, got ${rawSnapshot.dataSource}`);
-    assertAggregationMetadata(
-      drillRaw.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'tenant_drilldown',
+      scenario: 'drilldown raw',
+      payload: drillRaw.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'raw',
         dataSource: 'raw',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
       }),
-      'drilldown raw',
-    );
+    });
 
     const compareKeys = ['sent', 'failed', 'deadLetter', 'opened', 'clicked', 'conversion'];
     for (const key of compareKeys) {
@@ -705,16 +708,17 @@ async function main() {
       autoWholeDaySnapshot.dataSource === 'rollup',
       `drilldown auto(whole-day) expected rollup source, got ${autoWholeDaySnapshot.dataSource}`,
     );
-    assertAggregationMetadata(
-      drillAutoWholeDay.json,
-      expectedAggregationMetadata({
+    assertReadApiResponseContract({
+      api: 'tenant_drilldown',
+      scenario: 'drilldown auto(whole-day)',
+      payload: drillAutoWholeDay.json,
+      expectedMetadata: expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
       }),
-      'drilldown auto(whole-day)',
-    );
+    });
 
     const unauthorized = await apiRequest({
       method: 'GET',
