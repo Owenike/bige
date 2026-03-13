@@ -22,7 +22,12 @@ export type NotificationReadApiStatusSurface = {
   message: string;
 };
 
-type SurfaceSubject = "overview_page" | "overview_primary" | "insights_panel" | "trends_panel" | "tenant_drilldown_page";
+export type NotificationReadApiSurfaceSubject =
+  | "overview_page"
+  | "overview_primary"
+  | "insights_panel"
+  | "trends_panel"
+  | "tenant_drilldown_page";
 
 function getStatusTone(status: NotificationReadApiSurfaceStatus): NotificationReadApiStatusTone {
   switch (status) {
@@ -39,7 +44,7 @@ function getStatusTone(status: NotificationReadApiSurfaceStatus): NotificationRe
   }
 }
 
-function getSubjectLabel(subject: SurfaceSubject) {
+function getSubjectLabel(subject: NotificationReadApiSurfaceSubject) {
   switch (subject) {
     case "overview_page":
       return "Overview";
@@ -98,7 +103,7 @@ export function resolveNotificationReadApiPanelStatus(options: {
 
 export function buildNotificationReadApiStatusSurface(
   status: NotificationReadApiSurfaceStatus,
-  subject: SurfaceSubject,
+  subject: NotificationReadApiSurfaceSubject,
   issue?: NotificationReadApiOrchestrationError | null,
 ): NotificationReadApiStatusSurface {
   const label = getSubjectLabel(subject);

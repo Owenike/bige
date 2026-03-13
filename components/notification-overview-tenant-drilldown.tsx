@@ -1,17 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
 import {
   getDefaultTenantDrilldownSupportNote,
   useNotificationTenantDrilldownPageData,
 } from "../lib/notification-read-api-hooks";
-import {
-  buildNotificationReadApiStatusSurface,
-  resolveNotificationReadApiPageStatus,
-  resolveNotificationReadApiPanelStatus,
-} from "../lib/notification-read-api-status-model";
+import { buildNotificationTenantDrilldownViewModel } from "../lib/notification-read-api-view-model";
 import { useNotificationTenantDrilldownUrlSync } from "../lib/notification-read-api-url-state";
 import type { NotificationDeliveryChannel, NotificationTenantDrilldownQueryState } from "../lib/notification-read-api-query-state";
 
@@ -29,25 +25,17 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
   const { filters, draft, setDraft, applyDraft, resetFilters, backHref } = useNotificationTenantDrilldownUrlSync(props.tenantId);
   const [refreshKey, setRefreshKey] = useState(0);
   const drilldownRequest = useNotificationTenantDrilldownPageData(props.tenantId, filters, refreshKey);
-  const { data, loading } = drilldownRequest;
+  const { data } = drilldownRequest;
   const snapshot = data?.drilldown.snapshot ?? null;
   const recentAnomaliesSupportNote = data?.recentAnomaliesSupportNote ?? getDefaultTenantDrilldownSupportNote();
-  const pageStatus = resolveNotificationReadApiPageStatus(drilldownRequest);
-  const pageSurface = buildNotificationReadApiStatusSurface(
-    pageStatus,
-    "tenant_drilldown_page",
-    drilldownRequest.error,
+  const viewModel = useMemo(
+    () =>
+      buildNotificationTenantDrilldownViewModel({
+        request: drilldownRequest,
+        backHref,
+      }),
+    [backHref, drilldownRequest],
   );
-  const drilldownSurface = buildNotificationReadApiStatusSurface(
-    resolveNotificationReadApiPanelStatus({
-      pageStatus,
-      hasData: snapshot !== null,
-      issue: drilldownRequest.error,
-    }),
-    "tenant_drilldown_page",
-    drilldownRequest.error,
-  );
-  const showPageStatus = pageSurface.status !== "ready" && pageSurface.status !== "idle";
 
   return (
     <main className="fdGlassScene">
@@ -60,11 +48,16 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
             </h1>
             <p className="fdGlassText">Tenant: {props.tenantId}</p>
             <div className="actions" style={{ marginTop: 10 }}>
-              <Link className="fdPillBtn" href={backHref}>
-                Back To Overview
+              <Link className="fdPillBtn" href={viewModel.actions.backToOverview.href ?? backHref}>
+                {viewModel.actions.backToOverview.label}
               </Link>
-              <button type="button" className="fdPillBtn" onClick={() => setRefreshKey((current) => current + 1)} disabled={loading}>
-                {pageStatus === "hard_failure_no_data" ? "Retry" : loading ? "Refreshing..." : "Refresh"}
+              <button
+                type="button"
+                className="fdPillBtn"
+                onClick={() => setRefreshKey((current) => current + 1)}
+                disabled={!viewModel.actions.refresh.enabled}
+              >
+                {viewModel.actions.refresh.label}
               </button>
             </div>
           </div>
@@ -145,15 +138,20 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
           </div>
         </section>
 
-        {showPageStatus ? (
+        {viewModel.page.showStatusNotice || viewModel.page.errorSummary.length > 0 ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-            <p className={pageSurface.tone === "danger" ? "error" : "sub"} style={{ marginTop: 0 }}>
-              {pageSurface.message}
+            <p className={viewModel.page.tone === "danger" ? "error" : "sub"} style={{ marginTop: 0 }}>
+              {viewModel.page.assistiveMessage}
             </p>
+            {viewModel.page.errorSummary.map((summary) => (
+              <p key={summary} className="sub" style={{ marginTop: 8 }}>
+                {summary}
+              </p>
+            ))}
           </section>
         ) : null}
 
-        {drilldownRequest.isInitialLoading ? (
+        {viewModel.page.status === "initial_loading" ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
             <p className="fdGlassText">Loading tenant drilldown...</p>
           </section>
@@ -201,7 +199,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
 
             <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
               <p className="sub" style={{ marginTop: 0 }}>
-                {drilldownSurface.message}
+                {viewModel.summaryPanel.assistiveMessage}
               </p>
               <p className="sub" style={{ marginTop: 0 }}>
                 {formatNotificationAggregationDataSourceLabel(snapshot.dataSource)}
@@ -254,6 +252,12 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
                 {snapshot.recentAnomalies.length === 0 ? <p className="fdGlassText">No anomalies in current scope.</p> : null}
               </div>
             </section>
+
+            {viewModel.page.emptyMessage ? (
+              <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+                <p className="fdGlassText">{viewModel.page.emptyMessage}</p>
+              </section>
+            ) : null}
           </>
         ) : null}
       </section>

@@ -119,6 +119,8 @@ import {
 } from "../lib/notification-read-api-client";
 import {
   NotificationReadApiOrchestrationError,
+  type NotificationOverviewPageData,
+  type NotificationTenantDrilldownPageData,
   buildNotificationOverviewPagePaths,
   buildNotificationReadApiRequestKey,
   buildNotificationTenantDrilldownQueryFingerprint,
@@ -158,12 +160,18 @@ import {
   NotificationReadApiRequestLifecycleController,
   pruneNotificationReadApiResultCache,
   shouldRevalidateNotificationReadApiOnVisible,
+  type NotificationReadApiRequestState,
 } from "../lib/notification-read-api-request-state";
 import {
   buildNotificationReadApiStatusSurface,
   resolveNotificationReadApiPageStatus,
   resolveNotificationReadApiPanelStatus,
 } from "../lib/notification-read-api-status-model";
+import {
+  buildNotificationOpenTenantDrilldownAction,
+  buildNotificationOverviewDashboardViewModel,
+  buildNotificationTenantDrilldownViewModel,
+} from "../lib/notification-read-api-view-model";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
   canUseOverviewDailyRollupWindow,
@@ -411,6 +419,27 @@ async function flushAsyncWork() {
   await Promise.resolve();
   await Promise.resolve();
   await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function buildManagedRequestState<TData>(
+  data: TData | null,
+  overrides: Partial<NotificationReadApiRequestState<TData, NotificationReadApiOrchestrationError>> = {},
+) {
+  return {
+    ...createNotificationReadApiRequestState<TData, NotificationReadApiOrchestrationError>(data),
+    loading: false,
+    error: null,
+    errorMode: "none" as const,
+    lastEvent: data === null ? "none" as const : "success" as const,
+    requestKey: data === null ? null : "request:key",
+    cacheKey: data === null ? null : "cache:key",
+    cacheStatus: data === null ? "miss" as const : "hit" as const,
+    phase: "idle" as const,
+    isInitialLoading: false,
+    isReloading: false,
+    isRefreshing: false,
+    ...overrides,
+  };
 }
 
 test("preference payload validation accepts known event/role/channel", () => {
@@ -2441,6 +2470,238 @@ test("read API status surface distinguishes ready, stale, refreshing, soft failu
     requestKey: "cancelled:key",
   };
   assert.equal(resolveNotificationReadApiPageStatus(cancelledState), "cancelled");
+});
+
+test("read API view-model consolidates overview page/panel display payloads and action contracts", () => {
+  const overview = parseNotificationReadApiPayload(
+    "overview",
+    buildConsumerReadApiPayload(
+      "overview",
+      buildNotificationAggregationMetadata({
+        aggregationModeRequested: "auto",
+        dataSource: "raw",
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      }),
+      {
+        snapshotOverrides: {
+          totalRows: 5,
+        },
+      },
+    ),
+  );
+  const trends = parseNotificationReadApiPayload(
+    "trends",
+    buildConsumerReadApiPayload(
+      "trends",
+      buildNotificationAggregationMetadata({
+        aggregationModeRequested: "auto",
+        dataSource: "raw",
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      }),
+      {
+        snapshotOverrides: {
+          topWorseningTenants: [],
+          topWorseningAnomalyTypes: [],
+          topWorseningChannels: [],
+        },
+      },
+    ),
+  );
+  const insights = buildAnomalyInsightsPayload().snapshot;
+  const readyData: NotificationOverviewPageData = {
+    overview,
+    insights,
+    trends,
+    resourceErrors: [],
+    isEmpty: false,
+  };
+
+  const readyVm = buildNotificationOverviewDashboardViewModel({
+    request: buildManagedRequestState(readyData),
+    backHref: "/platform-admin",
+    opsHref: "/platform-admin/notifications-ops",
+    alertWorkflowHref: "/platform-admin/notifications-alerts",
+  });
+  assert.equal(readyVm.page.status, "ready");
+  assert.equal(readyVm.overviewPanel.status, "ready");
+  assert.equal(readyVm.insightsPriorityPanel.status, "ready");
+  assert.equal(readyVm.trendsPanel.status, "ready");
+  assert.equal(readyVm.actions.refresh.kind, "refresh");
+  assert.equal(readyVm.actions.refresh.enabled, true);
+  assert.equal(readyVm.actions.openOps.href, "/platform-admin/notifications-ops");
+
+  const partialIssue = classifyNotificationReadApiOrchestrationError(new TypeError("analytics offline"), {
+    source: "anomalies",
+    message: "Load anomalies failed",
+  });
+  const partialVm = buildNotificationOverviewDashboardViewModel({
+    request: buildManagedRequestState<NotificationOverviewPageData>({
+      ...readyData,
+      insights: null,
+      resourceErrors: [partialIssue],
+    }),
+    backHref: "/platform-admin",
+    opsHref: "/platform-admin/notifications-ops",
+    alertWorkflowHref: "/platform-admin/notifications-alerts",
+  });
+  assert.equal(partialVm.page.status, "partial_failure");
+  assert.equal(partialVm.insightsPriorityPanel.status, "partial_failure");
+  assert.equal(partialVm.trendsPanel.status, "ready");
+  assert.equal(partialVm.page.errorSummary.includes("anomalies network: anomalies network request failed: analytics offline"), true);
+
+  const softIssue = classifyNotificationReadApiOrchestrationError(new TypeError("refresh failed"), {
+    source: "overview",
+    message: "Load overview page failed",
+  });
+  const softVm = buildNotificationOverviewDashboardViewModel({
+    request: buildManagedRequestState(readyData, {
+      error: softIssue,
+      errorMode: "soft",
+      lastEvent: "error",
+    }),
+    backHref: "/platform-admin",
+    opsHref: "/platform-admin/notifications-ops",
+    alertWorkflowHref: "/platform-admin/notifications-alerts",
+  });
+  assert.equal(softVm.page.status, "soft_failure_with_data");
+  assert.equal(softVm.page.emptyMessage, null);
+
+  const hardIssue = classifyNotificationReadApiOrchestrationError(
+    new NotificationReadApiConsumerError({
+      api: "overview",
+      status: null,
+      message: "overview response contract drift: snapshot.totalRows expected number",
+      issues: ["snapshot.totalRows expected number"],
+    }),
+    {
+      source: "overview",
+      message: "Load overview page failed",
+    },
+  );
+  const hardVm = buildNotificationOverviewDashboardViewModel({
+    request: buildManagedRequestState<NotificationOverviewPageData>(null, {
+      error: hardIssue,
+      errorMode: "hard",
+      lastEvent: "error",
+    }),
+    backHref: "/platform-admin",
+    opsHref: "/platform-admin/notifications-ops",
+    alertWorkflowHref: "/platform-admin/notifications-alerts",
+  });
+  assert.equal(hardVm.page.status, "hard_failure_no_data");
+  assert.equal(hardVm.actions.refresh.kind, "retry");
+  assert.equal(hardVm.page.emptyMessage, null);
+
+  const openDrilldownAction = buildNotificationOpenTenantDrilldownAction({
+    tenantId: "tenant-1",
+    href: "/platform-admin/notifications-overview/tenant-1",
+  });
+  assert.deepEqual(openDrilldownAction, {
+    kind: "open_drilldown",
+    enabled: true,
+    busy: false,
+    label: "Open Tenant Drilldown",
+    href: "/platform-admin/notifications-overview/tenant-1",
+    prefetchKey: "tenant-1",
+  });
+});
+
+test("read API view-model consolidates tenant drilldown display payloads and retry/back contracts without affecting raw-backed support", () => {
+  const drilldown = parseNotificationReadApiPayload(
+    "tenant_drilldown",
+    buildConsumerReadApiPayload(
+      "tenant_drilldown",
+      buildNotificationAggregationMetadata({
+        aggregationModeRequested: "auto",
+        dataSource: "raw",
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      }),
+      {
+        snapshotOverrides: {
+          totalRows: 3,
+        },
+      },
+    ),
+  );
+  const readyData: NotificationTenantDrilldownPageData = {
+    drilldown,
+    isEmpty: false,
+    recentAnomaliesSupportNote: getTenantDrilldownRecentAnomaliesSupportNote(),
+  };
+
+  const readyVm = buildNotificationTenantDrilldownViewModel({
+    request: buildManagedRequestState(readyData),
+    backHref: "/platform-admin/notifications-overview?tenantId=tenant-1",
+  });
+  assert.equal(readyVm.page.status, "ready");
+  assert.equal(readyVm.summaryPanel.status, "ready");
+  assert.equal(readyVm.actions.backToOverview.kind, "back_to_overview");
+  assert.equal(readyData.recentAnomaliesSupportNote, getTenantDrilldownRecentAnomaliesSupportNote());
+
+  const staleVm = buildNotificationTenantDrilldownViewModel({
+    request: buildManagedRequestState(readyData, {
+      loading: true,
+      cacheStatus: "stale",
+      phase: "reloading",
+      isReloading: true,
+    }),
+    backHref: "/platform-admin/notifications-overview?tenantId=tenant-1",
+  });
+  assert.equal(staleVm.page.status, "ready_stale");
+  assert.equal(staleVm.actions.refresh.busy, true);
+  assert.equal(staleVm.actions.refresh.enabled, false);
+
+  const softIssue = classifyNotificationReadApiOrchestrationError(new TypeError("tenant refresh failed"), {
+    source: "tenant_drilldown",
+    message: "Load tenant drilldown failed",
+  });
+  const softVm = buildNotificationTenantDrilldownViewModel({
+    request: buildManagedRequestState(readyData, {
+      error: softIssue,
+      errorMode: "soft",
+      lastEvent: "error",
+    }),
+    backHref: "/platform-admin/notifications-overview?tenantId=tenant-1",
+  });
+  assert.equal(softVm.page.status, "soft_failure_with_data");
+  assert.equal(softVm.page.errorSummary[0]?.includes("tenant_drilldown network"), true);
+
+  const hardIssue = classifyNotificationReadApiOrchestrationError(
+    new NotificationReadApiConsumerError({
+      api: "tenant_drilldown",
+      status: null,
+      message: "tenant_drilldown response contract drift: snapshot.daily missing",
+      issues: ["snapshot.daily missing"],
+    }),
+    {
+      source: "tenant_drilldown",
+      message: "Load tenant drilldown failed",
+    },
+  );
+  const hardVm = buildNotificationTenantDrilldownViewModel({
+    request: buildManagedRequestState<NotificationTenantDrilldownPageData>(null, {
+      error: hardIssue,
+      errorMode: "hard",
+      lastEvent: "error",
+    }),
+    backHref: "/platform-admin/notifications-overview?tenantId=tenant-1",
+  });
+  assert.equal(hardVm.page.status, "hard_failure_no_data");
+  assert.equal(hardVm.actions.refresh.kind, "retry");
+  assert.equal(hardVm.page.emptyMessage, null);
+
+  const cancelledVm = buildNotificationTenantDrilldownViewModel({
+    request: buildManagedRequestState<NotificationTenantDrilldownPageData>(null, {
+      lastEvent: "cancelled",
+      requestKey: "cancelled:key",
+    }),
+    backHref: "/platform-admin/notifications-overview?tenantId=tenant-1",
+  });
+  assert.equal(cancelledVm.page.status, "cancelled");
+  assert.equal(cancelledVm.summaryPanel.status, "cancelled");
 });
 
 test("read API resilience keeps same-query last good data on soft failures and reserves hard failure for cold starts", async () => {

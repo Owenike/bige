@@ -9,18 +9,16 @@ import {
   type NotificationOverviewPageData,
 } from "../lib/notification-read-api-hooks";
 import {
-  buildNotificationReadApiStatusSurface,
-  resolveNotificationReadApiPageStatus,
-  resolveNotificationReadApiPanelStatus,
-} from "../lib/notification-read-api-status-model";
+  buildNotificationOpenTenantDrilldownAction,
+  buildNotificationOverviewDashboardViewModel,
+} from "../lib/notification-read-api-view-model";
 import { useNotificationOverviewUrlSync } from "../lib/notification-read-api-url-state";
-import type { NotificationDeliveryChannel, NotificationOverviewQueryState } from "../lib/notification-read-api-query-state";
+import type { NotificationDeliveryChannel } from "../lib/notification-read-api-query-state";
 import NotificationGovernanceNav from "./notification-governance-nav";
 
 type OverviewSnapshot = NotificationOverviewPageData["overview"]["snapshot"];
 
 type TrendDirection = "up" | "flat" | "down";
-type FilterState = NotificationOverviewQueryState;
 
 function toCount(value: number | null | undefined) {
   return Number(value || 0).toLocaleString();
@@ -50,58 +48,36 @@ export default function NotificationOverviewDashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const { filters, draft, setDraft, applyDraft, resetFilters, buildTenantDrilldownHref } = useNotificationOverviewUrlSync();
   const overviewRequest = useNotificationOverviewPageData(filters, refreshKey);
-  const { data, loading } = overviewRequest;
+  const { data } = overviewRequest;
   const snapshot = data?.overview.snapshot ?? null;
   const insights = data?.insights ?? null;
   const trend = data?.trends?.snapshot ?? null;
-  const resourceErrors = data?.resourceErrors ?? [];
-  const insightsIssue = resourceErrors.find((issue) => issue.source === "anomalies") ?? null;
-  const trendsIssue = resourceErrors.find((issue) => issue.source === "trends") ?? null;
-  const pageStatus = resolveNotificationReadApiPageStatus(overviewRequest, { resourceErrors });
-  const pageSurface = buildNotificationReadApiStatusSurface(
-    pageStatus,
-    "overview_page",
-    overviewRequest.error ?? resourceErrors[0] ?? null,
+  const viewModel = useMemo(
+    () =>
+      buildNotificationOverviewDashboardViewModel({
+        request: overviewRequest,
+        backHref: "/platform-admin",
+        opsHref: "/platform-admin/notifications-ops",
+        alertWorkflowHref: snapshot ? buildAlertWorkflowHref(snapshot) : "/platform-admin/notifications-alerts",
+      }),
+    [overviewRequest, snapshot],
   );
-  const overviewSurface = buildNotificationReadApiStatusSurface(
-    resolveNotificationReadApiPanelStatus({
-      pageStatus,
-      hasData: snapshot !== null,
-      issue: overviewRequest.error,
-    }),
-    "overview_primary",
-    overviewRequest.error,
-  );
-  const insightsSurface = buildNotificationReadApiStatusSurface(
-    resolveNotificationReadApiPanelStatus({
-      pageStatus,
-      hasData: insights !== null,
-      issue: insightsIssue,
-    }),
-    "insights_panel",
-    insightsIssue,
-  );
-  const trendsSurface = buildNotificationReadApiStatusSurface(
-    resolveNotificationReadApiPanelStatus({
-      pageStatus,
-      hasData: trend !== null,
-      issue: trendsIssue,
-    }),
-    "trends_panel",
-    trendsIssue,
-  );
-  const showPageStatus = pageSurface.status !== "ready" && pageSurface.status !== "idle";
-
-  const hasData = useMemo(() => Boolean(snapshot && snapshot.totalRows > 0), [snapshot]);
   const warmTenantDrilldown = (tenantId: string) => {
     void prefetchNotificationTenantDrilldownFromOverviewState(tenantId, filters);
   };
-  const buildTenantDrilldownLinkProps = (tenantId: string) => ({
-    href: buildTenantDrilldownHref(tenantId),
-    onMouseEnter: () => warmTenantDrilldown(tenantId),
-    onFocus: () => warmTenantDrilldown(tenantId),
-    onPointerDown: () => warmTenantDrilldown(tenantId),
-  });
+  const buildTenantDrilldownLinkProps = (tenantId: string, label?: string) => {
+    const action = buildNotificationOpenTenantDrilldownAction({
+      tenantId,
+      href: buildTenantDrilldownHref(tenantId),
+      label,
+    });
+    return {
+      href: action.href ?? "#",
+      onMouseEnter: () => warmTenantDrilldown(tenantId),
+      onFocus: () => warmTenantDrilldown(tenantId),
+      onPointerDown: () => warmTenantDrilldown(tenantId),
+    };
+  };
 
   return (
     <main className="fdGlassScene">
@@ -114,17 +90,25 @@ export default function NotificationOverviewDashboard() {
             </h1>
             <p className="fdGlassText">Daily delivery outcomes, engagement events, channel/tenant slices.</p>
             <div className="actions" style={{ marginTop: 10 }}>
-              <Link className="fdPillBtn" href="/platform-admin">
-                Back
+              <Link className="fdPillBtn" href={viewModel.actions.backToPlatform.href ?? "/platform-admin"}>
+                {viewModel.actions.backToPlatform.label}
               </Link>
-              <Link className="fdPillBtn" href="/platform-admin/notifications-ops">
-                Notification Ops
+              <Link className="fdPillBtn" href={viewModel.actions.openOps.href ?? "/platform-admin/notifications-ops"}>
+                {viewModel.actions.openOps.label}
               </Link>
-              <Link className="fdPillBtn" href={snapshot ? buildAlertWorkflowHref(snapshot) : "/platform-admin/notifications-alerts"}>
-                Alert Workflow
+              <Link
+                className="fdPillBtn"
+                href={viewModel.actions.openAlertWorkflow.href ?? "/platform-admin/notifications-alerts"}
+              >
+                {viewModel.actions.openAlertWorkflow.label}
               </Link>
-              <button type="button" className="fdPillBtn" onClick={() => setRefreshKey((current) => current + 1)} disabled={loading}>
-                {pageStatus === "hard_failure_no_data" ? "Retry" : loading ? "Refreshing..." : "Refresh"}
+              <button
+                type="button"
+                className="fdPillBtn"
+                onClick={() => setRefreshKey((current) => current + 1)}
+                disabled={!viewModel.actions.refresh.enabled}
+              >
+                {viewModel.actions.refresh.label}
               </button>
             </div>
           </div>
@@ -192,20 +176,20 @@ export default function NotificationOverviewDashboard() {
           </div>
         </section>
 
-        {showPageStatus || resourceErrors.length > 0 ? (
+        {viewModel.page.showStatusNotice || viewModel.page.errorSummary.length > 0 ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-            <p className={pageSurface.tone === "danger" ? "error" : "sub"} style={{ marginTop: 0 }}>
-              {pageSurface.message}
+            <p className={viewModel.page.tone === "danger" ? "error" : "sub"} style={{ marginTop: 0 }}>
+              {viewModel.page.assistiveMessage}
             </p>
-            {resourceErrors.map((issue) => (
-              <p key={`${issue.source}:${issue.kind}:${issue.message}`} className="sub" style={{ marginTop: 8 }}>
-                {issue.source} {issue.kind}: {issue.message}
+            {viewModel.page.errorSummary.map((summary: string) => (
+              <p key={summary} className="sub" style={{ marginTop: 8 }}>
+                {summary}
               </p>
             ))}
           </section>
         ) : null}
 
-        {overviewRequest.isInitialLoading ? (
+        {viewModel.page.status === "initial_loading" ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
             <p className="fdGlassText">Loading notification performance overview...</p>
           </section>
@@ -258,7 +242,7 @@ export default function NotificationOverviewDashboard() {
 
             <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
               <p className="sub" style={{ marginTop: 0 }}>
-                {overviewSurface.message}
+                {viewModel.overviewPanel.assistiveMessage}
               </p>
               <p className="sub" style={{ marginTop: 0 }}>
                 Rate definition: success/fail denominator = sent + failed; open/click/conversion denominator = sent.
@@ -270,9 +254,9 @@ export default function NotificationOverviewDashboard() {
 
             <section className="fdTwoCol" style={{ marginBottom: 14 }}>
               <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <h2 className="sectionTitle">Tenant Alert Priority</h2>
+                <h2 className="sectionTitle">{viewModel.insightsPriorityPanel.title}</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
-                  {insightsSurface.message}
+                  {viewModel.insightsPriorityPanel.assistiveMessage}
                 </p>
                 {insights ? (
                   <>
@@ -289,7 +273,7 @@ export default function NotificationOverviewDashboard() {
                             {item.summary}
                           </p>
                           <div className="actions" style={{ marginTop: 6 }}>
-                            <Link className="fdPillBtn" {...buildTenantDrilldownLinkProps(item.tenantId)}>
+                            <Link className="fdPillBtn" {...buildTenantDrilldownLinkProps(item.tenantId, "Open Tenant Drilldown")}>
                               Open Tenant Drilldown
                             </Link>
                             <Link className="fdPillBtn" href={buildAlertWorkflowHref(snapshot, item.tenantId)}>
@@ -298,7 +282,9 @@ export default function NotificationOverviewDashboard() {
                           </div>
                         </div>
                       ))}
-                      {insights.tenantPriorities.length === 0 ? <p className="fdGlassText">No tenant alerts.</p> : null}
+                      {insights.tenantPriorities.length === 0 ? (
+                        <p className="fdGlassText">{viewModel.insightsPriorityPanel.emptyMessage}</p>
+                      ) : null}
                     </div>
                   </>
                 ) : (
@@ -307,9 +293,9 @@ export default function NotificationOverviewDashboard() {
               </section>
 
               <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <h2 className="sectionTitle">Top Anomaly Reasons</h2>
+                <h2 className="sectionTitle">{viewModel.insightsReasonsPanel.title}</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
-                  {insightsSurface.message}
+                  {viewModel.insightsReasonsPanel.assistiveMessage}
                 </p>
                 {insights ? (
                   <div className="fdDataGrid" style={{ marginTop: 8 }}>
@@ -320,7 +306,9 @@ export default function NotificationOverviewDashboard() {
                         {item.sample ? ` | sample: ${item.sample}` : ""}
                       </p>
                     ))}
-                    {insights.reasonClusters.length === 0 ? <p className="fdGlassText">No anomaly reasons.</p> : null}
+                    {insights.reasonClusters.length === 0 ? (
+                      <p className="fdGlassText">{viewModel.insightsReasonsPanel.emptyMessage}</p>
+                    ) : null}
                   </div>
                 ) : (
                   <p className="fdGlassText">Anomaly insights are temporarily unavailable.</p>
@@ -329,9 +317,9 @@ export default function NotificationOverviewDashboard() {
             </section>
 
             <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-                <h2 className="sectionTitle">Alert Trend Comparison (Current vs Previous Window)</h2>
+                <h2 className="sectionTitle">{viewModel.trendsPanel.title}</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
-                  {trendsSurface.message}
+                  {viewModel.trendsPanel.assistiveMessage}
                 </p>
                 {trend ? (
                   <>
@@ -362,7 +350,7 @@ export default function NotificationOverviewDashboard() {
                                 {toPercent(item.rateDelta)})
                               </p>
                               <div className="actions" style={{ marginTop: 6 }}>
-                                <Link className="fdPillBtn" {...buildTenantDrilldownLinkProps(item.tenantId)}>
+                                <Link className="fdPillBtn" {...buildTenantDrilldownLinkProps(item.tenantId, "Open Tenant Drilldown")}>
                                   Open Tenant Drilldown
                                 </Link>
                                 <Link className="fdPillBtn" href={buildAlertWorkflowHref(snapshot, item.tenantId)}>
@@ -409,9 +397,9 @@ export default function NotificationOverviewDashboard() {
                 )}
               </section>
 
-            {!hasData ? (
+            {viewModel.page.emptyMessage ? (
               <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-                <p className="fdGlassText">No delivery rows in current filter scope.</p>
+                <p className="fdGlassText">{viewModel.page.emptyMessage}</p>
               </section>
             ) : null}
 

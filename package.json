@@ -30,6 +30,7 @@
         "test:phase42:prefetch": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:resilience": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:status-surface": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
+        "test:phase42:view-model": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:orchestration": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:query-state": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:url-sync": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
