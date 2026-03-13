@@ -5,6 +5,9 @@ import {
   orchestratorStateSchema,
   parseWithDualValidation,
   type CIStatusSummary,
+  type ExecutionMode,
+  type ExecutorFallbackMode,
+  type ExecutorProviderKind,
   type IterationRecord,
   type OrchestratorState,
   type PlannerProviderKind,
@@ -27,7 +30,7 @@ import {
   type ReviewerProvider,
 } from "./reviewer";
 import type { ExecutionProvider } from "./executor-adapters";
-import { LocalRepoExecutor, MockExecutor } from "./executor-adapters";
+import { LocalRepoExecutor, MockExecutor, OpenAIResponsesExecutorProvider } from "./executor-adapters";
 import type { StorageProvider } from "./storage";
 import { FileStorage } from "./storage";
 import type { GitHubStatusAdapter } from "./github";
@@ -35,14 +38,16 @@ import { MockGitHubStatusAdapter } from "./github";
 import { transitionState } from "./workflows/state-machine";
 import type { OpenAIResponsesClient } from "./openai";
 import { NodeHttpsResponsesClient } from "./openai";
+import { FileSystemWorkspaceManager } from "./workspace";
 
 type ProviderMap<T> = Record<PlannerProviderKind, T | null>;
+type ExecutorProviderMap = Record<ExecutorProviderKind, ExecutionProvider | null>;
 
 export type OrchestratorDependencies = {
   storage: StorageProvider;
   plannerProviders: ProviderMap<PlannerProvider>;
   reviewerProviders: ProviderMap<ReviewerProvider>;
-  executor: ExecutionProvider;
+  executorProviders: ExecutorProviderMap;
   githubAdapter: GitHubStatusAdapter | null;
   now?: () => Date;
 };
@@ -147,6 +152,43 @@ function currentLoopStopReason(state: OrchestratorState) {
   return null;
 }
 
+function resolveExecutorProvider(params: {
+  state: OrchestratorState;
+  providers: ExecutorProviderMap;
+}) {
+  const preferred = params.providers[params.state.task.executorMode];
+  if (preferred) {
+    return {
+      provider: preferred,
+      resolved: preferred.kind,
+      fallbackReason: null,
+    };
+  }
+
+  if (params.state.task.executorFallbackMode === "blocked") {
+    return {
+      provider: null,
+      resolved: null,
+      fallbackReason: `${params.state.task.executorMode} executor provider is not configured.`,
+    };
+  }
+
+  const fallback = params.providers[params.state.task.executorFallbackMode];
+  if (!fallback) {
+    return {
+      provider: null,
+      resolved: null,
+      fallbackReason: `${params.state.task.executorMode} executor provider is unavailable and fallback ${params.state.task.executorFallbackMode} is not configured.`,
+    };
+  }
+
+  return {
+    provider: fallback,
+    resolved: fallback.kind,
+    fallbackReason: `${params.state.task.executorMode} executor provider is unavailable; falling back to ${fallback.kind}.`,
+  };
+}
+
 export function createInitialState(params: {
   id: string;
   repoPath: string;
@@ -161,7 +203,10 @@ export function createInitialState(params: {
   maxConsecutiveFailures?: number;
   autoMode?: boolean;
   approvalMode?: "auto" | "human_approval";
-  executorMode?: "mock" | "local_repo";
+  executorMode?: ExecutorProviderKind;
+  executionMode?: ExecutionMode;
+  executorFallbackMode?: ExecutorFallbackMode;
+  workspaceRoot?: string | null;
   executorCommand?: string[];
   plannerProvider?: PlannerProviderKind;
   reviewerProvider?: PlannerProviderKind;
@@ -197,6 +242,9 @@ export function createInitialState(params: {
         specsClear: true,
         sameAcceptanceSuite: true,
         executorMode: params.executorMode ?? "mock",
+        executionMode: params.executionMode ?? (params.executorMode === "mock" ? "mock" : "dry_run"),
+        executorFallbackMode: params.executorFallbackMode ?? "blocked",
+        workspaceRoot: params.workspaceRoot ?? null,
         executorCommand: params.executorCommand ?? [],
         plannerProvider: params.plannerProvider ?? "rule_based",
         reviewerProvider: params.reviewerProvider ?? "rule_based",
@@ -302,24 +350,41 @@ async function executePlannedIteration(
   });
   await dependencies.storage.saveState(nextState);
 
-  const run = await dependencies.executor.submitTask({
+  const executorResolution = resolveExecutorProvider({
+    state,
+    providers: dependencies.executorProviders,
+  });
+  if (!executorResolution.provider) {
+    const stopped = persistStop(
+      nextState,
+      executorResolution.fallbackReason ?? "No executor provider is available.",
+      now,
+    );
+    await dependencies.storage.saveState(stopped);
+    return stopped;
+  }
+
+  const run = await executorResolution.provider.submitTask({
     iterationNumber: state.nextIterationPlan.iterationNumber,
     prompt: state.plannerDecision.nextPrompt,
     allowedFiles: state.plannerDecision.allowedFiles,
     forbiddenFiles: state.plannerDecision.forbiddenFiles,
     acceptanceCommands: state.plannerDecision.acceptanceCommands,
     repoPath: state.task.repoPath,
-    metadata:
-      state.task.executorMode === "local_repo"
-        ? { localCommand: state.task.executorCommand }
-        : undefined,
+    metadata: {
+      localCommand: state.task.executorMode === "local_repo" ? state.task.executorCommand : undefined,
+      executionMode: state.task.executionMode,
+      workspaceRoot: state.task.workspaceRoot,
+      taskId: state.id,
+      applyAllowed: state.task.executionMode !== "apply" || (state.task.autoMode && state.task.approvalMode === "auto"),
+    },
   });
 
   nextState = transitionState(nextState, "awaiting_result", now);
   await dependencies.storage.saveState(nextState);
-  await dependencies.executor.pollRun(run.runId);
+  await executorResolution.provider.pollRun(run.runId);
 
-  const report = await dependencies.executor.collectResult(run.runId);
+  const report = await executorResolution.provider.collectResult(run.runId);
   const reviewContextState = orchestratorStateSchema.parse({
     ...state,
     iterationNumber: report.iterationNumber,
@@ -573,14 +638,18 @@ export async function rejectPendingPlan(stateId: string, dependencies: Orchestra
 export function createDefaultDependencies(params: {
   repoPath: string;
   storageRoot?: string;
-  executorMode?: "mock" | "local_repo";
+  executorMode?: ExecutorProviderKind;
   mockCiStatus?: CIStatusSummary;
   openaiClient?: OpenAIResponsesClient | null;
+  workspaceRoot?: string;
 }) {
   const storage = new FileStorage(params.storageRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-state"));
   const responsesClient =
     params.openaiClient ??
     (process.env.OPENAI_API_KEY ? new NodeHttpsResponsesClient(process.env.OPENAI_API_KEY) : null);
+  const workspaceManager = new FileSystemWorkspaceManager(
+    params.workspaceRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-workspaces"),
+  );
 
   const plannerProviders: ProviderMap<PlannerProvider> = {
     rule_based: new RuleBasedPlannerProvider(),
@@ -590,14 +659,22 @@ export function createDefaultDependencies(params: {
     rule_based: new RuleBasedReviewerProvider(),
     openai: responsesClient ? new OpenAIResponsesReviewerProvider({ client: responsesClient }) : null,
   };
-  const executor =
-    params.executorMode === "local_repo" ? new LocalRepoExecutor() : new MockExecutor();
+  const executorProviders: ExecutorProviderMap = {
+    mock: new MockExecutor(),
+    local_repo: new LocalRepoExecutor(),
+    openai_responses: responsesClient
+      ? new OpenAIResponsesExecutorProvider({
+          client: responsesClient,
+          workspaceManager,
+        })
+      : null,
+  };
   const githubAdapter = params.mockCiStatus ? new MockGitHubStatusAdapter(params.mockCiStatus) : null;
   return {
     storage,
     plannerProviders,
     reviewerProviders,
-    executor,
+    executorProviders,
     githubAdapter,
   } satisfies OrchestratorDependencies;
 }

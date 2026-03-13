@@ -68,7 +68,7 @@ test("approval resume does not duplicate a planned iteration and persists iterat
   assert.equal(updated.iterationHistory[0]?.executionReport, null);
 
   await approvePendingPlan("storage-resume", dependencies);
-  dependencies.executor = new MockExecutor([createMockReport(1, true)]);
+  dependencies.executorProviders.mock = new MockExecutor([createMockReport(1, true)]);
 
   updated = await runOrchestratorLoop("storage-resume", dependencies);
   assert.equal(updated.status, "completed");

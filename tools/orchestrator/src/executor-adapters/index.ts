@@ -4,8 +4,12 @@ import {
   executionReportJsonSchema,
   executionReportSchema,
   parseWithDualValidation,
+  type ExecutionMode,
   type ExecutionReport,
+  type ExecutorProviderKind,
 } from "../schemas";
+import { validateAllowListedCommand } from "./command-policy";
+import { OpenAIResponsesExecutorProvider } from "./openai-responses";
 
 export type ExecutionProviderTask = {
   iterationNumber: number;
@@ -17,6 +21,10 @@ export type ExecutionProviderTask = {
   metadata?: {
     localCommand?: string[];
     mockReport?: ExecutionReport;
+    executionMode?: ExecutionMode;
+    workspaceRoot?: string | null;
+    taskId?: string;
+    applyAllowed?: boolean;
   };
 };
 
@@ -28,13 +36,14 @@ export type ExecutionProviderRun = {
 };
 
 export interface ExecutionProvider {
+  readonly kind: ExecutorProviderKind;
   submitTask(task: ExecutionProviderTask): Promise<ExecutionProviderRun>;
   pollRun(runId: string): Promise<ExecutionProviderRun>;
   cancelRun(runId: string): Promise<void>;
   collectResult(runId: string): Promise<ExecutionReport>;
 }
 
-type StoredRun = {
+export type StoredRun = {
   status: ExecutionProviderRunStatus;
   promise: Promise<ExecutionReport>;
   result?: ExecutionReport;
@@ -51,6 +60,7 @@ function validateExecutionReport(data: unknown) {
 }
 
 export class MockExecutor implements ExecutionProvider {
+  readonly kind = "mock" as const;
   private readonly runs = new Map<string, StoredRun>();
   private readonly queuedReports: ExecutionReport[];
 
@@ -85,7 +95,7 @@ export class MockExecutor implements ExecutionProvider {
         recommendedNextStep: "Replace MockExecutor with LocalRepoExecutor or a real coding-agent provider.",
         shouldCloseSlice: false,
         artifacts: [{ kind: "prompt", label: "Submitted prompt", path: null, value: task.prompt }],
-        rawExecutorOutput: { provider: "mock" },
+        rawExecutorOutput: { provider: "mock", executionMode: task.metadata?.executionMode ?? "mock" },
       });
 
     const promise = Promise.resolve(report);
@@ -117,20 +127,10 @@ export class MockExecutor implements ExecutionProvider {
   }
 }
 
-function validateLocalCommand(command: string[]) {
-  if (command.length === 0) throw new Error("LocalRepoExecutor requires a non-empty command.");
-  const executable = command[0];
-  const allowedExecutables = new Set(["node", "npm", "git"]);
-  if (!allowedExecutables.has(executable)) {
-    throw new Error(`LocalRepoExecutor blocked command "${executable}".`);
-  }
-}
-
-function runCommand(repoPath: string, command: string[]) {
-  validateLocalCommand(command);
-  const [file, ...args] = command;
+export async function runCommand(repoPath: string, command: string[]) {
+  const safe = validateAllowListedCommand(command);
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    const child = spawn(file, args, {
+    const child = spawn(safe.executable, safe.args, {
       cwd: repoPath,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
@@ -156,6 +156,7 @@ function runCommand(repoPath: string, command: string[]) {
 }
 
 export class LocalRepoExecutor implements ExecutionProvider {
+  readonly kind = "local_repo" as const;
   private readonly runs = new Map<string, StoredRun>();
 
   async submitTask(task: ExecutionProviderTask) {
@@ -172,7 +173,7 @@ export class LocalRepoExecutor implements ExecutionProvider {
           changedFiles: [],
           checkedButUnmodifiedFiles: task.allowedFiles,
           summaryOfChanges: [`LocalRepoExecutor ran: ${command.join(" ")}`],
-          whyThisWasDone: ["The orchestrator MVP needs a real local execution provider before a coding-agent API exists."],
+          whyThisWasDone: ["The orchestrator needs a real local execution provider before a coding-agent API exists."],
           howBehaviorWasKeptStable: ["LocalRepoExecutor only runs allow-listed commands."],
           localValidation: task.acceptanceCommands.map((validationCommand) => ({
             command: validationCommand,
@@ -188,7 +189,7 @@ export class LocalRepoExecutor implements ExecutionProvider {
             { kind: "stdout", label: "stdout", path: null, value: stdout.trim() || null },
             { kind: "stderr", label: "stderr", path: null, value: stderr.trim() || null },
           ],
-          rawExecutorOutput: { provider: "local_repo", command },
+          rawExecutorOutput: { provider: "local_repo", command, executionMode: task.metadata?.executionMode ?? "dry_run" },
         }),
       )
       .catch((error) =>
@@ -197,7 +198,7 @@ export class LocalRepoExecutor implements ExecutionProvider {
           changedFiles: [],
           checkedButUnmodifiedFiles: task.allowedFiles,
           summaryOfChanges: [`LocalRepoExecutor failed while running: ${command.join(" ")}`],
-          whyThisWasDone: ["The orchestrator MVP must surface local execution failures in a normalized report."],
+          whyThisWasDone: ["The orchestrator must surface local execution failures in a normalized report."],
           howBehaviorWasKeptStable: ["Execution failure is reported without touching protected files."],
           localValidation: task.acceptanceCommands.map((validationCommand) => ({
             command: validationCommand,
@@ -210,7 +211,7 @@ export class LocalRepoExecutor implements ExecutionProvider {
           recommendedNextStep: "Fix the local command or use MockExecutor to continue iterating.",
           shouldCloseSlice: false,
           artifacts: [],
-          rawExecutorOutput: { provider: "local_repo", command },
+          rawExecutorOutput: { provider: "local_repo", command, executionMode: task.metadata?.executionMode ?? "dry_run" },
         }),
       );
 
@@ -246,3 +247,5 @@ export class LocalRepoExecutor implements ExecutionProvider {
     return run.result ?? (await run.promise);
   }
 }
+
+export { OpenAIResponsesExecutorProvider };

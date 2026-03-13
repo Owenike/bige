@@ -53,6 +53,7 @@
         "orchestrator:run-loop": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js run-loop",
         "orchestrator:approve": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js approve",
         "orchestrator:reject": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js reject",
+        "orchestrator:workspace:cleanup": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js workspace:cleanup",
         "orchestrator:resume": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js resume",
         "orchestrator:review": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js review",
         "orchestrator:dry-run": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js dry-run",
@@ -64,6 +65,9 @@
         "test:orchestrator:policy": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 policy",
         "test:orchestrator:providers": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 providers",
         "test:orchestrator:storage": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 storage",
+        "test:orchestrator:executor-provider": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 executor-provider",
+        "test:orchestrator:workspace": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 workspace",
+        "test:orchestrator:patch-flow": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 patch-flow",
         "test:orchestrator:mock-loop": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 mock-loop",
         "test:orchestrator:loop": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 loop",
         "test:orchestrator:state-machine": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 state-machine"

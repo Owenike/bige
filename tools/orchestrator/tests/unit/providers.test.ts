@@ -104,7 +104,7 @@ test("OpenAI providers can drive planning and review when a client is configured
     }),
   });
   await dependencies.storage.saveState(state);
-  dependencies.executor = new MockExecutor([createMockReport(1, true)]);
+  dependencies.executorProviders.mock = new MockExecutor([createMockReport(1, true)]);
 
   const updated = await runOrchestratorOnce("openai-provider", dependencies);
   assert.equal(updated.status, "completed");
@@ -140,7 +140,7 @@ test("planner and reviewer fall back to rule-based providers when OpenAI is unav
     openaiClient: null,
   });
   await dependencies.storage.saveState(state);
-  dependencies.executor = new MockExecutor([createMockReport(1, false)]);
+  dependencies.executorProviders.mock = new MockExecutor([createMockReport(1, false)]);
 
   const updated = await runOrchestratorOnce("fallback-provider", dependencies);
   assert.equal(updated.lastPlannerProvider, "rule_based");

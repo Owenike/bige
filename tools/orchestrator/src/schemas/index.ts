@@ -172,6 +172,9 @@ export const reviewVerdictSchema = z.object({
 });
 
 export const providerKindSchema = z.enum(["rule_based", "openai"]);
+export const executorProviderSchema = z.enum(["mock", "local_repo", "openai_responses"]);
+export const executionModeSchema = z.enum(["mock", "dry_run", "apply"]);
+export const executorFallbackModeSchema = z.enum(["blocked", "mock", "local_repo"]);
 
 export const orchestratorStatusSchema = z.enum([
   "draft",
@@ -204,7 +207,10 @@ const orchestratorTaskSchema = z.object({
   sameBoundary: z.boolean().default(true),
   specsClear: z.boolean().default(true),
   sameAcceptanceSuite: z.boolean().default(true),
-  executorMode: z.enum(["mock", "local_repo"]).default("mock"),
+  executorMode: executorProviderSchema.default("mock"),
+  executionMode: executionModeSchema.default("mock"),
+  executorFallbackMode: executorFallbackModeSchema.default("blocked"),
+  workspaceRoot: z.string().nullable().default(null),
   executorCommand: z.array(z.string()).default([]),
   plannerProvider: providerKindSchema.default("rule_based"),
   reviewerProvider: providerKindSchema.default("rule_based"),
@@ -214,7 +220,8 @@ export const nextIterationPlanSchema = z.object({
   iterationNumber: z.number().int().positive(),
   plannerDecision: plannerDecisionSchema,
   approvalRequired: z.boolean(),
-  executorMode: z.enum(["mock", "local_repo"]),
+  executorMode: executorProviderSchema,
+  executionMode: executionModeSchema,
 });
 
 export const iterationRecordSchema = z.object({
@@ -268,6 +275,9 @@ export type CIStatusSummary = z.infer<typeof ciStatusSummarySchema>;
 export type ValidationResult = z.infer<typeof validationResultSchema>;
 export type PlannerProviderKind = z.infer<typeof providerKindSchema>;
 export type IterationRecord = z.infer<typeof iterationRecordSchema>;
+export type ExecutorProviderKind = z.infer<typeof executorProviderSchema>;
+export type ExecutionMode = z.infer<typeof executionModeSchema>;
+export type ExecutorFallbackMode = z.infer<typeof executorFallbackModeSchema>;
 
 const stringArrayJsonSchema: JsonSchema = {
   type: "array",
@@ -502,6 +512,9 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         "specsClear",
         "sameAcceptanceSuite",
         "executorMode",
+        "executionMode",
+        "executorFallbackMode",
+        "workspaceRoot",
         "executorCommand",
         "plannerProvider",
         "reviewerProvider",
@@ -524,7 +537,10 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         sameBoundary: { type: "boolean" },
         specsClear: { type: "boolean" },
         sameAcceptanceSuite: { type: "boolean" },
-        executorMode: { type: "string", enum: ["mock", "local_repo"] },
+        executorMode: { type: "string", enum: ["mock", "local_repo", "openai_responses"] },
+        executionMode: { type: "string", enum: ["mock", "dry_run", "apply"] },
+        executorFallbackMode: { type: "string", enum: ["blocked", "mock", "local_repo"] },
+        workspaceRoot: { type: "string", nullable: true },
         executorCommand: { type: "array", items: { type: "string" } },
         plannerProvider: { type: "string", enum: ["rule_based", "openai"] },
         reviewerProvider: { type: "string", enum: ["rule_based", "openai"] },
@@ -534,13 +550,14 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     nextIterationPlan: {
       type: "object",
       nullable: true,
-      required: ["iterationNumber", "plannerDecision", "approvalRequired", "executorMode"],
+      required: ["iterationNumber", "plannerDecision", "approvalRequired", "executorMode", "executionMode"],
       additionalProperties: false,
       properties: {
         iterationNumber: { type: "number" },
         plannerDecision: plannerDecisionJsonSchema,
         approvalRequired: { type: "boolean" },
-        executorMode: { type: "string", enum: ["mock", "local_repo"] },
+        executorMode: { type: "string", enum: ["mock", "local_repo", "openai_responses"] },
+        executionMode: { type: "string", enum: ["mock", "dry_run", "apply"] },
       },
     },
     lastExecutionReport: { ...executionReportJsonSchema, nullable: true },

@@ -200,6 +200,7 @@ export function createNextIterationPlan(params: {
     plannerDecision: params.plannerDecision,
     approvalRequired: params.state.task.approvalMode === "human_approval" || !params.state.task.autoMode,
     executorMode: params.state.task.executorMode,
+    executionMode: params.state.task.executionMode,
   }) satisfies NextIterationPlan;
 }
 

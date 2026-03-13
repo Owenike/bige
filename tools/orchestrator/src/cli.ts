@@ -8,7 +8,8 @@ import {
   runOrchestratorLoop,
   runOrchestratorOnce,
 } from "./orchestrator";
-import type { PlannerProviderKind } from "./schemas";
+import type { ExecutionMode, ExecutorFallbackMode, ExecutorProviderKind, PlannerProviderKind } from "./schemas";
+import { FileSystemWorkspaceManager } from "./workspace";
 
 function parseArgs(argv: string[]) {
   const [command = "help", ...rest] = argv;
@@ -38,11 +39,15 @@ async function main() {
   const repoPath = getOption(options, "repo", process.cwd());
   const stateId = getOption(options, "state-id", "default");
   const storageRoot = getOption(options, "storage-root", path.join(repoPath, ".tmp", "orchestrator-state"));
-  const executorMode = getOption(options, "executor", "mock") as "mock" | "local_repo";
+  const executorMode = getOption(options, "executor", "mock") as ExecutorProviderKind;
+  const executionMode = getOption(options, "execution-mode", executorMode === "mock" ? "mock" : "dry_run") as ExecutionMode;
+  const executorFallbackMode = getOption(options, "executor-fallback", "blocked") as ExecutorFallbackMode;
+  const workspaceRoot = getOption(options, "workspace-root", path.join(repoPath, ".tmp", "orchestrator-workspaces"));
   const dependencies = createDefaultDependencies({
     repoPath,
     storageRoot,
     executorMode,
+    workspaceRoot,
   });
 
   if (command === "init") {
@@ -79,6 +84,9 @@ async function main() {
       autoMode: getOption(options, "auto-mode", "false") === "true",
       approvalMode: getOption(options, "approval-mode", "human_approval") as "auto" | "human_approval",
       executorMode,
+      executionMode,
+      executorFallbackMode,
+      workspaceRoot,
       executorCommand: getOption(options, "local-command", "node,-e,console.log('local-executor-ok')")
         .split(",")
         .map((value) => value.trim())
@@ -131,16 +139,24 @@ async function main() {
     return;
   }
 
+  if (command === "workspace:cleanup") {
+    const manager = new FileSystemWorkspaceManager(workspaceRoot);
+    await manager.cleanupWorkspace(stateId);
+    process.stdout.write(`${JSON.stringify({ cleaned: true, workspaceRoot, stateId }, null, 2)}\n`);
+    return;
+  }
+
   process.stdout.write(
     [
       "Usage:",
       "  node cli.js init --state-id default --goal \"...\"",
       "  node cli.js plan --state-id default",
-      "  node cli.js run-once --state-id default --executor mock",
+      "  node cli.js run-once --state-id default --executor openai_responses --execution-mode dry_run",
       "  node cli.js run-loop --state-id default --executor mock",
       "  node cli.js approve --state-id default",
       "  node cli.js reject --state-id default --reason \"...\"",
       "  node cli.js resume --state-id default",
+      "  node cli.js workspace:cleanup --state-id default --workspace-root .tmp/orchestrator-workspaces",
       "  node cli.js review --state-id default",
       "  node cli.js dry-run --state-id default --executor mock",
     ].join("\n"),

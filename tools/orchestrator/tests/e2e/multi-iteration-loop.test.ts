@@ -54,7 +54,7 @@ test("run-loop can revise then accept and complete", async () => {
     storageRoot,
     executorMode: "mock",
   });
-  dependencies.executor = new MockExecutor([
+  dependencies.executorProviders.mock = new MockExecutor([
     createMockReport({
       iterationNumber: 1,
       blockers: ["Need one more iteration."],
@@ -96,7 +96,7 @@ test("run-loop stops when reviewer blocks a forbidden-file change", async () => 
     storageRoot,
     executorMode: "mock",
   });
-  dependencies.executor = new MockExecutor([
+  dependencies.executorProviders.mock = new MockExecutor([
     createMockReport({
       iterationNumber: 1,
       changedFiles: ["app/api/platform/notifications/overview/route.ts"],
@@ -154,7 +154,7 @@ test("run-loop waits for approval and continues after approval without replannin
   const plannedIteration = updated.iterationHistory[0]?.iterationNumber;
 
   await approvePendingPlan("loop-approval", dependencies);
-  dependencies.executor = new MockExecutor([
+  dependencies.executorProviders.mock = new MockExecutor([
     createMockReport({
       iterationNumber: 1,
       shouldCloseSlice: true,
