@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { ArtifactPruneResult, IterationRecord, OrchestratorState } from "../schemas";
 import { FileSystemWorkspaceManager } from "../workspace";
+import { resolveRetentionConfig } from "../config";
 
 export type ArtifactRetentionPolicy = {
   retainRecentSuccess: number;
@@ -14,7 +15,11 @@ export const DEFAULT_ARTIFACT_RETENTION_POLICY: ArtifactRetentionPolicy = {
 
 function isIterationProtected(state: OrchestratorState, record: IterationRecord) {
   if (record.iterationNumber === state.iterationNumber) return true;
-  return ["patch_ready", "waiting_approval", "approved_for_apply"].includes(record.patchStatus);
+  const retention = resolveRetentionConfig(state.task);
+  if (retention.preserveApprovalPending) {
+    return ["patch_ready", "patch_exported", "branch_ready", "promotion_ready", "waiting_approval", "approved_for_apply"].includes(record.patchStatus);
+  }
+  return ["patch_ready", "approved_for_apply"].includes(record.patchStatus);
 }
 
 function classifyIteration(record: IterationRecord) {
@@ -65,9 +70,10 @@ export async function pruneOrchestratorArtifacts(params: {
   policy?: Partial<ArtifactRetentionPolicy>;
 }) {
   const now = params.now ?? new Date();
+  const retention = resolveRetentionConfig(params.state.task);
   const policy: ArtifactRetentionPolicy = {
-    retainRecentSuccess: params.policy?.retainRecentSuccess ?? params.state.task.artifactRetentionSuccess,
-    retainRecentFailure: params.policy?.retainRecentFailure ?? params.state.task.artifactRetentionFailure,
+    retainRecentSuccess: params.policy?.retainRecentSuccess ?? retention.recentSuccessKeep,
+    retainRecentFailure: params.policy?.retainRecentFailure ?? retention.recentFailureKeep,
   };
 
   const protectedIterations = new Set<number>();

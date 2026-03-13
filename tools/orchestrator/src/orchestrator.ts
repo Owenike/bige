@@ -5,6 +5,8 @@ import {
   auditTrailSchema,
   ciStatusSummarySchema,
   cleanupDecisionSchema,
+  githubHandoffResultSchema,
+  liveEvidenceSchema,
   liveSmokeResultSchema,
   orchestratorStateJsonSchema,
   orchestratorStateSchema,
@@ -17,6 +19,7 @@ import {
   type ExecutionMode,
   type ExecutorFallbackMode,
   type ExecutorProviderKind,
+  type GitHubHandoffResult,
   type IterationRecord,
   type OrchestratorState,
   type PlannerProviderKind,
@@ -54,11 +57,16 @@ import {
   preparePromotionBranch,
   promotePatchFromState,
   validatePatchPromotionPreconditions,
+  validatePublishPreconditions,
 } from "./promotion";
 import { inspectWorkspaceCleanup } from "./cleanup";
 import { createHandoffPackage } from "./handoff";
 import { writeIterationAuditTrail } from "./audit";
 import { runOpenAIExecutorLiveSmoke } from "./live-smoke";
+import { resolvePromotionConfig, resolveRetentionConfig } from "./config";
+import type { GitHubHandoffAdapter } from "./github-handoff";
+import { GhCliDraftPullRequestAdapter } from "./github-handoff";
+import { writeLiveEvidence } from "./live-evidence";
 
 type ProviderMap<T> = Record<PlannerProviderKind, T | null>;
 type ExecutorProviderMap = Record<ExecutorProviderKind, ExecutionProvider | null>;
@@ -69,6 +77,7 @@ export type OrchestratorDependencies = {
   reviewerProviders: ProviderMap<ReviewerProvider>;
   executorProviders: ExecutorProviderMap;
   githubAdapter: GitHubStatusAdapter | null;
+  githubHandoffAdapter: GitHubHandoffAdapter | null;
   workspaceManager: FileSystemWorkspaceManager;
   now?: () => Date;
 };
@@ -112,6 +121,8 @@ function createIterationRecord(params: {
     artifactPruneResult: null,
     cleanupDecision: null,
     auditTrailPath: null,
+    liveEvidencePath: null,
+    githubHandoffResultPath: null,
     stateBefore: params.stateBefore,
     stateAfter: params.stateAfter,
     stopReason: null,
@@ -281,6 +292,8 @@ export function createInitialState(params: {
   executorCommand?: string[];
   plannerProvider?: PlannerProviderKind;
   reviewerProvider?: PlannerProviderKind;
+  promotionConfig?: Partial<ReturnType<typeof resolvePromotionConfig>>;
+  retentionConfig?: Partial<ReturnType<typeof resolveRetentionConfig>>;
   now?: Date;
 }) {
   const now = params.now ?? new Date();
@@ -321,6 +334,12 @@ export function createInitialState(params: {
         reviewerProvider: params.reviewerProvider ?? "rule_based",
         artifactRetentionSuccess: 3,
         artifactRetentionFailure: 5,
+        promotionConfig: resolvePromotionConfig({ promotionConfig: params.promotionConfig ?? undefined }),
+        retentionConfig: resolveRetentionConfig({
+          retentionConfig: params.retentionConfig ?? undefined,
+          artifactRetentionSuccess: 3,
+          artifactRetentionFailure: 5,
+        }),
       },
       plannerDecision: null,
       nextIterationPlan: null,
@@ -346,6 +365,8 @@ export function createInitialState(params: {
       lastLiveAcceptanceResult: null,
       lastCleanupDecision: null,
       lastPrDraftMetadata: null,
+      lastGitHubHandoffResult: null,
+      lastLiveEvidence: null,
       lastAuditTrail: null,
       lastHandoffPackagePath: null,
       stopReason: null,
@@ -926,7 +947,10 @@ export async function promoteApprovedPatch(
   if (state.patchStatus !== "promotion_ready" && state.patchStatus !== "approved_for_apply") {
     throw new Error(`Promotion requires promotion_ready state, received ${state.patchStatus}.`);
   }
-  const issues = validatePatchPromotionPreconditions(state);
+  const issues = validatePublishPreconditions(state, {
+    applyWorkspace: options?.applyWorkspace,
+    createBranch: options?.createBranch,
+  });
   if (issues.length > 0) {
     throw new Error(`Patch promotion preconditions failed: ${issues.join(" | ")}`);
   }
@@ -1113,6 +1137,7 @@ export async function runLiveAcceptance(params: {
   openaiClient?: OpenAIResponsesClient | null;
   enabled?: boolean;
 }) {
+  const startedAt = new Date().toISOString();
   const result = await runLiveSmoke({
     repoPath: params.repoPath,
     workspaceRoot: params.workspaceRoot,
@@ -1125,12 +1150,27 @@ export async function runLiveAcceptance(params: {
   if (params.stateId && params.dependencies) {
     const state = await params.dependencies.storage.loadState(params.stateId);
     if (!state) throw new Error(`Orchestrator state ${params.stateId} was not found.`);
+    const evidenceRoot = path.join(params.repoPath, ".tmp", "orchestrator-live-evidence");
+    const evidence = await writeLiveEvidence({
+      stateId: state.id,
+      iterationNumber: Math.max(
+        state.iterationNumber,
+        state.iterationHistory.length > 0
+          ? (state.iterationHistory[state.iterationHistory.length - 1]?.iterationNumber ?? 1)
+          : 1,
+      ),
+      outputRoot: evidenceRoot,
+      result,
+      startedAt,
+      endedAt: result.ranAt,
+    });
     let updated = orchestratorStateSchema.parse({
       ...state,
       liveAcceptanceStatus: result.status,
       livePassStatus: result.status === "passed" ? "passed" : state.livePassStatus,
       lastLiveSmokeResult: result,
       lastLiveAcceptanceResult: result,
+      lastLiveEvidence: liveEvidenceSchema.parse(evidence.evidence),
       updatedAt: result.ranAt,
     });
     if (state.iterationHistory.length > 0) {
@@ -1141,6 +1181,7 @@ export async function runLiveAcceptance(params: {
         {
           liveAcceptanceStatus: result.status,
           livePassStatus: result.status === "passed" ? "passed" : updated.livePassStatus,
+          liveEvidencePath: evidence.evidencePath,
         },
         new Date(result.ranAt),
       );
@@ -1200,19 +1241,50 @@ export async function prepareHandoff(
   const handoff = await createHandoffPackage({
     state,
     outputRoot,
-    publishBranch: options?.publishBranch,
+    publishBranch: options?.publishBranch ?? resolvePromotionConfig(state.task).allowPublish,
     createBranch: options?.createBranch,
     githubHandoffEnabled: options?.githubHandoffEnabled,
   });
+  let githubHandoffResult: GitHubHandoffResult | null =
+    handoff.prDraftPath && handoff.branchName
+      ? {
+          status: options?.githubHandoffEnabled ? "payload_only" : "skipped",
+          provider: dependencies.githubHandoffAdapter?.kind ?? "github_handoff_unavailable",
+          targetBranch: handoff.branchName,
+          draftUrl: null,
+          summary: handoff.githubHandoffReason,
+          requestPayloadPath: handoff.prDraftPath,
+          ranAt: new Date().toISOString(),
+        }
+      : null;
+  if (handoff.prDraftPath && handoff.branchName && options?.githubHandoffEnabled && dependencies.githubHandoffAdapter) {
+    const prDraftMetadata = prDraftMetadataSchema.parse(JSON.parse(await readFile(handoff.prDraftPath, "utf8")));
+    githubHandoffResult = await dependencies.githubHandoffAdapter.createDraftPullRequest({
+      repoPath: state.task.repoPath,
+      title: prDraftMetadata.title,
+      body: prDraftMetadata.body,
+      headBranch: handoff.branchName,
+      baseBranch: resolvePromotionConfig(state.task).baseBranch,
+      payloadRoot: outputRoot,
+      stateId: state.id,
+      iterationNumber: state.lastExecutionReport?.iterationNumber ?? Math.max(state.iterationNumber, 1),
+    });
+  }
 
   const now = (dependencies.now ?? (() => new Date()))();
   let updated = orchestratorStateSchema.parse({
     ...state,
     handoffStatus: handoff.status,
     prDraftStatus: handoff.prDraftPath
-      ? handoff.githubHandoffStatus === "payload_ready"
+      ? githubHandoffResult?.status === "draft_created"
         ? "payload_ready"
-        : "metadata_ready"
+        : githubHandoffResult?.status === "failed"
+          ? "failed"
+          : githubHandoffResult?.status === "skipped"
+            ? "metadata_ready"
+            : githubHandoffResult?.status === "payload_only" || handoff.githubHandoffStatus === "payload_ready"
+              ? "payload_ready"
+              : "metadata_ready"
       : handoff.githubHandoffStatus === "skipped"
         ? "skipped"
         : "failed",
@@ -1221,6 +1293,7 @@ export async function prepareHandoff(
     lastPrDraftMetadata: handoff.prDraftPath
       ? prDraftMetadataSchema.parse(JSON.parse(await readFile(handoff.prDraftPath, "utf8")))
       : null,
+    lastGitHubHandoffResult: githubHandoffResult ? githubHandoffResultSchema.parse(githubHandoffResult) : null,
     promotionStatus:
       handoff.status === "branch_published"
         ? "promoted"
@@ -1244,13 +1317,20 @@ export async function prepareHandoff(
       {
         handoffStatus: handoff.status,
         prDraftStatus: handoff.prDraftPath
-          ? handoff.githubHandoffStatus === "payload_ready"
+          ? githubHandoffResult?.status === "draft_created"
             ? "payload_ready"
-            : "metadata_ready"
+            : githubHandoffResult?.status === "failed"
+              ? "failed"
+              : githubHandoffResult?.status === "skipped"
+                ? "metadata_ready"
+                : githubHandoffResult?.status === "payload_only" || handoff.githubHandoffStatus === "payload_ready"
+                  ? "payload_ready"
+                  : "metadata_ready"
           : handoff.githubHandoffStatus === "skipped"
             ? "skipped"
             : "failed",
         handoffArtifactPaths: handoff.artifactPaths,
+        githubHandoffResultPath: githubHandoffResult?.requestPayloadPath ?? null,
         patchStatus:
           handoff.status === "branch_published"
             ? "promoted"
@@ -1310,12 +1390,17 @@ export function createDefaultDependencies(params: {
       : null,
   };
   const githubAdapter = params.mockCiStatus ? new MockGitHubStatusAdapter(params.mockCiStatus) : null;
+  const githubHandoffAdapter = new GhCliDraftPullRequestAdapter({
+    enabled: process.env.ORCHESTRATOR_GITHUB_HANDOFF === "true",
+    token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+  });
   return {
     storage,
     plannerProviders,
     reviewerProviders,
     executorProviders,
     githubAdapter,
+    githubHandoffAdapter,
     workspaceManager,
   } satisfies OrchestratorDependencies;
 }

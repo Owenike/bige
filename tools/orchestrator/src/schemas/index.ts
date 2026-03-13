@@ -245,6 +245,34 @@ export const prDraftMetadataSchema = z.object({
   createdAt: z.string(),
 });
 
+export const githubHandoffResultSchema = z.object({
+  status: z.enum(["not_requested", "skipped", "payload_only", "draft_created", "failed"]).default("not_requested"),
+  provider: z.string(),
+  targetBranch: z.string().nullable().default(null),
+  draftUrl: z.string().nullable().default(null),
+  summary: z.string(),
+  requestPayloadPath: z.string().nullable().default(null),
+  ranAt: z.string(),
+});
+
+export const liveEvidenceSchema = z.object({
+  provider: z.string(),
+  model: z.string().nullable().default(null),
+  status: liveSmokeStatusSchema,
+  reason: z.string(),
+  summary: z.string().nullable().default(null),
+  startedAt: z.string(),
+  endedAt: z.string(),
+  toolCallCount: z.number().int().nonnegative().default(0),
+  commandCount: z.number().int().nonnegative().default(0),
+  reportPath: z.string().nullable().default(null),
+  diffPath: z.string().nullable().default(null),
+  transcriptSummaryPath: z.string().nullable().default(null),
+  toolLogPath: z.string().nullable().default(null),
+  commandLogPath: z.string().nullable().default(null),
+  patchArtifactPath: z.string().nullable().default(null),
+});
+
 export const auditTrailSchema = z.object({
   iterationNumber: z.number().int().positive(),
   stateStatus: z.enum([
@@ -268,6 +296,23 @@ export const auditTrailSchema = z.object({
   summary: z.string(),
   artifactPaths: z.array(z.string()).default([]),
   createdAt: z.string(),
+});
+
+const promotionConfigSchema = z.object({
+  branchNameTemplate: z.string().default("orchestrator/{taskId}/iter-{iteration}"),
+  baseBranch: z.string().default("main"),
+  allowPublish: z.boolean().default(false),
+  approvalRequired: z.boolean().default(true),
+  allowApplyWorkspace: z.boolean().default(false),
+  requirePatchExport: z.boolean().default(true),
+});
+
+const retentionConfigSchema = z.object({
+  recentSuccessKeep: z.number().int().nonnegative().default(3),
+  recentFailureKeep: z.number().int().nonnegative().default(5),
+  staleWorkspaceTtlMinutes: z.number().int().positive().default(120),
+  orphanArtifactTtlMinutes: z.number().int().positive().default(240),
+  preserveApprovalPending: z.boolean().default(true),
 });
 
 export const orchestratorStatusSchema = z.enum([
@@ -310,6 +355,21 @@ const orchestratorTaskSchema = z.object({
   reviewerProvider: providerKindSchema.default("rule_based"),
   artifactRetentionSuccess: z.number().int().positive().default(3),
   artifactRetentionFailure: z.number().int().positive().default(5),
+  promotionConfig: promotionConfigSchema.default({
+    branchNameTemplate: "orchestrator/{taskId}/iter-{iteration}",
+    baseBranch: "main",
+    allowPublish: false,
+    approvalRequired: true,
+    allowApplyWorkspace: false,
+    requirePatchExport: true,
+  }),
+  retentionConfig: retentionConfigSchema.default({
+    recentSuccessKeep: 3,
+    recentFailureKeep: 5,
+    staleWorkspaceTtlMinutes: 120,
+    orphanArtifactTtlMinutes: 240,
+    preserveApprovalPending: true,
+  }),
 });
 
 export const nextIterationPlanSchema = z.object({
@@ -349,6 +409,8 @@ export const iterationRecordSchema = z.object({
   artifactPruneResult: artifactPruneResultSchema.nullable().default(null),
   cleanupDecision: cleanupDecisionSchema.nullable().default(null),
   auditTrailPath: z.string().nullable().default(null),
+  liveEvidencePath: z.string().nullable().default(null),
+  githubHandoffResultPath: z.string().nullable().default(null),
   stateBefore: orchestratorStatusSchema,
   stateAfter: orchestratorStatusSchema,
   stopReason: z.string().nullable().default(null),
@@ -388,6 +450,8 @@ export const orchestratorStateSchema = z.object({
   lastLiveAcceptanceResult: liveSmokeResultSchema.nullable().default(null),
   lastCleanupDecision: cleanupDecisionSchema.nullable().default(null),
   lastPrDraftMetadata: prDraftMetadataSchema.nullable().default(null),
+  lastGitHubHandoffResult: githubHandoffResultSchema.nullable().default(null),
+  lastLiveEvidence: liveEvidenceSchema.nullable().default(null),
   lastAuditTrail: auditTrailSchema.nullable().default(null),
   lastHandoffPackagePath: z.string().nullable().default(null),
   stopReason: z.string().nullable().default(null),
@@ -414,6 +478,8 @@ export type ArtifactPruneResult = z.infer<typeof artifactPruneResultSchema>;
 export type LiveSmokeResult = z.infer<typeof liveSmokeResultSchema>;
 export type CleanupDecision = z.infer<typeof cleanupDecisionSchema>;
 export type PrDraftMetadata = z.infer<typeof prDraftMetadataSchema>;
+export type GitHubHandoffResult = z.infer<typeof githubHandoffResultSchema>;
+export type LiveEvidence = z.infer<typeof liveEvidenceSchema>;
 export type AuditTrail = z.infer<typeof auditTrailSchema>;
 
 const stringArrayJsonSchema: JsonSchema = {
@@ -617,6 +683,8 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastLiveAcceptanceResult",
     "lastCleanupDecision",
     "lastPrDraftMetadata",
+    "lastGitHubHandoffResult",
+    "lastLiveEvidence",
     "lastAuditTrail",
     "lastHandoffPackagePath",
     "stopReason",
@@ -674,6 +742,8 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         "reviewerProvider",
         "artifactRetentionSuccess",
         "artifactRetentionFailure",
+        "promotionConfig",
+        "retentionConfig",
       ],
       additionalProperties: false,
       properties: {
@@ -702,6 +772,44 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         reviewerProvider: { type: "string", enum: ["rule_based", "openai"] },
         artifactRetentionSuccess: { type: "number" },
         artifactRetentionFailure: { type: "number" },
+        promotionConfig: {
+          type: "object",
+          required: [
+            "branchNameTemplate",
+            "baseBranch",
+            "allowPublish",
+            "approvalRequired",
+            "allowApplyWorkspace",
+            "requirePatchExport",
+          ],
+          additionalProperties: false,
+          properties: {
+            branchNameTemplate: { type: "string" },
+            baseBranch: { type: "string" },
+            allowPublish: { type: "boolean" },
+            approvalRequired: { type: "boolean" },
+            allowApplyWorkspace: { type: "boolean" },
+            requirePatchExport: { type: "boolean" },
+          },
+        },
+        retentionConfig: {
+          type: "object",
+          required: [
+            "recentSuccessKeep",
+            "recentFailureKeep",
+            "staleWorkspaceTtlMinutes",
+            "orphanArtifactTtlMinutes",
+            "preserveApprovalPending",
+          ],
+          additionalProperties: false,
+          properties: {
+            recentSuccessKeep: { type: "number" },
+            recentFailureKeep: { type: "number" },
+            staleWorkspaceTtlMinutes: { type: "number" },
+            orphanArtifactTtlMinutes: { type: "number" },
+            preserveApprovalPending: { type: "boolean" },
+          },
+        },
       },
     },
     plannerDecision: { ...plannerDecisionJsonSchema, nullable: true },
@@ -845,6 +953,60 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         createdAt: { type: "string" },
       },
     },
+    lastGitHubHandoffResult: {
+      type: "object",
+      nullable: true,
+      required: ["status", "provider", "targetBranch", "draftUrl", "summary", "requestPayloadPath", "ranAt"],
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["not_requested", "skipped", "payload_only", "draft_created", "failed"] },
+        provider: { type: "string" },
+        targetBranch: { type: "string", nullable: true },
+        draftUrl: { type: "string", nullable: true },
+        summary: { type: "string" },
+        requestPayloadPath: { type: "string", nullable: true },
+        ranAt: { type: "string" },
+      },
+    },
+    lastLiveEvidence: {
+      type: "object",
+      nullable: true,
+      required: [
+        "provider",
+        "model",
+        "status",
+        "reason",
+        "summary",
+        "startedAt",
+        "endedAt",
+        "toolCallCount",
+        "commandCount",
+        "reportPath",
+        "diffPath",
+        "transcriptSummaryPath",
+        "toolLogPath",
+        "commandLogPath",
+        "patchArtifactPath",
+      ],
+      additionalProperties: false,
+      properties: {
+        provider: { type: "string" },
+        model: { type: "string", nullable: true },
+        status: { type: "string", enum: ["not_run", "skipped", "passed", "failed", "blocked"] },
+        reason: { type: "string" },
+        summary: { type: "string", nullable: true },
+        startedAt: { type: "string" },
+        endedAt: { type: "string" },
+        toolCallCount: { type: "number" },
+        commandCount: { type: "number" },
+        reportPath: { type: "string", nullable: true },
+        diffPath: { type: "string", nullable: true },
+        transcriptSummaryPath: { type: "string", nullable: true },
+        toolLogPath: { type: "string", nullable: true },
+        commandLogPath: { type: "string", nullable: true },
+        patchArtifactPath: { type: "string", nullable: true },
+      },
+    },
     lastAuditTrail: {
       type: "object",
       nullable: true,
@@ -917,6 +1079,8 @@ export const orchestratorStateJsonSchema: JsonSchema = {
           "artifactPruneResult",
           "cleanupDecision",
           "auditTrailPath",
+          "liveEvidencePath",
+          "githubHandoffResultPath",
           "stateBefore",
           "stateAfter",
           "stopReason",
@@ -1003,6 +1167,8 @@ export const orchestratorStateJsonSchema: JsonSchema = {
             },
           },
           auditTrailPath: { type: "string", nullable: true },
+          liveEvidencePath: { type: "string", nullable: true },
+          githubHandoffResultPath: { type: "string", nullable: true },
           stateBefore: {
             type: "string",
             enum: [

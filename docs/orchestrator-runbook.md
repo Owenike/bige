@@ -4,6 +4,8 @@
 - Optional: `OPENAI_API_KEY`
 - Optional: `ORCHESTRATOR_STORAGE_ROOT`
 - Optional: `ORCHESTRATOR_WORKSPACE_ROOT`
+- Optional: `ORCHESTRATOR_GITHUB_HANDOFF=true`
+- Optional: `GITHUB_TOKEN` or `GH_TOKEN`
 - Optional: GitHub CLI auth for `GitHubCliStatusAdapter`
 
 ## Live Smoke vs Live Acceptance vs Live Pass
@@ -16,6 +18,18 @@
 - `test:orchestrator:live-smoke` is intended for manual smoke use or workflow-dispatch CI, not the default always-on gate
 - `test:orchestrator:live-acceptance` is the stronger gated path. It persists `liveAcceptanceStatus`, captures execution report, diff, tool log, command log, and a transcript summary artifact.
 - `test:orchestrator:live-pass` is the handoff gate. It persists `livePassStatus`, provider metadata, and the latest live acceptance result so later promotion and handoff steps can prove a real pass happened.
+- `live evidence` is written next to the live acceptance artifacts and records provider/model, final status, start/end time, tool count, command count, and artifact paths in one stable JSON payload.
+
+## Payload-Only vs Real GitHub Handoff
+- Payload-only handoff:
+  - always available after `handoff` preconditions pass
+  - writes PR draft metadata and GitHub request payload files to disk
+  - does not require `gh` or `GITHUB_TOKEN`
+- Real GitHub handoff:
+  - requires `ORCHESTRATOR_GITHUB_HANDOFF=true`
+  - requires `GITHUB_TOKEN` or `GH_TOKEN`
+  - uses the `gh` CLI draft PR path
+  - if token or `gh` is unavailable, the handoff is persisted as an explicit skip or failure instead of silently succeeding
 
 ## Provider Selection
 - `--planner-provider rule_based|openai`
@@ -93,6 +107,14 @@ npm run orchestrator:handoff -- --state-id demo --publish-branch false --github-
 
 `handoff` creates a reviewable package once live pass and patch approval preconditions are satisfied. The package includes patch export, changed files, validation summary, planner/reviewer summaries, promotion/workspace metadata, and a PR draft payload.
 
+Promotion config is task-scoped and currently supports:
+- `promotion-branch-template`
+- `promotion-base-branch`
+- `promotion-allow-publish`
+- `promotion-approval-required`
+- `promotion-allow-apply-workspace`
+- `promotion-require-patch-export`
+
 ## Resume
 ```powershell
 npm run orchestrator:resume -- --state-id demo --executor mock
@@ -130,6 +152,12 @@ Retention policy:
 - never prune iterations that are still waiting for patch approval or needed for resume
 - keep promotion-ready artifacts until approval/promotion has finished
 - stale/orphan workspaces are cleaned through `orchestrator:cleanup`
+- retention/cleanup config can be set at init time:
+  - `retention-success-keep`
+  - `retention-failure-keep`
+  - `retention-stale-workspace-ttl`
+  - `retention-orphan-artifact-ttl`
+  - `retention-preserve-approval-pending`
 
 ## Review Last Iteration
 ```powershell
@@ -161,6 +189,8 @@ Each state file persists:
 - handoff artifact paths
 - cleanup decision
 - live pass status
+- live evidence
+- GitHub handoff result
 - PR draft metadata
 - audit trail path/summary
 
@@ -188,6 +218,10 @@ npm run test:orchestrator:live-pass
 npm run test:orchestrator:handoff
 npm run test:orchestrator:pr-draft
 npm run test:orchestrator:audit
+npm run test:orchestrator:github-handoff
+npm run test:orchestrator:promotion-config
+npm run test:orchestrator:live-evidence
+npm run test:orchestrator:retention-config
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine
@@ -219,4 +253,4 @@ npm run test:orchestrator:state-machine
 - OpenAI planner/reviewer providers are wired for structured output, but live network usage is still optional and not part of the default acceptance suite.
 - GitHub workflow status is still best-effort through `gh`; full CI gate automation is still separate from the main product pipeline.
 - `apply` mode is intentionally approval-gated: the executor prepares patch artifacts, then `approve-patch` / `promote-patch` advance the patch through export and promotion preconditions. Direct write-back to the source repo should still stay under human approval.
-- PR draft handoff is metadata-first today. If GitHub handoff is not enabled, the orchestrator still writes the draft payload to disk and marks the GitHub portion as an explicit skip.
+- PR draft handoff is metadata-first by default. Real GitHub draft PR creation is optional and remains gated by `ORCHESTRATOR_GITHUB_HANDOFF` plus token availability.

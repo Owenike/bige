@@ -153,6 +153,8 @@ export async function createPromotionReadyFixture(stateId: string) {
         artifactPruneResult: null,
         cleanupDecision: null,
         auditTrailPath: null,
+        liveEvidencePath: null,
+        githubHandoffResultPath: null,
         stateBefore: "planning",
         stateAfter: "waiting_approval",
         stopReason: null,

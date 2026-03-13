@@ -96,6 +96,16 @@ function buildRuleBasedVerdict(input: ReviewerInput) {
     reasons.push("Live pass artifacts are incomplete.");
   }
 
+  if (input.state.liveAcceptanceStatus !== "not_run" && !input.state.lastLiveEvidence) {
+    verdict = verdict === "accept" ? "revise" : verdict;
+    reasons.push("Live acceptance evidence is missing.");
+  }
+
+  if (input.state.prDraftStatus === "payload_ready" && !input.state.lastGitHubHandoffResult) {
+    verdict = verdict === "accept" ? "revise" : verdict;
+    reasons.push("GitHub handoff result is missing for a payload-ready draft.");
+  }
+
   if (input.state.workspaceStatus === "orphaned") {
     verdict = "escalate";
     reasons.push("Workspace state indicates orphaned workspace risk.");

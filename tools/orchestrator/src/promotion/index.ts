@@ -3,6 +3,7 @@ import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { ExecutionReport, OrchestratorState } from "../schemas";
 import { FileSystemWorkspaceManager } from "../workspace";
+import { resolvePromotionBranchName, resolvePromotionConfig } from "../config";
 
 function findArtifactPath(report: ExecutionReport, kind: string) {
   return report.artifacts.find((artifact) => artifact.kind === kind)?.path ?? null;
@@ -11,6 +12,7 @@ function findArtifactPath(report: ExecutionReport, kind: string) {
 export function validatePatchPromotionPreconditions(state: OrchestratorState) {
   const issues: string[] = [];
   const report = state.lastExecutionReport;
+  const config = resolvePromotionConfig(state.task);
   if (!report) {
     issues.push("No execution report is available for patch promotion.");
     return issues;
@@ -34,12 +36,25 @@ export function validatePatchPromotionPreconditions(state: OrchestratorState) {
   if (report.changedFiles.some((changedFile) => state.task.forbiddenFiles.some((forbidden) => changedFile === forbidden || changedFile.startsWith(`${forbidden}/`) || changedFile.startsWith(`${forbidden}\\`)))) {
     issues.push("Patch promotion cannot proceed because forbidden files were changed.");
   }
-
   return issues;
 }
 
-function safeTaskSegment(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "task";
+export function validatePublishPreconditions(state: OrchestratorState, params?: { applyWorkspace?: boolean; createBranch?: boolean }) {
+  const issues = validatePatchPromotionPreconditions(state);
+  const config = resolvePromotionConfig(state.task);
+  if (config.approvalRequired && state.approvalStatus !== "approved") {
+    issues.push("Promotion publish requires explicit approval.");
+  }
+  if ((params?.createBranch ?? false) && !config.allowPublish) {
+    issues.push("Promotion publish is disabled by configuration.");
+  }
+  if ((params?.applyWorkspace ?? false) && !config.allowApplyWorkspace) {
+    issues.push("Applying workspace changes back to the repo is disabled by configuration.");
+  }
+  if (config.requirePatchExport && state.exportArtifactPaths.length === 0) {
+    issues.push("Patch promotion requires exported patch artifacts before promotion can continue.");
+  }
+  return [...new Set(issues)];
 }
 
 function runGit(repoPath: string, args: string[]) {
@@ -73,11 +88,13 @@ export function buildPromotionMetadata(state: OrchestratorState) {
   if (!report) {
     throw new Error("Promotion metadata requires an execution report.");
   }
-  const branchName = `orchestrator/${safeTaskSegment(state.id)}/iter-${report.iterationNumber}`;
+  const config = resolvePromotionConfig(state.task);
+  const branchName = resolvePromotionBranchName(state);
   const diffPath = findArtifactPath(report, "diff");
   const workspacePath = findArtifactPath(report, "workspace");
   return {
     branchName,
+    baseBranch: config.baseBranch,
     diffPath,
     workspacePath,
     changedFiles: report.changedFiles,
@@ -146,10 +163,18 @@ export async function preparePromotionBranch(params: {
   createBranch?: boolean;
 }) {
   const metadata = buildPromotionMetadata(params.state);
+  const config = resolvePromotionConfig(params.state.task);
   let branchCreated = false;
   let branchReason = "Branch metadata prepared without creating a git ref.";
 
   if (params.createBranch) {
+    if (!config.allowPublish) {
+      return {
+        ...metadata,
+        branchCreated,
+        branchReason: "Branch publish is disabled by promotion configuration.",
+      };
+    }
     try {
       await runGit(params.state.task.repoPath, ["branch", metadata.branchName]);
       branchCreated = true;

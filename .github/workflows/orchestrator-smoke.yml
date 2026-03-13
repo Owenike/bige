@@ -58,6 +58,10 @@ jobs:
           npm run test:orchestrator:handoff
           npm run test:orchestrator:pr-draft
           npm run test:orchestrator:audit
+          npm run test:orchestrator:github-handoff
+          npm run test:orchestrator:promotion-config
+          npm run test:orchestrator:live-evidence
+          npm run test:orchestrator:retention-config
           npm run test:orchestrator:mock-loop
           npm run test:orchestrator:loop
           npm run test:orchestrator:state-machine

@@ -127,6 +127,8 @@ async function createPatchReadyState(params?: { forbiddenFiles?: string[] }) {
         artifactPruneResult: null,
         cleanupDecision: null,
         auditTrailPath: null,
+        liveEvidencePath: null,
+        githubHandoffResultPath: null,
         stateBefore: "planning" as const,
         stateAfter: "waiting_approval" as const,
         stopReason: null,

@@ -107,6 +107,21 @@ async function main() {
         .filter(Boolean),
       plannerProvider: getOption(options, "planner-provider", "rule_based") as PlannerProviderKind,
       reviewerProvider: getOption(options, "reviewer-provider", "rule_based") as PlannerProviderKind,
+      promotionConfig: {
+        branchNameTemplate: getOption(options, "promotion-branch-template", "orchestrator/{taskId}/iter-{iteration}"),
+        baseBranch: getOption(options, "promotion-base-branch", "main"),
+        allowPublish: getOption(options, "promotion-allow-publish", "false") === "true",
+        approvalRequired: getOption(options, "promotion-approval-required", "true") === "true",
+        allowApplyWorkspace: getOption(options, "promotion-allow-apply-workspace", "false") === "true",
+        requirePatchExport: getOption(options, "promotion-require-patch-export", "true") === "true",
+      },
+      retentionConfig: {
+        recentSuccessKeep: Number.parseInt(getOption(options, "retention-success-keep", "3"), 10),
+        recentFailureKeep: Number.parseInt(getOption(options, "retention-failure-keep", "5"), 10),
+        staleWorkspaceTtlMinutes: Number.parseInt(getOption(options, "retention-stale-workspace-ttl", "120"), 10),
+        orphanArtifactTtlMinutes: Number.parseInt(getOption(options, "retention-orphan-artifact-ttl", "240"), 10),
+        preserveApprovalPending: getOption(options, "retention-preserve-approval-pending", "true") === "true",
+      },
     });
     await dependencies.storage.saveState(state);
     process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
@@ -183,7 +198,7 @@ async function main() {
 
   if (command === "cleanup") {
     const result = await cleanupStateWorkspaces(stateId, dependencies, {
-      staleMinutes: Number.parseInt(getOption(options, "stale-minutes", "120"), 10),
+      staleMinutes: options.has("stale-minutes") ? Number.parseInt(getOption(options, "stale-minutes", "120"), 10) : undefined,
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
@@ -191,8 +206,8 @@ async function main() {
 
   if (command === "artifacts:prune") {
     const result = await pruneStateArtifacts(stateId, dependencies, {
-      retainRecentSuccess: Number.parseInt(getOption(options, "retain-success", "3"), 10),
-      retainRecentFailure: Number.parseInt(getOption(options, "retain-failure", "5"), 10),
+      retainRecentSuccess: options.has("retain-success") ? Number.parseInt(getOption(options, "retain-success", "3"), 10) : undefined,
+      retainRecentFailure: options.has("retain-failure") ? Number.parseInt(getOption(options, "retain-failure", "5"), 10) : undefined,
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;

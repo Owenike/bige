@@ -1,5 +1,6 @@
 import type { CleanupDecision, OrchestratorState } from "../schemas";
 import { FileSystemWorkspaceManager } from "../workspace";
+import { resolveRetentionConfig } from "../config";
 
 function collectProtectedWorkspaceRoots(state: OrchestratorState) {
   const protectedPaths = new Set<string>();
@@ -22,7 +23,8 @@ export async function inspectWorkspaceCleanup(params: {
   staleMinutes?: number;
 }) {
   const now = params.now ?? new Date();
-  const staleMs = (params.staleMinutes ?? 120) * 60 * 1000;
+  const retention = resolveRetentionConfig(params.state.task);
+  const staleMs = (params.staleMinutes ?? retention.staleWorkspaceTtlMinutes) * 60 * 1000;
   const workspaces = await params.workspaceManager.listWorkspaces(params.state.id);
   const protectedRoots = collectProtectedWorkspaceRoots(params.state);
 

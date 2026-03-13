@@ -84,6 +84,9 @@ async function createPromotionReadyState() {
     executorMode: "openai_responses",
     executionMode: "apply",
     workspaceRoot,
+    promotionConfig: {
+      allowPublish: true,
+    },
   });
 
   await dependencies.storage.saveState({
@@ -156,6 +159,8 @@ async function createPromotionReadyState() {
           artifactPruneResult: null,
           cleanupDecision: null,
           auditTrailPath: null,
+          liveEvidencePath: null,
+          githubHandoffResultPath: null,
           stateBefore: "planning",
         stateAfter: "waiting_approval",
         stopReason: null,
