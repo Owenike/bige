@@ -12,8 +12,13 @@ import {
   type NotificationTenantDrilldownReadModel,
   type NotificationTrendsReadModel,
 } from "./notification-read-api-client";
-
-type DeliveryChannel = "in_app" | "email" | "line" | "sms" | "webhook" | "other";
+import {
+  serializeNotificationOverviewQueryParams,
+  serializeNotificationTenantDrilldownQueryParams,
+  type NotificationDeliveryChannel,
+  type NotificationOverviewQueryState,
+  type NotificationTenantDrilldownQueryState,
+} from "./notification-read-api-query-state";
 
 const anomalyReasonItemSchema = z.object({
   key: z.string(),
@@ -70,14 +75,14 @@ const anomalyInsightsSnapshotSchema = z.object({
 
 export type NotificationOverviewPageFilters = {
   tenantId: string;
-  channel: "" | DeliveryChannel;
+  channel: "" | NotificationDeliveryChannel;
   from: string;
   to: string;
   limit: number;
 };
 
 export type NotificationTenantDrilldownFilters = {
-  channel: "" | DeliveryChannel;
+  channel: "" | NotificationDeliveryChannel;
   aggregationMode: "auto" | "raw" | "rollup";
   from: string;
   to: string;
@@ -141,26 +146,6 @@ type TenantDrilldownLoaderDependencies = {
   fetchDrilldown?: typeof fetchNotificationTenantDrilldownReadApi;
 };
 
-function toIsoDateTime(input: string) {
-  const value = String(input || "").trim();
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString();
-}
-
-function buildBaseOverviewParams(filters: NotificationOverviewPageFilters) {
-  const params = new URLSearchParams();
-  if (filters.tenantId.trim()) params.set("tenantId", filters.tenantId.trim());
-  if (filters.channel) params.set("channel", filters.channel);
-  const fromIso = toIsoDateTime(filters.from);
-  const toIso = toIsoDateTime(filters.to);
-  if (fromIso) params.set("from", fromIso);
-  if (toIso) params.set("to", toIso);
-  params.set("limit", String(filters.limit));
-  return params;
-}
-
 function getPayloadErrorMessage(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object") {
     const record = payload as Record<string, unknown>;
@@ -191,7 +176,7 @@ function buildSchemaIssues(error: z.ZodError) {
 }
 
 export function buildNotificationOverviewPagePaths(filters: NotificationOverviewPageFilters) {
-  const params = buildBaseOverviewParams(filters);
+  const { params } = serializeNotificationOverviewQueryParams(filters as NotificationOverviewQueryState);
   return {
     overviewPath: `/api/platform/notifications/overview?${params.toString()}&aggregationMode=auto`,
     anomaliesPath: `/api/platform/notifications/anomalies?${params.toString()}`,
@@ -203,15 +188,7 @@ export function buildNotificationTenantDrilldownPath(
   tenantId: string,
   filters: NotificationTenantDrilldownFilters,
 ) {
-  const params = new URLSearchParams();
-  if (filters.channel) params.set("channel", filters.channel);
-  params.set("aggregationMode", filters.aggregationMode);
-  const fromIso = toIsoDateTime(filters.from);
-  const toIso = toIsoDateTime(filters.to);
-  if (fromIso) params.set("from", fromIso);
-  if (toIso) params.set("to", toIso);
-  params.set("limit", String(filters.limit));
-  params.set("anomalyLimit", String(filters.anomalyLimit));
+  const { params } = serializeNotificationTenantDrilldownQueryParams(filters as NotificationTenantDrilldownQueryState);
   return `/api/platform/notifications/overview/tenants/${encodeURIComponent(tenantId)}?${params.toString()}`;
 }
 

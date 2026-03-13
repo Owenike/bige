@@ -8,40 +8,16 @@ import {
   getDefaultTenantDrilldownSupportNote,
   useNotificationTenantDrilldownPageData,
 } from "../lib/notification-read-api-hooks";
+import {
+  buildNotificationOverviewPageHrefFromQueryState,
+  createNotificationTenantDrilldownQueryStateDefaults,
+  hydrateNotificationTenantDrilldownQueryStateFromSearchParams,
+  normalizeNotificationTenantDrilldownQueryState,
+  type NotificationDeliveryChannel,
+  type NotificationTenantDrilldownQueryState,
+} from "../lib/notification-read-api-query-state";
 
-type DeliveryChannel = "in_app" | "email" | "line" | "sms" | "webhook" | "other";
-
-type FilterState = {
-  channel: "" | DeliveryChannel;
-  aggregationMode: "auto" | "raw" | "rollup";
-  from: string;
-  to: string;
-  limit: number;
-  anomalyLimit: number;
-};
-
-function toLocalDateTimeInput(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const tzOffset = date.getTimezoneOffset();
-  return new Date(date.getTime() - tzOffset * 60_000).toISOString().slice(0, 16);
-}
-
-function fromLocalDateTimeInput(input: string) {
-  const value = String(input || "").trim();
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
-}
-
-function parseIsoInput(raw: string | null) {
-  const value = String(raw || "").trim();
-  if (!value) return "";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return toLocalDateTimeInput(parsed.toISOString());
-}
+type FilterState = NotificationTenantDrilldownQueryState;
 
 function toCount(value: number | null | undefined) {
   return Number(value || 0).toLocaleString();
@@ -53,59 +29,27 @@ function toPercent(value: number | null | undefined) {
 
 export default function NotificationOverviewTenantDrilldown(props: { tenantId: string }) {
   const searchParams = useSearchParams();
-  const [filters, setFilters] = useState<FilterState>(() => {
-    const now = new Date();
-    const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    return {
-      channel: (searchParams.get("channel") as FilterState["channel"]) || "",
-      aggregationMode: (searchParams.get("aggregationMode") as FilterState["aggregationMode"]) || "auto",
-      from: parseIsoInput(searchParams.get("from")) || toLocalDateTimeInput(last7d.toISOString()),
-      to: parseIsoInput(searchParams.get("to")) || toLocalDateTimeInput(now.toISOString()),
-      limit: Math.max(200, Math.min(50000, Number(searchParams.get("limit") || 2000))),
-      anomalyLimit: Math.max(10, Math.min(120, Number(searchParams.get("anomalyLimit") || 40))),
-    };
-  });
+  const initialFilters = useMemo(
+    () => hydrateNotificationTenantDrilldownQueryStateFromSearchParams(searchParams).state,
+    [searchParams],
+  );
+  const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [draft, setDraft] = useState<FilterState>(filters);
   const [refreshKey, setRefreshKey] = useState(0);
   const { data, loading, error } = useNotificationTenantDrilldownPageData(props.tenantId, filters, refreshKey);
   const snapshot = data?.drilldown.snapshot ?? null;
   const recentAnomaliesSupportNote = data?.recentAnomaliesSupportNote ?? getDefaultTenantDrilldownSupportNote();
 
-  const backHref = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set("tenantId", props.tenantId);
-    const fromIso = fromLocalDateTimeInput(filters.from);
-    const toIso = fromLocalDateTimeInput(filters.to);
-    if (fromIso) params.set("from", fromIso);
-    if (toIso) params.set("to", toIso);
-    if (filters.channel) params.set("channel", filters.channel);
-    params.set("aggregationMode", filters.aggregationMode);
-    params.set("limit", String(filters.limit));
-    return `/platform-admin/notifications-overview?${params.toString()}`;
-  }, [filters, props.tenantId]);
+  const backHref = useMemo(() => buildNotificationOverviewPageHrefFromQueryState(props.tenantId, filters), [filters, props.tenantId]);
 
   function applyFilters() {
-    setFilters({
-      channel: draft.channel,
-      aggregationMode: draft.aggregationMode,
-      from: draft.from,
-      to: draft.to,
-      limit: Math.max(200, Math.min(50000, Number(draft.limit || 2000))),
-      anomalyLimit: Math.max(10, Math.min(120, Number(draft.anomalyLimit || 40))),
-    });
+    const normalized = normalizeNotificationTenantDrilldownQueryState(draft);
+    setDraft(normalized.state);
+    setFilters(normalized.state);
   }
 
   function resetFilters() {
-    const now = new Date();
-    const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const next = {
-      channel: "" as FilterState["channel"],
-      aggregationMode: "auto" as FilterState["aggregationMode"],
-      from: toLocalDateTimeInput(last7d.toISOString()),
-      to: toLocalDateTimeInput(now.toISOString()),
-      limit: 2000,
-      anomalyLimit: 40,
-    };
+    const next = createNotificationTenantDrilldownQueryStateDefaults();
     setDraft(next);
     setFilters(next);
   }
@@ -137,7 +81,9 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
             <select
               className="input"
               value={draft.channel}
-              onChange={(event) => setDraft((prev) => ({ ...prev, channel: event.target.value as FilterState["channel"] }))}
+              onChange={(event) =>
+                setDraft((prev) => ({ ...prev, channel: event.target.value as "" | NotificationDeliveryChannel }))
+              }
             >
               <option value="">channel: all</option>
               <option value="in_app">in_app</option>

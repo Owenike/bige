@@ -124,6 +124,17 @@ import {
   loadNotificationOverviewPageData,
   loadNotificationTenantDrilldownPageData,
 } from "../lib/notification-read-api-hooks";
+import {
+  buildNotificationOverviewPageHrefFromQueryState,
+  createNotificationOverviewQueryStateDefaults,
+  createNotificationTenantDrilldownQueryStateDefaults,
+  hydrateNotificationOverviewQueryStateFromSearchParams,
+  hydrateNotificationTenantDrilldownQueryStateFromSearchParams,
+  normalizeNotificationOverviewQueryState,
+  normalizeNotificationTenantDrilldownQueryState,
+  serializeNotificationOverviewQueryParams,
+  serializeNotificationTenantDrilldownQueryParams,
+} from "../lib/notification-read-api-query-state";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
   canUseOverviewDailyRollupWindow,
@@ -2119,6 +2130,101 @@ test("tenant drilldown orchestration keeps raw-backed support note visible to co
   assert.equal(result.drilldown.recentAnomaliesRawBacked, true);
   assert.equal(result.recentAnomaliesSupportNote, getTenantDrilldownRecentAnomaliesSupportNote());
   assert.equal(result.isEmpty, false);
+});
+
+test("read API query-state defaults and search-param hydration stay aligned for overview and drilldown", () => {
+  const now = () => new Date("2026-03-13T12:00:00.000Z");
+
+  const overviewDefaults = createNotificationOverviewQueryStateDefaults(now);
+  assert.equal(overviewDefaults.tenantId, "");
+  assert.equal(overviewDefaults.limit, 2000);
+
+  const drilldownDefaults = createNotificationTenantDrilldownQueryStateDefaults(now);
+  assert.equal(drilldownDefaults.aggregationMode, "auto");
+  assert.equal(drilldownDefaults.anomalyLimit, 40);
+
+  const overviewHydrated = hydrateNotificationOverviewQueryStateFromSearchParams(
+    new URLSearchParams("tenantId=tenant-1&channel=email&from=2026-03-10T00:00:00.000Z&to=2026-03-10T23:59:59.999Z&limit=5000"),
+    now,
+  );
+  assert.equal(overviewHydrated.state.tenantId, "tenant-1");
+  assert.equal(overviewHydrated.state.channel, "email");
+  assert.equal(overviewHydrated.state.limit, 5000);
+
+  const drilldownHydrated = hydrateNotificationTenantDrilldownQueryStateFromSearchParams(
+    new URLSearchParams(
+      "channel=sms&aggregationMode=rollup&from=2026-03-10T00:00:00.000Z&to=2026-03-10T23:59:59.999Z&limit=4000&anomalyLimit=80",
+    ),
+    now,
+  );
+  assert.equal(drilldownHydrated.state.channel, "sms");
+  assert.equal(drilldownHydrated.state.aggregationMode, "rollup");
+  assert.equal(drilldownHydrated.state.limit, 4000);
+  assert.equal(drilldownHydrated.state.anomalyLimit, 80);
+});
+
+test("read API query-state normalization handles invalid dates, inverted ranges, and aggregation mode drift consistently", () => {
+  const now = () => new Date("2026-03-13T12:00:00.000Z");
+
+  const overview = normalizeNotificationOverviewQueryState(
+    {
+      tenantId: " tenant-1 ",
+      channel: "email",
+      from: "not-a-date",
+      to: "2026-03-10T09:00",
+      limit: 999999,
+    },
+    now,
+  );
+  assert.equal(overview.state.tenantId, "tenant-1");
+  assert.equal(overview.state.limit, 50000);
+  assert.equal(overview.issues.some((issue) => issue.kind === "invalid_datetime" && issue.field === "from"), true);
+  assert.equal(overview.issues.some((issue) => issue.kind === "invalid_number" && issue.field === "limit"), true);
+
+  const drilldown = normalizeNotificationTenantDrilldownQueryState(
+    {
+      channel: "email",
+      aggregationMode: "broken" as never,
+      from: "2026-03-11T10:00",
+      to: "2026-03-10T09:00",
+      limit: 50,
+      anomalyLimit: 999,
+    },
+    now,
+  );
+  assert.equal(drilldown.state.aggregationMode, "auto");
+  assert.equal(drilldown.state.limit, 200);
+  assert.equal(drilldown.state.anomalyLimit, 120);
+  assert.equal(drilldown.issues.some((issue) => issue.kind === "invalid_aggregation_mode"), true);
+  assert.equal(drilldown.issues.some((issue) => issue.kind === "range_inverted"), true);
+});
+
+test("read API query-state serialization keeps overview and drilldown request params/window semantics consistent", () => {
+  const overview = serializeNotificationOverviewQueryParams({
+    tenantId: "tenant-1",
+    channel: "email",
+    from: "2026-03-10T08:00",
+    to: "2026-03-10T20:00",
+    limit: 500,
+  });
+  const drilldown = serializeNotificationTenantDrilldownQueryParams({
+    channel: "email",
+    aggregationMode: "auto",
+    from: "2026-03-10T08:00",
+    to: "2026-03-10T20:00",
+    limit: 500,
+    anomalyLimit: 40,
+  });
+
+  assert.equal(overview.windowType, "partial_utc_window");
+  assert.equal(drilldown.windowType, "partial_utc_window");
+  assert.equal(overview.params.get("channel"), "email");
+  assert.equal(drilldown.params.get("aggregationMode"), "auto");
+
+  const backHref = buildNotificationOverviewPageHrefFromQueryState("tenant-1", drilldown.state);
+  assert.equal(backHref.includes("tenantId=tenant-1"), true);
+  assert.equal(backHref.includes("aggregationMode=auto"), true);
+  assert.equal(backHref.includes("anomalyLimit="), false);
 });
 
 test("aggregation explainability describes explicit raw, explicit rollup, and auto window resolution", () => {

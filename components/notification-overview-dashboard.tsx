@@ -2,45 +2,25 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
 import {
   useNotificationOverviewPageData,
   type NotificationOverviewPageData,
 } from "../lib/notification-read-api-hooks";
+import {
+  createNotificationOverviewQueryStateDefaults,
+  hydrateNotificationOverviewQueryStateFromSearchParams,
+  normalizeNotificationOverviewQueryState,
+  type NotificationDeliveryChannel,
+  type NotificationOverviewQueryState,
+} from "../lib/notification-read-api-query-state";
 import NotificationGovernanceNav from "./notification-governance-nav";
-
-type DeliveryChannel = "in_app" | "email" | "line" | "sms" | "webhook" | "other";
 
 type OverviewSnapshot = NotificationOverviewPageData["overview"]["snapshot"];
 
 type TrendDirection = "up" | "flat" | "down";
-
-type FilterState = {
-  tenantId: string;
-  channel: "" | DeliveryChannel;
-  from: string;
-  to: string;
-  limit: number;
-};
-
-function toLocalDateTimeInput(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const tzOffset = date.getTimezoneOffset();
-  return new Date(date.getTime() - tzOffset * 60_000).toISOString().slice(0, 16);
-}
-
-function defaultFilters(): FilterState {
-  const now = new Date();
-  const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  return {
-    tenantId: "",
-    channel: "",
-    from: toLocalDateTimeInput(last7d.toISOString()),
-    to: toLocalDateTimeInput(now.toISOString()),
-    limit: 2000,
-  };
-}
+type FilterState = NotificationOverviewQueryState;
 
 function toCount(value: number | null | undefined) {
   return Number(value || 0).toLocaleString();
@@ -77,8 +57,13 @@ function buildAlertWorkflowHref(snapshot: OverviewSnapshot, tenantId?: string) {
 }
 
 export default function NotificationOverviewDashboard() {
-  const [filters, setFilters] = useState<FilterState>(() => defaultFilters());
-  const [draft, setDraft] = useState<FilterState>(() => defaultFilters());
+  const searchParams = useSearchParams();
+  const initialFilters = useMemo(
+    () => hydrateNotificationOverviewQueryStateFromSearchParams(searchParams).state,
+    [searchParams],
+  );
+  const [filters, setFilters] = useState<FilterState>(initialFilters);
+  const [draft, setDraft] = useState<FilterState>(initialFilters);
   const [refreshKey, setRefreshKey] = useState(0);
   const { data, loading, error } = useNotificationOverviewPageData(filters, refreshKey);
   const snapshot = data?.overview.snapshot ?? null;
@@ -88,17 +73,13 @@ export default function NotificationOverviewDashboard() {
   const hasData = useMemo(() => Boolean(snapshot && snapshot.totalRows > 0), [snapshot]);
 
   function applyFilters() {
-    setFilters({
-      tenantId: draft.tenantId.trim(),
-      channel: draft.channel,
-      from: draft.from,
-      to: draft.to,
-      limit: Math.max(200, Math.min(50000, Number(draft.limit || 2000))),
-    });
+    const normalized = normalizeNotificationOverviewQueryState(draft);
+    setDraft(normalized.state);
+    setFilters(normalized.state);
   }
 
   function resetFilters() {
-    const defaults = defaultFilters();
+    const defaults = createNotificationOverviewQueryStateDefaults();
     setDraft(defaults);
     setFilters(defaults);
   }
@@ -144,7 +125,9 @@ export default function NotificationOverviewDashboard() {
             <select
               className="input"
               value={draft.channel}
-              onChange={(event) => setDraft((prev) => ({ ...prev, channel: event.target.value as FilterState["channel"] }))}
+              onChange={(event) =>
+                setDraft((prev) => ({ ...prev, channel: event.target.value as "" | NotificationDeliveryChannel }))
+              }
             >
               <option value="">channel: all</option>
               <option value="in_app">in_app</option>
