@@ -40,7 +40,10 @@ $suiteMap = @{
     "$outDir\tests\unit\github-handoff.test.js",
     "$outDir\tests\unit\promotion-config.test.js",
     "$outDir\tests\unit\live-evidence.test.js",
-    "$outDir\tests\unit\retention-config.test.js"
+    "$outDir\tests\unit\retention-config.test.js",
+    "$outDir\tests\unit\preflight.test.js",
+    "$outDir\tests\unit\profiles.test.js",
+    "$outDir\tests\unit\diagnostics.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js",
@@ -105,6 +108,15 @@ $suiteMap = @{
   "retention-config" = @(
     "$outDir\tests\unit\retention-config.test.js"
   )
+  "preflight" = @(
+    "$outDir\tests\unit\preflight.test.js"
+  )
+  "profiles" = @(
+    "$outDir\tests\unit\profiles.test.js"
+  )
+  "diagnostics" = @(
+    "$outDir\tests\unit\diagnostics.test.js"
+  )
   "live-smoke" = @(
     "$outDir\tests\integration\live-smoke.test.js"
   )
@@ -142,6 +154,9 @@ $suiteMap = @{
     "$outDir\tests\unit\promotion-config.test.js",
     "$outDir\tests\unit\live-evidence.test.js",
     "$outDir\tests\unit\retention-config.test.js",
+    "$outDir\tests\unit\preflight.test.js",
+    "$outDir\tests\unit\profiles.test.js",
+    "$outDir\tests\unit\diagnostics.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",

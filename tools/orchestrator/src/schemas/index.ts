@@ -273,6 +273,42 @@ export const liveEvidenceSchema = z.object({
   patchArtifactPath: z.string().nullable().default(null),
 });
 
+export const blockedReasonSchema = z.object({
+  code: z.string(),
+  summary: z.string(),
+  missingPrerequisites: z.array(z.string()).default([]),
+  recoverable: z.boolean().default(true),
+  suggestedNextAction: z.string(),
+});
+
+export const preflightTargetSchema = z.object({
+  target: z.enum(["live_smoke", "live_acceptance", "live_pass", "github_handoff", "promotion"]),
+  status: z.enum(["ready", "blocked", "skipped"]),
+  blockedReasons: z.array(blockedReasonSchema).default([]),
+  summary: z.string(),
+});
+
+export const preflightResultSchema = z.object({
+  checkedAt: z.string(),
+  profileId: z.string(),
+  availableProviders: z.array(z.string()).default([]),
+  unavailableProviders: z.array(z.object({ name: z.string(), reason: z.string() })).default([]),
+  missingEnv: z.array(z.string()).default([]),
+  missingTools: z.array(z.string()).default([]),
+  allowedExecutionModes: z.array(executionModeSchema).default([]),
+  allowedHandoffModes: z.array(z.enum(["payload_only", "github_draft_pr"])).default([]),
+  allowedPromotionModes: z.array(z.enum(["patch_export", "branch_publish", "workspace_apply"])).default([]),
+  blockedReasons: z.array(blockedReasonSchema).default([]),
+  targets: z.array(preflightTargetSchema).default([]),
+  summary: z.string(),
+});
+
+const handoffConfigSchema = z.object({
+  githubHandoffEnabled: z.boolean().default(false),
+  publishBranch: z.boolean().default(false),
+  createBranch: z.boolean().default(true),
+});
+
 export const auditTrailSchema = z.object({
   iterationNumber: z.number().int().positive(),
   stateStatus: z.enum([
@@ -330,11 +366,15 @@ export const orchestratorStatusSchema = z.enum([
 ]);
 
 const orchestratorTaskSchema = z.object({
+  profileId: z.string().default("default"),
+  profileName: z.string().default("Default Orchestrator Profile"),
+  repoType: z.string().default("generic_node"),
   userGoal: z.string(),
   repoPath: z.string(),
   repoName: z.string(),
   allowedFiles: z.array(z.string()),
   forbiddenFiles: z.array(z.string()),
+  commandAllowList: z.array(z.string()).default(["node", "npm", "git"]),
   acceptanceGates: z.array(z.string()),
   maxIterations: z.number().int().positive(),
   maxConsecutiveFailures: z.number().int().positive(),
@@ -369,6 +409,11 @@ const orchestratorTaskSchema = z.object({
     staleWorkspaceTtlMinutes: 120,
     orphanArtifactTtlMinutes: 240,
     preserveApprovalPending: true,
+  }),
+  handoffConfig: handoffConfigSchema.default({
+    githubHandoffEnabled: false,
+    publishBranch: false,
+    createBranch: true,
   }),
 });
 
@@ -452,6 +497,8 @@ export const orchestratorStateSchema = z.object({
   lastPrDraftMetadata: prDraftMetadataSchema.nullable().default(null),
   lastGitHubHandoffResult: githubHandoffResultSchema.nullable().default(null),
   lastLiveEvidence: liveEvidenceSchema.nullable().default(null),
+  lastPreflightResult: preflightResultSchema.nullable().default(null),
+  lastBlockedReasons: z.array(blockedReasonSchema).default([]),
   lastAuditTrail: auditTrailSchema.nullable().default(null),
   lastHandoffPackagePath: z.string().nullable().default(null),
   stopReason: z.string().nullable().default(null),
@@ -481,6 +528,9 @@ export type PrDraftMetadata = z.infer<typeof prDraftMetadataSchema>;
 export type GitHubHandoffResult = z.infer<typeof githubHandoffResultSchema>;
 export type LiveEvidence = z.infer<typeof liveEvidenceSchema>;
 export type AuditTrail = z.infer<typeof auditTrailSchema>;
+export type BlockedReason = z.infer<typeof blockedReasonSchema>;
+export type PreflightTarget = z.infer<typeof preflightTargetSchema>;
+export type PreflightResult = z.infer<typeof preflightResultSchema>;
 
 const stringArrayJsonSchema: JsonSchema = {
   type: "array",
@@ -747,11 +797,15 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       ],
       additionalProperties: false,
       properties: {
+        profileId: { type: "string" },
+        profileName: { type: "string" },
+        repoType: { type: "string" },
         userGoal: { type: "string" },
         repoPath: { type: "string" },
         repoName: { type: "string" },
         allowedFiles: stringArrayJsonSchema,
         forbiddenFiles: stringArrayJsonSchema,
+        commandAllowList: stringArrayJsonSchema,
         acceptanceGates: stringArrayJsonSchema,
         maxIterations: { type: "number" },
         maxConsecutiveFailures: { type: "number" },
@@ -808,6 +862,16 @@ export const orchestratorStateJsonSchema: JsonSchema = {
             staleWorkspaceTtlMinutes: { type: "number" },
             orphanArtifactTtlMinutes: { type: "number" },
             preserveApprovalPending: { type: "boolean" },
+          },
+        },
+        handoffConfig: {
+          type: "object",
+          required: ["githubHandoffEnabled", "publishBranch", "createBranch"],
+          additionalProperties: false,
+          properties: {
+            githubHandoffEnabled: { type: "boolean" },
+            publishBranch: { type: "boolean" },
+            createBranch: { type: "boolean" },
           },
         },
       },
@@ -1005,6 +1069,106 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         toolLogPath: { type: "string", nullable: true },
         commandLogPath: { type: "string", nullable: true },
         patchArtifactPath: { type: "string", nullable: true },
+      },
+    },
+    lastPreflightResult: {
+      type: "object",
+      nullable: true,
+      required: [
+        "checkedAt",
+        "profileId",
+        "availableProviders",
+        "unavailableProviders",
+        "missingEnv",
+        "missingTools",
+        "allowedExecutionModes",
+        "allowedHandoffModes",
+        "allowedPromotionModes",
+        "blockedReasons",
+        "targets",
+        "summary",
+      ],
+      additionalProperties: false,
+      properties: {
+        checkedAt: { type: "string" },
+        profileId: { type: "string" },
+        availableProviders: { type: "array", items: { type: "string" } },
+        unavailableProviders: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["name", "reason"],
+            additionalProperties: false,
+            properties: {
+              name: { type: "string" },
+              reason: { type: "string" },
+            },
+          },
+        },
+        missingEnv: { type: "array", items: { type: "string" } },
+        missingTools: { type: "array", items: { type: "string" } },
+        allowedExecutionModes: { type: "array", items: { type: "string", enum: ["mock", "dry_run", "apply"] } },
+        allowedHandoffModes: { type: "array", items: { type: "string", enum: ["payload_only", "github_draft_pr"] } },
+        allowedPromotionModes: { type: "array", items: { type: "string", enum: ["patch_export", "branch_publish", "workspace_apply"] } },
+        blockedReasons: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["code", "summary", "missingPrerequisites", "recoverable", "suggestedNextAction"],
+            additionalProperties: false,
+            properties: {
+              code: { type: "string" },
+              summary: { type: "string" },
+              missingPrerequisites: { type: "array", items: { type: "string" } },
+              recoverable: { type: "boolean" },
+              suggestedNextAction: { type: "string" },
+            },
+          },
+        },
+        targets: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["target", "status", "blockedReasons", "summary"],
+            additionalProperties: false,
+            properties: {
+              target: { type: "string", enum: ["live_smoke", "live_acceptance", "live_pass", "github_handoff", "promotion"] },
+              status: { type: "string", enum: ["ready", "blocked", "skipped"] },
+              blockedReasons: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["code", "summary", "missingPrerequisites", "recoverable", "suggestedNextAction"],
+                  additionalProperties: false,
+                  properties: {
+                    code: { type: "string" },
+                    summary: { type: "string" },
+                    missingPrerequisites: { type: "array", items: { type: "string" } },
+                    recoverable: { type: "boolean" },
+                    suggestedNextAction: { type: "string" },
+                  },
+                },
+              },
+              summary: { type: "string" },
+            },
+          },
+        },
+        summary: { type: "string" },
+      },
+    },
+    lastBlockedReasons: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["code", "summary", "missingPrerequisites", "recoverable", "suggestedNextAction"],
+        additionalProperties: false,
+        properties: {
+          code: { type: "string" },
+          summary: { type: "string" },
+          missingPrerequisites: { type: "array", items: { type: "string" } },
+          recoverable: { type: "boolean" },
+          suggestedNextAction: { type: "string" },
+        },
       },
     },
     lastAuditTrail: {

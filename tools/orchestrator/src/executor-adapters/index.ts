@@ -20,6 +20,7 @@ export type ExecutionProviderTask = {
   repoPath: string;
   metadata?: {
     localCommand?: string[];
+    commandAllowList?: string[];
     mockReport?: ExecutionReport;
     executionMode?: ExecutionMode;
     workspaceRoot?: string | null;
@@ -127,8 +128,8 @@ export class MockExecutor implements ExecutionProvider {
   }
 }
 
-export async function runCommand(repoPath: string, command: string[]) {
-  const safe = validateAllowListedCommand(command);
+export async function runCommand(repoPath: string, command: string[], allowList?: string[] | null) {
+  const safe = validateAllowListedCommand(command, allowList);
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(safe.executable, safe.args, {
       cwd: repoPath,
@@ -166,7 +167,7 @@ export class LocalRepoExecutor implements ExecutionProvider {
       throw new Error("LocalRepoExecutor requires metadata.localCommand.");
     }
 
-    const promise = runCommand(task.repoPath, command)
+    const promise = runCommand(task.repoPath, command, task.metadata?.commandAllowList)
       .then(({ stdout, stderr }) =>
         validateExecutionReport({
           iterationNumber: task.iterationNumber,

@@ -3,6 +3,11 @@ name: Orchestrator Smoke
 on:
   workflow_dispatch:
     inputs:
+      profile:
+        description: Orchestrator task profile id
+        required: false
+        default: default
+        type: string
       run_live_smoke:
         description: Run the live OpenAI executor smoke path
         required: false
@@ -37,6 +42,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Orchestrator preflight summary
+        shell: pwsh
+        run: |
+          npm run orchestrator:init -- --state-id workflow-preflight --goal "Workflow preflight" --objective "Inspect orchestrator readiness" --subtasks "preflight,profiles,diagnostics,workflow" --success-criteria "preflight summary is readable" --profile "${{ inputs.profile }}"
+          npm run orchestrator:preflight -- --state-id workflow-preflight
+          npm run orchestrator:diagnostics -- --state-id workflow-preflight
+
       - name: Orchestrator acceptance suite
         shell: pwsh
         run: |
@@ -62,6 +74,9 @@ jobs:
           npm run test:orchestrator:promotion-config
           npm run test:orchestrator:live-evidence
           npm run test:orchestrator:retention-config
+          npm run test:orchestrator:preflight
+          npm run test:orchestrator:profiles
+          npm run test:orchestrator:diagnostics
           npm run test:orchestrator:mock-loop
           npm run test:orchestrator:loop
           npm run test:orchestrator:state-machine

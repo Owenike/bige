@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import {
   approvalStatusSchema,
   auditTrailSchema,
+  blockedReasonSchema,
   ciStatusSummarySchema,
   cleanupDecisionSchema,
   githubHandoffResultSchema,
@@ -23,6 +24,7 @@ import {
   type IterationRecord,
   type OrchestratorState,
   type PlannerProviderKind,
+  type PreflightResult,
 } from "./schemas";
 import {
   ORCHESTRATOR_ACCEPTANCE_COMMANDS,
@@ -67,6 +69,8 @@ import { resolvePromotionConfig, resolveRetentionConfig } from "./config";
 import type { GitHubHandoffAdapter } from "./github-handoff";
 import { GhCliDraftPullRequestAdapter } from "./github-handoff";
 import { writeLiveEvidence } from "./live-evidence";
+import { runOrchestratorPreflight, type PreflightTargetName } from "./preflight";
+import { normalizeHandoffConfig, resolveTaskProfile } from "./profiles";
 
 type ProviderMap<T> = Record<PlannerProviderKind, T | null>;
 type ExecutorProviderMap = Record<ExecutorProviderKind, ExecutionProvider | null>;
@@ -160,6 +164,39 @@ function appendIterationRecord(state: OrchestratorState, record: IterationRecord
     iterationHistory: [...state.iterationHistory, record],
     updatedAt: now.toISOString(),
   });
+}
+
+function applyPreflightResult(state: OrchestratorState, preflight: PreflightResult, now: Date) {
+  return orchestratorStateSchema.parse({
+    ...state,
+    lastPreflightResult: preflight,
+    lastBlockedReasons: preflight.blockedReasons.map((reason) => blockedReasonSchema.parse(reason)),
+    updatedAt: now.toISOString(),
+  });
+}
+
+async function runStatePreflight(
+  state: OrchestratorState,
+  dependencies: OrchestratorDependencies,
+  now: Date,
+  options?: { enabled?: boolean },
+) {
+  const preflight = await runOrchestratorPreflight({
+    repoPath: state.task.repoPath,
+    workspaceRoot: state.task.workspaceRoot ?? path.join(state.task.repoPath, ".tmp", "orchestrator-workspaces"),
+    state,
+    enabled: options?.enabled,
+  });
+  const updated = applyPreflightResult(state, preflight, now);
+  await dependencies.storage.saveState(updated);
+  return {
+    state: updated,
+    preflight,
+  };
+}
+
+function findTargetBlockedReason(preflight: PreflightResult, target: PreflightTargetName) {
+  return preflight.targets.find((item) => item.target === target && item.status !== "ready");
 }
 
 function persistStop(state: OrchestratorState, stopReason: string, now: Date) {
@@ -278,8 +315,8 @@ export function createInitialState(params: {
   userGoal: string;
   objective: string;
   subtasks: string[];
-  allowedFiles: string[];
-  forbiddenFiles: string[];
+  allowedFiles?: string[];
+  forbiddenFiles?: string[];
   successCriteria: string[];
   maxIterations?: number;
   maxConsecutiveFailures?: number;
@@ -294,9 +331,39 @@ export function createInitialState(params: {
   reviewerProvider?: PlannerProviderKind;
   promotionConfig?: Partial<ReturnType<typeof resolvePromotionConfig>>;
   retentionConfig?: Partial<ReturnType<typeof resolveRetentionConfig>>;
+  profileId?: string | null;
+  profileName?: string | null;
+  repoType?: string | null;
+  commandAllowList?: string[];
+  handoffConfig?: {
+    githubHandoffEnabled?: boolean;
+    publishBranch?: boolean;
+    createBranch?: boolean;
+  };
   now?: Date;
 }) {
   const now = params.now ?? new Date();
+  const profile = resolveTaskProfile({
+    profileId: params.profileId,
+    repoPath: params.repoPath,
+    overrides: {
+      name: params.profileName ?? undefined,
+      repoType: params.repoType ?? undefined,
+      allowedFiles: params.allowedFiles,
+      forbiddenFiles: params.forbiddenFiles,
+      commandAllowList: params.commandAllowList,
+      approvalDefaults:
+        params.autoMode === undefined && params.approvalMode === undefined
+          ? undefined
+          : {
+              autoMode: params.autoMode ?? false,
+              approvalMode: params.approvalMode ?? "human_approval",
+            },
+      promotionDefaults: params.promotionConfig,
+      retentionDefaults: params.retentionConfig,
+      handoffDefaults: params.handoffConfig,
+    },
+  });
   return parseWithDualValidation({
     schemaName: "OrchestratorState",
     zodSchema: orchestratorStateSchema,
@@ -309,16 +376,20 @@ export function createInitialState(params: {
       repeatedNoProgressCount: 0,
       pendingHumanApproval: false,
       task: {
+        profileId: profile.id,
+        profileName: profile.name,
+        repoType: profile.repoType,
         userGoal: params.userGoal,
         repoPath: params.repoPath,
         repoName: params.repoName,
-        allowedFiles: params.allowedFiles,
-        forbiddenFiles: params.forbiddenFiles,
+        allowedFiles: profile.allowedFiles,
+        forbiddenFiles: profile.forbiddenFiles,
+        commandAllowList: profile.commandAllowList,
         acceptanceGates: [...ORCHESTRATOR_ACCEPTANCE_COMMANDS],
         maxIterations: params.maxIterations ?? 5,
         maxConsecutiveFailures: params.maxConsecutiveFailures ?? 2,
-        autoMode: params.autoMode ?? false,
-        approvalMode: params.approvalMode ?? "human_approval",
+        autoMode: params.autoMode ?? profile.approvalDefaults.autoMode,
+        approvalMode: params.approvalMode ?? profile.approvalDefaults.approvalMode,
         objective: params.objective,
         subtasks: params.subtasks,
         successCriteria: params.successCriteria,
@@ -334,12 +405,13 @@ export function createInitialState(params: {
         reviewerProvider: params.reviewerProvider ?? "rule_based",
         artifactRetentionSuccess: 3,
         artifactRetentionFailure: 5,
-        promotionConfig: resolvePromotionConfig({ promotionConfig: params.promotionConfig ?? undefined }),
+        promotionConfig: resolvePromotionConfig({ promotionConfig: params.promotionConfig ?? profile.promotionDefaults }),
         retentionConfig: resolveRetentionConfig({
-          retentionConfig: params.retentionConfig ?? undefined,
+          retentionConfig: params.retentionConfig ?? profile.retentionDefaults,
           artifactRetentionSuccess: 3,
           artifactRetentionFailure: 5,
         }),
+        handoffConfig: normalizeHandoffConfig(params.handoffConfig ?? profile.handoffDefaults),
       },
       plannerDecision: null,
       nextIterationPlan: null,
@@ -367,6 +439,8 @@ export function createInitialState(params: {
       lastPrDraftMetadata: null,
       lastGitHubHandoffResult: null,
       lastLiveEvidence: null,
+      lastPreflightResult: null,
+      lastBlockedReasons: [],
       lastAuditTrail: null,
       lastHandoffPackagePath: null,
       stopReason: null,
@@ -499,11 +573,12 @@ async function executePlannedIteration(
     forbiddenFiles: state.plannerDecision.forbiddenFiles,
     acceptanceCommands: state.plannerDecision.acceptanceCommands,
     repoPath: state.task.repoPath,
-    metadata: {
-      localCommand: state.task.executorMode === "local_repo" ? state.task.executorCommand : undefined,
-      executionMode: state.task.executionMode,
-      workspaceRoot: state.task.workspaceRoot,
-      taskId: state.id,
+      metadata: {
+        localCommand: state.task.executorMode === "local_repo" ? state.task.executorCommand : undefined,
+        commandAllowList: state.task.commandAllowList,
+        executionMode: state.task.executionMode,
+        workspaceRoot: state.task.workspaceRoot,
+        taskId: state.id,
       applyAllowed: state.task.executionMode !== "apply" || (state.task.autoMode && state.task.approvalMode === "auto"),
     },
   });
@@ -947,7 +1022,12 @@ export async function promoteApprovedPatch(
   if (state.patchStatus !== "promotion_ready" && state.patchStatus !== "approved_for_apply") {
     throw new Error(`Promotion requires promotion_ready state, received ${state.patchStatus}.`);
   }
-  const issues = validatePublishPreconditions(state, {
+  const now = (dependencies.now ?? (() => new Date()))();
+  const { state: preflightState, preflight } = await runStatePreflight(state, dependencies, now);
+  if (findTargetBlockedReason(preflight, "promotion")) {
+    throw new Error(findTargetBlockedReason(preflight, "promotion")?.summary ?? "Promotion is blocked.");
+  }
+  const issues = validatePublishPreconditions(preflightState, {
     applyWorkspace: options?.applyWorkspace,
     createBranch: options?.createBranch,
   });
@@ -955,16 +1035,19 @@ export async function promoteApprovedPatch(
     throw new Error(`Patch promotion preconditions failed: ${issues.join(" | ")}`);
   }
 
-  const now = (dependencies.now ?? (() => new Date()))();
   const branchPrep = await preparePromotionBranch({
-    state,
+    state: preflightState,
     createBranch: options?.createBranch ?? true,
   });
 
-  let report = state.lastExecutionReport;
+  const baseReport = preflightState.lastExecutionReport;
+  if (!baseReport) {
+    throw new Error("Promotion requires an execution report.");
+  }
+  let report = baseReport;
   if (options?.applyWorkspace) {
     const promotion = await promotePatchFromState({
-      state,
+      state: preflightState,
       workspaceManager: dependencies.workspaceManager,
     });
     report = appendArtifactsToReport(report, [
@@ -993,9 +1076,9 @@ export async function promoteApprovedPatch(
   ]);
 
   let promoted = orchestratorStateSchema.parse({
-    ...state,
+    ...preflightState,
     status:
-      state.lastExecutionReport.shouldCloseSlice && state.lastReviewVerdict?.verdict === "accept"
+      baseReport.shouldCloseSlice && preflightState.lastReviewVerdict?.verdict === "accept"
         ? "completed"
         : "needs_revision",
     patchStatus: patchStatusSchema.parse(options?.applyWorkspace ? "applied" : "promoted"),
@@ -1006,7 +1089,7 @@ export async function promoteApprovedPatch(
   });
   promoted = upsertIterationRecord(
     promoted,
-    state.lastExecutionReport.iterationNumber,
+    baseReport.iterationNumber,
     {
       executionReport: report,
       patchStatus: options?.applyWorkspace ? "applied" : "promoted",
@@ -1108,6 +1191,29 @@ async function persistAuditTrail(
   return updated;
 }
 
+function createGatedLiveResult(params: {
+  target: "live_smoke" | "live_acceptance" | "live_pass";
+  preflight: PreflightResult;
+  model?: string | null;
+}) {
+  const target = findTargetBlockedReason(params.preflight, params.target);
+  const blocked = target?.blockedReasons[0] ?? params.preflight.blockedReasons[0] ?? null;
+  const status = target?.status === "skipped" ? "skipped" : "blocked";
+  return liveSmokeResultSchema.parse({
+    status,
+    reason: blocked?.summary ?? `${params.target} is not ready.`,
+    provider: "openai_responses",
+    model: params.model ?? null,
+    summary: target?.summary ?? params.preflight.summary,
+    reportPath: null,
+    diffPath: null,
+    transcriptSummaryPath: null,
+    toolLogPath: null,
+    commandLogPath: null,
+    ranAt: new Date().toISOString(),
+  });
+}
+
 export async function runLiveSmoke(params: {
   repoPath: string;
   workspaceRoot?: string;
@@ -1116,6 +1222,21 @@ export async function runLiveSmoke(params: {
   openaiClient?: OpenAIResponsesClient | null;
   enabled?: boolean;
 }) {
+  const preflight = await runOrchestratorPreflight({
+    repoPath: params.repoPath,
+    workspaceRoot: params.workspaceRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-workspaces"),
+    enabled: params.enabled ?? true,
+    env: {
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    },
+  });
+  if (findTargetBlockedReason(preflight, "live_smoke")) {
+    return createGatedLiveResult({
+      target: "live_smoke",
+      preflight,
+      model: params.model ?? null,
+    });
+  }
   const result = await runOpenAIExecutorLiveSmoke({
     apiKey: process.env.OPENAI_API_KEY,
     enabled: params.enabled ?? true,
@@ -1137,6 +1258,33 @@ export async function runLiveAcceptance(params: {
   openaiClient?: OpenAIResponsesClient | null;
   enabled?: boolean;
 }) {
+  if (params.stateId && params.dependencies) {
+    const state = await params.dependencies.storage.loadState(params.stateId);
+    if (!state) throw new Error(`Orchestrator state ${params.stateId} was not found.`);
+    const { state: preflightState, preflight } = await runStatePreflight(
+      state,
+      params.dependencies,
+      (params.dependencies.now ?? (() => new Date()))(),
+      { enabled: params.enabled ?? true },
+    );
+    if (findTargetBlockedReason(preflight, "live_acceptance")) {
+      const result = createGatedLiveResult({
+        target: "live_acceptance",
+        preflight,
+        model: params.model ?? null,
+      });
+      const updated = orchestratorStateSchema.parse({
+        ...preflightState,
+        liveAcceptanceStatus: result.status,
+        lastLiveSmokeResult: result,
+        lastLiveAcceptanceResult: result,
+        updatedAt: result.ranAt,
+      });
+      await params.dependencies.storage.saveState(updated);
+      await persistAuditTrail(updated, params.dependencies, new Date(result.ranAt));
+      return result;
+    }
+  }
   const startedAt = new Date().toISOString();
   const result = await runLiveSmoke({
     repoPath: params.repoPath,
@@ -1204,6 +1352,33 @@ export async function runLivePass(params: {
   openaiClient?: OpenAIResponsesClient | null;
   enabled?: boolean;
 }) {
+  if (params.stateId && params.dependencies) {
+    const state = await params.dependencies.storage.loadState(params.stateId);
+    if (!state) throw new Error(`Orchestrator state ${params.stateId} was not found.`);
+    const { state: preflightState, preflight } = await runStatePreflight(
+      state,
+      params.dependencies,
+      (params.dependencies.now ?? (() => new Date()))(),
+      { enabled: params.enabled ?? true },
+    );
+    if (findTargetBlockedReason(preflight, "live_pass")) {
+      const result = createGatedLiveResult({
+        target: "live_pass",
+        preflight,
+        model: params.model ?? null,
+      });
+      const updated = orchestratorStateSchema.parse({
+        ...preflightState,
+        livePassStatus: result.status,
+        lastLiveSmokeResult: result,
+        lastLiveAcceptanceResult: result,
+        updatedAt: result.ranAt,
+      });
+      await params.dependencies.storage.saveState(updated);
+      await persistAuditTrail(updated, params.dependencies, new Date(result.ranAt));
+      return result;
+    }
+  }
   const result = await runLiveAcceptance(params);
   if (params.stateId && params.dependencies) {
     const state = await params.dependencies.storage.loadState(params.stateId);
@@ -1237,18 +1412,25 @@ export async function prepareHandoff(
 ) {
   const state = await dependencies.storage.loadState(stateId);
   if (!state) throw new Error(`Orchestrator state ${stateId} was not found.`);
+  const now = (dependencies.now ?? (() => new Date()))();
+  const { state: preflightState, preflight } = await runStatePreflight(state, dependencies, now);
+  const resolvedHandoffConfig = normalizeHandoffConfig(preflightState.task.handoffConfig);
+  const githubHandoffEnabled = options?.githubHandoffEnabled ?? resolvedHandoffConfig.githubHandoffEnabled;
+  if (githubHandoffEnabled && findTargetBlockedReason(preflight, "github_handoff")) {
+    throw new Error(findTargetBlockedReason(preflight, "github_handoff")?.summary ?? "GitHub handoff is blocked.");
+  }
   const outputRoot = path.join(state.task.repoPath, ".tmp", "orchestrator-handoff");
   const handoff = await createHandoffPackage({
-    state,
+    state: preflightState,
     outputRoot,
-    publishBranch: options?.publishBranch ?? resolvePromotionConfig(state.task).allowPublish,
-    createBranch: options?.createBranch,
-    githubHandoffEnabled: options?.githubHandoffEnabled,
+    publishBranch: options?.publishBranch ?? resolvedHandoffConfig.publishBranch,
+    createBranch: options?.createBranch ?? resolvedHandoffConfig.createBranch,
+    githubHandoffEnabled,
   });
   let githubHandoffResult: GitHubHandoffResult | null =
     handoff.prDraftPath && handoff.branchName
       ? {
-          status: options?.githubHandoffEnabled ? "payload_only" : "skipped",
+          status: githubHandoffEnabled ? "payload_only" : "skipped",
           provider: dependencies.githubHandoffAdapter?.kind ?? "github_handoff_unavailable",
           targetBranch: handoff.branchName,
           draftUrl: null,
@@ -1257,23 +1439,22 @@ export async function prepareHandoff(
           ranAt: new Date().toISOString(),
         }
       : null;
-  if (handoff.prDraftPath && handoff.branchName && options?.githubHandoffEnabled && dependencies.githubHandoffAdapter) {
+  if (handoff.prDraftPath && handoff.branchName && githubHandoffEnabled && dependencies.githubHandoffAdapter) {
     const prDraftMetadata = prDraftMetadataSchema.parse(JSON.parse(await readFile(handoff.prDraftPath, "utf8")));
     githubHandoffResult = await dependencies.githubHandoffAdapter.createDraftPullRequest({
-      repoPath: state.task.repoPath,
+      repoPath: preflightState.task.repoPath,
       title: prDraftMetadata.title,
       body: prDraftMetadata.body,
       headBranch: handoff.branchName,
-      baseBranch: resolvePromotionConfig(state.task).baseBranch,
+      baseBranch: resolvePromotionConfig(preflightState.task).baseBranch,
       payloadRoot: outputRoot,
-      stateId: state.id,
-      iterationNumber: state.lastExecutionReport?.iterationNumber ?? Math.max(state.iterationNumber, 1),
+      stateId: preflightState.id,
+      iterationNumber: preflightState.lastExecutionReport?.iterationNumber ?? Math.max(preflightState.iterationNumber, 1),
     });
   }
 
-  const now = (dependencies.now ?? (() => new Date()))();
   let updated = orchestratorStateSchema.parse({
-    ...state,
+    ...preflightState,
     handoffStatus: handoff.status,
     prDraftStatus: handoff.prDraftPath
       ? githubHandoffResult?.status === "draft_created"
@@ -1299,13 +1480,13 @@ export async function prepareHandoff(
         ? "promoted"
         : handoff.status === "handoff_ready"
           ? "branch_ready"
-          : state.promotionStatus,
+          : preflightState.promotionStatus,
     patchStatus:
       handoff.status === "branch_published"
         ? "promoted"
         : handoff.status === "handoff_ready"
           ? "branch_ready"
-          : state.patchStatus,
+          : preflightState.patchStatus,
     stopReason: handoff.issues.length > 0 ? handoff.issues.join(" | ") : null,
     updatedAt: now.toISOString(),
   });

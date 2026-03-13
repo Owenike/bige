@@ -80,8 +80,8 @@ type StoredRun = {
   result?: ExecutionReport;
 };
 
-async function runAllowListedCommand(repoPath: string, command: string[]) {
-  const safe = validateAllowListedCommand(command);
+async function runAllowListedCommand(repoPath: string, command: string[], allowList?: string[] | null) {
+  const safe = validateAllowListedCommand(command, allowList);
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(safe.executable, safe.args, {
       cwd: repoPath,
@@ -216,7 +216,11 @@ export class OpenAIResponsesExecutorProvider implements ExecutionProvider {
           result = { ok: true };
         } else if (action.kind === "run_command") {
           const command = action.command ?? [];
-          const { stdout, stderr } = await runAllowListedCommand(workspace.rootDir, command);
+          const { stdout, stderr } = await runAllowListedCommand(
+            workspace.rootDir,
+            command,
+            task.metadata?.commandAllowList,
+          );
           commandLog.push({
             command,
             stdout: stdout.trim() || null,

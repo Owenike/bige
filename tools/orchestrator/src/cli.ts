@@ -19,6 +19,8 @@ import {
 } from "./orchestrator";
 import type { ExecutionMode, ExecutorFallbackMode, ExecutorProviderKind, PlannerProviderKind } from "./schemas";
 import { FileSystemWorkspaceManager } from "./workspace";
+import { runOrchestratorPreflight, formatPreflightSummary } from "./preflight";
+import { buildDiagnosticsSummary, formatDiagnosticsSummary } from "./diagnostics";
 
 function parseArgs(argv: string[]) {
   const [command = "help", ...rest] = argv;
@@ -95,12 +97,19 @@ async function main() {
         .split(",")
         .map((value) => value.trim())
         .filter(Boolean),
+      profileId: options.get("profile") ?? "default",
+      profileName: options.get("profile-name") ?? null,
+      repoType: options.get("repo-type") ?? null,
       autoMode: getOption(options, "auto-mode", "false") === "true",
       approvalMode: getOption(options, "approval-mode", "human_approval") as "auto" | "human_approval",
       executorMode,
       executionMode,
       executorFallbackMode,
       workspaceRoot,
+      commandAllowList: getOption(options, "command-allow-list", "node,npm,git")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
       executorCommand: getOption(options, "local-command", "node,-e,console.log('local-executor-ok')")
         .split(",")
         .map((value) => value.trim())
@@ -122,6 +131,11 @@ async function main() {
         orphanArtifactTtlMinutes: Number.parseInt(getOption(options, "retention-orphan-artifact-ttl", "240"), 10),
         preserveApprovalPending: getOption(options, "retention-preserve-approval-pending", "true") === "true",
       },
+      handoffConfig: {
+        githubHandoffEnabled: getOption(options, "handoff-github-enabled", "false") === "true",
+        publishBranch: getOption(options, "handoff-publish-branch", "false") === "true",
+        createBranch: getOption(options, "handoff-create-branch", "true") === "true",
+      },
     });
     await dependencies.storage.saveState(state);
     process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
@@ -141,6 +155,22 @@ async function main() {
 
   if (command === "review") {
     process.stdout.write(`${JSON.stringify(existingState.lastReviewVerdict, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "preflight") {
+    const preflight = await runOrchestratorPreflight({
+      repoPath,
+      workspaceRoot,
+      state: existingState,
+    });
+    process.stdout.write(`${formatPreflightSummary(preflight)}\n\n${JSON.stringify(preflight, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "status" || command === "inspect" || command === "diagnostics") {
+    const diagnostics = buildDiagnosticsSummary(existingState);
+    process.stdout.write(`${formatDiagnosticsSummary(diagnostics)}\n`);
     return;
   }
 
@@ -276,6 +306,9 @@ async function main() {
       "  node cli.js promote-patch --state-id default --create-branch true --apply-workspace false",
       "  node cli.js reject-patch --state-id default --reason \"...\"",
       "  node cli.js handoff --state-id default --publish-branch false --github-handoff false",
+      "  node cli.js preflight --state-id default",
+      "  node cli.js inspect --state-id default",
+      "  node cli.js diagnostics --state-id default",
       "  node cli.js resume --state-id default",
       "  node cli.js workspace:cleanup --state-id default --workspace-root .tmp/orchestrator-workspaces",
       "  node cli.js cleanup --state-id default --stale-minutes 120",

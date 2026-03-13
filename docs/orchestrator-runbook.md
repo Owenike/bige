@@ -8,6 +8,59 @@
 - Optional: `GITHUB_TOKEN` or `GH_TOKEN`
 - Optional: GitHub CLI auth for `GitHubCliStatusAdapter`
 
+## Preflight Checks
+`orchestrator:preflight` runs a shared readiness pass before live/handoff/promotion paths.
+
+It checks:
+- `OPENAI_API_KEY`
+- `GITHUB_TOKEN` / `GH_TOKEN`
+- `gh` CLI availability
+- `git` availability
+- workspace root writability
+- allowed execution modes
+- allowed handoff modes
+- allowed promotion modes
+
+Output includes:
+- available providers
+- unavailable providers
+- missing env / secrets
+- missing local tools
+- blocked reason codes
+- suggested next actions
+
+Blocked reasons use one shared shape:
+- `code`
+- `summary`
+- `missingPrerequisites`
+- `recoverable`
+- `suggestedNextAction`
+
+These results are persisted into orchestrator state as `lastPreflightResult` and `lastBlockedReasons`.
+
+## Profiles
+Task/repo profiles centralize orchestrator-side defaults for:
+- allowed files
+- forbidden files
+- command allow-list
+- approval defaults
+- promotion defaults
+- retention defaults
+- handoff defaults
+
+Current support:
+- `default` profile
+- custom override at init time via CLI flags
+
+Profile-relevant init flags:
+- `--profile`
+- `--profile-name`
+- `--repo-type`
+- `--command-allow-list`
+- `--handoff-github-enabled`
+- `--handoff-publish-branch`
+- `--handoff-create-branch`
+
 ## Live Smoke vs Live Acceptance vs Live Pass
 - `npm run orchestrator:live-smoke -- --enabled true`
 - `npm run orchestrator:live-acceptance -- --state-id demo --enabled true`
@@ -112,8 +165,28 @@ Promotion config is task-scoped and currently supports:
 - `promotion-base-branch`
 - `promotion-allow-publish`
 - `promotion-approval-required`
-- `promotion-allow-apply-workspace`
-- `promotion-require-patch-export`
+  - `promotion-allow-apply-workspace`
+  - `promotion-require-patch-export`
+
+## Diagnostics / Inspect
+Use diagnostics commands to inspect operator-facing status:
+
+```powershell
+npm run orchestrator:preflight -- --state-id demo
+npm run orchestrator:status -- --state-id demo
+npm run orchestrator:diagnostics -- --state-id demo
+```
+
+Diagnostics summarize:
+- current state / iteration
+- current profile
+- latest planner / reviewer result
+- latest blockers
+- missing prerequisites
+- patch / promotion / handoff / live / workspace status
+- suggested next action
+
+`status`, `inspect`, and `diagnostics` currently resolve to the same readable summary path.
 
 ## Resume
 ```powershell
@@ -222,6 +295,9 @@ npm run test:orchestrator:github-handoff
 npm run test:orchestrator:promotion-config
 npm run test:orchestrator:live-evidence
 npm run test:orchestrator:retention-config
+npm run test:orchestrator:preflight
+npm run test:orchestrator:profiles
+npm run test:orchestrator:diagnostics
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine
@@ -254,3 +330,5 @@ npm run test:orchestrator:state-machine
 - GitHub workflow status is still best-effort through `gh`; full CI gate automation is still separate from the main product pipeline.
 - `apply` mode is intentionally approval-gated: the executor prepares patch artifacts, then `approve-patch` / `promote-patch` advance the patch through export and promotion preconditions. Direct write-back to the source repo should still stay under human approval.
 - PR draft handoff is metadata-first by default. Real GitHub draft PR creation is optional and remains gated by `ORCHESTRATOR_GITHUB_HANDOFF` plus token availability.
+- Preflight is fail-fast and safety-first. It does not relax any existing approval, promotion, or command safety rules.
+- GitHub handoff, live paths, and promotion all consume the same preflight/readiness model, so blocked or skipped paths should now explain themselves consistently.
