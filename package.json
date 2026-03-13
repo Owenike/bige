@@ -26,6 +26,7 @@
         "test:phase42:consumer": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:orchestration": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:query-state": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
+        "test:phase42:url-sync": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:schema": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:fixtures": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:e2e:anomaly-priority:blackbox": "powershell -ExecutionPolicy Bypass -File scripts/phase42-anomaly-priority-blackbox-e2e.ps1",

@@ -1,21 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
 import {
   getDefaultTenantDrilldownSupportNote,
   useNotificationTenantDrilldownPageData,
 } from "../lib/notification-read-api-hooks";
-import {
-  buildNotificationOverviewPageHrefFromQueryState,
-  createNotificationTenantDrilldownQueryStateDefaults,
-  hydrateNotificationTenantDrilldownQueryStateFromSearchParams,
-  normalizeNotificationTenantDrilldownQueryState,
-  type NotificationDeliveryChannel,
-  type NotificationTenantDrilldownQueryState,
-} from "../lib/notification-read-api-query-state";
+import { useNotificationTenantDrilldownUrlSync } from "../lib/notification-read-api-url-state";
+import type { NotificationDeliveryChannel, NotificationTenantDrilldownQueryState } from "../lib/notification-read-api-query-state";
 
 type FilterState = NotificationTenantDrilldownQueryState;
 
@@ -28,31 +21,11 @@ function toPercent(value: number | null | undefined) {
 }
 
 export default function NotificationOverviewTenantDrilldown(props: { tenantId: string }) {
-  const searchParams = useSearchParams();
-  const initialFilters = useMemo(
-    () => hydrateNotificationTenantDrilldownQueryStateFromSearchParams(searchParams).state,
-    [searchParams],
-  );
-  const [filters, setFilters] = useState<FilterState>(initialFilters);
-  const [draft, setDraft] = useState<FilterState>(filters);
+  const { filters, draft, setDraft, applyDraft, resetFilters, backHref } = useNotificationTenantDrilldownUrlSync(props.tenantId);
   const [refreshKey, setRefreshKey] = useState(0);
   const { data, loading, error } = useNotificationTenantDrilldownPageData(props.tenantId, filters, refreshKey);
   const snapshot = data?.drilldown.snapshot ?? null;
   const recentAnomaliesSupportNote = data?.recentAnomaliesSupportNote ?? getDefaultTenantDrilldownSupportNote();
-
-  const backHref = useMemo(() => buildNotificationOverviewPageHrefFromQueryState(props.tenantId, filters), [filters, props.tenantId]);
-
-  function applyFilters() {
-    const normalized = normalizeNotificationTenantDrilldownQueryState(draft);
-    setDraft(normalized.state);
-    setFilters(normalized.state);
-  }
-
-  function resetFilters() {
-    const next = createNotificationTenantDrilldownQueryStateDefaults();
-    setDraft(next);
-    setFilters(next);
-  }
 
   return (
     <main className="fdGlassScene">
@@ -140,7 +113,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
               onChange={(event) => setDraft((prev) => ({ ...prev, to: event.target.value }))}
             />
             <div className="actions">
-              <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={applyFilters}>
+              <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={applyDraft}>
                 Apply
               </button>
               <button type="button" className="fdPillBtn" onClick={resetFilters}>

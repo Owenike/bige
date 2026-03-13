@@ -2,19 +2,13 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
 import {
   useNotificationOverviewPageData,
   type NotificationOverviewPageData,
 } from "../lib/notification-read-api-hooks";
-import {
-  createNotificationOverviewQueryStateDefaults,
-  hydrateNotificationOverviewQueryStateFromSearchParams,
-  normalizeNotificationOverviewQueryState,
-  type NotificationDeliveryChannel,
-  type NotificationOverviewQueryState,
-} from "../lib/notification-read-api-query-state";
+import { useNotificationOverviewUrlSync } from "../lib/notification-read-api-url-state";
+import type { NotificationDeliveryChannel, NotificationOverviewQueryState } from "../lib/notification-read-api-query-state";
 import NotificationGovernanceNav from "./notification-governance-nav";
 
 type OverviewSnapshot = NotificationOverviewPageData["overview"]["snapshot"];
@@ -36,16 +30,6 @@ function trendDirectionLabel(direction: TrendDirection) {
   return "flat";
 }
 
-function buildTenantDrilldownHref(snapshot: OverviewSnapshot, tenantId: string) {
-  const params = new URLSearchParams();
-  params.set("from", snapshot.from);
-  params.set("to", snapshot.to);
-  if (snapshot.channel) params.set("channel", snapshot.channel);
-  params.set("limit", "2000");
-  params.set("anomalyLimit", "40");
-  return `/platform-admin/notifications-overview/${encodeURIComponent(tenantId)}?${params.toString()}`;
-}
-
 function buildAlertWorkflowHref(snapshot: OverviewSnapshot, tenantId?: string) {
   const params = new URLSearchParams();
   params.set("from", snapshot.from);
@@ -57,32 +41,14 @@ function buildAlertWorkflowHref(snapshot: OverviewSnapshot, tenantId?: string) {
 }
 
 export default function NotificationOverviewDashboard() {
-  const searchParams = useSearchParams();
-  const initialFilters = useMemo(
-    () => hydrateNotificationOverviewQueryStateFromSearchParams(searchParams).state,
-    [searchParams],
-  );
-  const [filters, setFilters] = useState<FilterState>(initialFilters);
-  const [draft, setDraft] = useState<FilterState>(initialFilters);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { filters, draft, setDraft, applyDraft, resetFilters, buildTenantDrilldownHref } = useNotificationOverviewUrlSync();
   const { data, loading, error } = useNotificationOverviewPageData(filters, refreshKey);
   const snapshot = data?.overview.snapshot ?? null;
   const insights = data?.insights ?? null;
   const trend = data?.trends.snapshot ?? null;
 
   const hasData = useMemo(() => Boolean(snapshot && snapshot.totalRows > 0), [snapshot]);
-
-  function applyFilters() {
-    const normalized = normalizeNotificationOverviewQueryState(draft);
-    setDraft(normalized.state);
-    setFilters(normalized.state);
-  }
-
-  function resetFilters() {
-    const defaults = createNotificationOverviewQueryStateDefaults();
-    setDraft(defaults);
-    setFilters(defaults);
-  }
 
   return (
     <main className="fdGlassScene">
@@ -163,7 +129,7 @@ export default function NotificationOverviewDashboard() {
               onChange={(event) => setDraft((prev) => ({ ...prev, to: event.target.value }))}
             />
             <div className="actions">
-              <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={applyFilters}>
+              <button type="button" className="fdPillBtn fdPillBtnPrimary" onClick={applyDraft}>
                 Apply
               </button>
               <button type="button" className="fdPillBtn" onClick={resetFilters}>
@@ -257,7 +223,7 @@ export default function NotificationOverviewDashboard() {
                             {item.summary}
                           </p>
                           <div className="actions" style={{ marginTop: 6 }}>
-                            <Link className="fdPillBtn" href={buildTenantDrilldownHref(snapshot, item.tenantId)}>
+                            <Link className="fdPillBtn" href={buildTenantDrilldownHref(item.tenantId)}>
                               Open Tenant Drilldown
                             </Link>
                             <Link className="fdPillBtn" href={buildAlertWorkflowHref(snapshot, item.tenantId)}>
@@ -317,7 +283,7 @@ export default function NotificationOverviewDashboard() {
                             {toPercent(item.rateDelta)})
                           </p>
                           <div className="actions" style={{ marginTop: 6 }}>
-                            <Link className="fdPillBtn" href={buildTenantDrilldownHref(snapshot, item.tenantId)}>
+                            <Link className="fdPillBtn" href={buildTenantDrilldownHref(item.tenantId)}>
                               Open Tenant Drilldown
                             </Link>
                             <Link className="fdPillBtn" href={buildAlertWorkflowHref(snapshot, item.tenantId)}>
@@ -391,7 +357,7 @@ export default function NotificationOverviewDashboard() {
                         clicked {row.clicked}, conversion {row.conversion}
                       </p>
                       <div className="actions" style={{ marginTop: 6 }}>
-                        <Link className="fdPillBtn" href={buildTenantDrilldownHref(snapshot, row.tenantId)}>
+                        <Link className="fdPillBtn" href={buildTenantDrilldownHref(row.tenantId)}>
                           Drilldown
                         </Link>
                       </div>

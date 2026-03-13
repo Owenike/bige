@@ -135,6 +135,12 @@ import {
   serializeNotificationOverviewQueryParams,
   serializeNotificationTenantDrilldownQueryParams,
 } from "../lib/notification-read-api-query-state";
+import {
+  buildNotificationOverviewHrefFromTenantDrilldownState,
+  buildNotificationOverviewPageUrl,
+  buildNotificationTenantDrilldownHrefFromOverviewState,
+  buildNotificationTenantDrilldownPageUrl,
+} from "../lib/notification-read-api-url-state";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
   canUseOverviewDailyRollupWindow,
@@ -2224,6 +2230,81 @@ test("read API query-state serialization keeps overview and drilldown request pa
   const backHref = buildNotificationOverviewPageHrefFromQueryState("tenant-1", drilldown.state);
   assert.equal(backHref.includes("tenantId=tenant-1"), true);
   assert.equal(backHref.includes("aggregationMode=auto"), true);
+  assert.equal(backHref.includes("anomalyLimit="), false);
+});
+
+test("read API url sync keeps overview and tenant drilldown links canonical and round-trippable", () => {
+  const now = () => new Date("2026-03-13T12:00:00.000Z");
+  const overviewDefaultUrl = buildNotificationOverviewPageUrl(
+    "/platform-admin/notifications-overview",
+    createNotificationOverviewQueryStateDefaults(now),
+    { now },
+  );
+  assert.equal(overviewDefaultUrl, "/platform-admin/notifications-overview");
+
+  const overviewUrl = buildNotificationOverviewPageUrl(
+    "/platform-admin/notifications-overview",
+    {
+      tenantId: "tenant-1",
+      channel: "email",
+      from: "2026-03-10T08:00",
+      to: "2026-03-10T20:00",
+      limit: 500,
+    },
+    { now },
+  );
+  assert.equal(overviewUrl.includes("tenantId=tenant-1"), true);
+  assert.equal(overviewUrl.includes("channel=email"), true);
+
+  const drilldownUrl = buildNotificationTenantDrilldownPageUrl(
+    "/platform-admin/notifications-overview/tenant-1",
+    {
+      channel: "email",
+      aggregationMode: "raw",
+      from: "2026-03-10T08:00",
+      to: "2026-03-10T20:00",
+      limit: 500,
+      anomalyLimit: 80,
+    },
+    { now },
+  );
+  assert.equal(drilldownUrl.includes("aggregationMode=raw"), true);
+  assert.equal(drilldownUrl.includes("anomalyLimit=80"), true);
+});
+
+test("read API url sync preserves overview to drilldown and drilldown back-link consistency", () => {
+  const now = () => new Date("2026-03-13T12:00:00.000Z");
+  const drilldownHref = buildNotificationTenantDrilldownHrefFromOverviewState(
+    "tenant-1",
+    {
+      tenantId: "",
+      channel: "sms",
+      from: "2026-03-10T08:00",
+      to: "2026-03-10T20:00",
+      limit: 5000,
+    },
+    { now },
+  );
+  assert.equal(drilldownHref.startsWith("/platform-admin/notifications-overview/tenant-1?"), true);
+  assert.equal(drilldownHref.includes("channel=sms"), true);
+  assert.equal(drilldownHref.includes("limit=5000"), true);
+  assert.equal(drilldownHref.includes("aggregationMode=auto"), false);
+
+  const backHref = buildNotificationOverviewHrefFromTenantDrilldownState(
+    "tenant-1",
+    {
+      channel: "sms",
+      aggregationMode: "rollup",
+      from: "2026-03-10T00:00",
+      to: "2026-03-10T23:59",
+      limit: 5000,
+      anomalyLimit: 120,
+    },
+    { now },
+  );
+  assert.equal(backHref.startsWith("/platform-admin/notifications-overview?"), true);
+  assert.equal(backHref.includes("tenantId=tenant-1"), true);
+  assert.equal(backHref.includes("aggregationMode="), false);
   assert.equal(backHref.includes("anomalyLimit="), false);
 });
 
