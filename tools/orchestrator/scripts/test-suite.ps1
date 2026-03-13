@@ -11,11 +11,19 @@ $tsconfig = Join-Path $root "tsconfig.json"
 $outDir = Join-Path $repoRoot ".tmp\orchestrator"
 
 if (Test-Path $outDir) {
-  try {
-    Remove-Item -Path $outDir -Recurse -Force -ErrorAction Stop
-  } catch {
-    if ($_.Exception -isnot [System.IO.DirectoryNotFoundException]) {
-      throw
+  $removed = $false
+  for ($attempt = 0; $attempt -lt 3 -and -not $removed; $attempt += 1) {
+    try {
+      Remove-Item -Path $outDir -Recurse -Force -ErrorAction Stop
+      $removed = $true
+    } catch {
+      if ($_.Exception -is [System.IO.DirectoryNotFoundException]) {
+        $removed = $true
+      } elseif ($attempt -lt 2) {
+        Start-Sleep -Milliseconds 250
+      } else {
+        Write-Warning "Continuing without clearing $outDir because it is temporarily locked."
+      }
     }
   }
 }
@@ -57,7 +65,11 @@ $suiteMap = @{
     "$outDir\tests\unit\backend-provider.test.js",
     "$outDir\tests\unit\cancellation.test.js",
     "$outDir\tests\unit\daemon.test.js",
-    "$outDir\tests\unit\supervision.test.js"
+    "$outDir\tests\unit\supervision.test.js",
+    "$outDir\tests\unit\supabase-backend.test.js",
+    "$outDir\tests\unit\remote-locking.test.js",
+    "$outDir\tests\unit\backend-migration.test.js",
+    "$outDir\tests\unit\remote-diagnostics.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js",
@@ -155,6 +167,18 @@ $suiteMap = @{
   "supervision" = @(
     "$outDir\tests\unit\supervision.test.js"
   )
+  "supabase-backend" = @(
+    "$outDir\tests\unit\supabase-backend.test.js"
+  )
+  "remote-locking" = @(
+    "$outDir\tests\unit\remote-locking.test.js"
+  )
+  "backend-migration" = @(
+    "$outDir\tests\unit\backend-migration.test.js"
+  )
+  "remote-diagnostics" = @(
+    "$outDir\tests\unit\remote-diagnostics.test.js"
+  )
   "live-smoke" = @(
     "$outDir\tests\integration\live-smoke.test.js"
   )
@@ -203,6 +227,10 @@ $suiteMap = @{
     "$outDir\tests\unit\cancellation.test.js",
     "$outDir\tests\unit\daemon.test.js",
     "$outDir\tests\unit\supervision.test.js",
+    "$outDir\tests\unit\supabase-backend.test.js",
+    "$outDir\tests\unit\remote-locking.test.js",
+    "$outDir\tests\unit\backend-migration.test.js",
+    "$outDir\tests\unit\remote-diagnostics.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",

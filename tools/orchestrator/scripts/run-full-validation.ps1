@@ -43,7 +43,11 @@ $scripts = @(
   "test:orchestrator:backend-provider",
   "test:orchestrator:cancellation",
   "test:orchestrator:daemon",
-  "test:orchestrator:supervision"
+  "test:orchestrator:supervision",
+  "test:orchestrator:supabase-backend",
+  "test:orchestrator:remote-locking",
+  "test:orchestrator:backend-migration",
+  "test:orchestrator:remote-diagnostics"
 )
 
 foreach ($script in $scripts) {

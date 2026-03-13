@@ -95,6 +95,38 @@ function formatWorkerSummary(summary: {
   ].join("\n");
 }
 
+function formatBackendStatus(summary: {
+  backendType: string;
+  status: string;
+  inspection: {
+    queueDepth: number;
+    runningCount: number;
+    queuedCount: number;
+    pausedCount: number;
+    blockedCount: number;
+    staleLeaseCount: number;
+    workerCount: number;
+    activeWorkers: string[];
+  };
+  details: string[];
+  migrationPath: string | null;
+}) {
+  return [
+    `Backend: ${summary.backendType}`,
+    `Status: ${summary.status}`,
+    `Queue depth: ${summary.inspection.queueDepth}`,
+    `Running: ${summary.inspection.runningCount}`,
+    `Queued: ${summary.inspection.queuedCount}`,
+    `Paused: ${summary.inspection.pausedCount}`,
+    `Blocked: ${summary.inspection.blockedCount}`,
+    `Stale leases: ${summary.inspection.staleLeaseCount}`,
+    `Workers: ${summary.inspection.workerCount}`,
+    `Active workers: ${summary.inspection.activeWorkers.join(", ") || "none"}`,
+    `Details: ${summary.details.join(" | ") || "none"}`,
+    `Migration path: ${summary.migrationPath ?? "none"}`,
+  ].join("\n");
+}
+
 function parseArgs(argv: string[]) {
   const [command = "help", ...rest] = argv;
   const options = new Map<string, string>();
@@ -127,6 +159,7 @@ async function main() {
   const executionMode = getOption(options, "execution-mode", executorMode === "mock" ? "mock" : "dry_run") as ExecutionMode;
   const executorFallbackMode = getOption(options, "executor-fallback", "blocked") as ExecutorFallbackMode;
   const backendType = getOption(options, "backend-type", "file") as BackendType;
+  const backendFallbackType = getOption(options, "backend-fallback", "blocked") as BackendType | "blocked";
   const workspaceRoot = getOption(options, "workspace-root", path.join(repoPath, ".tmp", "orchestrator-workspaces"));
   const liveSmokeEnabled = getOption(options, "live-smoke", "false") === "true";
   const applyWorkspace = getOption(options, "apply-workspace", "false") === "true";
@@ -137,6 +170,7 @@ async function main() {
     repoPath,
     storageRoot,
     backendType,
+    backendFallbackType,
     executorMode,
     workspaceRoot,
   });
@@ -227,6 +261,7 @@ async function main() {
       repoPath,
       storageRoot,
       backendType: existingState.backendType,
+      backendFallbackType,
       executorMode,
       workspaceRoot,
     });
@@ -316,6 +351,24 @@ async function main() {
   if (command === "backend:inspect") {
     const inspection = await dependencies.backend.inspect();
     process.stdout.write(`${JSON.stringify(inspection, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "backend:status") {
+    const status = await dependencies.backend.status();
+    process.stdout.write(`${formatBackendStatus(status)}\n\n${JSON.stringify(status, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "backend:init") {
+    const result = await dependencies.backend.initialize();
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "backend:migrate") {
+    const result = await dependencies.backend.migrate();
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
   }
 
@@ -495,6 +548,9 @@ async function main() {
       "  node cli.js worker:once --worker-id worker-1",
       "  node cli.js worker:run --worker-id worker-1 --poll-ms 1000 --max-polls 10",
       "  node cli.js worker:status --worker-id worker-1",
+      "  node cli.js backend:init --backend-type supabase",
+      "  node cli.js backend:migrate --backend-type supabase",
+      "  node cli.js backend:status --backend-type sqlite",
       "  node cli.js backend:inspect",
       "  node cli.js run:pause --state-id default",
       "  node cli.js run:resume --state-id default",

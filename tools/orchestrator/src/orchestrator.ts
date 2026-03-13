@@ -16,6 +16,7 @@ import {
   promotionStatusSchema,
   prDraftMetadataSchema,
   type CIStatusSummary,
+  type BackendType,
   type CleanupDecision,
   type ExecutionMode,
   type ExecutorFallbackMode,
@@ -46,7 +47,7 @@ import {
 import type { ExecutionProvider } from "./executor-adapters";
 import { LocalRepoExecutor, MockExecutor, OpenAIResponsesExecutorProvider } from "./executor-adapters";
 import type { StorageProvider } from "./storage";
-import { FileStorage } from "./storage";
+import { FileStorage, SupabaseStorage } from "./storage";
 import type { GitHubStatusAdapter } from "./github";
 import { MockGitHubStatusAdapter } from "./github";
 import { transitionState } from "./workflows/state-machine";
@@ -71,7 +72,8 @@ import { GhCliDraftPullRequestAdapter } from "./github-handoff";
 import { writeLiveEvidence } from "./live-evidence";
 import { runOrchestratorPreflight, type PreflightTargetName } from "./preflight";
 import { normalizeHandoffConfig, resolveTaskProfile } from "./profiles";
-import { FileBackendProvider, SqliteBackendProvider, type BackendProvider } from "./backend";
+import { FileBackendProvider, SqliteBackendProvider, SupabaseBackendProvider, type BackendProvider } from "./backend";
+import { createSupabaseDocumentStoreFromEnv } from "./supabase";
 
 type ProviderMap<T> = Record<PlannerProviderKind, T | null>;
 type ExecutorProviderMap = Record<ExecutorProviderKind, ExecutionProvider | null>;
@@ -342,7 +344,7 @@ export function createInitialState(params: {
     publishBranch?: boolean;
     createBranch?: boolean;
   };
-  backendType?: "file" | "sqlite";
+  backendType?: BackendType;
   now?: Date;
 }) {
   const now = params.now ?? new Date();
@@ -1559,24 +1561,55 @@ export async function prepareHandoff(
 export function createDefaultDependencies(params: {
   repoPath: string;
   storageRoot?: string;
-  backendType?: "file" | "sqlite";
+  backendType?: BackendType;
+  backendFallbackType?: BackendType | "blocked";
   backendRoot?: string;
   executorMode?: ExecutorProviderKind;
   mockCiStatus?: CIStatusSummary;
   openaiClient?: OpenAIResponsesClient | null;
   workspaceRoot?: string;
 }) {
-  const storage = new FileStorage(params.storageRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-state"));
+  const requestedBackend = params.backendType ?? "file";
+  const fallbackBackend = params.backendFallbackType ?? "blocked";
   const backendRoot = params.backendRoot ?? params.storageRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-state");
-  const backend =
-    params.backendType === "sqlite"
-      ? new SqliteBackendProvider({
-          rootDir: backendRoot,
-        })
-      : new FileBackendProvider({
-          rootDir: backendRoot,
-          storage,
-        });
+  const supabaseStore = requestedBackend === "supabase" ? createSupabaseDocumentStoreFromEnv() : null;
+
+  let storage: StorageProvider;
+  let backend: BackendProvider;
+  if (requestedBackend === "sqlite") {
+    storage = new FileStorage(params.storageRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-state"));
+    backend = new SqliteBackendProvider({
+      rootDir: backendRoot,
+    });
+  } else if (requestedBackend === "supabase") {
+    if (supabaseStore) {
+      storage = new SupabaseStorage(supabaseStore);
+      backend = new SupabaseBackendProvider({
+        store: supabaseStore,
+      });
+    } else if (fallbackBackend !== "blocked") {
+      storage = new FileStorage(params.storageRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-state"));
+      backend =
+        fallbackBackend === "sqlite"
+          ? new SqliteBackendProvider({
+              rootDir: backendRoot,
+            })
+          : new FileBackendProvider({
+              rootDir: backendRoot,
+              storage,
+            });
+    } else {
+      throw new Error(
+        "Supabase backend requires ORCHESTRATOR_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL and ORCHESTRATOR_SUPABASE_SERVICE_ROLE_KEY/SUPABASE_SERVICE_ROLE_KEY.",
+      );
+    }
+  } else {
+    storage = new FileStorage(params.storageRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-state"));
+    backend = new FileBackendProvider({
+      rootDir: backendRoot,
+      storage,
+    });
+  }
   const responsesClient =
     params.openaiClient ??
     (process.env.OPENAI_API_KEY ? new NodeHttpsResponsesClient(process.env.OPENAI_API_KEY) : null);

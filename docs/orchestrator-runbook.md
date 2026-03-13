@@ -4,7 +4,11 @@
 - Optional: `OPENAI_API_KEY`
 - Optional: `ORCHESTRATOR_STORAGE_ROOT`
 - Optional: `ORCHESTRATOR_WORKSPACE_ROOT`
-- Optional: `ORCHESTRATOR_BACKEND_TYPE=file|sqlite`
+- Optional: `ORCHESTRATOR_BACKEND_TYPE=file|sqlite|supabase`
+- Optional: `ORCHESTRATOR_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL`
+- Optional: `ORCHESTRATOR_SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SERVICE_ROLE_KEY`
+- Optional: `ORCHESTRATOR_SUPABASE_SCHEMA` (defaults to `public`)
+- Optional: `ORCHESTRATOR_SUPABASE_TABLE` (defaults to `orchestrator_documents`)
 - Optional: `ORCHESTRATOR_GITHUB_HANDOFF=true`
 - Optional: `GITHUB_TOKEN` or `GH_TOKEN`
 - Optional: GitHub CLI auth for `GitHubCliStatusAdapter`
@@ -195,6 +199,14 @@ Diagnostics summarize:
 
 `status`, `inspect`, and `diagnostics` currently resolve to the same readable summary path.
 
+`backend:status` is the operator-facing backend summary path. It shows:
+- backend type
+- queue depth
+- running/queued/paused/blocked counts
+- stale lease count
+- worker count
+- readiness / migration details
+
 ## Queue / Worker / Lock / Recovery
 The orchestrator can now run through a durable queue instead of only ad hoc CLI execution.
 
@@ -207,11 +219,20 @@ Backend choices:
   - current recommended durable backend
   - queue/lease/worker registry live in a single SQLite database file
   - better for long-running single-host worker mode and validating lease/recovery semantics
+- `supabase`
+  - shared remote backend for queue/lease/worker coordination
+  - uses orchestrator-only document storage
+  - requires Supabase URL + service role key
 
 Why SQLite-first:
 - no external network dependency
 - easier to validate queue + lease + recovery than raw file locking
 - still preserves a future path for a shared remote backend later
+
+Why add Supabase now:
+- shared queue/lease visibility across machines
+- remote worker coordination without inventing a separate scheduler first
+- still keeps file/sqlite as safer local defaults
 
 Queue items persist:
 - `taskId`
@@ -242,6 +263,9 @@ Worker commands:
 npm run orchestrator:worker:once -- --worker-id worker-1
 npm run orchestrator:worker:run -- --worker-id worker-1 --poll-ms 1000 --max-polls 10
 npm run orchestrator:worker:status -- --worker-id worker-1
+npm run orchestrator:backend:init -- --backend-type supabase
+npm run orchestrator:backend:migrate -- --backend-type supabase
+npm run orchestrator:backend:status -- --backend-type supabase
 npm run orchestrator:backend:inspect
 ```
 
@@ -346,7 +370,23 @@ npm run orchestrator:review -- --state-id demo
   - workers: `.tmp/orchestrator-state/workers.json`
 - `sqlite` backend:
   - `.tmp/orchestrator-state/orchestrator-backend.sqlite`
-- Override backend type with `--backend-type file|sqlite`
+- `supabase` backend:
+  - queue/workers/state documents live in `public.orchestrator_documents` by default
+  - schema/table can be overridden with `ORCHESTRATOR_SUPABASE_SCHEMA` and `ORCHESTRATOR_SUPABASE_TABLE`
+- Override backend type with `--backend-type file|sqlite|supabase`
+- Optional fallback with `--backend-fallback file|sqlite|blocked`
+
+## Supabase Backend Init / Migrate / Status
+```powershell
+npm run orchestrator:backend:init -- --backend-type supabase
+npm run orchestrator:backend:migrate -- --backend-type supabase
+npm run orchestrator:backend:status -- --backend-type supabase
+```
+
+Current migration path:
+- if a direct migration executor is not configured, the command returns `manual_required`
+- apply [tools/orchestrator/src/migrations/orchestrator_supabase.sql](/c:/Users/User/bige/tools/orchestrator/src/migrations/orchestrator_supabase.sql)
+- once the table exists, `backend:status` should report `ready`
 
 ## Workspace Location
 - Default: `.tmp/orchestrator-workspaces/<state-id>/iteration-<n>`
@@ -413,6 +453,10 @@ npm run test:orchestrator:backend-provider
 npm run test:orchestrator:cancellation
 npm run test:orchestrator:daemon
 npm run test:orchestrator:supervision
+npm run test:orchestrator:supabase-backend
+npm run test:orchestrator:remote-locking
+npm run test:orchestrator:backend-migration
+npm run test:orchestrator:remote-diagnostics
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine
@@ -422,6 +466,7 @@ npm run test:orchestrator:full-validation
 ## Provider Status
 - Real today:
   - `FileStorage`
+  - `SupabaseStorage`
   - `MockExecutor`
   - `LocalRepoExecutor`
   - `OpenAIResponsesExecutorProvider`
@@ -433,9 +478,6 @@ npm run test:orchestrator:full-validation
   - OpenAI Responses provider integrations
   - OpenAI coding executor tool turns
   - GitHub status adapter integration paths
-- Stubbed for later:
-  - `SupabaseStorage`
-
 ## Current MVP Limits
 - `OpenAIResponsesExecutorProvider` is a coding-executor MVP; its integration tests are mocked and it should still run behind human review for risky scopes.
 - Live OpenAI executor smoke is intentionally gated behind `OPENAI_API_KEY` and manual workflow dispatch.
@@ -449,7 +491,8 @@ npm run test:orchestrator:full-validation
 - Preflight is fail-fast and safety-first. It does not relax any existing approval, promotion, or command safety rules.
 - GitHub handoff, live paths, and promotion all consume the same preflight/readiness model, so blocked or skipped paths should now explain themselves consistently.
 - Queue / worker mode is still MVP:
-  - queue/lock backend is now pluggable, but only `file` and `sqlite` are implemented
+  - queue/lock backend is now pluggable across `file`, `sqlite`, and `supabase`
+  - `supabase` is still a document-based remote backend, not a high-throughput distributed scheduler
   - recovery is still lease/heartbeat based, not distributed consensus
   - cooperative pause/cancel only stop at safe boundaries; they are not hard interrupts in the middle of arbitrary commands
   - `worker:run` is daemon-style supervision, not a fully managed OS/background service

@@ -197,7 +197,7 @@ export const liveAcceptanceStatusSchema = z.enum(["not_run", "skipped", "passed"
 export const livePassStatusSchema = z.enum(["not_run", "skipped", "passed", "failed", "blocked"]);
 export const handoffStatusSchema = z.enum(["not_ready", "exported", "handoff_ready", "branch_published", "handoff_failed"]);
 export const prDraftStatusSchema = z.enum(["not_ready", "metadata_ready", "payload_ready", "skipped", "failed"]);
-export const backendTypeSchema = z.enum(["file", "sqlite"]);
+export const backendTypeSchema = z.enum(["file", "sqlite", "supabase"]);
 export const queueStatusSchema = z.enum(["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"]);
 export const cancellationStatusSchema = z.enum(["none", "cancel_requested", "cancelled"]);
 export const pauseStatusSchema = z.enum(["none", "pause_requested", "paused"]);
@@ -754,7 +754,7 @@ export const queueWorkerCollectionJsonSchema: JsonSchema = {
           status: { type: "string", enum: ["idle", "polling", "running", "backing_off", "stopped"] },
           supervisionStatus: { type: "string", enum: ["inactive", "healthy", "backing_off", "recovering", "stopped"] },
           currentRunId: { type: "string", nullable: true },
-          backendType: { type: "string", enum: ["file", "sqlite"] },
+          backendType: { type: "string", enum: ["file", "sqlite", "supabase"] },
           leaseOwner: { type: "string", nullable: true },
           lastHeartbeatAt: { type: "string", nullable: true },
           daemonHeartbeatAt: { type: "string", nullable: true },
@@ -1171,7 +1171,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       type: "string",
       enum: ["not_run", "skipped", "passed", "failed", "blocked"],
     },
-    backendType: { type: "string", enum: ["file", "sqlite"] },
+    backendType: { type: "string", enum: ["file", "sqlite", "supabase"] },
     queueStatus: {
       type: "string",
       enum: ["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"],

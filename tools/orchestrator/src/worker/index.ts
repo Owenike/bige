@@ -42,35 +42,38 @@ async function saveWorkerRecord(
   patch: Partial<QueueWorkerRecord>,
   now = new Date(),
 ) {
-  const workers = await loadWorkers(dependencies);
-  const existing = workers.workers.find((worker) => worker.workerId === workerId);
-  const nextRecord = queueWorkerRecordSchema.parse({
-    status: "idle",
-    supervisionStatus: "inactive",
-    currentRunId: null,
-    leaseOwner: null,
-    lastHeartbeatAt: null,
-    daemonHeartbeatAt: null,
-    lastError: null,
-    consecutiveErrors: 0,
-    idleCycles: 0,
-    pollCount: 0,
-    startedAt: existing?.startedAt ?? now.toISOString(),
-    ...existing,
-    ...patch,
-    workerId,
-    backendType: dependencies.backend.backendType,
-    updatedAt: now.toISOString(),
+  return dependencies.backend.mutateWorkers((workers) => {
+    const existing = workers.workers.find((worker) => worker.workerId === workerId);
+    const nextRecord = queueWorkerRecordSchema.parse({
+      status: "idle",
+      supervisionStatus: "inactive",
+      currentRunId: null,
+      leaseOwner: null,
+      lastHeartbeatAt: null,
+      daemonHeartbeatAt: null,
+      lastError: null,
+      consecutiveErrors: 0,
+      idleCycles: 0,
+      pollCount: 0,
+      startedAt: existing?.startedAt ?? now.toISOString(),
+      ...existing,
+      ...patch,
+      workerId,
+      backendType: dependencies.backend.backendType,
+      updatedAt: now.toISOString(),
+    });
+    const nextWorkers = queueWorkerCollectionSchema.parse({
+      updatedAt: now.toISOString(),
+      workers: [
+        ...workers.workers.filter((worker) => worker.workerId !== workerId),
+        nextRecord,
+      ],
+    });
+    return {
+      workers: nextWorkers,
+      result: nextRecord,
+    };
   });
-  const nextWorkers = queueWorkerCollectionSchema.parse({
-    updatedAt: now.toISOString(),
-    workers: [
-      ...workers.workers.filter((worker) => worker.workerId !== workerId),
-      nextRecord,
-    ],
-  });
-  await dependencies.backend.saveWorkers(nextWorkers);
-  return nextRecord;
 }
 
 export async function getWorkerStatus(dependencies: OrchestratorDependencies, workerId?: string | null) {

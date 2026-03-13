@@ -9,6 +9,7 @@ import {
   type OrchestratorState,
   type QueueRunCollection,
 } from "../schemas";
+import type { RemoteDocumentStore } from "../supabase";
 
 export interface StorageProvider {
   loadState(id: string): Promise<OrchestratorState | null>;
@@ -25,7 +26,7 @@ export class FileStorage implements StorageProvider {
   }
 
   private getQueuePath() {
-    return path.join(this.rootDir, `queue.json`);
+    return path.join(this.rootDir, "queue.json");
   }
 
   private async atomicWrite(filePath: string, value: string) {
@@ -82,19 +83,51 @@ export class FileStorage implements StorageProvider {
 }
 
 export class SupabaseStorage implements StorageProvider {
-  async loadState(): Promise<OrchestratorState | null> {
-    throw new Error("SupabaseStorage is reserved for a later iteration. FileStorage is the MVP storage provider.");
+  constructor(private readonly store: RemoteDocumentStore) {}
+
+  async loadState(id: string): Promise<OrchestratorState | null> {
+    const record = await this.store.load(`state:${id}`);
+    if (!record) {
+      return null;
+    }
+    return parseWithDualValidation({
+      schemaName: "OrchestratorState",
+      zodSchema: orchestratorStateSchema,
+      jsonSchema: orchestratorStateJsonSchema,
+      data: record.value,
+    });
   }
 
-  async saveState(): Promise<void> {
-    throw new Error("SupabaseStorage is reserved for a later iteration. FileStorage is the MVP storage provider.");
+  async saveState(state: OrchestratorState) {
+    const key = `state:${state.id}`;
+    const current = await this.store.load(key);
+    const saved = await this.store.save(key, state, current?.version ?? null);
+    if (!saved.applied) {
+      throw new Error(`SupabaseStorage save conflict for ${key}.`);
+    }
   }
 
   async loadQueue(): Promise<QueueRunCollection> {
-    throw new Error("SupabaseStorage is reserved for a later iteration. FileStorage is the MVP storage provider.");
+    const record = await this.store.load("queue");
+    if (!record) {
+      return queueRunCollectionSchema.parse({
+        updatedAt: new Date(0).toISOString(),
+        items: [],
+      });
+    }
+    return parseWithDualValidation({
+      schemaName: "QueueRunCollection",
+      zodSchema: queueRunCollectionSchema,
+      jsonSchema: queueRunCollectionJsonSchema,
+      data: record.value,
+    });
   }
 
-  async saveQueue(): Promise<void> {
-    throw new Error("SupabaseStorage is reserved for a later iteration. FileStorage is the MVP storage provider.");
+  async saveQueue(queue: QueueRunCollection) {
+    const current = await this.store.load("queue");
+    const saved = await this.store.save("queue", queue, current?.version ?? null);
+    if (!saved.applied) {
+      throw new Error("SupabaseStorage save conflict for queue.");
+    }
   }
 }
