@@ -180,6 +180,9 @@ function getAggregationMetadata(payload) {
     dataSource: pick('dataSource'),
     isWholeUtcDayWindow: pick('isWholeUtcDayWindow'),
     rollupEligible: pick('rollupEligible'),
+    resolutionReason: pick('resolutionReason'),
+    requestedWindowType: pick('requestedWindowType'),
+    snapshotWindowType: pick('snapshotWindowType'),
   };
   return { metadata, missingFields: [] };
 }
