@@ -7,6 +7,11 @@ import {
   getDefaultTenantDrilldownSupportNote,
   useNotificationTenantDrilldownPageData,
 } from "../lib/notification-read-api-hooks";
+import {
+  buildNotificationReadApiStatusSurface,
+  resolveNotificationReadApiPageStatus,
+  resolveNotificationReadApiPanelStatus,
+} from "../lib/notification-read-api-status-model";
 import { useNotificationTenantDrilldownUrlSync } from "../lib/notification-read-api-url-state";
 import type { NotificationDeliveryChannel, NotificationTenantDrilldownQueryState } from "../lib/notification-read-api-query-state";
 
@@ -23,9 +28,26 @@ function toPercent(value: number | null | undefined) {
 export default function NotificationOverviewTenantDrilldown(props: { tenantId: string }) {
   const { filters, draft, setDraft, applyDraft, resetFilters, backHref } = useNotificationTenantDrilldownUrlSync(props.tenantId);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { data, loading, error, errorMode, isInitialLoading } = useNotificationTenantDrilldownPageData(props.tenantId, filters, refreshKey);
+  const drilldownRequest = useNotificationTenantDrilldownPageData(props.tenantId, filters, refreshKey);
+  const { data, loading } = drilldownRequest;
   const snapshot = data?.drilldown.snapshot ?? null;
   const recentAnomaliesSupportNote = data?.recentAnomaliesSupportNote ?? getDefaultTenantDrilldownSupportNote();
+  const pageStatus = resolveNotificationReadApiPageStatus(drilldownRequest);
+  const pageSurface = buildNotificationReadApiStatusSurface(
+    pageStatus,
+    "tenant_drilldown_page",
+    drilldownRequest.error,
+  );
+  const drilldownSurface = buildNotificationReadApiStatusSurface(
+    resolveNotificationReadApiPanelStatus({
+      pageStatus,
+      hasData: snapshot !== null,
+      issue: drilldownRequest.error,
+    }),
+    "tenant_drilldown_page",
+    drilldownRequest.error,
+  );
+  const showPageStatus = pageSurface.status !== "ready" && pageSurface.status !== "idle";
 
   return (
     <main className="fdGlassScene">
@@ -42,7 +64,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
                 Back To Overview
               </Link>
               <button type="button" className="fdPillBtn" onClick={() => setRefreshKey((current) => current + 1)} disabled={loading}>
-                Refresh
+                {pageStatus === "hard_failure_no_data" ? "Retry" : loading ? "Refreshing..." : "Refresh"}
               </button>
             </div>
           </div>
@@ -123,15 +145,15 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
           </div>
         </section>
 
-        {error ? (
+        {showPageStatus ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-            <div className="error">
-              {errorMode === "soft" ? `Retaining last successful tenant drilldown data. ${error.message}` : error.message}
-            </div>
+            <p className={pageSurface.tone === "danger" ? "error" : "sub"} style={{ marginTop: 0 }}>
+              {pageSurface.message}
+            </p>
           </section>
         ) : null}
 
-        {isInitialLoading ? (
+        {drilldownRequest.isInitialLoading ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
             <p className="fdGlassText">Loading tenant drilldown...</p>
           </section>
@@ -178,6 +200,9 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
             </section>
 
             <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+              <p className="sub" style={{ marginTop: 0 }}>
+                {drilldownSurface.message}
+              </p>
               <p className="sub" style={{ marginTop: 0 }}>
                 {formatNotificationAggregationDataSourceLabel(snapshot.dataSource)}
               </p>

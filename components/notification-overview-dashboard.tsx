@@ -8,6 +8,11 @@ import {
   useNotificationOverviewPageData,
   type NotificationOverviewPageData,
 } from "../lib/notification-read-api-hooks";
+import {
+  buildNotificationReadApiStatusSurface,
+  resolveNotificationReadApiPageStatus,
+  resolveNotificationReadApiPanelStatus,
+} from "../lib/notification-read-api-status-model";
 import { useNotificationOverviewUrlSync } from "../lib/notification-read-api-url-state";
 import type { NotificationDeliveryChannel, NotificationOverviewQueryState } from "../lib/notification-read-api-query-state";
 import NotificationGovernanceNav from "./notification-governance-nav";
@@ -44,12 +49,48 @@ function buildAlertWorkflowHref(snapshot: OverviewSnapshot, tenantId?: string) {
 export default function NotificationOverviewDashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const { filters, draft, setDraft, applyDraft, resetFilters, buildTenantDrilldownHref } = useNotificationOverviewUrlSync();
-  const { data, loading, error, errorMode, isInitialLoading } = useNotificationOverviewPageData(filters, refreshKey);
+  const overviewRequest = useNotificationOverviewPageData(filters, refreshKey);
+  const { data, loading } = overviewRequest;
   const snapshot = data?.overview.snapshot ?? null;
   const insights = data?.insights ?? null;
   const trend = data?.trends?.snapshot ?? null;
   const resourceErrors = data?.resourceErrors ?? [];
-  const hasResilienceNotice = Boolean(error) || resourceErrors.length > 0;
+  const insightsIssue = resourceErrors.find((issue) => issue.source === "anomalies") ?? null;
+  const trendsIssue = resourceErrors.find((issue) => issue.source === "trends") ?? null;
+  const pageStatus = resolveNotificationReadApiPageStatus(overviewRequest, { resourceErrors });
+  const pageSurface = buildNotificationReadApiStatusSurface(
+    pageStatus,
+    "overview_page",
+    overviewRequest.error ?? resourceErrors[0] ?? null,
+  );
+  const overviewSurface = buildNotificationReadApiStatusSurface(
+    resolveNotificationReadApiPanelStatus({
+      pageStatus,
+      hasData: snapshot !== null,
+      issue: overviewRequest.error,
+    }),
+    "overview_primary",
+    overviewRequest.error,
+  );
+  const insightsSurface = buildNotificationReadApiStatusSurface(
+    resolveNotificationReadApiPanelStatus({
+      pageStatus,
+      hasData: insights !== null,
+      issue: insightsIssue,
+    }),
+    "insights_panel",
+    insightsIssue,
+  );
+  const trendsSurface = buildNotificationReadApiStatusSurface(
+    resolveNotificationReadApiPanelStatus({
+      pageStatus,
+      hasData: trend !== null,
+      issue: trendsIssue,
+    }),
+    "trends_panel",
+    trendsIssue,
+  );
+  const showPageStatus = pageSurface.status !== "ready" && pageSurface.status !== "idle";
 
   const hasData = useMemo(() => Boolean(snapshot && snapshot.totalRows > 0), [snapshot]);
   const warmTenantDrilldown = (tenantId: string) => {
@@ -83,7 +124,7 @@ export default function NotificationOverviewDashboard() {
                 Alert Workflow
               </Link>
               <button type="button" className="fdPillBtn" onClick={() => setRefreshKey((current) => current + 1)} disabled={loading}>
-                Refresh
+                {pageStatus === "hard_failure_no_data" ? "Retry" : loading ? "Refreshing..." : "Refresh"}
               </button>
             </div>
           </div>
@@ -151,22 +192,20 @@ export default function NotificationOverviewDashboard() {
           </div>
         </section>
 
-        {hasResilienceNotice ? (
+        {showPageStatus || resourceErrors.length > 0 ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-            {error ? (
-              <div className="error">
-                {errorMode === "soft" ? `Retaining last successful overview data. ${error.message}` : error.message}
-              </div>
-            ) : null}
+            <p className={pageSurface.tone === "danger" ? "error" : "sub"} style={{ marginTop: 0 }}>
+              {pageSurface.message}
+            </p>
             {resourceErrors.map((issue) => (
-              <p key={`${issue.source}:${issue.kind}:${issue.message}`} className="sub" style={{ marginTop: error ? 8 : 0 }}>
+              <p key={`${issue.source}:${issue.kind}:${issue.message}`} className="sub" style={{ marginTop: 8 }}>
                 {issue.source} {issue.kind}: {issue.message}
               </p>
             ))}
           </section>
         ) : null}
 
-        {isInitialLoading ? (
+        {overviewRequest.isInitialLoading ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
             <p className="fdGlassText">Loading notification performance overview...</p>
           </section>
@@ -219,6 +258,9 @@ export default function NotificationOverviewDashboard() {
 
             <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
               <p className="sub" style={{ marginTop: 0 }}>
+                {overviewSurface.message}
+              </p>
+              <p className="sub" style={{ marginTop: 0 }}>
                 Rate definition: success/fail denominator = sent + failed; open/click/conversion denominator = sent.
               </p>
               <p className="sub" style={{ marginTop: 0 }}>
@@ -226,11 +268,14 @@ export default function NotificationOverviewDashboard() {
               </p>
             </section>
 
-            {insights ? (
-              <>
-                <section className="fdTwoCol" style={{ marginBottom: 14 }}>
-                  <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                    <h2 className="sectionTitle">Tenant Alert Priority</h2>
+            <section className="fdTwoCol" style={{ marginBottom: 14 }}>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+                <h2 className="sectionTitle">Tenant Alert Priority</h2>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  {insightsSurface.message}
+                </p>
+                {insights ? (
+                  <>
                     <p className="sub" style={{ marginTop: 0 }}>
                       Rule: {insights.priorityRule.scoreFormula}
                     </p>
@@ -255,98 +300,114 @@ export default function NotificationOverviewDashboard() {
                       ))}
                       {insights.tenantPriorities.length === 0 ? <p className="fdGlassText">No tenant alerts.</p> : null}
                     </div>
-                  </section>
+                  </>
+                ) : (
+                  <p className="fdGlassText">Analytics panel is temporarily unavailable.</p>
+                )}
+              </section>
 
-                  <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                    <h2 className="sectionTitle">Top Anomaly Reasons</h2>
-                    <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                      {insights.reasonClusters.map((item) => (
-                        <p key={item.key} className="sub" style={{ marginTop: 0 }}>
-                          {item.label}: {item.count} (dead_letter {item.deadLetter}, failed {item.failed}, retrying {item.retrying}) |
-                          tenants {item.tenantCount} | channels {item.channelCount}
-                          {item.sample ? ` | sample: ${item.sample}` : ""}
-                        </p>
-                      ))}
-                      {insights.reasonClusters.length === 0 ? <p className="fdGlassText">No anomaly reasons.</p> : null}
-                    </div>
-                  </section>
-                </section>
-              </>
-            ) : null}
+              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+                <h2 className="sectionTitle">Top Anomaly Reasons</h2>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  {insightsSurface.message}
+                </p>
+                {insights ? (
+                  <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                    {insights.reasonClusters.map((item) => (
+                      <p key={item.key} className="sub" style={{ marginTop: 0 }}>
+                        {item.label}: {item.count} (dead_letter {item.deadLetter}, failed {item.failed}, retrying {item.retrying}) |
+                        tenants {item.tenantCount} | channels {item.channelCount}
+                        {item.sample ? ` | sample: ${item.sample}` : ""}
+                      </p>
+                    ))}
+                    {insights.reasonClusters.length === 0 ? <p className="fdGlassText">No anomaly reasons.</p> : null}
+                  </div>
+                ) : (
+                  <p className="fdGlassText">Anomaly insights are temporarily unavailable.</p>
+                )}
+              </section>
+            </section>
 
-            {trend ? (
-              <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
                 <h2 className="sectionTitle">Alert Trend Comparison (Current vs Previous Window)</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
-                  Current {new Date(trend.currentWindow.from).toLocaleString()} ~ {new Date(trend.currentWindow.to).toLocaleString()} vs Previous{" "}
-                  {new Date(trend.previousWindow.from).toLocaleString()} ~ {new Date(trend.previousWindow.to).toLocaleString()}
+                  {trendsSurface.message}
                 </p>
-                <p className="sub" style={{ marginTop: 0 }}>
-                  Overall anomalies: current {toCount(trend.currentWindow.anomalyCount)} / previous {toCount(trend.previousWindow.anomalyCount)} | delta{" "}
-                  {trend.overall.countDelta >= 0 ? "+" : ""}
-                  {toCount(trend.overall.countDelta)} | rate delta {trend.overall.rateDelta >= 0 ? "+" : ""}
-                  {toPercent(trend.overall.rateDelta)} ({trendDirectionLabel(trend.overall.direction)})
-                </p>
-                <p className="sub" style={{ marginTop: 0 }}>
-                  Rate definition: anomaly rate denominator = total deliveries in each window.
-                </p>
+                {trend ? (
+                  <>
+                    <p className="sub" style={{ marginTop: 0 }}>
+                      Current {new Date(trend.currentWindow.from).toLocaleString()} ~ {new Date(trend.currentWindow.to).toLocaleString()} vs Previous{" "}
+                      {new Date(trend.previousWindow.from).toLocaleString()} ~ {new Date(trend.previousWindow.to).toLocaleString()}
+                    </p>
+                    <p className="sub" style={{ marginTop: 0 }}>
+                      Overall anomalies: current {toCount(trend.currentWindow.anomalyCount)} / previous {toCount(trend.previousWindow.anomalyCount)} | delta{" "}
+                      {trend.overall.countDelta >= 0 ? "+" : ""}
+                      {toCount(trend.overall.countDelta)} | rate delta {trend.overall.rateDelta >= 0 ? "+" : ""}
+                      {toPercent(trend.overall.rateDelta)} ({trendDirectionLabel(trend.overall.direction)})
+                    </p>
+                    <p className="sub" style={{ marginTop: 0 }}>
+                      Rate definition: anomaly rate denominator = total deliveries in each window.
+                    </p>
 
-                <section className="fdTwoCol" style={{ marginTop: 10 }}>
-                  <section className="fdGlassSubPanel" style={{ padding: 12 }}>
-                    <h3 className="sectionTitle">Top Worsening Tenants</h3>
-                    <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                      {trend.topWorseningTenants.map((item) => (
-                        <div key={`trend-tenant-${item.tenantId}`} className="fdGlassSubPanel" style={{ padding: 10 }}>
-                          <p className="sub" style={{ marginTop: 0 }}>
-                            {item.tenantId}: {toCount(item.previousCount)} {"->"} {toCount(item.currentCount)} (delta{" "}
-                            {item.countDelta >= 0 ? "+" : ""}
-                            {toCount(item.countDelta)}, rate delta {item.rateDelta >= 0 ? "+" : ""}
-                            {toPercent(item.rateDelta)})
-                          </p>
-                          <div className="actions" style={{ marginTop: 6 }}>
-                            <Link className="fdPillBtn" {...buildTenantDrilldownLinkProps(item.tenantId)}>
-                              Open Tenant Drilldown
-                            </Link>
-                            <Link className="fdPillBtn" href={buildAlertWorkflowHref(snapshot, item.tenantId)}>
-                              Open Alert Workflow
-                            </Link>
-                          </div>
+                    <section className="fdTwoCol" style={{ marginTop: 10 }}>
+                      <section className="fdGlassSubPanel" style={{ padding: 12 }}>
+                        <h3 className="sectionTitle">Top Worsening Tenants</h3>
+                        <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                          {trend.topWorseningTenants.map((item) => (
+                            <div key={`trend-tenant-${item.tenantId}`} className="fdGlassSubPanel" style={{ padding: 10 }}>
+                              <p className="sub" style={{ marginTop: 0 }}>
+                                {item.tenantId}: {toCount(item.previousCount)} {"->"} {toCount(item.currentCount)} (delta{" "}
+                                {item.countDelta >= 0 ? "+" : ""}
+                                {toCount(item.countDelta)}, rate delta {item.rateDelta >= 0 ? "+" : ""}
+                                {toPercent(item.rateDelta)})
+                              </p>
+                              <div className="actions" style={{ marginTop: 6 }}>
+                                <Link className="fdPillBtn" {...buildTenantDrilldownLinkProps(item.tenantId)}>
+                                  Open Tenant Drilldown
+                                </Link>
+                                <Link className="fdPillBtn" href={buildAlertWorkflowHref(snapshot, item.tenantId)}>
+                                  Open Alert Workflow
+                                </Link>
+                              </div>
+                            </div>
+                          ))}
+                          {trend.topWorseningTenants.length === 0 ? <p className="fdGlassText">No worsening tenants in current window.</p> : null}
                         </div>
-                      ))}
-                      {trend.topWorseningTenants.length === 0 ? <p className="fdGlassText">No worsening tenants in current window.</p> : null}
-                    </div>
-                  </section>
+                      </section>
 
-                  <section className="fdGlassSubPanel" style={{ padding: 12 }}>
-                    <h3 className="sectionTitle">Top Worsening Anomaly Types</h3>
-                    <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                      {trend.topWorseningAnomalyTypes.map((item) => (
-                        <p key={`trend-type-${item.key}`} className="sub" style={{ marginTop: 0 }}>
-                          {item.label}: {toCount(item.previousCount)} {"->"} {toCount(item.currentCount)} (delta {item.countDelta >= 0 ? "+" : ""}
-                          {toCount(item.countDelta)}, rate delta {item.rateDelta >= 0 ? "+" : ""}
-                          {toPercent(item.rateDelta)}){item.sample ? ` | sample: ${item.sample}` : ""}
-                        </p>
-                      ))}
-                      {trend.topWorseningAnomalyTypes.length === 0 ? <p className="fdGlassText">No worsening anomaly types.</p> : null}
-                    </div>
-                    <h3 className="sectionTitle" style={{ marginTop: 12 }}>
-                      Worsening Channels
-                    </h3>
-                    <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                      {trend.topWorseningChannels.map((item) => (
-                        <p key={`trend-channel-${item.channel}`} className="sub" style={{ marginTop: 0 }}>
-                          {item.channel}: {toCount(item.previousCount)} {"->"} {toCount(item.currentCount)} (delta{" "}
-                          {item.countDelta >= 0 ? "+" : ""}
-                          {toCount(item.countDelta)}, rate delta {item.rateDelta >= 0 ? "+" : ""}
-                          {toPercent(item.rateDelta)})
-                        </p>
-                      ))}
-                      {trend.topWorseningChannels.length === 0 ? <p className="fdGlassText">No worsening channels.</p> : null}
-                    </div>
-                  </section>
-                </section>
+                      <section className="fdGlassSubPanel" style={{ padding: 12 }}>
+                        <h3 className="sectionTitle">Top Worsening Anomaly Types</h3>
+                        <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                          {trend.topWorseningAnomalyTypes.map((item) => (
+                            <p key={`trend-type-${item.key}`} className="sub" style={{ marginTop: 0 }}>
+                              {item.label}: {toCount(item.previousCount)} {"->"} {toCount(item.currentCount)} (delta {item.countDelta >= 0 ? "+" : ""}
+                              {toCount(item.countDelta)}, rate delta {item.rateDelta >= 0 ? "+" : ""}
+                              {toPercent(item.rateDelta)}){item.sample ? ` | sample: ${item.sample}` : ""}
+                            </p>
+                          ))}
+                          {trend.topWorseningAnomalyTypes.length === 0 ? <p className="fdGlassText">No worsening anomaly types.</p> : null}
+                        </div>
+                        <h3 className="sectionTitle" style={{ marginTop: 12 }}>
+                          Worsening Channels
+                        </h3>
+                        <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                          {trend.topWorseningChannels.map((item) => (
+                            <p key={`trend-channel-${item.channel}`} className="sub" style={{ marginTop: 0 }}>
+                              {item.channel}: {toCount(item.previousCount)} {"->"} {toCount(item.currentCount)} (delta{" "}
+                              {item.countDelta >= 0 ? "+" : ""}
+                              {toCount(item.countDelta)}, rate delta {item.rateDelta >= 0 ? "+" : ""}
+                              {toPercent(item.rateDelta)})
+                            </p>
+                          ))}
+                          {trend.topWorseningChannels.length === 0 ? <p className="fdGlassText">No worsening channels.</p> : null}
+                        </div>
+                      </section>
+                    </section>
+                  </>
+                ) : (
+                  <p className="fdGlassText">Trend comparison is temporarily unavailable.</p>
+                )}
               </section>
-            ) : null}
 
             {!hasData ? (
               <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>

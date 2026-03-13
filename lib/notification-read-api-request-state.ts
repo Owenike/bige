@@ -7,12 +7,14 @@ export type NotificationReadApiRequestPhase = "idle" | "initial_loading" | "relo
 export type NotificationReadApiCacheStatus = "miss" | "hit" | "stale";
 export type NotificationReadApiPrefetchStatus = "hit" | "fetched" | "failed" | "cancelled";
 export type NotificationReadApiErrorMode = "none" | "soft" | "hard";
+export type NotificationReadApiLastEvent = "none" | "success" | "cancelled" | "error";
 
 export type NotificationReadApiRequestState<TData, TError extends Error> = {
   data: TData | null;
   loading: boolean;
   error: TError | null;
   errorMode: NotificationReadApiErrorMode;
+  lastEvent: NotificationReadApiLastEvent;
   requestKey: string | null;
   cacheKey: string | null;
   cacheStatus: NotificationReadApiCacheStatus;
@@ -115,6 +117,7 @@ export function createNotificationReadApiRequestState<TData, TError extends Erro
     loading: data === null,
     error: null,
     errorMode: "none",
+    lastEvent: "none",
     requestKey: null,
     cacheKey: null,
     cacheStatus: "miss",
@@ -389,6 +392,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
         loading: false,
         error: null,
         errorMode: "none",
+        lastEvent: "success",
         requestKey: params.requestKey,
         cacheKey,
         cacheStatus: "hit",
@@ -417,6 +421,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
       loading: true,
       error: null,
       errorMode: "none",
+      lastEvent: this.state.lastEvent,
       requestKey: params.requestKey,
       cacheKey,
       cacheStatus: cached.status,
@@ -439,6 +444,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
           loading: false,
           error: null,
           errorMode: "none",
+          lastEvent: "success",
           requestKey: params.requestKey,
           cacheKey,
           cacheStatus: "hit",
@@ -460,6 +466,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
             loading: false,
             error: null,
             errorMode: "none",
+            lastEvent: "cancelled",
             requestKey: params.requestKey,
             cacheKey,
             cacheStatus: cached.data !== null ? cached.status : "miss",
@@ -477,6 +484,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
           loading: false,
           error: classified,
           errorMode: failedData !== null ? "soft" : "hard",
+          lastEvent: "error",
           requestKey: params.requestKey,
           cacheKey,
           cacheStatus: cached.data !== null ? cached.status : "miss",

@@ -149,6 +149,7 @@ import {
 } from "../lib/notification-read-api-url-state";
 import {
   clearNotificationReadApiResultCache,
+  createNotificationReadApiRequestState,
   inspectNotificationReadApiResultCache,
   invalidateNotificationReadApiResultCache,
   NOTIFICATION_READ_API_RESULT_CACHE_EXPIRED_MS,
@@ -158,6 +159,11 @@ import {
   pruneNotificationReadApiResultCache,
   shouldRevalidateNotificationReadApiOnVisible,
 } from "../lib/notification-read-api-request-state";
+import {
+  buildNotificationReadApiStatusSurface,
+  resolveNotificationReadApiPageStatus,
+  resolveNotificationReadApiPanelStatus,
+} from "../lib/notification-read-api-status-model";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
   canUseOverviewDailyRollupWindow,
@@ -2347,6 +2353,94 @@ test("read API lifecycle controller treats cancelled requests as non-errors and 
   await flushAsyncWork();
 
   assert.equal(writes, 1);
+});
+
+test("read API status surface distinguishes ready, stale, refreshing, soft failure, hard failure, partial failure, and cancelled", () => {
+  const readyState = {
+    ...createNotificationReadApiRequestState<string, NotificationReadApiOrchestrationError>("ready-data"),
+    loading: false,
+    phase: "idle" as const,
+    cacheStatus: "hit" as const,
+  };
+  assert.equal(resolveNotificationReadApiPageStatus(readyState), "ready");
+
+  const staleState = {
+    ...readyState,
+    loading: true,
+    phase: "reloading" as const,
+    cacheStatus: "stale" as const,
+  };
+  assert.equal(resolveNotificationReadApiPageStatus(staleState), "ready_stale");
+  assert.equal(
+    buildNotificationReadApiStatusSurface("ready_stale", "overview_page").message.includes("background refresh"),
+    true,
+  );
+
+  const refreshingState = {
+    ...readyState,
+    loading: true,
+    phase: "refreshing" as const,
+    cacheStatus: "hit" as const,
+  };
+  assert.equal(resolveNotificationReadApiPageStatus(refreshingState), "refreshing");
+
+  const softFailureState = {
+    ...readyState,
+    error: classifyNotificationReadApiOrchestrationError(new TypeError("fetch failed"), {
+      source: "overview",
+      message: "Load overview page failed",
+    }),
+    errorMode: "soft" as const,
+    lastEvent: "error" as const,
+  };
+  assert.equal(resolveNotificationReadApiPageStatus(softFailureState), "soft_failure_with_data");
+
+  const hardFailureState = {
+    ...createNotificationReadApiRequestState<string, NotificationReadApiOrchestrationError>(null),
+    loading: false,
+    error: classifyNotificationReadApiOrchestrationError(new TypeError("fetch failed"), {
+      source: "overview",
+      message: "Load overview page failed",
+    }),
+    errorMode: "hard" as const,
+    lastEvent: "error" as const,
+    phase: "idle" as const,
+  };
+  assert.equal(resolveNotificationReadApiPageStatus(hardFailureState), "hard_failure_no_data");
+
+  const partialFailureState = {
+    ...readyState,
+  };
+  const partialIssue = classifyNotificationReadApiOrchestrationError(
+    new NotificationReadApiConsumerError({
+      api: "trends",
+      status: null,
+      message: "trends response contract drift: type_mismatch: resolutionReason",
+      issues: ["type_mismatch: resolutionReason"],
+    }),
+    {
+      source: "trends",
+      message: "Load trends failed",
+    },
+  );
+  assert.equal(resolveNotificationReadApiPageStatus(partialFailureState, { resourceErrors: [partialIssue] }), "partial_failure");
+  assert.equal(
+    resolveNotificationReadApiPanelStatus({
+      pageStatus: "partial_failure",
+      hasData: false,
+      issue: partialIssue,
+    }),
+    "partial_failure",
+  );
+
+  const cancelledState = {
+    ...readyState,
+    data: null,
+    lastEvent: "cancelled" as const,
+    cacheKey: null,
+    requestKey: "cancelled:key",
+  };
+  assert.equal(resolveNotificationReadApiPageStatus(cancelledState), "cancelled");
 });
 
 test("read API resilience keeps same-query last good data on soft failures and reserves hard failure for cold starts", async () => {
