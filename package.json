@@ -24,6 +24,7 @@
         "test:phase42:contract": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1 && powershell -ExecutionPolicy Bypass -File scripts/phase42-overview-blackbox-e2e.ps1 && powershell -ExecutionPolicy Bypass -File scripts/phase42-tenant-drilldown-blackbox-e2e.ps1",
         "test:phase42:stable": "npm run typecheck && npm run lint && npm run test:unit && npm run test:phase42:contract:unit && npm run test:phase42:schema && npm run test:phase42:fixtures",
         "test:phase42:consumer": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
+        "test:phase42:lifecycle": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:orchestration": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:query-state": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",
         "test:phase42:url-sync": "powershell -ExecutionPolicy Bypass -File scripts/unit-tests.ps1",

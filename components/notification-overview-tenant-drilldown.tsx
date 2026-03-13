@@ -23,7 +23,7 @@ function toPercent(value: number | null | undefined) {
 export default function NotificationOverviewTenantDrilldown(props: { tenantId: string }) {
   const { filters, draft, setDraft, applyDraft, resetFilters, backHref } = useNotificationTenantDrilldownUrlSync(props.tenantId);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { data, loading, error } = useNotificationTenantDrilldownPageData(props.tenantId, filters, refreshKey);
+  const { data, loading, error, isInitialLoading } = useNotificationTenantDrilldownPageData(props.tenantId, filters, refreshKey);
   const snapshot = data?.drilldown.snapshot ?? null;
   const recentAnomaliesSupportNote = data?.recentAnomaliesSupportNote ?? getDefaultTenantDrilldownSupportNote();
 
@@ -129,7 +129,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
           </section>
         ) : null}
 
-        {loading && !snapshot ? (
+        {isInitialLoading ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
             <p className="fdGlassText">Loading tenant drilldown...</p>
           </section>

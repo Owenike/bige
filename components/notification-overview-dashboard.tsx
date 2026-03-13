@@ -43,7 +43,7 @@ function buildAlertWorkflowHref(snapshot: OverviewSnapshot, tenantId?: string) {
 export default function NotificationOverviewDashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const { filters, draft, setDraft, applyDraft, resetFilters, buildTenantDrilldownHref } = useNotificationOverviewUrlSync();
-  const { data, loading, error } = useNotificationOverviewPageData(filters, refreshKey);
+  const { data, loading, error, isInitialLoading } = useNotificationOverviewPageData(filters, refreshKey);
   const snapshot = data?.overview.snapshot ?? null;
   const insights = data?.insights ?? null;
   const trend = data?.trends.snapshot ?? null;
@@ -145,7 +145,7 @@ export default function NotificationOverviewDashboard() {
           </section>
         ) : null}
 
-        {loading && !snapshot ? (
+        {isInitialLoading ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
             <p className="fdGlassText">Loading notification performance overview...</p>
           </section>

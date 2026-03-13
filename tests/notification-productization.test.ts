@@ -121,6 +121,7 @@ import {
   NotificationReadApiOrchestrationError,
   buildNotificationOverviewPagePaths,
   buildNotificationTenantDrilldownPath,
+  classifyNotificationReadApiOrchestrationError,
   loadNotificationOverviewPageData,
   loadNotificationTenantDrilldownPageData,
 } from "../lib/notification-read-api-hooks";
@@ -141,6 +142,7 @@ import {
   buildNotificationTenantDrilldownHrefFromOverviewState,
   buildNotificationTenantDrilldownPageUrl,
 } from "../lib/notification-read-api-url-state";
+import { NotificationReadApiRequestLifecycleController } from "../lib/notification-read-api-request-state";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
   canUseOverviewDailyRollupWindow,
@@ -365,6 +367,29 @@ function jsonResponse(payload: unknown, status = 200) {
       "content-type": "application/json",
     },
   });
+}
+
+function createDeferredPromise<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, resolve, reject };
+}
+
+function createAbortError(message = "The operation was aborted.") {
+  const error = new Error(message);
+  error.name = "AbortError";
+  return error;
+}
+
+async function flushAsyncWork() {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 test("preference payload validation accepts known event/role/channel", () => {
@@ -2136,6 +2161,179 @@ test("tenant drilldown orchestration keeps raw-backed support note visible to co
   assert.equal(result.drilldown.recentAnomaliesRawBacked, true);
   assert.equal(result.recentAnomaliesSupportNote, getTenantDrilldownRecentAnomaliesSupportNote());
   assert.equal(result.isEmpty, false);
+});
+
+test("read API lifecycle controller keeps only the latest response when requests resolve out of order", async () => {
+  const states: Array<{
+    data: string | null;
+    loading: boolean;
+    error: NotificationReadApiOrchestrationError | null;
+    phase: string;
+  }> = [];
+  const first = createDeferredPromise<string>();
+  const second = createDeferredPromise<string>();
+  const controller = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: (state) => {
+      states.push({
+        data: state.data,
+        loading: state.loading,
+        error: state.error,
+        phase: state.phase,
+      });
+    },
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  controller.start({
+    requestKey: "overview:first",
+    cause: "query",
+    loader: async () => first.promise,
+  });
+  controller.start({
+    requestKey: "overview:second",
+    cause: "query",
+    loader: async () => second.promise,
+  });
+  await flushAsyncWork();
+
+  first.resolve("stale");
+  await first.promise;
+  await flushAsyncWork();
+  assert.equal(controller.getState().data, null);
+
+  second.resolve("fresh");
+  await second.promise;
+  await flushAsyncWork();
+
+  assert.equal(controller.getState().data, "fresh");
+  assert.equal(controller.getState().error, null);
+  assert.equal(states.some((state) => state.data === "stale"), false);
+  assert.equal(states[states.length - 1]?.phase, "idle");
+});
+
+test("read API lifecycle controller dedupes same in-flight query and distinguishes refresh from initial load", async () => {
+  const shared = createDeferredPromise<string>();
+  let loaderCalls = 0;
+  const overviewController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+  const drilldownController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  const loader = async () => {
+    loaderCalls += 1;
+    return shared.promise;
+  };
+
+  overviewController.start({
+    requestKey: "shared:key",
+    cause: "query",
+    loader,
+  });
+  drilldownController.start({
+    requestKey: "shared:key",
+    cause: "query",
+    loader,
+  });
+  await flushAsyncWork();
+
+  assert.equal(loaderCalls, 1);
+  shared.resolve("shared-result");
+  await shared.promise;
+  await flushAsyncWork();
+
+  assert.equal(overviewController.getState().data, "shared-result");
+  assert.equal(drilldownController.getState().data, "shared-result");
+
+  const refresh = createDeferredPromise<string>();
+  overviewController.start({
+    requestKey: "shared:key|refresh:1",
+    cause: "refresh",
+    loader: async () => refresh.promise,
+  });
+  assert.equal(overviewController.getState().phase, "refreshing");
+  refresh.resolve("shared-refresh");
+  await refresh.promise;
+  await flushAsyncWork();
+  assert.equal(overviewController.getState().data, "shared-refresh");
+});
+
+test("read API lifecycle controller treats cancelled requests as non-errors and ignores unmount writes", async () => {
+  const states: Array<{
+    loading: boolean;
+    errorKind: NotificationReadApiOrchestrationError["kind"] | null;
+  }> = [];
+  const cancelledController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: (state) => {
+      states.push({
+        loading: state.loading,
+        errorKind: state.error?.kind ?? null,
+      });
+    },
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  cancelledController.start({
+    requestKey: "cancelled:key",
+    cause: "query",
+    loader: async () => {
+      throw createAbortError();
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(cancelledController.getState().error, null);
+  assert.equal(cancelledController.getState().loading, false);
+  assert.equal(states.some((state) => state.errorKind === "cancelled"), false);
+
+  const pending = createDeferredPromise<string>();
+  let writes = 0;
+  const unmountController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {
+      writes += 1;
+    },
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  unmountController.start({
+    requestKey: "tenant:pending",
+    cause: "query",
+    loader: async () => pending.promise,
+  });
+  unmountController.dispose();
+  pending.resolve("ignored");
+  await pending.promise;
+  await flushAsyncWork();
+
+  assert.equal(writes, 1);
 });
 
 test("read API query-state defaults and search-param hydration stay aligned for overview and drilldown", () => {

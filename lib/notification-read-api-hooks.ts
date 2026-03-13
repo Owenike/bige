@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import {
   NotificationReadApiConsumerError,
@@ -19,6 +19,12 @@ import {
   type NotificationOverviewQueryState,
   type NotificationTenantDrilldownQueryState,
 } from "./notification-read-api-query-state";
+import {
+  NotificationReadApiRequestLifecycleController,
+  createNotificationReadApiRequestState,
+  type NotificationReadApiRequestCause,
+  type NotificationReadApiRequestState,
+} from "./notification-read-api-request-state";
 
 const anomalyReasonItemSchema = z.object({
   key: z.string(),
@@ -112,7 +118,7 @@ export type NotificationReadApiOrchestrationSource =
   | "tenant_drilldown"
   | "anomalies";
 
-export type NotificationReadApiOrchestrationErrorKind = "network" | "api" | "contract" | "empty";
+export type NotificationReadApiOrchestrationErrorKind = "network" | "api" | "contract" | "empty" | "cancelled";
 
 export class NotificationReadApiOrchestrationError extends Error {
   kind: NotificationReadApiOrchestrationErrorKind;
@@ -146,6 +152,10 @@ type TenantDrilldownLoaderDependencies = {
   fetchDrilldown?: typeof fetchNotificationTenantDrilldownReadApi;
 };
 
+type NotificationReadApiLoadOptions = {
+  signal?: AbortSignal;
+};
+
 function getPayloadErrorMessage(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object") {
     const record = payload as Record<string, unknown>;
@@ -175,6 +185,17 @@ function buildSchemaIssues(error: z.ZodError) {
   });
 }
 
+function isAbortLikeError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: unknown; code?: unknown; message?: unknown };
+  return (
+    candidate.name === "AbortError" ||
+    candidate.code === "ABORT_ERR" ||
+    candidate.message === "The operation was aborted." ||
+    candidate.message === "This operation was aborted"
+  );
+}
+
 export function buildNotificationOverviewPagePaths(filters: NotificationOverviewPageFilters) {
   const { params } = serializeNotificationOverviewQueryParams(filters as NotificationOverviewQueryState);
   return {
@@ -200,6 +221,15 @@ export function classifyNotificationReadApiOrchestrationError(
   },
 ) {
   if (error instanceof NotificationReadApiOrchestrationError) return error;
+
+  if (isAbortLikeError(error)) {
+    return new NotificationReadApiOrchestrationError({
+      kind: "cancelled",
+      source: fallback.source,
+      message: `${fallback.source} request was cancelled`,
+      issues: ["request aborted"],
+    });
+  }
 
   if (error instanceof NotificationReadApiConsumerError) {
     return new NotificationReadApiOrchestrationError({
@@ -298,6 +328,7 @@ export async function fetchNotificationAnomalyInsightsSnapshot(
 export async function loadNotificationOverviewPageData(
   filters: NotificationOverviewPageFilters,
   dependencies: OverviewPageLoaderDependencies = {},
+  options: NotificationReadApiLoadOptions = {},
 ): Promise<NotificationOverviewPageData> {
   const paths = buildNotificationOverviewPagePaths(filters);
   const fetchOverview = dependencies.fetchOverview ?? fetchNotificationOverviewReadApi;
@@ -306,9 +337,9 @@ export async function loadNotificationOverviewPageData(
 
   try {
     const [overview, insights, trends] = await Promise.all([
-      fetchOverview(paths.overviewPath, { cache: "no-store" }),
-      fetchNotificationAnomalyInsightsSnapshot(paths.anomaliesPath, { cache: "no-store" }, fetchImpl),
-      fetchTrends(paths.trendsPath, { cache: "no-store" }),
+      fetchOverview(paths.overviewPath, { cache: "no-store", signal: options.signal }),
+      fetchNotificationAnomalyInsightsSnapshot(paths.anomaliesPath, { cache: "no-store", signal: options.signal }, fetchImpl),
+      fetchTrends(paths.trendsPath, { cache: "no-store", signal: options.signal }),
     ]);
 
     return {
@@ -329,12 +360,13 @@ export async function loadNotificationTenantDrilldownPageData(
   tenantId: string,
   filters: NotificationTenantDrilldownFilters,
   dependencies: TenantDrilldownLoaderDependencies = {},
+  options: NotificationReadApiLoadOptions = {},
 ): Promise<NotificationTenantDrilldownPageData> {
   const fetchDrilldown = dependencies.fetchDrilldown ?? fetchNotificationTenantDrilldownReadApi;
   const path = buildNotificationTenantDrilldownPath(tenantId, filters);
 
   try {
-    const drilldown = await fetchDrilldown(path, { cache: "no-store" });
+    const drilldown = await fetchDrilldown(path, { cache: "no-store", signal: options.signal });
     return {
       drilldown,
       isEmpty: drilldown.snapshot.totalRows === 0,
@@ -348,46 +380,100 @@ export async function loadNotificationTenantDrilldownPageData(
   }
 }
 
-type NotificationAsyncState<TData> = {
-  data: TData | null;
-  loading: boolean;
-  error: NotificationReadApiOrchestrationError | null;
-};
+export type NotificationAsyncState<TData> = NotificationReadApiRequestState<
+  TData,
+  NotificationReadApiOrchestrationError
+>;
 
-export function useNotificationOverviewPageData(filters: NotificationOverviewPageFilters, refreshKey: number) {
-  const [state, setState] = useState<NotificationAsyncState<NotificationOverviewPageData>>({
-    data: null,
-    loading: true,
-    error: null,
-  });
-  const requestKey = useMemo(() => {
-    const paths = buildNotificationOverviewPagePaths(filters);
-    return `${paths.overviewPath}|${paths.anomaliesPath}|${paths.trendsPath}|${refreshKey}`;
-  }, [filters, refreshKey]);
+function isCancelledNotificationReadApiOrchestrationError(error: NotificationReadApiOrchestrationError) {
+  return error.kind === "cancelled";
+}
+
+function resolveNotificationReadApiRequestCause(
+  previous:
+    | {
+        queryFingerprint: string;
+        refreshKey: number;
+      }
+    | null,
+  next: {
+    queryFingerprint: string;
+    refreshKey: number;
+  },
+): NotificationReadApiRequestCause {
+  if (previous && previous.queryFingerprint === next.queryFingerprint && previous.refreshKey !== next.refreshKey) {
+    return "refresh";
+  }
+  return "query";
+}
+
+function useNotificationManagedRequest<TData>(params: {
+  queryFingerprint: string;
+  refreshKey: number;
+  loader: (signal: AbortSignal) => Promise<TData>;
+  classifyError: (error: unknown) => NotificationReadApiOrchestrationError;
+}) {
+  const [state, setState] = useState<NotificationAsyncState<TData>>(() =>
+    createNotificationReadApiRequestState<TData, NotificationReadApiOrchestrationError>(null),
+  );
+  const [controller] = useState(
+    () =>
+      new NotificationReadApiRequestLifecycleController<TData, NotificationReadApiOrchestrationError>({
+        onStateChange: setState,
+        classifyError: params.classifyError,
+        isCancelledError: isCancelledNotificationReadApiOrchestrationError,
+      }),
+  );
+  const previousRequestRef = useRef<{
+    queryFingerprint: string;
+    refreshKey: number;
+  } | null>(null);
+  const loadRequest = useEffectEvent((signal: AbortSignal) => params.loader(signal));
 
   useEffect(() => {
-    let active = true;
-    setState((current) => ({ data: current.data, loading: true, error: null }));
-    void loadNotificationOverviewPageData(filters)
-      .then((data) => {
-        if (!active) return;
-        setState({ data, loading: false, error: null });
-      })
-      .catch((error) => {
-        if (!active) return;
-        const nextError = classifyNotificationReadApiOrchestrationError(error, {
-          source: "overview",
-          message: "Load overview page failed",
-        });
-        setState((current) => ({ data: current.data, loading: false, error: nextError }));
-      });
-
     return () => {
-      active = false;
+      controller.dispose();
     };
-  }, [filters, requestKey]);
+  }, [controller]);
+
+  useEffect(() => {
+    const requestKey = `${params.queryFingerprint}|refresh:${params.refreshKey}`;
+    const cause = resolveNotificationReadApiRequestCause(previousRequestRef.current, {
+      queryFingerprint: params.queryFingerprint,
+      refreshKey: params.refreshKey,
+    });
+    previousRequestRef.current = {
+      queryFingerprint: params.queryFingerprint,
+      refreshKey: params.refreshKey,
+    };
+
+    controller.start({
+      requestKey,
+      cause,
+      loader: loadRequest,
+    });
+  }, [controller, params.queryFingerprint, params.refreshKey]);
 
   return state;
+}
+
+export function useNotificationOverviewPageData(filters: NotificationOverviewPageFilters, refreshKey: number) {
+  const paths = useMemo(() => buildNotificationOverviewPagePaths(filters), [filters]);
+  const queryFingerprint = useMemo(
+    () => `${paths.overviewPath}|${paths.anomaliesPath}|${paths.trendsPath}`,
+    [paths.anomaliesPath, paths.overviewPath, paths.trendsPath],
+  );
+
+  return useNotificationManagedRequest({
+    queryFingerprint,
+    refreshKey,
+    loader: (signal) => loadNotificationOverviewPageData(filters, {}, { signal }),
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+  });
 }
 
 export function useNotificationTenantDrilldownPageData(
@@ -395,39 +481,21 @@ export function useNotificationTenantDrilldownPageData(
   filters: NotificationTenantDrilldownFilters,
   refreshKey: number,
 ) {
-  const [state, setState] = useState<NotificationAsyncState<NotificationTenantDrilldownPageData>>({
-    data: null,
-    loading: true,
-    error: null,
-  });
-  const requestKey = useMemo(
-    () => `${buildNotificationTenantDrilldownPath(tenantId, filters)}|${refreshKey}`,
-    [tenantId, filters, refreshKey],
+  const queryFingerprint = useMemo(
+    () => buildNotificationTenantDrilldownPath(tenantId, filters),
+    [tenantId, filters],
   );
 
-  useEffect(() => {
-    let active = true;
-    setState((current) => ({ data: current.data, loading: true, error: null }));
-    void loadNotificationTenantDrilldownPageData(tenantId, filters)
-      .then((data) => {
-        if (!active) return;
-        setState({ data, loading: false, error: null });
-      })
-      .catch((error) => {
-        if (!active) return;
-        const nextError = classifyNotificationReadApiOrchestrationError(error, {
-          source: "tenant_drilldown",
-          message: "Load tenant drilldown failed",
-        });
-        setState((current) => ({ data: current.data, loading: false, error: nextError }));
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [tenantId, filters, requestKey]);
-
-  return state;
+  return useNotificationManagedRequest({
+    queryFingerprint,
+    refreshKey,
+    loader: (signal) => loadNotificationTenantDrilldownPageData(tenantId, filters, {}, { signal }),
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+  });
 }
 
 export function getDefaultTenantDrilldownSupportNote() {
