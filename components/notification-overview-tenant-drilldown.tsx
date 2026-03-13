@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
+import {
+  fetchNotificationTenantDrilldownReadApi,
+  getTenantDrilldownRecentAnomaliesSupportNote,
+  type NotificationTenantDrilldownReadModel,
+} from "../lib/notification-read-api-client";
 
 type DeliveryChannel = "in_app" | "email" | "line" | "sms" | "webhook" | "other";
 
@@ -52,40 +57,7 @@ type AnomalyItem = {
   occurredAt: string;
 };
 
-type DrilldownSnapshot = {
-  from: string;
-  to: string;
-  tenantId: string;
-  channel: DeliveryChannel | null;
-  dataSource: "raw" | "rollup";
-  totalRows: number;
-  sent: number;
-  failed: number;
-  pending: number;
-  retrying: number;
-  deadLetter: number;
-  opened: number;
-  clicked: number;
-  conversion: number;
-  successRate: number;
-  failRate: number;
-  openRate: number;
-  clickRate: number;
-  conversionRate: number;
-  rateDefinitions: {
-    successFailDenominator: "sent_plus_failed";
-    engagementDenominator: "sent";
-  };
-  daily: DailyItem[];
-  byChannel: ChannelItem[];
-  recentAnomalies: AnomalyItem[];
-  anomalySummary: {
-    total: number;
-    failed: number;
-    deadLetter: number;
-    retrying: number;
-  };
-};
+type DrilldownSnapshot = NotificationTenantDrilldownReadModel["snapshot"];
 
 type FilterState = {
   channel: "" | DeliveryChannel;
@@ -145,6 +117,9 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<DrilldownSnapshot | null>(null);
+  const [recentAnomaliesSupportNote, setRecentAnomaliesSupportNote] = useState(() =>
+    getTenantDrilldownRecentAnomaliesSupportNote(),
+  );
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -161,23 +136,14 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
 
     setLoading(true);
     setError(null);
-    void fetch(`/api/platform/notifications/overview/tenants/${encodeURIComponent(props.tenantId)}?${params.toString()}`, { cache: "no-store" })
-      .then(async (response) => {
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          const message = payload?.error?.message || payload?.message || "Load tenant drilldown failed";
-          throw new Error(String(message));
-        }
-        return payload?.snapshot || payload?.data?.snapshot || null;
-      })
+    void fetchNotificationTenantDrilldownReadApi(
+      `/api/platform/notifications/overview/tenants/${encodeURIComponent(props.tenantId)}?${params.toString()}`,
+      { cache: "no-store" },
+    )
       .then((data) => {
         if (!active) return;
-        if (!data) {
-          setError("Tenant drilldown payload is empty.");
-          setLoading(false);
-          return;
-        }
-        setSnapshot(data as DrilldownSnapshot);
+        setSnapshot(data.snapshot);
+        setRecentAnomaliesSupportNote(data.recentAnomaliesReason);
         setLoading(false);
       })
       .catch((fetchError) => {
@@ -384,7 +350,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
                 Rate definition: success/fail denominator = sent + failed; open/click/conversion denominator = sent.
               </p>
               <p className="sub" style={{ marginTop: 0 }}>
-                Recent anomalies are always read from raw deliveries for latest error context.
+                {recentAnomaliesSupportNote}
               </p>
             </section>
 

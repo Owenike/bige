@@ -112,6 +112,11 @@ import {
   validateNotificationAggregationMetadataSchema,
   validateNotificationReadApiResponseSchema,
 } from "../lib/notification-aggregation-contract";
+import {
+  NotificationReadApiConsumerError,
+  getTenantDrilldownRecentAnomaliesSupportNote,
+  parseNotificationReadApiPayload,
+} from "../lib/notification-read-api-client";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
   canUseOverviewDailyRollupWindow,
@@ -126,6 +131,146 @@ import {
 } from "../lib/notification-runtime-simulation-fixtures";
 import { validateNotificationRuntimeReadiness } from "../lib/notification-runtime-readiness-validator";
 import { NOTIFICATION_READ_API_REGRESSION_CASES } from "./notification-read-api-regression-fixtures";
+
+function buildConsumerReadApiPayload(
+  api: "overview" | "analytics" | "trends" | "tenant_drilldown",
+  metadata: ReturnType<typeof buildNotificationAggregationMetadata>,
+) {
+  if (api === "overview" || api === "analytics") {
+    const snapshot = {
+      from: "2026-03-10T00:00:00.000Z",
+      to: "2026-03-10T23:59:59.999Z",
+      tenantId: null,
+      channel: null,
+      dataSource: metadata.dataSource,
+      totalRows: 0,
+      sent: 0,
+      failed: 0,
+      pending: 0,
+      retrying: 0,
+      deadLetter: 0,
+      opened: 0,
+      clicked: 0,
+      conversion: 0,
+      successRate: 0,
+      failRate: 0,
+      openRate: 0,
+      clickRate: 0,
+      conversionRate: 0,
+      rateDefinitions: {
+        successFailDenominator: "sent_plus_failed" as const,
+        engagementDenominator: "sent" as const,
+      },
+      daily: [],
+      byChannel: [],
+      byTenant: [],
+    };
+    return {
+      ok: true,
+      data: {
+        snapshot,
+        ...metadata,
+      },
+      snapshot,
+      ...metadata,
+    };
+  }
+
+  if (api === "trends") {
+    const snapshot = {
+      tenantId: null,
+      channel: null,
+      dataSource: metadata.dataSource,
+      currentWindow: {
+        from: "2026-03-10T08:00:00.000Z",
+        to: "2026-03-10T20:00:00.000Z",
+        durationMinutes: 720,
+        totalDeliveries: 0,
+        anomalyCount: 0,
+        anomalyRate: 0,
+      },
+      previousWindow: {
+        from: "2026-03-09T08:00:00.000Z",
+        to: "2026-03-09T20:00:00.000Z",
+        durationMinutes: 720,
+        totalDeliveries: 0,
+        anomalyCount: 0,
+        anomalyRate: 0,
+      },
+      overall: {
+        currentCount: 0,
+        previousCount: 0,
+        countDelta: 0,
+        currentRate: 0,
+        previousRate: 0,
+        rateDelta: 0,
+        direction: "flat" as const,
+      },
+      byTenant: [],
+      byAnomalyType: [],
+      byChannel: [],
+      topWorseningTenants: [],
+      topWorseningAnomalyTypes: [],
+      topWorseningChannels: [],
+      rateDefinitions: {
+        anomalyRateDenominator: "total_deliveries_in_window" as const,
+      },
+    };
+    return {
+      ok: true,
+      data: {
+        snapshot,
+        ...metadata,
+      },
+      snapshot,
+      ...metadata,
+    };
+  }
+
+  const snapshot = {
+    from: "2026-03-10T00:00:00.000Z",
+    to: "2026-03-10T23:59:59.999Z",
+    tenantId: "11111111-1111-4111-8111-111111111111",
+    channel: null,
+    dataSource: metadata.dataSource,
+    totalRows: 0,
+    sent: 0,
+    failed: 0,
+    pending: 0,
+    retrying: 0,
+    deadLetter: 0,
+    opened: 0,
+    clicked: 0,
+    conversion: 0,
+    successRate: 0,
+    failRate: 0,
+    openRate: 0,
+    clickRate: 0,
+    conversionRate: 0,
+    rateDefinitions: {
+      successFailDenominator: "sent_plus_failed" as const,
+      engagementDenominator: "sent" as const,
+    },
+    daily: [],
+    byChannel: [],
+    recentAnomalies: [],
+    anomalySummary: {
+      total: 0,
+      failed: 0,
+      deadLetter: 0,
+      retrying: 0,
+    },
+  };
+  return {
+    ok: true,
+    data: {
+      snapshot,
+      ...metadata,
+    },
+    snapshot,
+    ...metadata,
+  };
+}
 
 test("preference payload validation accepts known event/role/channel", () => {
   const eventKey = notificationEventKeySchema.parse("member_contract_expiring");
@@ -1590,6 +1735,56 @@ test("read API schema guardrail reports schema drift, rule mismatch, and fixture
     },
   });
   assert.equal(fixtureIssues.some((item) => item.kind === "fixture_drift" && item.path === "fixture.snapshot.hasByTenant"), true);
+});
+
+test("read API consumer adapter parses overview, analytics, trends, and tenant drilldown fixtures", () => {
+  for (const item of NOTIFICATION_READ_API_REGRESSION_CASES) {
+    const parsed = parseNotificationReadApiPayload(item.api, buildConsumerReadApiPayload(item.api, item.expectedMetadata));
+    assert.equal(parsed.api, item.api);
+    assert.deepEqual(parsed.aggregation, item.expectedMetadata, `${item.scenario} aggregation`);
+    assert.equal(parsed.snapshot.dataSource, item.expectedMetadata.dataSource, `${item.scenario} snapshot source`);
+  }
+});
+
+test("read API consumer adapter raises explicit contract drift errors", () => {
+  const caseItem = NOTIFICATION_READ_API_REGRESSION_CASES.find((item) => item.scenario === "trends_auto_non_day");
+  assert.equal(Boolean(caseItem), true);
+  if (!caseItem) return;
+
+  const brokenPayload = {
+    ...caseItem.payload,
+    resolutionReason: "",
+    data: {
+      ...(caseItem.payload.data as Record<string, unknown>),
+      resolutionReason: "",
+    },
+  };
+
+  assert.throws(
+    () => parseNotificationReadApiPayload("trends", brokenPayload),
+    (error: unknown) => {
+      assert.equal(error instanceof NotificationReadApiConsumerError, true);
+      if (!(error instanceof NotificationReadApiConsumerError)) return false;
+      assert.equal(error.api, "trends");
+      assert.equal(error.message.includes("type_mismatch"), true);
+      assert.equal(error.message.includes("resolutionReason"), true);
+      return true;
+    },
+  );
+});
+
+test("tenant drilldown consumer adapter exposes raw-backed anomaly support note by design", () => {
+  const caseItem = NOTIFICATION_READ_API_REGRESSION_CASES.find((item) => item.scenario === "tenant_drilldown_auto_whole_day");
+  assert.equal(Boolean(caseItem), true);
+  if (!caseItem) return;
+
+  const parsed = parseNotificationReadApiPayload(
+    "tenant_drilldown",
+    buildConsumerReadApiPayload("tenant_drilldown", caseItem.expectedMetadata),
+  );
+  assert.equal(parsed.recentAnomaliesRawBacked, true);
+  assert.equal(parsed.recentAnomaliesDataSource, "raw");
+  assert.equal(parsed.recentAnomaliesReason, getTenantDrilldownRecentAnomaliesSupportNote());
 });
 
 test("aggregation explainability describes explicit raw, explicit rollup, and auto window resolution", () => {

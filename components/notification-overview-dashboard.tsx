@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
+import {
+  fetchNotificationOverviewReadApi,
+  fetchNotificationTrendsReadApi,
+  type NotificationOverviewReadModel,
+  type NotificationTrendsReadModel,
+} from "../lib/notification-read-api-client";
 import NotificationGovernanceNav from "./notification-governance-nav";
 
 type DeliveryChannel = "in_app" | "email" | "line" | "sms" | "webhook" | "other";
@@ -56,30 +62,7 @@ type TenantItem = {
   conversionRate: number;
 };
 
-type OverviewSnapshot = {
-  from: string;
-  to: string;
-  tenantId: string | null;
-  channel: DeliveryChannel | null;
-  dataSource: "raw" | "rollup";
-  totalRows: number;
-  sent: number;
-  failed: number;
-  pending: number;
-  retrying: number;
-  deadLetter: number;
-  opened: number;
-  clicked: number;
-  conversion: number;
-  successRate: number;
-  failRate: number;
-  openRate: number;
-  clickRate: number;
-  conversionRate: number;
-  daily: DailyItem[];
-  byChannel: ChannelItem[];
-  byTenant: TenantItem[];
-};
+type OverviewSnapshot = NotificationOverviewReadModel["snapshot"];
 
 type AnomalyReasonItem = {
   key: string;
@@ -155,33 +138,7 @@ type TrendAnomalyTypeItem = TrendItem & {
   sample: string | null;
 };
 
-type TrendComparisonSnapshot = {
-  tenantId: string | null;
-  channel: DeliveryChannel | null;
-  currentWindow: {
-    from: string;
-    to: string;
-    durationMinutes: number;
-    totalDeliveries: number;
-    anomalyCount: number;
-    anomalyRate: number;
-  };
-  previousWindow: {
-    from: string;
-    to: string;
-    durationMinutes: number;
-    totalDeliveries: number;
-    anomalyCount: number;
-    anomalyRate: number;
-  };
-  overall: TrendItem;
-  topWorseningTenants: TrendTenantItem[];
-  topWorseningAnomalyTypes: TrendAnomalyTypeItem[];
-  topWorseningChannels: TrendChannelItem[];
-  rateDefinitions: {
-    anomalyRateDenominator: "total_deliveries_in_window";
-  };
-};
+type TrendComparisonSnapshot = NotificationTrendsReadModel["snapshot"];
 
 type FilterState = {
   tenantId: string;
@@ -279,14 +236,7 @@ export default function NotificationOverviewDashboard() {
     const anomaliesPath = `/api/platform/notifications/anomalies?${params.toString()}`;
     const trendsPath = `/api/platform/notifications/trends?${params.toString()}&topLimit=8`;
     void Promise.all([
-      fetch(overviewPath, { cache: "no-store" }).then(async (response) => {
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          const message = payload?.error?.message || payload?.message || "Load overview failed";
-          throw new Error(String(message));
-        }
-        return payload?.snapshot || payload?.data?.snapshot || null;
-      }),
+      fetchNotificationOverviewReadApi(overviewPath, { cache: "no-store" }).then((response) => response.snapshot),
       fetch(anomaliesPath, { cache: "no-store" }).then(async (response) => {
         const payload = await response.json().catch(() => null);
         if (!response.ok) {
@@ -295,14 +245,7 @@ export default function NotificationOverviewDashboard() {
         }
         return payload?.snapshot || payload?.data?.snapshot || null;
       }),
-      fetch(trendsPath, { cache: "no-store" }).then(async (response) => {
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          const message = payload?.error?.message || payload?.message || "Load trend comparison failed";
-          throw new Error(String(message));
-        }
-        return payload?.snapshot || payload?.data?.snapshot || null;
-      }),
+      fetchNotificationTrendsReadApi(trendsPath, { cache: "no-store" }).then((response) => response.snapshot),
     ])
       .then(([overviewData, anomaliesData, trendsData]) => {
         if (!active) return;
