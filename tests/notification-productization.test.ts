@@ -172,6 +172,12 @@ import {
   buildNotificationOverviewDashboardViewModel,
   buildNotificationTenantDrilldownViewModel,
 } from "../lib/notification-read-api-view-model";
+import {
+  buildNotificationOverviewMetricCardDescriptors,
+  buildNotificationOverviewPanelDescriptors,
+  buildNotificationTenantDrilldownMetricCardDescriptors,
+  buildNotificationTenantDrilldownSectionDescriptors,
+} from "../lib/notification-read-api-selectors";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
   canUseOverviewDailyRollupWindow,
@@ -2702,6 +2708,309 @@ test("read API view-model consolidates tenant drilldown display payloads and ret
   });
   assert.equal(cancelledVm.page.status, "cancelled");
   assert.equal(cancelledVm.summaryPanel.status, "cancelled");
+});
+
+test("read API selectors keep overview panel descriptors stable and align action contracts with shared view-model states", () => {
+  const overview = parseNotificationReadApiPayload(
+    "overview",
+    buildConsumerReadApiPayload(
+      "overview",
+      buildNotificationAggregationMetadata({
+        aggregationModeRequested: "auto",
+        dataSource: "raw",
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      }),
+      {
+        snapshotOverrides: {
+          totalRows: 5,
+          byTenant: [
+            {
+              tenantId: "tenant-1",
+              total: 4,
+              sent: 3,
+              failed: 1,
+              pending: 0,
+              retrying: 0,
+              deadLetter: 0,
+              opened: 2,
+              clicked: 1,
+              conversion: 1,
+              successRate: 75,
+              failRate: 25,
+              openRate: 66.67,
+              clickRate: 33.33,
+              conversionRate: 33.33,
+            },
+          ],
+        },
+      },
+    ),
+  );
+  const trends = parseNotificationReadApiPayload(
+    "trends",
+    buildConsumerReadApiPayload(
+      "trends",
+      buildNotificationAggregationMetadata({
+        aggregationModeRequested: "auto",
+        dataSource: "raw",
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      }),
+      {
+        snapshotOverrides: {
+          topWorseningTenants: [
+            {
+              tenantId: "tenant-1",
+              previousCount: 1,
+              currentCount: 3,
+              countDelta: 2,
+              previousRate: 1,
+              currentRate: 3,
+              rateDelta: 2,
+              direction: "up" as const,
+            },
+          ],
+        },
+      },
+    ),
+  );
+  const readyData: NotificationOverviewPageData = {
+    overview,
+    insights: buildAnomalyInsightsPayload().snapshot,
+    trends,
+    resourceErrors: [],
+    isEmpty: false,
+  };
+  const readyVm = buildNotificationOverviewDashboardViewModel({
+    request: buildManagedRequestState(readyData),
+    backHref: "/platform-admin",
+    opsHref: "/platform-admin/notifications-ops",
+    alertWorkflowHref: "/platform-admin/notifications-alerts",
+  });
+
+  const buildDescriptors = () =>
+    buildNotificationOverviewPanelDescriptors({
+      viewModel: readyVm,
+      data: readyData,
+      buildAlertWorkflowHref: (tenantId?: string) =>
+        tenantId
+          ? `/platform-admin/notifications-alerts?tenantId=${tenantId}`
+          : "/platform-admin/notifications-alerts",
+      buildTenantDrilldownHref: (tenantId) => `/platform-admin/notifications-overview/${tenantId}`,
+      formatters: {
+        toCount: (value) => Number(value || 0).toLocaleString(),
+        toPercent: (value) => `${Number(value || 0).toFixed(2)}%`,
+        trendDirectionLabel: (value) => value,
+      },
+    });
+
+  const firstDescriptors = buildDescriptors();
+  const secondDescriptors = buildDescriptors();
+  assert.deepEqual(firstDescriptors, secondDescriptors);
+
+  const metricCards = buildNotificationOverviewMetricCardDescriptors(readyData.overview.snapshot, {
+    toCount: (value) => Number(value || 0).toLocaleString(),
+    toPercent: (value) => `${Number(value || 0).toFixed(2)}%`,
+  });
+  assert.equal(metricCards[0]?.key, "rows");
+  assert.equal(firstDescriptors.overviewPanel.payload.kind, "overview_summary");
+  assert.equal(firstDescriptors.nonBlockingPanels[0]?.payload.kind, "insights_priority");
+  assert.equal(firstDescriptors.nonBlockingPanels[1]?.payload.kind, "insights_reasons");
+  assert.equal(firstDescriptors.nonBlockingPanels[2]?.payload.kind, "trend_comparison");
+  assert.equal(firstDescriptors.supportingPanels[1]?.payload.kind, "by_tenant");
+  assert.deepEqual(firstDescriptors.supportingPanels[1]?.payload.rows[0]?.actions[0], {
+    kind: "open_drilldown",
+    enabled: true,
+    busy: false,
+    label: "Drilldown",
+    href: "/platform-admin/notifications-overview/tenant-1",
+    prefetchKey: "tenant-1",
+  });
+
+  const partialIssue = classifyNotificationReadApiOrchestrationError(new TypeError("analytics offline"), {
+    source: "anomalies",
+    message: "Load anomalies failed",
+  });
+  const partialVm = buildNotificationOverviewDashboardViewModel({
+    request: buildManagedRequestState<NotificationOverviewPageData>({
+      ...readyData,
+      insights: null,
+      resourceErrors: [partialIssue],
+    }),
+    backHref: "/platform-admin",
+    opsHref: "/platform-admin/notifications-ops",
+    alertWorkflowHref: "/platform-admin/notifications-alerts",
+  });
+  const partialDescriptors = buildNotificationOverviewPanelDescriptors({
+    viewModel: partialVm,
+    data: {
+      ...readyData,
+      insights: null,
+      resourceErrors: [partialIssue],
+    },
+    buildAlertWorkflowHref: (tenantId?: string) =>
+      tenantId ? `/platform-admin/notifications-alerts?tenantId=${tenantId}` : "/platform-admin/notifications-alerts",
+    buildTenantDrilldownHref: (tenantId) => `/platform-admin/notifications-overview/${tenantId}`,
+    formatters: {
+      toCount: (value) => Number(value || 0).toLocaleString(),
+      toPercent: (value) => `${Number(value || 0).toFixed(2)}%`,
+      trendDirectionLabel: (value) => value,
+    },
+  });
+  assert.equal(partialDescriptors.nonBlockingPanels[0]?.status, "partial_failure");
+  assert.equal(partialDescriptors.nonBlockingPanels[2]?.status, "ready");
+
+  const hardIssue = classifyNotificationReadApiOrchestrationError(
+    new NotificationReadApiConsumerError({
+      api: "overview",
+      status: null,
+      message: "overview response contract drift: snapshot.totalRows expected number",
+      issues: ["snapshot.totalRows expected number"],
+    }),
+    {
+      source: "overview",
+      message: "Load overview page failed",
+    },
+  );
+  const hardVm = buildNotificationOverviewDashboardViewModel({
+    request: buildManagedRequestState<NotificationOverviewPageData>(null, {
+      error: hardIssue,
+      errorMode: "hard",
+      lastEvent: "error",
+    }),
+    backHref: "/platform-admin",
+    opsHref: "/platform-admin/notifications-ops",
+    alertWorkflowHref: "/platform-admin/notifications-alerts",
+  });
+  const hardDescriptors = buildNotificationOverviewPanelDescriptors({
+    viewModel: hardVm,
+    data: null,
+    buildAlertWorkflowHref: () => "/platform-admin/notifications-alerts",
+    buildTenantDrilldownHref: (tenantId) => `/platform-admin/notifications-overview/${tenantId}`,
+    formatters: {
+      toCount: (value) => Number(value || 0).toLocaleString(),
+      toPercent: (value) => `${Number(value || 0).toFixed(2)}%`,
+      trendDirectionLabel: (value) => value,
+    },
+  });
+  assert.equal(hardDescriptors.overviewPanel.status, "hard_failure_no_data");
+  assert.equal(hardDescriptors.overviewPanel.isEmpty, false);
+  assert.equal(hardDescriptors.nonBlockingPanels[0]?.hasError, true);
+});
+
+test("read API selectors keep tenant drilldown sections stable without changing raw-backed anomaly support", () => {
+  const drilldown = parseNotificationReadApiPayload(
+    "tenant_drilldown",
+    buildConsumerReadApiPayload(
+      "tenant_drilldown",
+      buildNotificationAggregationMetadata({
+        aggregationModeRequested: "auto",
+        dataSource: "raw",
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      }),
+      {
+        snapshotOverrides: {
+          totalRows: 3,
+          recentAnomalies: [
+            {
+              id: "anomaly-1",
+              status: "failed",
+              channel: "email",
+              errorCode: "PROVIDER_TIMEOUT",
+              errorMessage: "timeout",
+              lastError: "timeout",
+              attempts: 1,
+              retryCount: 1,
+              maxAttempts: 3,
+              nextRetryAt: "2026-03-10T09:00:00.000Z",
+              occurredAt: "2026-03-10T08:00:00.000Z",
+            },
+          ],
+        },
+      },
+    ),
+  );
+  const readyData: NotificationTenantDrilldownPageData = {
+    drilldown,
+    isEmpty: false,
+    recentAnomaliesSupportNote: getTenantDrilldownRecentAnomaliesSupportNote(),
+  };
+  const readyVm = buildNotificationTenantDrilldownViewModel({
+    request: buildManagedRequestState(readyData),
+    backHref: "/platform-admin/notifications-overview?tenantId=tenant-1",
+  });
+
+  const firstDescriptors = buildNotificationTenantDrilldownSectionDescriptors({
+    viewModel: readyVm,
+    data: readyData,
+    recentAnomaliesSupportNote: readyData.recentAnomaliesSupportNote,
+  });
+  const secondDescriptors = buildNotificationTenantDrilldownSectionDescriptors({
+    viewModel: readyVm,
+    data: readyData,
+    recentAnomaliesSupportNote: readyData.recentAnomaliesSupportNote,
+  });
+  assert.deepEqual(firstDescriptors, secondDescriptors);
+
+  const metricCards = buildNotificationTenantDrilldownMetricCardDescriptors(readyData.drilldown.snapshot, {
+    toCount: (value) => Number(value || 0).toLocaleString(),
+    toPercent: (value) => `${Number(value || 0).toFixed(2)}%`,
+  });
+  assert.equal(metricCards[0]?.key, "rows");
+  assert.equal(firstDescriptors.summarySection.payload.kind, "tenant_summary");
+  assert.equal(firstDescriptors.sections[0]?.payload.kind, "tenant_by_channel");
+  assert.equal(firstDescriptors.sections[1]?.payload.kind, "tenant_daily");
+  assert.equal(firstDescriptors.sections[2]?.payload.kind, "tenant_recent_anomalies");
+  assert.equal(
+    firstDescriptors.sections[2]?.payload.kind === "tenant_recent_anomalies"
+      ? firstDescriptors.sections[2].payload.supportNote
+      : null,
+    getTenantDrilldownRecentAnomaliesSupportNote(),
+  );
+
+  const cancelledVm = buildNotificationTenantDrilldownViewModel({
+    request: buildManagedRequestState<NotificationTenantDrilldownPageData>(null, {
+      lastEvent: "cancelled",
+      requestKey: "cancelled:key",
+    }),
+    backHref: "/platform-admin/notifications-overview?tenantId=tenant-1",
+  });
+  const cancelledDescriptors = buildNotificationTenantDrilldownSectionDescriptors({
+    viewModel: cancelledVm,
+    data: null,
+    recentAnomaliesSupportNote: getTenantDrilldownRecentAnomaliesSupportNote(),
+  });
+  assert.equal(cancelledDescriptors.summarySection.status, "cancelled");
+
+  const hardIssue = classifyNotificationReadApiOrchestrationError(
+    new NotificationReadApiConsumerError({
+      api: "tenant_drilldown",
+      status: null,
+      message: "tenant_drilldown response contract drift: snapshot.daily missing",
+      issues: ["snapshot.daily missing"],
+    }),
+    {
+      source: "tenant_drilldown",
+      message: "Load tenant drilldown failed",
+    },
+  );
+  const hardVm = buildNotificationTenantDrilldownViewModel({
+    request: buildManagedRequestState<NotificationTenantDrilldownPageData>(null, {
+      error: hardIssue,
+      errorMode: "hard",
+      lastEvent: "error",
+    }),
+    backHref: "/platform-admin/notifications-overview?tenantId=tenant-1",
+  });
+  const hardDescriptors = buildNotificationTenantDrilldownSectionDescriptors({
+    viewModel: hardVm,
+    data: null,
+    recentAnomaliesSupportNote: getTenantDrilldownRecentAnomaliesSupportNote(),
+  });
+  assert.equal(hardDescriptors.summarySection.status, "hard_failure_no_data");
+  assert.equal(hardDescriptors.sections[2]?.status, "hard_failure_no_data");
 });
 
 test("read API resilience keeps same-query last good data on soft failures and reserves hard failure for cold starts", async () => {

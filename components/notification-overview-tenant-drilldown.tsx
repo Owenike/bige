@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
+import { useCallback, useMemo, useState } from "react";
 import {
   getDefaultTenantDrilldownSupportNote,
   useNotificationTenantDrilldownPageData,
 } from "../lib/notification-read-api-hooks";
 import { buildNotificationTenantDrilldownViewModel } from "../lib/notification-read-api-view-model";
+import {
+  buildNotificationTenantDrilldownMetricCardDescriptors,
+  buildNotificationTenantDrilldownSectionDescriptors,
+} from "../lib/notification-read-api-selectors";
 import { useNotificationTenantDrilldownUrlSync } from "../lib/notification-read-api-url-state";
 import type { NotificationDeliveryChannel, NotificationTenantDrilldownQueryState } from "../lib/notification-read-api-query-state";
 
@@ -36,6 +39,27 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
       }),
     [backHref, drilldownRequest],
   );
+  const metricCards = useMemo(
+    () =>
+      buildNotificationTenantDrilldownMetricCardDescriptors(snapshot, {
+        toCount,
+        toPercent,
+      }),
+    [snapshot],
+  );
+  const sectionDescriptors = useMemo(
+    () =>
+      buildNotificationTenantDrilldownSectionDescriptors({
+        viewModel,
+        data,
+        recentAnomaliesSupportNote,
+      }),
+    [data, recentAnomaliesSupportNote, viewModel],
+  );
+  const [channelSection, dailySection, anomalySection] = sectionDescriptors.sections;
+  const handleRefresh = useCallback(() => {
+    setRefreshKey((current) => current + 1);
+  }, []);
 
   return (
     <main className="fdGlassScene">
@@ -54,7 +78,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
               <button
                 type="button"
                 className="fdPillBtn"
-                onClick={() => setRefreshKey((current) => current + 1)}
+                onClick={handleRefresh}
                 disabled={!viewModel.actions.refresh.enabled}
               >
                 {viewModel.actions.refresh.label}
@@ -160,96 +184,81 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
         {snapshot ? (
           <>
             <section className="fdInventorySummary" style={{ marginBottom: 14 }}>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
-                <div className="kvLabel">Rows</div>
-                <strong className="fdInventorySummaryValue">{toCount(snapshot.totalRows)}</strong>
-              </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
-                <div className="kvLabel">Sent / Failed / Dead Letter</div>
-                <strong className="fdInventorySummaryValue">
-                  {toCount(snapshot.sent)} / {toCount(snapshot.failed)} / {toCount(snapshot.deadLetter)}
-                </strong>
-              </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
-                <div className="kvLabel">Opened / Clicked / Conversion</div>
-                <strong className="fdInventorySummaryValue">
-                  {toCount(snapshot.opened)} / {toCount(snapshot.clicked)} / {toCount(snapshot.conversion)}
-                </strong>
-              </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
-                <div className="kvLabel">Success / Fail Rate</div>
-                <strong className="fdInventorySummaryValue">
-                  {toPercent(snapshot.successRate)} / {toPercent(snapshot.failRate)}
-                </strong>
-              </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
-                <div className="kvLabel">Open / Click / Conversion Rate</div>
-                <strong className="fdInventorySummaryValue">
-                  {toPercent(snapshot.openRate)} / {toPercent(snapshot.clickRate)} / {toPercent(snapshot.conversionRate)}
-                </strong>
-              </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
-                <div className="kvLabel">Anomalies (failed / dead_letter / retrying)</div>
-                <strong className="fdInventorySummaryValue">
-                  {toCount(snapshot.anomalySummary.total)} ({toCount(snapshot.anomalySummary.failed)} /{" "}
-                  {toCount(snapshot.anomalySummary.deadLetter)} / {toCount(snapshot.anomalySummary.retrying)})
-                </strong>
-              </div>
+              {metricCards.map((card) => (
+                <div key={card.key} className="fdGlassSubPanel fdInventorySummaryItem">
+                  <div className="kvLabel">{card.label}</div>
+                  <strong className="fdInventorySummaryValue">{card.value}</strong>
+                </div>
+              ))}
             </section>
 
             <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
               <p className="sub" style={{ marginTop: 0 }}>
-                {viewModel.summaryPanel.assistiveMessage}
+                {sectionDescriptors.summarySection.assistiveMessage}
               </p>
-              <p className="sub" style={{ marginTop: 0 }}>
-                {formatNotificationAggregationDataSourceLabel(snapshot.dataSource)}
-              </p>
+              {sectionDescriptors.summarySection.payload.kind === "tenant_summary" &&
+              sectionDescriptors.summarySection.payload.aggregationSourceLabel ? (
+                <p className="sub" style={{ marginTop: 0 }}>
+                  {sectionDescriptors.summarySection.payload.aggregationSourceLabel}
+                </p>
+              ) : null}
               <p className="sub" style={{ marginTop: 0 }}>
                 Rate definition: success/fail denominator = sent + failed; open/click/conversion denominator = sent.
               </p>
               <p className="sub" style={{ marginTop: 0 }}>
-                {recentAnomaliesSupportNote}
+                {sectionDescriptors.summarySection.payload.kind === "tenant_summary"
+                  ? sectionDescriptors.summarySection.payload.supportNote
+                  : recentAnomaliesSupportNote}
               </p>
             </section>
 
             <section className="fdTwoCol" style={{ marginBottom: 14 }}>
               <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <h2 className="sectionTitle">Channel Breakdown</h2>
+                <h2 className="sectionTitle">{channelSection.title}</h2>
                 <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                  {snapshot.byChannel.map((row) => (
-                    <p key={row.channel} className="sub" style={{ marginTop: 0 }}>
-                      {row.channel}: sent {row.sent}, failed {row.failed} (dead_letter {row.deadLetter}), opened {row.opened},
-                      clicked {row.clicked}, conversion {row.conversion}
+                  {channelSection.payload.kind === "tenant_by_channel"
+                    ? channelSection.payload.rows.map((row) => (
+                    <p key={row.key} className="sub" style={{ marginTop: 0 }}>
+                      {row.text}
                     </p>
-                  ))}
-                  {snapshot.byChannel.length === 0 ? <p className="fdGlassText">No channel data.</p> : null}
+                      ))
+                    : null}
+                  {channelSection.payload.kind === "tenant_by_channel" && channelSection.payload.rows.length === 0 ? (
+                    <p className="fdGlassText">{channelSection.emptyMessage}</p>
+                  ) : null}
                 </div>
               </section>
 
               <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <h2 className="sectionTitle">Daily Trend</h2>
+                <h2 className="sectionTitle">{dailySection.title}</h2>
                 <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                  {snapshot.daily.map((row) => (
-                    <p key={row.day} className="sub" style={{ marginTop: 0 }}>
-                      {row.day}: sent {row.sent}, failed {row.failed}, dead_letter {row.deadLetter}, opened {row.opened}, clicked{" "}
-                      {row.clicked}, conversion {row.conversion}
+                  {dailySection.payload.kind === "tenant_daily"
+                    ? dailySection.payload.rows.map((row) => (
+                    <p key={row.key} className="sub" style={{ marginTop: 0 }}>
+                      {row.text}
                     </p>
-                  ))}
-                  {snapshot.daily.length === 0 ? <p className="fdGlassText">No daily trend data.</p> : null}
+                      ))
+                    : null}
+                  {dailySection.payload.kind === "tenant_daily" && dailySection.payload.rows.length === 0 ? (
+                    <p className="fdGlassText">{dailySection.emptyMessage}</p>
+                  ) : null}
                 </div>
               </section>
             </section>
 
             <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-              <h2 className="sectionTitle">Recent Anomalies</h2>
+              <h2 className="sectionTitle">{anomalySection.title}</h2>
               <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                {snapshot.recentAnomalies.map((row) => (
-                  <p key={row.id} className="sub" style={{ marginTop: 0 }}>
-                    [{row.status}] {row.channel} - {row.errorCode || "NO_CODE"} - {row.lastError || row.errorMessage || "-"} (retry{" "}
-                    {row.retryCount}/{row.maxAttempts}, occurred {new Date(row.occurredAt).toLocaleString()})
+                {anomalySection.payload.kind === "tenant_recent_anomalies"
+                  ? anomalySection.payload.rows.map((row) => (
+                  <p key={row.key} className="sub" style={{ marginTop: 0 }}>
+                    {row.text}
                   </p>
-                ))}
-                {snapshot.recentAnomalies.length === 0 ? <p className="fdGlassText">No anomalies in current scope.</p> : null}
+                    ))
+                  : null}
+                {anomalySection.payload.kind === "tenant_recent_anomalies" && anomalySection.payload.rows.length === 0 ? (
+                  <p className="fdGlassText">{anomalySection.emptyMessage}</p>
+                ) : null}
               </div>
             </section>
 

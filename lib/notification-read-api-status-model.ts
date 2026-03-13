@@ -84,12 +84,15 @@ export function resolveNotificationReadApiPanelStatus(options: {
   hasData: boolean;
   issue?: NotificationReadApiOrchestrationError | null;
 }): NotificationReadApiSurfaceStatus {
+  if (!options.hasData && options.pageStatus === "hard_failure_no_data") {
+    return "hard_failure_no_data";
+  }
+
   if (options.issue) {
     return options.hasData ? "soft_failure_with_data" : "partial_failure";
   }
 
   if (!options.hasData) {
-    if (options.pageStatus === "hard_failure_no_data") return "hard_failure_no_data";
     if (options.pageStatus === "initial_loading") return "initial_loading";
     if (options.pageStatus === "cancelled") return "cancelled";
     return "idle";
