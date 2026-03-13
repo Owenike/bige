@@ -11,6 +11,11 @@ export type WorkspaceSession = {
   forbiddenFiles: string[];
 };
 
+export type WorkspaceDescriptor = WorkspaceSession & {
+  metadataPath: string;
+  updatedAt: string;
+};
+
 function normalizeRelative(value: string) {
   return value.replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/^\/+/, "");
 }
@@ -40,6 +45,22 @@ async function collectFiles(rootDir: string, currentDir = rootDir): Promise<stri
       files.push(...(await collectFiles(rootDir, absolutePath)));
     } else if (entry.isFile()) {
       files.push(normalizeRelative(path.relative(rootDir, absolutePath)));
+    }
+  }
+  return files.sort();
+}
+
+async function collectWorkspaceMetadataFiles(rootDir: string, currentDir = rootDir): Promise<string[]> {
+  const entries = await readdir(currentDir, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const absolutePath = path.join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectWorkspaceMetadataFiles(rootDir, absolutePath)));
+      continue;
+    }
+    if (entry.isFile() && entry.name === "workspace.json" && absolutePath.includes(`${path.sep}.orchestrator${path.sep}`)) {
+      files.push(absolutePath);
     }
   }
   return files.sort();
@@ -113,6 +134,24 @@ export class FileSystemWorkspaceManager {
 
   async loadWorkspace(rootDir: string) {
     return loadWorkspaceMetadata(rootDir);
+  }
+
+  async listWorkspaces(taskId?: string) {
+    if (!(await pathExists(this.rootDir))) {
+      return [] as WorkspaceDescriptor[];
+    }
+    const metadataFiles = await collectWorkspaceMetadataFiles(this.rootDir, taskId ? path.join(this.rootDir, taskId) : this.rootDir);
+    const descriptors: WorkspaceDescriptor[] = [];
+    for (const metadataPath of metadataFiles) {
+      const session = await loadWorkspaceMetadata(path.dirname(path.dirname(metadataPath)));
+      const details = await stat(metadataPath);
+      descriptors.push({
+        ...session,
+        metadataPath,
+        updatedAt: details.mtime.toISOString(),
+      });
+    }
+    return descriptors;
   }
 
   async cleanupPath(targetPath: string) {

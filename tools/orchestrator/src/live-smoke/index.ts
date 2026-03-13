@@ -19,6 +19,9 @@ export function resolveLiveSmokeGate(params: {
         reason: "Live smoke is disabled by configuration.",
         reportPath: null,
         diffPath: null,
+        transcriptSummaryPath: null,
+        toolLogPath: null,
+        commandLogPath: null,
         ranAt: new Date().toISOString(),
       } satisfies LiveSmokeResult,
     };
@@ -32,6 +35,9 @@ export function resolveLiveSmokeGate(params: {
         reason: "OPENAI_API_KEY is missing; live smoke was skipped.",
         reportPath: null,
         diffPath: null,
+        transcriptSummaryPath: null,
+        toolLogPath: null,
+        commandLogPath: null,
         ranAt: new Date().toISOString(),
       } satisfies LiveSmokeResult,
     };
@@ -96,8 +102,27 @@ export async function runOpenAIExecutorLiveSmoke(params: {
 
     const report = await executor.collectResult(run.runId);
     const reportPath = path.join(smokeRoot, "execution-report.json");
+    const transcriptSummaryPath = path.join(smokeRoot, "live-summary.json");
     await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
     const diffPath = report.artifacts.find((artifact) => artifact.kind === "diff")?.path ?? null;
+    const toolLogPath = report.artifacts.find((artifact) => artifact.kind === "tool_log")?.path ?? null;
+    const commandLogPath = report.artifacts.find((artifact) => artifact.kind === "command_log")?.path ?? null;
+    await writeFile(
+      transcriptSummaryPath,
+      `${JSON.stringify(
+        {
+          provider: "openai_responses",
+          iterationNumber: report.iterationNumber,
+          changedFiles: report.changedFiles,
+          summaryOfChanges: report.summaryOfChanges,
+          recommendedNextStep: report.recommendedNextStep,
+          rawExecutorOutput: report.rawExecutorOutput ?? null,
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
 
     return {
       status: report.blockers.length > 0 ? "blocked" : "passed",
@@ -107,6 +132,9 @@ export async function runOpenAIExecutorLiveSmoke(params: {
           : "Live smoke completed successfully.",
       reportPath,
       diffPath,
+      transcriptSummaryPath,
+      toolLogPath,
+      commandLogPath,
       ranAt: new Date().toISOString(),
     } satisfies LiveSmokeResult;
   } catch (error) {
@@ -115,6 +143,9 @@ export async function runOpenAIExecutorLiveSmoke(params: {
       reason: error instanceof Error ? error.message : String(error),
       reportPath: null,
       diffPath: null,
+      transcriptSummaryPath: null,
+      toolLogPath: null,
+      commandLogPath: null,
       ranAt: new Date().toISOString(),
     } satisfies LiveSmokeResult;
   }

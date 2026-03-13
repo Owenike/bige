@@ -60,6 +60,10 @@ async function createPatchReadyState(params?: { forbiddenFiles?: string[] }) {
     pendingHumanApproval: true,
     patchStatus: "waiting_approval" as const,
     approvalStatus: "pending_patch" as const,
+    promotionStatus: "not_ready" as const,
+    workspaceStatus: "active" as const,
+    liveAcceptanceStatus: "not_run" as const,
+    exportArtifactPaths: [],
     lastExecutionReport: {
       iterationNumber: 1,
       changedFiles: diff.changedFiles,
@@ -108,7 +112,12 @@ async function createPatchReadyState(params?: { forbiddenFiles?: string[] }) {
         ciSummary: null,
         patchStatus: "waiting_approval" as const,
         approvalStatus: "pending_patch" as const,
+        promotionStatus: "not_ready" as const,
+        liveAcceptanceStatus: "not_run" as const,
+        workspaceStatus: "active" as const,
+        exportArtifactPaths: [],
         artifactPruneResult: null,
+        cleanupDecision: null,
         stateBefore: "planning" as const,
         stateAfter: "waiting_approval" as const,
         stopReason: null,
@@ -122,14 +131,17 @@ async function createPatchReadyState(params?: { forbiddenFiles?: string[] }) {
   return { dependencies, repoRoot };
 }
 
-test("approvePendingPatch promotes workspace changes back to the repo", async () => {
+test("approvePendingPatch exports promotion artifacts without mutating the repo", async () => {
   const { dependencies, repoRoot } = await createPatchReadyState();
   const updated = await approvePendingPatch("promotion-state", dependencies);
 
-  assert.equal(updated.patchStatus, "applied");
+  assert.equal(updated.patchStatus, "promotion_ready");
   assert.equal(updated.approvalStatus, "approved");
   assert.equal(updated.status, "completed");
-  assert.equal(await readFile(path.join(repoRoot, "allowed", "file.txt"), "utf8"), "after\n");
+  assert.equal(updated.promotionStatus, "promotion_ready");
+  assert.equal(updated.exportArtifactPaths.length, 2);
+  assert.equal(updated.lastExecutionReport?.artifacts.some((artifact) => artifact.kind === "patch_export"), true);
+  assert.equal(await readFile(path.join(repoRoot, "allowed", "file.txt"), "utf8"), "before\n");
 });
 
 test("rejectPendingPatch blocks the state and preserves the repo", async () => {

@@ -66,6 +66,16 @@ function buildRuleBasedVerdict(input: ReviewerInput) {
     reasons.push(`Execution is missing required artifacts: ${missingArtifacts.join(", ")}.`);
   }
 
+  if (["patch_exported", "branch_ready", "promotion_ready", "promoted"].includes(input.state.patchStatus) && input.state.exportArtifactPaths.length === 0) {
+    verdict = verdict === "accept" ? "revise" : verdict;
+    reasons.push("Promotion flow is missing exported patch artifacts.");
+  }
+
+  if (input.state.workspaceStatus === "orphaned") {
+    verdict = "escalate";
+    reasons.push("Workspace state indicates orphaned workspace risk.");
+  }
+
   if (input.report.blockers.length > 0 && verdict === "accept") {
     verdict = "revise";
     reasons.push("Execution reported blockers that prevent completion.");

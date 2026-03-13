@@ -11,6 +11,9 @@ test("live smoke gating skips clearly when OPENAI_API_KEY is missing", () => {
   assert.equal(gate.runnable, false);
   assert.equal(gate.result?.status, "skipped");
   assert.equal(gate.result?.reason.includes("OPENAI_API_KEY"), true);
+  assert.equal(gate.result?.transcriptSummaryPath, null);
+  assert.equal(gate.result?.toolLogPath, null);
+  assert.equal(gate.result?.commandLogPath, null);
 });
 
 test(
@@ -27,5 +30,8 @@ test(
     assert.equal(result.status, "passed");
     assert.equal(Boolean(result.reportPath), true);
     assert.equal(Boolean(result.diffPath), true);
+    assert.equal(Boolean(result.transcriptSummaryPath), true);
+    assert.equal(Boolean(result.toolLogPath), true);
+    assert.equal(Boolean(result.commandLogPath), true);
   },
 );

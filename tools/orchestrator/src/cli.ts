@@ -2,12 +2,15 @@ import path from "node:path";
 import {
   approvePendingPatch,
   approvePendingPlan,
+  cleanupStateWorkspaces,
   createDefaultDependencies,
   createInitialState,
   planOrchestratorIteration,
+  promoteApprovedPatch,
   pruneStateArtifacts,
   rejectPendingPatch,
   rejectPendingPlan,
+  runLiveAcceptance,
   runLiveSmoke,
   runOrchestratorLoop,
   runOrchestratorOnce,
@@ -48,6 +51,8 @@ async function main() {
   const executorFallbackMode = getOption(options, "executor-fallback", "blocked") as ExecutorFallbackMode;
   const workspaceRoot = getOption(options, "workspace-root", path.join(repoPath, ".tmp", "orchestrator-workspaces"));
   const liveSmokeEnabled = getOption(options, "live-smoke", "false") === "true";
+  const applyWorkspace = getOption(options, "apply-workspace", "false") === "true";
+  const createBranch = getOption(options, "create-branch", "true") === "true";
   const dependencies = createDefaultDependencies({
     repoPath,
     storageRoot,
@@ -138,6 +143,15 @@ async function main() {
     return;
   }
 
+  if (command === "promote-patch") {
+    const updatedState = await promoteApprovedPatch(stateId, dependencies, {
+      applyWorkspace,
+      createBranch,
+    });
+    process.stdout.write(`${JSON.stringify(updatedState, null, 2)}\n`);
+    return;
+  }
+
   if (command === "reject-patch") {
     const updatedState = await rejectPendingPatch(stateId, dependencies, options.get("reason"));
     process.stdout.write(`${JSON.stringify(updatedState, null, 2)}\n`);
@@ -163,6 +177,14 @@ async function main() {
     return;
   }
 
+  if (command === "cleanup") {
+    const result = await cleanupStateWorkspaces(stateId, dependencies, {
+      staleMinutes: Number.parseInt(getOption(options, "stale-minutes", "120"), 10),
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
   if (command === "artifacts:prune") {
     const result = await pruneStateArtifacts(stateId, dependencies, {
       retainRecentSuccess: Number.parseInt(getOption(options, "retain-success", "3"), 10),
@@ -184,6 +206,20 @@ async function main() {
     return;
   }
 
+  if (command === "live-acceptance") {
+    const result = await runLiveAcceptance({
+      stateId,
+      dependencies,
+      repoPath,
+      workspaceRoot,
+      outputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-live-acceptance")),
+      model: options.get("model"),
+      enabled: liveSmokeEnabled || getOption(options, "enabled", "true") === "true",
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
   process.stdout.write(
     [
       "Usage:",
@@ -194,11 +230,14 @@ async function main() {
       "  node cli.js approve --state-id default",
       "  node cli.js reject --state-id default --reason \"...\"",
       "  node cli.js approve-patch --state-id default",
+      "  node cli.js promote-patch --state-id default --create-branch true --apply-workspace false",
       "  node cli.js reject-patch --state-id default --reason \"...\"",
       "  node cli.js resume --state-id default",
       "  node cli.js workspace:cleanup --state-id default --workspace-root .tmp/orchestrator-workspaces",
+      "  node cli.js cleanup --state-id default --stale-minutes 120",
       "  node cli.js artifacts:prune --state-id default --retain-success 3 --retain-failure 5",
       "  node cli.js live-smoke --enabled true --workspace-root .tmp/orchestrator-workspaces",
+      "  node cli.js live-acceptance --state-id default --enabled true",
       "  node cli.js review --state-id default",
       "  node cli.js dry-run --state-id default --executor mock",
     ].join("\n"),

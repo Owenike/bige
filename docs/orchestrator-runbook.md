@@ -6,12 +6,14 @@
 - Optional: `ORCHESTRATOR_WORKSPACE_ROOT`
 - Optional: GitHub CLI auth for `GitHubCliStatusAdapter`
 
-## Live Smoke
+## Live Smoke vs Live Acceptance
 - `npm run orchestrator:live-smoke -- --enabled true`
+- `npm run orchestrator:live-acceptance -- --state-id demo --enabled true`
 - Requires `OPENAI_API_KEY`
 - Skips explicitly when `OPENAI_API_KEY` is missing
 - Runs only in an isolated temp repo/workspace and never edits the main repo directly
 - `test:orchestrator:live-smoke` is intended for manual smoke use or workflow-dispatch CI, not the default always-on gate
+- `test:orchestrator:live-acceptance` is the stronger gated path. It persists `liveAcceptanceStatus`, captures execution report, diff, tool log, command log, and a transcript summary artifact.
 
 ## Provider Selection
 - `--planner-provider rule_based|openai`
@@ -35,8 +37,12 @@ Approval mode stops after planning in `waiting_approval`. Use `approve` or `reje
 Patch promotion uses a separate lifecycle:
 - `plan_ready`
 - `patch_ready`
+- `patch_exported`
+- `branch_ready`
+- `promotion_ready`
 - `waiting_approval`
 - `approved_for_apply`
+- `promoted`
 - `applied`
 - `rejected`
 
@@ -70,12 +76,17 @@ npm run orchestrator:run-loop -- --state-id demo --executor openai_responses --e
 npm run orchestrator:approve -- --state-id demo
 npm run orchestrator:reject -- --state-id demo --reason "Need human review before execution."
 npm run orchestrator:approve-patch -- --state-id demo
+npm run orchestrator:promote-patch -- --state-id demo --create-branch true --apply-workspace false
 npm run orchestrator:reject-patch -- --state-id demo --reason "Need manual patch review."
 ```
 
 `approve` / `reject` control plan approval.
 
-`approve-patch` / `reject-patch` control promotion of an already prepared patch from isolated workspace artifacts back to the source repo.
+`approve-patch` marks the patch as approved, exports patch metadata, and prepares promotion artifacts.
+
+`promote-patch` is a separate, still-guarded step. It can create a safe local promotion branch name and PR-ready metadata, and only applies workspace files back when `--apply-workspace true` is explicitly requested.
+
+`reject-patch` blocks the patch promotion path.
 
 ## Resume
 ```powershell
@@ -85,7 +96,10 @@ npm run orchestrator:resume -- --state-id demo --executor mock
 ## Workspace Cleanup
 ```powershell
 npm run orchestrator:workspace:cleanup -- --state-id demo --workspace-root .tmp/orchestrator-workspaces
+npm run orchestrator:cleanup -- --state-id demo --stale-minutes 120
 ```
+
+`cleanup` performs stale/orphan workspace inspection and only deletes workspaces that are not still needed for review, approval, or resume.
 
 ## Artifact Pruning
 ```powershell
@@ -96,13 +110,18 @@ Artifacts include:
 - diff / patch
 - tool log
 - command log
+- transcript summary
 - execution report
 - planner / reviewer state recorded in persisted orchestrator state
+- patch export manifest
+- PR-ready metadata
 
 Retention policy:
 - keep recent successful iterations
 - keep recent failed iterations
 - never prune iterations that are still waiting for patch approval or needed for resume
+- keep promotion-ready artifacts until approval/promotion has finished
+- stale/orphan workspaces are cleaned through `orchestrator:cleanup`
 
 ## Review Last Iteration
 ```powershell
@@ -127,6 +146,11 @@ Each state file persists:
 - state transitions
 - stop reason
 - fallback reason
+- live acceptance status
+- promotion status
+- workspace status
+- export artifact paths
+- cleanup decision
 
 ## Acceptance
 Run the orchestrator suite with:
@@ -143,8 +167,11 @@ npm run test:orchestrator:executor-provider
 npm run test:orchestrator:workspace
 npm run test:orchestrator:patch-flow
 npm run test:orchestrator:promotion
+npm run test:orchestrator:promotion-branch
 npm run test:orchestrator:artifacts
+npm run test:orchestrator:cleanup
 npm run test:orchestrator:live-smoke
+npm run test:orchestrator:live-acceptance
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine
@@ -170,7 +197,8 @@ npm run test:orchestrator:state-machine
 ## Current MVP Limits
 - `OpenAIResponsesExecutorProvider` is a coding-executor MVP; its integration tests are mocked and it should still run behind human review for risky scopes.
 - Live OpenAI executor smoke is intentionally gated behind `OPENAI_API_KEY` and manual workflow dispatch.
+- Live acceptance is also gated behind `OPENAI_API_KEY` and manual workflow dispatch, and it should remain behind human review.
 - `LocalRepoExecutor` remains allow-list only and intentionally conservative.
 - OpenAI planner/reviewer providers are wired for structured output, but live network usage is still optional and not part of the default acceptance suite.
 - GitHub workflow status is still best-effort through `gh`; full CI gate automation is still separate from the main product pipeline.
-- `apply` mode is intentionally approval-gated: the executor prepares patch artifacts, then `approve-patch` promotes them back to the repo only after precondition checks pass.
+- `apply` mode is intentionally approval-gated: the executor prepares patch artifacts, then `approve-patch` / `promote-patch` advance the patch through export and promotion preconditions. Direct write-back to the source repo should still stay under human approval.

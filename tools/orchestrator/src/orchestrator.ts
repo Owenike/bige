@@ -2,12 +2,15 @@ import path from "node:path";
 import {
   approvalStatusSchema,
   ciStatusSummarySchema,
+  cleanupDecisionSchema,
   liveSmokeResultSchema,
   orchestratorStateJsonSchema,
   orchestratorStateSchema,
   parseWithDualValidation,
   patchStatusSchema,
+  promotionStatusSchema,
   type CIStatusSummary,
+  type CleanupDecision,
   type ExecutionMode,
   type ExecutorFallbackMode,
   type ExecutorProviderKind,
@@ -43,7 +46,13 @@ import type { OpenAIResponsesClient } from "./openai";
 import { NodeHttpsResponsesClient } from "./openai";
 import { FileSystemWorkspaceManager } from "./workspace";
 import { pruneOrchestratorArtifacts } from "./artifacts";
-import { promotePatchFromState, validatePatchPromotionPreconditions } from "./promotion";
+import {
+  exportPatchBundle,
+  preparePromotionBranch,
+  promotePatchFromState,
+  validatePatchPromotionPreconditions,
+} from "./promotion";
+import { inspectWorkspaceCleanup } from "./cleanup";
 import { runOpenAIExecutorLiveSmoke } from "./live-smoke";
 
 type ProviderMap<T> = Record<PlannerProviderKind, T | null>;
@@ -87,7 +96,12 @@ function createIterationRecord(params: {
     ciSummary: null,
     patchStatus: "none",
     approvalStatus: "not_requested",
+    promotionStatus: "not_ready",
+    liveAcceptanceStatus: "not_run",
+    workspaceStatus: "unknown",
+    exportArtifactPaths: [],
     artifactPruneResult: null,
+    cleanupDecision: null,
     stateBefore: params.stateBefore,
     stateAfter: params.stateAfter,
     stopReason: null,
@@ -165,6 +179,26 @@ function currentLoopStopReason(state: OrchestratorState) {
     return "Maximum consecutive failures reached.";
   }
   return null;
+}
+
+function findArtifactPath(report: NonNullable<OrchestratorState["lastExecutionReport"]>, kind: string) {
+  return report.artifacts.find((artifact) => artifact.kind === kind)?.path ?? null;
+}
+
+function reportWorkspaceStatus(report: NonNullable<OrchestratorState["lastExecutionReport"]> | null) {
+  return report && report.artifacts.some((artifact) => artifact.kind === "workspace" && artifact.path)
+    ? "active"
+    : "clean";
+}
+
+function appendArtifactsToReport(
+  report: NonNullable<OrchestratorState["lastExecutionReport"]>,
+  artifacts: Array<{ kind: string; label: string; path: string | null; value: string | null }>,
+) {
+  return {
+    ...report,
+    artifacts: [...report.artifacts, ...artifacts],
+  };
 }
 
 function resolveExecutorProvider(params: {
@@ -289,8 +323,13 @@ export function createInitialState(params: {
       lastReviewerFallbackReason: null,
       patchStatus: "none",
       approvalStatus: "not_requested",
+      promotionStatus: "not_ready",
+      workspaceStatus: "unknown",
+      liveAcceptanceStatus: "not_run",
+      exportArtifactPaths: [],
       lastArtifactPruneResult: null,
       lastLiveSmokeResult: null,
+      lastCleanupDecision: null,
       stopReason: null,
       iterationHistory: [],
       createdAt: now.toISOString(),
@@ -450,6 +489,7 @@ async function executePlannedIteration(
     consecutiveFailures: report.blockers.length > 0 ? nextState.consecutiveFailures + 1 : 0,
     patchStatus:
       reportHasPatchArtifacts(state, report) && state.task.executionMode === "apply" ? "patch_ready" : state.patchStatus,
+    workspaceStatus: reportWorkspaceStatus(report),
     updatedAt: now.toISOString(),
   });
   nextState = upsertIterationRecord(
@@ -463,6 +503,7 @@ async function executePlannedIteration(
       executionReport: report,
       patchStatus:
         reportHasPatchArtifacts(state, report) && state.task.executionMode === "apply" ? "patch_ready" : nextState.patchStatus,
+      workspaceStatus: reportWorkspaceStatus(report),
       stateAfter: "validating",
     },
     now,
@@ -561,6 +602,7 @@ async function executePlannedIteration(
         ? "patch_ready"
         : nextState.patchStatus,
     approvalStatus: waitingForPatchApproval ? "pending_patch" : nextState.approvalStatus,
+    workspaceStatus: reportWorkspaceStatus(report),
     stopReason:
       nextStatus === "stopped" || nextStatus === "blocked"
         ? policyStopReason ?? reviewerResolution.verdict.reasons.join(" | ")
@@ -582,6 +624,7 @@ async function executePlannedIteration(
           ? "patch_ready"
           : nextState.patchStatus,
       approvalStatus: waitingForPatchApproval ? "pending_patch" : nextState.approvalStatus,
+      workspaceStatus: reportWorkspaceStatus(report),
       stateAfter: nextStatus,
       stopReason: nextState.stopReason,
     },
@@ -594,8 +637,13 @@ async function executePlannedIteration(
 
 export async function runOrchestratorOnce(stateId: string, dependencies: OrchestratorDependencies) {
   const nowFactory = dependencies.now ?? (() => new Date());
-  const initial = await dependencies.storage.loadState(stateId);
+  let initial = await dependencies.storage.loadState(stateId);
   if (!initial) throw new Error(`Orchestrator state ${stateId} was not found.`);
+
+  if (initial.task.workspaceRoot) {
+    const cleanup = await cleanupStateWorkspaces(stateId, dependencies);
+    initial = cleanup.state;
+  }
 
   const loopStopReason = currentLoopStopReason(initial);
   if (loopStopReason) {
@@ -739,66 +787,71 @@ export async function approvePendingPatch(stateId: string, dependencies: Orchest
   }
 
   const now = (dependencies.now ?? (() => new Date()))();
+  const exportRoot = path.join(state.task.repoPath, ".tmp", "orchestrator-promotion");
+  const exportBundle = await exportPatchBundle({
+    state,
+    exportRoot,
+  });
+  const branchPrep = await preparePromotionBranch({
+    state,
+    createBranch: false,
+  });
+
+  const nextStatus =
+    state.lastExecutionReport?.shouldCloseSlice && state.lastReviewVerdict?.verdict === "accept" ? "completed" : "needs_revision";
+
   let approved = orchestratorStateSchema.parse({
     ...state,
     pendingHumanApproval: false,
-    patchStatus: patchStatusSchema.parse("approved_for_apply"),
+    status: nextStatus,
+    patchStatus: patchStatusSchema.parse("promotion_ready"),
     approvalStatus: approvalStatusSchema.parse("approved"),
+    promotionStatus: promotionStatusSchema.parse("promotion_ready"),
+    exportArtifactPaths: [exportBundle.patchExportPath, exportBundle.manifestPath],
     stopReason: null,
     updatedAt: now.toISOString(),
   });
+  if (approved.lastExecutionReport) {
+    approved = orchestratorStateSchema.parse({
+      ...approved,
+      lastExecutionReport: appendArtifactsToReport(approved.lastExecutionReport, [
+        {
+          kind: "patch_export",
+          label: "patch export",
+          path: exportBundle.patchExportPath,
+          value: exportBundle.branchName,
+        },
+        {
+          kind: "promotion_manifest",
+          label: "promotion manifest",
+          path: exportBundle.manifestPath,
+          value: exportBundle.prTitle,
+        },
+        {
+          kind: "branch_metadata",
+          label: "branch metadata",
+          path: null,
+          value: branchPrep.branchReason,
+        },
+      ]),
+      updatedAt: now.toISOString(),
+    });
+  }
   approved = upsertIterationRecord(
     approved,
     state.lastExecutionReport!.iterationNumber,
     {
-      patchStatus: "approved_for_apply",
+      executionReport: approved.lastExecutionReport,
+      patchStatus: "promotion_ready",
       approvalStatus: "approved",
-      stateAfter: approved.status,
+      promotionStatus: "promotion_ready",
+      exportArtifactPaths: [exportBundle.patchExportPath, exportBundle.manifestPath],
+      stateAfter: nextStatus,
     },
     now,
   );
-
-  const promotion = await promotePatchFromState({
-    state: approved,
-    workspaceManager: dependencies.workspaceManager,
-  });
-
-  let applied = orchestratorStateSchema.parse({
-    ...approved,
-    patchStatus: patchStatusSchema.parse("applied"),
-    approvalStatus: approvalStatusSchema.parse("approved"),
-    status:
-      approved.lastExecutionReport?.shouldCloseSlice && approved.lastReviewVerdict?.verdict === "accept"
-        ? "completed"
-        : "needs_revision",
-    updatedAt: now.toISOString(),
-  });
-  applied = upsertIterationRecord(
-    applied,
-    state.lastExecutionReport!.iterationNumber,
-    {
-      patchStatus: "applied",
-      approvalStatus: "approved",
-      stateAfter: applied.status,
-      executionReport: applied.lastExecutionReport
-        ? {
-            ...applied.lastExecutionReport,
-            artifacts: [
-              ...applied.lastExecutionReport.artifacts,
-              {
-                kind: "promotion",
-                label: "promotion summary",
-                path: null,
-                value: `Applied ${promotion.changedFiles.length} files from ${promotion.workspacePath}.`,
-              },
-            ],
-          }
-        : null,
-    },
-    now,
-  );
-  await dependencies.storage.saveState(applied);
-  return applied;
+  await dependencies.storage.saveState(approved);
+  return approved;
 }
 
 export async function rejectPendingPatch(stateId: string, dependencies: OrchestratorDependencies, reason?: string) {
@@ -833,6 +886,91 @@ export async function rejectPendingPatch(stateId: string, dependencies: Orchestr
   return rejected;
 }
 
+export async function promoteApprovedPatch(
+  stateId: string,
+  dependencies: OrchestratorDependencies,
+  options?: { applyWorkspace?: boolean; createBranch?: boolean },
+) {
+  const state = await dependencies.storage.loadState(stateId);
+  if (!state) throw new Error(`Orchestrator state ${stateId} was not found.`);
+  if (!state.lastExecutionReport) {
+    throw new Error("Promotion requires an execution report.");
+  }
+  if (state.approvalStatus !== "approved") {
+    throw new Error("Promotion requires an approved patch.");
+  }
+  if (state.patchStatus !== "promotion_ready" && state.patchStatus !== "approved_for_apply") {
+    throw new Error(`Promotion requires promotion_ready state, received ${state.patchStatus}.`);
+  }
+  const issues = validatePatchPromotionPreconditions(state);
+  if (issues.length > 0) {
+    throw new Error(`Patch promotion preconditions failed: ${issues.join(" | ")}`);
+  }
+
+  const now = (dependencies.now ?? (() => new Date()))();
+  const branchPrep = await preparePromotionBranch({
+    state,
+    createBranch: options?.createBranch ?? true,
+  });
+
+  let report = state.lastExecutionReport;
+  if (options?.applyWorkspace) {
+    const promotion = await promotePatchFromState({
+      state,
+      workspaceManager: dependencies.workspaceManager,
+    });
+    report = appendArtifactsToReport(report, [
+      {
+        kind: "promotion",
+        label: "promotion summary",
+        path: null,
+        value: `Applied ${promotion.changedFiles.length} files from ${promotion.workspacePath}.`,
+      },
+    ]);
+  }
+
+  report = appendArtifactsToReport(report, [
+    {
+      kind: "promotion_branch",
+      label: "promotion branch",
+      path: null,
+      value: branchPrep.branchName,
+    },
+    {
+      kind: "pr_ready",
+      label: "pr ready metadata",
+      path: null,
+      value: `${branchPrep.prTitle}\n\n${branchPrep.prBody}`,
+    },
+  ]);
+
+  let promoted = orchestratorStateSchema.parse({
+    ...state,
+    status:
+      state.lastExecutionReport.shouldCloseSlice && state.lastReviewVerdict?.verdict === "accept"
+        ? "completed"
+        : "needs_revision",
+    patchStatus: patchStatusSchema.parse(options?.applyWorkspace ? "applied" : "promoted"),
+    promotionStatus: promotionStatusSchema.parse("promoted"),
+    lastExecutionReport: report,
+    stopReason: null,
+    updatedAt: now.toISOString(),
+  });
+  promoted = upsertIterationRecord(
+    promoted,
+    state.lastExecutionReport.iterationNumber,
+    {
+      executionReport: report,
+      patchStatus: options?.applyWorkspace ? "applied" : "promoted",
+      promotionStatus: "promoted",
+      stateAfter: promoted.status,
+    },
+    now,
+  );
+  await dependencies.storage.saveState(promoted);
+  return promoted;
+}
+
 export async function pruneStateArtifacts(
   stateId: string,
   dependencies: OrchestratorDependencies,
@@ -848,6 +986,46 @@ export async function pruneStateArtifacts(
   });
   await dependencies.storage.saveState(orchestratorStateSchema.parse(pruned.state));
   return pruned;
+}
+
+export async function cleanupStateWorkspaces(
+  stateId: string,
+  dependencies: OrchestratorDependencies,
+  options?: { staleMinutes?: number },
+) {
+  const state = await dependencies.storage.loadState(stateId);
+  if (!state) throw new Error(`Orchestrator state ${stateId} was not found.`);
+  const decision = cleanupDecisionSchema.parse(
+    await inspectWorkspaceCleanup({
+      state,
+      workspaceManager: dependencies.workspaceManager,
+      now: (dependencies.now ?? (() => new Date()))(),
+      staleMinutes: options?.staleMinutes,
+    }),
+  );
+  let updated = orchestratorStateSchema.parse({
+    ...state,
+    workspaceStatus: decision.workspaceStatus,
+    lastCleanupDecision: decision,
+    updatedAt: decision.cleanedAt,
+  });
+  if (state.iterationHistory.length > 0) {
+    const lastIteration = state.iterationHistory[state.iterationHistory.length - 1];
+    updated = upsertIterationRecord(
+      updated,
+      lastIteration.iterationNumber,
+      {
+        workspaceStatus: decision.workspaceStatus,
+        cleanupDecision: decision,
+      },
+      new Date(decision.cleanedAt),
+    );
+  }
+  await dependencies.storage.saveState(updated);
+  return {
+    state: updated,
+    result: decision,
+  };
 }
 
 export async function runLiveSmoke(params: {
@@ -867,6 +1045,51 @@ export async function runLiveSmoke(params: {
     client: params.openaiClient ?? undefined,
   });
   return liveSmokeResultSchema.parse(result);
+}
+
+export async function runLiveAcceptance(params: {
+  stateId?: string;
+  dependencies?: OrchestratorDependencies;
+  repoPath: string;
+  workspaceRoot?: string;
+  outputRoot?: string;
+  model?: string;
+  openaiClient?: OpenAIResponsesClient | null;
+  enabled?: boolean;
+}) {
+  const result = await runLiveSmoke({
+    repoPath: params.repoPath,
+    workspaceRoot: params.workspaceRoot,
+    outputRoot: params.outputRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-live-acceptance"),
+    model: params.model,
+    openaiClient: params.openaiClient,
+    enabled: params.enabled,
+  });
+
+  if (params.stateId && params.dependencies) {
+    const state = await params.dependencies.storage.loadState(params.stateId);
+    if (!state) throw new Error(`Orchestrator state ${params.stateId} was not found.`);
+    let updated = orchestratorStateSchema.parse({
+      ...state,
+      liveAcceptanceStatus: result.status,
+      lastLiveSmokeResult: result,
+      updatedAt: result.ranAt,
+    });
+    if (state.iterationHistory.length > 0) {
+      const lastIteration = state.iterationHistory[state.iterationHistory.length - 1];
+      updated = upsertIterationRecord(
+        updated,
+        lastIteration.iterationNumber,
+        {
+          liveAcceptanceStatus: result.status,
+        },
+        new Date(result.ranAt),
+      );
+    }
+    await params.dependencies.storage.saveState(updated);
+  }
+
+  return result;
 }
 
 export function createDefaultDependencies(params: {
