@@ -50,6 +50,9 @@
         "orchestrator:init": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js init",
         "orchestrator:plan": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js plan",
         "orchestrator:run-once": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js run-once",
+        "orchestrator:run-loop": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js run-loop",
+        "orchestrator:approve": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js approve",
+        "orchestrator:reject": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js reject",
         "orchestrator:resume": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js resume",
         "orchestrator:review": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js review",
         "orchestrator:dry-run": "npm run orchestrator:build && node .tmp/orchestrator/src/cli.js dry-run",
@@ -59,7 +62,10 @@
         "test:orchestrator:integration": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 integration",
         "test:orchestrator:schema": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 schema",
         "test:orchestrator:policy": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 policy",
+        "test:orchestrator:providers": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 providers",
+        "test:orchestrator:storage": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 storage",
         "test:orchestrator:mock-loop": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 mock-loop",
+        "test:orchestrator:loop": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 loop",
         "test:orchestrator:state-machine": "powershell -ExecutionPolicy Bypass -File tools/orchestrator/scripts/test-suite.ps1 state-machine"
     },
     "dependencies": {

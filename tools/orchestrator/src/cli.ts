@@ -1,6 +1,14 @@
 import path from "node:path";
-import { createInitialState, createDefaultDependencies, runOrchestratorOnce } from "./orchestrator";
-import { orchestratorStateSchema } from "./schemas";
+import {
+  approvePendingPlan,
+  createDefaultDependencies,
+  createInitialState,
+  planOrchestratorIteration,
+  rejectPendingPlan,
+  runOrchestratorLoop,
+  runOrchestratorOnce,
+} from "./orchestrator";
+import type { PlannerProviderKind } from "./schemas";
 
 function parseArgs(argv: string[]) {
   const [command = "help", ...rest] = argv;
@@ -75,6 +83,8 @@ async function main() {
         .split(",")
         .map((value) => value.trim())
         .filter(Boolean),
+      plannerProvider: getOption(options, "planner-provider", "rule_based") as PlannerProviderKind,
+      reviewerProvider: getOption(options, "reviewer-provider", "rule_based") as PlannerProviderKind,
     });
     await dependencies.storage.saveState(state);
     process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
@@ -87,31 +97,36 @@ async function main() {
   }
 
   if (command === "plan") {
-    const plannedState = orchestratorStateSchema.parse(existingState);
-    const decision = await dependencies.planner.plan({
-      state: plannedState,
-      previousExecutionReport: plannedState.lastExecutionReport,
-    });
-    process.stdout.write(`${JSON.stringify(decision, null, 2)}\n`);
+    const updated = await planOrchestratorIteration(stateId, dependencies);
+    process.stdout.write(`${JSON.stringify(updated.plannerDecision, null, 2)}\n`);
     return;
   }
 
   if (command === "review") {
-    if (!existingState.lastExecutionReport || !existingState.plannerDecision) {
-      throw new Error("Review requires an execution report and planner decision in state.");
-    }
-    const verdict = await dependencies.reviewer.review({
-      state: existingState,
-      report: existingState.lastExecutionReport,
-      decision: existingState.plannerDecision,
-      ciSummary: existingState.lastCIStatus,
-    });
-    process.stdout.write(`${JSON.stringify(verdict, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(existingState.lastReviewVerdict, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "approve") {
+    const updatedState = await approvePendingPlan(stateId, dependencies);
+    process.stdout.write(`${JSON.stringify(updatedState, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "reject") {
+    const updatedState = await rejectPendingPlan(stateId, dependencies, options.get("reason"));
+    process.stdout.write(`${JSON.stringify(updatedState, null, 2)}\n`);
     return;
   }
 
   if (command === "run-once" || command === "resume" || command === "dry-run") {
     const updatedState = await runOrchestratorOnce(stateId, dependencies);
+    process.stdout.write(`${JSON.stringify(updatedState, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "run-loop") {
+    const updatedState = await runOrchestratorLoop(stateId, dependencies);
     process.stdout.write(`${JSON.stringify(updatedState, null, 2)}\n`);
     return;
   }
@@ -122,6 +137,9 @@ async function main() {
       "  node cli.js init --state-id default --goal \"...\"",
       "  node cli.js plan --state-id default",
       "  node cli.js run-once --state-id default --executor mock",
+      "  node cli.js run-loop --state-id default --executor mock",
+      "  node cli.js approve --state-id default",
+      "  node cli.js reject --state-id default --reason \"...\"",
       "  node cli.js resume --state-id default",
       "  node cli.js review --state-id default",
       "  node cli.js dry-run --state-id default --executor mock",

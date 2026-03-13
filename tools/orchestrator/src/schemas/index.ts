@@ -162,13 +162,6 @@ export const plannerDecisionSchema = z.object({
   nextPrompt: z.string(),
 });
 
-export const nextIterationPlanSchema = z.object({
-  iterationNumber: z.number().int().positive(),
-  plannerDecision: plannerDecisionSchema,
-  approvalRequired: z.boolean(),
-  executorMode: z.enum(["mock", "local_repo"]),
-});
-
 export const reviewVerdictSchema = z.object({
   verdict: z.enum(["accept", "revise", "stop", "escalate"]),
   reasons: z.array(z.string()),
@@ -178,9 +171,12 @@ export const reviewVerdictSchema = z.object({
   canAutoContinue: z.boolean(),
 });
 
+export const providerKindSchema = z.enum(["rule_based", "openai"]);
+
 export const orchestratorStatusSchema = z.enum([
   "draft",
   "planning",
+  "waiting_approval",
   "executing",
   "awaiting_result",
   "validating",
@@ -210,6 +206,34 @@ const orchestratorTaskSchema = z.object({
   sameAcceptanceSuite: z.boolean().default(true),
   executorMode: z.enum(["mock", "local_repo"]).default("mock"),
   executorCommand: z.array(z.string()).default([]),
+  plannerProvider: providerKindSchema.default("rule_based"),
+  reviewerProvider: providerKindSchema.default("rule_based"),
+});
+
+export const nextIterationPlanSchema = z.object({
+  iterationNumber: z.number().int().positive(),
+  plannerDecision: plannerDecisionSchema,
+  approvalRequired: z.boolean(),
+  executorMode: z.enum(["mock", "local_repo"]),
+});
+
+export const iterationRecordSchema = z.object({
+  iterationNumber: z.number().int().positive(),
+  plannerProviderRequested: providerKindSchema,
+  plannerProviderResolved: providerKindSchema,
+  plannerFallbackReason: z.string().nullable().default(null),
+  reviewerProviderRequested: providerKindSchema.nullable().default(null),
+  reviewerProviderResolved: providerKindSchema.nullable().default(null),
+  reviewerFallbackReason: z.string().nullable().default(null),
+  plannerDecision: plannerDecisionSchema.nullable().default(null),
+  executionReport: executionReportSchema.nullable().default(null),
+  reviewVerdict: reviewVerdictSchema.nullable().default(null),
+  ciSummary: ciStatusSummarySchema.nullable().default(null),
+  stateBefore: orchestratorStatusSchema,
+  stateAfter: orchestratorStatusSchema,
+  stopReason: z.string().nullable().default(null),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 });
 
 export const orchestratorStateSchema = z.object({
@@ -217,6 +241,7 @@ export const orchestratorStateSchema = z.object({
   status: orchestratorStatusSchema,
   iterationNumber: z.number().int().nonnegative(),
   consecutiveFailures: z.number().int().nonnegative(),
+  repeatedNoProgressCount: z.number().int().nonnegative().default(0),
   pendingHumanApproval: z.boolean().default(false),
   task: orchestratorTaskSchema,
   plannerDecision: plannerDecisionSchema.nullable().default(null),
@@ -224,7 +249,12 @@ export const orchestratorStateSchema = z.object({
   lastExecutionReport: executionReportSchema.nullable().default(null),
   lastReviewVerdict: reviewVerdictSchema.nullable().default(null),
   lastCIStatus: ciStatusSummarySchema.nullable().default(null),
+  lastPlannerProvider: providerKindSchema.nullable().default(null),
+  lastReviewerProvider: providerKindSchema.nullable().default(null),
+  lastPlannerFallbackReason: z.string().nullable().default(null),
+  lastReviewerFallbackReason: z.string().nullable().default(null),
   stopReason: z.string().nullable().default(null),
+  iterationHistory: z.array(iterationRecordSchema).default([]),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -236,6 +266,8 @@ export type ReviewVerdict = z.infer<typeof reviewVerdictSchema>;
 export type OrchestratorState = z.infer<typeof orchestratorStateSchema>;
 export type CIStatusSummary = z.infer<typeof ciStatusSummarySchema>;
 export type ValidationResult = z.infer<typeof validationResultSchema>;
+export type PlannerProviderKind = z.infer<typeof providerKindSchema>;
+export type IterationRecord = z.infer<typeof iterationRecordSchema>;
 
 const stringArrayJsonSchema: JsonSchema = {
   type: "array",
@@ -411,6 +443,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "status",
     "iterationNumber",
     "consecutiveFailures",
+    "repeatedNoProgressCount",
     "pendingHumanApproval",
     "task",
     "plannerDecision",
@@ -418,7 +451,12 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastExecutionReport",
     "lastReviewVerdict",
     "lastCIStatus",
+    "lastPlannerProvider",
+    "lastReviewerProvider",
+    "lastPlannerFallbackReason",
+    "lastReviewerFallbackReason",
     "stopReason",
+    "iterationHistory",
     "createdAt",
     "updatedAt",
   ],
@@ -426,10 +464,23 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     id: { type: "string" },
     status: {
       type: "string",
-      enum: ["draft", "planning", "executing", "awaiting_result", "validating", "ci_running", "needs_revision", "blocked", "completed", "stopped"],
+      enum: [
+        "draft",
+        "planning",
+        "waiting_approval",
+        "executing",
+        "awaiting_result",
+        "validating",
+        "ci_running",
+        "needs_revision",
+        "blocked",
+        "completed",
+        "stopped",
+      ],
     },
     iterationNumber: { type: "number" },
     consecutiveFailures: { type: "number" },
+    repeatedNoProgressCount: { type: "number" },
     pendingHumanApproval: { type: "boolean" },
     task: {
       type: "object",
@@ -452,6 +503,8 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         "sameAcceptanceSuite",
         "executorMode",
         "executorCommand",
+        "plannerProvider",
+        "reviewerProvider",
       ],
       additionalProperties: false,
       properties: {
@@ -472,10 +525,9 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         specsClear: { type: "boolean" },
         sameAcceptanceSuite: { type: "boolean" },
         executorMode: { type: "string", enum: ["mock", "local_repo"] },
-        executorCommand: {
-          type: "array",
-          items: { type: "string" },
-        },
+        executorCommand: { type: "array", items: { type: "string" } },
+        plannerProvider: { type: "string", enum: ["rule_based", "openai"] },
+        reviewerProvider: { type: "string", enum: ["rule_based", "openai"] },
       },
     },
     plannerDecision: { ...plannerDecisionJsonSchema, nullable: true },
@@ -494,7 +546,84 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     lastExecutionReport: { ...executionReportJsonSchema, nullable: true },
     lastReviewVerdict: { ...reviewVerdictJsonSchema, nullable: true },
     lastCIStatus: { ...ciStatusSummaryJsonSchema, nullable: true },
+    lastPlannerProvider: { type: "string", enum: ["rule_based", "openai"], nullable: true },
+    lastReviewerProvider: { type: "string", enum: ["rule_based", "openai"], nullable: true },
+    lastPlannerFallbackReason: { type: "string", nullable: true },
+    lastReviewerFallbackReason: { type: "string", nullable: true },
     stopReason: { type: "string", nullable: true },
+    iterationHistory: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "iterationNumber",
+          "plannerProviderRequested",
+          "plannerProviderResolved",
+          "plannerFallbackReason",
+          "reviewerProviderRequested",
+          "reviewerProviderResolved",
+          "reviewerFallbackReason",
+          "plannerDecision",
+          "executionReport",
+          "reviewVerdict",
+          "ciSummary",
+          "stateBefore",
+          "stateAfter",
+          "stopReason",
+          "createdAt",
+          "updatedAt",
+        ],
+        properties: {
+          iterationNumber: { type: "number" },
+          plannerProviderRequested: { type: "string", enum: ["rule_based", "openai"] },
+          plannerProviderResolved: { type: "string", enum: ["rule_based", "openai"] },
+          plannerFallbackReason: { type: "string", nullable: true },
+          reviewerProviderRequested: { type: "string", enum: ["rule_based", "openai"], nullable: true },
+          reviewerProviderResolved: { type: "string", enum: ["rule_based", "openai"], nullable: true },
+          reviewerFallbackReason: { type: "string", nullable: true },
+          plannerDecision: { ...plannerDecisionJsonSchema, nullable: true },
+          executionReport: { ...executionReportJsonSchema, nullable: true },
+          reviewVerdict: { ...reviewVerdictJsonSchema, nullable: true },
+          ciSummary: { ...ciStatusSummaryJsonSchema, nullable: true },
+          stateBefore: {
+            type: "string",
+            enum: [
+              "draft",
+              "planning",
+              "waiting_approval",
+              "executing",
+              "awaiting_result",
+              "validating",
+              "ci_running",
+              "needs_revision",
+              "blocked",
+              "completed",
+              "stopped",
+            ],
+          },
+          stateAfter: {
+            type: "string",
+            enum: [
+              "draft",
+              "planning",
+              "waiting_approval",
+              "executing",
+              "awaiting_result",
+              "validating",
+              "ci_running",
+              "needs_revision",
+              "blocked",
+              "completed",
+              "stopped",
+            ],
+          },
+          stopReason: { type: "string", nullable: true },
+          createdAt: { type: "string" },
+          updatedAt: { type: "string" },
+        },
+      },
+    },
     createdAt: { type: "string" },
     updatedAt: { type: "string" },
   },

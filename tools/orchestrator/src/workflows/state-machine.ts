@@ -3,6 +3,7 @@ import { orchestratorStateSchema, type OrchestratorState } from "../schemas";
 export type OrchestratorTransitionEvent =
   | "planning_started"
   | "plan_ready"
+  | "waiting_approval"
   | "execution_started"
   | "awaiting_result"
   | "validating"
@@ -14,7 +15,8 @@ export type OrchestratorTransitionEvent =
 
 const allowedTransitions: Record<OrchestratorState["status"], OrchestratorTransitionEvent[]> = {
   draft: ["planning_started", "stopped"],
-  planning: ["plan_ready", "execution_started", "stopped"],
+  planning: ["plan_ready", "waiting_approval", "execution_started", "stopped"],
+  waiting_approval: ["execution_started", "blocked", "stopped"],
   executing: ["awaiting_result", "blocked", "stopped"],
   awaiting_result: ["validating", "blocked", "stopped"],
   validating: ["ci_running", "needs_revision", "completed", "blocked", "stopped"],
@@ -28,6 +30,7 @@ const allowedTransitions: Record<OrchestratorState["status"], OrchestratorTransi
 const statusByEvent: Record<OrchestratorTransitionEvent, OrchestratorState["status"]> = {
   planning_started: "planning",
   plan_ready: "planning",
+  waiting_approval: "waiting_approval",
   execution_started: "executing",
   awaiting_result: "awaiting_result",
   validating: "validating",

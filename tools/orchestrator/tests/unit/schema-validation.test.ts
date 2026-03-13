@@ -94,4 +94,6 @@ test("orchestrator state schema preserves init payload", () => {
   });
   assert.equal(parsed.status, "draft");
   assert.equal(parsed.task.executorMode, "mock");
+  assert.equal(parsed.task.plannerProvider, "rule_based");
+  assert.equal(parsed.iterationHistory.length, 0);
 });

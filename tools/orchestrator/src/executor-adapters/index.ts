@@ -52,11 +52,21 @@ function validateExecutionReport(data: unknown) {
 
 export class MockExecutor implements ExecutionProvider {
   private readonly runs = new Map<string, StoredRun>();
+  private readonly queuedReports: ExecutionReport[];
+
+  constructor(queuedReports: ExecutionReport[] = []) {
+    this.queuedReports = [...queuedReports];
+  }
+
+  enqueueReports(reports: ExecutionReport[]) {
+    this.queuedReports.push(...reports);
+  }
 
   async submitTask(task: ExecutionProviderTask) {
     const runId = randomUUID();
     const report =
       task.metadata?.mockReport ??
+      this.queuedReports.shift() ??
       validateExecutionReport({
         iterationNumber: task.iterationNumber,
         changedFiles: [],

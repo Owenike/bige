@@ -1,4 +1,10 @@
-import type { ExecutionReport, OrchestratorState, ValidationResult } from "../schemas";
+import type {
+  ExecutionReport,
+  OrchestratorState,
+  PlannerDecision,
+  ReviewVerdict,
+  ValidationResult,
+} from "../schemas";
 
 export const ORCHESTRATOR_ACCEPTANCE_COMMANDS = [
   "npm run test:orchestrator:typecheck",
@@ -87,12 +93,60 @@ export function hasRepeatedBlocker(state: OrchestratorState, report: ExecutionRe
   return report.blockers.some((blocker) => state.lastExecutionReport?.blockers.includes(blocker));
 }
 
-export function shouldStopForPolicy(state: OrchestratorState, report: ExecutionReport) {
+function sameStringSet(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  const leftSorted = [...left].sort();
+  const rightSorted = [...right].sort();
+  return leftSorted.every((value, index) => value === rightSorted[index]);
+}
+
+export function hasRepeatedNoProgress(params: {
+  state: OrchestratorState;
+  decision: PlannerDecision;
+  report: ExecutionReport;
+  violatedConstraints: string[];
+  missingValidation: string[];
+  suggestedPatchScope: string[];
+}) {
+  const previousVerdict = params.state.lastReviewVerdict;
+  const previousDecision = params.state.plannerDecision;
+  if (!previousVerdict || !previousDecision) return false;
+
+  const repeatedBlocker = hasRepeatedBlocker(params.state, params.report);
+  const repeatedObjective = previousDecision.objective === params.decision.objective;
+  const repeatedConstraints = sameStringSet(previousVerdict.violatedConstraints, params.violatedConstraints);
+  const repeatedValidation = sameStringSet(previousVerdict.missingValidation, params.missingValidation);
+  const repeatedPatchScope = sameStringSet(previousVerdict.suggestedPatchScope, params.suggestedPatchScope);
+
+  return repeatedObjective && (repeatedBlocker || (repeatedConstraints && repeatedValidation && repeatedPatchScope));
+}
+
+export function shouldStopForPolicy(params: {
+  state: OrchestratorState;
+  report: ExecutionReport;
+  decision?: PlannerDecision;
+  reviewVerdict?: Pick<ReviewVerdict, "violatedConstraints" | "missingValidation" | "suggestedPatchScope">;
+}) {
+  const { state, report } = params;
   if (state.iterationNumber >= state.task.maxIterations) {
     return "Maximum iterations reached.";
   }
   if (state.consecutiveFailures >= state.task.maxConsecutiveFailures) {
     return "Maximum consecutive failures reached.";
+  }
+  if (
+    params.decision &&
+    params.reviewVerdict &&
+    hasRepeatedNoProgress({
+      state,
+      decision: params.decision,
+      report,
+      violatedConstraints: params.reviewVerdict.violatedConstraints,
+      missingValidation: params.reviewVerdict.missingValidation,
+      suggestedPatchScope: params.reviewVerdict.suggestedPatchScope,
+    })
+  ) {
+    return "The same problem repeated without measurable progress.";
   }
   if (hasRepeatedBlocker(state, report)) {
     return "The same blocker repeated without progress.";

@@ -24,7 +24,9 @@ $suiteMap = @{
     "$outDir\tests\unit\schema-validation.test.js",
     "$outDir\tests\unit\policy-engine.test.js",
     "$outDir\tests\unit\planner-reviewer.test.js",
-    "$outDir\tests\unit\state-machine.test.js"
+    "$outDir\tests\unit\state-machine.test.js",
+    "$outDir\tests\unit\providers.test.js",
+    "$outDir\tests\unit\storage-persistence.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js"
@@ -39,16 +41,29 @@ $suiteMap = @{
   "state-machine" = @(
     "$outDir\tests\unit\state-machine.test.js"
   )
+  "providers" = @(
+    "$outDir\tests\unit\providers.test.js"
+  )
+  "storage" = @(
+    "$outDir\tests\unit\storage-persistence.test.js"
+  )
   "mock-loop" = @(
-    "$outDir\tests\e2e\mock-loop.test.js"
+    "$outDir\tests\e2e\mock-loop.test.js",
+    "$outDir\tests\e2e\multi-iteration-loop.test.js"
+  )
+  "loop" = @(
+    "$outDir\tests\e2e\multi-iteration-loop.test.js"
   )
   "all" = @(
     "$outDir\tests\unit\schema-validation.test.js",
     "$outDir\tests\unit\policy-engine.test.js",
     "$outDir\tests\unit\planner-reviewer.test.js",
     "$outDir\tests\unit\state-machine.test.js",
+    "$outDir\tests\unit\providers.test.js",
+    "$outDir\tests\unit\storage-persistence.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
-    "$outDir\tests\e2e\mock-loop.test.js"
+    "$outDir\tests\e2e\mock-loop.test.js",
+    "$outDir\tests\e2e\multi-iteration-loop.test.js"
   )
 }
 

@@ -3,7 +3,7 @@ import test from "node:test";
 import { createInitialState } from "../../src/orchestrator";
 import { transitionState } from "../../src/workflows/state-machine";
 
-test("state machine advances through planning to completion and blocks invalid transitions", () => {
+test("state machine advances through planning, approval, execution, and completion while blocking invalid transitions", () => {
   let state = createInitialState({
     id: "state-machine",
     repoPath: "C:/repo",
@@ -17,7 +17,7 @@ test("state machine advances through planning to completion and blocks invalid t
   });
 
   state = transitionState(state, "planning_started");
-  state = transitionState(state, "plan_ready");
+  state = transitionState(state, "waiting_approval");
   state = transitionState(state, "execution_started");
   state = transitionState(state, "awaiting_result");
   state = transitionState(state, "validating");
