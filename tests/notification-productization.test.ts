@@ -120,10 +120,14 @@ import {
 import {
   NotificationReadApiOrchestrationError,
   buildNotificationOverviewPagePaths,
+  buildNotificationReadApiRequestKey,
+  buildNotificationTenantDrilldownQueryFingerprint,
   buildNotificationTenantDrilldownPath,
   classifyNotificationReadApiOrchestrationError,
   loadNotificationOverviewPageData,
   loadNotificationTenantDrilldownPageData,
+  prefetchNotificationTenantDrilldownFromOverviewState,
+  prefetchNotificationTenantDrilldownPageData,
 } from "../lib/notification-read-api-hooks";
 import {
   buildNotificationOverviewPageHrefFromQueryState,
@@ -139,6 +143,7 @@ import {
 import {
   buildNotificationOverviewHrefFromTenantDrilldownState,
   buildNotificationOverviewPageUrl,
+  buildNotificationTenantDrilldownStateFromOverviewState,
   buildNotificationTenantDrilldownHrefFromOverviewState,
   buildNotificationTenantDrilldownPageUrl,
 } from "../lib/notification-read-api-url-state";
@@ -2795,6 +2800,274 @@ test("read API visibility revalidation keeps existing data, avoids duplicate in-
   assert.equal(controller.getState().data, "revalidated");
   assert.equal(controller.getState().phase, "idle");
   assert.equal(controller.getState().cacheStatus, "hit");
+});
+
+test("read API warm navigation prefetch shares drilldown fingerprint and serves a fresh cache hit on navigation", async () => {
+  clearNotificationReadApiResultCache();
+  const overviewState = {
+    tenantId: "",
+    channel: "email" as const,
+    from: "2026-03-10T00:00",
+    to: "2026-03-10T23:59",
+    limit: 2000,
+  };
+  const drilldownState = buildNotificationTenantDrilldownStateFromOverviewState(overviewState, {
+    now: () => new Date("2026-03-13T12:00:00.000Z"),
+  });
+  let loaderCalls = 0;
+  const fetchDrilldown = async () => {
+    loaderCalls += 1;
+    return parseNotificationReadApiPayload(
+      "tenant_drilldown",
+      buildConsumerReadApiPayload(
+        "tenant_drilldown",
+        buildNotificationAggregationMetadata({
+          aggregationModeRequested: "auto",
+          dataSource: "rollup",
+          isWholeUtcDayWindow: true,
+          rollupEligible: true,
+        }),
+      ),
+    );
+  };
+
+  const prefetched = await prefetchNotificationTenantDrilldownFromOverviewState(
+    "tenant-prefetch",
+    overviewState,
+    {
+      fetchDrilldown,
+    },
+    {
+      referenceNow: () => new Date("2026-03-13T12:00:00.000Z"),
+      now: () => 1_000,
+    },
+  );
+
+  const directPrefetch = await prefetchNotificationTenantDrilldownPageData(
+    "tenant-prefetch",
+    drilldownState,
+    {
+      fetchDrilldown,
+    },
+    {
+      now: () => 1_000,
+    },
+  );
+
+  assert.equal(prefetched.filters.aggregationMode, "auto");
+  assert.equal(prefetched.queryFingerprint, buildNotificationTenantDrilldownQueryFingerprint("tenant-prefetch", drilldownState));
+  assert.equal(directPrefetch.queryFingerprint, prefetched.queryFingerprint);
+  assert.equal(directPrefetch.requestKey, buildNotificationReadApiRequestKey(prefetched.queryFingerprint, 0));
+  assert.equal(loaderCalls, 1);
+
+  const controller = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+  let navigationLoaderCalls = 0;
+  controller.start({
+    requestKey: directPrefetch.requestKey,
+    cacheKey: directPrefetch.queryFingerprint,
+    cause: "query",
+    now: () => 1_050,
+    loader: async () => {
+      navigationLoaderCalls += 1;
+      return "should-not-run";
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(controller.getState().cacheStatus, "hit");
+  assert.equal(controller.getState().loading, false);
+  assert.equal(controller.getState().isInitialLoading, false);
+  assert.equal(navigationLoaderCalls, 0);
+});
+
+test("read API warm navigation keeps stale drilldown data visible, treats expired cache as miss, and preserves manual refresh bypass", async () => {
+  clearNotificationReadApiResultCache();
+  let nowMs = 1_000;
+  let loaderCalls = 0;
+  const filters = buildNotificationTenantDrilldownStateFromOverviewState(
+    {
+      tenantId: "",
+      channel: "",
+      from: "2026-03-10T00:00",
+      to: "2026-03-10T23:59",
+      limit: 2000,
+    },
+    {
+      now: () => new Date("2026-03-13T12:00:00.000Z"),
+    },
+  );
+
+  await prefetchNotificationTenantDrilldownPageData(
+    "tenant-stale",
+    filters,
+    {
+      fetchDrilldown: async () => {
+        loaderCalls += 1;
+        return parseNotificationReadApiPayload(
+          "tenant_drilldown",
+          buildConsumerReadApiPayload(
+            "tenant_drilldown",
+            buildNotificationAggregationMetadata({
+              aggregationModeRequested: "auto",
+              dataSource: "rollup",
+              isWholeUtcDayWindow: true,
+              rollupEligible: true,
+            }),
+          ),
+        );
+      },
+    },
+    {
+      now: () => nowMs,
+      cacheTtlMs: 100,
+      cacheExpireMs: 300,
+    },
+  );
+
+  const queryFingerprint = buildNotificationTenantDrilldownQueryFingerprint("tenant-stale", filters);
+  const requestKey = buildNotificationReadApiRequestKey(queryFingerprint, 0);
+
+  const staleDeferred = createDeferredPromise<string>();
+  const staleController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+  nowMs += 150;
+  staleController.start({
+    requestKey,
+    cacheKey: queryFingerprint,
+    cause: "query",
+    now: () => nowMs,
+    cacheTtlMs: 100,
+    cacheExpireMs: 300,
+    loader: async () => {
+      loaderCalls += 1;
+      return staleDeferred.promise;
+    },
+  });
+  await flushAsyncWork();
+  assert.equal(staleController.getState().cacheStatus, "stale");
+  assert.equal(staleController.getState().phase, "reloading");
+  assert.equal(staleController.getState().data !== null, true);
+
+  staleDeferred.resolve("fresh-after-stale");
+  await staleDeferred.promise;
+  await flushAsyncWork();
+
+  const expiredController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+  nowMs += 500;
+  const expiredDeferred = createDeferredPromise<string>();
+  expiredController.start({
+    requestKey,
+    cacheKey: queryFingerprint,
+    cause: "query",
+    now: () => nowMs,
+    cacheTtlMs: 100,
+    cacheExpireMs: 300,
+    loader: async () => {
+      loaderCalls += 1;
+      return expiredDeferred.promise;
+    },
+  });
+  await flushAsyncWork();
+  assert.equal(expiredController.getState().phase, "initial_loading");
+  assert.equal(expiredController.getState().data, null);
+
+  expiredDeferred.resolve("expired-refetch");
+  await expiredDeferred.promise;
+  await flushAsyncWork();
+
+  expiredController.start({
+    requestKey: buildNotificationReadApiRequestKey(queryFingerprint, 1),
+    cacheKey: queryFingerprint,
+    cause: "refresh",
+    now: () => nowMs + 1,
+    cacheTtlMs: 100,
+    cacheExpireMs: 300,
+    loader: async () => {
+      loaderCalls += 1;
+      return "manual-refresh";
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(expiredController.getState().data, "manual-refresh");
+  assert.equal(loaderCalls >= 4, true);
+});
+
+test("read API warm navigation prefetch failure does not poison drilldown navigation or raw-backed support note", async () => {
+  clearNotificationReadApiResultCache();
+  const filters = buildNotificationTenantDrilldownStateFromOverviewState(
+    {
+      tenantId: "",
+      channel: "",
+      from: "2026-03-10T00:00",
+      to: "2026-03-10T23:59",
+      limit: 2000,
+    },
+    {
+      now: () => new Date("2026-03-13T12:00:00.000Z"),
+    },
+  );
+
+  const failedPrefetch = await prefetchNotificationTenantDrilldownPageData(
+    "tenant-failure",
+    filters,
+    {
+      fetchDrilldown: async () => {
+        throw new TypeError("prefetch failed");
+      },
+    },
+    {
+      now: () => 1_000,
+    },
+  );
+
+  assert.equal(failedPrefetch.status, "failed");
+
+  const recovered = await loadNotificationTenantDrilldownPageData(
+    "tenant-failure",
+    filters,
+    {
+      fetchDrilldown: async () =>
+        parseNotificationReadApiPayload(
+          "tenant_drilldown",
+          buildConsumerReadApiPayload(
+            "tenant_drilldown",
+            buildNotificationAggregationMetadata({
+              aggregationModeRequested: "auto",
+              dataSource: "raw",
+              isWholeUtcDayWindow: false,
+              rollupEligible: false,
+            }),
+          ),
+        ),
+    },
+  );
+
+  assert.equal(recovered.recentAnomaliesSupportNote, getTenantDrilldownRecentAnomaliesSupportNote());
+  assert.equal(recovered.drilldown.recentAnomaliesRawBacked, true);
 });
 
 test("read API query-state defaults and search-param hydration stay aligned for overview and drilldown", () => {

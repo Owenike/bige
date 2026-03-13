@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
 import {
+  prefetchNotificationTenantDrilldownFromOverviewState,
   useNotificationOverviewPageData,
   type NotificationOverviewPageData,
 } from "../lib/notification-read-api-hooks";
@@ -49,6 +50,15 @@ export default function NotificationOverviewDashboard() {
   const trend = data?.trends.snapshot ?? null;
 
   const hasData = useMemo(() => Boolean(snapshot && snapshot.totalRows > 0), [snapshot]);
+  const warmTenantDrilldown = (tenantId: string) => {
+    void prefetchNotificationTenantDrilldownFromOverviewState(tenantId, filters);
+  };
+  const buildTenantDrilldownLinkProps = (tenantId: string) => ({
+    href: buildTenantDrilldownHref(tenantId),
+    onMouseEnter: () => warmTenantDrilldown(tenantId),
+    onFocus: () => warmTenantDrilldown(tenantId),
+    onPointerDown: () => warmTenantDrilldown(tenantId),
+  });
 
   return (
     <main className="fdGlassScene">
@@ -223,7 +233,7 @@ export default function NotificationOverviewDashboard() {
                             {item.summary}
                           </p>
                           <div className="actions" style={{ marginTop: 6 }}>
-                            <Link className="fdPillBtn" href={buildTenantDrilldownHref(item.tenantId)}>
+                            <Link className="fdPillBtn" {...buildTenantDrilldownLinkProps(item.tenantId)}>
                               Open Tenant Drilldown
                             </Link>
                             <Link className="fdPillBtn" href={buildAlertWorkflowHref(snapshot, item.tenantId)}>
@@ -283,7 +293,7 @@ export default function NotificationOverviewDashboard() {
                             {toPercent(item.rateDelta)})
                           </p>
                           <div className="actions" style={{ marginTop: 6 }}>
-                            <Link className="fdPillBtn" href={buildTenantDrilldownHref(item.tenantId)}>
+                            <Link className="fdPillBtn" {...buildTenantDrilldownLinkProps(item.tenantId)}>
                               Open Tenant Drilldown
                             </Link>
                             <Link className="fdPillBtn" href={buildAlertWorkflowHref(snapshot, item.tenantId)}>
@@ -357,7 +367,7 @@ export default function NotificationOverviewDashboard() {
                         clicked {row.clicked}, conversion {row.conversion}
                       </p>
                       <div className="actions" style={{ marginTop: 6 }}>
-                        <Link className="fdPillBtn" href={buildTenantDrilldownHref(row.tenantId)}>
+                        <Link className="fdPillBtn" {...buildTenantDrilldownLinkProps(row.tenantId)}>
                           Drilldown
                         </Link>
                       </div>

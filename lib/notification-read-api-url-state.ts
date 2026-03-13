@@ -102,18 +102,21 @@ export function buildNotificationTenantDrilldownHrefFromOverviewState(
   options: UrlSyncOptions = {},
 ) {
   const path = `/platform-admin/notifications-overview/${encodeURIComponent(tenantId)}`;
-  return buildNotificationTenantDrilldownPageUrl(
-    path,
-    {
-      channel: overviewState.channel,
-      aggregationMode: "auto",
-      from: overviewState.from,
-      to: overviewState.to,
-      limit: overviewState.limit,
-      anomalyLimit: createNotificationTenantDrilldownQueryStateDefaults(options.now).anomalyLimit,
-    },
-    options,
-  );
+  return buildNotificationTenantDrilldownPageUrl(path, buildNotificationTenantDrilldownStateFromOverviewState(overviewState, options), options);
+}
+
+export function buildNotificationTenantDrilldownStateFromOverviewState(
+  overviewState: NotificationOverviewQueryState,
+  options: UrlSyncOptions = {},
+): NotificationTenantDrilldownQueryState {
+  return {
+    channel: overviewState.channel,
+    aggregationMode: "auto",
+    from: overviewState.from,
+    to: overviewState.to,
+    limit: overviewState.limit,
+    anomalyLimit: createNotificationTenantDrilldownQueryStateDefaults(options.now).anomalyLimit,
+  };
 }
 
 export function buildNotificationOverviewHrefFromTenantDrilldownState(

@@ -19,9 +19,11 @@ import {
   type NotificationOverviewQueryState,
   type NotificationTenantDrilldownQueryState,
 } from "./notification-read-api-query-state";
+import { buildNotificationTenantDrilldownStateFromOverviewState } from "./notification-read-api-url-state";
 import {
   NotificationReadApiRequestLifecycleController,
   createNotificationReadApiRequestState,
+  prefetchNotificationReadApiResult,
   shouldRevalidateNotificationReadApiOnVisible,
   type NotificationReadApiRequestCause,
   type NotificationReadApiRequestState,
@@ -212,6 +214,17 @@ export function buildNotificationTenantDrilldownPath(
 ) {
   const { params } = serializeNotificationTenantDrilldownQueryParams(filters as NotificationTenantDrilldownQueryState);
   return `/api/platform/notifications/overview/tenants/${encodeURIComponent(tenantId)}?${params.toString()}`;
+}
+
+export function buildNotificationReadApiRequestKey(queryFingerprint: string, refreshKey: number) {
+  return `${queryFingerprint}|refresh:${refreshKey}`;
+}
+
+export function buildNotificationTenantDrilldownQueryFingerprint(
+  tenantId: string,
+  filters: NotificationTenantDrilldownFilters,
+) {
+  return buildNotificationTenantDrilldownPath(tenantId, filters);
 }
 
 export function classifyNotificationReadApiOrchestrationError(
@@ -438,7 +451,7 @@ function useNotificationManagedRequest<TData>(params: {
   }, [controller]);
 
   useEffect(() => {
-    const requestKey = `${params.queryFingerprint}|refresh:${params.refreshKey}`;
+    const requestKey = buildNotificationReadApiRequestKey(params.queryFingerprint, params.refreshKey);
     const cause = resolveNotificationReadApiRequestCause(previousRequestRef.current, {
       queryFingerprint: params.queryFingerprint,
       refreshKey: params.refreshKey,
@@ -514,7 +527,7 @@ export function useNotificationTenantDrilldownPageData(
   refreshKey: number,
 ) {
   const queryFingerprint = useMemo(
-    () => buildNotificationTenantDrilldownPath(tenantId, filters),
+    () => buildNotificationTenantDrilldownQueryFingerprint(tenantId, filters),
     [tenantId, filters],
   );
 
@@ -528,6 +541,53 @@ export function useNotificationTenantDrilldownPageData(
         message: "Load tenant drilldown failed",
       }),
   });
+}
+
+export async function prefetchNotificationTenantDrilldownPageData(
+  tenantId: string,
+  filters: NotificationTenantDrilldownFilters,
+  dependencies: TenantDrilldownLoaderDependencies = {},
+  options: NotificationReadApiLoadOptions & {
+    cacheTtlMs?: number;
+    cacheExpireMs?: number;
+    now?: () => number;
+    refreshKey?: number;
+  } = {},
+) {
+  const queryFingerprint = buildNotificationTenantDrilldownQueryFingerprint(tenantId, filters);
+  const requestKey = buildNotificationReadApiRequestKey(queryFingerprint, options.refreshKey ?? 0);
+  const result = await prefetchNotificationReadApiResult({
+    requestKey,
+    cacheKey: queryFingerprint,
+    cacheTtlMs: options.cacheTtlMs,
+    cacheExpireMs: options.cacheExpireMs,
+    now: options.now,
+    loader: (signal) => loadNotificationTenantDrilldownPageData(tenantId, filters, dependencies, { signal }),
+  });
+
+  return {
+    ...result,
+    tenantId,
+    filters,
+    queryFingerprint,
+    requestKey,
+  };
+}
+
+export async function prefetchNotificationTenantDrilldownFromOverviewState(
+  tenantId: string,
+  overviewState: NotificationOverviewQueryState,
+  dependencies: TenantDrilldownLoaderDependencies = {},
+  options: {
+    referenceNow?: Date | (() => Date);
+    now?: () => number;
+    cacheTtlMs?: number;
+    cacheExpireMs?: number;
+    refreshKey?: number;
+  } = {},
+) {
+  const filters = buildNotificationTenantDrilldownStateFromOverviewState(overviewState, { now: options.referenceNow });
+  return prefetchNotificationTenantDrilldownPageData(tenantId, filters, dependencies, options);
 }
 
 export function getDefaultTenantDrilldownSupportNote() {

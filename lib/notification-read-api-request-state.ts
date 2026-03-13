@@ -5,6 +5,7 @@ export type NotificationReadApiRequestCause = "query" | "refresh" | "visibility"
 export type NotificationReadApiRequestPhase = "idle" | "initial_loading" | "reloading" | "refreshing";
 
 export type NotificationReadApiCacheStatus = "miss" | "hit" | "stale";
+export type NotificationReadApiPrefetchStatus = "hit" | "fetched" | "failed" | "cancelled";
 
 export type NotificationReadApiRequestState<TData, TError extends Error> = {
   data: TData | null;
@@ -43,6 +44,12 @@ export type NotificationReadApiCacheDebugEntry = {
   lastAccessedAt: number;
   ageMs: number;
   status: NotificationReadApiCacheLookupStatus;
+};
+
+export type NotificationReadApiPrefetchResult<TData> = {
+  status: NotificationReadApiPrefetchStatus;
+  cacheStatus: NotificationReadApiCacheStatus;
+  data: TData | null;
 };
 
 function acquireSharedRequest<TData>(requestKey: string, loader: RequestLoader<TData>) {
@@ -85,6 +92,17 @@ function acquireSharedRequest<TData>(requestKey: string, loader: RequestLoader<T
       }
     },
   };
+}
+
+function isAbortLikeNotificationReadApiRequestError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: unknown; code?: unknown; message?: unknown };
+  return (
+    candidate.name === "AbortError" ||
+    candidate.code === "ABORT_ERR" ||
+    candidate.message === "The operation was aborted." ||
+    candidate.message === "This operation was aborted"
+  );
 }
 
 export function createNotificationReadApiRequestState<TData, TError extends Error>(
@@ -207,6 +225,50 @@ export function shouldRevalidateNotificationReadApiOnVisible(params: {
     cacheExpireMs: params.cacheExpireMs,
   });
   return status === "stale" || status === "expired";
+}
+
+export async function prefetchNotificationReadApiResult<TData>(params: {
+  requestKey: string;
+  cacheKey?: string;
+  loader: RequestLoader<TData>;
+  cacheTtlMs?: number;
+  cacheExpireMs?: number;
+  now?: () => number;
+}): Promise<NotificationReadApiPrefetchResult<TData>> {
+  const cacheKey = params.cacheKey ?? params.requestKey;
+  const cached = getNotificationReadApiCachedResult<TData>({
+    cacheKey,
+    now: params.now,
+    cacheTtlMs: params.cacheTtlMs,
+    cacheExpireMs: params.cacheExpireMs,
+  });
+
+  if (cached.status === "hit") {
+    return {
+      status: "hit",
+      cacheStatus: "hit",
+      data: cached.data,
+    };
+  }
+
+  const subscription = acquireSharedRequest(params.requestKey, params.loader);
+  try {
+    const data = await subscription.promise;
+    writeNotificationReadApiCachedResult(cacheKey, data, params.now);
+    return {
+      status: "fetched",
+      cacheStatus: "hit",
+      data,
+    };
+  } catch (error) {
+    return {
+      status: isAbortLikeNotificationReadApiRequestError(error) ? "cancelled" : "failed",
+      cacheStatus: cached.data !== null ? cached.status : "miss",
+      data: cached.data,
+    };
+  } finally {
+    subscription.release();
+  }
 }
 
 function getNotificationReadApiCachedResult<TData>(params: {
