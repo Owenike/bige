@@ -1,144 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
 import {
-  fetchNotificationOverviewReadApi,
-  fetchNotificationTrendsReadApi,
-  type NotificationOverviewReadModel,
-  type NotificationTrendsReadModel,
-} from "../lib/notification-read-api-client";
+  useNotificationOverviewPageData,
+  type NotificationOverviewPageData,
+} from "../lib/notification-read-api-hooks";
 import NotificationGovernanceNav from "./notification-governance-nav";
 
 type DeliveryChannel = "in_app" | "email" | "line" | "sms" | "webhook" | "other";
 
-type DailyItem = {
-  day: string;
-  sent: number;
-  failed: number;
-  deadLetter: number;
-  opened: number;
-  clicked: number;
-  conversion: number;
-  total: number;
-  successRate: number;
-  failRate: number;
-};
-
-type ChannelItem = {
-  channel: string;
-  total: number;
-  sent: number;
-  failed: number;
-  pending: number;
-  retrying: number;
-  deadLetter: number;
-  opened: number;
-  clicked: number;
-  conversion: number;
-  successRate: number;
-  failRate: number;
-  openRate: number;
-  clickRate: number;
-  conversionRate: number;
-};
-
-type TenantItem = {
-  tenantId: string;
-  total: number;
-  sent: number;
-  failed: number;
-  pending: number;
-  retrying: number;
-  deadLetter: number;
-  opened: number;
-  clicked: number;
-  conversion: number;
-  successRate: number;
-  failRate: number;
-  openRate: number;
-  clickRate: number;
-  conversionRate: number;
-};
-
-type OverviewSnapshot = NotificationOverviewReadModel["snapshot"];
-
-type AnomalyReasonItem = {
-  key: string;
-  label: string;
-  sample: string | null;
-  count: number;
-  deadLetter: number;
-  failed: number;
-  retrying: number;
-  tenantCount: number;
-  channelCount: number;
-};
-
-type TenantPriorityItem = {
-  tenantId: string;
-  priority: "P1" | "P2" | "P3" | "P4";
-  severity: "critical" | "high" | "medium" | "low";
-  score: number;
-  deadLetter: number;
-  failedRate: number;
-  retrying: number;
-  anomalyTotal: number;
-  recentAnomalies: number;
-  previousAnomalies: number;
-  surgeRatio: number;
-  summary: string;
-};
-
-type AnomalyInsightsSnapshot = {
-  from: string;
-  to: string;
-  tenantId: string | null;
-  channel: DeliveryChannel | null;
-  totalAnomalies: number;
-  reasonClusters: AnomalyReasonItem[];
-  tenantPriorities: TenantPriorityItem[];
-  priorityRule: {
-    scoreFormula: string;
-    weights: {
-      deadLetter: number;
-      failed: number;
-      retrying: number;
-      failedRateBands: Array<{ threshold: number; bonus: number }>;
-      surgeBands: Array<{ condition: string; bonus: number }>;
-    };
-    severityBands: Array<{ severity: "critical" | "high" | "medium" | "low"; minScore: number }>;
-  };
-};
+type OverviewSnapshot = NotificationOverviewPageData["overview"]["snapshot"];
 
 type TrendDirection = "up" | "flat" | "down";
-
-type TrendItem = {
-  currentCount: number;
-  previousCount: number;
-  countDelta: number;
-  currentRate: number;
-  previousRate: number;
-  rateDelta: number;
-  direction: TrendDirection;
-};
-
-type TrendTenantItem = TrendItem & {
-  tenantId: string;
-};
-
-type TrendChannelItem = TrendItem & {
-  channel: string;
-};
-
-type TrendAnomalyTypeItem = TrendItem & {
-  key: string;
-  label: string;
-  sample: string | null;
-};
-
-type TrendComparisonSnapshot = NotificationTrendsReadModel["snapshot"];
 
 type FilterState = {
   tenantId: string;
@@ -153,14 +28,6 @@ function toLocalDateTimeInput(iso: string) {
   if (Number.isNaN(date.getTime())) return "";
   const tzOffset = date.getTimezoneOffset();
   return new Date(date.getTime() - tzOffset * 60_000).toISOString().slice(0, 16);
-}
-
-function fromLocalDateTimeInput(input: string) {
-  const value = String(input || "").trim();
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
 }
 
 function defaultFilters(): FilterState {
@@ -212,73 +79,11 @@ function buildAlertWorkflowHref(snapshot: OverviewSnapshot, tenantId?: string) {
 export default function NotificationOverviewDashboard() {
   const [filters, setFilters] = useState<FilterState>(() => defaultFilters());
   const [draft, setDraft] = useState<FilterState>(() => defaultFilters());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [snapshot, setSnapshot] = useState<OverviewSnapshot | null>(null);
-  const [insights, setInsights] = useState<AnomalyInsightsSnapshot | null>(null);
-  const [trend, setTrend] = useState<TrendComparisonSnapshot | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    const params = new URLSearchParams();
-    if (filters.tenantId.trim()) params.set("tenantId", filters.tenantId.trim());
-    if (filters.channel) params.set("channel", filters.channel);
-    const fromIso = fromLocalDateTimeInput(filters.from);
-    const toIso = fromLocalDateTimeInput(filters.to);
-    if (fromIso) params.set("from", fromIso);
-    if (toIso) params.set("to", toIso);
-    params.set("limit", String(filters.limit));
-
-    setLoading(true);
-    setError(null);
-    const overviewPath = `/api/platform/notifications/overview?${params.toString()}&aggregationMode=auto`;
-    const anomaliesPath = `/api/platform/notifications/anomalies?${params.toString()}`;
-    const trendsPath = `/api/platform/notifications/trends?${params.toString()}&topLimit=8`;
-    void Promise.all([
-      fetchNotificationOverviewReadApi(overviewPath, { cache: "no-store" }).then((response) => response.snapshot),
-      fetch(anomaliesPath, { cache: "no-store" }).then(async (response) => {
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          const message = payload?.error?.message || payload?.message || "Load anomalies failed";
-          throw new Error(String(message));
-        }
-        return payload?.snapshot || payload?.data?.snapshot || null;
-      }),
-      fetchNotificationTrendsReadApi(trendsPath, { cache: "no-store" }).then((response) => response.snapshot),
-    ])
-      .then(([overviewData, anomaliesData, trendsData]) => {
-        if (!active) return;
-        if (!overviewData) {
-          setError("Overview payload is empty.");
-          setLoading(false);
-          return;
-        }
-        if (!anomaliesData) {
-          setError("Anomaly insights payload is empty.");
-          setLoading(false);
-          return;
-        }
-        if (!trendsData) {
-          setError("Trend comparison payload is empty.");
-          setLoading(false);
-          return;
-        }
-        setSnapshot(overviewData as OverviewSnapshot);
-        setInsights(anomaliesData as AnomalyInsightsSnapshot);
-        setTrend(trendsData as TrendComparisonSnapshot);
-        setLoading(false);
-      })
-      .catch((fetchError) => {
-        if (!active) return;
-        setError(fetchError instanceof Error ? fetchError.message : "Load overview failed");
-        setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [filters, refreshKey]);
+  const { data, loading, error } = useNotificationOverviewPageData(filters, refreshKey);
+  const snapshot = data?.overview.snapshot ?? null;
+  const insights = data?.insights ?? null;
+  const trend = data?.trends.snapshot ?? null;
 
   const hasData = useMemo(() => Boolean(snapshot && snapshot.totalRows > 0), [snapshot]);
 
@@ -387,7 +192,7 @@ export default function NotificationOverviewDashboard() {
 
         {error ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-            <div className="error">{error}</div>
+            <div className="error">{error.message}</div>
           </section>
         ) : null}
 

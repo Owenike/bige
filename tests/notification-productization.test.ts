@@ -117,6 +117,13 @@ import {
   getTenantDrilldownRecentAnomaliesSupportNote,
   parseNotificationReadApiPayload,
 } from "../lib/notification-read-api-client";
+import {
+  NotificationReadApiOrchestrationError,
+  buildNotificationOverviewPagePaths,
+  buildNotificationTenantDrilldownPath,
+  loadNotificationOverviewPageData,
+  loadNotificationTenantDrilldownPageData,
+} from "../lib/notification-read-api-hooks";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
   canUseOverviewDailyRollupWindow,
@@ -135,6 +142,9 @@ import { NOTIFICATION_READ_API_REGRESSION_CASES } from "./notification-read-api-
 function buildConsumerReadApiPayload(
   api: "overview" | "analytics" | "trends" | "tenant_drilldown",
   metadata: ReturnType<typeof buildNotificationAggregationMetadata>,
+  options?: {
+    snapshotOverrides?: Record<string, unknown>;
+  },
 ) {
   if (api === "overview" || api === "analytics") {
     const snapshot = {
@@ -164,6 +174,7 @@ function buildConsumerReadApiPayload(
       daily: [],
       byChannel: [],
       byTenant: [],
+      ...(options?.snapshotOverrides || {}),
     };
     return {
       ok: true,
@@ -215,6 +226,7 @@ function buildConsumerReadApiPayload(
       rateDefinitions: {
         anomalyRateDenominator: "total_deliveries_in_window" as const,
       },
+      ...(options?.snapshotOverrides || {}),
     };
     return {
       ok: true,
@@ -260,6 +272,7 @@ function buildConsumerReadApiPayload(
       deadLetter: 0,
       retrying: 0,
     },
+    ...(options?.snapshotOverrides || {}),
   };
   return {
     ok: true,
@@ -270,6 +283,71 @@ function buildConsumerReadApiPayload(
     snapshot,
     ...metadata,
   };
+}
+
+function buildAnomalyInsightsPayload() {
+  const snapshot = {
+    from: "2026-03-10T00:00:00.000Z",
+    to: "2026-03-10T23:59:59.999Z",
+    tenantId: null,
+    channel: null,
+    totalAnomalies: 1,
+    reasonClusters: [
+      {
+        key: "provider_timeout",
+        label: "Provider Timeout",
+        sample: "timeout",
+        count: 1,
+        deadLetter: 0,
+        failed: 1,
+        retrying: 0,
+        tenantCount: 1,
+        channelCount: 1,
+      },
+    ],
+    tenantPriorities: [
+      {
+        tenantId: "tenant-1",
+        priority: "P2" as const,
+        severity: "high" as const,
+        score: 42,
+        deadLetter: 0,
+        failedRate: 12.5,
+        retrying: 1,
+        anomalyTotal: 3,
+        recentAnomalies: 2,
+        previousAnomalies: 1,
+        surgeRatio: 2,
+        summary: "High retry spike.",
+      },
+    ],
+    priorityRule: {
+      scoreFormula: "deadLetter*5 + failed*2 + retrying",
+      weights: {
+        deadLetter: 5,
+        failed: 2,
+        retrying: 1,
+        failedRateBands: [{ threshold: 10, bonus: 5 }],
+        surgeBands: [{ condition: "ratio >= 2", bonus: 3 }],
+      },
+      severityBands: [{ severity: "high" as const, minScore: 30 }],
+    },
+  };
+
+  return {
+    ok: true,
+    data: { snapshot },
+    snapshot,
+  };
+}
+
+function jsonResponse(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "content-type": "application/json",
+    },
+  });
 }
 
 test("preference payload validation accepts known event/role/channel", () => {
@@ -1785,6 +1863,262 @@ test("tenant drilldown consumer adapter exposes raw-backed anomaly support note 
   assert.equal(parsed.recentAnomaliesRawBacked, true);
   assert.equal(parsed.recentAnomaliesDataSource, "raw");
   assert.equal(parsed.recentAnomaliesReason, getTenantDrilldownRecentAnomaliesSupportNote());
+});
+
+test("read API orchestration builds overview and tenant drilldown request URLs centrally", () => {
+  const expectedFrom = encodeURIComponent(new Date("2026-03-10T08:00").toISOString());
+  const expectedTo = encodeURIComponent(new Date("2026-03-10T20:00").toISOString());
+
+  assert.deepEqual(
+    buildNotificationOverviewPagePaths({
+      tenantId: "tenant-1",
+      channel: "email",
+      from: "2026-03-10T08:00",
+      to: "2026-03-10T20:00",
+      limit: 500,
+    }),
+    {
+      overviewPath:
+        `/api/platform/notifications/overview?tenantId=tenant-1&channel=email&from=${expectedFrom}&to=${expectedTo}&limit=500&aggregationMode=auto`,
+      anomaliesPath:
+        `/api/platform/notifications/anomalies?tenantId=tenant-1&channel=email&from=${expectedFrom}&to=${expectedTo}&limit=500`,
+      trendsPath:
+        `/api/platform/notifications/trends?tenantId=tenant-1&channel=email&from=${expectedFrom}&to=${expectedTo}&limit=500&topLimit=8`,
+    },
+  );
+
+  assert.equal(
+    buildNotificationTenantDrilldownPath("tenant-1", {
+      channel: "email",
+      aggregationMode: "auto",
+      from: "2026-03-10T08:00",
+      to: "2026-03-10T20:00",
+      limit: 500,
+      anomalyLimit: 40,
+    }),
+    `/api/platform/notifications/overview/tenants/tenant-1?channel=email&aggregationMode=auto&from=${expectedFrom}&to=${expectedTo}&limit=500&anomalyLimit=40`,
+  );
+});
+
+test("overview read API orchestration loads parsed overview, anomalies, and trends together", async () => {
+  const metadata = buildNotificationAggregationMetadata({
+    aggregationModeRequested: "auto",
+    dataSource: "raw",
+    isWholeUtcDayWindow: false,
+    rollupEligible: false,
+  });
+  const overview = parseNotificationReadApiPayload(
+    "overview",
+    buildConsumerReadApiPayload("overview", metadata, {
+      snapshotOverrides: { totalRows: 12, byChannel: [{ channel: "email", total: 12, sent: 10, failed: 2, pending: 0, retrying: 0, deadLetter: 0, opened: 4, clicked: 1, conversion: 1, successRate: 83.33, failRate: 16.67, openRate: 40, clickRate: 10, conversionRate: 10 }] },
+    }),
+  );
+  const trends = parseNotificationReadApiPayload("trends", buildConsumerReadApiPayload("trends", metadata));
+
+  const result = await loadNotificationOverviewPageData(
+    {
+      tenantId: "",
+      channel: "",
+      from: "2026-03-10T08:00",
+      to: "2026-03-10T20:00",
+      limit: 2000,
+    },
+    {
+      fetchOverview: async () => overview,
+      fetchTrends: async () => trends,
+      fetchImpl: async () => jsonResponse(buildAnomalyInsightsPayload()),
+    },
+  );
+
+  assert.equal(result.overview.snapshot.totalRows, 12);
+  assert.equal(result.overview.aggregation.aggregationModeResolved, "raw");
+  assert.equal(result.insights.totalAnomalies, 1);
+  assert.equal(result.trends.aggregation.dataSource, "raw");
+  assert.equal(result.isEmpty, false);
+});
+
+test("read API orchestration classifies network, api, contract, and empty failures clearly", async () => {
+  const metadata = buildNotificationAggregationMetadata({
+    aggregationModeRequested: "auto",
+    dataSource: "raw",
+    isWholeUtcDayWindow: false,
+    rollupEligible: false,
+  });
+  const overview = parseNotificationReadApiPayload("overview", buildConsumerReadApiPayload("overview", metadata));
+  const trends = parseNotificationReadApiPayload("trends", buildConsumerReadApiPayload("trends", metadata));
+
+  await assert.rejects(
+    () =>
+      loadNotificationOverviewPageData(
+        {
+          tenantId: "",
+          channel: "",
+          from: "2026-03-10T08:00",
+          to: "2026-03-10T20:00",
+          limit: 2000,
+        },
+        {
+          fetchOverview: async () => {
+            throw new TypeError("fetch failed");
+          },
+          fetchTrends: async () => trends,
+          fetchImpl: async () => jsonResponse(buildAnomalyInsightsPayload()),
+        },
+      ),
+    (error: unknown) => {
+      assert.equal(error instanceof NotificationReadApiOrchestrationError, true);
+      if (!(error instanceof NotificationReadApiOrchestrationError)) return false;
+      assert.equal(error.kind, "network");
+      assert.equal(error.source, "overview");
+      assert.equal(error.message.includes("network request failed"), true);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      loadNotificationOverviewPageData(
+        {
+          tenantId: "",
+          channel: "",
+          from: "2026-03-10T08:00",
+          to: "2026-03-10T20:00",
+          limit: 2000,
+        },
+        {
+          fetchOverview: async () => overview,
+          fetchTrends: async () => trends,
+          fetchImpl: async () => jsonResponse({ message: "missing snapshot" }),
+        },
+      ),
+    (error: unknown) => {
+      assert.equal(error instanceof NotificationReadApiOrchestrationError, true);
+      if (!(error instanceof NotificationReadApiOrchestrationError)) return false;
+      assert.equal(error.kind, "empty");
+      assert.equal(error.source, "anomalies");
+      assert.equal(error.message.includes("payload is empty"), true);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      loadNotificationOverviewPageData(
+        {
+          tenantId: "",
+          channel: "",
+          from: "2026-03-10T08:00",
+          to: "2026-03-10T20:00",
+          limit: 2000,
+        },
+        {
+          fetchOverview: async () => {
+            throw new NotificationReadApiConsumerError({
+              api: "overview",
+              status: 500,
+              message: "overview request failed (500): boom",
+              issues: ["boom"],
+            });
+          },
+          fetchTrends: async () => trends,
+          fetchImpl: async () => jsonResponse(buildAnomalyInsightsPayload()),
+        },
+      ),
+    (error: unknown) => {
+      assert.equal(error instanceof NotificationReadApiOrchestrationError, true);
+      if (!(error instanceof NotificationReadApiOrchestrationError)) return false;
+      assert.equal(error.kind, "api");
+      assert.equal(error.source, "overview");
+      assert.equal(error.status, 500);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      loadNotificationOverviewPageData(
+        {
+          tenantId: "",
+          channel: "",
+          from: "2026-03-10T08:00",
+          to: "2026-03-10T20:00",
+          limit: 2000,
+        },
+        {
+          fetchOverview: async () => overview,
+          fetchTrends: async () => {
+            throw new NotificationReadApiConsumerError({
+              api: "trends",
+              status: null,
+              message: "trends response contract drift: type_mismatch: resolutionReason",
+              issues: ["type_mismatch: resolutionReason"],
+            });
+          },
+          fetchImpl: async () => jsonResponse(buildAnomalyInsightsPayload()),
+        },
+      ),
+    (error: unknown) => {
+      assert.equal(error instanceof NotificationReadApiOrchestrationError, true);
+      if (!(error instanceof NotificationReadApiOrchestrationError)) return false;
+      assert.equal(error.kind, "contract");
+      assert.equal(error.source, "trends");
+      assert.equal(error.message.includes("contract drift"), true);
+      return true;
+    },
+  );
+});
+
+test("tenant drilldown orchestration keeps raw-backed support note visible to consumers", async () => {
+  const metadata = buildNotificationAggregationMetadata({
+    aggregationModeRequested: "auto",
+    dataSource: "rollup",
+    isWholeUtcDayWindow: true,
+    rollupEligible: true,
+  });
+
+  const drilldown = parseNotificationReadApiPayload(
+    "tenant_drilldown",
+    buildConsumerReadApiPayload("tenant_drilldown", metadata, {
+      snapshotOverrides: {
+        totalRows: 7,
+        recentAnomalies: [
+          {
+            id: "anomaly-1",
+            channel: "email",
+            status: "failed",
+            errorCode: "PROVIDER_TIMEOUT",
+            errorMessage: "timeout",
+            lastError: "timeout",
+            attempts: 1,
+            retryCount: 1,
+            maxAttempts: 5,
+            nextRetryAt: null,
+            occurredAt: "2026-03-10T09:00:00.000Z",
+          },
+        ],
+      },
+    }),
+  );
+
+  const result = await loadNotificationTenantDrilldownPageData(
+    "tenant-1",
+    {
+      channel: "",
+      aggregationMode: "auto",
+      from: "2026-03-10T00:00",
+      to: "2026-03-10T23:59",
+      limit: 2000,
+      anomalyLimit: 40,
+    },
+    {
+      fetchDrilldown: async () => drilldown,
+    },
+  );
+
+  assert.equal(result.drilldown.aggregation.aggregationModeResolved, "rollup");
+  assert.equal(result.drilldown.recentAnomaliesRawBacked, true);
+  assert.equal(result.recentAnomaliesSupportNote, getTenantDrilldownRecentAnomaliesSupportNote());
+  assert.equal(result.isEmpty, false);
 });
 
 test("aggregation explainability describes explicit raw, explicit rollup, and auto window resolution", () => {

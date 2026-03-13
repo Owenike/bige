@@ -1,63 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatNotificationAggregationDataSourceLabel } from "../lib/notification-aggregation-contract";
 import {
-  fetchNotificationTenantDrilldownReadApi,
-  getTenantDrilldownRecentAnomaliesSupportNote,
-  type NotificationTenantDrilldownReadModel,
-} from "../lib/notification-read-api-client";
+  getDefaultTenantDrilldownSupportNote,
+  useNotificationTenantDrilldownPageData,
+} from "../lib/notification-read-api-hooks";
 
 type DeliveryChannel = "in_app" | "email" | "line" | "sms" | "webhook" | "other";
-
-type DailyItem = {
-  day: string;
-  sent: number;
-  failed: number;
-  deadLetter: number;
-  opened: number;
-  clicked: number;
-  conversion: number;
-  total: number;
-  successRate: number;
-  failRate: number;
-};
-
-type ChannelItem = {
-  channel: string;
-  total: number;
-  sent: number;
-  failed: number;
-  pending: number;
-  retrying: number;
-  deadLetter: number;
-  opened: number;
-  clicked: number;
-  conversion: number;
-  successRate: number;
-  failRate: number;
-  openRate: number;
-  clickRate: number;
-  conversionRate: number;
-};
-
-type AnomalyItem = {
-  id: string;
-  channel: string;
-  status: string;
-  errorCode: string | null;
-  errorMessage: string | null;
-  lastError: string | null;
-  attempts: number;
-  retryCount: number;
-  maxAttempts: number;
-  nextRetryAt: string | null;
-  occurredAt: string;
-};
-
-type DrilldownSnapshot = NotificationTenantDrilldownReadModel["snapshot"];
 
 type FilterState = {
   channel: "" | DeliveryChannel;
@@ -114,48 +66,10 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
     };
   });
   const [draft, setDraft] = useState<FilterState>(filters);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [snapshot, setSnapshot] = useState<DrilldownSnapshot | null>(null);
-  const [recentAnomaliesSupportNote, setRecentAnomaliesSupportNote] = useState(() =>
-    getTenantDrilldownRecentAnomaliesSupportNote(),
-  );
   const [refreshKey, setRefreshKey] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    const params = new URLSearchParams();
-    if (filters.channel) params.set("channel", filters.channel);
-    params.set("aggregationMode", filters.aggregationMode);
-    const fromIso = fromLocalDateTimeInput(filters.from);
-    const toIso = fromLocalDateTimeInput(filters.to);
-    if (fromIso) params.set("from", fromIso);
-    if (toIso) params.set("to", toIso);
-    params.set("limit", String(filters.limit));
-    params.set("anomalyLimit", String(filters.anomalyLimit));
-
-    setLoading(true);
-    setError(null);
-    void fetchNotificationTenantDrilldownReadApi(
-      `/api/platform/notifications/overview/tenants/${encodeURIComponent(props.tenantId)}?${params.toString()}`,
-      { cache: "no-store" },
-    )
-      .then((data) => {
-        if (!active) return;
-        setSnapshot(data.snapshot);
-        setRecentAnomaliesSupportNote(data.recentAnomaliesReason);
-        setLoading(false);
-      })
-      .catch((fetchError) => {
-        if (!active) return;
-        setError(fetchError instanceof Error ? fetchError.message : "Load tenant drilldown failed");
-        setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [filters, props.tenantId, refreshKey]);
+  const { data, loading, error } = useNotificationTenantDrilldownPageData(props.tenantId, filters, refreshKey);
+  const snapshot = data?.drilldown.snapshot ?? null;
+  const recentAnomaliesSupportNote = data?.recentAnomaliesSupportNote ?? getDefaultTenantDrilldownSupportNote();
 
   const backHref = useMemo(() => {
     const params = new URLSearchParams();
@@ -292,7 +206,7 @@ export default function NotificationOverviewTenantDrilldown(props: { tenantId: s
 
         {error ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-            <div className="error">{error}</div>
+            <div className="error">{error.message}</div>
           </section>
         ) : null}
 
