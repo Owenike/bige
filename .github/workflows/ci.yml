@@ -5,9 +5,16 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+    inputs:
+      phase42_base_url:
+        description: Optional live phase42 base URL override for manual runs
+        required: false
+        type: string
 
 jobs:
-  quality-gate:
+  phase42-stable-gate:
+    name: Phase42 Stable Gate
     runs-on: windows-latest
 
     steps:
@@ -23,11 +30,42 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
+      - name: Phase42 Typecheck Gate
+        run: npm run typecheck
+
+      - name: Phase42 Lint Gate
         run: npm run lint
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Phase42 Unit Gate
+        run: npm run test:unit
+
+      - name: Phase42 Contract Unit Gate
+        run: npm run test:phase42:contract:unit
+
+      - name: Phase42 Schema Gate
+        run: npm run test:phase42:schema
+
+      - name: Phase42 Fixture Gate
+        run: npm run test:phase42:fixtures
+
+  quality-gate:
+    name: Quality Gate
+    runs-on: windows-latest
+    needs:
+      - phase42-stable-gate
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build
         run: npm run build
@@ -40,3 +78,82 @@ jobs:
 
       - name: Go-live check
         run: npm run go-live:check
+
+  phase42-live-blackbox:
+    name: Phase42 Live Blackbox
+    runs-on: windows-latest
+
+    steps:
+      - name: Decide live blackbox policy
+        id: policy
+        shell: pwsh
+        env:
+          PHASE42_BASE_URL_INPUT: ${{ github.event.inputs.phase42_base_url || '' }}
+          PHASE42_BASE_URL_SECRET: ${{ secrets.PHASE42_BASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PHASE42_VERCEL_BYPASS_SECRET: ${{ secrets.PHASE42_VERCEL_BYPASS_SECRET }}
+        run: |
+          $baseUrl = if ($env:PHASE42_BASE_URL_INPUT) { $env:PHASE42_BASE_URL_INPUT } else { $env:PHASE42_BASE_URL_SECRET }
+          $isAllowed = $env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -or ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF -eq 'refs/heads/main')
+          if (-not $isAllowed) {
+            "run_live=false" >> $env:GITHUB_OUTPUT
+            "skip_reason=phase42 live blackbox is restricted to push on main or workflow_dispatch." >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          $missing = @()
+          if (-not $baseUrl) { $missing += "PHASE42_BASE_URL (workflow input or repository secret)" }
+          if (-not $env:NEXT_PUBLIC_SUPABASE_URL) { $missing += "NEXT_PUBLIC_SUPABASE_URL" }
+          if (-not $env:NEXT_PUBLIC_SUPABASE_ANON_KEY) { $missing += "NEXT_PUBLIC_SUPABASE_ANON_KEY" }
+          if (-not $env:SUPABASE_SERVICE_ROLE_KEY) { $missing += "SUPABASE_SERVICE_ROLE_KEY" }
+
+          if ($missing.Count -gt 0) {
+            "run_live=false" >> $env:GITHUB_OUTPUT
+            "skip_reason=phase42 live blackbox skipped because required live env or secrets are missing: $($missing -join ', ')." >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          "run_live=true" >> $env:GITHUB_OUTPUT
+          "skip_reason=phase42 live blackbox ready to run." >> $env:GITHUB_OUTPUT
+          "base_url=$baseUrl" >> $env:GITHUB_OUTPUT
+
+      - name: Report live blackbox skip
+        if: ${{ steps.policy.outputs.run_live != 'true' }}
+        shell: pwsh
+        run: |
+          Write-Host "::notice title=Phase42 live blackbox skipped::${{ steps.policy.outputs.skip_reason }}"
+
+      - name: Checkout
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        run: npm ci
+
+      - name: Run phase42 live blackbox
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        env:
+          PHASE42_BASE_URL: ${{ steps.policy.outputs.base_url }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PHASE42_VERCEL_BYPASS_SECRET: ${{ secrets.PHASE42_VERCEL_BYPASS_SECRET }}
+        shell: pwsh
+        run: |
+          Write-Host "Running phase42 live blackbox against $env:PHASE42_BASE_URL"
+          if ($env:PHASE42_VERCEL_BYPASS_SECRET) {
+            Write-Host "Using configured Vercel bypass secret."
+          } else {
+            Write-Host "No Vercel bypass secret configured; live target must be directly accessible."
+          }
+          npm run test:phase42:contract:blackbox
