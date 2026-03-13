@@ -33,11 +33,15 @@ $suiteMap = @{
     "$outDir\tests\unit\promotion.test.js",
     "$outDir\tests\unit\promotion-branch.test.js",
     "$outDir\tests\unit\artifacts.test.js",
-    "$outDir\tests\unit\cleanup.test.js"
+    "$outDir\tests\unit\cleanup.test.js",
+    "$outDir\tests\unit\handoff.test.js",
+    "$outDir\tests\unit\pr-draft.test.js",
+    "$outDir\tests\unit\audit.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js",
-    "$outDir\tests\integration\live-acceptance.test.js"
+    "$outDir\tests\integration\live-acceptance.test.js",
+    "$outDir\tests\integration\live-pass.test.js"
   )
   "schema" = @(
     "$outDir\tests\unit\schema-validation.test.js"
@@ -76,11 +80,23 @@ $suiteMap = @{
   "cleanup" = @(
     "$outDir\tests\unit\cleanup.test.js"
   )
+  "handoff" = @(
+    "$outDir\tests\unit\handoff.test.js"
+  )
+  "pr-draft" = @(
+    "$outDir\tests\unit\pr-draft.test.js"
+  )
+  "audit" = @(
+    "$outDir\tests\unit\audit.test.js"
+  )
   "live-smoke" = @(
     "$outDir\tests\integration\live-smoke.test.js"
   )
   "live-acceptance" = @(
     "$outDir\tests\integration\live-acceptance.test.js"
+  )
+  "live-pass" = @(
+    "$outDir\tests\integration\live-pass.test.js"
   )
   "mock-loop" = @(
     "$outDir\tests\e2e\mock-loop.test.js",
@@ -103,9 +119,13 @@ $suiteMap = @{
     "$outDir\tests\unit\promotion-branch.test.js",
     "$outDir\tests\unit\artifacts.test.js",
     "$outDir\tests\unit\cleanup.test.js",
+    "$outDir\tests\unit\handoff.test.js",
+    "$outDir\tests\unit\pr-draft.test.js",
+    "$outDir\tests\unit\audit.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",
+    "$outDir\tests\integration\live-pass.test.js",
     "$outDir\tests\e2e\mock-loop.test.js",
     "$outDir\tests\e2e\multi-iteration-loop.test.js"
   )

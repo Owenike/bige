@@ -1,15 +1,8 @@
-import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import test from "node:test";
 import path from "node:path";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import {
-  approvePendingPatch,
-  createDefaultDependencies,
-  createInitialState,
-  promoteApprovedPatch,
-} from "../../src/orchestrator";
+import { createDefaultDependencies, createInitialState } from "../../src/orchestrator";
 import { FileSystemWorkspaceManager } from "../../src/workspace";
 
 function runGit(repoPath: string, args: string[]) {
@@ -38,9 +31,9 @@ function runGit(repoPath: string, args: string[]) {
   });
 }
 
-async function createPromotionReadyState() {
-  const repoRoot = await mkdtemp(path.join(tmpdir(), "orchestrator-promotion-branch-repo-"));
-  const storageRoot = await mkdtemp(path.join(tmpdir(), "orchestrator-promotion-branch-storage-"));
+export async function createPromotionReadyFixture(stateId: string) {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), `orchestrator-${stateId}-repo-`));
+  const storageRoot = await mkdtemp(path.join(tmpdir(), `orchestrator-${stateId}-storage-`));
   const workspaceRoot = path.join(repoRoot, ".workspaces");
   await mkdir(path.join(repoRoot, "allowed"), { recursive: true });
   await writeFile(path.join(repoRoot, "allowed", "file.txt"), "before\n", "utf8");
@@ -60,7 +53,7 @@ async function createPromotionReadyState() {
   });
   const workspaceManager = new FileSystemWorkspaceManager(workspaceRoot);
   const workspace = await workspaceManager.createWorkspace({
-    taskId: "promotion-branch-state",
+    taskId: stateId,
     iterationNumber: 1,
     repoPath: repoRoot,
     allowedFiles: ["allowed"],
@@ -70,7 +63,7 @@ async function createPromotionReadyState() {
   const diff = await workspaceManager.collectDiffArtifacts(workspace);
 
   const state = createInitialState({
-    id: "promotion-branch-state",
+    id: stateId,
     repoPath: repoRoot,
     repoName: "repo",
     userGoal: "Promote approved patch to a branch-ready state",
@@ -96,7 +89,11 @@ async function createPromotionReadyState() {
     promotionStatus: "not_ready",
     workspaceStatus: "active",
     liveAcceptanceStatus: "not_run",
+    livePassStatus: "not_run",
     exportArtifactPaths: [],
+    handoffStatus: "not_ready",
+    prDraftStatus: "not_ready",
+    handoffArtifactPaths: [],
     lastExecutionReport: {
       iterationNumber: 1,
       changedFiles: diff.changedFiles,
@@ -145,18 +142,18 @@ async function createPromotionReadyState() {
         ciSummary: null,
         patchStatus: "waiting_approval",
         approvalStatus: "pending_patch",
-          promotionStatus: "not_ready",
-          liveAcceptanceStatus: "not_run",
-          livePassStatus: "not_run",
-          workspaceStatus: "active",
-          exportArtifactPaths: [],
-          handoffStatus: "not_ready",
-          prDraftStatus: "not_ready",
-          handoffArtifactPaths: [],
-          artifactPruneResult: null,
-          cleanupDecision: null,
-          auditTrailPath: null,
-          stateBefore: "planning",
+        promotionStatus: "not_ready",
+        liveAcceptanceStatus: "not_run",
+        livePassStatus: "not_run",
+        workspaceStatus: "active",
+        exportArtifactPaths: [],
+        handoffStatus: "not_ready",
+        prDraftStatus: "not_ready",
+        handoffArtifactPaths: [],
+        artifactPruneResult: null,
+        cleanupDecision: null,
+        auditTrailPath: null,
+        stateBefore: "planning",
         stateAfter: "waiting_approval",
         stopReason: null,
         createdAt: state.createdAt,
@@ -168,32 +165,3 @@ async function createPromotionReadyState() {
 
   return { dependencies, repoRoot };
 }
-
-test("promoteApprovedPatch creates promotion branch metadata after approval", async () => {
-  const { dependencies, repoRoot } = await createPromotionReadyState();
-  await approvePendingPatch("promotion-branch-state", dependencies);
-  const updated = await promoteApprovedPatch("promotion-branch-state", dependencies, {
-    createBranch: true,
-    applyWorkspace: false,
-  });
-
-  assert.equal(updated.patchStatus, "promoted");
-  assert.equal(updated.promotionStatus, "promoted");
-  assert.equal(updated.lastExecutionReport?.artifacts.some((artifact) => artifact.kind === "promotion_branch"), true);
-
-  const branchList = await runGit(repoRoot, ["branch", "--list", "orchestrator/promotion-branch-state/iter-1"]);
-  assert.equal(branchList.stdout.includes("orchestrator/promotion-branch-state/iter-1"), true);
-});
-
-test("promoteApprovedPatch rejects promotion before approval", async () => {
-  const { dependencies } = await createPromotionReadyState();
-
-  await assert.rejects(
-    () =>
-      promoteApprovedPatch("promotion-branch-state", dependencies, {
-        createBranch: false,
-        applyWorkspace: false,
-      }),
-    /approved patch/i,
-  );
-});

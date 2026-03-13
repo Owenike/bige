@@ -71,6 +71,31 @@ function buildRuleBasedVerdict(input: ReviewerInput) {
     reasons.push("Promotion flow is missing exported patch artifacts.");
   }
 
+  if (["handoff_ready", "branch_published"].includes(input.state.handoffStatus) && input.state.handoffArtifactPaths.length === 0) {
+    verdict = verdict === "accept" ? "revise" : verdict;
+    reasons.push("Handoff flow is missing required handoff artifacts.");
+  }
+
+  if (["metadata_ready", "payload_ready"].includes(input.state.prDraftStatus) && !input.state.lastPrDraftMetadata) {
+    verdict = verdict === "accept" ? "revise" : verdict;
+    reasons.push("PR draft status is ready but PR draft metadata is missing.");
+  }
+
+  if ((input.state.handoffStatus !== "not_ready" || input.state.promotionStatus === "promoted") && input.state.livePassStatus !== "passed") {
+    verdict = verdict === "accept" ? "revise" : verdict;
+    reasons.push("Live pass must complete successfully before handoff or promotion can be finalized.");
+  }
+
+  if (
+    input.state.livePassStatus === "passed" &&
+    (!input.state.lastLiveAcceptanceResult?.reportPath ||
+      !input.state.lastLiveAcceptanceResult?.toolLogPath ||
+      !input.state.lastLiveAcceptanceResult?.commandLogPath)
+  ) {
+    verdict = verdict === "accept" ? "revise" : verdict;
+    reasons.push("Live pass artifacts are incomplete.");
+  }
+
   if (input.state.workspaceStatus === "orphaned") {
     verdict = "escalate";
     reasons.push("Workspace state indicates orphaned workspace risk.");

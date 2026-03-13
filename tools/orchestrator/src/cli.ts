@@ -6,11 +6,13 @@ import {
   createDefaultDependencies,
   createInitialState,
   planOrchestratorIteration,
+  prepareHandoff,
   promoteApprovedPatch,
   pruneStateArtifacts,
   rejectPendingPatch,
   rejectPendingPlan,
   runLiveAcceptance,
+  runLivePass,
   runLiveSmoke,
   runOrchestratorLoop,
   runOrchestratorOnce,
@@ -53,6 +55,8 @@ async function main() {
   const liveSmokeEnabled = getOption(options, "live-smoke", "false") === "true";
   const applyWorkspace = getOption(options, "apply-workspace", "false") === "true";
   const createBranch = getOption(options, "create-branch", "true") === "true";
+  const publishBranch = getOption(options, "publish-branch", "false") === "true";
+  const githubHandoffEnabled = getOption(options, "github-handoff", "false") === "true";
   const dependencies = createDefaultDependencies({
     repoPath,
     storageRoot,
@@ -220,6 +224,30 @@ async function main() {
     return;
   }
 
+  if (command === "live-pass") {
+    const result = await runLivePass({
+      stateId,
+      dependencies,
+      repoPath,
+      workspaceRoot,
+      outputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-live-pass")),
+      model: options.get("model"),
+      enabled: liveSmokeEnabled || getOption(options, "enabled", "true") === "true",
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "handoff") {
+    const result = await prepareHandoff(stateId, dependencies, {
+      publishBranch,
+      createBranch,
+      githubHandoffEnabled,
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
   process.stdout.write(
     [
       "Usage:",
@@ -232,12 +260,14 @@ async function main() {
       "  node cli.js approve-patch --state-id default",
       "  node cli.js promote-patch --state-id default --create-branch true --apply-workspace false",
       "  node cli.js reject-patch --state-id default --reason \"...\"",
+      "  node cli.js handoff --state-id default --publish-branch false --github-handoff false",
       "  node cli.js resume --state-id default",
       "  node cli.js workspace:cleanup --state-id default --workspace-root .tmp/orchestrator-workspaces",
       "  node cli.js cleanup --state-id default --stale-minutes 120",
       "  node cli.js artifacts:prune --state-id default --retain-success 3 --retain-failure 5",
       "  node cli.js live-smoke --enabled true --workspace-root .tmp/orchestrator-workspaces",
       "  node cli.js live-acceptance --state-id default --enabled true",
+      "  node cli.js live-pass --state-id default --enabled true",
       "  node cli.js review --state-id default",
       "  node cli.js dry-run --state-id default --executor mock",
     ].join("\n"),

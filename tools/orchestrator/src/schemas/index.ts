@@ -194,6 +194,9 @@ export const liveSmokeStatusSchema = z.enum(["not_run", "skipped", "passed", "fa
 export const promotionStatusSchema = z.enum(["not_ready", "patch_exported", "branch_ready", "promotion_ready", "promoted", "rejected"]);
 export const workspaceStatusSchema = z.enum(["unknown", "clean", "active", "stale", "orphaned", "cleaned"]);
 export const liveAcceptanceStatusSchema = z.enum(["not_run", "skipped", "passed", "failed", "blocked"]);
+export const livePassStatusSchema = z.enum(["not_run", "skipped", "passed", "failed", "blocked"]);
+export const handoffStatusSchema = z.enum(["not_ready", "exported", "handoff_ready", "branch_published", "handoff_failed"]);
+export const prDraftStatusSchema = z.enum(["not_ready", "metadata_ready", "payload_ready", "skipped", "failed"]);
 
 export const artifactPruneResultSchema = z.object({
   status: artifactPruneStatusSchema,
@@ -207,6 +210,9 @@ export const artifactPruneResultSchema = z.object({
 export const liveSmokeResultSchema = z.object({
   status: liveSmokeStatusSchema,
   reason: z.string(),
+  provider: z.string(),
+  model: z.string().nullable().default(null),
+  summary: z.string().nullable().default(null),
   reportPath: z.string().nullable().default(null),
   diffPath: z.string().nullable().default(null),
   transcriptSummaryPath: z.string().nullable().default(null),
@@ -223,6 +229,45 @@ export const cleanupDecisionSchema = z.object({
   stalePaths: z.array(z.string()).default([]),
   summary: z.string(),
   cleanedAt: z.string(),
+});
+
+export const prDraftMetadataSchema = z.object({
+  title: z.string(),
+  body: z.string(),
+  changeSummary: z.array(z.string()).default([]),
+  validationSummary: z.array(z.string()).default([]),
+  knownRisks: z.array(z.string()).default([]),
+  approvalNotes: z.array(z.string()).default([]),
+  branchName: z.string().nullable().default(null),
+  payloadPath: z.string().nullable().default(null),
+  githubHandoffStatus: z.enum(["not_requested", "skipped", "payload_ready", "failed"]).default("not_requested"),
+  githubHandoffReason: z.string().nullable().default(null),
+  createdAt: z.string(),
+});
+
+export const auditTrailSchema = z.object({
+  iterationNumber: z.number().int().positive(),
+  stateStatus: z.enum([
+    "draft",
+    "planning",
+    "waiting_approval",
+    "executing",
+    "awaiting_result",
+    "validating",
+    "ci_running",
+    "needs_revision",
+    "blocked",
+    "completed",
+    "stopped",
+  ]),
+  patchStatus: patchStatusSchema,
+  promotionStatus: promotionStatusSchema,
+  handoffStatus: handoffStatusSchema,
+  liveAcceptanceStatus: liveAcceptanceStatusSchema,
+  livePassStatus: livePassStatusSchema,
+  summary: z.string(),
+  artifactPaths: z.array(z.string()).default([]),
+  createdAt: z.string(),
 });
 
 export const orchestratorStatusSchema = z.enum([
@@ -295,10 +340,15 @@ export const iterationRecordSchema = z.object({
   approvalStatus: approvalStatusSchema.default("not_requested"),
   promotionStatus: promotionStatusSchema.default("not_ready"),
   liveAcceptanceStatus: liveAcceptanceStatusSchema.default("not_run"),
+  livePassStatus: livePassStatusSchema.default("not_run"),
   workspaceStatus: workspaceStatusSchema.default("unknown"),
   exportArtifactPaths: z.array(z.string()).default([]),
+  handoffStatus: handoffStatusSchema.default("not_ready"),
+  prDraftStatus: prDraftStatusSchema.default("not_ready"),
+  handoffArtifactPaths: z.array(z.string()).default([]),
   artifactPruneResult: artifactPruneResultSchema.nullable().default(null),
   cleanupDecision: cleanupDecisionSchema.nullable().default(null),
+  auditTrailPath: z.string().nullable().default(null),
   stateBefore: orchestratorStatusSchema,
   stateAfter: orchestratorStatusSchema,
   stopReason: z.string().nullable().default(null),
@@ -328,10 +378,18 @@ export const orchestratorStateSchema = z.object({
   promotionStatus: promotionStatusSchema.default("not_ready"),
   workspaceStatus: workspaceStatusSchema.default("unknown"),
   liveAcceptanceStatus: liveAcceptanceStatusSchema.default("not_run"),
+  livePassStatus: livePassStatusSchema.default("not_run"),
   exportArtifactPaths: z.array(z.string()).default([]),
+  handoffStatus: handoffStatusSchema.default("not_ready"),
+  prDraftStatus: prDraftStatusSchema.default("not_ready"),
+  handoffArtifactPaths: z.array(z.string()).default([]),
   lastArtifactPruneResult: artifactPruneResultSchema.nullable().default(null),
   lastLiveSmokeResult: liveSmokeResultSchema.nullable().default(null),
+  lastLiveAcceptanceResult: liveSmokeResultSchema.nullable().default(null),
   lastCleanupDecision: cleanupDecisionSchema.nullable().default(null),
+  lastPrDraftMetadata: prDraftMetadataSchema.nullable().default(null),
+  lastAuditTrail: auditTrailSchema.nullable().default(null),
+  lastHandoffPackagePath: z.string().nullable().default(null),
   stopReason: z.string().nullable().default(null),
   iterationHistory: z.array(iterationRecordSchema).default([]),
   createdAt: z.string(),
@@ -355,6 +413,8 @@ export type ApprovalStatus = z.infer<typeof approvalStatusSchema>;
 export type ArtifactPruneResult = z.infer<typeof artifactPruneResultSchema>;
 export type LiveSmokeResult = z.infer<typeof liveSmokeResultSchema>;
 export type CleanupDecision = z.infer<typeof cleanupDecisionSchema>;
+export type PrDraftMetadata = z.infer<typeof prDraftMetadataSchema>;
+export type AuditTrail = z.infer<typeof auditTrailSchema>;
 
 const stringArrayJsonSchema: JsonSchema = {
   type: "array",
@@ -547,10 +607,18 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "promotionStatus",
     "workspaceStatus",
     "liveAcceptanceStatus",
+    "livePassStatus",
     "exportArtifactPaths",
+    "handoffStatus",
+    "prDraftStatus",
+    "handoffArtifactPaths",
     "lastArtifactPruneResult",
     "lastLiveSmokeResult",
+    "lastLiveAcceptanceResult",
     "lastCleanupDecision",
+    "lastPrDraftMetadata",
+    "lastAuditTrail",
+    "lastHandoffPackagePath",
     "stopReason",
     "iterationHistory",
     "createdAt",
@@ -677,7 +745,20 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       type: "string",
       enum: ["not_run", "skipped", "passed", "failed", "blocked"],
     },
+    livePassStatus: {
+      type: "string",
+      enum: ["not_run", "skipped", "passed", "failed", "blocked"],
+    },
     exportArtifactPaths: { type: "array", items: { type: "string" } },
+    handoffStatus: {
+      type: "string",
+      enum: ["not_ready", "exported", "handoff_ready", "branch_published", "handoff_failed"],
+    },
+    prDraftStatus: {
+      type: "string",
+      enum: ["not_ready", "metadata_ready", "payload_ready", "skipped", "failed"],
+    },
+    handoffArtifactPaths: { type: "array", items: { type: "string" } },
     lastArtifactPruneResult: {
       type: "object",
       nullable: true,
@@ -695,11 +776,33 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     lastLiveSmokeResult: {
       type: "object",
       nullable: true,
-      required: ["status", "reason", "reportPath", "diffPath", "transcriptSummaryPath", "toolLogPath", "commandLogPath", "ranAt"],
+      required: ["status", "reason", "provider", "model", "summary", "reportPath", "diffPath", "transcriptSummaryPath", "toolLogPath", "commandLogPath", "ranAt"],
       additionalProperties: false,
       properties: {
         status: { type: "string", enum: ["not_run", "skipped", "passed", "failed", "blocked"] },
         reason: { type: "string" },
+        provider: { type: "string" },
+        model: { type: "string", nullable: true },
+        summary: { type: "string", nullable: true },
+        reportPath: { type: "string", nullable: true },
+        diffPath: { type: "string", nullable: true },
+        transcriptSummaryPath: { type: "string", nullable: true },
+        toolLogPath: { type: "string", nullable: true },
+        commandLogPath: { type: "string", nullable: true },
+        ranAt: { type: "string" },
+      },
+    },
+    lastLiveAcceptanceResult: {
+      type: "object",
+      nullable: true,
+      required: ["status", "reason", "provider", "model", "summary", "reportPath", "diffPath", "transcriptSummaryPath", "toolLogPath", "commandLogPath", "ranAt"],
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["not_run", "skipped", "passed", "failed", "blocked"] },
+        reason: { type: "string" },
+        provider: { type: "string" },
+        model: { type: "string", nullable: true },
+        summary: { type: "string", nullable: true },
         reportPath: { type: "string", nullable: true },
         diffPath: { type: "string", nullable: true },
         transcriptSummaryPath: { type: "string", nullable: true },
@@ -723,6 +826,62 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         cleanedAt: { type: "string" },
       },
     },
+    lastPrDraftMetadata: {
+      type: "object",
+      nullable: true,
+      required: ["title", "body", "changeSummary", "validationSummary", "knownRisks", "approvalNotes", "branchName", "payloadPath", "githubHandoffStatus", "githubHandoffReason", "createdAt"],
+      additionalProperties: false,
+      properties: {
+        title: { type: "string" },
+        body: { type: "string" },
+        changeSummary: { type: "array", items: { type: "string" } },
+        validationSummary: { type: "array", items: { type: "string" } },
+        knownRisks: { type: "array", items: { type: "string" } },
+        approvalNotes: { type: "array", items: { type: "string" } },
+        branchName: { type: "string", nullable: true },
+        payloadPath: { type: "string", nullable: true },
+        githubHandoffStatus: { type: "string", enum: ["not_requested", "skipped", "payload_ready", "failed"] },
+        githubHandoffReason: { type: "string", nullable: true },
+        createdAt: { type: "string" },
+      },
+    },
+    lastAuditTrail: {
+      type: "object",
+      nullable: true,
+      required: ["iterationNumber", "stateStatus", "patchStatus", "promotionStatus", "handoffStatus", "liveAcceptanceStatus", "livePassStatus", "summary", "artifactPaths", "createdAt"],
+      additionalProperties: false,
+      properties: {
+        iterationNumber: { type: "number" },
+        stateStatus: {
+          type: "string",
+          enum: ["draft", "planning", "waiting_approval", "executing", "awaiting_result", "validating", "ci_running", "needs_revision", "blocked", "completed", "stopped"],
+        },
+        patchStatus: {
+          type: "string",
+          enum: ["none", "plan_ready", "patch_ready", "patch_exported", "branch_ready", "promotion_ready", "waiting_approval", "approved_for_apply", "applied", "promoted", "rejected"],
+        },
+        promotionStatus: {
+          type: "string",
+          enum: ["not_ready", "patch_exported", "branch_ready", "promotion_ready", "promoted", "rejected"],
+        },
+        handoffStatus: {
+          type: "string",
+          enum: ["not_ready", "exported", "handoff_ready", "branch_published", "handoff_failed"],
+        },
+        liveAcceptanceStatus: {
+          type: "string",
+          enum: ["not_run", "skipped", "passed", "failed", "blocked"],
+        },
+        livePassStatus: {
+          type: "string",
+          enum: ["not_run", "skipped", "passed", "failed", "blocked"],
+        },
+        summary: { type: "string" },
+        artifactPaths: { type: "array", items: { type: "string" } },
+        createdAt: { type: "string" },
+      },
+    },
+    lastHandoffPackagePath: { type: "string", nullable: true },
     stopReason: { type: "string", nullable: true },
     iterationHistory: {
       type: "array",
@@ -749,10 +908,15 @@ export const orchestratorStateJsonSchema: JsonSchema = {
           "approvalStatus",
           "promotionStatus",
           "liveAcceptanceStatus",
+          "livePassStatus",
           "workspaceStatus",
           "exportArtifactPaths",
+          "handoffStatus",
+          "prDraftStatus",
+          "handoffArtifactPaths",
           "artifactPruneResult",
           "cleanupDecision",
+          "auditTrailPath",
           "stateBefore",
           "stateAfter",
           "stopReason",
@@ -791,11 +955,24 @@ export const orchestratorStateJsonSchema: JsonSchema = {
             type: "string",
             enum: ["not_run", "skipped", "passed", "failed", "blocked"],
           },
+          livePassStatus: {
+            type: "string",
+            enum: ["not_run", "skipped", "passed", "failed", "blocked"],
+          },
           workspaceStatus: {
             type: "string",
             enum: ["unknown", "clean", "active", "stale", "orphaned", "cleaned"],
           },
           exportArtifactPaths: { type: "array", items: { type: "string" } },
+          handoffStatus: {
+            type: "string",
+            enum: ["not_ready", "exported", "handoff_ready", "branch_published", "handoff_failed"],
+          },
+          prDraftStatus: {
+            type: "string",
+            enum: ["not_ready", "metadata_ready", "payload_ready", "skipped", "failed"],
+          },
+          handoffArtifactPaths: { type: "array", items: { type: "string" } },
           artifactPruneResult: {
             type: "object",
             nullable: true,
@@ -825,6 +1002,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
               cleanedAt: { type: "string" },
             },
           },
+          auditTrailPath: { type: "string", nullable: true },
           stateBefore: {
             type: "string",
             enum: [

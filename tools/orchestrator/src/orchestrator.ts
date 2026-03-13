@@ -1,6 +1,8 @@
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 import {
   approvalStatusSchema,
+  auditTrailSchema,
   ciStatusSummarySchema,
   cleanupDecisionSchema,
   liveSmokeResultSchema,
@@ -9,6 +11,7 @@ import {
   parseWithDualValidation,
   patchStatusSchema,
   promotionStatusSchema,
+  prDraftMetadataSchema,
   type CIStatusSummary,
   type CleanupDecision,
   type ExecutionMode,
@@ -53,6 +56,8 @@ import {
   validatePatchPromotionPreconditions,
 } from "./promotion";
 import { inspectWorkspaceCleanup } from "./cleanup";
+import { createHandoffPackage } from "./handoff";
+import { writeIterationAuditTrail } from "./audit";
 import { runOpenAIExecutorLiveSmoke } from "./live-smoke";
 
 type ProviderMap<T> = Record<PlannerProviderKind, T | null>;
@@ -98,10 +103,15 @@ function createIterationRecord(params: {
     approvalStatus: "not_requested",
     promotionStatus: "not_ready",
     liveAcceptanceStatus: "not_run",
+    livePassStatus: "not_run",
     workspaceStatus: "unknown",
     exportArtifactPaths: [],
+    handoffStatus: "not_ready",
+    prDraftStatus: "not_ready",
+    handoffArtifactPaths: [],
     artifactPruneResult: null,
     cleanupDecision: null,
+    auditTrailPath: null,
     stateBefore: params.stateBefore,
     stateAfter: params.stateAfter,
     stopReason: null,
@@ -326,10 +336,18 @@ export function createInitialState(params: {
       promotionStatus: "not_ready",
       workspaceStatus: "unknown",
       liveAcceptanceStatus: "not_run",
+      livePassStatus: "not_run",
       exportArtifactPaths: [],
+      handoffStatus: "not_ready",
+      prDraftStatus: "not_ready",
+      handoffArtifactPaths: [],
       lastArtifactPruneResult: null,
       lastLiveSmokeResult: null,
+      lastLiveAcceptanceResult: null,
       lastCleanupDecision: null,
+      lastPrDraftMetadata: null,
+      lastAuditTrail: null,
+      lastHandoffPackagePath: null,
       stopReason: null,
       iterationHistory: [],
       createdAt: now.toISOString(),
@@ -808,6 +826,8 @@ export async function approvePendingPatch(stateId: string, dependencies: Orchest
     approvalStatus: approvalStatusSchema.parse("approved"),
     promotionStatus: promotionStatusSchema.parse("promotion_ready"),
     exportArtifactPaths: [exportBundle.patchExportPath, exportBundle.manifestPath],
+    handoffStatus: "exported",
+    handoffArtifactPaths: [exportBundle.patchExportPath, exportBundle.manifestPath],
     stopReason: null,
     updatedAt: now.toISOString(),
   });
@@ -846,11 +866,14 @@ export async function approvePendingPatch(stateId: string, dependencies: Orchest
       approvalStatus: "approved",
       promotionStatus: "promotion_ready",
       exportArtifactPaths: [exportBundle.patchExportPath, exportBundle.manifestPath],
+      handoffStatus: "exported",
+      handoffArtifactPaths: [exportBundle.patchExportPath, exportBundle.manifestPath],
       stateAfter: nextStatus,
     },
     now,
   );
   await dependencies.storage.saveState(approved);
+  approved = await persistAuditTrail(approved, dependencies, now);
   return approved;
 }
 
@@ -883,6 +906,7 @@ export async function rejectPendingPatch(stateId: string, dependencies: Orchestr
     now,
   );
   await dependencies.storage.saveState(rejected);
+  rejected = await persistAuditTrail(rejected, dependencies, now);
   return rejected;
 }
 
@@ -968,6 +992,7 @@ export async function promoteApprovedPatch(
     now,
   );
   await dependencies.storage.saveState(promoted);
+  promoted = await persistAuditTrail(promoted, dependencies, now);
   return promoted;
 }
 
@@ -1022,10 +1047,41 @@ export async function cleanupStateWorkspaces(
     );
   }
   await dependencies.storage.saveState(updated);
+  updated = await persistAuditTrail(updated, dependencies, new Date(decision.cleanedAt));
   return {
     state: updated,
     result: decision,
   };
+}
+
+async function persistAuditTrail(
+  state: OrchestratorState,
+  dependencies: OrchestratorDependencies,
+  now: Date,
+) {
+  const auditRoot = path.join(state.task.repoPath, ".tmp", "orchestrator-audit");
+  const { auditTrail, auditPath } = await writeIterationAuditTrail({
+    state,
+    outputRoot: auditRoot,
+  });
+  let updated = orchestratorStateSchema.parse({
+    ...state,
+    lastAuditTrail: auditTrailSchema.parse(auditTrail),
+    updatedAt: now.toISOString(),
+  });
+  if (updated.iterationHistory.length > 0) {
+    const lastIteration = updated.iterationHistory[updated.iterationHistory.length - 1];
+    updated = upsertIterationRecord(
+      updated,
+      lastIteration.iterationNumber,
+      {
+        auditTrailPath: auditPath,
+      },
+      now,
+    );
+  }
+  await dependencies.storage.saveState(updated);
+  return updated;
 }
 
 export async function runLiveSmoke(params: {
@@ -1072,7 +1128,9 @@ export async function runLiveAcceptance(params: {
     let updated = orchestratorStateSchema.parse({
       ...state,
       liveAcceptanceStatus: result.status,
+      livePassStatus: result.status === "passed" ? "passed" : state.livePassStatus,
       lastLiveSmokeResult: result,
+      lastLiveAcceptanceResult: result,
       updatedAt: result.ranAt,
     });
     if (state.iterationHistory.length > 0) {
@@ -1082,14 +1140,139 @@ export async function runLiveAcceptance(params: {
         lastIteration.iterationNumber,
         {
           liveAcceptanceStatus: result.status,
+          livePassStatus: result.status === "passed" ? "passed" : updated.livePassStatus,
         },
         new Date(result.ranAt),
       );
     }
     await params.dependencies.storage.saveState(updated);
+    updated = await persistAuditTrail(updated, params.dependencies, new Date(result.ranAt));
+    return result;
   }
 
   return result;
+}
+
+export async function runLivePass(params: {
+  stateId?: string;
+  dependencies?: OrchestratorDependencies;
+  repoPath: string;
+  workspaceRoot?: string;
+  outputRoot?: string;
+  model?: string;
+  openaiClient?: OpenAIResponsesClient | null;
+  enabled?: boolean;
+}) {
+  const result = await runLiveAcceptance(params);
+  if (params.stateId && params.dependencies) {
+    const state = await params.dependencies.storage.loadState(params.stateId);
+    if (!state) throw new Error(`Orchestrator state ${params.stateId} was not found.`);
+    let updated = orchestratorStateSchema.parse({
+      ...state,
+      livePassStatus: result.status,
+      updatedAt: result.ranAt,
+    });
+    if (updated.iterationHistory.length > 0) {
+      const lastIteration = updated.iterationHistory[updated.iterationHistory.length - 1];
+      updated = upsertIterationRecord(
+        updated,
+        lastIteration.iterationNumber,
+        {
+          livePassStatus: result.status,
+        },
+        new Date(result.ranAt),
+      );
+    }
+    await params.dependencies.storage.saveState(updated);
+    await persistAuditTrail(updated, params.dependencies, new Date(result.ranAt));
+  }
+  return result;
+}
+
+export async function prepareHandoff(
+  stateId: string,
+  dependencies: OrchestratorDependencies,
+  options?: { publishBranch?: boolean; createBranch?: boolean; githubHandoffEnabled?: boolean },
+) {
+  const state = await dependencies.storage.loadState(stateId);
+  if (!state) throw new Error(`Orchestrator state ${stateId} was not found.`);
+  const outputRoot = path.join(state.task.repoPath, ".tmp", "orchestrator-handoff");
+  const handoff = await createHandoffPackage({
+    state,
+    outputRoot,
+    publishBranch: options?.publishBranch,
+    createBranch: options?.createBranch,
+    githubHandoffEnabled: options?.githubHandoffEnabled,
+  });
+
+  const now = (dependencies.now ?? (() => new Date()))();
+  let updated = orchestratorStateSchema.parse({
+    ...state,
+    handoffStatus: handoff.status,
+    prDraftStatus: handoff.prDraftPath
+      ? handoff.githubHandoffStatus === "payload_ready"
+        ? "payload_ready"
+        : "metadata_ready"
+      : handoff.githubHandoffStatus === "skipped"
+        ? "skipped"
+        : "failed",
+    handoffArtifactPaths: handoff.artifactPaths,
+    lastHandoffPackagePath: handoff.handoffPackagePath,
+    lastPrDraftMetadata: handoff.prDraftPath
+      ? prDraftMetadataSchema.parse(JSON.parse(await readFile(handoff.prDraftPath, "utf8")))
+      : null,
+    promotionStatus:
+      handoff.status === "branch_published"
+        ? "promoted"
+        : handoff.status === "handoff_ready"
+          ? "branch_ready"
+          : state.promotionStatus,
+    patchStatus:
+      handoff.status === "branch_published"
+        ? "promoted"
+        : handoff.status === "handoff_ready"
+          ? "branch_ready"
+          : state.patchStatus,
+    stopReason: handoff.issues.length > 0 ? handoff.issues.join(" | ") : null,
+    updatedAt: now.toISOString(),
+  });
+  if (updated.iterationHistory.length > 0) {
+    const lastIteration = updated.iterationHistory[updated.iterationHistory.length - 1];
+    updated = upsertIterationRecord(
+      updated,
+      lastIteration.iterationNumber,
+      {
+        handoffStatus: handoff.status,
+        prDraftStatus: handoff.prDraftPath
+          ? handoff.githubHandoffStatus === "payload_ready"
+            ? "payload_ready"
+            : "metadata_ready"
+          : handoff.githubHandoffStatus === "skipped"
+            ? "skipped"
+            : "failed",
+        handoffArtifactPaths: handoff.artifactPaths,
+        patchStatus:
+          handoff.status === "branch_published"
+            ? "promoted"
+            : handoff.status === "handoff_ready"
+              ? "branch_ready"
+              : updated.patchStatus,
+        promotionStatus:
+          handoff.status === "branch_published"
+            ? "promoted"
+            : handoff.status === "handoff_ready"
+              ? "branch_ready"
+              : updated.promotionStatus,
+      },
+      now,
+    );
+  }
+  await dependencies.storage.saveState(updated);
+  updated = await persistAuditTrail(updated, dependencies, now);
+  return {
+    state: updated,
+    result: handoff,
+  };
 }
 
 export function createDefaultDependencies(params: {

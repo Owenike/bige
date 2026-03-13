@@ -13,6 +13,11 @@ on:
         required: false
         default: false
         type: boolean
+      run_live_pass:
+        description: Run the live OpenAI executor pass path
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   orchestrator-validation:
@@ -50,10 +55,14 @@ jobs:
           npm run test:orchestrator:promotion-branch
           npm run test:orchestrator:artifacts
           npm run test:orchestrator:cleanup
+          npm run test:orchestrator:handoff
+          npm run test:orchestrator:pr-draft
+          npm run test:orchestrator:audit
           npm run test:orchestrator:mock-loop
           npm run test:orchestrator:loop
           npm run test:orchestrator:state-machine
           npm run test:orchestrator:live-acceptance
+          npm run test:orchestrator:live-pass
 
   orchestrator-live-smoke:
     name: Orchestrator Live Smoke
@@ -154,3 +163,53 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: npm run test:orchestrator:live-acceptance
+
+  orchestrator-live-pass:
+    name: Orchestrator Live Pass
+    needs: orchestrator-validation
+    runs-on: windows-latest
+    if: ${{ inputs.run_live_pass }}
+
+    steps:
+      - name: Decide live pass policy
+        id: policy
+        shell: pwsh
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if (-not $env:OPENAI_API_KEY) {
+            "run_live=false" >> $env:GITHUB_OUTPUT
+            "skip_reason=orchestrator live pass skipped because OPENAI_API_KEY is missing." >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          "run_live=true" >> $env:GITHUB_OUTPUT
+          "skip_reason=orchestrator live pass is ready to run." >> $env:GITHUB_OUTPUT
+
+      - name: Report live pass skip
+        if: ${{ steps.policy.outputs.run_live != 'true' }}
+        shell: pwsh
+        run: |
+          Write-Host "::notice title=Orchestrator live pass skipped::${{ steps.policy.outputs.skip_reason }}"
+
+      - name: Checkout
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        run: npm ci
+
+      - name: Run orchestrator live pass
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        shell: pwsh
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: npm run test:orchestrator:live-pass

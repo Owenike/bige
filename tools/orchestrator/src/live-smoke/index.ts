@@ -10,6 +10,7 @@ import { FileSystemWorkspaceManager } from "../workspace";
 export function resolveLiveSmokeGate(params: {
   apiKey?: string | null;
   enabled?: boolean;
+  model?: string | null;
 }) {
   if (!params.enabled) {
     return {
@@ -17,6 +18,9 @@ export function resolveLiveSmokeGate(params: {
       result: {
         status: "skipped",
         reason: "Live smoke is disabled by configuration.",
+        provider: "openai_responses",
+        model: params.model ?? null,
+        summary: "Live smoke skipped because it was disabled by configuration.",
         reportPath: null,
         diffPath: null,
         transcriptSummaryPath: null,
@@ -33,6 +37,9 @@ export function resolveLiveSmokeGate(params: {
       result: {
         status: "skipped",
         reason: "OPENAI_API_KEY is missing; live smoke was skipped.",
+        provider: "openai_responses",
+        model: params.model ?? null,
+        summary: "Live smoke skipped because OPENAI_API_KEY is not configured.",
         reportPath: null,
         diffPath: null,
         transcriptSummaryPath: null,
@@ -60,6 +67,7 @@ export async function runOpenAIExecutorLiveSmoke(params: {
   const gate = resolveLiveSmokeGate({
     apiKey: params.apiKey,
     enabled: params.enabled ?? true,
+    model: params.model ?? null,
   });
   if (!gate.runnable) {
     return gate.result;
@@ -130,6 +138,9 @@ export async function runOpenAIExecutorLiveSmoke(params: {
         report.blockers.length > 0
           ? `Live smoke completed with blockers: ${report.blockers.join(" | ")}`
           : "Live smoke completed successfully.",
+      provider: "openai_responses",
+      model: params.model ?? "gpt-5",
+      summary: report.summaryOfChanges.join(" | ") || report.recommendedNextStep,
       reportPath,
       diffPath,
       transcriptSummaryPath,
@@ -141,6 +152,9 @@ export async function runOpenAIExecutorLiveSmoke(params: {
     return {
       status: "failed",
       reason: error instanceof Error ? error.message : String(error),
+      provider: "openai_responses",
+      model: params.model ?? "gpt-5",
+      summary: "Live smoke failed before completing a valid execution report.",
       reportPath: null,
       diffPath: null,
       transcriptSummaryPath: null,
