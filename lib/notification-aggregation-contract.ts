@@ -11,6 +11,20 @@ export type NotificationAggregationMetadata = {
   rollupEligible: boolean;
 };
 
+export const NOTIFICATION_AGGREGATION_METADATA_FIELDS = [
+  "aggregationModeRequested",
+  "aggregationModeResolved",
+  "dataSource",
+  "isWholeUtcDayWindow",
+  "rollupEligible",
+] as const;
+
+export type NotificationAggregationMetadataField = (typeof NOTIFICATION_AGGREGATION_METADATA_FIELDS)[number];
+
+export type NotificationAggregationMetadataPayload = {
+  data?: Record<string, unknown> | null;
+} & Record<string, unknown>;
+
 export function isWholeUtcDayWindow(fromIso: string, toIso: string) {
   return isUtcDayBoundary(fromIso, "start") && isUtcDayBoundary(toIso, "end");
 }
@@ -29,6 +43,78 @@ export function buildNotificationAggregationMetadata(params: {
     isWholeUtcDayWindow: Boolean(params.isWholeUtcDayWindow),
     rollupEligible: Boolean(params.rollupEligible),
   };
+}
+
+export function pickNotificationAggregationMetadataField(
+  payload: NotificationAggregationMetadataPayload | null | undefined,
+  field: NotificationAggregationMetadataField,
+) {
+  if (!payload || typeof payload !== "object") return undefined;
+  const data = payload.data && typeof payload.data === "object" ? payload.data : null;
+  if (data && Object.prototype.hasOwnProperty.call(data, field)) return data[field];
+  return payload[field];
+}
+
+export function listMissingNotificationAggregationMetadataFields(
+  payload: NotificationAggregationMetadataPayload | null | undefined,
+) {
+  return NOTIFICATION_AGGREGATION_METADATA_FIELDS.filter(
+    (field) => typeof pickNotificationAggregationMetadataField(payload, field) === "undefined",
+  );
+}
+
+export function getNotificationAggregationMetadata(
+  payload: NotificationAggregationMetadataPayload | null | undefined,
+): NotificationAggregationMetadata | null {
+  const missingFields = listMissingNotificationAggregationMetadataFields(payload);
+  if (missingFields.length > 0) return null;
+  return {
+    aggregationModeRequested: pickNotificationAggregationMetadataField(
+      payload,
+      "aggregationModeRequested",
+    ) as NotificationAggregationModeRequested,
+    aggregationModeResolved: pickNotificationAggregationMetadataField(
+      payload,
+      "aggregationModeResolved",
+    ) as NotificationAggregationDataSource,
+    dataSource: pickNotificationAggregationMetadataField(payload, "dataSource") as NotificationAggregationDataSource,
+    isWholeUtcDayWindow: Boolean(pickNotificationAggregationMetadataField(payload, "isWholeUtcDayWindow")),
+    rollupEligible: Boolean(pickNotificationAggregationMetadataField(payload, "rollupEligible")),
+  };
+}
+
+export function describeNotificationAggregationMetadataContractIssues(params: {
+  payload: NotificationAggregationMetadataPayload | null | undefined;
+  expected?: Partial<NotificationAggregationMetadata>;
+}) {
+  const issues: string[] = [];
+  const missingFields = listMissingNotificationAggregationMetadataFields(params.payload);
+  if (missingFields.length > 0) {
+    issues.push(`missing fields: ${missingFields.join(", ")}`);
+    return issues;
+  }
+
+  const metadata = getNotificationAggregationMetadata(params.payload);
+  if (!metadata) {
+    issues.push("metadata payload unreadable");
+    return issues;
+  }
+
+  if (metadata.aggregationModeResolved !== metadata.dataSource) {
+    issues.push(
+      `aggregationModeResolved/dataSource mismatch: ${metadata.aggregationModeResolved} vs ${metadata.dataSource}`,
+    );
+  }
+
+  for (const field of NOTIFICATION_AGGREGATION_METADATA_FIELDS) {
+    const expectedValue = params.expected?.[field];
+    if (typeof expectedValue === "undefined") continue;
+    if (metadata[field] !== expectedValue) {
+      issues.push(`${field} expected ${String(expectedValue)}, got ${String(metadata[field])}`);
+    }
+  }
+
+  return issues;
 }
 
 export function buildTrendRollupEligibilityMetadata(params: {

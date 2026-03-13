@@ -96,8 +96,12 @@ import {
 } from "../lib/notification-alert-trends";
 import {
   buildNotificationAggregationMetadata,
+  describeNotificationAggregationMetadataContractIssues,
   buildTrendRollupEligibilityMetadata,
   formatNotificationAggregationDataSourceLabel,
+  getNotificationAggregationMetadata,
+  listMissingNotificationAggregationMetadataFields,
+  NOTIFICATION_AGGREGATION_METADATA_FIELDS,
 } from "../lib/notification-aggregation-contract";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
@@ -1351,40 +1355,101 @@ test("analytics rollup guard only allows whole-day UTC windows", () => {
   assert.equal(canUseAnalyticsDailyRollupWindow("2026-03-10T08:00:00.000Z", "2026-03-10T20:00:00.000Z"), false);
 });
 
-test("aggregation metadata contract resolves auto non-day to raw", () => {
-  assert.deepEqual(
-    buildNotificationAggregationMetadata({
+test("aggregation metadata contract guardrail covers overview, analytics, trends, and tenant drilldown", () => {
+  const cases = [
+    {
+      label: "overview auto(non-day)",
+      metadata: buildNotificationAggregationMetadata({
+        aggregationModeRequested: "auto",
+        dataSource: "raw",
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      }),
+    },
+    {
+      label: "analytics auto(whole-day)",
+      metadata: buildNotificationAggregationMetadata({
+        aggregationModeRequested: "auto",
+        dataSource: "rollup",
+        isWholeUtcDayWindow: true,
+        rollupEligible: true,
+      }),
+    },
+    {
+      label: "trends auto(non-day)",
+      metadata: buildNotificationAggregationMetadata({
+        aggregationModeRequested: "auto",
+        dataSource: "raw",
+        isWholeUtcDayWindow: false,
+        rollupEligible: false,
+      }),
+    },
+    {
+      label: "tenant drilldown auto(whole-day)",
+      metadata: buildNotificationAggregationMetadata({
+        aggregationModeRequested: "auto",
+        dataSource: "rollup",
+        isWholeUtcDayWindow: true,
+        rollupEligible: true,
+      }),
+    },
+  ];
+
+  for (const item of cases) {
+    const payload = {
+      ok: true,
+      data: {
+        snapshot: { dataSource: item.metadata.dataSource },
+        ...item.metadata,
+      },
+      ...item.metadata,
+    };
+    assert.deepEqual(listMissingNotificationAggregationMetadataFields(payload), [], `${item.label} missing fields`);
+    assert.deepEqual(
+      describeNotificationAggregationMetadataContractIssues({ payload, expected: item.metadata }),
+      [],
+      `${item.label} contract issues`,
+    );
+    assert.deepEqual(getNotificationAggregationMetadata(payload), item.metadata, `${item.label} extracted metadata`);
+  }
+});
+
+test("aggregation metadata contract guardrail reports field drift and resolved/source mismatch", () => {
+  const missingPayload = {
+    ok: true,
+    data: {
+      snapshot: { dataSource: "raw" },
       aggregationModeRequested: "auto",
       dataSource: "raw",
-      isWholeUtcDayWindow: false,
-      rollupEligible: false,
-    }),
-    {
+    },
+  };
+  assert.deepEqual(listMissingNotificationAggregationMetadataFields(missingPayload), [
+    "aggregationModeResolved",
+    "isWholeUtcDayWindow",
+    "rollupEligible",
+  ]);
+
+  const driftPayload = {
+    ok: true,
+    aggregationModeRequested: "auto",
+    aggregationModeResolved: "rollup",
+    dataSource: "raw",
+    isWholeUtcDayWindow: false,
+    rollupEligible: false,
+  };
+  const issues = describeNotificationAggregationMetadataContractIssues({
+    payload: driftPayload,
+    expected: {
       aggregationModeRequested: "auto",
       aggregationModeResolved: "raw",
       dataSource: "raw",
       isWholeUtcDayWindow: false,
       rollupEligible: false,
     },
-  );
-});
-
-test("aggregation metadata contract resolves auto whole-day to rollup", () => {
-  assert.deepEqual(
-    buildNotificationAggregationMetadata({
-      aggregationModeRequested: "auto",
-      dataSource: "rollup",
-      isWholeUtcDayWindow: true,
-      rollupEligible: true,
-    }),
-    {
-      aggregationModeRequested: "auto",
-      aggregationModeResolved: "rollup",
-      dataSource: "rollup",
-      isWholeUtcDayWindow: true,
-      rollupEligible: true,
-    },
-  );
+  });
+  assert.equal(issues.some((item) => item.includes("aggregationModeResolved/dataSource mismatch")), true);
+  assert.equal(issues.some((item) => item.includes("aggregationModeResolved expected raw, got rollup")), true);
+  assert.equal(NOTIFICATION_AGGREGATION_METADATA_FIELDS.length, 5);
 });
 
 test("trend rollup eligibility metadata keeps whole-day and previous-window checks separate", () => {
@@ -1407,7 +1472,7 @@ test("aggregation data source labels are unified for overview and drilldown UI",
   assert.equal(formatNotificationAggregationDataSourceLabel("rollup"), "Aggregation source: daily rollup aggregation.");
 });
 
-test("tenant drilldown recent anomalies contract stays raw-backed", () => {
+test("tenant drilldown recent anomalies stay raw-backed by design for latest retry and error context", () => {
   assert.equal(TENANT_DRILLDOWN_RECENT_ANOMALIES_DATA_SOURCE, "raw");
   assert.equal(TENANT_DRILLDOWN_RECENT_ANOMALIES_RAW_REASON.includes("rollups do not store"), true);
 });

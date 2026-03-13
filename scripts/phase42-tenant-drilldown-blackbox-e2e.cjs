@@ -2,6 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
+const {
+  assertAggregationMetadata,
+  getSnapshot,
+} = require('./phase42-overview-blackbox-e2e.cjs');
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -94,51 +98,6 @@ async function apiGetWithRetry(params) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
   return last;
-}
-
-function getSnapshot(payload) {
-  if (!payload || typeof payload !== 'object') return null;
-  if (payload.snapshot && typeof payload.snapshot === 'object') return payload.snapshot;
-  if (payload.data && payload.data.snapshot && typeof payload.data.snapshot === 'object') return payload.data.snapshot;
-  return null;
-}
-
-function getAggregationMetadata(payload) {
-  if (!payload || typeof payload !== 'object') return null;
-  const root = payload;
-  const data = payload.data && typeof payload.data === 'object' ? payload.data : {};
-  const pick = (key) => (Object.prototype.hasOwnProperty.call(data, key) ? data[key] : root[key]);
-  const metadata = {
-    aggregationModeRequested: pick('aggregationModeRequested'),
-    aggregationModeResolved: pick('aggregationModeResolved'),
-    dataSource: pick('dataSource'),
-    isWholeUtcDayWindow: pick('isWholeUtcDayWindow'),
-    rollupEligible: pick('rollupEligible'),
-  };
-  if (!metadata.aggregationModeRequested || !metadata.aggregationModeResolved || !metadata.dataSource) return null;
-  return metadata;
-}
-
-function assertAggregationMetadata(payload, expected, label) {
-  const metadata = getAggregationMetadata(payload);
-  assertOrThrow(Boolean(metadata), `${label} aggregation metadata missing`);
-  assertOrThrow(
-    metadata.aggregationModeRequested === expected.aggregationModeRequested,
-    `${label} aggregationModeRequested expected ${expected.aggregationModeRequested}, got ${metadata.aggregationModeRequested}`,
-  );
-  assertOrThrow(
-    metadata.aggregationModeResolved === expected.aggregationModeResolved,
-    `${label} aggregationModeResolved expected ${expected.aggregationModeResolved}, got ${metadata.aggregationModeResolved}`,
-  );
-  assertOrThrow(metadata.dataSource === expected.dataSource, `${label} dataSource expected ${expected.dataSource}, got ${metadata.dataSource}`);
-  assertOrThrow(
-    metadata.isWholeUtcDayWindow === expected.isWholeUtcDayWindow,
-    `${label} isWholeUtcDayWindow expected ${expected.isWholeUtcDayWindow}, got ${metadata.isWholeUtcDayWindow}`,
-  );
-  assertOrThrow(
-    metadata.rollupEligible === expected.rollupEligible,
-    `${label} rollupEligible expected ${expected.rollupEligible}, got ${metadata.rollupEligible}`,
-  );
 }
 
 function dayStartIsoUtc(date) {

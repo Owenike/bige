@@ -103,11 +103,21 @@ function getSnapshot(payload) {
   return null;
 }
 
+const AGGREGATION_METADATA_FIELDS = [
+  'aggregationModeRequested',
+  'aggregationModeResolved',
+  'dataSource',
+  'isWholeUtcDayWindow',
+  'rollupEligible',
+];
+
 function getAggregationMetadata(payload) {
-  if (!payload || typeof payload !== 'object') return null;
+  if (!payload || typeof payload !== 'object') return { metadata: null, missingFields: [...AGGREGATION_METADATA_FIELDS] };
   const root = payload;
   const data = payload.data && typeof payload.data === 'object' ? payload.data : {};
   const pick = (key) => (Object.prototype.hasOwnProperty.call(data, key) ? data[key] : root[key]);
+  const missingFields = AGGREGATION_METADATA_FIELDS.filter((key) => typeof pick(key) === 'undefined');
+  if (missingFields.length > 0) return { metadata: null, missingFields };
   const metadata = {
     aggregationModeRequested: pick('aggregationModeRequested'),
     aggregationModeResolved: pick('aggregationModeResolved'),
@@ -115,30 +125,35 @@ function getAggregationMetadata(payload) {
     isWholeUtcDayWindow: pick('isWholeUtcDayWindow'),
     rollupEligible: pick('rollupEligible'),
   };
-  if (!metadata.aggregationModeRequested || !metadata.aggregationModeResolved || !metadata.dataSource) return null;
-  return metadata;
+  return { metadata, missingFields: [] };
+}
+
+function describeAggregationMetadataContractIssues(payload, expected) {
+  const { metadata, missingFields } = getAggregationMetadata(payload);
+  const issues = [];
+  if (missingFields.length > 0) {
+    issues.push(`missing fields: ${missingFields.join(', ')}`);
+    return issues;
+  }
+  if (!metadata) {
+    issues.push('metadata payload unreadable');
+    return issues;
+  }
+  if (metadata.aggregationModeResolved !== metadata.dataSource) {
+    issues.push(`aggregationModeResolved/dataSource mismatch: ${metadata.aggregationModeResolved} vs ${metadata.dataSource}`);
+  }
+  for (const [key, expectedValue] of Object.entries(expected || {})) {
+    if (typeof expectedValue === 'undefined') continue;
+    if (metadata[key] !== expectedValue) {
+      issues.push(`${key} expected ${expectedValue}, got ${metadata[key]}`);
+    }
+  }
+  return issues;
 }
 
 function assertAggregationMetadata(payload, expected, label) {
-  const metadata = getAggregationMetadata(payload);
-  assertOrThrow(Boolean(metadata), `${label} aggregation metadata missing`);
-  assertOrThrow(
-    metadata.aggregationModeRequested === expected.aggregationModeRequested,
-    `${label} aggregationModeRequested expected ${expected.aggregationModeRequested}, got ${metadata.aggregationModeRequested}`,
-  );
-  assertOrThrow(
-    metadata.aggregationModeResolved === expected.aggregationModeResolved,
-    `${label} aggregationModeResolved expected ${expected.aggregationModeResolved}, got ${metadata.aggregationModeResolved}`,
-  );
-  assertOrThrow(metadata.dataSource === expected.dataSource, `${label} dataSource expected ${expected.dataSource}, got ${metadata.dataSource}`);
-  assertOrThrow(
-    metadata.isWholeUtcDayWindow === expected.isWholeUtcDayWindow,
-    `${label} isWholeUtcDayWindow expected ${expected.isWholeUtcDayWindow}, got ${metadata.isWholeUtcDayWindow}`,
-  );
-  assertOrThrow(
-    metadata.rollupEligible === expected.rollupEligible,
-    `${label} rollupEligible expected ${expected.rollupEligible}, got ${metadata.rollupEligible}`,
-  );
+  const issues = describeAggregationMetadataContractIssues(payload, expected);
+  assertOrThrow(issues.length === 0, `${label} aggregation metadata contract failed: ${issues.join('; ')}`);
 }
 
 function toDateStringUtc(date) {
@@ -1042,7 +1057,17 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+module.exports = {
+  AGGREGATION_METADATA_FIELDS,
+  assertAggregationMetadata,
+  describeAggregationMetadataContractIssues,
+  getAggregationMetadata,
+  getSnapshot,
+};
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}
