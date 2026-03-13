@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const {
   assertAggregationMetadata,
+  expectedAggregationMetadata,
   getSnapshot,
 } = require('./phase42-overview-blackbox-e2e.cjs');
 
@@ -524,13 +525,12 @@ async function main() {
     assertOrThrow(drillSnapshot.dataSource === 'raw', `drilldown auto(non-day) expected raw source, got ${drillSnapshot.dataSource}`);
     assertAggregationMetadata(
       drilldown.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
-        aggregationModeResolved: 'raw',
         dataSource: 'raw',
         isWholeUtcDayWindow: false,
         rollupEligible: false,
-      },
+      }),
       'drilldown auto(non-day)',
     );
 
@@ -612,13 +612,12 @@ async function main() {
     assertOrThrow(rollupSnapshot.dataSource === 'rollup', `drilldown rollup expected rollup source, got ${rollupSnapshot.dataSource}`);
     assertAggregationMetadata(
       drillRollup.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'rollup',
-        aggregationModeResolved: 'rollup',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
-      },
+      }),
       'drilldown rollup',
     );
     assertOrThrow(
@@ -643,13 +642,12 @@ async function main() {
     assertOrThrow(rawSnapshot.dataSource === 'raw', `drilldown raw expected raw source, got ${rawSnapshot.dataSource}`);
     assertAggregationMetadata(
       drillRaw.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'raw',
-        aggregationModeResolved: 'raw',
         dataSource: 'raw',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
-      },
+      }),
       'drilldown raw',
     );
 
@@ -709,13 +707,12 @@ async function main() {
     );
     assertAggregationMetadata(
       drillAutoWholeDay.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
-        aggregationModeResolved: 'rollup',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
-      },
+      }),
       'drilldown auto(whole-day)',
     );
 

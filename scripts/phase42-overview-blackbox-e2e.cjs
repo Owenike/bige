@@ -109,7 +109,63 @@ const AGGREGATION_METADATA_FIELDS = [
   'dataSource',
   'isWholeUtcDayWindow',
   'rollupEligible',
+  'resolutionReason',
+  'requestedWindowType',
+  'snapshotWindowType',
 ];
+
+function getAggregationWindowType(isWholeUtcDayWindow) {
+  return isWholeUtcDayWindow ? 'whole_utc_day' : 'partial_utc_window';
+}
+
+function buildAggregationResolutionReason(params) {
+  const aggregationModeRequested = String(params.aggregationModeRequested || 'auto');
+  if (aggregationModeRequested === 'raw') {
+    return 'aggregationMode=raw was explicitly requested, so raw query aggregation was used.';
+  }
+  if (aggregationModeRequested === 'rollup') {
+    return 'aggregationMode=rollup was explicitly requested, so daily rollup aggregation was used.';
+  }
+  if (params.reasonScope === 'trends') {
+    if (params.dataSource === 'rollup') {
+      return 'aggregationMode=auto resolved to daily rollup aggregation because both current and previous trend windows are whole UTC-day windows.';
+    }
+    if (params.isWholeUtcDayWindow && !params.rollupEligible) {
+      return 'aggregationMode=auto fell back to raw query aggregation because trend rollups require both current and previous windows to be whole UTC-day windows.';
+    }
+    return 'aggregationMode=auto fell back to raw query aggregation because the current trend window is not a whole UTC-day window.';
+  }
+  if (params.dataSource === 'rollup') {
+    return 'aggregationMode=auto resolved to daily rollup aggregation because the requested window is a whole UTC-day window.';
+  }
+  if (params.isWholeUtcDayWindow && !params.rollupEligible) {
+    return 'aggregationMode=auto fell back to raw query aggregation because the requested window was not eligible for daily rollup aggregation.';
+  }
+  return 'aggregationMode=auto fell back to raw query aggregation because the requested window is not a whole UTC-day window.';
+}
+
+function expectedAggregationMetadata(params) {
+  const aggregationModeRequested = String(params.aggregationModeRequested || 'auto');
+  const isWholeUtcDayWindow = Boolean(params.isWholeUtcDayWindow);
+  return {
+    aggregationModeRequested,
+    aggregationModeResolved: params.dataSource,
+    dataSource: params.dataSource,
+    isWholeUtcDayWindow,
+    rollupEligible: Boolean(params.rollupEligible),
+    resolutionReason:
+      params.resolutionReason ||
+      buildAggregationResolutionReason({
+        aggregationModeRequested,
+        dataSource: params.dataSource,
+        isWholeUtcDayWindow,
+        rollupEligible: Boolean(params.rollupEligible),
+        reasonScope: params.reasonScope || 'default',
+      }),
+    requestedWindowType: params.requestedWindowType || getAggregationWindowType(isWholeUtcDayWindow),
+    snapshotWindowType: params.snapshotWindowType || getAggregationWindowType(isWholeUtcDayWindow),
+  };
+}
 
 function getAggregationMetadata(payload) {
   if (!payload || typeof payload !== 'object') return { metadata: null, missingFields: [...AGGREGATION_METADATA_FIELDS] };
@@ -551,13 +607,12 @@ async function main() {
     assertOrThrow(snapshot.dataSource === 'raw', `overview auto(non-day) expected raw source, got ${snapshot.dataSource}`);
     assertAggregationMetadata(
       overview.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
-        aggregationModeResolved: 'raw',
         dataSource: 'raw',
         isWholeUtcDayWindow: false,
         rollupEligible: false,
-      },
+      }),
       'overview auto(non-day)',
     );
     assertOrThrow(snapshot.totalRows === 6, `overview totalRows expected 6, got ${snapshot.totalRows}`);
@@ -607,13 +662,12 @@ async function main() {
     assertOrThrow(analyticsSnapshot, 'analytics snapshot missing');
     assertAggregationMetadata(
       analytics.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
-        aggregationModeResolved: 'raw',
         dataSource: 'raw',
         isWholeUtcDayWindow: false,
         rollupEligible: false,
-      },
+      }),
       'analytics auto(non-day)',
     );
     assertOrThrow(
@@ -644,13 +698,13 @@ async function main() {
     );
     assertAggregationMetadata(
       trendsNonDay.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
-        aggregationModeResolved: 'raw',
         dataSource: 'raw',
         isWholeUtcDayWindow: false,
         rollupEligible: false,
-      },
+        reasonScope: 'trends',
+      }),
       'trends auto(non-day)',
     );
 
@@ -675,13 +729,12 @@ async function main() {
     );
     assertAggregationMetadata(
       drilldownNonDay.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
-        aggregationModeResolved: 'raw',
         dataSource: 'raw',
         isWholeUtcDayWindow: false,
         rollupEligible: false,
-      },
+      }),
       'drilldown auto(non-day)',
     );
 
@@ -737,13 +790,12 @@ async function main() {
     assertOrThrow(rollupSnapshot.dataSource === 'rollup', `overview rollup dataSource expected rollup, got ${rollupSnapshot.dataSource}`);
     assertAggregationMetadata(
       overviewRollup.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'rollup',
-        aggregationModeResolved: 'rollup',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
-      },
+      }),
       'overview rollup',
     );
 
@@ -763,13 +815,12 @@ async function main() {
     assertOrThrow(rawSnapshot.dataSource === 'raw', `overview raw dataSource expected raw, got ${rawSnapshot.dataSource}`);
     assertAggregationMetadata(
       overviewRaw.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'raw',
-        aggregationModeResolved: 'raw',
         dataSource: 'raw',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
-      },
+      }),
       'overview raw',
     );
 
@@ -800,13 +851,12 @@ async function main() {
     );
     assertAggregationMetadata(
       overviewAutoRollup.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
-        aggregationModeResolved: 'rollup',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
-      },
+      }),
       'overview auto(whole-day)',
     );
 
@@ -834,13 +884,12 @@ async function main() {
     );
     assertAggregationMetadata(
       analyticsAutoWholeDay.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
-        aggregationModeResolved: 'rollup',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
-      },
+      }),
       'analytics auto(whole-day)',
     );
 
@@ -865,13 +914,13 @@ async function main() {
     );
     assertAggregationMetadata(
       trendsAutoWholeDay.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
-        aggregationModeResolved: 'rollup',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
-      },
+        reasonScope: 'trends',
+      }),
       'trends auto(whole-day)',
     );
 
@@ -899,13 +948,12 @@ async function main() {
     );
     assertAggregationMetadata(
       drilldownAutoWholeDay.json,
-      {
+      expectedAggregationMetadata({
         aggregationModeRequested: 'auto',
-        aggregationModeResolved: 'rollup',
         dataSource: 'rollup',
         isWholeUtcDayWindow: true,
         rollupEligible: true,
-      },
+      }),
       'drilldown auto(whole-day)',
     );
 
@@ -1060,8 +1108,11 @@ async function main() {
 module.exports = {
   AGGREGATION_METADATA_FIELDS,
   assertAggregationMetadata,
+  expectedAggregationMetadata,
+  buildAggregationResolutionReason,
   describeAggregationMetadataContractIssues,
   getAggregationMetadata,
+  getAggregationWindowType,
   getSnapshot,
 };
 

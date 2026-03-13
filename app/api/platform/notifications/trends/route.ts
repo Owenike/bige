@@ -58,6 +58,7 @@ export async function GET(request: Request) {
     dataSource: compared.snapshot.dataSource,
     isWholeUtcDayWindow: eligibility.isWholeUtcDayWindow,
     rollupEligible: eligibility.rollupEligible,
+    reasonScope: "trends",
   });
 
   return apiSuccess({

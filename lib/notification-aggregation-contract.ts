@@ -9,14 +9,30 @@ export type NotificationAggregationMetadata = {
   dataSource: NotificationAggregationDataSource;
   isWholeUtcDayWindow: boolean;
   rollupEligible: boolean;
+  resolutionReason: string;
+  requestedWindowType: NotificationAggregationWindowType;
+  snapshotWindowType: NotificationAggregationWindowType;
 };
 
-export const NOTIFICATION_AGGREGATION_METADATA_FIELDS = [
+export type NotificationAggregationWindowType = "whole_utc_day" | "partial_utc_window";
+
+export const NOTIFICATION_AGGREGATION_CORE_METADATA_FIELDS = [
   "aggregationModeRequested",
   "aggregationModeResolved",
   "dataSource",
   "isWholeUtcDayWindow",
   "rollupEligible",
+] as const;
+
+export const NOTIFICATION_AGGREGATION_EXPLAINABILITY_FIELDS = [
+  "resolutionReason",
+  "requestedWindowType",
+  "snapshotWindowType",
+] as const;
+
+export const NOTIFICATION_AGGREGATION_METADATA_FIELDS = [
+  ...NOTIFICATION_AGGREGATION_CORE_METADATA_FIELDS,
+  ...NOTIFICATION_AGGREGATION_EXPLAINABILITY_FIELDS,
 ] as const;
 
 export type NotificationAggregationMetadataField = (typeof NOTIFICATION_AGGREGATION_METADATA_FIELDS)[number];
@@ -29,19 +45,77 @@ export function isWholeUtcDayWindow(fromIso: string, toIso: string) {
   return isUtcDayBoundary(fromIso, "start") && isUtcDayBoundary(toIso, "end");
 }
 
+export function getNotificationAggregationWindowType(isWholeWindow: boolean): NotificationAggregationWindowType {
+  return isWholeWindow ? "whole_utc_day" : "partial_utc_window";
+}
+
+export function buildNotificationAggregationResolutionReason(params: {
+  aggregationModeRequested?: NotificationAggregationModeRequested | null;
+  dataSource: NotificationAggregationDataSource;
+  isWholeUtcDayWindow: boolean;
+  rollupEligible: boolean;
+  reasonScope?: "default" | "trends";
+}) {
+  const aggregationModeRequested = params.aggregationModeRequested || "auto";
+
+  if (aggregationModeRequested === "raw") {
+    return "aggregationMode=raw was explicitly requested, so raw query aggregation was used.";
+  }
+  if (aggregationModeRequested === "rollup") {
+    return "aggregationMode=rollup was explicitly requested, so daily rollup aggregation was used.";
+  }
+
+  if (params.reasonScope === "trends") {
+    if (params.dataSource === "rollup") {
+      return "aggregationMode=auto resolved to daily rollup aggregation because both current and previous trend windows are whole UTC-day windows.";
+    }
+    if (params.isWholeUtcDayWindow && !params.rollupEligible) {
+      return "aggregationMode=auto fell back to raw query aggregation because trend rollups require both current and previous windows to be whole UTC-day windows.";
+    }
+    return "aggregationMode=auto fell back to raw query aggregation because the current trend window is not a whole UTC-day window.";
+  }
+
+  if (params.dataSource === "rollup") {
+    return "aggregationMode=auto resolved to daily rollup aggregation because the requested window is a whole UTC-day window.";
+  }
+  if (params.isWholeUtcDayWindow && !params.rollupEligible) {
+    return "aggregationMode=auto fell back to raw query aggregation because the requested window was not eligible for daily rollup aggregation.";
+  }
+  return "aggregationMode=auto fell back to raw query aggregation because the requested window is not a whole UTC-day window.";
+}
+
 export function buildNotificationAggregationMetadata(params: {
   aggregationModeRequested?: NotificationAggregationModeRequested | null;
   dataSource: NotificationAggregationDataSource;
   isWholeUtcDayWindow: boolean;
   rollupEligible: boolean;
+  resolutionReason?: string | null;
+  requestedWindowType?: NotificationAggregationWindowType | null;
+  snapshotWindowType?: NotificationAggregationWindowType | null;
+  reasonScope?: "default" | "trends";
 }): NotificationAggregationMetadata {
   const aggregationModeRequested = params.aggregationModeRequested || "auto";
+  const requestedWindowType =
+    params.requestedWindowType || getNotificationAggregationWindowType(Boolean(params.isWholeUtcDayWindow));
+  const snapshotWindowType =
+    params.snapshotWindowType || getNotificationAggregationWindowType(Boolean(params.isWholeUtcDayWindow));
   return {
     aggregationModeRequested,
     aggregationModeResolved: params.dataSource,
     dataSource: params.dataSource,
     isWholeUtcDayWindow: Boolean(params.isWholeUtcDayWindow),
     rollupEligible: Boolean(params.rollupEligible),
+    resolutionReason:
+      params.resolutionReason ||
+      buildNotificationAggregationResolutionReason({
+        aggregationModeRequested,
+        dataSource: params.dataSource,
+        isWholeUtcDayWindow: Boolean(params.isWholeUtcDayWindow),
+        rollupEligible: Boolean(params.rollupEligible),
+        reasonScope: params.reasonScope || "default",
+      }),
+    requestedWindowType,
+    snapshotWindowType,
   };
 }
 
@@ -80,6 +154,15 @@ export function getNotificationAggregationMetadata(
     dataSource: pickNotificationAggregationMetadataField(payload, "dataSource") as NotificationAggregationDataSource,
     isWholeUtcDayWindow: Boolean(pickNotificationAggregationMetadataField(payload, "isWholeUtcDayWindow")),
     rollupEligible: Boolean(pickNotificationAggregationMetadataField(payload, "rollupEligible")),
+    resolutionReason: String(pickNotificationAggregationMetadataField(payload, "resolutionReason") || ""),
+    requestedWindowType: pickNotificationAggregationMetadataField(
+      payload,
+      "requestedWindowType",
+    ) as NotificationAggregationWindowType,
+    snapshotWindowType: pickNotificationAggregationMetadataField(
+      payload,
+      "snapshotWindowType",
+    ) as NotificationAggregationWindowType,
   };
 }
 

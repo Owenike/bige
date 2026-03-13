@@ -96,11 +96,15 @@ import {
 } from "../lib/notification-alert-trends";
 import {
   buildNotificationAggregationMetadata,
+  buildNotificationAggregationResolutionReason,
   describeNotificationAggregationMetadataContractIssues,
   buildTrendRollupEligibilityMetadata,
   formatNotificationAggregationDataSourceLabel,
   getNotificationAggregationMetadata,
+  getNotificationAggregationWindowType,
   listMissingNotificationAggregationMetadataFields,
+  NOTIFICATION_AGGREGATION_CORE_METADATA_FIELDS,
+  NOTIFICATION_AGGREGATION_EXPLAINABILITY_FIELDS,
   NOTIFICATION_AGGREGATION_METADATA_FIELDS,
 } from "../lib/notification-aggregation-contract";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
@@ -1382,6 +1386,7 @@ test("aggregation metadata contract guardrail covers overview, analytics, trends
         dataSource: "raw",
         isWholeUtcDayWindow: false,
         rollupEligible: false,
+        reasonScope: "trends",
       }),
     },
     {
@@ -1427,6 +1432,9 @@ test("aggregation metadata contract guardrail reports field drift and resolved/s
     "aggregationModeResolved",
     "isWholeUtcDayWindow",
     "rollupEligible",
+    "resolutionReason",
+    "requestedWindowType",
+    "snapshotWindowType",
   ]);
 
   const driftPayload = {
@@ -1436,6 +1444,10 @@ test("aggregation metadata contract guardrail reports field drift and resolved/s
     dataSource: "raw",
     isWholeUtcDayWindow: false,
     rollupEligible: false,
+    resolutionReason:
+      "aggregationMode=auto fell back to raw query aggregation because the requested window is not a whole UTC-day window.",
+    requestedWindowType: "partial_utc_window",
+    snapshotWindowType: "partial_utc_window",
   };
   const issues = describeNotificationAggregationMetadataContractIssues({
     payload: driftPayload,
@@ -1445,11 +1457,99 @@ test("aggregation metadata contract guardrail reports field drift and resolved/s
       dataSource: "raw",
       isWholeUtcDayWindow: false,
       rollupEligible: false,
+      resolutionReason:
+        "aggregationMode=auto fell back to raw query aggregation because the requested window is not a whole UTC-day window.",
+      requestedWindowType: "partial_utc_window",
+      snapshotWindowType: "partial_utc_window",
     },
   });
   assert.equal(issues.some((item) => item.includes("aggregationModeResolved/dataSource mismatch")), true);
   assert.equal(issues.some((item) => item.includes("aggregationModeResolved expected raw, got rollup")), true);
-  assert.equal(NOTIFICATION_AGGREGATION_METADATA_FIELDS.length, 5);
+  assert.equal(NOTIFICATION_AGGREGATION_CORE_METADATA_FIELDS.length, 5);
+  assert.equal(NOTIFICATION_AGGREGATION_EXPLAINABILITY_FIELDS.length, 3);
+  assert.equal(NOTIFICATION_AGGREGATION_METADATA_FIELDS.length, 8);
+});
+
+test("aggregation explainability describes explicit raw, explicit rollup, and auto window resolution", () => {
+  const explicitRaw = buildNotificationAggregationMetadata({
+    aggregationModeRequested: "raw",
+    dataSource: "raw",
+    isWholeUtcDayWindow: true,
+    rollupEligible: true,
+  });
+  assert.equal(
+    explicitRaw.resolutionReason,
+    "aggregationMode=raw was explicitly requested, so raw query aggregation was used.",
+  );
+  assert.equal(explicitRaw.requestedWindowType, "whole_utc_day");
+  assert.equal(explicitRaw.snapshotWindowType, "whole_utc_day");
+
+  const explicitRollup = buildNotificationAggregationMetadata({
+    aggregationModeRequested: "rollup",
+    dataSource: "rollup",
+    isWholeUtcDayWindow: true,
+    rollupEligible: true,
+  });
+  assert.equal(
+    explicitRollup.resolutionReason,
+    "aggregationMode=rollup was explicitly requested, so daily rollup aggregation was used.",
+  );
+
+  const autoPartial = buildNotificationAggregationMetadata({
+    aggregationModeRequested: "auto",
+    dataSource: "raw",
+    isWholeUtcDayWindow: false,
+    rollupEligible: false,
+  });
+  assert.equal(
+    autoPartial.resolutionReason,
+    "aggregationMode=auto fell back to raw query aggregation because the requested window is not a whole UTC-day window.",
+  );
+  assert.equal(autoPartial.requestedWindowType, getNotificationAggregationWindowType(false));
+  assert.equal(autoPartial.snapshotWindowType, "partial_utc_window");
+
+  const autoWholeDay = buildNotificationAggregationMetadata({
+    aggregationModeRequested: "auto",
+    dataSource: "rollup",
+    isWholeUtcDayWindow: true,
+    rollupEligible: true,
+  });
+  assert.equal(
+    autoWholeDay.resolutionReason,
+    "aggregationMode=auto resolved to daily rollup aggregation because the requested window is a whole UTC-day window.",
+  );
+});
+
+test("trend explainability keeps current-window and compare-window semantics readable", () => {
+  const currentWholePreviousPartial = buildTrendRollupEligibilityMetadata({
+    currentFromIso: "2026-03-10T00:00:00.000Z",
+    currentToIso: "2026-03-10T23:59:59.999Z",
+    previousFromIso: "2026-03-09T08:00:00.000Z",
+    previousToIso: "2026-03-10T07:59:59.000Z",
+  });
+  const trendFallbackReason = buildNotificationAggregationResolutionReason({
+    aggregationModeRequested: "auto",
+    dataSource: "raw",
+    isWholeUtcDayWindow: currentWholePreviousPartial.isWholeUtcDayWindow,
+    rollupEligible: currentWholePreviousPartial.rollupEligible,
+    reasonScope: "trends",
+  });
+  assert.equal(
+    trendFallbackReason,
+    "aggregationMode=auto fell back to raw query aggregation because trend rollups require both current and previous windows to be whole UTC-day windows.",
+  );
+
+  const trendRollupReason = buildNotificationAggregationResolutionReason({
+    aggregationModeRequested: "auto",
+    dataSource: "rollup",
+    isWholeUtcDayWindow: true,
+    rollupEligible: true,
+    reasonScope: "trends",
+  });
+  assert.equal(
+    trendRollupReason,
+    "aggregationMode=auto resolved to daily rollup aggregation because both current and previous trend windows are whole UTC-day windows.",
+  );
 });
 
 test("trend rollup eligibility metadata keeps whole-day and previous-window checks separate", () => {
