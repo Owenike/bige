@@ -44,10 +44,12 @@ function buildAlertWorkflowHref(snapshot: OverviewSnapshot, tenantId?: string) {
 export default function NotificationOverviewDashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const { filters, draft, setDraft, applyDraft, resetFilters, buildTenantDrilldownHref } = useNotificationOverviewUrlSync();
-  const { data, loading, error, isInitialLoading } = useNotificationOverviewPageData(filters, refreshKey);
+  const { data, loading, error, errorMode, isInitialLoading } = useNotificationOverviewPageData(filters, refreshKey);
   const snapshot = data?.overview.snapshot ?? null;
   const insights = data?.insights ?? null;
-  const trend = data?.trends.snapshot ?? null;
+  const trend = data?.trends?.snapshot ?? null;
+  const resourceErrors = data?.resourceErrors ?? [];
+  const hasResilienceNotice = Boolean(error) || resourceErrors.length > 0;
 
   const hasData = useMemo(() => Boolean(snapshot && snapshot.totalRows > 0), [snapshot]);
   const warmTenantDrilldown = (tenantId: string) => {
@@ -149,9 +151,18 @@ export default function NotificationOverviewDashboard() {
           </div>
         </section>
 
-        {error ? (
+        {hasResilienceNotice ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-            <div className="error">{error.message}</div>
+            {error ? (
+              <div className="error">
+                {errorMode === "soft" ? `Retaining last successful overview data. ${error.message}` : error.message}
+              </div>
+            ) : null}
+            {resourceErrors.map((issue) => (
+              <p key={`${issue.source}:${issue.kind}:${issue.message}`} className="sub" style={{ marginTop: error ? 8 : 0 }}>
+                {issue.source} {issue.kind}: {issue.message}
+              </p>
+            ))}
           </section>
         ) : null}
 

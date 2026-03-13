@@ -1989,12 +1989,13 @@ test("overview read API orchestration loads parsed overview, anomalies, and tren
 
   assert.equal(result.overview.snapshot.totalRows, 12);
   assert.equal(result.overview.aggregation.aggregationModeResolved, "raw");
-  assert.equal(result.insights.totalAnomalies, 1);
-  assert.equal(result.trends.aggregation.dataSource, "raw");
+  assert.equal(result.insights?.totalAnomalies, 1);
+  assert.equal(result.trends?.aggregation.dataSource, "raw");
+  assert.deepEqual(result.resourceErrors, []);
   assert.equal(result.isEmpty, false);
 });
 
-test("read API orchestration classifies network, api, contract, and empty failures clearly", async () => {
+test("read API orchestration classifies blocking failures clearly and tolerates non-blocking panel failures", async () => {
   const metadata = buildNotificationAggregationMetadata({
     aggregationModeRequested: "auto",
     dataSource: "raw",
@@ -2032,31 +2033,27 @@ test("read API orchestration classifies network, api, contract, and empty failur
     },
   );
 
-  await assert.rejects(
-    () =>
-      loadNotificationOverviewPageData(
-        {
-          tenantId: "",
-          channel: "",
-          from: "2026-03-10T08:00",
-          to: "2026-03-10T20:00",
-          limit: 2000,
-        },
-        {
-          fetchOverview: async () => overview,
-          fetchTrends: async () => trends,
-          fetchImpl: async () => jsonResponse({ message: "missing snapshot" }),
-        },
-      ),
-    (error: unknown) => {
-      assert.equal(error instanceof NotificationReadApiOrchestrationError, true);
-      if (!(error instanceof NotificationReadApiOrchestrationError)) return false;
-      assert.equal(error.kind, "empty");
-      assert.equal(error.source, "anomalies");
-      assert.equal(error.message.includes("payload is empty"), true);
-      return true;
+  const emptyAnomalies = await loadNotificationOverviewPageData(
+    {
+      tenantId: "",
+      channel: "",
+      from: "2026-03-10T08:00",
+      to: "2026-03-10T20:00",
+      limit: 2000,
+    },
+    {
+      fetchOverview: async () => overview,
+      fetchTrends: async () => trends,
+      fetchImpl: async () => jsonResponse({ message: "missing snapshot" }),
     },
   );
+  assert.equal(emptyAnomalies.overview.snapshot.totalRows, 0);
+  assert.equal(emptyAnomalies.insights, null);
+  assert.equal(emptyAnomalies.trends?.aggregation.dataSource, "raw");
+  assert.equal(emptyAnomalies.resourceErrors.length, 1);
+  assert.equal(emptyAnomalies.resourceErrors[0]?.kind, "empty");
+  assert.equal(emptyAnomalies.resourceErrors[0]?.source, "anomalies");
+  assert.equal(emptyAnomalies.resourceErrors[0]?.message.includes("payload is empty"), true);
 
   await assert.rejects(
     () =>
@@ -2091,38 +2088,33 @@ test("read API orchestration classifies network, api, contract, and empty failur
     },
   );
 
-  await assert.rejects(
-    () =>
-      loadNotificationOverviewPageData(
-        {
-          tenantId: "",
-          channel: "",
-          from: "2026-03-10T08:00",
-          to: "2026-03-10T20:00",
-          limit: 2000,
-        },
-        {
-          fetchOverview: async () => overview,
-          fetchTrends: async () => {
-            throw new NotificationReadApiConsumerError({
-              api: "trends",
-              status: null,
-              message: "trends response contract drift: type_mismatch: resolutionReason",
-              issues: ["type_mismatch: resolutionReason"],
-            });
-          },
-          fetchImpl: async () => jsonResponse(buildAnomalyInsightsPayload()),
-        },
-      ),
-    (error: unknown) => {
-      assert.equal(error instanceof NotificationReadApiOrchestrationError, true);
-      if (!(error instanceof NotificationReadApiOrchestrationError)) return false;
-      assert.equal(error.kind, "contract");
-      assert.equal(error.source, "trends");
-      assert.equal(error.message.includes("contract drift"), true);
-      return true;
+  const contractTrends = await loadNotificationOverviewPageData(
+    {
+      tenantId: "",
+      channel: "",
+      from: "2026-03-10T08:00",
+      to: "2026-03-10T20:00",
+      limit: 2000,
+    },
+    {
+      fetchOverview: async () => overview,
+      fetchTrends: async () => {
+        throw new NotificationReadApiConsumerError({
+          api: "trends",
+          status: null,
+          message: "trends response contract drift: type_mismatch: resolutionReason",
+          issues: ["type_mismatch: resolutionReason"],
+        });
+      },
+      fetchImpl: async () => jsonResponse(buildAnomalyInsightsPayload()),
     },
   );
+  assert.equal(contractTrends.insights?.totalAnomalies, 1);
+  assert.equal(contractTrends.trends, null);
+  assert.equal(contractTrends.resourceErrors.length, 1);
+  assert.equal(contractTrends.resourceErrors[0]?.kind, "contract");
+  assert.equal(contractTrends.resourceErrors[0]?.source, "trends");
+  assert.equal(contractTrends.resourceErrors[0]?.message.includes("contract drift"), true);
 });
 
 test("tenant drilldown orchestration keeps raw-backed support note visible to consumers", async () => {
@@ -2262,11 +2254,13 @@ test("read API lifecycle controller dedupes same in-flight query and distinguish
 
   overviewController.start({
     requestKey: "shared:key",
+    cacheKey: "shared:key",
     cause: "query",
     loader,
   });
   drilldownController.start({
     requestKey: "shared:key",
+    cacheKey: "shared:key",
     cause: "query",
     loader,
   });
@@ -2283,6 +2277,7 @@ test("read API lifecycle controller dedupes same in-flight query and distinguish
   const refresh = createDeferredPromise<string>();
   overviewController.start({
     requestKey: "shared:key|refresh:1",
+    cacheKey: "shared:key",
     cause: "refresh",
     loader: async () => refresh.promise,
   });
@@ -2352,6 +2347,201 @@ test("read API lifecycle controller treats cancelled requests as non-errors and 
   await flushAsyncWork();
 
   assert.equal(writes, 1);
+});
+
+test("read API resilience keeps same-query last good data on soft failures and reserves hard failure for cold starts", async () => {
+  clearNotificationReadApiResultCache();
+  const controller = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  controller.start({
+    requestKey: "overview:soft|refresh:0",
+    cacheKey: "overview:soft",
+    cause: "query",
+    loader: async () => "last-good",
+  });
+  await flushAsyncWork();
+
+  controller.start({
+    requestKey: "overview:soft|refresh:1",
+    cacheKey: "overview:soft",
+    cause: "refresh",
+    loader: async () => {
+      throw new TypeError("refresh failed");
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(controller.getState().data, "last-good");
+  assert.equal(controller.getState().error?.kind, "network");
+  assert.equal(controller.getState().errorMode, "soft");
+
+  invalidateNotificationReadApiResultCache("overview:soft");
+  controller.start({
+    requestKey: "overview:soft|retry-query",
+    cacheKey: "overview:soft",
+    cause: "query",
+    loader: async () => {
+      throw new TypeError("reload failed");
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(controller.getState().data, "last-good");
+  assert.equal(controller.getState().cacheStatus, "miss");
+  assert.equal(controller.getState().error?.kind, "network");
+  assert.equal(controller.getState().errorMode, "soft");
+
+  const coldController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+  coldController.start({
+    requestKey: "overview:cold|refresh:0",
+    cacheKey: "overview:cold",
+    cause: "query",
+    loader: async () => {
+      throw new TypeError("cold failure");
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(coldController.getState().data, null);
+  assert.equal(coldController.getState().error?.kind, "network");
+  assert.equal(coldController.getState().errorMode, "hard");
+});
+
+test("read API resilience keeps contract drift explicit instead of swallowing it behind soft-failure retention", async () => {
+  clearNotificationReadApiResultCache();
+  const controller = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  controller.start({
+    requestKey: "overview:contract|refresh:0",
+    cacheKey: "overview:contract",
+    cause: "query",
+    loader: async () => "good-before-contract",
+  });
+  await flushAsyncWork();
+
+  controller.start({
+    requestKey: "overview:contract|refresh:1",
+    cacheKey: "overview:contract",
+    cause: "refresh",
+    loader: async () => {
+      throw new NotificationReadApiConsumerError({
+        api: "overview",
+        status: null,
+        message: "overview response contract drift: type_mismatch: resolutionReason",
+        issues: ["type_mismatch: resolutionReason"],
+      });
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(controller.getState().data, "good-before-contract");
+  assert.equal(controller.getState().error?.kind, "contract");
+  assert.equal(controller.getState().errorMode, "soft");
+  assert.equal(controller.getState().error?.message.includes("contract drift"), true);
+});
+
+test("tenant drilldown resilience preserves last good raw-backed support data on soft refresh failures", async () => {
+  clearNotificationReadApiResultCache();
+  const metadata = buildNotificationAggregationMetadata({
+    aggregationModeRequested: "auto",
+    dataSource: "raw",
+    isWholeUtcDayWindow: false,
+    rollupEligible: false,
+  });
+  const goodData = await loadNotificationTenantDrilldownPageData(
+    "tenant-resilient",
+    {
+      channel: "",
+      aggregationMode: "auto",
+      from: "2026-03-10T08:00",
+      to: "2026-03-10T20:00",
+      limit: 2000,
+      anomalyLimit: 40,
+    },
+    {
+      fetchDrilldown: async () =>
+        parseNotificationReadApiPayload(
+          "tenant_drilldown",
+          buildConsumerReadApiPayload("tenant_drilldown", metadata, {
+            snapshotOverrides: {
+              totalRows: 6,
+              recentAnomalies: [
+                {
+                  id: "anomaly-keep",
+                  channel: "email",
+                  status: "failed",
+                  errorCode: "PROVIDER_TIMEOUT",
+                  errorMessage: "timeout",
+                  lastError: "timeout",
+                  attempts: 1,
+                  retryCount: 1,
+                  maxAttempts: 5,
+                  nextRetryAt: null,
+                  occurredAt: "2026-03-10T09:00:00.000Z",
+                },
+              ],
+            },
+          }),
+        ),
+    },
+  );
+
+  const controller = new NotificationReadApiRequestLifecycleController<typeof goodData, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  controller.start({
+    requestKey: "tenant:resilient|refresh:0",
+    cacheKey: "tenant:resilient",
+    cause: "query",
+    loader: async () => goodData,
+  });
+  await flushAsyncWork();
+
+  controller.start({
+    requestKey: "tenant:resilient|refresh:1",
+    cacheKey: "tenant:resilient",
+    cause: "refresh",
+    loader: async () => {
+      throw new TypeError("drilldown refresh failed");
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(controller.getState().data?.drilldown.recentAnomaliesRawBacked, true);
+  assert.equal(controller.getState().data?.recentAnomaliesSupportNote, getTenantDrilldownRecentAnomaliesSupportNote());
+  assert.equal(controller.getState().error?.kind, "network");
+  assert.equal(controller.getState().errorMode, "soft");
 });
 
 test("read API result cache reuses same query results without refetching within TTL", async () => {

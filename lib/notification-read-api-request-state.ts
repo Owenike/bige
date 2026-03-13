@@ -6,11 +6,13 @@ export type NotificationReadApiRequestPhase = "idle" | "initial_loading" | "relo
 
 export type NotificationReadApiCacheStatus = "miss" | "hit" | "stale";
 export type NotificationReadApiPrefetchStatus = "hit" | "fetched" | "failed" | "cancelled";
+export type NotificationReadApiErrorMode = "none" | "soft" | "hard";
 
 export type NotificationReadApiRequestState<TData, TError extends Error> = {
   data: TData | null;
   loading: boolean;
   error: TError | null;
+  errorMode: NotificationReadApiErrorMode;
   requestKey: string | null;
   cacheKey: string | null;
   cacheStatus: NotificationReadApiCacheStatus;
@@ -112,6 +114,7 @@ export function createNotificationReadApiRequestState<TData, TError extends Erro
     data,
     loading: data === null,
     error: null,
+    errorMode: "none",
     requestKey: null,
     cacheKey: null,
     cacheStatus: "miss",
@@ -347,6 +350,12 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
     return this.state;
   }
 
+  private resolveRetainedData(cacheKey: string, cachedData: TData | null) {
+    if (cachedData !== null) return cachedData;
+    if (this.state.cacheKey === cacheKey && this.state.data !== null) return this.state.data;
+    return null;
+  }
+
   start(params: {
     requestKey: string;
     cacheKey?: string;
@@ -379,6 +388,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
         data: cached.data,
         loading: false,
         error: null,
+        errorMode: "none",
         requestKey: params.requestKey,
         cacheKey,
         cacheStatus: "hit",
@@ -394,8 +404,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
     const sequence = this.sequence;
     this.releaseCurrent?.();
 
-    const nextData =
-      cached.data !== null ? cached.data : params.cause === "query" ? null : this.state.data;
+    const nextData = this.resolveRetainedData(cacheKey, cached.data);
     const hasData = nextData !== null;
     const phase: NotificationReadApiRequestPhase = hasData
       ? params.cause === "query"
@@ -407,6 +416,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
       data: nextData,
       loading: true,
       error: null,
+      errorMode: "none",
       requestKey: params.requestKey,
       cacheKey,
       cacheStatus: cached.status,
@@ -428,6 +438,7 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
           data,
           loading: false,
           error: null,
+          errorMode: "none",
           requestKey: params.requestKey,
           cacheKey,
           cacheStatus: "hit",
@@ -443,12 +454,12 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
         this.releaseCurrent = null;
 
         if (this.isCancelledError(classified)) {
-          const cancelledData =
-            cached.data !== null ? cached.data : params.cause === "query" ? null : this.state.data;
+          const cancelledData = this.resolveRetainedData(cacheKey, cached.data);
           this.commit({
             data: cancelledData,
             loading: false,
             error: null,
+            errorMode: "none",
             requestKey: params.requestKey,
             cacheKey,
             cacheStatus: cached.data !== null ? cached.status : "miss",
@@ -460,12 +471,12 @@ export class NotificationReadApiRequestLifecycleController<TData, TError extends
           return;
         }
 
-        const failedData =
-          cached.data !== null ? cached.data : params.cause === "query" ? null : this.state.data;
+        const failedData = this.resolveRetainedData(cacheKey, cached.data);
         this.commit({
           data: failedData,
           loading: false,
           error: classified,
+          errorMode: failedData !== null ? "soft" : "hard",
           requestKey: params.requestKey,
           cacheKey,
           cacheStatus: cached.data !== null ? cached.status : "miss",

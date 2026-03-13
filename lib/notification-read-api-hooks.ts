@@ -103,8 +103,9 @@ export type NotificationAnomalyInsightsSnapshot = z.infer<typeof anomalyInsights
 
 export type NotificationOverviewPageData = {
   overview: NotificationOverviewReadModel;
-  insights: NotificationAnomalyInsightsSnapshot;
-  trends: NotificationTrendsReadModel;
+  insights: NotificationAnomalyInsightsSnapshot | null;
+  trends: NotificationTrendsReadModel | null;
+  resourceErrors: NotificationReadApiOrchestrationError[];
   isEmpty: boolean;
 };
 
@@ -158,6 +159,28 @@ type TenantDrilldownLoaderDependencies = {
 type NotificationReadApiLoadOptions = {
   signal?: AbortSignal;
 };
+
+async function resolveOptionalOverviewResource<TData>(
+  source: "anomalies" | "trends",
+  loader: () => Promise<TData>,
+): Promise<{ data: TData | null; issue: NotificationReadApiOrchestrationError | null }> {
+  try {
+    return {
+      data: await loader(),
+      issue: null,
+    };
+  } catch (error) {
+    const issue = classifyNotificationReadApiOrchestrationError(error, {
+      source,
+      message: `Load ${source} failed`,
+    });
+    if (issue.kind === "cancelled") throw issue;
+    return {
+      data: null,
+      issue,
+    };
+  }
+}
 
 function getPayloadErrorMessage(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object") {
@@ -349,25 +372,36 @@ export async function loadNotificationOverviewPageData(
   const fetchTrends = dependencies.fetchTrends ?? fetchNotificationTrendsReadApi;
   const fetchImpl = dependencies.fetchImpl ?? fetch;
 
-  try {
-    const [overview, insights, trends] = await Promise.all([
-      fetchOverview(paths.overviewPath, { cache: "no-store", signal: options.signal }),
-      fetchNotificationAnomalyInsightsSnapshot(paths.anomaliesPath, { cache: "no-store", signal: options.signal }, fetchImpl),
-      fetchTrends(paths.trendsPath, { cache: "no-store", signal: options.signal }),
-    ]);
+  const overviewPromise = fetchOverview(paths.overviewPath, { cache: "no-store", signal: options.signal });
+  const insightsPromise = resolveOptionalOverviewResource("anomalies", () =>
+    fetchNotificationAnomalyInsightsSnapshot(paths.anomaliesPath, { cache: "no-store", signal: options.signal }, fetchImpl),
+  );
+  const trendsPromise = resolveOptionalOverviewResource("trends", () =>
+    fetchTrends(paths.trendsPath, { cache: "no-store", signal: options.signal }),
+  );
 
-    return {
-      overview,
-      insights,
-      trends,
-      isEmpty: overview.snapshot.totalRows === 0,
-    };
+  let overview: NotificationOverviewReadModel;
+  try {
+    overview = await overviewPromise;
   } catch (error) {
     throw classifyNotificationReadApiOrchestrationError(error, {
       source: "overview",
       message: "Load overview page failed",
     });
   }
+
+  const [insightsResult, trendsResult] = await Promise.all([insightsPromise, trendsPromise]);
+  const resourceErrors = [insightsResult.issue, trendsResult.issue].filter(
+    (issue): issue is NotificationReadApiOrchestrationError => issue !== null,
+  );
+
+  return {
+    overview,
+    insights: insightsResult.data,
+    trends: trendsResult.data,
+    resourceErrors,
+    isEmpty: overview.snapshot.totalRows === 0,
+  };
 }
 
 export async function loadNotificationTenantDrilldownPageData(
