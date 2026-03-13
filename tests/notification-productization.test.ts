@@ -142,7 +142,12 @@ import {
   buildNotificationTenantDrilldownHrefFromOverviewState,
   buildNotificationTenantDrilldownPageUrl,
 } from "../lib/notification-read-api-url-state";
-import { NotificationReadApiRequestLifecycleController } from "../lib/notification-read-api-request-state";
+import {
+  clearNotificationReadApiResultCache,
+  invalidateNotificationReadApiResultCache,
+  NOTIFICATION_READ_API_RESULT_CACHE_TTL_MS,
+  NotificationReadApiRequestLifecycleController,
+} from "../lib/notification-read-api-request-state";
 import { canUseDailyRollupWindow } from "../lib/notification-rollup";
 import {
   canUseOverviewDailyRollupWindow,
@@ -2164,6 +2169,7 @@ test("tenant drilldown orchestration keeps raw-backed support note visible to co
 });
 
 test("read API lifecycle controller keeps only the latest response when requests resolve out of order", async () => {
+  clearNotificationReadApiResultCache();
   const states: Array<{
     data: string | null;
     loading: boolean;
@@ -2217,6 +2223,7 @@ test("read API lifecycle controller keeps only the latest response when requests
 });
 
 test("read API lifecycle controller dedupes same in-flight query and distinguishes refresh from initial load", async () => {
+  clearNotificationReadApiResultCache();
   const shared = createDeferredPromise<string>();
   let loaderCalls = 0;
   const overviewController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
@@ -2277,6 +2284,7 @@ test("read API lifecycle controller dedupes same in-flight query and distinguish
 });
 
 test("read API lifecycle controller treats cancelled requests as non-errors and ignores unmount writes", async () => {
+  clearNotificationReadApiResultCache();
   const states: Array<{
     loading: boolean;
     errorKind: NotificationReadApiOrchestrationError["kind"] | null;
@@ -2334,6 +2342,277 @@ test("read API lifecycle controller treats cancelled requests as non-errors and 
   await flushAsyncWork();
 
   assert.equal(writes, 1);
+});
+
+test("read API result cache reuses same query results without refetching within TTL", async () => {
+  clearNotificationReadApiResultCache();
+  let nowMs = 1_000;
+  let loaderCalls = 0;
+
+  const firstController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  firstController.start({
+    requestKey: "overview:key|refresh:0",
+    cacheKey: "overview:key",
+    cause: "query",
+    now: () => nowMs,
+    loader: async () => {
+      loaderCalls += 1;
+      return "cached-overview";
+    },
+  });
+  await flushAsyncWork();
+  assert.equal(firstController.getState().data, "cached-overview");
+  assert.equal(loaderCalls, 1);
+
+  const secondController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  secondController.start({
+    requestKey: "overview:key|refresh:0",
+    cacheKey: "overview:key",
+    cause: "query",
+    now: () => nowMs + 5_000,
+    loader: async () => {
+      loaderCalls += 1;
+      return "should-not-run";
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(secondController.getState().data, "cached-overview");
+  assert.equal(secondController.getState().cacheStatus, "hit");
+  assert.equal(secondController.getState().loading, false);
+  assert.equal(loaderCalls, 1);
+});
+
+test("read API result cache expires after TTL and revalidates stale entries", async () => {
+  clearNotificationReadApiResultCache();
+  let nowMs = 1_000;
+
+  const seedController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  seedController.start({
+    requestKey: "tenant:key|refresh:0",
+    cacheKey: "tenant:key",
+    cause: "query",
+    cacheTtlMs: 100,
+    now: () => nowMs,
+    loader: async () => "warm-cache",
+  });
+  await flushAsyncWork();
+
+  const staleStates: string[] = [];
+  const staleDeferred = createDeferredPromise<string>();
+  let loaderCalls = 0;
+  nowMs += 500;
+
+  const staleController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: (state) => {
+      staleStates.push(`${state.cacheStatus}:${state.phase}:${state.data ?? "null"}`);
+    },
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  staleController.start({
+    requestKey: "tenant:key|refresh:0",
+    cacheKey: "tenant:key",
+    cause: "query",
+    cacheTtlMs: 100,
+    now: () => nowMs,
+    loader: async () => {
+      loaderCalls += 1;
+      return staleDeferred.promise;
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(staleController.getState().data, "warm-cache");
+  assert.equal(staleController.getState().cacheStatus, "stale");
+  assert.equal(staleController.getState().phase, "reloading");
+  assert.equal(loaderCalls, 1);
+
+  staleDeferred.resolve("fresh-cache");
+  await staleDeferred.promise;
+  await flushAsyncWork();
+
+  assert.equal(staleController.getState().data, "fresh-cache");
+  assert.equal(staleController.getState().cacheStatus, "hit");
+  assert.equal(staleStates.some((value) => value === "stale:reloading:warm-cache"), true);
+});
+
+test("read API result cache bypasses cached entries on manual refresh and preserves refresh semantics", async () => {
+  clearNotificationReadApiResultCache();
+  let loaderCalls = 0;
+  const values = ["initial", "refreshed"];
+  const controller = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  controller.start({
+    requestKey: "overview:refresh|refresh:0",
+    cacheKey: "overview:refresh",
+    cause: "query",
+    loader: async () => values[loaderCalls++]!,
+  });
+  await flushAsyncWork();
+
+  controller.start({
+    requestKey: "overview:refresh|refresh:1",
+    cacheKey: "overview:refresh",
+    cause: "refresh",
+    loader: async () => values[loaderCalls++]!,
+  });
+  await flushAsyncWork();
+
+  assert.equal(loaderCalls, 2);
+  assert.equal(controller.getState().data, "refreshed");
+  assert.equal(controller.getState().cacheStatus, "hit");
+  assert.equal(controller.getState().isRefreshing, false);
+});
+
+test("read API result cache does not write failed or cancelled responses and does not bleed old query data into a new cache miss", async () => {
+  clearNotificationReadApiResultCache();
+  let loaderCalls = 0;
+  const controller = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  controller.start({
+    requestKey: "overview:good|refresh:0",
+    cacheKey: "overview:good",
+    cause: "query",
+    loader: async () => {
+      loaderCalls += 1;
+      return "good";
+    },
+  });
+  await flushAsyncWork();
+
+  controller.start({
+    requestKey: "overview:bad|refresh:0",
+    cacheKey: "overview:bad",
+    cause: "query",
+    loader: async () => {
+      loaderCalls += 1;
+      throw new TypeError("fetch failed");
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(controller.getState().data, null);
+  assert.equal(controller.getState().error?.kind, "network");
+
+  const cancelledController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  cancelledController.start({
+    requestKey: "tenant:cancelled|refresh:0",
+    cacheKey: "tenant:cancelled",
+    cause: "query",
+    loader: async () => {
+      loaderCalls += 1;
+      throw createAbortError();
+    },
+  });
+  await flushAsyncWork();
+
+  const retryController = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "tenant_drilldown",
+        message: "Load tenant drilldown failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+
+  retryController.start({
+    requestKey: "tenant:cancelled|refresh:0",
+    cacheKey: "tenant:cancelled",
+    cause: "query",
+    loader: async () => {
+      loaderCalls += 1;
+      return "tenant-fresh";
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(retryController.getState().data, "tenant-fresh");
+  assert.equal(loaderCalls, 4);
+
+  invalidateNotificationReadApiResultCache("overview:good");
+  const afterInvalidate = new NotificationReadApiRequestLifecycleController<string, NotificationReadApiOrchestrationError>({
+    onStateChange: () => {},
+    classifyError: (error) =>
+      classifyNotificationReadApiOrchestrationError(error, {
+        source: "overview",
+        message: "Load overview page failed",
+      }),
+    isCancelledError: (error) => error.kind === "cancelled",
+  });
+  let invalidateCalls = 0;
+  afterInvalidate.start({
+    requestKey: "overview:good|refresh:0",
+    cacheKey: "overview:good",
+    cause: "query",
+    cacheTtlMs: NOTIFICATION_READ_API_RESULT_CACHE_TTL_MS,
+    loader: async () => {
+      invalidateCalls += 1;
+      return "good-again";
+    },
+  });
+  await flushAsyncWork();
+
+  assert.equal(afterInvalidate.getState().data, "good-again");
+  assert.equal(invalidateCalls, 1);
 });
 
 test("read API query-state defaults and search-param hydration stay aligned for overview and drilldown", () => {

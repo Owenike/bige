@@ -449,6 +449,7 @@ function useNotificationManagedRequest<TData>(params: {
 
     controller.start({
       requestKey,
+      cacheKey: params.queryFingerprint,
       cause,
       loader: loadRequest,
     });
