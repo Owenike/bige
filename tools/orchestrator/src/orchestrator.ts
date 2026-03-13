@@ -1,9 +1,12 @@
 import path from "node:path";
 import {
+  approvalStatusSchema,
   ciStatusSummarySchema,
+  liveSmokeResultSchema,
   orchestratorStateJsonSchema,
   orchestratorStateSchema,
   parseWithDualValidation,
+  patchStatusSchema,
   type CIStatusSummary,
   type ExecutionMode,
   type ExecutorFallbackMode,
@@ -39,6 +42,9 @@ import { transitionState } from "./workflows/state-machine";
 import type { OpenAIResponsesClient } from "./openai";
 import { NodeHttpsResponsesClient } from "./openai";
 import { FileSystemWorkspaceManager } from "./workspace";
+import { pruneOrchestratorArtifacts } from "./artifacts";
+import { promotePatchFromState, validatePatchPromotionPreconditions } from "./promotion";
+import { runOpenAIExecutorLiveSmoke } from "./live-smoke";
 
 type ProviderMap<T> = Record<PlannerProviderKind, T | null>;
 type ExecutorProviderMap = Record<ExecutorProviderKind, ExecutionProvider | null>;
@@ -49,6 +55,7 @@ export type OrchestratorDependencies = {
   reviewerProviders: ProviderMap<ReviewerProvider>;
   executorProviders: ExecutorProviderMap;
   githubAdapter: GitHubStatusAdapter | null;
+  workspaceManager: FileSystemWorkspaceManager;
   now?: () => Date;
 };
 
@@ -57,6 +64,7 @@ function createIterationRecord(params: {
   plannerProviderRequested: PlannerProviderKind;
   plannerProviderResolved: PlannerProviderKind;
   plannerFallbackReason: string | null;
+  executionMode: ExecutionMode;
   stateBefore: OrchestratorState["status"];
   stateAfter: OrchestratorState["status"];
   now: Date;
@@ -66,6 +74,10 @@ function createIterationRecord(params: {
     plannerProviderRequested: params.plannerProviderRequested,
     plannerProviderResolved: params.plannerProviderResolved,
     plannerFallbackReason: params.plannerFallbackReason,
+    executorProviderRequested: null,
+    executorProviderResolved: null,
+    executorFallbackReason: null,
+    executionMode: params.executionMode,
     reviewerProviderRequested: null,
     reviewerProviderResolved: null,
     reviewerFallbackReason: null,
@@ -73,6 +85,9 @@ function createIterationRecord(params: {
     executionReport: null,
     reviewVerdict: null,
     ciSummary: null,
+    patchStatus: "none",
+    approvalStatus: "not_requested",
+    artifactPruneResult: null,
     stateBefore: params.stateBefore,
     stateAfter: params.stateAfter,
     stopReason: null,
@@ -189,6 +204,18 @@ function resolveExecutorProvider(params: {
   };
 }
 
+function reportHasPatchArtifacts(state: OrchestratorState, report: NonNullable<OrchestratorState["lastExecutionReport"]>) {
+  return (
+    report.changedFiles.length > 0 &&
+    report.artifacts.some((artifact) => artifact.kind === "workspace" && artifact.path) &&
+    report.artifacts.some((artifact) => artifact.kind === "diff" && artifact.path)
+  );
+}
+
+function shouldWaitForPatchApproval(state: OrchestratorState, report: NonNullable<OrchestratorState["lastExecutionReport"]>) {
+  return state.task.executionMode === "apply" && reportHasPatchArtifacts(state, report);
+}
+
 export function createInitialState(params: {
   id: string;
   repoPath: string;
@@ -248,6 +275,8 @@ export function createInitialState(params: {
         executorCommand: params.executorCommand ?? [],
         plannerProvider: params.plannerProvider ?? "rule_based",
         reviewerProvider: params.reviewerProvider ?? "rule_based",
+        artifactRetentionSuccess: 3,
+        artifactRetentionFailure: 5,
       },
       plannerDecision: null,
       nextIterationPlan: null,
@@ -258,6 +287,10 @@ export function createInitialState(params: {
       lastReviewerProvider: null,
       lastPlannerFallbackReason: null,
       lastReviewerFallbackReason: null,
+      patchStatus: "none",
+      approvalStatus: "not_requested",
+      lastArtifactPruneResult: null,
+      lastLiveSmokeResult: null,
       stopReason: null,
       iterationHistory: [],
       createdAt: now.toISOString(),
@@ -288,6 +321,8 @@ async function planIteration(state: OrchestratorState, dependencies: Orchestrato
     plannerDecision: plannerResolution.decision,
     nextIterationPlan,
     pendingHumanApproval: nextIterationPlan.approvalRequired,
+    patchStatus: "plan_ready",
+    approvalStatus: nextIterationPlan.approvalRequired ? "pending_plan" : "not_requested",
     lastPlannerProvider: plannerResolution.resolved,
     lastPlannerFallbackReason: plannerResolution.fallbackReason,
     stopReason: null,
@@ -301,6 +336,7 @@ async function planIteration(state: OrchestratorState, dependencies: Orchestrato
       plannerProviderRequested: plannerResolution.requested,
       plannerProviderResolved: plannerResolution.resolved,
       plannerFallbackReason: plannerResolution.fallbackReason,
+      executionMode: nextIterationPlan.executionMode,
       stateBefore: planningStateBefore,
       stateAfter: nextIterationPlan.approvalRequired ? "waiting_approval" : "planning",
       now,
@@ -312,6 +348,8 @@ async function planIteration(state: OrchestratorState, dependencies: Orchestrato
     nextIterationPlan.iterationNumber,
     {
       plannerDecision: plannerResolution.decision,
+      patchStatus: "plan_ready",
+      approvalStatus: nextIterationPlan.approvalRequired ? "pending_plan" : "not_requested",
     },
     now,
   );
@@ -346,6 +384,7 @@ async function executePlannedIteration(
   nextState = orchestratorStateSchema.parse({
     ...nextState,
     pendingHumanApproval: false,
+    approvalStatus: "not_requested",
     updatedAt: now.toISOString(),
   });
   await dependencies.storage.saveState(nextState);
@@ -355,8 +394,19 @@ async function executePlannedIteration(
     providers: dependencies.executorProviders,
   });
   if (!executorResolution.provider) {
-    const stopped = persistStop(
+    let stopped = upsertIterationRecord(
       nextState,
+      state.nextIterationPlan.iterationNumber,
+      {
+        executorProviderRequested: state.task.executorMode,
+        executorProviderResolved: null,
+        executorFallbackReason: executorResolution.fallbackReason,
+        executionMode: state.task.executionMode,
+      },
+      now,
+    );
+    stopped = persistStop(
+      stopped,
       executorResolution.fallbackReason ?? "No executor provider is available.",
       now,
     );
@@ -398,13 +448,21 @@ async function executePlannedIteration(
     iterationNumber: report.iterationNumber,
     lastExecutionReport: report,
     consecutiveFailures: report.blockers.length > 0 ? nextState.consecutiveFailures + 1 : 0,
+    patchStatus:
+      reportHasPatchArtifacts(state, report) && state.task.executionMode === "apply" ? "patch_ready" : state.patchStatus,
     updatedAt: now.toISOString(),
   });
   nextState = upsertIterationRecord(
     nextState,
     report.iterationNumber,
     {
+      executorProviderRequested: state.task.executorMode,
+      executorProviderResolved: executorResolution.resolved,
+      executorFallbackReason: executorResolution.fallbackReason,
+      executionMode: state.task.executionMode,
       executionReport: report,
+      patchStatus:
+        reportHasPatchArtifacts(state, report) && state.task.executionMode === "apply" ? "patch_ready" : nextState.patchStatus,
       stateAfter: "validating",
     },
     now,
@@ -467,6 +525,14 @@ async function executePlannedIteration(
     nextStatus = "stopped";
   }
 
+  const waitingForPatchApproval =
+    !policyStopReason &&
+    reviewerResolution.verdict.verdict === "accept" &&
+    shouldWaitForPatchApproval(state, report);
+  if (waitingForPatchApproval) {
+    nextStatus = "waiting_approval";
+  }
+
   nextState = transitionState(nextState, nextStatus, now);
   const repeatedNoProgress =
     reviewerResolution.verdict.reasons.some((reason) => reason.includes("same problem repeated")) ||
@@ -487,8 +553,14 @@ async function executePlannedIteration(
     lastReviewerFallbackReason: reviewerResolution.fallbackReason,
     consecutiveFailures: nextConsecutiveFailures,
     repeatedNoProgressCount: repeatedNoProgress ? nextState.repeatedNoProgressCount + 1 : 0,
-    pendingHumanApproval: false,
+    pendingHumanApproval: waitingForPatchApproval ? true : false,
     nextIterationPlan: null,
+    patchStatus: waitingForPatchApproval
+      ? "waiting_approval"
+      : reportHasPatchArtifacts(state, report) && state.task.executionMode === "apply" && reviewerResolution.verdict.verdict === "accept"
+        ? "patch_ready"
+        : nextState.patchStatus,
+    approvalStatus: waitingForPatchApproval ? "pending_patch" : nextState.approvalStatus,
     stopReason:
       nextStatus === "stopped" || nextStatus === "blocked"
         ? policyStopReason ?? reviewerResolution.verdict.reasons.join(" | ")
@@ -504,6 +576,12 @@ async function executePlannedIteration(
       reviewerFallbackReason: reviewerResolution.fallbackReason,
       reviewVerdict: reviewerResolution.verdict,
       ciSummary,
+      patchStatus: waitingForPatchApproval
+        ? "waiting_approval"
+        : reportHasPatchArtifacts(state, report) && state.task.executionMode === "apply" && reviewerResolution.verdict.verdict === "accept"
+          ? "patch_ready"
+          : nextState.patchStatus,
+      approvalStatus: waitingForPatchApproval ? "pending_patch" : nextState.approvalStatus,
       stateAfter: nextStatus,
       stopReason: nextState.stopReason,
     },
@@ -599,11 +677,24 @@ export async function approvePendingPlan(stateId: string, dependencies: Orchestr
   const approved = orchestratorStateSchema.parse({
     ...state,
     pendingHumanApproval: false,
+    approvalStatus: "approved",
     stopReason: null,
     updatedAt: (dependencies.now ?? (() => new Date()))().toISOString(),
   });
-  await dependencies.storage.saveState(approved);
-  return approved;
+  const nextIterationNumber = state.nextIterationPlan.iterationNumber;
+  const approvedNow = dependencies.now ?? (() => new Date());
+  const approvedWithRecord = upsertIterationRecord(
+    approved,
+    nextIterationNumber,
+    {
+      patchStatus: state.patchStatus,
+      approvalStatus: "approved",
+      stateAfter: "planning",
+    },
+    approvedNow(),
+  );
+  await dependencies.storage.saveState(approvedWithRecord);
+  return approvedWithRecord;
 }
 
 export async function rejectPendingPlan(stateId: string, dependencies: OrchestratorDependencies, reason?: string) {
@@ -618,6 +709,8 @@ export async function rejectPendingPlan(stateId: string, dependencies: Orchestra
   rejected = orchestratorStateSchema.parse({
     ...rejected,
     pendingHumanApproval: false,
+    patchStatus: "rejected",
+    approvalStatus: "rejected",
     stopReason: reason ?? "Human approval rejected the planned iteration.",
     nextIterationPlan: null,
     updatedAt: now.toISOString(),
@@ -626,6 +719,8 @@ export async function rejectPendingPlan(stateId: string, dependencies: Orchestra
     rejected,
     state.nextIterationPlan.iterationNumber,
     {
+      patchStatus: "rejected",
+      approvalStatus: "rejected",
       stopReason: rejected.stopReason,
       stateAfter: "blocked",
     },
@@ -633,6 +728,145 @@ export async function rejectPendingPlan(stateId: string, dependencies: Orchestra
   );
   await dependencies.storage.saveState(rejected);
   return rejected;
+}
+
+export async function approvePendingPatch(stateId: string, dependencies: OrchestratorDependencies) {
+  const state = await dependencies.storage.loadState(stateId);
+  if (!state) throw new Error(`Orchestrator state ${stateId} was not found.`);
+  const issues = validatePatchPromotionPreconditions(state);
+  if (issues.length > 0) {
+    throw new Error(`Patch approval preconditions failed: ${issues.join(" | ")}`);
+  }
+
+  const now = (dependencies.now ?? (() => new Date()))();
+  let approved = orchestratorStateSchema.parse({
+    ...state,
+    pendingHumanApproval: false,
+    patchStatus: patchStatusSchema.parse("approved_for_apply"),
+    approvalStatus: approvalStatusSchema.parse("approved"),
+    stopReason: null,
+    updatedAt: now.toISOString(),
+  });
+  approved = upsertIterationRecord(
+    approved,
+    state.lastExecutionReport!.iterationNumber,
+    {
+      patchStatus: "approved_for_apply",
+      approvalStatus: "approved",
+      stateAfter: approved.status,
+    },
+    now,
+  );
+
+  const promotion = await promotePatchFromState({
+    state: approved,
+    workspaceManager: dependencies.workspaceManager,
+  });
+
+  let applied = orchestratorStateSchema.parse({
+    ...approved,
+    patchStatus: patchStatusSchema.parse("applied"),
+    approvalStatus: approvalStatusSchema.parse("approved"),
+    status:
+      approved.lastExecutionReport?.shouldCloseSlice && approved.lastReviewVerdict?.verdict === "accept"
+        ? "completed"
+        : "needs_revision",
+    updatedAt: now.toISOString(),
+  });
+  applied = upsertIterationRecord(
+    applied,
+    state.lastExecutionReport!.iterationNumber,
+    {
+      patchStatus: "applied",
+      approvalStatus: "approved",
+      stateAfter: applied.status,
+      executionReport: applied.lastExecutionReport
+        ? {
+            ...applied.lastExecutionReport,
+            artifacts: [
+              ...applied.lastExecutionReport.artifacts,
+              {
+                kind: "promotion",
+                label: "promotion summary",
+                path: null,
+                value: `Applied ${promotion.changedFiles.length} files from ${promotion.workspacePath}.`,
+              },
+            ],
+          }
+        : null,
+    },
+    now,
+  );
+  await dependencies.storage.saveState(applied);
+  return applied;
+}
+
+export async function rejectPendingPatch(stateId: string, dependencies: OrchestratorDependencies, reason?: string) {
+  const state = await dependencies.storage.loadState(stateId);
+  if (!state) throw new Error(`Orchestrator state ${stateId} was not found.`);
+  if (!state.lastExecutionReport || state.patchStatus !== "waiting_approval") {
+    throw new Error("State is not waiting for patch approval.");
+  }
+
+  const now = (dependencies.now ?? (() => new Date()))();
+  let rejected = transitionState(state, "blocked", now);
+  rejected = orchestratorStateSchema.parse({
+    ...rejected,
+    pendingHumanApproval: false,
+    patchStatus: "rejected",
+    approvalStatus: "rejected",
+    stopReason: reason ?? "Human approval rejected patch promotion.",
+    updatedAt: now.toISOString(),
+  });
+  rejected = upsertIterationRecord(
+    rejected,
+    state.lastExecutionReport.iterationNumber,
+    {
+      patchStatus: "rejected",
+      approvalStatus: "rejected",
+      stateAfter: "blocked",
+      stopReason: rejected.stopReason,
+    },
+    now,
+  );
+  await dependencies.storage.saveState(rejected);
+  return rejected;
+}
+
+export async function pruneStateArtifacts(
+  stateId: string,
+  dependencies: OrchestratorDependencies,
+  policy?: { retainRecentSuccess?: number; retainRecentFailure?: number },
+) {
+  const state = await dependencies.storage.loadState(stateId);
+  if (!state) throw new Error(`Orchestrator state ${stateId} was not found.`);
+  const pruned = await pruneOrchestratorArtifacts({
+    state,
+    workspaceManager: dependencies.workspaceManager,
+    now: (dependencies.now ?? (() => new Date()))(),
+    policy,
+  });
+  await dependencies.storage.saveState(orchestratorStateSchema.parse(pruned.state));
+  return pruned;
+}
+
+export async function runLiveSmoke(params: {
+  repoPath: string;
+  workspaceRoot?: string;
+  outputRoot?: string;
+  model?: string;
+  openaiClient?: OpenAIResponsesClient | null;
+  enabled?: boolean;
+}) {
+  const result = await runOpenAIExecutorLiveSmoke({
+    apiKey: process.env.OPENAI_API_KEY,
+    enabled: params.enabled ?? true,
+    model: params.model,
+    workspaceRoot: params.workspaceRoot,
+    outputRoot: params.outputRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-live-smoke"),
+    client: params.openaiClient ?? undefined,
+  });
+  return liveSmokeResultSchema.parse(result);
 }
 
 export function createDefaultDependencies(params: {
@@ -676,5 +910,6 @@ export function createDefaultDependencies(params: {
     reviewerProviders,
     executorProviders,
     githubAdapter,
+    workspaceManager,
   } satisfies OrchestratorDependencies;
 }

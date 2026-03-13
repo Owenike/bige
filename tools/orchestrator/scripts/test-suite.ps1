@@ -29,7 +29,9 @@ $suiteMap = @{
     "$outDir\tests\unit\storage-persistence.test.js",
     "$outDir\tests\unit\executor-provider.test.js",
     "$outDir\tests\unit\workspace.test.js",
-    "$outDir\tests\unit\patch-flow.test.js"
+    "$outDir\tests\unit\patch-flow.test.js",
+    "$outDir\tests\unit\promotion.test.js",
+    "$outDir\tests\unit\artifacts.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js"
@@ -59,6 +61,15 @@ $suiteMap = @{
   "patch-flow" = @(
     "$outDir\tests\unit\patch-flow.test.js"
   )
+  "promotion" = @(
+    "$outDir\tests\unit\promotion.test.js"
+  )
+  "artifacts" = @(
+    "$outDir\tests\unit\artifacts.test.js"
+  )
+  "live-smoke" = @(
+    "$outDir\tests\integration\live-smoke.test.js"
+  )
   "mock-loop" = @(
     "$outDir\tests\e2e\mock-loop.test.js",
     "$outDir\tests\e2e\multi-iteration-loop.test.js"
@@ -76,7 +87,10 @@ $suiteMap = @{
     "$outDir\tests\unit\executor-provider.test.js",
     "$outDir\tests\unit\workspace.test.js",
     "$outDir\tests\unit\patch-flow.test.js",
+    "$outDir\tests\unit\promotion.test.js",
+    "$outDir\tests\unit\artifacts.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
+    "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\e2e\mock-loop.test.js",
     "$outDir\tests\e2e\multi-iteration-loop.test.js"
   )

@@ -87,6 +87,16 @@ export function findMissingValidation(requiredCommands: string[], validations: V
   return requiredCommands.filter((command) => !passedCommands.has(command.trim()));
 }
 
+export function findMissingArtifacts(report: ExecutionReport) {
+  const provider =
+    typeof report.rawExecutorOutput === "object" && report.rawExecutorOutput !== null && "provider" in report.rawExecutorOutput
+      ? String((report.rawExecutorOutput as { provider?: unknown }).provider ?? "")
+      : "";
+  const presentKinds = new Set(report.artifacts.map((artifact) => artifact.kind));
+  const requiredKinds = provider === "openai_responses" ? ["workspace", "diff", "tool_log", "command_log"] : [];
+  return requiredKinds.filter((kind) => !presentKinds.has(kind));
+}
+
 export function hasRepeatedBlocker(state: OrchestratorState, report: ExecutionReport) {
   if (!state.lastExecutionReport) return false;
   if (report.blockers.length === 0 || state.lastExecutionReport.blockers.length === 0) return false;

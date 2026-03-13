@@ -6,6 +6,13 @@
 - Optional: `ORCHESTRATOR_WORKSPACE_ROOT`
 - Optional: GitHub CLI auth for `GitHubCliStatusAdapter`
 
+## Live Smoke
+- `npm run orchestrator:live-smoke -- --enabled true`
+- Requires `OPENAI_API_KEY`
+- Skips explicitly when `OPENAI_API_KEY` is missing
+- Runs only in an isolated temp repo/workspace and never edits the main repo directly
+- `test:orchestrator:live-smoke` is intended for manual smoke use or workflow-dispatch CI, not the default always-on gate
+
 ## Provider Selection
 - `--planner-provider rule_based|openai`
 - `--reviewer-provider rule_based|openai`
@@ -17,13 +24,21 @@
 ## Execution Modes
 - `mock`: synthetic execution only
 - `dry_run`: isolated workspace edits plus diff/log artifacts, without writing back to the main repo
-- `apply`: isolated workspace edits plus diff/log artifacts, then copies changed files back only when auto mode is enabled and approval mode is `auto`
+- `apply`: isolated workspace edits plus diff/log artifacts, then waits for explicit patch approval before promotion back to the source repo
 
 ## Modes
 - Auto mode: `--approval-mode auto --auto-mode true`
 - Human approval mode: `--approval-mode human_approval --auto-mode false`
 
 Approval mode stops after planning in `waiting_approval`. Use `approve` or `reject` before resuming.
+
+Patch promotion uses a separate lifecycle:
+- `plan_ready`
+- `patch_ready`
+- `waiting_approval`
+- `approved_for_apply`
+- `applied`
+- `rejected`
 
 ## Initialize
 ```powershell
@@ -54,7 +69,13 @@ npm run orchestrator:run-loop -- --state-id demo --executor openai_responses --e
 ```powershell
 npm run orchestrator:approve -- --state-id demo
 npm run orchestrator:reject -- --state-id demo --reason "Need human review before execution."
+npm run orchestrator:approve-patch -- --state-id demo
+npm run orchestrator:reject-patch -- --state-id demo --reason "Need manual patch review."
 ```
+
+`approve` / `reject` control plan approval.
+
+`approve-patch` / `reject-patch` control promotion of an already prepared patch from isolated workspace artifacts back to the source repo.
 
 ## Resume
 ```powershell
@@ -65,6 +86,23 @@ npm run orchestrator:resume -- --state-id demo --executor mock
 ```powershell
 npm run orchestrator:workspace:cleanup -- --state-id demo --workspace-root .tmp/orchestrator-workspaces
 ```
+
+## Artifact Pruning
+```powershell
+npm run orchestrator:artifacts:prune -- --state-id demo --retain-success 3 --retain-failure 5
+```
+
+Artifacts include:
+- diff / patch
+- tool log
+- command log
+- execution report
+- planner / reviewer state recorded in persisted orchestrator state
+
+Retention policy:
+- keep recent successful iterations
+- keep recent failed iterations
+- never prune iterations that are still waiting for patch approval or needed for resume
 
 ## Review Last Iteration
 ```powershell
@@ -104,6 +142,9 @@ npm run test:orchestrator:storage
 npm run test:orchestrator:executor-provider
 npm run test:orchestrator:workspace
 npm run test:orchestrator:patch-flow
+npm run test:orchestrator:promotion
+npm run test:orchestrator:artifacts
+npm run test:orchestrator:live-smoke
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine
@@ -128,7 +169,8 @@ npm run test:orchestrator:state-machine
 
 ## Current MVP Limits
 - `OpenAIResponsesExecutorProvider` is a coding-executor MVP; its integration tests are mocked and it should still run behind human review for risky scopes.
+- Live OpenAI executor smoke is intentionally gated behind `OPENAI_API_KEY` and manual workflow dispatch.
 - `LocalRepoExecutor` remains allow-list only and intentionally conservative.
 - OpenAI planner/reviewer providers are wired for structured output, but live network usage is still optional and not part of the default acceptance suite.
-- GitHub workflow status is still best-effort through `gh`; full CI gate automation is not yet part of orchestrator completion logic.
-- `apply` mode is intentionally conservative: without auto mode plus `approvalMode=auto`, it returns a patch-ready report instead of silently mutating the main repo.
+- GitHub workflow status is still best-effort through `gh`; full CI gate automation is still separate from the main product pipeline.
+- `apply` mode is intentionally approval-gated: the executor prepares patch artifacts, then `approve-patch` promotes them back to the repo only after precondition checks pass.

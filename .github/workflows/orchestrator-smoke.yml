@@ -1,0 +1,98 @@
+name: Orchestrator Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_live_smoke:
+        description: Run the live OpenAI executor smoke path
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  orchestrator-validation:
+    name: Orchestrator Validation
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Orchestrator acceptance suite
+        shell: pwsh
+        run: |
+          npm run test:orchestrator:typecheck
+          npm run test:orchestrator:lint
+          npm run test:orchestrator:unit
+          npm run test:orchestrator:integration
+          npm run test:orchestrator:schema
+          npm run test:orchestrator:policy
+          npm run test:orchestrator:providers
+          npm run test:orchestrator:storage
+          npm run test:orchestrator:executor-provider
+          npm run test:orchestrator:workspace
+          npm run test:orchestrator:patch-flow
+          npm run test:orchestrator:promotion
+          npm run test:orchestrator:artifacts
+          npm run test:orchestrator:mock-loop
+          npm run test:orchestrator:loop
+          npm run test:orchestrator:state-machine
+
+  orchestrator-live-smoke:
+    name: Orchestrator Live Smoke
+    needs: orchestrator-validation
+    runs-on: windows-latest
+    if: ${{ inputs.run_live_smoke }}
+
+    steps:
+      - name: Decide live smoke policy
+        id: policy
+        shell: pwsh
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if (-not $env:OPENAI_API_KEY) {
+            "run_live=false" >> $env:GITHUB_OUTPUT
+            "skip_reason=orchestrator live smoke skipped because OPENAI_API_KEY is missing." >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          "run_live=true" >> $env:GITHUB_OUTPUT
+          "skip_reason=orchestrator live smoke is ready to run." >> $env:GITHUB_OUTPUT
+
+      - name: Report live smoke skip
+        if: ${{ steps.policy.outputs.run_live != 'true' }}
+        shell: pwsh
+        run: |
+          Write-Host "::notice title=Orchestrator live smoke skipped::${{ steps.policy.outputs.skip_reason }}"
+
+      - name: Checkout
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        run: npm ci
+
+      - name: Run orchestrator live smoke
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        shell: pwsh
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: npm run test:orchestrator:live-smoke

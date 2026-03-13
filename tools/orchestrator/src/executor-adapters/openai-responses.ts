@@ -283,15 +283,6 @@ export class OpenAIResponsesExecutorProvider implements ExecutionProvider {
     await writeJsonArtifact(commandLogPath, commandLog);
 
     const diffArtifacts = await this.params.workspaceManager.collectDiffArtifacts(workspace);
-    const applyAllowed = task.metadata?.applyAllowed ?? false;
-    const blockers: string[] = [];
-    if (executionMode === "apply" && diffArtifacts.changedFiles.length > 0 && !applyAllowed) {
-      blockers.push("Apply mode requires auto mode with approvalMode=auto, or a future patch-approval handoff.");
-    }
-    if (executionMode === "apply" && diffArtifacts.changedFiles.length > 0 && applyAllowed) {
-      await this.params.workspaceManager.applyWorkspaceToRepo(workspace, diffArtifacts.changedFiles);
-    }
-
     return validateExecutionReport({
       iterationNumber: task.iterationNumber,
       changedFiles: diffArtifacts.changedFiles,
@@ -305,7 +296,7 @@ export class OpenAIResponsesExecutorProvider implements ExecutionProvider {
         output: null,
       })),
       ciValidation: null,
-      blockers,
+      blockers: [],
       risks: completion.risks,
       recommendedNextStep: completion.recommendedNextStep,
       shouldCloseSlice: completion.shouldCloseSlice,
@@ -320,6 +311,7 @@ export class OpenAIResponsesExecutorProvider implements ExecutionProvider {
         executionMode,
         workspace: workspace.rootDir,
         toolTurns: toolLog.length,
+        patchPromotionRequired: executionMode === "apply" && diffArtifacts.changedFiles.length > 0,
       },
     });
   }

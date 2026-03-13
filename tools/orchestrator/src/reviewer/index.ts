@@ -13,6 +13,7 @@ import {
 import {
   canAutoContinue,
   findForbiddenFileViolations,
+  findMissingArtifacts,
   findMissingValidation,
   shouldStopForPolicy,
 } from "../policies";
@@ -46,6 +47,7 @@ function buildRuleBasedVerdict(input: ReviewerInput) {
     input.decision.acceptanceCommands,
     input.report.localValidation,
   );
+  const missingArtifacts = findMissingArtifacts(input.report);
   const reasons: string[] = [];
   let verdict: ReviewVerdict["verdict"] = "accept";
 
@@ -57,6 +59,11 @@ function buildRuleBasedVerdict(input: ReviewerInput) {
   if (missingValidation.length > 0) {
     verdict = verdict === "accept" ? "revise" : verdict;
     reasons.push("Execution is missing required validation commands.");
+  }
+
+  if (missingArtifacts.length > 0) {
+    verdict = verdict === "accept" ? "revise" : verdict;
+    reasons.push(`Execution is missing required artifacts: ${missingArtifacts.join(", ")}.`);
   }
 
   if (input.report.blockers.length > 0 && verdict === "accept") {
@@ -81,7 +88,7 @@ function buildRuleBasedVerdict(input: ReviewerInput) {
 
   const suggestedPatchScope =
     verdict === "revise"
-      ? [...new Set([...violatedConstraints, ...missingValidation, ...input.report.changedFiles])]
+      ? [...new Set([...violatedConstraints, ...missingValidation, ...missingArtifacts.map((artifact) => `artifact:${artifact}`), ...input.report.changedFiles])]
       : [];
 
   const policyStopReason = shouldStopForPolicy({

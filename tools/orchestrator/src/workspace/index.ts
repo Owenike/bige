@@ -24,6 +24,12 @@ async function pathExists(targetPath: string) {
   }
 }
 
+async function loadWorkspaceMetadata(rootDir: string) {
+  const metadataPath = path.join(rootDir, ".orchestrator", "workspace.json");
+  const content = await readFile(metadataPath, "utf8");
+  return JSON.parse(content) as WorkspaceSession;
+}
+
 async function collectFiles(rootDir: string, currentDir = rootDir): Promise<string[]> {
   const entries = await readdir(currentDir, { withFileTypes: true });
   const files: string[] = [];
@@ -105,6 +111,14 @@ export class FileSystemWorkspaceManager {
     await rm(this.rootDir, { recursive: true, force: true });
   }
 
+  async loadWorkspace(rootDir: string) {
+    return loadWorkspaceMetadata(rootDir);
+  }
+
+  async cleanupPath(targetPath: string) {
+    await rm(targetPath, { recursive: true, force: true });
+  }
+
   async collectDiffArtifacts(session: WorkspaceSession) {
     const files = await collectFiles(session.rootDir);
     const changedFiles: string[] = [];
@@ -141,6 +155,11 @@ export class FileSystemWorkspaceManager {
       await mkdir(path.dirname(targetPath), { recursive: true });
       await cp(sourcePath, targetPath, { force: true });
     }
+  }
+
+  async applyWorkspaceRootToRepo(rootDir: string, changedFiles: string[]) {
+    const session = await this.loadWorkspace(rootDir);
+    await this.applyWorkspaceToRepo(session, changedFiles);
   }
 }
 

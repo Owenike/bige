@@ -175,6 +175,35 @@ export const providerKindSchema = z.enum(["rule_based", "openai"]);
 export const executorProviderSchema = z.enum(["mock", "local_repo", "openai_responses"]);
 export const executionModeSchema = z.enum(["mock", "dry_run", "apply"]);
 export const executorFallbackModeSchema = z.enum(["blocked", "mock", "local_repo"]);
+export const patchStatusSchema = z.enum([
+  "none",
+  "plan_ready",
+  "patch_ready",
+  "waiting_approval",
+  "approved_for_apply",
+  "applied",
+  "rejected",
+]);
+export const approvalStatusSchema = z.enum(["not_requested", "pending_plan", "pending_patch", "approved", "rejected"]);
+export const artifactPruneStatusSchema = z.enum(["not_run", "pruned", "skipped", "failed"]);
+export const liveSmokeStatusSchema = z.enum(["not_run", "skipped", "passed", "failed", "blocked"]);
+
+export const artifactPruneResultSchema = z.object({
+  status: artifactPruneStatusSchema,
+  retainedIterations: z.array(z.number().int().positive()),
+  deletedPaths: z.array(z.string()),
+  skippedReasons: z.array(z.string()).default([]),
+  summary: z.string(),
+  prunedAt: z.string(),
+});
+
+export const liveSmokeResultSchema = z.object({
+  status: liveSmokeStatusSchema,
+  reason: z.string(),
+  reportPath: z.string().nullable().default(null),
+  diffPath: z.string().nullable().default(null),
+  ranAt: z.string(),
+});
 
 export const orchestratorStatusSchema = z.enum([
   "draft",
@@ -214,6 +243,8 @@ const orchestratorTaskSchema = z.object({
   executorCommand: z.array(z.string()).default([]),
   plannerProvider: providerKindSchema.default("rule_based"),
   reviewerProvider: providerKindSchema.default("rule_based"),
+  artifactRetentionSuccess: z.number().int().positive().default(3),
+  artifactRetentionFailure: z.number().int().positive().default(5),
 });
 
 export const nextIterationPlanSchema = z.object({
@@ -229,6 +260,10 @@ export const iterationRecordSchema = z.object({
   plannerProviderRequested: providerKindSchema,
   plannerProviderResolved: providerKindSchema,
   plannerFallbackReason: z.string().nullable().default(null),
+  executorProviderRequested: executorProviderSchema.nullable().default(null),
+  executorProviderResolved: executorProviderSchema.nullable().default(null),
+  executorFallbackReason: z.string().nullable().default(null),
+  executionMode: executionModeSchema.nullable().default(null),
   reviewerProviderRequested: providerKindSchema.nullable().default(null),
   reviewerProviderResolved: providerKindSchema.nullable().default(null),
   reviewerFallbackReason: z.string().nullable().default(null),
@@ -236,6 +271,9 @@ export const iterationRecordSchema = z.object({
   executionReport: executionReportSchema.nullable().default(null),
   reviewVerdict: reviewVerdictSchema.nullable().default(null),
   ciSummary: ciStatusSummarySchema.nullable().default(null),
+  patchStatus: patchStatusSchema.default("none"),
+  approvalStatus: approvalStatusSchema.default("not_requested"),
+  artifactPruneResult: artifactPruneResultSchema.nullable().default(null),
   stateBefore: orchestratorStatusSchema,
   stateAfter: orchestratorStatusSchema,
   stopReason: z.string().nullable().default(null),
@@ -260,6 +298,10 @@ export const orchestratorStateSchema = z.object({
   lastReviewerProvider: providerKindSchema.nullable().default(null),
   lastPlannerFallbackReason: z.string().nullable().default(null),
   lastReviewerFallbackReason: z.string().nullable().default(null),
+  patchStatus: patchStatusSchema.default("none"),
+  approvalStatus: approvalStatusSchema.default("not_requested"),
+  lastArtifactPruneResult: artifactPruneResultSchema.nullable().default(null),
+  lastLiveSmokeResult: liveSmokeResultSchema.nullable().default(null),
   stopReason: z.string().nullable().default(null),
   iterationHistory: z.array(iterationRecordSchema).default([]),
   createdAt: z.string(),
@@ -278,6 +320,10 @@ export type IterationRecord = z.infer<typeof iterationRecordSchema>;
 export type ExecutorProviderKind = z.infer<typeof executorProviderSchema>;
 export type ExecutionMode = z.infer<typeof executionModeSchema>;
 export type ExecutorFallbackMode = z.infer<typeof executorFallbackModeSchema>;
+export type PatchStatus = z.infer<typeof patchStatusSchema>;
+export type ApprovalStatus = z.infer<typeof approvalStatusSchema>;
+export type ArtifactPruneResult = z.infer<typeof artifactPruneResultSchema>;
+export type LiveSmokeResult = z.infer<typeof liveSmokeResultSchema>;
 
 const stringArrayJsonSchema: JsonSchema = {
   type: "array",
@@ -465,6 +511,10 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastReviewerProvider",
     "lastPlannerFallbackReason",
     "lastReviewerFallbackReason",
+    "patchStatus",
+    "approvalStatus",
+    "lastArtifactPruneResult",
+    "lastLiveSmokeResult",
     "stopReason",
     "iterationHistory",
     "createdAt",
@@ -518,6 +568,8 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         "executorCommand",
         "plannerProvider",
         "reviewerProvider",
+        "artifactRetentionSuccess",
+        "artifactRetentionFailure",
       ],
       additionalProperties: false,
       properties: {
@@ -544,6 +596,8 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         executorCommand: { type: "array", items: { type: "string" } },
         plannerProvider: { type: "string", enum: ["rule_based", "openai"] },
         reviewerProvider: { type: "string", enum: ["rule_based", "openai"] },
+        artifactRetentionSuccess: { type: "number" },
+        artifactRetentionFailure: { type: "number" },
       },
     },
     plannerDecision: { ...plannerDecisionJsonSchema, nullable: true },
@@ -567,6 +621,41 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     lastReviewerProvider: { type: "string", enum: ["rule_based", "openai"], nullable: true },
     lastPlannerFallbackReason: { type: "string", nullable: true },
     lastReviewerFallbackReason: { type: "string", nullable: true },
+    patchStatus: {
+      type: "string",
+      enum: ["none", "plan_ready", "patch_ready", "waiting_approval", "approved_for_apply", "applied", "rejected"],
+    },
+    approvalStatus: {
+      type: "string",
+      enum: ["not_requested", "pending_plan", "pending_patch", "approved", "rejected"],
+    },
+    lastArtifactPruneResult: {
+      type: "object",
+      nullable: true,
+      required: ["status", "retainedIterations", "deletedPaths", "skippedReasons", "summary", "prunedAt"],
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["not_run", "pruned", "skipped", "failed"] },
+        retainedIterations: { type: "array", items: { type: "number" } },
+        deletedPaths: { type: "array", items: { type: "string" } },
+        skippedReasons: { type: "array", items: { type: "string" } },
+        summary: { type: "string" },
+        prunedAt: { type: "string" },
+      },
+    },
+    lastLiveSmokeResult: {
+      type: "object",
+      nullable: true,
+      required: ["status", "reason", "reportPath", "diffPath", "ranAt"],
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["not_run", "skipped", "passed", "failed", "blocked"] },
+        reason: { type: "string" },
+        reportPath: { type: "string", nullable: true },
+        diffPath: { type: "string", nullable: true },
+        ranAt: { type: "string" },
+      },
+    },
     stopReason: { type: "string", nullable: true },
     iterationHistory: {
       type: "array",
@@ -578,6 +667,10 @@ export const orchestratorStateJsonSchema: JsonSchema = {
           "plannerProviderRequested",
           "plannerProviderResolved",
           "plannerFallbackReason",
+          "executorProviderRequested",
+          "executorProviderResolved",
+          "executorFallbackReason",
+          "executionMode",
           "reviewerProviderRequested",
           "reviewerProviderResolved",
           "reviewerFallbackReason",
@@ -585,6 +678,9 @@ export const orchestratorStateJsonSchema: JsonSchema = {
           "executionReport",
           "reviewVerdict",
           "ciSummary",
+          "patchStatus",
+          "approvalStatus",
+          "artifactPruneResult",
           "stateBefore",
           "stateAfter",
           "stopReason",
@@ -596,6 +692,10 @@ export const orchestratorStateJsonSchema: JsonSchema = {
           plannerProviderRequested: { type: "string", enum: ["rule_based", "openai"] },
           plannerProviderResolved: { type: "string", enum: ["rule_based", "openai"] },
           plannerFallbackReason: { type: "string", nullable: true },
+          executorProviderRequested: { type: "string", enum: ["mock", "local_repo", "openai_responses"], nullable: true },
+          executorProviderResolved: { type: "string", enum: ["mock", "local_repo", "openai_responses"], nullable: true },
+          executorFallbackReason: { type: "string", nullable: true },
+          executionMode: { type: "string", enum: ["mock", "dry_run", "apply"], nullable: true },
           reviewerProviderRequested: { type: "string", enum: ["rule_based", "openai"], nullable: true },
           reviewerProviderResolved: { type: "string", enum: ["rule_based", "openai"], nullable: true },
           reviewerFallbackReason: { type: "string", nullable: true },
@@ -603,6 +703,28 @@ export const orchestratorStateJsonSchema: JsonSchema = {
           executionReport: { ...executionReportJsonSchema, nullable: true },
           reviewVerdict: { ...reviewVerdictJsonSchema, nullable: true },
           ciSummary: { ...ciStatusSummaryJsonSchema, nullable: true },
+          patchStatus: {
+            type: "string",
+            enum: ["none", "plan_ready", "patch_ready", "waiting_approval", "approved_for_apply", "applied", "rejected"],
+          },
+          approvalStatus: {
+            type: "string",
+            enum: ["not_requested", "pending_plan", "pending_patch", "approved", "rejected"],
+          },
+          artifactPruneResult: {
+            type: "object",
+            nullable: true,
+            required: ["status", "retainedIterations", "deletedPaths", "skippedReasons", "summary", "prunedAt"],
+            additionalProperties: false,
+            properties: {
+              status: { type: "string", enum: ["not_run", "pruned", "skipped", "failed"] },
+              retainedIterations: { type: "array", items: { type: "number" } },
+              deletedPaths: { type: "array", items: { type: "string" } },
+              skippedReasons: { type: "array", items: { type: "string" } },
+              summary: { type: "string" },
+              prunedAt: { type: "string" },
+            },
+          },
           stateBefore: {
             type: "string",
             enum: [
