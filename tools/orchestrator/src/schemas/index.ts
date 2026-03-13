@@ -197,6 +197,45 @@ export const liveAcceptanceStatusSchema = z.enum(["not_run", "skipped", "passed"
 export const livePassStatusSchema = z.enum(["not_run", "skipped", "passed", "failed", "blocked"]);
 export const handoffStatusSchema = z.enum(["not_ready", "exported", "handoff_ready", "branch_published", "handoff_failed"]);
 export const prDraftStatusSchema = z.enum(["not_ready", "metadata_ready", "payload_ready", "skipped", "failed"]);
+export const queueStatusSchema = z.enum(["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"]);
+export const recoveryDecisionSchema = z.object({
+  runId: z.string(),
+  action: z.enum(["none", "requeued", "retained", "paused", "blocked", "cancelled"]),
+  reason: z.string(),
+  workspaceStatus: workspaceStatusSchema,
+  recoverable: z.boolean().default(true),
+  decidedAt: z.string(),
+});
+export const queueRunItemSchema = z.object({
+  id: z.string(),
+  taskId: z.string(),
+  stateId: z.string(),
+  iterationNumber: z.number().int().positive().nullable().default(null),
+  priority: z.number().int().default(0),
+  requestedAt: z.string(),
+  scheduledAt: z.string(),
+  status: queueStatusSchema.default("queued"),
+  attemptCount: z.number().int().nonnegative().default(0),
+  profileId: z.string(),
+  executionMode: executionModeSchema,
+  approvalMode: z.enum(["auto", "human_approval"]),
+  repoPath: z.string(),
+  workspaceRoot: z.string().nullable().default(null),
+  lockScopeKeys: z.array(z.string()).default([]),
+  workerId: z.string().nullable().default(null),
+  leaseOwner: z.string().nullable().default(null),
+  leaseExpiresAt: z.string().nullable().default(null),
+  lastHeartbeatAt: z.string().nullable().default(null),
+  queuedAt: z.string(),
+  startedAt: z.string().nullable().default(null),
+  finishedAt: z.string().nullable().default(null),
+  reason: z.string().nullable().default(null),
+  recoveryDecision: recoveryDecisionSchema.nullable().default(null),
+});
+export const queueRunCollectionSchema = z.object({
+  updatedAt: z.string(),
+  items: z.array(queueRunItemSchema).default([]),
+});
 
 export const artifactPruneResultSchema = z.object({
   status: artifactPruneStatusSchema,
@@ -486,6 +525,15 @@ export const orchestratorStateSchema = z.object({
   workspaceStatus: workspaceStatusSchema.default("unknown"),
   liveAcceptanceStatus: liveAcceptanceStatusSchema.default("not_run"),
   livePassStatus: livePassStatusSchema.default("not_run"),
+  queueStatus: queueStatusSchema.default("not_queued"),
+  workerId: z.string().nullable().default(null),
+  leaseOwner: z.string().nullable().default(null),
+  lastHeartbeatAt: z.string().nullable().default(null),
+  lastRecoveryDecision: recoveryDecisionSchema.nullable().default(null),
+  retryCount: z.number().int().nonnegative().default(0),
+  queuedAt: z.string().nullable().default(null),
+  startedAt: z.string().nullable().default(null),
+  finishedAt: z.string().nullable().default(null),
   exportArtifactPaths: z.array(z.string()).default([]),
   handoffStatus: handoffStatusSchema.default("not_ready"),
   prDraftStatus: prDraftStatusSchema.default("not_ready"),
@@ -531,10 +579,98 @@ export type AuditTrail = z.infer<typeof auditTrailSchema>;
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 export type PreflightTarget = z.infer<typeof preflightTargetSchema>;
 export type PreflightResult = z.infer<typeof preflightResultSchema>;
+export type QueueStatus = z.infer<typeof queueStatusSchema>;
+export type RecoveryDecision = z.infer<typeof recoveryDecisionSchema>;
+export type QueueRunItem = z.infer<typeof queueRunItemSchema>;
+export type QueueRunCollection = z.infer<typeof queueRunCollectionSchema>;
 
 const stringArrayJsonSchema: JsonSchema = {
   type: "array",
   items: { type: "string" },
+};
+
+export const queueRunCollectionJsonSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["updatedAt", "items"],
+  properties: {
+    updatedAt: { type: "string" },
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "id",
+          "taskId",
+          "stateId",
+          "iterationNumber",
+          "priority",
+          "requestedAt",
+          "scheduledAt",
+          "status",
+          "attemptCount",
+          "profileId",
+          "executionMode",
+          "approvalMode",
+          "repoPath",
+          "workspaceRoot",
+          "lockScopeKeys",
+          "workerId",
+          "leaseOwner",
+          "leaseExpiresAt",
+          "lastHeartbeatAt",
+          "queuedAt",
+          "startedAt",
+          "finishedAt",
+          "reason",
+          "recoveryDecision",
+        ],
+        properties: {
+          id: { type: "string" },
+          taskId: { type: "string" },
+          stateId: { type: "string" },
+          iterationNumber: { type: "number", nullable: true },
+          priority: { type: "number" },
+          requestedAt: { type: "string" },
+          scheduledAt: { type: "string" },
+          status: {
+            type: "string",
+            enum: ["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"],
+          },
+          attemptCount: { type: "number" },
+          profileId: { type: "string" },
+          executionMode: { type: "string", enum: ["mock", "dry_run", "apply"] },
+          approvalMode: { type: "string", enum: ["auto", "human_approval"] },
+          repoPath: { type: "string" },
+          workspaceRoot: { type: "string", nullable: true },
+          lockScopeKeys: stringArrayJsonSchema,
+          workerId: { type: "string", nullable: true },
+          leaseOwner: { type: "string", nullable: true },
+          leaseExpiresAt: { type: "string", nullable: true },
+          lastHeartbeatAt: { type: "string", nullable: true },
+          queuedAt: { type: "string" },
+          startedAt: { type: "string", nullable: true },
+          finishedAt: { type: "string", nullable: true },
+          reason: { type: "string", nullable: true },
+          recoveryDecision: {
+            type: "object",
+            nullable: true,
+            required: ["runId", "action", "reason", "workspaceStatus", "recoverable", "decidedAt"],
+            additionalProperties: false,
+            properties: {
+              runId: { type: "string" },
+              action: { type: "string", enum: ["none", "requeued", "retained", "paused", "blocked", "cancelled"] },
+              reason: { type: "string" },
+              workspaceStatus: { type: "string", enum: ["unknown", "clean", "active", "stale", "orphaned", "cleaned"] },
+              recoverable: { type: "boolean" },
+              decidedAt: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+  },
 };
 
 export const executionReportJsonSchema: JsonSchema = {
@@ -921,6 +1057,31 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       type: "string",
       enum: ["not_run", "skipped", "passed", "failed", "blocked"],
     },
+    queueStatus: {
+      type: "string",
+      enum: ["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"],
+    },
+    workerId: { type: "string", nullable: true },
+    leaseOwner: { type: "string", nullable: true },
+    lastHeartbeatAt: { type: "string", nullable: true },
+    lastRecoveryDecision: {
+      type: "object",
+      nullable: true,
+      required: ["runId", "action", "reason", "workspaceStatus", "recoverable", "decidedAt"],
+      additionalProperties: false,
+      properties: {
+        runId: { type: "string" },
+        action: { type: "string", enum: ["none", "requeued", "retained", "paused", "blocked", "cancelled"] },
+        reason: { type: "string" },
+        workspaceStatus: { type: "string", enum: ["unknown", "clean", "active", "stale", "orphaned", "cleaned"] },
+        recoverable: { type: "boolean" },
+        decidedAt: { type: "string" },
+      },
+    },
+    retryCount: { type: "number" },
+    queuedAt: { type: "string", nullable: true },
+    startedAt: { type: "string", nullable: true },
+    finishedAt: { type: "string", nullable: true },
     exportArtifactPaths: { type: "array", items: { type: "string" } },
     handoffStatus: {
       type: "string",

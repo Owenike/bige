@@ -77,6 +77,10 @@ jobs:
           npm run test:orchestrator:preflight
           npm run test:orchestrator:profiles
           npm run test:orchestrator:diagnostics
+          npm run test:orchestrator:queue
+          npm run test:orchestrator:worker
+          npm run test:orchestrator:locking
+          npm run test:orchestrator:recovery
           npm run test:orchestrator:mock-loop
           npm run test:orchestrator:loop
           npm run test:orchestrator:state-machine

@@ -11,7 +11,13 @@ $tsconfig = Join-Path $root "tsconfig.json"
 $outDir = Join-Path $repoRoot ".tmp\orchestrator"
 
 if (Test-Path $outDir) {
-  Remove-Item -Path $outDir -Recurse -Force
+  try {
+    Remove-Item -Path $outDir -Recurse -Force -ErrorAction Stop
+  } catch {
+    if ($_.Exception -isnot [System.IO.DirectoryNotFoundException]) {
+      throw
+    }
+  }
 }
 
 npx tsc -p $tsconfig
@@ -43,7 +49,11 @@ $suiteMap = @{
     "$outDir\tests\unit\retention-config.test.js",
     "$outDir\tests\unit\preflight.test.js",
     "$outDir\tests\unit\profiles.test.js",
-    "$outDir\tests\unit\diagnostics.test.js"
+    "$outDir\tests\unit\diagnostics.test.js",
+    "$outDir\tests\unit\queue.test.js",
+    "$outDir\tests\unit\worker.test.js",
+    "$outDir\tests\unit\locking.test.js",
+    "$outDir\tests\unit\recovery.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js",
@@ -117,6 +127,18 @@ $suiteMap = @{
   "diagnostics" = @(
     "$outDir\tests\unit\diagnostics.test.js"
   )
+  "queue" = @(
+    "$outDir\tests\unit\queue.test.js"
+  )
+  "worker" = @(
+    "$outDir\tests\unit\worker.test.js"
+  )
+  "locking" = @(
+    "$outDir\tests\unit\locking.test.js"
+  )
+  "recovery" = @(
+    "$outDir\tests\unit\recovery.test.js"
+  )
   "live-smoke" = @(
     "$outDir\tests\integration\live-smoke.test.js"
   )
@@ -157,6 +179,10 @@ $suiteMap = @{
     "$outDir\tests\unit\preflight.test.js",
     "$outDir\tests\unit\profiles.test.js",
     "$outDir\tests\unit\diagnostics.test.js",
+    "$outDir\tests\unit\queue.test.js",
+    "$outDir\tests\unit\worker.test.js",
+    "$outDir\tests\unit\locking.test.js",
+    "$outDir\tests\unit\recovery.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",

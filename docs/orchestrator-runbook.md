@@ -188,6 +188,67 @@ Diagnostics summarize:
 
 `status`, `inspect`, and `diagnostics` currently resolve to the same readable summary path.
 
+## Queue / Worker / Lock / Recovery
+The orchestrator can now run through a durable queue instead of only ad hoc CLI execution.
+
+Queue items persist:
+- `taskId`
+- `runId`
+- `iterationNumber`
+- `priority`
+- `scheduledAt`
+- `status`
+- `attemptCount`
+- `profileId`
+- `executionMode`
+- `approvalMode`
+- `workerId`
+- `leaseOwner`
+- `lastHeartbeatAt`
+- `queuedAt`
+- `startedAt`
+- `finishedAt`
+
+Queue commands:
+```powershell
+npm run orchestrator:queue:enqueue -- --state-id demo --priority 10
+npm run orchestrator:queue:list
+```
+
+Worker commands:
+```powershell
+npm run orchestrator:worker:once -- --worker-id worker-1
+npm run orchestrator:worker:run -- --worker-id worker-1 --poll-ms 1000 --max-polls 10
+```
+
+Operator control commands:
+```powershell
+npm run orchestrator:run:pause -- --state-id demo
+npm run orchestrator:run:resume -- --state-id demo
+npm run orchestrator:run:cancel -- --state-id demo
+npm run orchestrator:run:requeue -- --state-id demo
+```
+
+Behavior summary:
+- `worker:once` performs one poll cycle and exits.
+- `worker:run` keeps polling for eligible queued runs.
+- leases prevent two workers from taking the same task / repo / workspace scope at the same time.
+- running items renew a heartbeat-backed lease while work is in progress.
+- expired leases are eligible for recovery.
+- approval / handoff / promotion pending states are paused rather than force-taken-over.
+
+Recovery summary:
+- stale running jobs with expired leases are requeued if safe to take over
+- approval / handoff / blocked runs are paused for manual review
+- workspace cleanup is inspected before recovery decides to resume or requeue
+- recovery decisions are persisted as `lastRecoveryDecision`
+
+Automatic stop vs blocked:
+- missing prerequisites and unavailable execution modes block the run
+- approval-required states pause instead of auto-running
+- stop conditions such as max failures / max iterations still apply inside worker mode
+- worker mode does not bypass forbidden files, promotion preconditions, or approval gates
+
 ## Resume
 ```powershell
 npm run orchestrator:resume -- --state-id demo --executor mock
@@ -298,6 +359,10 @@ npm run test:orchestrator:retention-config
 npm run test:orchestrator:preflight
 npm run test:orchestrator:profiles
 npm run test:orchestrator:diagnostics
+npm run test:orchestrator:queue
+npm run test:orchestrator:worker
+npm run test:orchestrator:locking
+npm run test:orchestrator:recovery
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine
@@ -332,3 +397,8 @@ npm run test:orchestrator:state-machine
 - PR draft handoff is metadata-first by default. Real GitHub draft PR creation is optional and remains gated by `ORCHESTRATOR_GITHUB_HANDOFF` plus token availability.
 - Preflight is fail-fast and safety-first. It does not relax any existing approval, promotion, or command safety rules.
 - GitHub handoff, live paths, and promotion all consume the same preflight/readiness model, so blocked or skipped paths should now explain themselves consistently.
+- Queue / worker mode is still MVP:
+  - queue persistence is file-backed
+  - recovery is lease/heartbeat based, not distributed consensus
+  - running runs cannot be operator-paused/cancelled without cooperative stop support
+  - approval, handoff, and promotion pending runs are preserved conservatively rather than aggressively reclaimed

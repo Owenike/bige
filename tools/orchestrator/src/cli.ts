@@ -17,10 +17,64 @@ import {
   runOrchestratorLoop,
   runOrchestratorOnce,
 } from "./orchestrator";
-import type { ExecutionMode, ExecutorFallbackMode, ExecutorProviderKind, PlannerProviderKind } from "./schemas";
+import { orchestratorStateSchema, type ExecutionMode, type ExecutorFallbackMode, type ExecutorProviderKind, type PlannerProviderKind } from "./schemas";
 import { FileSystemWorkspaceManager } from "./workspace";
 import { runOrchestratorPreflight, formatPreflightSummary } from "./preflight";
 import { buildDiagnosticsSummary, formatDiagnosticsSummary } from "./diagnostics";
+import { acquireNextQueueRun, applyQueueItemToState, cancelQueueRun, enqueueStateRun, formatQueueSummary, listQueueRuns, pauseQueueRun, requeueRun } from "./queue";
+import { runQueueWorker } from "./worker";
+
+async function resolveRunId(params: {
+  stateId: string;
+  dependencies: ReturnType<typeof createDefaultDependencies>;
+  explicitRunId?: string;
+}) {
+  if (params.explicitRunId) {
+    return params.explicitRunId;
+  }
+  const queue = await listQueueRuns(params.dependencies.storage);
+  const match = queue.find((item) => item.stateId === params.stateId && ["queued", "running", "paused", "blocked", "failed"].includes(item.status));
+  if (!match) {
+    throw new Error(`No queue run found for state ${params.stateId}.`);
+  }
+  return match.id;
+}
+
+function formatRunSummary(run: {
+  id: string;
+  status: string;
+  stateId: string;
+  workerId: string | null;
+  attemptCount: number;
+  reason: string | null;
+}) {
+  return [
+    `Run: ${run.id}`,
+    `State: ${run.stateId}`,
+    `Status: ${run.status}`,
+    `Worker: ${run.workerId ?? "none"}`,
+    `Attempts: ${run.attemptCount}`,
+    `Reason: ${run.reason ?? "none"}`,
+  ].join("\n");
+}
+
+function formatWorkerSummary(summary: {
+  workerId: string;
+  polls: number;
+  processed: number;
+  recovered: number;
+  finalStatuses: string[];
+  queueSize: number;
+}) {
+  return [
+    `Worker: ${summary.workerId}`,
+    `Polls: ${summary.polls}`,
+    `Processed: ${summary.processed}`,
+    `Recovered stale runs: ${summary.recovered}`,
+    `Final statuses: ${summary.finalStatuses.join(", ") || "none"}`,
+    `Queue size: ${summary.queueSize}`,
+  ].join("\n");
+}
 
 function parseArgs(argv: string[]) {
   const [command = "help", ...rest] = argv;
@@ -174,6 +228,97 @@ async function main() {
     return;
   }
 
+  if (command === "queue:enqueue") {
+    const result = await enqueueStateRun({
+      storage: dependencies.storage,
+      state: existingState,
+      priority: Number.parseInt(getOption(options, "priority", "0"), 10),
+      scheduledAt: options.get("scheduled-at"),
+      requestedBy: options.get("requested-by") ?? "operator",
+    });
+    const updatedState = orchestratorStateSchema.parse(
+      applyQueueItemToState(existingState, result.item, new Date()),
+    );
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(`${formatRunSummary(result.item)}\n${result.deduped ? "\nDeduped existing queued/running item.\n" : ""}`);
+    return;
+  }
+
+  if (command === "queue:list") {
+    const queue = await listQueueRuns(dependencies.storage);
+    process.stdout.write(`${formatQueueSummary(queue)}\n`);
+    return;
+  }
+
+  if (command === "worker:once") {
+    const summary = await runQueueWorker({
+      workerId: getOption(options, "worker-id", "worker-once"),
+      dependencies,
+      continuous: false,
+      leaseMs: Number.parseInt(getOption(options, "lease-ms", "60000"), 10),
+    });
+    process.stdout.write(`${formatWorkerSummary(summary)}\n`);
+    return;
+  }
+
+  if (command === "worker:run") {
+    const summary = await runQueueWorker({
+      workerId: getOption(options, "worker-id", "worker-loop"),
+      dependencies,
+      continuous: true,
+      pollIntervalMs: Number.parseInt(getOption(options, "poll-ms", "1000"), 10),
+      maxPolls: Number.parseInt(getOption(options, "max-polls", "10"), 10),
+      leaseMs: Number.parseInt(getOption(options, "lease-ms", "60000"), 10),
+    });
+    process.stdout.write(`${formatWorkerSummary(summary)}\n`);
+    return;
+  }
+
+  if (command === "run:cancel") {
+    const runId = await resolveRunId({
+      stateId,
+      dependencies,
+      explicitRunId: options.get("run-id"),
+    });
+    const updatedRun = await cancelQueueRun(dependencies.storage, runId, options.get("reason"));
+    if (updatedRun) {
+      const updatedState = orchestratorStateSchema.parse(applyQueueItemToState(existingState, updatedRun, new Date()));
+      await dependencies.storage.saveState(updatedState);
+    }
+    process.stdout.write(updatedRun ? `${formatRunSummary(updatedRun)}\n` : "Run not found.\n");
+    return;
+  }
+
+  if (command === "run:pause") {
+    const runId = await resolveRunId({
+      stateId,
+      dependencies,
+      explicitRunId: options.get("run-id"),
+    });
+    const updatedRun = await pauseQueueRun(dependencies.storage, runId, options.get("reason"));
+    if (updatedRun) {
+      const updatedState = orchestratorStateSchema.parse(applyQueueItemToState(existingState, updatedRun, new Date()));
+      await dependencies.storage.saveState(updatedState);
+    }
+    process.stdout.write(updatedRun ? `${formatRunSummary(updatedRun)}\n` : "Run not found.\n");
+    return;
+  }
+
+  if (command === "run:resume" || command === "run:requeue") {
+    const runId = await resolveRunId({
+      stateId,
+      dependencies,
+      explicitRunId: options.get("run-id"),
+    });
+    const updatedRun = await requeueRun(dependencies.storage, runId, options.get("reason"));
+    if (updatedRun) {
+      const updatedState = orchestratorStateSchema.parse(applyQueueItemToState(existingState, updatedRun, new Date()));
+      await dependencies.storage.saveState(updatedState);
+    }
+    process.stdout.write(updatedRun ? `${formatRunSummary(updatedRun)}\n` : "Run not found.\n");
+    return;
+  }
+
   if (command === "approve") {
     const updatedState = await approvePendingPlan(stateId, dependencies);
     process.stdout.write(`${JSON.stringify(updatedState, null, 2)}\n`);
@@ -298,8 +443,16 @@ async function main() {
       "Usage:",
       "  node cli.js init --state-id default --goal \"...\"",
       "  node cli.js plan --state-id default",
+      "  node cli.js queue:enqueue --state-id default --priority 10",
+      "  node cli.js queue:list",
       "  node cli.js run-once --state-id default --executor openai_responses --execution-mode dry_run",
       "  node cli.js run-loop --state-id default --executor mock",
+      "  node cli.js worker:once --worker-id worker-1",
+      "  node cli.js worker:run --worker-id worker-1 --poll-ms 1000 --max-polls 10",
+      "  node cli.js run:pause --state-id default",
+      "  node cli.js run:resume --state-id default",
+      "  node cli.js run:cancel --state-id default",
+      "  node cli.js run:requeue --state-id default",
       "  node cli.js approve --state-id default",
       "  node cli.js reject --state-id default --reason \"...\"",
       "  node cli.js approve-patch --state-id default",

@@ -16,6 +16,7 @@ export type OrchestratorDiagnostics = {
     suggestedNextAction: string;
   }>;
   artifactSummary: {
+    queueStatus: string;
     patchStatus: string;
     promotionStatus: string;
     handoffStatus: string;
@@ -24,12 +25,28 @@ export type OrchestratorDiagnostics = {
     livePassStatus: string;
     workspaceStatus: string;
   };
+  workerSummary: {
+    workerId: string | null;
+    leaseOwner: string | null;
+    lastHeartbeatAt: string | null;
+    retryCount: number;
+  };
+  recoverySummary: {
+    action: string | null;
+    reason: string | null;
+  };
   nextSuggestedAction: string;
 };
 
 function resolveNextSuggestedAction(state: OrchestratorState, preflight: PreflightResult | null) {
   if (preflight?.blockedReasons.length) {
     return preflight.blockedReasons[0]?.suggestedNextAction ?? "Resolve the first blocked prerequisite.";
+  }
+  if (state.queueStatus === "queued") {
+    return "Run a worker or worker:once to process the queued task.";
+  }
+  if (state.queueStatus === "running") {
+    return "Inspect worker heartbeat and wait for the current lease to complete.";
   }
   if (state.pendingHumanApproval && state.patchStatus === "waiting_approval") {
     return "Approve or reject the pending patch before promotion or handoff.";
@@ -86,6 +103,7 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
     missingPrerequisites,
     blockedReasons,
     artifactSummary: {
+      queueStatus: state.queueStatus,
       patchStatus: state.patchStatus,
       promotionStatus: state.promotionStatus,
       handoffStatus: state.handoffStatus,
@@ -93,6 +111,16 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
       liveAcceptanceStatus: state.liveAcceptanceStatus,
       livePassStatus: state.livePassStatus,
       workspaceStatus: state.workspaceStatus,
+    },
+    workerSummary: {
+      workerId: state.workerId,
+      leaseOwner: state.leaseOwner,
+      lastHeartbeatAt: state.lastHeartbeatAt,
+      retryCount: state.retryCount,
+    },
+    recoverySummary: {
+      action: state.lastRecoveryDecision?.action ?? null,
+      reason: state.lastRecoveryDecision?.reason ?? null,
     },
     nextSuggestedAction: resolveNextSuggestedAction(state, preflight),
   } satisfies OrchestratorDiagnostics;
@@ -105,7 +133,9 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     `Planner: ${summary.plannerSummary}`,
     `Reviewer: ${summary.reviewerSummary}`,
     `Last iteration: ${summary.lastIterationSummary}`,
-    `Artifacts: patch=${summary.artifactSummary.patchStatus}, promotion=${summary.artifactSummary.promotionStatus}, handoff=${summary.artifactSummary.handoffStatus}, prDraft=${summary.artifactSummary.prDraftStatus}, liveAcceptance=${summary.artifactSummary.liveAcceptanceStatus}, livePass=${summary.artifactSummary.livePassStatus}, workspace=${summary.artifactSummary.workspaceStatus}`,
+    `Artifacts: queue=${summary.artifactSummary.queueStatus}, patch=${summary.artifactSummary.patchStatus}, promotion=${summary.artifactSummary.promotionStatus}, handoff=${summary.artifactSummary.handoffStatus}, prDraft=${summary.artifactSummary.prDraftStatus}, liveAcceptance=${summary.artifactSummary.liveAcceptanceStatus}, livePass=${summary.artifactSummary.livePassStatus}, workspace=${summary.artifactSummary.workspaceStatus}`,
+    `Worker: workerId=${summary.workerSummary.workerId ?? "none"}, leaseOwner=${summary.workerSummary.leaseOwner ?? "none"}, lastHeartbeat=${summary.workerSummary.lastHeartbeatAt ?? "none"}, retries=${summary.workerSummary.retryCount}`,
+    `Recovery: action=${summary.recoverySummary.action ?? "none"}, reason=${summary.recoverySummary.reason ?? "none"}`,
     `Blockers: ${summary.blockers.join(" | ") || "none"}`,
     `Missing prerequisites: ${summary.missingPrerequisites.join(", ") || "none"}`,
   ];
