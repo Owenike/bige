@@ -58,6 +58,10 @@ $suiteMap = @{
     "$outDir\tests\unit\preflight.test.js",
     "$outDir\tests\unit\profiles.test.js",
     "$outDir\tests\unit\diagnostics.test.js",
+    "$outDir\tests\unit\github-events.test.js",
+    "$outDir\tests\unit\idempotency.test.js",
+    "$outDir\tests\unit\status-reporting.test.js",
+    "$outDir\tests\unit\trigger-policy.test.js",
     "$outDir\tests\unit\queue.test.js",
     "$outDir\tests\unit\worker.test.js",
     "$outDir\tests\unit\locking.test.js",
@@ -147,6 +151,18 @@ $suiteMap = @{
   "diagnostics" = @(
     "$outDir\tests\unit\diagnostics.test.js"
   )
+  "github-events" = @(
+    "$outDir\tests\unit\github-events.test.js"
+  )
+  "idempotency" = @(
+    "$outDir\tests\unit\idempotency.test.js"
+  )
+  "status-reporting" = @(
+    "$outDir\tests\unit\status-reporting.test.js"
+  )
+  "trigger-policy" = @(
+    "$outDir\tests\unit\trigger-policy.test.js"
+  )
   "queue" = @(
     "$outDir\tests\unit\queue.test.js"
   )
@@ -235,6 +251,10 @@ $suiteMap = @{
     "$outDir\tests\unit\preflight.test.js",
     "$outDir\tests\unit\profiles.test.js",
     "$outDir\tests\unit\diagnostics.test.js",
+    "$outDir\tests\unit\github-events.test.js",
+    "$outDir\tests\unit\idempotency.test.js",
+    "$outDir\tests\unit\status-reporting.test.js",
+    "$outDir\tests\unit\trigger-policy.test.js",
     "$outDir\tests\unit\queue.test.js",
     "$outDir\tests\unit\worker.test.js",
     "$outDir\tests\unit\locking.test.js",

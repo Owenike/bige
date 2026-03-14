@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 import {
   approvePendingPatch,
   approvePendingPlan,
@@ -33,6 +34,8 @@ import { getWorkerStatus, runQueueWorker } from "./worker";
 import { runSupabaseBackendLiveSmoke } from "./supabase-live";
 import { exportBackendSnapshot, importBackendSnapshot } from "./transfer";
 import { inspectBackendHealth, repairBackendHealth } from "./health";
+import { ingestGitHubEvent } from "./github-events";
+import { GhCliStatusReportingAdapter, applyStatusReportToState, reportStateStatus } from "./status-reporting";
 
 async function resolveRunId(params: {
   stateId: string;
@@ -323,6 +326,37 @@ async function main() {
     return;
   }
 
+  if (command === "event:intake") {
+    const payloadPath = options.get("payload");
+    if (!payloadPath) {
+      throw new Error("--payload is required for event:intake.");
+    }
+    const payload = JSON.parse(await readFile(path.resolve(payloadPath), "utf8")) as unknown;
+    const intake = await ingestGitHubEvent({
+      payload,
+      dependencies,
+      repoPath,
+      replayOverride: getOption(options, "replay", "false") === "true",
+      enqueue: getOption(options, "enqueue", "true") === "true",
+    });
+    let updatedState = intake.state;
+    let statusReport = null;
+    if (getOption(options, "report-status", "true") === "true") {
+      statusReport = await reportStateStatus({
+        state: intake.state,
+        outputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report")),
+        adapter: new GhCliStatusReportingAdapter({
+          enabled: getOption(options, "enabled", "true") === "true",
+          token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+        }),
+      });
+      updatedState = applyStatusReportToState(intake.state, statusReport);
+      await dependencies.storage.saveState(updatedState);
+    }
+    process.stdout.write(`${JSON.stringify({ ...intake, state: updatedState, statusReport }, null, 2)}\n`);
+    return;
+  }
+
   const existingState = await dependencies.storage.loadState(stateId);
   if (!existingState) {
     throw new Error(`State ${stateId} was not found. Run init first.`);
@@ -356,6 +390,22 @@ async function main() {
       state: existingState,
     });
     process.stdout.write(`${formatPreflightSummary(preflight)}\n\n${JSON.stringify(preflight, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "status:report") {
+    const outputRoot = getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report"));
+    const result = await reportStateStatus({
+      state: existingState,
+      outputRoot,
+      adapter: new GhCliStatusReportingAdapter({
+        enabled: getOption(options, "enabled", "true") === "true",
+        token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+      }),
+    });
+    const updated = applyStatusReportToState(existingState, result);
+    await dependencies.storage.saveState(updated);
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
   }
 
@@ -718,6 +768,8 @@ async function main() {
       "Usage:",
       "  node cli.js init --state-id default --goal \"...\"",
       "  node cli.js plan --state-id default",
+      "  node cli.js event:intake --payload path/to/event.json --enqueue true --report-status true",
+      "  node cli.js status:report --state-id default",
       "  node cli.js queue:enqueue --state-id default --priority 10",
       "  node cli.js queue:list",
       "  node cli.js run-once --state-id default --executor openai_responses --execution-mode dry_run",

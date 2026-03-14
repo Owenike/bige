@@ -5,6 +5,11 @@ export type OrchestratorDiagnostics = {
   status: OrchestratorState["status"];
   iterationNumber: number;
   profileId: string;
+  sourceEventType: OrchestratorState["sourceEventType"];
+  sourceEventId: string | null;
+  idempotencyKey: string | null;
+  idempotencyStatus: OrchestratorState["idempotencyStatus"];
+  triggerPolicyId: string | null;
   lastIterationSummary: string;
   plannerSummary: string;
   reviewerSummary: string;
@@ -44,6 +49,10 @@ export type OrchestratorDiagnostics = {
   recoverySummary: {
     action: string | null;
     reason: string | null;
+  };
+  statusReporting: {
+    status: OrchestratorState["statusReportStatus"];
+    summary: string | null;
   };
   nextSuggestedAction: string;
 };
@@ -100,6 +109,11 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
     status: state.status,
     iterationNumber: state.iterationNumber,
     profileId: state.task.profileId,
+    sourceEventType: state.sourceEventType,
+    sourceEventId: state.sourceEventId,
+    idempotencyKey: state.idempotencyKey,
+    idempotencyStatus: state.idempotencyStatus,
+    triggerPolicyId: state.triggerPolicyId,
     lastIterationSummary:
       latestIteration?.executionReport?.summaryOfChanges.join(" | ") ??
       state.lastExecutionReport?.summaryOfChanges.join(" | ") ??
@@ -142,6 +156,10 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
       action: state.lastRecoveryDecision?.action ?? null,
       reason: state.lastRecoveryDecision?.reason ?? null,
     },
+    statusReporting: {
+      status: state.statusReportStatus,
+      summary: state.lastStatusReportSummary?.summary ?? null,
+    },
     nextSuggestedAction: resolveNextSuggestedAction(state, preflight),
   } satisfies OrchestratorDiagnostics;
 }
@@ -150,12 +168,14 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
   const lines = [
     `State: ${summary.stateId}`,
     `Status: ${summary.status} (iteration ${summary.iterationNumber}, profile ${summary.profileId})`,
+    `Source: type=${summary.sourceEventType}, eventId=${summary.sourceEventId ?? "none"}, idempotency=${summary.idempotencyKey ?? "none"} (${summary.idempotencyStatus}), triggerPolicy=${summary.triggerPolicyId ?? "none"}`,
     `Planner: ${summary.plannerSummary}`,
     `Reviewer: ${summary.reviewerSummary}`,
     `Last iteration: ${summary.lastIterationSummary}`,
     `Artifacts: backend=${summary.artifactSummary.backendType}, backendHealth=${summary.artifactSummary.backendHealthStatus}, queue=${summary.artifactSummary.queueStatus}, transfer=${summary.artifactSummary.transferStatus}, repair=${summary.artifactSummary.repairStatus}, patch=${summary.artifactSummary.patchStatus}, promotion=${summary.artifactSummary.promotionStatus}, handoff=${summary.artifactSummary.handoffStatus}, prDraft=${summary.artifactSummary.prDraftStatus}, liveAcceptance=${summary.artifactSummary.liveAcceptanceStatus}, livePass=${summary.artifactSummary.livePassStatus}, workspace=${summary.artifactSummary.workspaceStatus}`,
     `Worker: status=${summary.workerSummary.workerStatus}, supervision=${summary.workerSummary.supervisionStatus}, workerId=${summary.workerSummary.workerId ?? "none"}, leaseOwner=${summary.workerSummary.leaseOwner ?? "none"}, lastHeartbeat=${summary.workerSummary.lastHeartbeatAt ?? "none"}, lastLeaseRenewal=${summary.workerSummary.lastLeaseRenewalAt ?? "none"}, daemonHeartbeat=${summary.workerSummary.daemonHeartbeatAt ?? "none"}, cancel=${summary.workerSummary.cancellationStatus}, pause=${summary.workerSummary.pauseStatus}, retries=${summary.workerSummary.retryCount}`,
     `Recovery: action=${summary.recoverySummary.action ?? "none"}, reason=${summary.recoverySummary.reason ?? "none"}`,
+    `Status reporting: status=${summary.statusReporting.status}, summary=${summary.statusReporting.summary ?? "none"}`,
     `Blockers: ${summary.blockers.join(" | ") || "none"}`,
     `Missing prerequisites: ${summary.missingPrerequisites.join(", ") || "none"}`,
   ];

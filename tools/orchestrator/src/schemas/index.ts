@@ -201,6 +201,18 @@ export const backendTypeSchema = z.enum(["file", "sqlite", "supabase"]);
 export const backendHealthStatusSchema = z.enum(["unknown", "ready", "degraded", "blocked", "manual_required", "skipped", "failed"]);
 export const transferStatusSchema = z.enum(["not_run", "exported", "imported", "completed", "skipped", "blocked", "manual_required", "failed"]);
 export const repairStatusSchema = z.enum(["not_run", "repaired", "skipped", "manual_required", "failed"]);
+export const sourceEventTypeSchema = z.enum([
+  "none",
+  "issue_opened",
+  "issue_labeled",
+  "pull_request_opened",
+  "pull_request_labeled",
+  "pull_request_synchronize",
+  "issue_comment_command",
+  "workflow_dispatch",
+]);
+export const idempotencyStatusSchema = z.enum(["not_checked", "created", "linked_existing", "duplicate_ignored", "replayed"]);
+export const statusReportStatusSchema = z.enum(["not_run", "payload_ready", "comment_posted", "skipped", "failed"]);
 export const queueStatusSchema = z.enum(["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"]);
 export const cancellationStatusSchema = z.enum(["none", "cancel_requested", "cancelled"]);
 export const pauseStatusSchema = z.enum(["none", "pause_requested", "paused"]);
@@ -389,6 +401,29 @@ export const backendRepairResultSchema = z.object({
   orphanBlockedCount: z.number().int().nonnegative().default(0),
   manualRequiredReasons: z.array(z.string()).default([]),
   summary: z.string(),
+  ranAt: z.string(),
+});
+
+export const sourceEventSummarySchema = z.object({
+  repository: z.string(),
+  branch: z.string().nullable().default(null),
+  issueNumber: z.number().int().positive().nullable().default(null),
+  prNumber: z.number().int().positive().nullable().default(null),
+  commentId: z.number().int().positive().nullable().default(null),
+  label: z.string().nullable().default(null),
+  headSha: z.string().nullable().default(null),
+  command: z.string().nullable().default(null),
+  triggerReason: z.string(),
+});
+
+export const statusReportSummarySchema = z.object({
+  status: statusReportStatusSchema,
+  provider: z.string(),
+  summary: z.string(),
+  markdownPath: z.string().nullable().default(null),
+  payloadPath: z.string().nullable().default(null),
+  targetUrl: z.string().nullable().default(null),
+  targetNumber: z.number().int().positive().nullable().default(null),
   ranAt: z.string(),
 });
 
@@ -607,6 +642,13 @@ export const orchestratorStateSchema = z.object({
   livePassStatus: livePassStatusSchema.default("not_run"),
   backendType: backendTypeSchema.default("file"),
   backendHealthStatus: backendHealthStatusSchema.default("unknown"),
+  sourceEventType: sourceEventTypeSchema.default("none"),
+  sourceEventId: z.string().nullable().default(null),
+  sourceEventSummary: sourceEventSummarySchema.nullable().default(null),
+  idempotencyKey: z.string().nullable().default(null),
+  idempotencyStatus: idempotencyStatusSchema.default("not_checked"),
+  duplicateOfStateId: z.string().nullable().default(null),
+  triggerPolicyId: z.string().nullable().default(null),
   queueStatus: queueStatusSchema.default("not_queued"),
   workerStatus: workerRuntimeStatusSchema.default("idle"),
   cancellationStatus: cancellationStatusSchema.default("none"),
@@ -640,6 +682,8 @@ export const orchestratorStateSchema = z.object({
   lastPrDraftMetadata: prDraftMetadataSchema.nullable().default(null),
   lastGitHubHandoffResult: githubHandoffResultSchema.nullable().default(null),
   lastLiveEvidence: liveEvidenceSchema.nullable().default(null),
+  statusReportStatus: statusReportStatusSchema.default("not_run"),
+  lastStatusReportSummary: statusReportSummarySchema.nullable().default(null),
   lastPreflightResult: preflightResultSchema.nullable().default(null),
   lastBlockedReasons: z.array(blockedReasonSchema).default([]),
   lastAuditTrail: auditTrailSchema.nullable().default(null),
@@ -674,6 +718,11 @@ export type BackendLiveSmokeResult = z.infer<typeof backendLiveSmokeResultSchema
 export type BackendHealthSummary = z.infer<typeof backendHealthSummarySchema>;
 export type BackendTransferSummary = z.infer<typeof backendTransferSummarySchema>;
 export type BackendRepairResult = z.infer<typeof backendRepairResultSchema>;
+export type SourceEventType = z.infer<typeof sourceEventTypeSchema>;
+export type IdempotencyStatus = z.infer<typeof idempotencyStatusSchema>;
+export type StatusReportStatus = z.infer<typeof statusReportStatusSchema>;
+export type SourceEventSummary = z.infer<typeof sourceEventSummarySchema>;
+export type StatusReportSummary = z.infer<typeof statusReportSummarySchema>;
 export type AuditTrail = z.infer<typeof auditTrailSchema>;
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 export type PreflightTarget = z.infer<typeof preflightTargetSchema>;
@@ -1025,6 +1074,13 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "livePassStatus",
     "backendType",
     "backendHealthStatus",
+    "sourceEventType",
+    "sourceEventId",
+    "sourceEventSummary",
+    "idempotencyKey",
+    "idempotencyStatus",
+    "duplicateOfStateId",
+    "triggerPolicyId",
     "exportArtifactPaths",
     "queueStatus",
     "workerStatus",
@@ -1058,6 +1114,8 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastPrDraftMetadata",
     "lastGitHubHandoffResult",
     "lastLiveEvidence",
+    "statusReportStatus",
+    "lastStatusReportSummary",
     "lastAuditTrail",
     "lastHandoffPackagePath",
     "stopReason",
@@ -1246,6 +1304,32 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     },
     backendType: { type: "string", enum: ["file", "sqlite", "supabase"] },
     backendHealthStatus: { type: "string", enum: ["unknown", "ready", "degraded", "blocked", "manual_required", "skipped", "failed"] },
+    sourceEventType: {
+      type: "string",
+      enum: ["none", "issue_opened", "issue_labeled", "pull_request_opened", "pull_request_labeled", "pull_request_synchronize", "issue_comment_command", "workflow_dispatch"],
+    },
+    sourceEventId: { type: "string", nullable: true },
+    sourceEventSummary: {
+      type: "object",
+      nullable: true,
+      required: ["repository", "branch", "issueNumber", "prNumber", "commentId", "label", "headSha", "command", "triggerReason"],
+      additionalProperties: false,
+      properties: {
+        repository: { type: "string" },
+        branch: { type: "string", nullable: true },
+        issueNumber: { type: "number", nullable: true },
+        prNumber: { type: "number", nullable: true },
+        commentId: { type: "number", nullable: true },
+        label: { type: "string", nullable: true },
+        headSha: { type: "string", nullable: true },
+        command: { type: "string", nullable: true },
+        triggerReason: { type: "string" },
+      },
+    },
+    idempotencyKey: { type: "string", nullable: true },
+    idempotencyStatus: { type: "string", enum: ["not_checked", "created", "linked_existing", "duplicate_ignored", "replayed"] },
+    duplicateOfStateId: { type: "string", nullable: true },
+    triggerPolicyId: { type: "string", nullable: true },
     queueStatus: {
       type: "string",
       enum: ["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"],
@@ -1529,6 +1613,26 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         toolLogPath: { type: "string", nullable: true },
         commandLogPath: { type: "string", nullable: true },
         patchArtifactPath: { type: "string", nullable: true },
+      },
+    },
+    statusReportStatus: {
+      type: "string",
+      enum: ["not_run", "payload_ready", "comment_posted", "skipped", "failed"],
+    },
+    lastStatusReportSummary: {
+      type: "object",
+      nullable: true,
+      required: ["status", "provider", "summary", "markdownPath", "payloadPath", "targetUrl", "targetNumber", "ranAt"],
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["not_run", "payload_ready", "comment_posted", "skipped", "failed"] },
+        provider: { type: "string" },
+        summary: { type: "string" },
+        markdownPath: { type: "string", nullable: true },
+        payloadPath: { type: "string", nullable: true },
+        targetUrl: { type: "string", nullable: true },
+        targetNumber: { type: "number", nullable: true },
+        ranAt: { type: "string" },
       },
     },
     lastPreflightResult: {
