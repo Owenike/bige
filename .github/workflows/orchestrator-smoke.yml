@@ -89,7 +89,10 @@ jobs:
           npm run test:orchestrator:github-live-comment
           npm run test:orchestrator:github-live-auth-smoke
           npm run test:orchestrator:github-live-auth-matrix
+          npm run test:orchestrator:github-live-auth-success
           npm run test:orchestrator:github-live-targeting
+          npm run test:orchestrator:github-sandbox-targets
+          npm run test:orchestrator:github-live-auth-evidence
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary

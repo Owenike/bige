@@ -46,6 +46,7 @@ import {
 import { formatReportDeliveryAttempts } from "./reporting-audit";
 import { runGitHubLiveAuthSmoke } from "./github-live-auth";
 import { selectGitHubLiveSmokeTarget } from "./github-live-targets";
+import { describeGitHubSandboxTargetRegistry, loadGitHubSandboxTargetRegistry, resolveGitHubSandboxTarget } from "./github-sandbox-targets";
 import { ingestGitHubWebhook } from "./webhook";
 import { formatWebhookHostingConfig, loadWebhookHostingConfig } from "./runtime-config";
 import { formatWebhookShutdownSummary, startWebhookHosting } from "./webhook-hosting";
@@ -239,6 +240,12 @@ function normalizeCliValue(value: string) {
 
 function getOption(options: Map<string, string>, key: string, fallback: string) {
   return normalizeCliValue(options.get(key) ?? fallback);
+}
+
+async function loadSandboxRegistryFromOptions(options: Map<string, string>) {
+  return loadGitHubSandboxTargetRegistry({
+    configPath: options.get("sandbox-config") ?? null,
+  });
 }
 
 async function main() {
@@ -610,8 +617,11 @@ async function main() {
   }
 
   if (command === "reporting:target-check") {
-    const result = selectGitHubLiveSmokeTarget({
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const registryResolution = resolveGitHubSandboxTarget({
       state: existingState,
+      loadedRegistry: sandboxRegistry,
+      requestedProfileId: options.get("sandbox-profile") ?? null,
       requestedTarget: {
         repository: options.get("target-repo") ?? null,
         targetType: options.has("target-type")
@@ -621,16 +631,24 @@ async function main() {
         allowCorrelatedReuse: getOption(options, "allow-correlated-reuse", "false") === "true",
       },
     });
+    const result =
+      registryResolution.status === "resolved"
+        ? selectGitHubLiveSmokeTarget({
+            state: existingState,
+            requestedTarget: registryResolution.requestedTarget,
+          })
+        : null;
     process.stdout.write(
       [
-        `GitHub auth smoke target: ${result.status}`,
-        `Mode: ${result.mode}`,
-        `Action: ${result.attemptedAction}`,
-        `Target: ${result.target.targetType ?? "none"} ${result.target.repository ?? "none"}#${result.target.targetNumber ?? "none"}`,
-        `Summary: ${result.summary}`,
-        `Next action: ${result.suggestedNextAction}`,
+        `Sandbox registry: ${describeGitHubSandboxTargetRegistry(sandboxRegistry)}`,
+        `Registry resolution: ${registryResolution.status} / profile=${registryResolution.profileId ?? "none"} / source=${registryResolution.configSource}`,
+        `Registry summary: ${registryResolution.summary}`,
+        result
+          ? `GitHub auth smoke target: ${result.status} / mode=${result.mode} / action=${result.attemptedAction} / target=${result.target.targetType ?? "none"} ${result.target.repository ?? "none"}#${result.target.targetNumber ?? "none"}`
+          : "GitHub auth smoke target: unresolved",
+        `Next action: ${result?.suggestedNextAction ?? registryResolution.suggestedNextAction}`,
         "",
-        JSON.stringify(result, null, 2),
+        JSON.stringify({ sandboxRegistry, registryResolution, result }, null, 2),
       ].join("\n"),
     );
     return;
@@ -638,6 +656,7 @@ async function main() {
 
   if (command === "reporting:auth-smoke") {
     const outputRoot = getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report"));
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
     const adapter = new GhCliStatusReportingAdapter({
       enabled: getOption(options, "enabled", "true") === "true",
       token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
@@ -648,6 +667,8 @@ async function main() {
       adapter,
       enabled: getOption(options, "enabled", "true") === "true",
       token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+      sandboxRegistry,
+      sandboxProfileId: options.get("sandbox-profile") ?? null,
       requestedTarget: {
         repository: options.get("target-repo") ?? null,
         targetType: options.has("target-type")
@@ -664,6 +685,7 @@ async function main() {
         `Mode: ${result.result.mode}`,
         `Action: ${result.result.attemptedAction}`,
         `Target: ${result.result.target.targetType ?? "none"} ${result.result.target.repository ?? "none"}#${result.result.target.targetNumber ?? "none"}`,
+        `Sandbox profile: ${result.state.sandboxTargetProfileId ?? "none"} / config=${result.state.sandboxTargetConfigVersion ?? "none"}`,
         `Summary: ${result.result.summary}`,
         `Next action: ${result.result.suggestedNextAction}`,
         `Evidence: ${result.evidencePath}`,
@@ -1059,8 +1081,8 @@ async function main() {
       "  node cli.js github-live-report:smoke --state-id default",
       "  node cli.js reporting:smoke --state-id default",
       "  node cli.js reporting:permissions --state-id default",
-      "  node cli.js reporting:target-check --state-id default --target-repo example/bige --target-type issue --target-number 1",
-      "  node cli.js reporting:auth-smoke --state-id default --target-repo example/bige --target-type issue --target-number 1",
+      "  node cli.js reporting:target-check --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
+      "  node cli.js reporting:auth-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:status --state-id default",
       "  node cli.js reporting:audit --state-id default",
       "  node cli.js queue:enqueue --state-id default --priority 10",

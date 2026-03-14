@@ -81,11 +81,15 @@ export type OrchestratorDiagnostics = {
     lastAuditId: string | null;
     recentAttempts: string[];
     authSmokeStatus: OrchestratorState["authSmokeStatus"];
+    authSmokeSuccessStatus: OrchestratorState["authSmokeSuccessStatus"];
     authSmokeMode: OrchestratorState["authSmokeMode"];
     authSmokePermissionResult: OrchestratorState["authSmokePermissionResult"];
     authSmokeFailureReason: string | null;
     targetSelectionStatus: OrchestratorState["targetSelectionStatus"];
     authSmokeTarget: string | null;
+    sandboxTargetProfileId: string | null;
+    sandboxTargetConfigVersion: string | null;
+    authSmokeEvidencePath: string | null;
   };
   nextSuggestedAction: string;
 };
@@ -225,6 +229,7 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
             `${attempt.attemptedAt} ${attempt.action} ${attempt.targetType}:${attempt.targetId ?? "none"} ${attempt.permissionCheckResult} ${attempt.failureReason ?? "ok"}`,
         ),
       authSmokeStatus: state.authSmokeStatus,
+      authSmokeSuccessStatus: state.authSmokeSuccessStatus,
       authSmokeMode: state.authSmokeMode,
       authSmokePermissionResult: state.authSmokePermissionResult,
       authSmokeFailureReason: state.authSmokeFailureReason,
@@ -232,6 +237,9 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
       authSmokeTarget: state.authSmokeTarget
         ? `${state.authSmokeTarget.repository ?? "none"}:${state.authSmokeTarget.targetType ?? "none"}:${state.authSmokeTarget.targetNumber ?? "none"}`
         : null,
+      sandboxTargetProfileId: state.sandboxTargetProfileId,
+      sandboxTargetConfigVersion: state.sandboxTargetConfigVersion,
+      authSmokeEvidencePath: state.lastAuthSmokeEvidencePath,
     },
     nextSuggestedAction: resolveNextSuggestedAction(state, preflight),
   } satisfies OrchestratorDiagnostics;
@@ -251,7 +259,7 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     `Worker: status=${summary.workerSummary.workerStatus}, supervision=${summary.workerSummary.supervisionStatus}, workerId=${summary.workerSummary.workerId ?? "none"}, leaseOwner=${summary.workerSummary.leaseOwner ?? "none"}, lastHeartbeat=${summary.workerSummary.lastHeartbeatAt ?? "none"}, lastLeaseRenewal=${summary.workerSummary.lastLeaseRenewalAt ?? "none"}, daemonHeartbeat=${summary.workerSummary.daemonHeartbeatAt ?? "none"}, cancel=${summary.workerSummary.cancellationStatus}, pause=${summary.workerSummary.pauseStatus}, retries=${summary.workerSummary.retryCount}`,
     `Recovery: action=${summary.recoverySummary.action ?? "none"}, reason=${summary.recoverySummary.reason ?? "none"}`,
     `Status reporting: status=${summary.statusReporting.status}, readiness=${summary.statusReporting.readiness}, readinessStatus=${summary.statusReporting.readinessStatus}, live=${summary.statusReporting.liveStatus}, permission=${summary.statusReporting.permissionStatus}, action=${summary.statusReporting.action}, strategy=${summary.statusReporting.targetStrategy}, correlation=${summary.statusReporting.correlationId ?? "none"}, target=${summary.statusReporting.target ?? "none"}, audit=${summary.statusReporting.lastAuditId ?? "none"}, failure=${summary.statusReporting.failureReason ?? "none"}, summary=${summary.statusReporting.summary ?? "none"}`,
-    `Auth smoke: status=${summary.statusReporting.authSmokeStatus}, mode=${summary.statusReporting.authSmokeMode}, permission=${summary.statusReporting.authSmokePermissionResult}, selection=${summary.statusReporting.targetSelectionStatus}, target=${summary.statusReporting.authSmokeTarget ?? "none"}, failure=${summary.statusReporting.authSmokeFailureReason ?? "none"}`,
+    `Auth smoke: status=${summary.statusReporting.authSmokeStatus}, success=${summary.statusReporting.authSmokeSuccessStatus}, mode=${summary.statusReporting.authSmokeMode}, permission=${summary.statusReporting.authSmokePermissionResult}, selection=${summary.statusReporting.targetSelectionStatus}, target=${summary.statusReporting.authSmokeTarget ?? "none"}, profile=${summary.statusReporting.sandboxTargetProfileId ?? "none"}, config=${summary.statusReporting.sandboxTargetConfigVersion ?? "none"}, evidence=${summary.statusReporting.authSmokeEvidencePath ?? "none"}, failure=${summary.statusReporting.authSmokeFailureReason ?? "none"}`,
     `Blockers: ${summary.blockers.join(" | ") || "none"}`,
     `Missing prerequisites: ${summary.missingPrerequisites.join(", ") || "none"}`,
   ];

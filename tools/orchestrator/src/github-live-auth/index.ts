@@ -1,8 +1,14 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { reportStateStatus, applyStatusReportToState, runGitHubReportPermissionSmoke, type StatusReportingAdapter } from "../status-reporting";
-import { orchestratorStateSchema, type GitHubAuthSmokeResult, type OrchestratorState } from "../schemas";
-import { selectGitHubLiveSmokeTarget, type RequestedGitHubSandboxTarget } from "../github-live-targets";
+import {
+  orchestratorStateSchema,
+  type GitHubAuthSmokeResult,
+  type GitHubLiveAuthEvidence,
+  type OrchestratorState,
+} from "../schemas";
+import { selectGitHubLiveSmokeTarget, type GitHubLiveTargetSelectionResult, type RequestedGitHubSandboxTarget } from "../github-live-targets";
+import { resolveGitHubSandboxTarget, type LoadedGitHubSandboxTargetRegistry } from "../github-sandbox-targets";
 
 export async function runGitHubLiveAuthSmoke(params: {
   state: OrchestratorState;
@@ -11,6 +17,8 @@ export async function runGitHubLiveAuthSmoke(params: {
   enabled: boolean;
   token: string | null;
   requestedTarget?: RequestedGitHubSandboxTarget | null;
+  sandboxRegistry?: LoadedGitHubSandboxTargetRegistry | null;
+  sandboxProfileId?: string | null;
   execFileImpl?: (
     file: string,
     args: readonly string[],
@@ -22,10 +30,13 @@ export async function runGitHubLiveAuthSmoke(params: {
     stderr: string;
   }>;
 }) {
-  const selection = selectGitHubLiveSmokeTarget({
+  const registryResolution = resolveGitHubSandboxTarget({
     state: params.state,
+    loadedRegistry: params.sandboxRegistry,
     requestedTarget: params.requestedTarget,
+    requestedProfileId: params.sandboxProfileId ?? null,
   });
+  const selection = applySandboxActionPolicy(resolveSelection(params.state, registryResolution), registryResolution);
   const permissionSmoke = await runGitHubReportPermissionSmoke({
     state:
       selection.target.repository && selection.target.targetNumber && selection.target.targetType
@@ -49,7 +60,7 @@ export async function runGitHubLiveAuthSmoke(params: {
       mode: "readiness_only",
       target: selection.target,
       attemptedAction: "blocked",
-      permissionResult: selection.permissionResult,
+      permissionResult: selection.permissionResult === "ready" ? "blocked" : selection.permissionResult,
       failureReason: selection.failureReason,
       providerUsed: permissionSmoke.providerUsed,
       evidencePath,
@@ -80,6 +91,7 @@ export async function runGitHubLiveAuthSmoke(params: {
     });
     let finalSummary = first;
     let action: "create" | "update" = selection.attemptedAction === "update" ? "update" : "create";
+
     if (first.status === "comment_created") {
       const createdState = applyStatusReportToState(sandboxState, first);
       const second = await reportStateStatus({
@@ -93,6 +105,7 @@ export async function runGitHubLiveAuthSmoke(params: {
     } else {
       nextState = applyStatusReportToState(params.state, first);
     }
+
     result = {
       status:
         finalSummary.status === "comment_created" || finalSummary.status === "comment_updated"
@@ -118,8 +131,17 @@ export async function runGitHubLiveAuthSmoke(params: {
     };
   }
 
-  await writeFile(evidencePath, `${JSON.stringify({ selection, permissionSmoke, result }, null, 2)}\n`, "utf8");
-  const updatedState = applyGitHubAuthSmokeToState(nextState, result);
+  const evidence = buildGitHubAuthSmokeEvidence({
+    result,
+    selection,
+    registryResolution,
+  });
+  await writeFile(
+    evidencePath,
+    `${JSON.stringify({ selection, registryResolution, permissionSmoke, result, evidence }, null, 2)}\n`,
+    "utf8",
+  );
+  const updatedState = applyGitHubAuthSmokeToState(nextState, result, evidence);
   return {
     result,
     state: updatedState,
@@ -127,7 +149,119 @@ export async function runGitHubLiveAuthSmoke(params: {
   };
 }
 
-function withSandboxTarget(state: OrchestratorState, selection: ReturnType<typeof selectGitHubLiveSmokeTarget>) {
+function resolveSelection(
+  state: OrchestratorState,
+  registryResolution: ReturnType<typeof resolveGitHubSandboxTarget>,
+): GitHubLiveTargetSelectionResult {
+  if (registryResolution.status === "resolved") {
+    return selectGitHubLiveSmokeTarget({
+      state,
+      requestedTarget: registryResolution.requestedTarget,
+    });
+  }
+
+  const fallbackStatus = registryResolution.status as "blocked" | "manual_required";
+  return {
+    status: fallbackStatus,
+    target: {
+      repository: null,
+      targetType: null,
+      targetNumber: null,
+      commentId: null,
+      selectionStatus: fallbackStatus,
+      selectionSummary: registryResolution.summary,
+    },
+    mode: "none",
+    attemptedAction: "none",
+    permissionResult: "blocked",
+    failureReason: registryResolution.failureReason,
+    summary: registryResolution.summary,
+    suggestedNextAction: registryResolution.suggestedNextAction,
+  } satisfies GitHubLiveTargetSelectionResult;
+}
+
+function applySandboxActionPolicy(
+  selection: GitHubLiveTargetSelectionResult,
+  registryResolution: ReturnType<typeof resolveGitHubSandboxTarget>,
+) {
+  if (registryResolution.status !== "resolved" || !registryResolution.actionPolicy) {
+    return selection;
+  }
+
+  if (registryResolution.actionPolicy === "create_only" && selection.attemptedAction === "update") {
+    return {
+      ...selection,
+      status: "blocked",
+      mode: "none",
+      attemptedAction: "none",
+      permissionResult: "blocked",
+      failureReason: "github_auth_smoke_update_disallowed_by_sandbox_policy",
+      summary: "GitHub live auth smoke is blocked because the selected sandbox target only permits create.",
+      suggestedNextAction: "Choose a sandbox target that allows update, or clear the correlated target so the smoke can create a fresh comment.",
+      target: {
+        ...selection.target,
+        selectionStatus: "blocked",
+        selectionSummary: "Sandbox target policy permits create only.",
+      },
+    } satisfies GitHubLiveTargetSelectionResult;
+  }
+
+  if (registryResolution.actionPolicy === "update_only" && selection.attemptedAction === "create") {
+    return {
+      ...selection,
+      status: "blocked",
+      mode: "none",
+      attemptedAction: "none",
+      permissionResult: "blocked",
+      failureReason: "github_auth_smoke_create_disallowed_by_sandbox_policy",
+      summary: "GitHub live auth smoke is blocked because the selected sandbox target only permits update.",
+      suggestedNextAction: "Reuse a correlated target that already has a comment, or change the sandbox target policy to allow create.",
+      target: {
+        ...selection.target,
+        selectionStatus: "blocked",
+        selectionSummary: "Sandbox target policy permits update only.",
+      },
+    } satisfies GitHubLiveTargetSelectionResult;
+  }
+
+  return selection;
+}
+
+function buildGitHubAuthSmokeEvidence(params: {
+  result: GitHubAuthSmokeResult;
+  selection: GitHubLiveTargetSelectionResult;
+  registryResolution: ReturnType<typeof resolveGitHubSandboxTarget>;
+}): GitHubLiveAuthEvidence {
+  const targetReference =
+    params.result.target.repository && params.result.target.targetType && params.result.target.targetNumber
+      ? `${params.result.target.repository}:${params.result.target.targetType}:${params.result.target.targetNumber}`
+      : null;
+
+  return {
+    attemptedAt: params.result.ranAt,
+    sandboxTargetProfileId: params.registryResolution.profileId,
+    sandboxTargetConfigVersion: params.registryResolution.configVersion,
+    sandboxTargetConfigSource: params.registryResolution.configSource,
+    targetSelectionStatus: params.result.target.selectionStatus,
+    targetSelectionSummary: params.selection.summary,
+    permissionResult: params.result.permissionResult,
+    action:
+      params.result.status === "passed"
+        ? "success"
+        : params.result.status === "failed"
+          ? "failed"
+          : params.result.attemptedAction,
+    providerUsed: params.result.providerUsed,
+    target: params.result.target,
+    lastCommentId: params.result.target.commentId,
+    targetReference,
+    failureReason: params.result.failureReason,
+    summary: params.result.summary,
+    suggestedNextAction: params.result.suggestedNextAction,
+  };
+}
+
+function withSandboxTarget(state: OrchestratorState, selection: GitHubLiveTargetSelectionResult) {
   const target = selection.target;
   return orchestratorStateSchema.parse({
     ...state,
@@ -159,16 +293,26 @@ function withSandboxTarget(state: OrchestratorState, selection: ReturnType<typeo
   });
 }
 
-export function applyGitHubAuthSmokeToState(state: OrchestratorState, result: GitHubAuthSmokeResult) {
+export function applyGitHubAuthSmokeToState(state: OrchestratorState, result: GitHubAuthSmokeResult, evidence: GitHubLiveAuthEvidence) {
   return orchestratorStateSchema.parse({
     ...state,
     authSmokeStatus: result.status,
+    authSmokeSuccessStatus: result.status === "passed" ? "success" : result.status === "not_run" ? "not_run" : "non_success",
     authSmokeMode: result.mode,
     authSmokeTarget: result.target,
     authSmokePermissionResult: result.permissionResult,
     authSmokeFailureReason: result.failureReason,
+    sandboxTargetProfileId: evidence.sandboxTargetProfileId,
+    sandboxTargetConfigVersion: evidence.sandboxTargetConfigVersion,
     targetSelectionStatus: result.target.selectionStatus,
+    lastAuthSmokeTarget: result.target,
+    lastAuthSmokeAction:
+      result.attemptedAction === "create" || result.attemptedAction === "update" || result.attemptedAction === "skip" || result.attemptedAction === "blocked"
+        ? result.attemptedAction
+        : "none",
+    lastAuthSmokeEvidencePath: result.evidencePath,
     lastLiveSmokeEvidencePath: result.evidencePath,
+    lastLiveAuthEvidence: evidence,
     lastGitHubAuthSmokeResult: result,
     updatedAt: result.ranAt,
   });

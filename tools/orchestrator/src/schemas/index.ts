@@ -613,6 +613,39 @@ export const githubAuthSmokeResultSchema = z.object({
   ranAt: z.string(),
 });
 
+export const githubSandboxActionPolicySchema = z.enum(["create_or_update", "create_only", "update_only"]);
+
+export const githubSandboxTargetProfileSchema = z.object({
+  repository: z.string(),
+  targetType: z.enum(["issue", "pull_request"]),
+  targetNumber: z.number().int().positive(),
+  actionPolicy: githubSandboxActionPolicySchema.default("create_or_update"),
+});
+
+export const githubSandboxTargetRegistrySchema = z.object({
+  version: z.string().default("default-empty-v1"),
+  defaultProfileId: z.string().nullable().default(null),
+  profiles: z.record(z.string(), githubSandboxTargetProfileSchema).default({}),
+});
+
+export const githubLiveAuthEvidenceSchema = z.object({
+  attemptedAt: z.string(),
+  sandboxTargetProfileId: z.string().nullable().default(null),
+  sandboxTargetConfigVersion: z.string().nullable().default(null),
+  sandboxTargetConfigSource: z.enum(["default", "env", "file", "explicit_override"]).default("default"),
+  targetSelectionStatus: githubTargetSelectionStatusSchema.default("unknown"),
+  targetSelectionSummary: z.string().nullable().default(null),
+  permissionResult: statusReportPermissionStatusSchema.default("unknown"),
+  action: z.enum(["none", "create", "update", "skip", "blocked", "failed", "success"]).default("none"),
+  providerUsed: z.string(),
+  target: githubAuthSmokeTargetSchema.nullable().default(null),
+  lastCommentId: z.number().int().positive().nullable().default(null),
+  targetReference: z.string().nullable().default(null),
+  failureReason: z.string().nullable().default(null),
+  summary: z.string(),
+  suggestedNextAction: z.string().nullable().default(null),
+});
+
 export const blockedReasonSchema = z.object({
   code: z.string(),
   summary: z.string(),
@@ -898,12 +931,19 @@ export const orchestratorStateSchema = z.object({
   reportDeliveryAttempts: z.array(reportDeliveryAttemptSchema).default([]),
   lastReportDeliveryAuditId: z.string().nullable().default(null),
   authSmokeStatus: githubAuthSmokeStatusSchema.default("not_run"),
+  authSmokeSuccessStatus: z.enum(["not_run", "success", "non_success"]).default("not_run"),
   authSmokeMode: githubAuthSmokeModeSchema.default("none"),
   authSmokeTarget: githubAuthSmokeTargetSchema.nullable().default(null),
   authSmokePermissionResult: statusReportPermissionStatusSchema.default("unknown"),
   authSmokeFailureReason: z.string().nullable().default(null),
+  sandboxTargetProfileId: z.string().nullable().default(null),
+  sandboxTargetConfigVersion: z.string().nullable().default(null),
   targetSelectionStatus: githubTargetSelectionStatusSchema.default("unknown"),
+  lastAuthSmokeTarget: githubAuthSmokeTargetSchema.nullable().default(null),
+  lastAuthSmokeAction: z.enum(["none", "create", "update", "skip", "blocked"]).default("none"),
+  lastAuthSmokeEvidencePath: z.string().nullable().default(null),
   lastLiveSmokeEvidencePath: z.string().nullable().default(null),
+  lastLiveAuthEvidence: githubLiveAuthEvidenceSchema.nullable().default(null),
   lastGitHubAuthSmokeResult: githubAuthSmokeResultSchema.nullable().default(null),
   lastPreflightResult: preflightResultSchema.nullable().default(null),
   lastBlockedReasons: z.array(blockedReasonSchema).default([]),
@@ -965,6 +1005,10 @@ export type GitHubAuthSmokeMode = z.infer<typeof githubAuthSmokeModeSchema>;
 export type GitHubTargetSelectionStatus = z.infer<typeof githubTargetSelectionStatusSchema>;
 export type GitHubAuthSmokeTarget = z.infer<typeof githubAuthSmokeTargetSchema>;
 export type GitHubAuthSmokeResult = z.infer<typeof githubAuthSmokeResultSchema>;
+export type GitHubSandboxActionPolicy = z.infer<typeof githubSandboxActionPolicySchema>;
+export type GitHubSandboxTargetProfile = z.infer<typeof githubSandboxTargetProfileSchema>;
+export type GitHubSandboxTargetRegistry = z.infer<typeof githubSandboxTargetRegistrySchema>;
+export type GitHubLiveAuthEvidence = z.infer<typeof githubLiveAuthEvidenceSchema>;
 export type AuditTrail = z.infer<typeof auditTrailSchema>;
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 export type PreflightTarget = z.infer<typeof preflightTargetSchema>;
@@ -1508,12 +1552,19 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "reportDeliveryAttempts",
     "lastReportDeliveryAuditId",
     "authSmokeStatus",
+    "authSmokeSuccessStatus",
     "authSmokeMode",
     "authSmokeTarget",
     "authSmokePermissionResult",
     "authSmokeFailureReason",
+    "sandboxTargetProfileId",
+    "sandboxTargetConfigVersion",
     "targetSelectionStatus",
+    "lastAuthSmokeTarget",
+    "lastAuthSmokeAction",
+    "lastAuthSmokeEvidencePath",
     "lastLiveSmokeEvidencePath",
+    "lastLiveAuthEvidence",
     "lastGitHubAuthSmokeResult",
     "lastAuditTrail",
     "lastHandoffPackagePath",
@@ -2179,6 +2230,10 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       type: "string",
       enum: ["not_run", "skipped", "passed", "failed", "blocked", "manual_required"],
     },
+    authSmokeSuccessStatus: {
+      type: "string",
+      enum: ["not_run", "success", "non_success"],
+    },
     authSmokeMode: {
       type: "string",
       enum: ["none", "readiness_only", "sandbox_issue", "sandbox_pull_request", "correlated_reuse"],
@@ -2202,11 +2257,81 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "target_not_found", "create_denied", "update_denied", "target_locked_or_not_updatable", "correlation_target_missing", "correlation_not_updatable", "repository_mismatch", "blocked"],
     },
     authSmokeFailureReason: { type: "string", nullable: true },
+    sandboxTargetProfileId: { type: "string", nullable: true },
+    sandboxTargetConfigVersion: { type: "string", nullable: true },
     targetSelectionStatus: {
       type: "string",
       enum: ["unknown", "sandbox_explicit", "correlated_reuse", "blocked", "manual_required"],
     },
+    lastAuthSmokeTarget: {
+      type: "object",
+      nullable: true,
+      required: ["repository", "targetType", "targetNumber", "commentId", "selectionStatus", "selectionSummary"],
+      additionalProperties: false,
+      properties: {
+        repository: { type: "string", nullable: true },
+        targetType: { type: "string", enum: ["issue", "pull_request"], nullable: true },
+        targetNumber: { type: "number", nullable: true },
+        commentId: { type: "number", nullable: true },
+        selectionStatus: { type: "string", enum: ["unknown", "sandbox_explicit", "correlated_reuse", "blocked", "manual_required"] },
+        selectionSummary: { type: "string", nullable: true },
+      },
+    },
+    lastAuthSmokeAction: { type: "string", enum: ["none", "create", "update", "skip", "blocked"] },
+    lastAuthSmokeEvidencePath: { type: "string", nullable: true },
     lastLiveSmokeEvidencePath: { type: "string", nullable: true },
+    lastLiveAuthEvidence: {
+      type: "object",
+      nullable: true,
+      required: [
+        "attemptedAt",
+        "sandboxTargetProfileId",
+        "sandboxTargetConfigVersion",
+        "sandboxTargetConfigSource",
+        "targetSelectionStatus",
+        "targetSelectionSummary",
+        "permissionResult",
+        "action",
+        "providerUsed",
+        "target",
+        "lastCommentId",
+        "targetReference",
+        "failureReason",
+        "summary",
+        "suggestedNextAction",
+      ],
+      additionalProperties: false,
+      properties: {
+        attemptedAt: { type: "string" },
+        sandboxTargetProfileId: { type: "string", nullable: true },
+        sandboxTargetConfigVersion: { type: "string", nullable: true },
+        sandboxTargetConfigSource: { type: "string", enum: ["default", "env", "file", "explicit_override"] },
+        targetSelectionStatus: { type: "string", enum: ["unknown", "sandbox_explicit", "correlated_reuse", "blocked", "manual_required"] },
+        targetSelectionSummary: { type: "string", nullable: true },
+        permissionResult: { type: "string", enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "target_not_found", "create_denied", "update_denied", "target_locked_or_not_updatable", "correlation_target_missing", "correlation_not_updatable", "repository_mismatch", "blocked"] },
+        action: { type: "string", enum: ["none", "create", "update", "skip", "blocked", "failed", "success"] },
+        providerUsed: { type: "string" },
+        target: {
+          type: "object",
+          nullable: true,
+          required: ["repository", "targetType", "targetNumber", "commentId", "selectionStatus", "selectionSummary"],
+          additionalProperties: false,
+          properties: {
+            repository: { type: "string", nullable: true },
+            targetType: { type: "string", enum: ["issue", "pull_request"], nullable: true },
+            targetNumber: { type: "number", nullable: true },
+            commentId: { type: "number", nullable: true },
+            selectionStatus: { type: "string", enum: ["unknown", "sandbox_explicit", "correlated_reuse", "blocked", "manual_required"] },
+            selectionSummary: { type: "string", nullable: true },
+          },
+        },
+        lastCommentId: { type: "number", nullable: true },
+        targetReference: { type: "string", nullable: true },
+        failureReason: { type: "string", nullable: true },
+        summary: { type: "string" },
+        suggestedNextAction: { type: "string", nullable: true },
+      },
+    },
     lastGitHubAuthSmokeResult: {
       type: "object",
       nullable: true,

@@ -404,16 +404,23 @@ Live auth smoke:
 - required prerequisites:
   - `GITHUB_TOKEN` or `GH_TOKEN`
   - `gh` on `PATH`
-  - an explicit sandbox target via `--target-repo`, `--target-type`, `--target-number`, or an explicitly allowed correlated target reuse
+  - a safe sandbox target via explicit CLI override or sandbox target registry/profile
 - without an explicit sandbox target, auth smoke returns `manual_required` instead of guessing a real thread
 - smoke metadata now persists:
   - `authSmokeStatus`
+  - `authSmokeSuccessStatus`
   - `authSmokeMode`
   - `authSmokeTarget`
   - `authSmokePermissionResult`
   - `authSmokeFailureReason`
+  - `sandboxTargetProfileId`
+  - `sandboxTargetConfigVersion`
   - `targetSelectionStatus`
+  - `lastAuthSmokeTarget`
+  - `lastAuthSmokeAction`
+  - `lastAuthSmokeEvidencePath`
   - `lastLiveSmokeEvidencePath`
+  - `lastLiveAuthEvidence`
   - `lastGitHubAuthSmokeResult`
 
 Denied / blocked matrix:
@@ -440,9 +447,9 @@ Local smoke:
 npm run orchestrator:status:report -- --state-id demo
 npm run orchestrator:github-live-report:smoke -- --state-id demo
 npm run orchestrator:reporting:smoke -- --state-id demo
-node .tmp/orchestrator/src/cli.js reporting:target-check --state-id demo --target-repo example/bige --target-type issue --target-number 1
+node .tmp/orchestrator/src/cli.js reporting:target-check --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js reporting:permissions --state-id demo
-node .tmp/orchestrator/src/cli.js reporting:auth-smoke --state-id demo --target-repo example/bige --target-type issue --target-number 1
+node .tmp/orchestrator/src/cli.js reporting:auth-smoke --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 ```
 
 The smoke path is intentionally gated:
@@ -458,6 +465,37 @@ Sandbox target rules:
 - `blocked`: the explicit target conflicts with the known correlated repository, or the thread cannot be safely updated
 - `manual_required`: no safe sandbox target was supplied, so the orchestrator refuses to guess a live thread
 
+Sandbox target registry:
+- the registry can come from JSON config or env-derived defaults
+- supported fields per profile:
+  - `repository`
+  - `targetType`
+  - `targetNumber`
+  - `actionPolicy` = `create_or_update`, `create_only`, or `update_only`
+- resolution order:
+  - explicit CLI override
+  - explicit `--sandbox-profile`
+  - current task profile id
+  - registry default profile
+- if no safe registry target exists, auth smoke returns `manual_required`
+- if policy and correlated target disagree, auth smoke returns `blocked`
+
+Minimal registry example:
+```json
+{
+  "version": "sandbox-v1",
+  "defaultProfileId": "default",
+  "profiles": {
+    "default": {
+      "repository": "example/bige",
+      "targetType": "issue",
+      "targetNumber": 101,
+      "actionPolicy": "create_or_update"
+    }
+  }
+}
+```
+
 Delivery audit:
 - every status reporting attempt records an audit entry with action, target, correlation id, readiness, permission result, provider, failure reason, and suggested next action
 - recent attempts are persisted in `reportDeliveryAttempts`
@@ -470,8 +508,8 @@ npm run orchestrator:diagnostics -- --state-id demo
 node .tmp/orchestrator/src/cli.js reporting:status --state-id demo
 node .tmp/orchestrator/src/cli.js reporting:audit --state-id demo
 node .tmp/orchestrator/src/cli.js reporting:permissions --state-id demo
-node .tmp/orchestrator/src/cli.js reporting:target-check --state-id demo --target-repo example/bige --target-type issue --target-number 1
-node .tmp/orchestrator/src/cli.js reporting:auth-smoke --state-id demo --target-repo example/bige --target-type issue --target-number 1
+node .tmp/orchestrator/src/cli.js reporting:target-check --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
+node .tmp/orchestrator/src/cli.js reporting:auth-smoke --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 ```
 
 Typical next actions:
@@ -480,6 +518,20 @@ Typical next actions:
 - invalid target -> re-run from a valid issue/PR thread or let the next create path recreate correlation
 - update denied / correlation not updatable -> use a token that can patch the correlated comment, or clear the stale target and recreate it
 - no sandbox target -> provide explicit `--target-repo`, `--target-type`, `--target-number`, or intentionally allow correlated reuse for a known-safe thread
+- no sandbox registry profile -> add a registry profile for the current orchestrator task profile, or pass `--sandbox-profile`
+
+Live auth evidence:
+- every auth smoke run writes a JSON evidence file and stores its path in `lastAuthSmokeEvidencePath`
+- evidence captures:
+  - attempted time
+  - sandbox profile/config version
+  - target selection result
+  - permission result
+  - final action (`success`, `failed`, `skip`, `blocked`)
+  - provider used
+  - last comment id / target reference
+  - failure reason / next action
+- this path is safe to inspect even when auth smoke is blocked or skipped
 
 ## Inbound Audit
 Every accepted, rejected, ignored, or duplicate webhook intake now records inbound audit metadata.
