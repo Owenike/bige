@@ -164,6 +164,9 @@ test("comment command webhook can route to status reporting for an existing thre
           targetNumber: params.targetNumber,
           commentId: 123,
           correlationId: "orchestrator-status:issue-12-task",
+          readiness: "ready",
+          targetKind: "issue_comment",
+          failureReason: null,
           action: "created",
           ranAt: new Date().toISOString(),
         };

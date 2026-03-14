@@ -35,11 +35,12 @@ export function deriveStatusReportTarget(params: {
   targetUrl: string | null;
   targetNumber: number | null;
   commentId: number | null;
+  targetKind?: StatusReportTarget["kind"] | null;
   updatedAt: string;
 }): StatusReportTarget {
   const source = params.state.sourceEventSummary;
   return {
-    kind: source?.prNumber ? "pull_request_comment" : source?.issueNumber ? "issue_comment" : "artifact_only",
+    kind: params.targetKind ?? (source?.prNumber ? "pull_request_comment" : source?.issueNumber ? "issue_comment" : "artifact_only"),
     repository: source?.repository ?? null,
     targetNumber: params.targetNumber,
     commentId: params.commentId,

@@ -235,6 +235,7 @@ export const replayProtectionStatusSchema = z.enum(["not_checked", "accepted", "
 export const inboundAuditStatusSchema = z.enum(["not_recorded", "recorded", "failed"]);
 export const runtimeHealthStatusSchema = z.enum(["unknown", "ready", "degraded", "blocked"]);
 export const runtimeReadinessStatusSchema = z.enum(["unknown", "ready", "degraded", "blocked"]);
+export const liveStatusReportReadinessSchema = z.enum(["unknown", "ready", "degraded", "blocked"]);
 export const liveStatusReportStatusSchema = z.enum(["unknown", "ready", "degraded", "blocked", "skipped", "failed"]);
 export const statusReportStatusSchema = z.enum([
   "not_run",
@@ -242,6 +243,7 @@ export const statusReportStatusSchema = z.enum([
   "comment_posted",
   "comment_created",
   "comment_updated",
+  "blocked",
   "skipped",
   "failed",
 ]);
@@ -542,7 +544,10 @@ export const statusReportSummarySchema = z.object({
   targetNumber: z.number().int().positive().nullable().default(null),
   commentId: z.number().int().positive().nullable().default(null),
   correlationId: z.string().nullable().default(null),
-  action: z.enum(["none", "payload_only", "created", "updated", "skipped", "failed"]).default("none"),
+  readiness: liveStatusReportReadinessSchema.default("unknown"),
+  targetKind: z.enum(["artifact_only", "issue_comment", "pull_request_comment"]).default("artifact_only"),
+  failureReason: z.string().nullable().default(null),
+  action: z.enum(["none", "payload_only", "created", "updated", "skipped", "blocked", "failed"]).default("none"),
   ranAt: z.string(),
 });
 
@@ -817,10 +822,13 @@ export const orchestratorStateSchema = z.object({
   lastPrDraftMetadata: prDraftMetadataSchema.nullable().default(null),
   lastGitHubHandoffResult: githubHandoffResultSchema.nullable().default(null),
   lastLiveEvidence: liveEvidenceSchema.nullable().default(null),
+  liveStatusReportReadiness: liveStatusReportReadinessSchema.default("unknown"),
   liveStatusReportStatus: liveStatusReportStatusSchema.default("unknown"),
   statusReportStatus: statusReportStatusSchema.default("not_run"),
   statusReportCorrelationId: z.string().nullable().default(null),
+  lastStatusReportAction: z.enum(["none", "payload_only", "created", "updated", "skipped", "blocked", "failed"]).default("none"),
   lastStatusReportTarget: statusReportTargetSchema.nullable().default(null),
+  lastStatusReportFailureReason: z.string().nullable().default(null),
   lastStatusReportSummary: statusReportSummarySchema.nullable().default(null),
   lastPreflightResult: preflightResultSchema.nullable().default(null),
   lastBlockedReasons: z.array(blockedReasonSchema).default([]),
@@ -1404,10 +1412,13 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastPrDraftMetadata",
     "lastGitHubHandoffResult",
     "lastLiveEvidence",
+    "liveStatusReportReadiness",
     "liveStatusReportStatus",
     "statusReportStatus",
     "statusReportCorrelationId",
+    "lastStatusReportAction",
     "lastStatusReportTarget",
+    "lastStatusReportFailureReason",
     "lastStatusReportSummary",
     "lastAuditTrail",
     "lastHandoffPackagePath",
@@ -1974,15 +1985,23 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         patchArtifactPath: { type: "string", nullable: true },
       },
     },
+    liveStatusReportReadiness: {
+      type: "string",
+      enum: ["unknown", "ready", "degraded", "blocked"],
+    },
     liveStatusReportStatus: {
       type: "string",
       enum: ["unknown", "ready", "degraded", "blocked", "skipped", "failed"],
     },
     statusReportStatus: {
       type: "string",
-      enum: ["not_run", "payload_ready", "comment_posted", "comment_created", "comment_updated", "skipped", "failed"],
+      enum: ["not_run", "payload_ready", "comment_posted", "comment_created", "comment_updated", "blocked", "skipped", "failed"],
     },
     statusReportCorrelationId: { type: "string", nullable: true },
+    lastStatusReportAction: {
+      type: "string",
+      enum: ["none", "payload_only", "created", "updated", "skipped", "blocked", "failed"],
+    },
     lastStatusReportTarget: {
       type: "object",
       nullable: true,
@@ -1998,13 +2017,14 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         updatedAt: { type: "string" },
       },
     },
+    lastStatusReportFailureReason: { type: "string", nullable: true },
     lastStatusReportSummary: {
       type: "object",
       nullable: true,
-      required: ["status", "provider", "summary", "markdownPath", "payloadPath", "targetUrl", "targetNumber", "commentId", "correlationId", "action", "ranAt"],
+      required: ["status", "provider", "summary", "markdownPath", "payloadPath", "targetUrl", "targetNumber", "commentId", "correlationId", "readiness", "targetKind", "failureReason", "action", "ranAt"],
       additionalProperties: false,
       properties: {
-        status: { type: "string", enum: ["not_run", "payload_ready", "comment_posted", "comment_created", "comment_updated", "skipped", "failed"] },
+        status: { type: "string", enum: ["not_run", "payload_ready", "comment_posted", "comment_created", "comment_updated", "blocked", "skipped", "failed"] },
         provider: { type: "string" },
         summary: { type: "string" },
         markdownPath: { type: "string", nullable: true },
@@ -2013,7 +2033,10 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         targetNumber: { type: "number", nullable: true },
         commentId: { type: "number", nullable: true },
         correlationId: { type: "string", nullable: true },
-        action: { type: "string", enum: ["none", "payload_only", "created", "updated", "skipped", "failed"] },
+        readiness: { type: "string", enum: ["unknown", "ready", "degraded", "blocked"] },
+        targetKind: { type: "string", enum: ["artifact_only", "issue_comment", "pull_request_comment"] },
+        failureReason: { type: "string", nullable: true },
+        action: { type: "string", enum: ["none", "payload_only", "created", "updated", "skipped", "blocked", "failed"] },
         ranAt: { type: "string" },
       },
     },

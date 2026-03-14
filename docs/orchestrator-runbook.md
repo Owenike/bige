@@ -348,6 +348,7 @@ Operator-friendly status reporting can emit:
 CLI path:
 ```powershell
 npm run orchestrator:status:report -- --state-id demo
+npm run orchestrator:github-live-report:smoke -- --state-id demo
 ```
 
 `event:intake` can also emit an initial task-created status summary when `--report-status true`.
@@ -367,22 +368,44 @@ Comment upsert / correlation:
 - status comments carry a stable marker `<!-- orchestrator-status:<state-id> -->`
 - if a prior comment target is known, the orchestrator patches that comment
 - if the prior target is unknown, the adapter searches the thread for the same marker before posting a new comment
+- if a stored target comment is stale or missing, the adapter falls back to correlation lookup before deciding to create a fresh comment
 - persisted correlation fields:
   - `statusReportCorrelationId`
   - `lastStatusReportTarget`
+  - `lastStatusReportAction`
+  - `lastStatusReportFailureReason`
   - `lastStatusReportSummary`
+  - `liveStatusReportReadiness`
 
 Skip / failure behavior:
 - missing `GITHUB_TOKEN` / `GH_TOKEN` -> explicit `skipped`
 - missing `gh` for live comment path -> explicit degraded/skip for live reporting while payload output still succeeds
-- missing issue / PR target -> payload-only summary
+- missing issue / PR target -> readiness `blocked`; payload output can still exist, but live comment path does not run
 - disabled adapter or no GitHub target -> payload-only summary instead of hard failure
 - no generic fail for unavailable GitHub comment posting
 
 Live GitHub reporting hardening:
 - live comment create/update first checks readiness for `gh` + token
+- readiness now also answers whether the next live action is expected to be `create`, `update`, `skip`, or `blocked`
 - correlation marker lookup still prevents duplicate comments on the same thread
+- issue and PR thread targeting now follow the same persisted target metadata model
 - create/update failure is recorded as reporting failure and does not redefine the main orchestration result
+
+Live comment action rules:
+- `create`: no correlated comment target is known for the current issue / PR thread
+- `update`: a correlated comment target already exists, or marker lookup found one in the thread
+- `skip`: live path is disabled or degraded because token / `gh` is unavailable
+- `blocked`: there is no safe issue / PR thread target for live commenting
+
+Local smoke:
+```powershell
+npm run orchestrator:status:report -- --state-id demo
+npm run orchestrator:github-live-report:smoke -- --state-id demo
+```
+
+The smoke path is intentionally gated:
+- with valid token + `gh`, it should create then update the correlated comment
+- without token or `gh`, it records degraded/skip semantics instead of hard-failing
 
 ## Inbound Audit
 Every accepted, rejected, ignored, or duplicate webhook intake now records inbound audit metadata.

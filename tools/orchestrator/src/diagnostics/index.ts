@@ -68,8 +68,11 @@ export type OrchestratorDiagnostics = {
   };
   statusReporting: {
     status: OrchestratorState["statusReportStatus"];
+    readiness: OrchestratorState["liveStatusReportReadiness"];
     liveStatus: OrchestratorState["liveStatusReportStatus"];
+    action: OrchestratorState["lastStatusReportAction"];
     summary: string | null;
+    failureReason: string | null;
     correlationId: string | null;
     target: string | null;
   };
@@ -193,8 +196,11 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
     },
     statusReporting: {
       status: state.statusReportStatus,
+      readiness: state.liveStatusReportReadiness,
       liveStatus: state.liveStatusReportStatus,
+      action: state.lastStatusReportAction,
       summary: state.lastStatusReportSummary?.summary ?? null,
+      failureReason: state.lastStatusReportFailureReason,
       correlationId: state.statusReportCorrelationId,
       target: state.lastStatusReportTarget?.targetUrl ?? state.lastStatusReportTarget?.correlationId ?? null,
     },
@@ -215,7 +221,7 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     `Artifacts: backend=${summary.artifactSummary.backendType}, backendHealth=${summary.artifactSummary.backendHealthStatus}, queue=${summary.artifactSummary.queueStatus}, transfer=${summary.artifactSummary.transferStatus}, repair=${summary.artifactSummary.repairStatus}, patch=${summary.artifactSummary.patchStatus}, promotion=${summary.artifactSummary.promotionStatus}, handoff=${summary.artifactSummary.handoffStatus}, prDraft=${summary.artifactSummary.prDraftStatus}, liveAcceptance=${summary.artifactSummary.liveAcceptanceStatus}, livePass=${summary.artifactSummary.livePassStatus}, workspace=${summary.artifactSummary.workspaceStatus}`,
     `Worker: status=${summary.workerSummary.workerStatus}, supervision=${summary.workerSummary.supervisionStatus}, workerId=${summary.workerSummary.workerId ?? "none"}, leaseOwner=${summary.workerSummary.leaseOwner ?? "none"}, lastHeartbeat=${summary.workerSummary.lastHeartbeatAt ?? "none"}, lastLeaseRenewal=${summary.workerSummary.lastLeaseRenewalAt ?? "none"}, daemonHeartbeat=${summary.workerSummary.daemonHeartbeatAt ?? "none"}, cancel=${summary.workerSummary.cancellationStatus}, pause=${summary.workerSummary.pauseStatus}, retries=${summary.workerSummary.retryCount}`,
     `Recovery: action=${summary.recoverySummary.action ?? "none"}, reason=${summary.recoverySummary.reason ?? "none"}`,
-    `Status reporting: status=${summary.statusReporting.status}, live=${summary.statusReporting.liveStatus}, correlation=${summary.statusReporting.correlationId ?? "none"}, target=${summary.statusReporting.target ?? "none"}, summary=${summary.statusReporting.summary ?? "none"}`,
+    `Status reporting: status=${summary.statusReporting.status}, readiness=${summary.statusReporting.readiness}, live=${summary.statusReporting.liveStatus}, action=${summary.statusReporting.action}, correlation=${summary.statusReporting.correlationId ?? "none"}, target=${summary.statusReporting.target ?? "none"}, failure=${summary.statusReporting.failureReason ?? "none"}, summary=${summary.statusReporting.summary ?? "none"}`,
     `Blockers: ${summary.blockers.join(" | ") || "none"}`,
     `Missing prerequisites: ${summary.missingPrerequisites.join(", ") || "none"}`,
   ];

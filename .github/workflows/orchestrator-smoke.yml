@@ -84,6 +84,9 @@ jobs:
           npm run test:orchestrator:diagnostics
           npm run test:orchestrator:webhook-runtime
           npm run test:orchestrator:github-live-report
+          npm run test:orchestrator:comment-targeting
+          npm run test:orchestrator:reporting-readiness
+          npm run test:orchestrator:github-live-comment
           npm run test:orchestrator:actor-policy-config
           npm run test:orchestrator:runtime-config
           npm run test:orchestrator:webhook-hosting

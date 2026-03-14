@@ -35,7 +35,7 @@ import { runSupabaseBackendLiveSmoke } from "./supabase-live";
 import { exportBackendSnapshot, importBackendSnapshot } from "./transfer";
 import { inspectBackendHealth, repairBackendHealth } from "./health";
 import { ingestGitHubEvent } from "./github-events";
-import { GhCliStatusReportingAdapter, applyStatusReportToState, reportStateStatus } from "./status-reporting";
+import { GhCliStatusReportingAdapter, applyStatusReportToState, reportStateStatus, runGitHubLiveCommentSmoke } from "./status-reporting";
 import { ingestGitHubWebhook } from "./webhook";
 import { formatWebhookHostingConfig, loadWebhookHostingConfig } from "./runtime-config";
 import { formatWebhookShutdownSummary, startWebhookHosting } from "./webhook-hosting";
@@ -553,6 +553,22 @@ async function main() {
     return;
   }
 
+  if (command === "github-live-report:smoke") {
+    const outputRoot = getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report"));
+    const adapter = new GhCliStatusReportingAdapter({
+      enabled: getOption(options, "enabled", "true") === "true",
+      token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+    });
+    const result = await runGitHubLiveCommentSmoke({
+      state: existingState,
+      outputRoot,
+      adapter,
+    });
+    await dependencies.storage.saveState(result.state);
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
   if (command === "status" || command === "inspect" || command === "diagnostics") {
     const diagnostics = buildDiagnosticsSummary(existingState);
     process.stdout.write(`${formatDiagnosticsSummary(diagnostics)}\n`);
@@ -920,6 +936,7 @@ async function main() {
       "  node cli.js inbound:list",
       "  node cli.js inbound:inspect --inbound-id delivery-123",
       "  node cli.js status:report --state-id default",
+      "  node cli.js github-live-report:smoke --state-id default",
       "  node cli.js queue:enqueue --state-id default --priority 10",
       "  node cli.js queue:list",
       "  node cli.js run-once --state-id default --executor openai_responses --execution-mode dry_run",

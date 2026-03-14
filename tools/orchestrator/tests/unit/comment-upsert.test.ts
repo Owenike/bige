@@ -55,6 +55,15 @@ test("status reporting reuses the same correlated comment instead of creating a 
           stderr: "",
         };
       }
+      if (args[0] === "api" && args[1] === "repos/example/bige/issues/comments/111" && !args.includes("--method")) {
+        return {
+          stdout: JSON.stringify({
+            id: 111,
+            html_url: "https://github.com/example/bige/issues/77#issuecomment-111",
+          }),
+          stderr: "",
+        };
+      }
       if (args[0] === "api" && args[1] === "repos/example/bige/issues/comments/111" && args.includes("PATCH")) {
         return {
           stdout: JSON.stringify({
