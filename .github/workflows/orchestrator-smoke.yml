@@ -82,6 +82,12 @@ jobs:
           npm run test:orchestrator:preflight
           npm run test:orchestrator:profiles
           npm run test:orchestrator:diagnostics
+          npm run test:orchestrator:webhook-runtime
+          npm run test:orchestrator:github-live-report
+          npm run test:orchestrator:actor-policy-config
+          npm run test:orchestrator:runtime-config
+          npm run test:orchestrator:webhook-hosting
+          npm run test:orchestrator:graceful-shutdown
           npm run test:orchestrator:queue
           npm run test:orchestrator:worker
           npm run test:orchestrator:locking

@@ -10,6 +10,10 @@ export type WebhookRuntimeSummary = {
   status: "ready" | "degraded" | "blocked";
   healthStatus: "ready" | "degraded" | "blocked";
   readinessStatus: "ready" | "degraded" | "blocked";
+  host: string;
+  port: number;
+  basePath: string;
+  webhookPath: string;
   summary: string;
   missingPrerequisites: string[];
   actorPolicy: LoadedActorPolicyConfig | null;
@@ -40,6 +44,10 @@ export async function evaluateWebhookRuntime(params: {
   webhookSecret: string | null;
   actorPolicyConfigPath?: string | null;
   liveReportingEnabled?: boolean;
+  host?: string;
+  port?: number;
+  basePath?: string;
+  webhookPath?: string;
 }) : Promise<WebhookRuntimeSummary> {
   const startedAt = new Date().toISOString();
   const missingPrerequisites: string[] = [];
@@ -106,10 +114,18 @@ export async function evaluateWebhookRuntime(params: {
       `runtime=${status}`,
       `health=${healthStatus}`,
       `readiness=${readinessStatus}`,
+      `host=${params.host ?? "127.0.0.1"}`,
+      `port=${params.port ?? 8787}`,
+      `basePath=${params.basePath ?? "/"}`,
+      `webhookPath=${params.webhookPath ?? "/github"}`,
       `backend=${backendStatus.backendType}/${backendStatus.status}`,
       `actorPolicy=${actorPolicy ? describeActorPolicyConfig(actorPolicy) : actorPolicyError ?? "unavailable"}`,
       `liveReporting=${liveReporting.status}`,
     ].join(" | "),
+    host: params.host ?? "127.0.0.1",
+    port: params.port ?? 8787,
+    basePath: params.basePath ?? "",
+    webhookPath: params.webhookPath ?? "/github",
     missingPrerequisites,
     actorPolicy,
     liveReporting,
@@ -127,6 +143,10 @@ export function formatWebhookRuntimeSummary(summary: WebhookRuntimeSummary) {
     `Runtime: ${summary.status}`,
     `Health: ${summary.healthStatus}`,
     `Readiness: ${summary.readinessStatus}`,
+    `Host: ${summary.host}`,
+    `Port: ${summary.port}`,
+    `Base path: ${summary.basePath || "/"}`,
+    `Webhook path: ${summary.webhookPath}`,
     `Backend: ${summary.backend.backendType} (${summary.backend.status})`,
     `Backend summary: ${summary.backend.summary}`,
     `Actor policy: ${summary.actorPolicy ? describeActorPolicyConfig(summary.actorPolicy) : "none"}`,

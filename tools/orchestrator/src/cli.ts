@@ -37,7 +37,8 @@ import { inspectBackendHealth, repairBackendHealth } from "./health";
 import { ingestGitHubEvent } from "./github-events";
 import { GhCliStatusReportingAdapter, applyStatusReportToState, reportStateStatus } from "./status-reporting";
 import { ingestGitHubWebhook } from "./webhook";
-import { startWebhookServer } from "./webhook-server";
+import { formatWebhookHostingConfig, loadWebhookHostingConfig } from "./runtime-config";
+import { formatWebhookShutdownSummary, startWebhookHosting } from "./webhook-hosting";
 import { resolveActorAuthorization } from "./actor-policy";
 import { describeActorPolicyConfig, loadActorPolicyConfig } from "./actor-policy-config";
 import { formatInboundAuditSummary, listInboundAuditRecords } from "./inbound-audit";
@@ -393,40 +394,63 @@ async function main() {
   }
 
   if (command === "webhook:runtime") {
+    const hostingConfig = loadWebhookHostingConfig({
+      repoPath,
+      outputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report")),
+      options: {
+        host: options.get("host"),
+        port: options.get("port"),
+        basePath: options.get("base-path"),
+        webhookPath: options.get("webhook-path"),
+        webhookSecret: options.get("webhook-secret") ?? process.env.GITHUB_WEBHOOK_SECRET ?? null,
+        actorPolicyConfigPath: options.get("actor-policy-config") ?? process.env.ORCHESTRATOR_ACTOR_POLICY_CONFIG ?? null,
+        liveReportingEnabled: getOption(options, "enabled", "true") === "true",
+      },
+    });
     const summary = await evaluateWebhookRuntime({
       dependencies,
-      webhookSecret: options.get("webhook-secret") ?? process.env.GITHUB_WEBHOOK_SECRET ?? null,
-      actorPolicyConfigPath: options.get("actor-policy-config") ?? process.env.ORCHESTRATOR_ACTOR_POLICY_CONFIG ?? null,
-      liveReportingEnabled: getOption(options, "enabled", "true") === "true",
+      webhookSecret: hostingConfig.webhookSecret,
+      actorPolicyConfigPath: hostingConfig.actorPolicyConfigPath,
+      liveReportingEnabled: hostingConfig.liveReportingEnabled,
+      host: hostingConfig.host,
+      port: hostingConfig.port,
+      basePath: hostingConfig.basePath,
+      webhookPath: hostingConfig.webhookPath,
     });
-    process.stdout.write(`${formatWebhookRuntimeSummary(summary)}\n\n${JSON.stringify(summary, null, 2)}\n`);
+    process.stdout.write(
+      `${formatWebhookHostingConfig(hostingConfig)}\n${formatWebhookRuntimeSummary(summary)}\n\n${JSON.stringify(summary, null, 2)}\n`,
+    );
     return;
   }
 
   if (command === "webhook:serve") {
-    const port = Number.parseInt(getOption(options, "port", "8787"), 10);
-    const handle = await startWebhookServer({
-      port,
-      secret: options.get("webhook-secret") ?? process.env.GITHUB_WEBHOOK_SECRET ?? null,
-      dependencies,
+    const handle = await startWebhookHosting({
       repoPath,
+      dependencies,
       outputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report")),
-      webhookPath: getOption(options, "webhook-path", "/github"),
-      actorPolicyConfigPath: options.get("actor-policy-config") ?? process.env.ORCHESTRATOR_ACTOR_POLICY_CONFIG ?? null,
-      enqueue: getOption(options, "enqueue", "true") === "true",
-      replayOverride: getOption(options, "replay", "false") === "true",
-      reportStatus: getOption(options, "report-status", "true") === "true",
+      options: {
+        host: options.get("host"),
+        port: options.get("port"),
+        basePath: options.get("base-path"),
+        webhookPath: options.get("webhook-path"),
+        webhookSecret: options.get("webhook-secret") ?? process.env.GITHUB_WEBHOOK_SECRET ?? null,
+        actorPolicyConfigPath: options.get("actor-policy-config") ?? process.env.ORCHESTRATOR_ACTOR_POLICY_CONFIG ?? null,
+        liveReportingEnabled: getOption(options, "enabled", "true") === "true",
+        enqueue: getOption(options, "enqueue", "true") === "true",
+        replayOverride: getOption(options, "replay", "false") === "true",
+        reportStatus: getOption(options, "report-status", "true") === "true",
+      },
     });
-    process.stdout.write(
-      `${JSON.stringify({ started: true, url: handle.url, healthUrl: handle.healthUrl, readinessUrl: handle.readinessUrl, startupSummary: handle.startupSummary }, null, 2)}\n`,
-    );
+    process.stdout.write(`${handle.startupText}\n\n`);
     await new Promise<void>((resolve) => {
       process.once("SIGINT", async () => {
-        await handle.close();
+        const summary = await handle.shutdown("sigint");
+        process.stdout.write(`${formatWebhookShutdownSummary(summary)}\n`);
         resolve();
       });
       process.once("SIGTERM", async () => {
-        await handle.close();
+        const summary = await handle.shutdown("sigterm");
+        process.stdout.write(`${formatWebhookShutdownSummary(summary)}\n`);
         resolve();
       });
     });
@@ -890,8 +914,8 @@ async function main() {
       "  node cli.js plan --state-id default",
       "  node cli.js event:intake --payload path/to/event.json --enqueue true --report-status true",
       "  node cli.js webhook:intake --payload path/to/payload.json --headers path/to/headers.json --enqueue true",
-      "  node cli.js webhook:runtime --webhook-secret ... --actor-policy-config path/to/actor-policy.json",
-      "  node cli.js webhook:serve --port 8787 --webhook-path /github",
+      "  node cli.js webhook:runtime --host 127.0.0.1 --port 8787 --base-path /hooks --webhook-path /github",
+      "  node cli.js webhook:serve --host 127.0.0.1 --port 8787 --base-path /hooks --webhook-path /github",
       "  node cli.js actor-policy:check --actor orchestrator-admin --command run",
       "  node cli.js inbound:list",
       "  node cli.js inbound:inspect --inbound-id delivery-123",

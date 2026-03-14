@@ -69,6 +69,7 @@ $suiteMap = @{
     "$outDir\tests\unit\event-flow.test.js",
     "$outDir\tests\unit\actor-policy.test.js",
     "$outDir\tests\unit\actor-policy-config.test.js",
+    "$outDir\tests\unit\runtime-config.test.js",
     "$outDir\tests\unit\replay-protection.test.js",
     "$outDir\tests\unit\inbound-audit.test.js",
     "$outDir\tests\unit\github-live-report.test.js",
@@ -94,7 +95,9 @@ $suiteMap = @{
     "$outDir\tests\integration\live-pass.test.js",
     "$outDir\tests\integration\supabase-live.test.js",
     "$outDir\tests\integration\webhook-server.test.js",
-    "$outDir\tests\integration\webhook-runtime.test.js"
+    "$outDir\tests\integration\webhook-runtime.test.js",
+    "$outDir\tests\integration\webhook-hosting.test.js",
+    "$outDir\tests\integration\graceful-shutdown.test.js"
   )
   "schema" = @(
     "$outDir\tests\unit\schema-validation.test.js"
@@ -199,6 +202,9 @@ $suiteMap = @{
   "actor-policy-config" = @(
     "$outDir\tests\unit\actor-policy-config.test.js"
   )
+  "runtime-config" = @(
+    "$outDir\tests\unit\runtime-config.test.js"
+  )
   "replay-protection" = @(
     "$outDir\tests\unit\replay-protection.test.js"
   )
@@ -210,6 +216,12 @@ $suiteMap = @{
   )
   "webhook-runtime" = @(
     "$outDir\tests\integration\webhook-runtime.test.js"
+  )
+  "webhook-hosting" = @(
+    "$outDir\tests\integration\webhook-hosting.test.js"
+  )
+  "graceful-shutdown" = @(
+    "$outDir\tests\integration\graceful-shutdown.test.js"
   )
   "queue" = @(
     "$outDir\tests\unit\queue.test.js"
@@ -310,6 +322,7 @@ $suiteMap = @{
     "$outDir\tests\unit\event-flow.test.js",
     "$outDir\tests\unit\actor-policy.test.js",
     "$outDir\tests\unit\actor-policy-config.test.js",
+    "$outDir\tests\unit\runtime-config.test.js",
     "$outDir\tests\unit\replay-protection.test.js",
     "$outDir\tests\unit\inbound-audit.test.js",
     "$outDir\tests\unit\github-live-report.test.js",
@@ -335,6 +348,8 @@ $suiteMap = @{
     "$outDir\tests\integration\supabase-live.test.js",
     "$outDir\tests\integration\webhook-server.test.js",
     "$outDir\tests\integration\webhook-runtime.test.js",
+    "$outDir\tests\integration\webhook-hosting.test.js",
+    "$outDir\tests\integration\graceful-shutdown.test.js",
     "$outDir\tests\e2e\mock-loop.test.js",
     "$outDir\tests\e2e\multi-iteration-loop.test.js"
   )

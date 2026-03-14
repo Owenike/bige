@@ -129,13 +129,20 @@ The orchestrator now ships a local webhook receiver and no longer depends only o
 
 Start it locally:
 ```powershell
-npm run orchestrator:webhook:serve -- --port 8787 --webhook-path /github
+npm run orchestrator:webhook:serve -- --host 127.0.0.1 --port 8787 --base-path /hooks --webhook-path /github
 ```
 
 Check runtime summary without starting the server:
 ```powershell
-npm run orchestrator:webhook:runtime -- --webhook-secret your-secret --actor-policy-config .tmp/orchestrator/actor-policy.json
+npm run orchestrator:webhook:runtime -- --host 127.0.0.1 --port 8787 --base-path /hooks --webhook-secret your-secret --actor-policy-config .tmp/orchestrator/actor-policy.json
 ```
+
+Deploy-oriented hosting behavior:
+- `webhook:serve` is a standalone Node server, not a main-product route
+- host / port / base path / webhook path are configurable
+- startup prints a hosting summary plus runtime readiness
+- `SIGINT` / `SIGTERM` trigger graceful shutdown and emit a shutdown summary
+- new requests are rejected once shutdown begins
 
 Supported inbound events:
 - `issues`
@@ -150,21 +157,38 @@ Receiver behavior:
 - records inbound audit trail and replay protection decisions
 
 Runtime endpoints:
-- `GET /healthz`
-- `GET /readyz`
+- `GET <basePath>/healthz`
+- `GET <basePath>/readyz`
 
 Runtime readiness currently checks:
 - `GITHUB_WEBHOOK_SECRET`
 - actor policy config readability
 - GitHub live status reporting prerequisites (`GITHUB_TOKEN` / `GH_TOKEN`, `gh`)
 - backend/storage availability
+- host / port / base path / webhook path normalization at startup
 
 Readiness semantics:
 - `ready`: webhook secret, actor policy config, and backend are usable; live comment path is available
 - `degraded`: core ingress can run, but live GitHub comment reporting is not ready
 - `blocked`: webhook secret/config/backend is not usable, so safe ingress should not start accepting real traffic
 
+Typical degraded cases:
+- missing `GITHUB_TOKEN` / `GH_TOKEN`
+- missing `gh`
+
+Typical blocked cases:
+- missing `GITHUB_WEBHOOK_SECRET`
+- unreadable actor policy config
+- backend/storage unavailable
+
 Use `curl` or a tunnel/proxy to point GitHub webhooks at the local endpoint.
+
+Local hosting smoke:
+```powershell
+npm run orchestrator:webhook:serve -- --host 127.0.0.1 --port 8787 --base-path /hooks --webhook-path /github
+curl http://127.0.0.1:8787/hooks/healthz
+curl http://127.0.0.1:8787/hooks/readyz
+```
 
 Failure semantics:
 - missing webhook secret -> `blocked` or `manual_required`
@@ -240,16 +264,16 @@ Unsupported or unauthorized commands are explicitly recorded as `rejected` or `i
 ## Actor Policy
 Trigger policy decides whether an event shape is routable; actor policy decides whether the specific GitHub actor is allowed to invoke that route.
 
-Current configurable actor policy uses env-backed allowlists:
+Current configurable actor policy supports JSON config first, with env-backed allowlists as fallback:
+- pass `--actor-policy-config path/to/actor-policy.json`
+- or set `ORCHESTRATOR_ACTOR_POLICY_CONFIG=/path/to/actor-policy.json`
+
+Env-backed allowlists:
 - `ORCHESTRATOR_ACTOR_ADMINS`
 - `ORCHESTRATOR_ACTOR_RUNNERS`
 - `ORCHESTRATOR_ACTOR_APPROVERS`
 - `ORCHESTRATOR_ACTOR_STATUS`
 - `ORCHESTRATOR_ACTOR_LIVE`
-
-Actor policy can now also be loaded from JSON config:
-- set `ORCHESTRATOR_ACTOR_POLICY_CONFIG=/path/to/actor-policy.json`
-- or pass `--actor-policy-config path/to/actor-policy.json`
 
 Example config:
 ```json
@@ -268,6 +292,12 @@ Current authorization model:
 - approver actors can request approve/reject
 - live-capable actors are additionally required for live/apply/promotion-adjacent requests
 - admin actors bypass lower-tier restrictions inside the orchestrator boundary
+
+Diagnostics / readiness should now show:
+- actor policy config source (`file`, `env`, or `default`)
+- actor policy config version
+- runtime health/readiness
+- live GitHub comment path readiness
 
 Operator check path:
 ```powershell
@@ -929,5 +959,7 @@ npm run test:orchestrator:full-validation
   - `worker:run` is daemon-style supervision, not a fully managed OS/background service
   - approval, handoff, and promotion pending runs are preserved conservatively rather than aggressively reclaimed
 - webhook receiver is now a standalone local Node service with health/readiness endpoints, but it is still not wired into the main product runtime
+- webhook hosting is deployable as a standalone orchestrator service, but it is still intentionally separate from the main product runtime
+- graceful shutdown is best-effort and conservative; it stops new requests and lets in-flight work finish, but it is not a full process supervisor
 - actor policy config is JSON/env based for now; it does not sync GitHub org/team/role membership
 - live GitHub comment reporting is gated by token + `gh`; without them the system degrades to payload-only reporting instead of hard-failing ingress
