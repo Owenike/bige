@@ -66,6 +66,9 @@ import { classifySandboxRecoveryIncidents, formatSandboxIncidentGovernance } fro
 import { formatSandboxIncidentPolicy, resolveSandboxIncidentPolicy } from "./sandbox-incident-policy";
 import { buildSandboxEscalationSummary, formatSandboxEscalationSummary } from "./sandbox-escalation";
 import { buildSandboxGovernanceStatus, formatSandboxGovernanceStatus } from "./sandbox-governance-status";
+import { buildSandboxResolutionReadiness, formatSandboxResolutionReadiness } from "./sandbox-resolution-readiness";
+import { buildSandboxResolutionEvidenceSummary, formatSandboxResolutionEvidenceSummary } from "./sandbox-resolution-evidence";
+import { buildSandboxClosureGatingDecision, formatSandboxClosureGatingDecision } from "./sandbox-closure-gating";
 import { buildSandboxOperatorHandoffSummary, formatSandboxOperatorHandoffSummary } from "./sandbox-operator-handoff";
 import { formatSandboxOperatorActionResult, runSandboxOperatorAction } from "./sandbox-operator-actions";
 import { listSandboxRestorePoints } from "./sandbox-restore-points";
@@ -461,6 +464,24 @@ async function resolveSandboxGovernanceArtifacts(params: {
     loadedRegistry: params.sandboxRegistry,
     limit: params.limit,
   });
+  const resolutionEvidenceSummary = await buildSandboxResolutionEvidenceSummary({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+  });
+  const closureGatingDecision = await buildSandboxClosureGatingDecision({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+  });
+  const resolutionReadiness = await buildSandboxResolutionReadiness({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+  });
   const escalation = await buildSandboxEscalationSummary({
     configPath: params.configPath,
     state: params.state,
@@ -472,6 +493,9 @@ async function resolveSandboxGovernanceArtifacts(params: {
     governanceStatus,
     incidentPolicy,
     handoffSummary,
+    resolutionEvidenceSummary,
+    closureGatingDecision,
+    resolutionReadiness,
     escalation,
   };
 }
@@ -480,18 +504,24 @@ function buildSandboxGovernanceStatePatch(params: {
   governanceStatus: Awaited<ReturnType<typeof buildSandboxGovernanceStatus>>;
   incidentPolicy: ReturnType<typeof resolveSandboxIncidentPolicy>;
   handoffSummary: Awaited<ReturnType<typeof buildSandboxOperatorHandoffSummary>>;
+  resolutionEvidenceSummary: Awaited<ReturnType<typeof buildSandboxResolutionEvidenceSummary>>;
+  closureGatingDecision: Awaited<ReturnType<typeof buildSandboxClosureGatingDecision>>;
+  resolutionReadiness: Awaited<ReturnType<typeof buildSandboxResolutionReadiness>>;
   escalation: Awaited<ReturnType<typeof buildSandboxEscalationSummary>>;
 }) {
   return {
     lastGovernanceStatus: params.governanceStatus,
     lastIncidentPolicy: params.incidentPolicy,
     lastOperatorHandoffSummary: params.handoffSummary,
-    lastRecoveryIncidentSummary: params.governanceStatus.latestIncidentSummary ?? params.governanceStatus.summary,
-    lastIncidentType: params.governanceStatus.latestIncidentType,
-    lastIncidentSeverity: params.governanceStatus.latestIncidentSeverity,
-    lastIncidentSummary: params.governanceStatus.latestIncidentSummary,
-    lastOperatorAction: params.governanceStatus.latestOperatorAction,
-    lastOperatorActionStatus: params.governanceStatus.latestOperatorActionStatus,
+    lastResolutionReadiness: params.resolutionReadiness,
+    lastResolutionEvidenceSummary: params.resolutionEvidenceSummary,
+    lastClosureGatingDecision: params.closureGatingDecision,
+    lastRecoveryIncidentSummary: params.resolutionEvidenceSummary.latestIncidentSummary ?? params.resolutionEvidenceSummary.summary,
+    lastIncidentType: params.resolutionReadiness.latestIncidentType,
+    lastIncidentSeverity: params.resolutionReadiness.latestIncidentSeverity,
+    lastIncidentSummary: params.resolutionReadiness.latestIncidentSummary,
+    lastOperatorAction: params.resolutionReadiness.latestOperatorAction,
+    lastOperatorActionStatus: params.resolutionReadiness.latestOperatorActionStatus,
     lastEscalationSummary: params.escalation.summary,
   };
 }
@@ -1679,7 +1709,7 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxIncidentGovernance(result)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${JSON.stringify({ incidents: result, governance }, null, 2)}\n`,
+      `${formatSandboxIncidentGovernance(result)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${formatSandboxResolutionReadiness(governance.resolutionReadiness)}\n\n${JSON.stringify({ incidents: result, governance }, null, 2)}\n`,
     );
     return;
   }
@@ -1845,6 +1875,81 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:resolution:readiness") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxResolutionReadiness(governance.resolutionReadiness)}\n\n${formatSandboxClosureGatingDecision(governance.closureGatingDecision)}\n\n${JSON.stringify(governance.resolutionReadiness, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:resolution:evidence") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxResolutionEvidenceSummary(governance.resolutionEvidenceSummary)}\n\n${formatSandboxOperatorHandoffSummary(governance.handoffSummary)}\n\n${JSON.stringify(governance.resolutionEvidenceSummary, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:incident:closure-check") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxClosureGatingDecision(governance.closureGatingDecision)}\n\n${formatSandboxResolutionReadiness(governance.resolutionReadiness)}\n\n${JSON.stringify(governance.closureGatingDecision, null, 2)}\n`,
+    );
+    return;
+  }
+
   if (command === "sandbox:recovery:diagnostics") {
     const configPath = options.get("sandbox-config");
     if (!configPath) {
@@ -1869,7 +1974,7 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxRecoveryDiagnostics(result)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${formatSandboxIncidentPolicy(governance.incidentPolicy)}\n\n${formatSandboxOperatorHandoffSummary(governance.handoffSummary)}\n\n${JSON.stringify({ result, governance }, null, 2)}\n`,
+      `${formatSandboxRecoveryDiagnostics(result)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${formatSandboxResolutionEvidenceSummary(governance.resolutionEvidenceSummary)}\n\n${formatSandboxResolutionReadiness(governance.resolutionReadiness)}\n\n${formatSandboxClosureGatingDecision(governance.closureGatingDecision)}\n\n${formatSandboxIncidentPolicy(governance.incidentPolicy)}\n\n${formatSandboxOperatorHandoffSummary(governance.handoffSummary)}\n\n${JSON.stringify({ result, governance }, null, 2)}\n`,
     );
     return;
   }
@@ -2425,6 +2530,9 @@ async function main() {
       "  node cli.js sandbox:governance:status --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:incident:governance --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:incident:policy --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
+      "  node cli.js sandbox:resolution:readiness --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:resolution:evidence --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:incident:closure-check --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:incident:acknowledge --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
       "  node cli.js sandbox:incident:resolve --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
       "  node cli.js sandbox:incident:escalate --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",

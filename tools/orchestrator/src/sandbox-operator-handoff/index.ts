@@ -2,7 +2,7 @@ import type { LoadedGitHubSandboxTargetRegistry } from "../github-sandbox-target
 import type { OrchestratorState } from "../schemas";
 import { buildSandboxGovernanceStatus } from "../sandbox-governance-status";
 import { classifySandboxRecoveryIncidents } from "../sandbox-incident-governance";
-import { listSandboxOperatorActions } from "../sandbox-operator-actions";
+import { buildSandboxResolutionEvidenceSummary } from "../sandbox-resolution-evidence";
 
 export type SandboxOperatorHandoffSummary = {
   latestIncidentSummary: string | null;
@@ -35,8 +35,10 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     loadedRegistry: params.loadedRegistry,
     limit,
   });
-  const actions = await listSandboxOperatorActions({
+  const evidence = await buildSandboxResolutionEvidenceSummary({
     configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.loadedRegistry,
     limit,
   });
   const repeatedHotspots = incidents.incidents
@@ -44,9 +46,7 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     .flatMap((incident) => incident.affectedProfiles)
     .filter((profileId, index, array) => array.indexOf(profileId) === index)
     .sort();
-  const latestActionSummary = actions.records[0]
-    ? `${actions.records[0].actedAt} ${actions.records[0].action} ${actions.records[0].status} ${actions.records[0].summary}`
-    : null;
+  const latestActionSummary = evidence.latestOperatorActionTrailSummary;
   const escalationRecommendation =
     governance.operatorHandoffRecommended || governance.latestEscalationNeededCount > 0
       ? `Escalate or hand off before further recovery apply attempts.`

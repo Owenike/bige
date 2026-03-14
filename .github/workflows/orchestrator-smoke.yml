@@ -148,6 +148,9 @@ jobs:
           npm run test:orchestrator:sandbox-governance-status
           npm run test:orchestrator:sandbox-incident-policy-matrix
           npm run test:orchestrator:sandbox-operator-handoff-summary
+          npm run test:orchestrator:sandbox-resolution-readiness
+          npm run test:orchestrator:sandbox-resolution-evidence-summary
+          npm run test:orchestrator:sandbox-closure-gating
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary

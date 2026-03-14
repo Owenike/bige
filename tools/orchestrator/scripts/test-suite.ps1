@@ -100,6 +100,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-governance-status.test.js",
     "$outDir\tests\unit\sandbox-incident-policy-matrix.test.js",
     "$outDir\tests\unit\sandbox-operator-handoff-summary.test.js",
+    "$outDir\tests\unit\sandbox-resolution-readiness.test.js",
+    "$outDir\tests\unit\sandbox-resolution-evidence-summary.test.js",
+    "$outDir\tests\unit\sandbox-closure-gating.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -334,6 +337,15 @@ $suiteMap = @{
   "sandbox-operator-handoff-summary" = @(
     "$outDir\tests\unit\sandbox-operator-handoff-summary.test.js"
   )
+  "sandbox-resolution-readiness" = @(
+    "$outDir\tests\unit\sandbox-resolution-readiness.test.js"
+  )
+  "sandbox-resolution-evidence-summary" = @(
+    "$outDir\tests\unit\sandbox-resolution-evidence-summary.test.js"
+  )
+  "sandbox-closure-gating" = @(
+    "$outDir\tests\unit\sandbox-closure-gating.test.js"
+  )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
   )
@@ -521,6 +533,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-governance-status.test.js",
     "$outDir\tests\unit\sandbox-incident-policy-matrix.test.js",
     "$outDir\tests\unit\sandbox-operator-handoff-summary.test.js",
+    "$outDir\tests\unit\sandbox-resolution-readiness.test.js",
+    "$outDir\tests\unit\sandbox-resolution-evidence-summary.test.js",
+    "$outDir\tests\unit\sandbox-closure-gating.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",

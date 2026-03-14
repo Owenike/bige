@@ -561,6 +561,9 @@ Sandbox target registry:
   - use `sandbox:incident:rerun-preview`, `sandbox:incident:rerun-validate`, or `sandbox:incident:rerun-apply` only when the incident still points to a valid restore point and governance permits a rerun
   - use `sandbox:escalation:summary` when you need a compact view of unresolved incidents, escalation-needed count, and repeated blocked/manual_required hotspots
   - use `sandbox:operator:handoff` when you need a one-line handoff plus warnings, hotspots, and next-step guidance for the next operator
+  - use `sandbox:resolution:evidence` when you need the shared evidence summary that diagnostics, handoff, readiness, and closure-check all consume
+  - use `sandbox:resolution:readiness` when you need a centralized answer for whether the latest incident set is closure-ready, still operator-flow, or review/escalation-gated
+  - use `sandbox:incident:closure-check` when you need the explicit closure gating decision, blocked reason codes, and next action before treating an incident as safely closed
   - inspect `sandbox:rollback:governance` before any rollback apply if you need to know whether a restore point is stale, default-unsafe, or otherwise blocked
   - always run `sandbox:rollback:preview` before `sandbox:rollback:validate` or `sandbox:rollback:apply`
   - use `sandbox:batch-recovery:preview` and `sandbox:batch-recovery:validate` before any multi-restore recovery
@@ -648,6 +651,31 @@ Sandbox target registry:
     - governance warnings
     - escalation recommendation
     - a short operator handoff line
+  - resolution evidence is centralized into one shared summary that records:
+    - latest incident severity/type/summary
+    - latest operator action trail
+    - whether `rerun_preview`, `rerun_validate`, `rerun_apply`, `request_review`, or `escalate` were attempted
+    - unresolved/repeated hotspots
+    - evidence gaps and the next evidence that should be collected
+    - closure confidence
+  - resolution readiness is centralized into one shared summary that records:
+    - whether unresolved incidents remain
+    - whether escalation or manual review is still required
+    - whether rerun/validate/apply evidence exists
+    - whether closure is currently allowed
+    - blocked reason codes and the recommended next step before closure
+  - closure gating is the single source of truth for deciding whether `mark_resolved` can be treated as closure-ready:
+    - `critical`, `blocked`, and `manual_required` situations do not become closure-ready just because an operator recorded `mark_resolved`
+    - missing evidence gaps block closure even when the latest action is `mark_resolved`
+    - `resolved` is operator metadata; it is not equivalent to verified remediation
+    - reason codes are shared by CLI, diagnostics, and runbook guidance so closure decisions stay consistent
+  - compatibility fields such as `lastIncidentType`, `lastIncidentSeverity`, `lastIncidentSummary`, `lastOperatorAction`, and `lastOperatorActionStatus` remain in state for older consumers, but they are now derived from the centralized governance/readiness/evidence summaries instead of being maintained separately
+  - operator closure interpretation:
+    - `closure_ready` means the current incident set has no remaining governance/evidence blockers and may be treated as safely closed
+    - `operator_flow` means the incident is not terminally blocked, but more preview/validate/apply or operator review work is still expected
+    - `review_required` means request-review or escalation must happen before the incident can move toward closure
+    - `resolved_not_ready` means an operator already marked the incident resolved, but governance still says do not close it yet
+    - `blocked` means closure is stopped by a terminal blocked/manual-required condition and should not proceed without manual intervention
   - restore retention keeps the latest restore point, the recent N restore points, restore points referenced by recent rollback audit, and any restore point still associated with unresolved manual_required work
   - `sandbox:restore-points:prune` only removes expired restore points that are not protected by retention rules
   - no-op apply or no-op rollback does not create a new restore point
@@ -1358,6 +1386,9 @@ npm run test:orchestrator:sandbox-default-selection
 npm run test:orchestrator:sandbox-governance-status
 npm run test:orchestrator:sandbox-incident-policy-matrix
 npm run test:orchestrator:sandbox-operator-handoff-summary
+npm run test:orchestrator:sandbox-resolution-readiness
+npm run test:orchestrator:sandbox-resolution-evidence-summary
+npm run test:orchestrator:sandbox-closure-gating
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine
