@@ -70,11 +70,16 @@ export type OrchestratorDiagnostics = {
     status: OrchestratorState["statusReportStatus"];
     readiness: OrchestratorState["liveStatusReportReadiness"];
     liveStatus: OrchestratorState["liveStatusReportStatus"];
+    permissionStatus: OrchestratorState["lastStatusReportPermissionStatus"];
+    readinessStatus: OrchestratorState["lastStatusReportReadinessStatus"];
     action: OrchestratorState["lastStatusReportAction"];
+    targetStrategy: OrchestratorState["lastStatusReportTargetStrategy"];
     summary: string | null;
     failureReason: string | null;
     correlationId: string | null;
     target: string | null;
+    lastAuditId: string | null;
+    recentAttempts: string[];
   };
   nextSuggestedAction: string;
 };
@@ -198,11 +203,21 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
       status: state.statusReportStatus,
       readiness: state.liveStatusReportReadiness,
       liveStatus: state.liveStatusReportStatus,
+      permissionStatus: state.lastStatusReportPermissionStatus,
+      readinessStatus: state.lastStatusReportReadinessStatus,
       action: state.lastStatusReportAction,
+      targetStrategy: state.lastStatusReportTargetStrategy,
       summary: state.lastStatusReportSummary?.summary ?? null,
       failureReason: state.lastStatusReportFailureReason,
       correlationId: state.statusReportCorrelationId,
       target: state.lastStatusReportTarget?.targetUrl ?? state.lastStatusReportTarget?.correlationId ?? null,
+      lastAuditId: state.lastReportDeliveryAuditId,
+      recentAttempts: state.reportDeliveryAttempts
+        .slice(-3)
+        .map(
+          (attempt) =>
+            `${attempt.attemptedAt} ${attempt.action} ${attempt.targetType}:${attempt.targetId ?? "none"} ${attempt.permissionCheckResult} ${attempt.failureReason ?? "ok"}`,
+        ),
     },
     nextSuggestedAction: resolveNextSuggestedAction(state, preflight),
   } satisfies OrchestratorDiagnostics;
@@ -221,7 +236,7 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     `Artifacts: backend=${summary.artifactSummary.backendType}, backendHealth=${summary.artifactSummary.backendHealthStatus}, queue=${summary.artifactSummary.queueStatus}, transfer=${summary.artifactSummary.transferStatus}, repair=${summary.artifactSummary.repairStatus}, patch=${summary.artifactSummary.patchStatus}, promotion=${summary.artifactSummary.promotionStatus}, handoff=${summary.artifactSummary.handoffStatus}, prDraft=${summary.artifactSummary.prDraftStatus}, liveAcceptance=${summary.artifactSummary.liveAcceptanceStatus}, livePass=${summary.artifactSummary.livePassStatus}, workspace=${summary.artifactSummary.workspaceStatus}`,
     `Worker: status=${summary.workerSummary.workerStatus}, supervision=${summary.workerSummary.supervisionStatus}, workerId=${summary.workerSummary.workerId ?? "none"}, leaseOwner=${summary.workerSummary.leaseOwner ?? "none"}, lastHeartbeat=${summary.workerSummary.lastHeartbeatAt ?? "none"}, lastLeaseRenewal=${summary.workerSummary.lastLeaseRenewalAt ?? "none"}, daemonHeartbeat=${summary.workerSummary.daemonHeartbeatAt ?? "none"}, cancel=${summary.workerSummary.cancellationStatus}, pause=${summary.workerSummary.pauseStatus}, retries=${summary.workerSummary.retryCount}`,
     `Recovery: action=${summary.recoverySummary.action ?? "none"}, reason=${summary.recoverySummary.reason ?? "none"}`,
-    `Status reporting: status=${summary.statusReporting.status}, readiness=${summary.statusReporting.readiness}, live=${summary.statusReporting.liveStatus}, action=${summary.statusReporting.action}, correlation=${summary.statusReporting.correlationId ?? "none"}, target=${summary.statusReporting.target ?? "none"}, failure=${summary.statusReporting.failureReason ?? "none"}, summary=${summary.statusReporting.summary ?? "none"}`,
+    `Status reporting: status=${summary.statusReporting.status}, readiness=${summary.statusReporting.readiness}, readinessStatus=${summary.statusReporting.readinessStatus}, live=${summary.statusReporting.liveStatus}, permission=${summary.statusReporting.permissionStatus}, action=${summary.statusReporting.action}, strategy=${summary.statusReporting.targetStrategy}, correlation=${summary.statusReporting.correlationId ?? "none"}, target=${summary.statusReporting.target ?? "none"}, audit=${summary.statusReporting.lastAuditId ?? "none"}, failure=${summary.statusReporting.failureReason ?? "none"}, summary=${summary.statusReporting.summary ?? "none"}`,
     `Blockers: ${summary.blockers.join(" | ") || "none"}`,
     `Missing prerequisites: ${summary.missingPrerequisites.join(", ") || "none"}`,
   ];
@@ -229,6 +244,12 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     lines.push("Blocked reasons:");
     for (const reason of summary.blockedReasons) {
       lines.push(`- ${reason.code}: ${reason.summary} -> ${reason.suggestedNextAction}`);
+    }
+  }
+  if (summary.statusReporting.recentAttempts.length > 0) {
+    lines.push("Recent report attempts:");
+    for (const attempt of summary.statusReporting.recentAttempts) {
+      lines.push(`- ${attempt}`);
     }
   }
   lines.push(`Next action: ${summary.nextSuggestedAction}`);

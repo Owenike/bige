@@ -87,6 +87,9 @@ jobs:
           npm run test:orchestrator:comment-targeting
           npm run test:orchestrator:reporting-readiness
           npm run test:orchestrator:github-live-comment
+          npm run test:orchestrator:github-report-permissions
+          npm run test:orchestrator:report-delivery-audit
+          npm run test:orchestrator:reporting-operator-summary
           npm run test:orchestrator:actor-policy-config
           npm run test:orchestrator:runtime-config
           npm run test:orchestrator:webhook-hosting

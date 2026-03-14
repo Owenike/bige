@@ -237,6 +237,18 @@ export const runtimeHealthStatusSchema = z.enum(["unknown", "ready", "degraded",
 export const runtimeReadinessStatusSchema = z.enum(["unknown", "ready", "degraded", "blocked"]);
 export const liveStatusReportReadinessSchema = z.enum(["unknown", "ready", "degraded", "blocked"]);
 export const liveStatusReportStatusSchema = z.enum(["unknown", "ready", "degraded", "blocked", "skipped", "failed"]);
+export const statusReportPermissionStatusSchema = z.enum([
+  "unknown",
+  "ready",
+  "disabled",
+  "missing_token",
+  "missing_gh",
+  "target_invalid",
+  "create_denied",
+  "update_denied",
+  "correlation_not_updatable",
+  "blocked",
+]);
 export const statusReportStatusSchema = z.enum([
   "not_run",
   "payload_ready",
@@ -545,10 +557,30 @@ export const statusReportSummarySchema = z.object({
   commentId: z.number().int().positive().nullable().default(null),
   correlationId: z.string().nullable().default(null),
   readiness: liveStatusReportReadinessSchema.default("unknown"),
+  permissionStatus: statusReportPermissionStatusSchema.default("unknown"),
   targetKind: z.enum(["artifact_only", "issue_comment", "pull_request_comment"]).default("artifact_only"),
+  targetStrategy: z.enum(["unknown", "create", "update", "skip", "blocked"]).default("unknown"),
   failureReason: z.string().nullable().default(null),
   action: z.enum(["none", "payload_only", "created", "updated", "skipped", "blocked", "failed"]).default("none"),
+  auditId: z.string().nullable().default(null),
+  nextAction: z.string().nullable().default(null),
   ranAt: z.string(),
+});
+
+export const reportDeliveryAttemptSchema = z.object({
+  id: z.string(),
+  attemptedAt: z.string(),
+  targetType: z.enum(["artifact_only", "issue_comment", "pull_request_comment"]),
+  targetId: z.number().int().positive().nullable().default(null),
+  targetUrl: z.string().nullable().default(null),
+  action: z.enum(["create", "update", "skip", "blocked", "failed"]),
+  correlationId: z.string().nullable().default(null),
+  readinessStatus: liveStatusReportReadinessSchema.default("unknown"),
+  permissionCheckResult: statusReportPermissionStatusSchema.default("unknown"),
+  failureReason: z.string().nullable().default(null),
+  providerUsed: z.string(),
+  summary: z.string(),
+  suggestedNextAction: z.string().nullable().default(null),
 });
 
 export const blockedReasonSchema = z.object({
@@ -824,12 +856,17 @@ export const orchestratorStateSchema = z.object({
   lastLiveEvidence: liveEvidenceSchema.nullable().default(null),
   liveStatusReportReadiness: liveStatusReportReadinessSchema.default("unknown"),
   liveStatusReportStatus: liveStatusReportStatusSchema.default("unknown"),
+  lastStatusReportPermissionStatus: statusReportPermissionStatusSchema.default("unknown"),
+  lastStatusReportReadinessStatus: liveStatusReportReadinessSchema.default("unknown"),
   statusReportStatus: statusReportStatusSchema.default("not_run"),
   statusReportCorrelationId: z.string().nullable().default(null),
   lastStatusReportAction: z.enum(["none", "payload_only", "created", "updated", "skipped", "blocked", "failed"]).default("none"),
+  lastStatusReportTargetStrategy: z.enum(["unknown", "create", "update", "skip", "blocked"]).default("unknown"),
   lastStatusReportTarget: statusReportTargetSchema.nullable().default(null),
   lastStatusReportFailureReason: z.string().nullable().default(null),
   lastStatusReportSummary: statusReportSummarySchema.nullable().default(null),
+  reportDeliveryAttempts: z.array(reportDeliveryAttemptSchema).default([]),
+  lastReportDeliveryAuditId: z.string().nullable().default(null),
   lastPreflightResult: preflightResultSchema.nullable().default(null),
   lastBlockedReasons: z.array(blockedReasonSchema).default([]),
   lastAuditTrail: auditTrailSchema.nullable().default(null),
@@ -883,6 +920,8 @@ export type ActorAuthorizationDecision = z.infer<typeof actorAuthorizationDecisi
 export type InboundAuditRecord = z.infer<typeof inboundAuditRecordSchema>;
 export type InboundAuditCollection = z.infer<typeof inboundAuditCollectionSchema>;
 export type StatusReportSummary = z.infer<typeof statusReportSummarySchema>;
+export type StatusReportPermissionStatus = z.infer<typeof statusReportPermissionStatusSchema>;
+export type ReportDeliveryAttempt = z.infer<typeof reportDeliveryAttemptSchema>;
 export type AuditTrail = z.infer<typeof auditTrailSchema>;
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 export type PreflightTarget = z.infer<typeof preflightTargetSchema>;
@@ -1414,12 +1453,17 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastLiveEvidence",
     "liveStatusReportReadiness",
     "liveStatusReportStatus",
+    "lastStatusReportPermissionStatus",
+    "lastStatusReportReadinessStatus",
     "statusReportStatus",
     "statusReportCorrelationId",
     "lastStatusReportAction",
+    "lastStatusReportTargetStrategy",
     "lastStatusReportTarget",
     "lastStatusReportFailureReason",
     "lastStatusReportSummary",
+    "reportDeliveryAttempts",
+    "lastReportDeliveryAuditId",
     "lastAuditTrail",
     "lastHandoffPackagePath",
     "stopReason",
@@ -1993,6 +2037,14 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       type: "string",
       enum: ["unknown", "ready", "degraded", "blocked", "skipped", "failed"],
     },
+    lastStatusReportPermissionStatus: {
+      type: "string",
+      enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "create_denied", "update_denied", "correlation_not_updatable", "blocked"],
+    },
+    lastStatusReportReadinessStatus: {
+      type: "string",
+      enum: ["unknown", "ready", "degraded", "blocked"],
+    },
     statusReportStatus: {
       type: "string",
       enum: ["not_run", "payload_ready", "comment_posted", "comment_created", "comment_updated", "blocked", "skipped", "failed"],
@@ -2001,6 +2053,10 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     lastStatusReportAction: {
       type: "string",
       enum: ["none", "payload_only", "created", "updated", "skipped", "blocked", "failed"],
+    },
+    lastStatusReportTargetStrategy: {
+      type: "string",
+      enum: ["unknown", "create", "update", "skip", "blocked"],
     },
     lastStatusReportTarget: {
       type: "object",
@@ -2021,7 +2077,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     lastStatusReportSummary: {
       type: "object",
       nullable: true,
-      required: ["status", "provider", "summary", "markdownPath", "payloadPath", "targetUrl", "targetNumber", "commentId", "correlationId", "readiness", "targetKind", "failureReason", "action", "ranAt"],
+      required: ["status", "provider", "summary", "markdownPath", "payloadPath", "targetUrl", "targetNumber", "commentId", "correlationId", "readiness", "permissionStatus", "targetKind", "targetStrategy", "failureReason", "action", "auditId", "nextAction", "ranAt"],
       additionalProperties: false,
       properties: {
         status: { type: "string", enum: ["not_run", "payload_ready", "comment_posted", "comment_created", "comment_updated", "blocked", "skipped", "failed"] },
@@ -2034,12 +2090,40 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         commentId: { type: "number", nullable: true },
         correlationId: { type: "string", nullable: true },
         readiness: { type: "string", enum: ["unknown", "ready", "degraded", "blocked"] },
+        permissionStatus: { type: "string", enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "create_denied", "update_denied", "correlation_not_updatable", "blocked"] },
         targetKind: { type: "string", enum: ["artifact_only", "issue_comment", "pull_request_comment"] },
+        targetStrategy: { type: "string", enum: ["unknown", "create", "update", "skip", "blocked"] },
         failureReason: { type: "string", nullable: true },
         action: { type: "string", enum: ["none", "payload_only", "created", "updated", "skipped", "blocked", "failed"] },
+        auditId: { type: "string", nullable: true },
+        nextAction: { type: "string", nullable: true },
         ranAt: { type: "string" },
       },
     },
+    reportDeliveryAttempts: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "attemptedAt", "targetType", "targetId", "targetUrl", "action", "correlationId", "readinessStatus", "permissionCheckResult", "failureReason", "providerUsed", "summary", "suggestedNextAction"],
+        additionalProperties: false,
+        properties: {
+          id: { type: "string" },
+          attemptedAt: { type: "string" },
+          targetType: { type: "string", enum: ["artifact_only", "issue_comment", "pull_request_comment"] },
+          targetId: { type: "number", nullable: true },
+          targetUrl: { type: "string", nullable: true },
+          action: { type: "string", enum: ["create", "update", "skip", "blocked", "failed"] },
+          correlationId: { type: "string", nullable: true },
+          readinessStatus: { type: "string", enum: ["unknown", "ready", "degraded", "blocked"] },
+          permissionCheckResult: { type: "string", enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "create_denied", "update_denied", "correlation_not_updatable", "blocked"] },
+          failureReason: { type: "string", nullable: true },
+          providerUsed: { type: "string" },
+          summary: { type: "string" },
+          suggestedNextAction: { type: "string", nullable: true },
+        },
+      },
+    },
+    lastReportDeliveryAuditId: { type: "string", nullable: true },
     lastPreflightResult: {
       type: "object",
       nullable: true,

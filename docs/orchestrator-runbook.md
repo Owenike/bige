@@ -349,6 +349,8 @@ CLI path:
 ```powershell
 npm run orchestrator:status:report -- --state-id demo
 npm run orchestrator:github-live-report:smoke -- --state-id demo
+npm run orchestrator:reporting:smoke -- --state-id demo
+npm run orchestrator:diagnostics -- --state-id demo
 ```
 
 `event:intake` can also emit an initial task-created status summary when `--report-status true`.
@@ -373,9 +375,14 @@ Comment upsert / correlation:
   - `statusReportCorrelationId`
   - `lastStatusReportTarget`
   - `lastStatusReportAction`
+  - `lastStatusReportTargetStrategy`
+  - `lastStatusReportPermissionStatus`
+  - `lastStatusReportReadinessStatus`
   - `lastStatusReportFailureReason`
   - `lastStatusReportSummary`
   - `liveStatusReportReadiness`
+  - `reportDeliveryAttempts`
+  - `lastReportDeliveryAuditId`
 
 Skip / failure behavior:
 - missing `GITHUB_TOKEN` / `GH_TOKEN` -> explicit `skipped`
@@ -387,6 +394,7 @@ Skip / failure behavior:
 Live GitHub reporting hardening:
 - live comment create/update first checks readiness for `gh` + token
 - readiness now also answers whether the next live action is expected to be `create`, `update`, `skip`, or `blocked`
+- permission smoke now distinguishes missing token, missing `gh`, invalid target, create denied, update denied, and visible-but-not-updatable correlated targets
 - correlation marker lookup still prevents duplicate comments on the same thread
 - issue and PR thread targeting now follow the same persisted target metadata model
 - create/update failure is recorded as reporting failure and does not redefine the main orchestration result
@@ -396,16 +404,38 @@ Live comment action rules:
 - `update`: a correlated comment target already exists, or marker lookup found one in the thread
 - `skip`: live path is disabled or degraded because token / `gh` is unavailable
 - `blocked`: there is no safe issue / PR thread target for live commenting
+- `failed`: the target exists but GitHub rejected create/update, or the target is invalid/stale and could not be repaired automatically
 
 Local smoke:
 ```powershell
 npm run orchestrator:status:report -- --state-id demo
 npm run orchestrator:github-live-report:smoke -- --state-id demo
+npm run orchestrator:reporting:smoke -- --state-id demo
 ```
 
 The smoke path is intentionally gated:
 - with valid token + `gh`, it should create then update the correlated comment
 - without token or `gh`, it records degraded/skip semantics instead of hard-failing
+- permission smoke is non-authoritative when no live token is present, but still classifies the exact prerequisite or permission bucket that is missing
+
+Delivery audit:
+- every status reporting attempt records an audit entry with action, target, correlation id, readiness, permission result, provider, failure reason, and suggested next action
+- recent attempts are persisted in `reportDeliveryAttempts`
+- operator-facing views use these entries to explain whether the current strategy is `create`, `update`, `skip`, `blocked`, or `failed`
+
+Operator commands:
+```powershell
+npm run orchestrator:reporting:smoke -- --state-id demo
+npm run orchestrator:diagnostics -- --state-id demo
+node .tmp/orchestrator/src/cli.js reporting:status --state-id demo
+node .tmp/orchestrator/src/cli.js reporting:audit --state-id demo
+```
+
+Typical next actions:
+- missing token -> provide `GITHUB_TOKEN` or `GH_TOKEN`
+- missing `gh` -> install `gh` and ensure it is on `PATH`
+- invalid target -> re-run from a valid issue/PR thread or let the next create path recreate correlation
+- update denied / correlation not updatable -> use a token that can patch the correlated comment, or clear the stale target and recreate it
 
 ## Inbound Audit
 Every accepted, rejected, ignored, or duplicate webhook intake now records inbound audit metadata.

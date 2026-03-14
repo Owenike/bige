@@ -165,9 +165,13 @@ test("comment command webhook can route to status reporting for an existing thre
           commentId: 123,
           correlationId: "orchestrator-status:issue-12-task",
           readiness: "ready",
+          permissionStatus: "ready",
           targetKind: "issue_comment",
+          targetStrategy: "create",
           failureReason: null,
           action: "created",
+          auditId: "mock-audit",
+          nextAction: "Reuse the correlated comment.",
           ranAt: new Date().toISOString(),
         };
       },

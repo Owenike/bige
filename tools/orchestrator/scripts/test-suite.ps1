@@ -64,6 +64,9 @@ $suiteMap = @{
     "$outDir\tests\unit\comment-targeting.test.js",
     "$outDir\tests\unit\reporting-readiness.test.js",
     "$outDir\tests\unit\github-live-comment.test.js",
+    "$outDir\tests\unit\github-report-permissions.test.js",
+    "$outDir\tests\unit\report-delivery-audit.test.js",
+    "$outDir\tests\unit\reporting-operator-summary.test.js",
     "$outDir\tests\unit\trigger-policy.test.js",
     "$outDir\tests\unit\webhook.test.js",
     "$outDir\tests\unit\commands.test.js",
@@ -186,6 +189,15 @@ $suiteMap = @{
   )
   "github-live-comment" = @(
     "$outDir\tests\unit\github-live-comment.test.js"
+  )
+  "github-report-permissions" = @(
+    "$outDir\tests\unit\github-report-permissions.test.js"
+  )
+  "report-delivery-audit" = @(
+    "$outDir\tests\unit\report-delivery-audit.test.js"
+  )
+  "reporting-operator-summary" = @(
+    "$outDir\tests\unit\reporting-operator-summary.test.js"
   )
   "trigger-policy" = @(
     "$outDir\tests\unit\trigger-policy.test.js"
@@ -329,6 +341,9 @@ $suiteMap = @{
     "$outDir\tests\unit\comment-targeting.test.js",
     "$outDir\tests\unit\reporting-readiness.test.js",
     "$outDir\tests\unit\github-live-comment.test.js",
+    "$outDir\tests\unit\github-report-permissions.test.js",
+    "$outDir\tests\unit\report-delivery-audit.test.js",
+    "$outDir\tests\unit\reporting-operator-summary.test.js",
     "$outDir\tests\unit\trigger-policy.test.js",
     "$outDir\tests\unit\webhook.test.js",
     "$outDir\tests\unit\commands.test.js",

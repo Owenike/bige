@@ -16,8 +16,11 @@ import {
   statusReportSummarySchema,
   statusReportTargetSchema,
   type OrchestratorState,
+  type StatusReportPermissionStatus,
   type StatusReportSummary,
 } from "../schemas";
+import { classifyGitHubReportingFailure, mapReadinessToPermissionStatus, summarizePermissionStatus } from "../github-report-permissions";
+import { applyReportDeliveryAudit, formatReportDeliveryAttempts } from "../reporting-audit";
 
 const execFileAsync = promisify(execFile);
 
@@ -68,6 +71,29 @@ export type GitHubLiveReportReadiness = {
   failureReason: string | null;
   suggestedNextAction: string;
 };
+
+export type GitHubReportPermissionSmokeResult = {
+  status: "ready" | "degraded" | "blocked";
+  permissionStatus: StatusReportPermissionStatus;
+  targetStrategy: "unknown" | "create" | "update" | "skip" | "blocked";
+  targetKind: "artifact_only" | "issue_comment" | "pull_request_comment";
+  targetId: number | null;
+  summary: string;
+  failureReason: string | null;
+  suggestedNextAction: string;
+  providerUsed: "gh" | "payload_only";
+};
+
+function buildStatusReportAuditId(correlationId: string | null, ranAt: string, action: string) {
+  return `report-delivery:${correlationId ?? "none"}:${ranAt}:${action}`;
+}
+
+function mapReadinessActionToSummaryAction(action: GitHubLiveReportReadiness["action"]) {
+  if (action === "blocked") {
+    return "blocked";
+  }
+  return "skipped";
+}
 
 function mapStatusSummaryToLiveStatus(summary: StatusReportSummary): OrchestratorState["liveStatusReportStatus"] {
   if (summary.status === "comment_created" || summary.status === "comment_updated" || summary.status === "comment_posted") {
@@ -190,6 +216,111 @@ export async function evaluateGitHubLiveCommentReadiness(params: {
   };
 }
 
+export async function runGitHubReportPermissionSmoke(params: {
+  state: OrchestratorState;
+  enabled: boolean;
+  token: string | null;
+  execFileImpl?: ExecFileLike;
+}): Promise<GitHubReportPermissionSmokeResult> {
+  const execImpl: ExecFileLike = params.execFileImpl ?? defaultExecFileLike;
+  const readiness = await evaluateGitHubLiveCommentReadiness({
+    state: params.state,
+    enabled: params.enabled,
+    token: params.token,
+    execFileImpl: execImpl,
+  });
+
+  if (readiness.status !== "ready") {
+    return {
+      status: readiness.status,
+      permissionStatus: mapReadinessToPermissionStatus(readiness),
+      targetStrategy: readiness.action,
+      targetKind: readiness.targetKind,
+      targetId: readiness.targetId,
+      summary: readiness.summary,
+      failureReason: readiness.failureReason,
+      suggestedNextAction: readiness.suggestedNextAction,
+      providerUsed: readiness.action === "skip" ? "payload_only" : "gh",
+    };
+  }
+
+  const target = resolveStatusReportGitHubTarget(params.state);
+  if (!target) {
+    return {
+      status: "blocked",
+      permissionStatus: "blocked",
+      targetStrategy: "blocked",
+      targetKind: "artifact_only",
+      targetId: null,
+      summary: "GitHub live reporting is blocked because no issue or pull request target is available.",
+      failureReason: "missing_github_thread_target",
+      suggestedNextAction: "Run reporting from an issue or pull request sourced task.",
+      providerUsed: "payload_only",
+    };
+  }
+
+  const targetDecision = resolveCommentTargetingDecision({
+    state: params.state,
+  });
+
+  try {
+    if (targetDecision.action === "update" && targetDecision.commentId) {
+      await execImpl("gh", ["api", `repos/${target.repository}/issues/comments/${targetDecision.commentId}`], {
+        windowsHide: true,
+      });
+      return {
+        status: "ready",
+        permissionStatus: "ready",
+        targetStrategy: "update",
+        targetKind: targetDecision.targetKind,
+        targetId: targetDecision.commentId,
+        summary: "GitHub live reporting can reach the correlated comment and is ready to update it.",
+        failureReason: null,
+        suggestedNextAction: "Run the live comment reporting path to patch the correlated comment.",
+        providerUsed: "gh",
+      };
+    }
+
+    await execImpl("gh", ["api", `repos/${target.repository}/issues/${target.targetNumber}`], {
+      windowsHide: true,
+    });
+    return {
+      status: "ready",
+      permissionStatus: "ready",
+      targetStrategy: "create",
+      targetKind: targetDecision.targetKind,
+      targetId: target.targetNumber,
+      summary: "GitHub live reporting can reach the target thread and is ready to create a correlated comment.",
+      failureReason: null,
+      suggestedNextAction: "Run the live comment reporting path to create the first correlated status comment.",
+      providerUsed: "gh",
+    };
+  } catch (error) {
+    const classified =
+      targetDecision.action === "update"
+        ? classifyGitHubReportingFailure({
+            error,
+            attemptedAction: "update",
+          })
+        : classifyGitHubReportingFailure({
+            error,
+            attemptedAction: "create",
+          });
+
+    return {
+      status: "degraded",
+      permissionStatus: classified.permissionStatus,
+      targetStrategy: targetDecision.action === "update" ? "update" : "create",
+      targetKind: targetDecision.targetKind,
+      targetId: targetDecision.commentId ?? targetDecision.targetNumber,
+      summary: summarizePermissionStatus(classified.permissionStatus),
+      failureReason: classified.failureReason,
+      suggestedNextAction: classified.suggestedNextAction,
+      providerUsed: "gh",
+    };
+  }
+}
+
 export function resolveStatusReportGitHubTarget(state: OrchestratorState) {
   const target = resolveGitHubThreadTarget(state);
   if (!target) {
@@ -223,6 +354,7 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
     const ranAt = new Date().toISOString();
     const correlationId = buildStatusReportCorrelationId(params.state);
     if (!this.params.enabled) {
+      const auditId = buildStatusReportAuditId(correlationId, ranAt, "skipped");
       return statusReportSummarySchema.parse({
         status: "skipped",
         provider: this.kind,
@@ -234,13 +366,18 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
         commentId: null,
         correlationId,
         readiness: "degraded",
+        permissionStatus: "disabled",
         targetKind: params.isPullRequest ? "pull_request_comment" : "issue_comment",
+        targetStrategy: "skip",
         failureReason: "github_live_reporting_disabled",
         action: "skipped",
+        auditId,
+        nextAction: "Enable live GitHub reporting before retrying comment delivery.",
         ranAt,
       });
     }
     if (!this.params.token) {
+      const auditId = buildStatusReportAuditId(correlationId, ranAt, "skipped");
       return statusReportSummarySchema.parse({
         status: "skipped",
         provider: this.kind,
@@ -252,9 +389,13 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
         commentId: null,
         correlationId,
         readiness: "degraded",
+        permissionStatus: "missing_token",
         targetKind: params.isPullRequest ? "pull_request_comment" : "issue_comment",
+        targetStrategy: "skip",
         failureReason: "missing_github_token",
         action: "skipped",
+        auditId,
+        nextAction: "Provide GITHUB_TOKEN or GH_TOKEN before retrying live reporting.",
         ranAt,
       });
     }
@@ -266,6 +407,7 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
       execFileImpl: execImpl,
     });
     if (readiness.status !== "ready") {
+      const auditId = buildStatusReportAuditId(correlationId, ranAt, readiness.action);
       return statusReportSummarySchema.parse({
         status: readiness.status === "blocked" ? "blocked" : "skipped",
         provider: this.kind,
@@ -277,9 +419,13 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
         commentId: null,
         correlationId,
         readiness: readiness.status,
+        permissionStatus: mapReadinessToPermissionStatus(readiness),
         targetKind: readiness.targetKind,
+        targetStrategy: readiness.action,
         failureReason: readiness.failureReason,
-        action: readiness.action === "blocked" ? "blocked" : "skipped",
+        action: mapReadinessActionToSummaryAction(readiness.action),
+        auditId,
+        nextAction: readiness.suggestedNextAction,
         ranAt,
       });
     }
@@ -298,9 +444,38 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
           const payload = stdout.trim() ? (JSON.parse(stdout) as { id?: number; html_url?: string }) : null;
           existingCommentId = payload?.id ?? existingCommentId;
           existingUrl = payload?.html_url ?? existingUrl;
-        } catch {
-          existingCommentId = null;
-          existingUrl = null;
+        } catch (error) {
+          const classified = classifyGitHubReportingFailure({
+            error,
+            attemptedAction: "update",
+            correlatedTargetVisible: false,
+          });
+          if (classified.permissionStatus === "target_invalid") {
+            existingCommentId = null;
+            existingUrl = null;
+          } else {
+            const auditId = buildStatusReportAuditId(correlationId, ranAt, "failed");
+            return statusReportSummarySchema.parse({
+              status: "failed",
+              provider: this.kind,
+              summary: summarizePermissionStatus(classified.permissionStatus),
+              markdownPath: params.markdownPath,
+              payloadPath: null,
+              targetUrl: existingUrl,
+              targetNumber: params.targetNumber,
+              commentId: params.state.lastStatusReportTarget?.commentId ?? null,
+              correlationId,
+              readiness: "degraded",
+              permissionStatus: classified.permissionStatus,
+              targetKind: params.isPullRequest ? "pull_request_comment" : "issue_comment",
+              targetStrategy: "update",
+              failureReason: classified.failureReason,
+              action: "failed",
+              auditId,
+              nextAction: classified.suggestedNextAction,
+              ranAt,
+            });
+          }
         }
       }
 
@@ -328,6 +503,7 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
         const args = ["api", `repos/${params.repository}/issues/comments/${existingCommentId}`, "--method", "PATCH", "--input", bodyPayloadPath];
         const { stdout } = await execImpl("gh", args, { windowsHide: true });
         const payload = stdout.trim() ? (JSON.parse(stdout) as { html_url?: string; id?: number }) : null;
+        const auditId = buildStatusReportAuditId(correlationId, ranAt, "updated");
         return statusReportSummarySchema.parse({
           status: "comment_updated",
           provider: this.kind,
@@ -339,9 +515,13 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
           commentId: payload?.id ?? targeting.commentId,
           correlationId,
           readiness: "ready",
+          permissionStatus: "ready",
           targetKind: targeting.targetKind,
+          targetStrategy: "update",
           failureReason: null,
           action: "updated",
+          auditId,
+          nextAction: "Continue using the correlated comment for subsequent status updates.",
           ranAt,
         });
       }
@@ -349,6 +529,7 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
       const args = ["api", `repos/${params.repository}/issues/${params.targetNumber}/comments`, "--method", "POST", "--input", bodyPayloadPath];
       const { stdout } = await execImpl("gh", args, { windowsHide: true });
       const payload = stdout.trim() ? (JSON.parse(stdout) as { html_url?: string; id?: number }) : null;
+      const auditId = buildStatusReportAuditId(correlationId, ranAt, "created");
       return statusReportSummarySchema.parse({
         status: "comment_created",
         provider: this.kind,
@@ -360,26 +541,40 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
         commentId: payload?.id ?? extractCommentIdFromUrl(payload?.html_url),
         correlationId,
         readiness: "ready",
+        permissionStatus: "ready",
         targetKind: params.isPullRequest ? "pull_request_comment" : "issue_comment",
+        targetStrategy: "create",
         failureReason: null,
         action: "created",
+        auditId,
+        nextAction: "Reuse the stored correlation target for subsequent status updates.",
         ranAt,
       });
     } catch (error) {
+      const classified = classifyGitHubReportingFailure({
+        error,
+        attemptedAction: params.state.lastStatusReportTarget?.commentId ? "update" : "create",
+        correlatedTargetVisible: Boolean(params.state.lastStatusReportTarget?.commentId),
+      });
+      const auditId = buildStatusReportAuditId(correlationId, ranAt, "failed");
       return statusReportSummarySchema.parse({
         status: "failed",
         provider: this.kind,
-        summary: error instanceof Error ? error.message : "GitHub comment reporting failed.",
+        summary: summarizePermissionStatus(classified.permissionStatus),
         markdownPath: params.markdownPath,
         payloadPath: null,
         targetUrl: null,
         targetNumber: params.targetNumber,
         commentId: null,
         correlationId,
-        readiness: "blocked",
+        readiness: classified.permissionStatus === "target_invalid" ? "degraded" : "blocked",
+        permissionStatus: classified.permissionStatus,
         targetKind: params.isPullRequest ? "pull_request_comment" : "issue_comment",
-        failureReason: error instanceof Error ? error.message : "github_live_comment_failed",
+        targetStrategy: params.state.lastStatusReportTarget?.commentId ? "update" : "create",
+        failureReason: classified.failureReason,
         action: "failed",
+        auditId,
+        nextAction: classified.suggestedNextAction,
         ranAt,
       });
     }
@@ -417,7 +612,7 @@ export function buildStatusReportPayload(state: OrchestratorState) {
   }
   lines.push(`- Runtime: health=${state.runtimeHealthStatus} / readiness=${state.runtimeReadinessStatus}`);
   lines.push(
-    `- Live status reporting: status=${state.liveStatusReportStatus} / readiness=${state.liveStatusReportReadiness} / action=${state.lastStatusReportAction}`,
+    `- Live status reporting: status=${state.liveStatusReportStatus} / readiness=${state.liveStatusReportReadiness} / action=${state.lastStatusReportAction} / permission=${state.lastStatusReportPermissionStatus} / strategy=${state.lastStatusReportTargetStrategy}`,
   );
   if (state.lastHandoffPackagePath) {
     lines.push(`- Handoff package: ${state.lastHandoffPackagePath}`);
@@ -452,6 +647,7 @@ export async function reportStateStatus(params: {
 
   const target = resolveStatusReportGitHubTarget(params.state);
   if (!target) {
+    const auditId = buildStatusReportAuditId(payload.correlationId, payload.generatedAt, "payload_only");
     return statusReportSummarySchema.parse({
       status: "payload_ready",
       provider: "payload_only",
@@ -463,14 +659,19 @@ export async function reportStateStatus(params: {
       commentId: null,
       correlationId: payload.correlationId,
       readiness: "blocked",
+      permissionStatus: "blocked",
       targetKind: "artifact_only",
+      targetStrategy: "blocked",
       failureReason: "missing_github_thread_target",
       action: "payload_only",
+      auditId,
+      nextAction: "Run status reporting from an issue or pull request sourced task.",
       ranAt: payload.generatedAt,
     });
   }
 
   if (!params.adapter) {
+    const auditId = buildStatusReportAuditId(payload.correlationId, payload.generatedAt, "payload_only");
     return statusReportSummarySchema.parse({
       status: "payload_ready",
       provider: "payload_only",
@@ -482,9 +683,13 @@ export async function reportStateStatus(params: {
       commentId: null,
       correlationId: payload.correlationId,
       readiness: "degraded",
+      permissionStatus: "unknown",
       targetKind: target.isPullRequest ? "pull_request_comment" : "issue_comment",
+      targetStrategy: "skip",
       failureReason: "github_adapter_not_configured",
       action: "payload_only",
+      auditId,
+      nextAction: "Configure a GitHub status reporting adapter to post or update live comments.",
       ranAt: payload.generatedAt,
     });
   }
@@ -501,6 +706,38 @@ export async function reportStateStatus(params: {
     markdownPath,
     payloadPath,
   });
+}
+
+export async function inspectGitHubReportingOperatorSummary(params: {
+  state: OrchestratorState;
+  enabled: boolean;
+  token: string | null;
+  execFileImpl?: ExecFileLike;
+}) {
+  const permissionSmoke = await runGitHubReportPermissionSmoke({
+    state: params.state,
+    enabled: params.enabled,
+    token: params.token,
+    execFileImpl: params.execFileImpl,
+  });
+  const recentAttempts = params.state.reportDeliveryAttempts.slice(-5);
+  const lines = [
+    `Live reporting readiness: ${params.state.liveStatusReportReadiness}`,
+    `Last live report status: ${params.state.liveStatusReportStatus}`,
+    `Last action: ${params.state.lastStatusReportAction}`,
+    `Last permission status: ${params.state.lastStatusReportPermissionStatus}`,
+    `Target strategy: ${params.state.lastStatusReportTargetStrategy}`,
+    `Current permission smoke: ${permissionSmoke.status} / ${permissionSmoke.permissionStatus} / ${permissionSmoke.targetStrategy}`,
+    `Current target: ${permissionSmoke.targetKind}:${permissionSmoke.targetId ?? "none"}`,
+    `Current summary: ${permissionSmoke.summary}`,
+    `Next action: ${permissionSmoke.suggestedNextAction}`,
+    `Recent attempts:\n${formatReportDeliveryAttempts(recentAttempts)}`,
+  ];
+  return {
+    permissionSmoke,
+    recentAttempts,
+    summaryText: lines.join("\n"),
+  };
 }
 
 export async function runGitHubLiveCommentSmoke(params: {
@@ -542,16 +779,22 @@ export function applyStatusReportToState(state: OrchestratorState, summary: Stat
       updatedAt: summary.ranAt,
     }),
   );
+  const audit = applyReportDeliveryAudit(state, summary);
   return orchestratorStateSchema.parse({
     ...state,
     liveStatusReportStatus: mapStatusSummaryToLiveStatus(summary),
     liveStatusReportReadiness: summary.readiness,
+    lastStatusReportPermissionStatus: summary.permissionStatus,
+    lastStatusReportReadinessStatus: summary.readiness,
     statusReportStatus: summary.status,
     statusReportCorrelationId: target.correlationId,
     lastStatusReportAction: summary.action,
+    lastStatusReportTargetStrategy: summary.targetStrategy,
     lastStatusReportTarget: target,
     lastStatusReportFailureReason: summary.failureReason,
     lastStatusReportSummary: summary,
+    reportDeliveryAttempts: audit.attempts,
+    lastReportDeliveryAuditId: audit.lastAuditId,
     updatedAt: summary.ranAt,
   });
 }
