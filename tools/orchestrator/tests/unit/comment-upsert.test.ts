@@ -40,6 +40,9 @@ test("status reporting reuses the same correlated comment instead of creating a 
     token: "token",
     execFileImpl: async (_file, args) => {
       calls.push(args.join(" "));
+      if (args[0] === "--version") {
+        return { stdout: "gh version 2.0.0", stderr: "" };
+      }
       if (args[0] === "api" && args[1] === "repos/example/bige/issues/77/comments" && args.includes("--method") === false) {
         return { stdout: "[]", stderr: "" };
       }

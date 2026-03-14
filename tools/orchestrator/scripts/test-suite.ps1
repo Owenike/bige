@@ -68,8 +68,10 @@ $suiteMap = @{
     "$outDir\tests\unit\comment-upsert.test.js",
     "$outDir\tests\unit\event-flow.test.js",
     "$outDir\tests\unit\actor-policy.test.js",
+    "$outDir\tests\unit\actor-policy-config.test.js",
     "$outDir\tests\unit\replay-protection.test.js",
     "$outDir\tests\unit\inbound-audit.test.js",
+    "$outDir\tests\unit\github-live-report.test.js",
     "$outDir\tests\unit\queue.test.js",
     "$outDir\tests\unit\worker.test.js",
     "$outDir\tests\unit\locking.test.js",
@@ -91,7 +93,8 @@ $suiteMap = @{
     "$outDir\tests\integration\live-acceptance.test.js",
     "$outDir\tests\integration\live-pass.test.js",
     "$outDir\tests\integration\supabase-live.test.js",
-    "$outDir\tests\integration\webhook-server.test.js"
+    "$outDir\tests\integration\webhook-server.test.js",
+    "$outDir\tests\integration\webhook-runtime.test.js"
   )
   "schema" = @(
     "$outDir\tests\unit\schema-validation.test.js"
@@ -193,11 +196,20 @@ $suiteMap = @{
   "actor-policy" = @(
     "$outDir\tests\unit\actor-policy.test.js"
   )
+  "actor-policy-config" = @(
+    "$outDir\tests\unit\actor-policy-config.test.js"
+  )
   "replay-protection" = @(
     "$outDir\tests\unit\replay-protection.test.js"
   )
   "inbound-audit" = @(
     "$outDir\tests\unit\inbound-audit.test.js"
+  )
+  "github-live-report" = @(
+    "$outDir\tests\unit\github-live-report.test.js"
+  )
+  "webhook-runtime" = @(
+    "$outDir\tests\integration\webhook-runtime.test.js"
   )
   "queue" = @(
     "$outDir\tests\unit\queue.test.js"
@@ -297,8 +309,10 @@ $suiteMap = @{
     "$outDir\tests\unit\comment-upsert.test.js",
     "$outDir\tests\unit\event-flow.test.js",
     "$outDir\tests\unit\actor-policy.test.js",
+    "$outDir\tests\unit\actor-policy-config.test.js",
     "$outDir\tests\unit\replay-protection.test.js",
     "$outDir\tests\unit\inbound-audit.test.js",
+    "$outDir\tests\unit\github-live-report.test.js",
     "$outDir\tests\unit\queue.test.js",
     "$outDir\tests\unit\worker.test.js",
     "$outDir\tests\unit\locking.test.js",
@@ -320,6 +334,7 @@ $suiteMap = @{
     "$outDir\tests\integration\live-pass.test.js",
     "$outDir\tests\integration\supabase-live.test.js",
     "$outDir\tests\integration\webhook-server.test.js",
+    "$outDir\tests\integration\webhook-runtime.test.js",
     "$outDir\tests\e2e\mock-loop.test.js",
     "$outDir\tests\e2e\multi-iteration-loop.test.js"
   )

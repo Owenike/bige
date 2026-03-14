@@ -7,7 +7,8 @@ import {
   rejectPendingPlan,
   type OrchestratorDependencies,
 } from "../orchestrator";
-import { loadActorPolicyConfigFromEnv, resolveActorAuthorization } from "../actor-policy";
+import { resolveActorAuthorization } from "../actor-policy";
+import { loadActorPolicyConfig, type LoadedActorPolicyConfig } from "../actor-policy-config";
 import { routeParsedCommand } from "../commands";
 import {
   buildInboundAuditId,
@@ -168,6 +169,9 @@ async function updateStateForInbound(params: {
   parsedCommand: OrchestratorState["parsedCommand"];
   commandRoutingDecision: CommandRoutingDecision | null;
   commandRoutingStatus: OrchestratorState["commandRoutingStatus"];
+  actorPolicyConfigVersion?: string | null;
+  runtimeHealthStatus?: OrchestratorState["runtimeHealthStatus"];
+  runtimeReadinessStatus?: OrchestratorState["runtimeReadinessStatus"];
 }) {
   const updated = orchestratorStateSchema.parse({
     ...params.state,
@@ -178,8 +182,11 @@ async function updateStateForInbound(params: {
     inboundCorrelationId: params.correlationId,
     actorIdentity: params.actorIdentity,
     actorAuthorizationStatus: params.actorAuthorizationStatus,
+    actorPolicyConfigVersion: params.actorPolicyConfigVersion ?? params.state.actorPolicyConfigVersion,
     replayProtectionStatus: params.replayProtectionStatus,
     inboundAuditStatus: "recorded",
+    runtimeHealthStatus: params.runtimeHealthStatus ?? params.state.runtimeHealthStatus,
+    runtimeReadinessStatus: params.runtimeReadinessStatus ?? params.state.runtimeReadinessStatus,
     parsedCommand: params.parsedCommand,
     commandRoutingDecision: params.commandRoutingDecision,
     commandRoutingStatus: params.commandRoutingStatus,
@@ -261,6 +268,7 @@ export async function ingestGitHubWebhook(params: {
   statusAdapter?: StatusReportingAdapter | null;
   statusOutputRoot: string;
   auditOutputRoot?: string;
+  actorPolicyConfigPath?: string | null;
 }) : Promise<WebhookIngestionResult> {
   const receivedAt = new Date().toISOString();
   const parsedHeaders = parseGitHubWebhookHeaders(params.headers);
@@ -294,6 +302,56 @@ export async function ingestGitHubWebhook(params: {
     rawBody: params.rawBody,
     headers: params.headers,
   });
+  let actorPolicyConfig: LoadedActorPolicyConfig;
+  try {
+    actorPolicyConfig = await loadActorPolicyConfig({
+      configPath: params.actorPolicyConfigPath ?? null,
+    });
+  } catch (error) {
+    const blockedReason = createBlockedReason({
+      code: "actor_policy_config_unreadable",
+      summary: error instanceof Error ? error.message : "Actor policy config could not be loaded.",
+      missingPrerequisites: [params.actorPolicyConfigPath ?? "actor-policy-config"],
+      suggestedNextAction: "Fix the actor policy config path or remove the invalid override before retrying webhook intake.",
+    });
+    await saveAuditAndReturn({
+      dependencies: params.dependencies,
+      auditId,
+      receivedAt,
+      deliveryId: parsedHeaders.deliveryId,
+      eventType: parsedHeaders.eventType,
+      sourceEventType: normalizedEvent?.eventType ?? "none",
+      sourceEventId: normalizedEvent?.sourceEventId ?? null,
+      repository: normalizedEvent?.repository ?? null,
+      issueNumber: normalizedEvent?.issueNumber ?? null,
+      prNumber: normalizedEvent?.prNumber ?? null,
+      commentId: normalizedEvent?.commentId ?? null,
+      actorIdentity,
+      signatureStatus: signature.status,
+      parsedCommand: normalizedEvent?.parsedCommand ?? null,
+      actorAuthorizationStatus: "rejected",
+      actorAuthorizationReason: blockedReason.summary,
+      replayProtectionStatus: "rejected",
+      replayProtectionReason: blockedReason.summary,
+      commandRoutingDecision: null,
+      linkedStateId: null,
+      linkedRunId: null,
+      statusReportCorrelationId: defaultCorrelationId,
+      payloadPath: auditArtifacts.payloadPath,
+      headersPath: auditArtifacts.headersPath,
+      summary: blockedReason.summary,
+    });
+    return {
+      status: "rejected",
+      signatureStatus: signature.status,
+      blockedReason,
+      state: null,
+      intake: null,
+      statusReport: null,
+      summary: blockedReason.summary,
+      inboundAuditId: auditId,
+    };
+  }
 
   if (signature.status !== "verified") {
     await saveAuditAndReturn({
@@ -437,7 +495,8 @@ export async function ingestGitHubWebhook(params: {
     executionMode: normalizedEvent.parsedCommand?.executionMode ?? policy.executionMode,
     approvalRequired: policy.approvalMode === "human_approval",
     liveRequested: policy.handoffConfig.githubHandoffEnabled,
-    config: loadActorPolicyConfigFromEnv(),
+    config: actorPolicyConfig.config,
+    configVersion: actorPolicyConfig.version,
   });
   const actorBlockedReason =
     actorDecision.status === "rejected" ||
@@ -570,7 +629,10 @@ export async function ingestGitHubWebhook(params: {
             actorIdentity,
             signatureStatus: signature.status,
             actorAuthorizationStatus: actorDecision.status,
+            actorPolicyConfigVersion: actorPolicyConfig.version,
             replayProtectionStatus: replay.status,
+            runtimeHealthStatus: params.secret ? "ready" : "blocked",
+            runtimeReadinessStatus: params.secret ? "ready" : "blocked",
             parsedCommand: normalizedEvent.parsedCommand,
             commandRoutingDecision: routing,
             commandRoutingStatus: routing.status,
@@ -663,7 +725,10 @@ export async function ingestGitHubWebhook(params: {
           actorIdentity,
           signatureStatus: signature.status,
           actorAuthorizationStatus: actorDecision.status,
+          actorPolicyConfigVersion: actorPolicyConfig.version,
           replayProtectionStatus: replay.status,
+          runtimeHealthStatus: params.secret ? "ready" : "blocked",
+          runtimeReadinessStatus: params.secret ? "ready" : "blocked",
           parsedCommand: normalizedEvent.parsedCommand,
           commandRoutingDecision: routing,
           commandRoutingStatus: routing.status,
@@ -701,7 +766,10 @@ export async function ingestGitHubWebhook(params: {
           actorIdentity,
           signatureStatus: signature.status,
           actorAuthorizationStatus: actorDecision.status,
+          actorPolicyConfigVersion: actorPolicyConfig.version,
           replayProtectionStatus: replay.status,
+          runtimeHealthStatus: params.secret ? "ready" : "blocked",
+          runtimeReadinessStatus: params.secret ? "ready" : "blocked",
           parsedCommand: normalizedEvent.parsedCommand,
           commandRoutingDecision: routing,
           commandRoutingStatus: routing.status,
@@ -776,7 +844,10 @@ export async function ingestGitHubWebhook(params: {
     actorIdentity,
     signatureStatus: signature.status,
     actorAuthorizationStatus: actorDecision.status,
+    actorPolicyConfigVersion: actorPolicyConfig.version,
     replayProtectionStatus: replay.status,
+    runtimeHealthStatus: params.secret ? "ready" : "blocked",
+    runtimeReadinessStatus: params.secret ? "ready" : "blocked",
     parsedCommand: normalizedEvent.parsedCommand,
     commandRoutingDecision: normalizedEvent.parsedCommand
       ? {
@@ -812,7 +883,10 @@ export async function ingestGitHubWebhook(params: {
       actorIdentity,
       signatureStatus: signature.status,
       actorAuthorizationStatus: actorDecision.status,
+      actorPolicyConfigVersion: actorPolicyConfig.version,
       replayProtectionStatus: replay.status,
+      runtimeHealthStatus: params.secret ? "ready" : "blocked",
+      runtimeReadinessStatus: params.secret ? "ready" : "blocked",
       parsedCommand: normalizedEvent.parsedCommand,
       commandRoutingDecision: updatedState.commandRoutingDecision,
       commandRoutingStatus: updatedState.commandRoutingStatus,

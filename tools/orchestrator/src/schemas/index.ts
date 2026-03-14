@@ -233,6 +233,9 @@ export const commandRoutingStatusSchema = z.enum(["not_applicable", "accepted", 
 export const actorAuthorizationStatusSchema = z.enum(["not_checked", "authorized", "status_only", "rejected"]);
 export const replayProtectionStatusSchema = z.enum(["not_checked", "accepted", "duplicate_delivery", "duplicate_event", "replayed", "rejected"]);
 export const inboundAuditStatusSchema = z.enum(["not_recorded", "recorded", "failed"]);
+export const runtimeHealthStatusSchema = z.enum(["unknown", "ready", "degraded", "blocked"]);
+export const runtimeReadinessStatusSchema = z.enum(["unknown", "ready", "degraded", "blocked"]);
+export const liveStatusReportStatusSchema = z.enum(["unknown", "ready", "degraded", "blocked", "skipped", "failed"]);
 export const statusReportStatusSchema = z.enum([
   "not_run",
   "payload_ready",
@@ -483,6 +486,8 @@ export const actorAuthorizationDecisionSchema = z.object({
   status: actorAuthorizationStatusSchema,
   summary: z.string(),
   allowedCommands: z.array(commandKindSchema).default([]),
+  matchedRule: z.string().nullable().default(null),
+  configVersion: z.string().nullable().default(null),
   blockedReason: z
     .object({
       code: z.string(),
@@ -767,8 +772,11 @@ export const orchestratorStateSchema = z.object({
   inboundCorrelationId: z.string().nullable().default(null),
   actorIdentity: actorIdentitySchema.nullable().default(null),
   actorAuthorizationStatus: actorAuthorizationStatusSchema.default("not_checked"),
+  actorPolicyConfigVersion: z.string().nullable().default(null),
   replayProtectionStatus: replayProtectionStatusSchema.default("not_checked"),
   inboundAuditStatus: inboundAuditStatusSchema.default("not_recorded"),
+  runtimeHealthStatus: runtimeHealthStatusSchema.default("unknown"),
+  runtimeReadinessStatus: runtimeReadinessStatusSchema.default("unknown"),
   parsedCommand: parsedCommandSchema.nullable().default(null),
   commandRoutingStatus: commandRoutingStatusSchema.default("not_applicable"),
   commandRoutingDecision: commandRoutingDecisionSchema.nullable().default(null),
@@ -809,6 +817,7 @@ export const orchestratorStateSchema = z.object({
   lastPrDraftMetadata: prDraftMetadataSchema.nullable().default(null),
   lastGitHubHandoffResult: githubHandoffResultSchema.nullable().default(null),
   lastLiveEvidence: liveEvidenceSchema.nullable().default(null),
+  liveStatusReportStatus: liveStatusReportStatusSchema.default("unknown"),
   statusReportStatus: statusReportStatusSchema.default("not_run"),
   statusReportCorrelationId: z.string().nullable().default(null),
   lastStatusReportTarget: statusReportTargetSchema.nullable().default(null),
@@ -1350,8 +1359,11 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "inboundCorrelationId",
     "actorIdentity",
     "actorAuthorizationStatus",
+    "actorPolicyConfigVersion",
     "replayProtectionStatus",
     "inboundAuditStatus",
+    "runtimeHealthStatus",
+    "runtimeReadinessStatus",
     "parsedCommand",
     "commandRoutingStatus",
     "commandRoutingDecision",
@@ -1392,6 +1404,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastPrDraftMetadata",
     "lastGitHubHandoffResult",
     "lastLiveEvidence",
+    "liveStatusReportStatus",
     "statusReportStatus",
     "statusReportCorrelationId",
     "lastStatusReportTarget",
@@ -1623,6 +1636,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       type: "string",
       enum: ["not_checked", "authorized", "status_only", "rejected"],
     },
+    actorPolicyConfigVersion: { type: "string", nullable: true },
     replayProtectionStatus: {
       type: "string",
       enum: ["not_checked", "accepted", "duplicate_delivery", "duplicate_event", "replayed", "rejected"],
@@ -1630,6 +1644,14 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     inboundAuditStatus: {
       type: "string",
       enum: ["not_recorded", "recorded", "failed"],
+    },
+    runtimeHealthStatus: {
+      type: "string",
+      enum: ["unknown", "ready", "degraded", "blocked"],
+    },
+    runtimeReadinessStatus: {
+      type: "string",
+      enum: ["unknown", "ready", "degraded", "blocked"],
     },
     parsedCommand: {
       type: "object",
@@ -1951,6 +1973,10 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         commandLogPath: { type: "string", nullable: true },
         patchArtifactPath: { type: "string", nullable: true },
       },
+    },
+    liveStatusReportStatus: {
+      type: "string",
+      enum: ["unknown", "ready", "degraded", "blocked", "skipped", "failed"],
     },
     statusReportStatus: {
       type: "string",

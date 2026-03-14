@@ -18,6 +18,7 @@
 - Optional: `ORCHESTRATOR_ACTOR_APPROVERS`
 - Optional: `ORCHESTRATOR_ACTOR_STATUS`
 - Optional: `ORCHESTRATOR_ACTOR_LIVE`
+- Optional: `ORCHESTRATOR_ACTOR_POLICY_CONFIG`
 
 ## Preflight Checks
 `orchestrator:preflight` runs a shared readiness pass before live/handoff/promotion paths.
@@ -131,6 +132,11 @@ Start it locally:
 npm run orchestrator:webhook:serve -- --port 8787 --webhook-path /github
 ```
 
+Check runtime summary without starting the server:
+```powershell
+npm run orchestrator:webhook:runtime -- --webhook-secret your-secret --actor-policy-config .tmp/orchestrator/actor-policy.json
+```
+
 Supported inbound events:
 - `issues`
 - `issue_comment`
@@ -142,6 +148,21 @@ Receiver behavior:
 - extracts `x-github-event` and `x-github-delivery`
 - normalizes the payload through the shared GitHub event intake layer
 - records inbound audit trail and replay protection decisions
+
+Runtime endpoints:
+- `GET /healthz`
+- `GET /readyz`
+
+Runtime readiness currently checks:
+- `GITHUB_WEBHOOK_SECRET`
+- actor policy config readability
+- GitHub live status reporting prerequisites (`GITHUB_TOKEN` / `GH_TOKEN`, `gh`)
+- backend/storage availability
+
+Readiness semantics:
+- `ready`: webhook secret, actor policy config, and backend are usable; live comment path is available
+- `degraded`: core ingress can run, but live GitHub comment reporting is not ready
+- `blocked`: webhook secret/config/backend is not usable, so safe ingress should not start accepting real traffic
 
 Use `curl` or a tunnel/proxy to point GitHub webhooks at the local endpoint.
 
@@ -226,6 +247,21 @@ Current configurable actor policy uses env-backed allowlists:
 - `ORCHESTRATOR_ACTOR_STATUS`
 - `ORCHESTRATOR_ACTOR_LIVE`
 
+Actor policy can now also be loaded from JSON config:
+- set `ORCHESTRATOR_ACTOR_POLICY_CONFIG=/path/to/actor-policy.json`
+- or pass `--actor-policy-config path/to/actor-policy.json`
+
+Example config:
+```json
+{
+  "version": "team-defaults-v1",
+  "runActors": ["orchestrator-runner"],
+  "approverActors": ["orchestrator-approver"],
+  "statusActors": ["orchestrator-viewer", "orchestrator-approver"],
+  "liveActors": ["orchestrator-approver"]
+}
+```
+
 Current authorization model:
 - status-only actors can request `/orchestrator status`
 - runner actors can request run/dry-run/retry
@@ -244,6 +280,12 @@ Authorization outcomes are explicit:
 - `not_checked`
 
 Unauthorized commands are rejected with a persisted reason; they are not silently ignored.
+
+Actor policy diagnostics now also record:
+- matched rule
+- config version
+- rejected reason
+- suggested next action
 
 ## Replay Protection
 Replay protection is now stricter than generic task idempotency.
@@ -302,9 +344,15 @@ Comment upsert / correlation:
 
 Skip / failure behavior:
 - missing `GITHUB_TOKEN` / `GH_TOKEN` -> explicit `skipped`
+- missing `gh` for live comment path -> explicit degraded/skip for live reporting while payload output still succeeds
 - missing issue / PR target -> payload-only summary
 - disabled adapter or no GitHub target -> payload-only summary instead of hard failure
 - no generic fail for unavailable GitHub comment posting
+
+Live GitHub reporting hardening:
+- live comment create/update first checks readiness for `gh` + token
+- correlation marker lookup still prevents duplicate comments on the same thread
+- create/update failure is recorded as reporting failure and does not redefine the main orchestration result
 
 ## Inbound Audit
 Every accepted, rejected, ignored, or duplicate webhook intake now records inbound audit metadata.
@@ -462,6 +510,8 @@ Diagnostics summarize:
 - current state / iteration
 - current profile
 - source event / delivery / signature / idempotency / trigger policy
+- runtime health / readiness
+- actor policy config version and authorization status
 - parsed command and command routing decision
 - latest planner / reviewer result
 - latest blockers
@@ -874,7 +924,10 @@ npm run test:orchestrator:full-validation
   - `supabase` is still a document-based remote backend, not a high-throughput distributed scheduler
   - recovery is still lease/heartbeat based, not distributed consensus
   - backend transfer/bootstrap is intentionally conservative and rebuilds live ownership instead of migrating active locks
-  - backend health/repair favors explicit `manual_required` over risky auto-fix for ambiguous remote states
+- backend health/repair favors explicit `manual_required` over risky auto-fix for ambiguous remote states
   - cooperative pause/cancel only stop at safe boundaries; they are not hard interrupts in the middle of arbitrary commands
   - `worker:run` is daemon-style supervision, not a fully managed OS/background service
   - approval, handoff, and promotion pending runs are preserved conservatively rather than aggressively reclaimed
+- webhook receiver is now a standalone local Node service with health/readiness endpoints, but it is still not wired into the main product runtime
+- actor policy config is JSON/env based for now; it does not sync GitHub org/team/role membership
+- live GitHub comment reporting is gated by token + `gh`; without them the system degrades to payload-only reporting instead of hard-failing ingress

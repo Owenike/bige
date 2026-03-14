@@ -38,8 +38,10 @@ import { ingestGitHubEvent } from "./github-events";
 import { GhCliStatusReportingAdapter, applyStatusReportToState, reportStateStatus } from "./status-reporting";
 import { ingestGitHubWebhook } from "./webhook";
 import { startWebhookServer } from "./webhook-server";
-import { loadActorPolicyConfigFromEnv, resolveActorAuthorization } from "./actor-policy";
+import { resolveActorAuthorization } from "./actor-policy";
+import { describeActorPolicyConfig, loadActorPolicyConfig } from "./actor-policy-config";
 import { formatInboundAuditSummary, listInboundAuditRecords } from "./inbound-audit";
+import { evaluateWebhookRuntime, formatWebhookRuntimeSummary } from "./webhook-runtime";
 
 async function resolveRunId(params: {
   stateId: string;
@@ -384,8 +386,20 @@ async function main() {
       }),
       statusOutputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report")),
       auditOutputRoot: getOption(options, "audit-output-root", path.join(repoPath, ".tmp", "orchestrator-inbound")),
+      actorPolicyConfigPath: options.get("actor-policy-config") ?? process.env.ORCHESTRATOR_ACTOR_POLICY_CONFIG ?? null,
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "webhook:runtime") {
+    const summary = await evaluateWebhookRuntime({
+      dependencies,
+      webhookSecret: options.get("webhook-secret") ?? process.env.GITHUB_WEBHOOK_SECRET ?? null,
+      actorPolicyConfigPath: options.get("actor-policy-config") ?? process.env.ORCHESTRATOR_ACTOR_POLICY_CONFIG ?? null,
+      liveReportingEnabled: getOption(options, "enabled", "true") === "true",
+    });
+    process.stdout.write(`${formatWebhookRuntimeSummary(summary)}\n\n${JSON.stringify(summary, null, 2)}\n`);
     return;
   }
 
@@ -398,11 +412,14 @@ async function main() {
       repoPath,
       outputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report")),
       webhookPath: getOption(options, "webhook-path", "/github"),
+      actorPolicyConfigPath: options.get("actor-policy-config") ?? process.env.ORCHESTRATOR_ACTOR_POLICY_CONFIG ?? null,
       enqueue: getOption(options, "enqueue", "true") === "true",
       replayOverride: getOption(options, "replay", "false") === "true",
       reportStatus: getOption(options, "report-status", "true") === "true",
     });
-    process.stdout.write(`${JSON.stringify({ started: true, url: handle.url }, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify({ started: true, url: handle.url, healthUrl: handle.healthUrl, readinessUrl: handle.readinessUrl, startupSummary: handle.startupSummary }, null, 2)}\n`,
+    );
     await new Promise<void>((resolve) => {
       process.once("SIGINT", async () => {
         await handle.close();
@@ -418,6 +435,9 @@ async function main() {
 
   if (command === "actor-policy:check") {
     const actor = options.get("actor") ?? "";
+    const actorPolicy = await loadActorPolicyConfig({
+      configPath: options.get("actor-policy-config") ?? process.env.ORCHESTRATOR_ACTOR_POLICY_CONFIG ?? null,
+    });
     const commandName = options.get("command");
     const decision = resolveActorAuthorization({
       actor: actor ? { login: actor, id: null, type: "User" } : null,
@@ -429,9 +449,10 @@ async function main() {
         : null,
       approvalRequired: getOption(options, "approval-required", "true") === "true",
       liveRequested: getOption(options, "live", "false") === "true",
-      config: loadActorPolicyConfigFromEnv(),
+      config: actorPolicy.config,
+      configVersion: actorPolicy.version,
     });
-    process.stdout.write(`${JSON.stringify(decision, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ actorPolicy: describeActorPolicyConfig(actorPolicy), decision }, null, 2)}\n`);
     return;
   }
 
@@ -869,6 +890,7 @@ async function main() {
       "  node cli.js plan --state-id default",
       "  node cli.js event:intake --payload path/to/event.json --enqueue true --report-status true",
       "  node cli.js webhook:intake --payload path/to/payload.json --headers path/to/headers.json --enqueue true",
+      "  node cli.js webhook:runtime --webhook-secret ... --actor-policy-config path/to/actor-policy.json",
       "  node cli.js webhook:serve --port 8787 --webhook-path /github",
       "  node cli.js actor-policy:check --actor orchestrator-admin --command run",
       "  node cli.js inbound:list",

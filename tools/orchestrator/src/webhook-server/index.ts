@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { ingestGitHubWebhook } from "../webhook";
 import { GhCliStatusReportingAdapter } from "../status-reporting";
 import type { OrchestratorDependencies } from "../orchestrator";
+import { evaluateWebhookRuntime, type WebhookRuntimeSummary } from "../webhook-runtime";
 
 async function readRawBody(request: IncomingMessage) {
   const chunks: Buffer[] = [];
@@ -14,8 +15,21 @@ async function readRawBody(request: IncomingMessage) {
 export type WebhookServerHandle = {
   server: Server;
   url: string;
+  healthUrl: string;
+  readinessUrl: string;
+  startupSummary: WebhookRuntimeSummary;
   close(): Promise<void>;
 };
+
+async function respondRuntimeSummary(params: {
+  response: ServerResponse;
+  statusCode: number;
+  summary: WebhookRuntimeSummary;
+}) {
+  params.response.statusCode = params.statusCode;
+  params.response.setHeader("content-type", "application/json; charset=utf-8");
+  params.response.end(JSON.stringify(params.summary, null, 2));
+}
 
 export async function handleWebhookHttpRequest(params: {
   request: IncomingMessage;
@@ -25,12 +39,46 @@ export async function handleWebhookHttpRequest(params: {
   repoPath: string;
   outputRoot: string;
   webhookPath?: string;
+  actorPolicyConfigPath?: string | null;
   enqueue?: boolean;
   replayOverride?: boolean;
   reportStatus?: boolean;
 }) {
   const webhookPath = params.webhookPath ?? "/github";
   const requestUrl = new URL(params.request.url ?? webhookPath, "http://127.0.0.1");
+  const readinessPath = "/readyz";
+  const healthPath = "/healthz";
+
+  if (params.request.method === "GET" && requestUrl.pathname === healthPath) {
+    const summary = await evaluateWebhookRuntime({
+      dependencies: params.dependencies,
+      webhookSecret: params.secret,
+      actorPolicyConfigPath: params.actorPolicyConfigPath ?? process.env.ORCHESTRATOR_ACTOR_POLICY_CONFIG ?? null,
+      liveReportingEnabled: true,
+    });
+    await respondRuntimeSummary({
+      response: params.response,
+      statusCode: summary.healthStatus === "blocked" ? 503 : 200,
+      summary,
+    });
+    return;
+  }
+
+  if (params.request.method === "GET" && requestUrl.pathname === readinessPath) {
+    const summary = await evaluateWebhookRuntime({
+      dependencies: params.dependencies,
+      webhookSecret: params.secret,
+      actorPolicyConfigPath: params.actorPolicyConfigPath ?? process.env.ORCHESTRATOR_ACTOR_POLICY_CONFIG ?? null,
+      liveReportingEnabled: true,
+    });
+    await respondRuntimeSummary({
+      response: params.response,
+      statusCode: summary.readinessStatus === "blocked" ? 503 : 200,
+      summary,
+    });
+    return;
+  }
+
   if (params.request.method !== "POST" || requestUrl.pathname !== webhookPath) {
     params.response.statusCode = requestUrl.pathname === webhookPath ? 405 : 404;
     params.response.setHeader("content-type", "application/json; charset=utf-8");
@@ -78,11 +126,18 @@ export async function startWebhookServer(params: {
   repoPath: string;
   outputRoot: string;
   webhookPath?: string;
+  actorPolicyConfigPath?: string | null;
   enqueue?: boolean;
   replayOverride?: boolean;
   reportStatus?: boolean;
 }) {
   const webhookPath = params.webhookPath ?? "/github";
+  const startupSummary = await evaluateWebhookRuntime({
+    dependencies: params.dependencies,
+    webhookSecret: params.secret,
+    actorPolicyConfigPath: params.actorPolicyConfigPath ?? process.env.ORCHESTRATOR_ACTOR_POLICY_CONFIG ?? null,
+    liveReportingEnabled: true,
+  });
   const server = createServer(async (request, response) => {
     try {
       await handleWebhookHttpRequest({
@@ -93,6 +148,7 @@ export async function startWebhookServer(params: {
         repoPath: params.repoPath,
         outputRoot: params.outputRoot,
         webhookPath,
+        actorPolicyConfigPath: params.actorPolicyConfigPath,
         enqueue: params.enqueue,
         replayOverride: params.replayOverride,
         reportStatus: params.reportStatus,
@@ -116,6 +172,9 @@ export async function startWebhookServer(params: {
   return {
     server,
     url: `http://127.0.0.1:${params.port}${webhookPath}`,
+    healthUrl: `http://127.0.0.1:${params.port}/healthz`,
+    readinessUrl: `http://127.0.0.1:${params.port}/readyz`,
+    startupSummary,
     async close() {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

@@ -15,8 +15,11 @@ export type OrchestratorDiagnostics = {
   inboundCorrelationId: string | null;
   actorIdentity: string | null;
   actorAuthorizationStatus: OrchestratorState["actorAuthorizationStatus"];
+  actorPolicyConfigVersion: string | null;
   replayProtectionStatus: OrchestratorState["replayProtectionStatus"];
   inboundAuditStatus: OrchestratorState["inboundAuditStatus"];
+  runtimeHealthStatus: OrchestratorState["runtimeHealthStatus"];
+  runtimeReadinessStatus: OrchestratorState["runtimeReadinessStatus"];
   idempotencyKey: string | null;
   idempotencyStatus: OrchestratorState["idempotencyStatus"];
   triggerPolicyId: string | null;
@@ -65,6 +68,7 @@ export type OrchestratorDiagnostics = {
   };
   statusReporting: {
     status: OrchestratorState["statusReportStatus"];
+    liveStatus: OrchestratorState["liveStatusReportStatus"];
     summary: string | null;
     correlationId: string | null;
     target: string | null;
@@ -134,8 +138,11 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
     inboundCorrelationId: state.inboundCorrelationId,
     actorIdentity: state.actorIdentity?.login ?? null,
     actorAuthorizationStatus: state.actorAuthorizationStatus,
+    actorPolicyConfigVersion: state.actorPolicyConfigVersion,
     replayProtectionStatus: state.replayProtectionStatus,
     inboundAuditStatus: state.inboundAuditStatus,
+    runtimeHealthStatus: state.runtimeHealthStatus,
+    runtimeReadinessStatus: state.runtimeReadinessStatus,
     idempotencyKey: state.idempotencyKey,
     idempotencyStatus: state.idempotencyStatus,
     triggerPolicyId: state.triggerPolicyId,
@@ -186,6 +193,7 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
     },
     statusReporting: {
       status: state.statusReportStatus,
+      liveStatus: state.liveStatusReportStatus,
       summary: state.lastStatusReportSummary?.summary ?? null,
       correlationId: state.statusReportCorrelationId,
       target: state.lastStatusReportTarget?.targetUrl ?? state.lastStatusReportTarget?.correlationId ?? null,
@@ -198,7 +206,8 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
   const lines = [
     `State: ${summary.stateId}`,
     `Status: ${summary.status} (iteration ${summary.iterationNumber}, profile ${summary.profileId})`,
-    `Source: type=${summary.sourceEventType}, eventId=${summary.sourceEventId ?? "none"}, webhook=${summary.webhookEventType}/${summary.webhookDeliveryId ?? "none"}/${summary.webhookSignatureStatus}, inbound=${summary.inboundEventId ?? "none"}/${summary.inboundDeliveryId ?? "none"}/${summary.inboundAuditStatus}, actor=${summary.actorIdentity ?? "none"}/${summary.actorAuthorizationStatus}, replay=${summary.replayProtectionStatus}, correlation=${summary.inboundCorrelationId ?? "none"}, idempotency=${summary.idempotencyKey ?? "none"} (${summary.idempotencyStatus}), triggerPolicy=${summary.triggerPolicyId ?? "none"}`,
+    `Source: type=${summary.sourceEventType}, eventId=${summary.sourceEventId ?? "none"}, webhook=${summary.webhookEventType}/${summary.webhookDeliveryId ?? "none"}/${summary.webhookSignatureStatus}, inbound=${summary.inboundEventId ?? "none"}/${summary.inboundDeliveryId ?? "none"}/${summary.inboundAuditStatus}, actor=${summary.actorIdentity ?? "none"}/${summary.actorAuthorizationStatus}/${summary.actorPolicyConfigVersion ?? "none"}, replay=${summary.replayProtectionStatus}, correlation=${summary.inboundCorrelationId ?? "none"}, idempotency=${summary.idempotencyKey ?? "none"} (${summary.idempotencyStatus}), triggerPolicy=${summary.triggerPolicyId ?? "none"}`,
+    `Runtime: health=${summary.runtimeHealthStatus}, readiness=${summary.runtimeReadinessStatus}`,
     `Command: raw=${summary.parsedCommand ?? "none"}, routing=${summary.commandRoutingStatus}, summary=${summary.commandRoutingSummary ?? "none"}`,
     `Planner: ${summary.plannerSummary}`,
     `Reviewer: ${summary.reviewerSummary}`,
@@ -206,7 +215,7 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     `Artifacts: backend=${summary.artifactSummary.backendType}, backendHealth=${summary.artifactSummary.backendHealthStatus}, queue=${summary.artifactSummary.queueStatus}, transfer=${summary.artifactSummary.transferStatus}, repair=${summary.artifactSummary.repairStatus}, patch=${summary.artifactSummary.patchStatus}, promotion=${summary.artifactSummary.promotionStatus}, handoff=${summary.artifactSummary.handoffStatus}, prDraft=${summary.artifactSummary.prDraftStatus}, liveAcceptance=${summary.artifactSummary.liveAcceptanceStatus}, livePass=${summary.artifactSummary.livePassStatus}, workspace=${summary.artifactSummary.workspaceStatus}`,
     `Worker: status=${summary.workerSummary.workerStatus}, supervision=${summary.workerSummary.supervisionStatus}, workerId=${summary.workerSummary.workerId ?? "none"}, leaseOwner=${summary.workerSummary.leaseOwner ?? "none"}, lastHeartbeat=${summary.workerSummary.lastHeartbeatAt ?? "none"}, lastLeaseRenewal=${summary.workerSummary.lastLeaseRenewalAt ?? "none"}, daemonHeartbeat=${summary.workerSummary.daemonHeartbeatAt ?? "none"}, cancel=${summary.workerSummary.cancellationStatus}, pause=${summary.workerSummary.pauseStatus}, retries=${summary.workerSummary.retryCount}`,
     `Recovery: action=${summary.recoverySummary.action ?? "none"}, reason=${summary.recoverySummary.reason ?? "none"}`,
-    `Status reporting: status=${summary.statusReporting.status}, correlation=${summary.statusReporting.correlationId ?? "none"}, target=${summary.statusReporting.target ?? "none"}, summary=${summary.statusReporting.summary ?? "none"}`,
+    `Status reporting: status=${summary.statusReporting.status}, live=${summary.statusReporting.liveStatus}, correlation=${summary.statusReporting.correlationId ?? "none"}, target=${summary.statusReporting.target ?? "none"}, summary=${summary.statusReporting.summary ?? "none"}`,
     `Blockers: ${summary.blockers.join(" | ") || "none"}`,
     `Missing prerequisites: ${summary.missingPrerequisites.join(", ") || "none"}`,
   ];

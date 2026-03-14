@@ -5,41 +5,12 @@ import {
   type ActorIdentity,
   type CommandKind,
 } from "../schemas";
-
-export type ActorPolicyConfig = {
-  adminActors: string[];
-  runActors: string[];
-  approverActors: string[];
-  statusActors: string[];
-  liveActors: string[];
-};
-
-export const DEFAULT_ACTOR_POLICY_CONFIG: ActorPolicyConfig = {
-  adminActors: ["orchestrator-admin"],
-  runActors: ["orchestrator-admin", "orchestrator-runner"],
-  approverActors: ["orchestrator-admin", "orchestrator-approver"],
-  statusActors: ["orchestrator-admin", "orchestrator-runner", "orchestrator-approver", "orchestrator-viewer"],
-  liveActors: ["orchestrator-admin", "orchestrator-approver"],
-};
-
-function parseActorList(value: string | undefined, fallback: string[]) {
-  return value
-    ? value
-        .split(",")
-        .map((entry) => entry.trim())
-        .filter(Boolean)
-    : [...fallback];
-}
-
-export function loadActorPolicyConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ActorPolicyConfig {
-  return {
-    adminActors: parseActorList(env.ORCHESTRATOR_ACTOR_ADMINS, DEFAULT_ACTOR_POLICY_CONFIG.adminActors),
-    runActors: parseActorList(env.ORCHESTRATOR_ACTOR_RUNNERS, DEFAULT_ACTOR_POLICY_CONFIG.runActors),
-    approverActors: parseActorList(env.ORCHESTRATOR_ACTOR_APPROVERS, DEFAULT_ACTOR_POLICY_CONFIG.approverActors),
-    statusActors: parseActorList(env.ORCHESTRATOR_ACTOR_STATUS, DEFAULT_ACTOR_POLICY_CONFIG.statusActors),
-    liveActors: parseActorList(env.ORCHESTRATOR_ACTOR_LIVE, DEFAULT_ACTOR_POLICY_CONFIG.liveActors),
-  };
-}
+import {
+  DEFAULT_ACTOR_POLICY_CONFIG,
+  loadActorPolicyConfigFromEnv,
+  type ActorPolicyConfig,
+  type LoadedActorPolicyConfig,
+} from "../actor-policy-config";
 
 export type ActorPolicyDecisionInput = {
   actor: ActorIdentity | null;
@@ -48,6 +19,7 @@ export type ActorPolicyDecisionInput = {
   approvalRequired?: boolean;
   liveRequested?: boolean;
   config?: Partial<ActorPolicyConfig>;
+  configVersion?: string | null;
 };
 
 function normalizeConfig(config?: Partial<ActorPolicyConfig>): ActorPolicyConfig {
@@ -70,12 +42,15 @@ function includesActor(values: string[], actor: ActorIdentity | null) {
 export function resolveActorAuthorization(input: ActorPolicyDecisionInput): ActorAuthorizationDecision {
   const config = normalizeConfig(input.config);
   const actorLogin = input.actor?.login ?? null;
+  const configVersion = input.configVersion ?? "default";
 
   if (!actorLogin) {
     return actorAuthorizationDecisionSchema.parse({
       status: "rejected",
       summary: "Webhook actor identity is missing.",
       allowedCommands: [],
+      matchedRule: "missing_actor_identity",
+      configVersion,
       blockedReason: blockedReasonSchema.parse({
         code: "missing_actor_identity",
         summary: "Webhook actor identity is missing and the command cannot be authorized.",
@@ -105,6 +80,8 @@ export function resolveActorAuthorization(input: ActorPolicyDecisionInput): Acto
           : isApprover
             ? ["status", "approve", "reject"]
             : ["status"],
+      matchedRule: isAdmin ? "adminActors" : isRunActor ? "runActors" : isApprover ? "approverActors" : "statusActors",
+      configVersion,
       blockedReason: null,
     });
   }
@@ -115,6 +92,8 @@ export function resolveActorAuthorization(input: ActorPolicyDecisionInput): Acto
         status: isRunActor || isApprover ? "authorized" : "status_only",
         summary: `Actor ${actorLogin} can request orchestrator status.`,
         allowedCommands: ["status"],
+        matchedRule: isAdmin ? "adminActors" : isRunActor ? "runActors" : isApprover ? "approverActors" : "statusActors",
+        configVersion,
         blockedReason: null,
       });
     }
@@ -126,6 +105,8 @@ export function resolveActorAuthorization(input: ActorPolicyDecisionInput): Acto
         status: "authorized",
         summary: `Actor ${actorLogin} can ${input.command} orchestrator approvals.`,
         allowedCommands: [input.command],
+        matchedRule: isAdmin ? "adminActors" : "approverActors",
+        configVersion,
         blockedReason: null,
       });
     }
@@ -139,6 +120,8 @@ export function resolveActorAuthorization(input: ActorPolicyDecisionInput): Acto
             status: "rejected",
             summary: `Actor ${actorLogin} cannot request live/apply orchestration commands.`,
             allowedCommands: [],
+            matchedRule: "liveActors",
+            configVersion,
             blockedReason: blockedReasonSchema.parse({
               code: "actor_live_not_allowed",
               summary: `Actor ${actorLogin} is not authorized for live/apply orchestration commands.`,
@@ -153,6 +136,8 @@ export function resolveActorAuthorization(input: ActorPolicyDecisionInput): Acto
         status: "authorized",
         summary: `Actor ${actorLogin} can request ${input.command}.`,
         allowedCommands: [input.command, "status"],
+        matchedRule: isAdmin ? "adminActors" : "runActors",
+        configVersion,
         blockedReason: null,
       });
     }
@@ -164,6 +149,8 @@ export function resolveActorAuthorization(input: ActorPolicyDecisionInput): Acto
       ? `Actor ${actorLogin} is limited to status-only commands and cannot run ${input.command}.`
       : `Actor ${actorLogin} is not authorized for ${input.command}.`,
     allowedCommands: isStatusActor ? ["status"] : [],
+    matchedRule: isStatusActor ? "statusActors" : "none",
+    configVersion,
     blockedReason: blockedReasonSchema.parse({
       code: "actor_command_not_authorized",
       summary: isStatusActor
@@ -177,3 +164,6 @@ export function resolveActorAuthorization(input: ActorPolicyDecisionInput): Acto
     }),
   });
 }
+
+export { DEFAULT_ACTOR_POLICY_CONFIG, loadActorPolicyConfigFromEnv };
+export type { ActorPolicyConfig, LoadedActorPolicyConfig };

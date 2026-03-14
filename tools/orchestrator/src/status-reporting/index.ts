@@ -53,6 +53,73 @@ export interface StatusReportingAdapter {
   }): Promise<StatusReportSummary>;
 }
 
+export type GitHubLiveReportReadiness = {
+  status: "ready" | "degraded" | "blocked";
+  summary: string;
+  missingPrerequisites: string[];
+};
+
+function mapStatusSummaryToLiveStatus(summary: StatusReportSummary): OrchestratorState["liveStatusReportStatus"] {
+  if (summary.status === "comment_created" || summary.status === "comment_updated" || summary.status === "comment_posted") {
+    return "ready";
+  }
+  if (summary.status === "skipped") {
+    return "skipped";
+  }
+  if (summary.status === "failed") {
+    return "failed";
+  }
+  return "unknown";
+}
+
+export async function assessGitHubLiveReporting(params: {
+  enabled: boolean;
+  token: string | null;
+  execFileImpl?: ExecFileLike;
+}): Promise<GitHubLiveReportReadiness> {
+  if (!params.enabled) {
+    return {
+      status: "degraded",
+      summary: "GitHub live status reporting is disabled; payload-only reporting remains available.",
+      missingPrerequisites: ["status-reporting.enabled"],
+    };
+  }
+  if (!params.token) {
+    return {
+      status: "degraded",
+      summary: "GitHub live status reporting is unavailable because GITHUB_TOKEN/GH_TOKEN is missing.",
+      missingPrerequisites: ["GITHUB_TOKEN or GH_TOKEN"],
+    };
+  }
+  const execImpl: ExecFileLike = params.execFileImpl ?? defaultExecFileLike;
+  try {
+    await execImpl("gh", ["--version"], { windowsHide: true });
+    return {
+      status: "ready",
+      summary: "GitHub live status reporting is ready.",
+      missingPrerequisites: [],
+    };
+  } catch (error) {
+    return {
+      status: "degraded",
+      summary: error instanceof Error ? `GitHub live status reporting degraded: ${error.message}` : "GitHub live status reporting degraded because gh is unavailable.",
+      missingPrerequisites: ["gh"],
+    };
+  }
+}
+
+export function resolveStatusReportGitHubTarget(state: OrchestratorState) {
+  const source = state.sourceEventSummary;
+  if (!source || (!source.issueNumber && !source.prNumber)) {
+    return null;
+  }
+  return {
+    repository: source.repository,
+    targetNumber: source.prNumber ?? source.issueNumber!,
+    isPullRequest: Boolean(source.prNumber),
+  };
+}
+
 export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
   readonly kind = "github_comment";
 
@@ -104,6 +171,26 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
       });
     }
     const execImpl: ExecFileLike = this.params.execFileImpl ?? defaultExecFileLike;
+    const readiness = await assessGitHubLiveReporting({
+      enabled: this.params.enabled,
+      token: this.params.token,
+      execFileImpl: execImpl,
+    });
+    if (readiness.status !== "ready") {
+      return statusReportSummarySchema.parse({
+        status: "skipped",
+        provider: this.kind,
+        summary: readiness.summary,
+        markdownPath: params.markdownPath,
+        payloadPath: null,
+        targetUrl: null,
+        targetNumber: params.targetNumber,
+        commentId: null,
+        correlationId,
+        action: "skipped",
+        ranAt,
+      });
+    }
     const markdown = withStatusReportMarker(await readFile(params.markdownPath, "utf8"), correlationId);
     const bodyPayloadPath = path.join(path.dirname(params.markdownPath), `${params.state.id}-status-report-gh.json`);
     await writeFile(bodyPayloadPath, `${JSON.stringify({ body: markdown }, null, 2)}\n`, "utf8");
@@ -199,9 +286,11 @@ export function buildStatusReportPayload(state: OrchestratorState) {
   }
   if (state.inboundEventId || state.actorIdentity?.login) {
     lines.push(
-      `- Inbound audit: ${state.inboundEventId ?? "none"} / actor=${state.actorIdentity?.login ?? "none"} / auth=${state.actorAuthorizationStatus} / replay=${state.replayProtectionStatus}`,
+      `- Inbound audit: ${state.inboundEventId ?? "none"} / actor=${state.actorIdentity?.login ?? "none"} / auth=${state.actorAuthorizationStatus} / actorPolicy=${state.actorPolicyConfigVersion ?? "none"} / replay=${state.replayProtectionStatus}`,
     );
   }
+  lines.push(`- Runtime: health=${state.runtimeHealthStatus} / readiness=${state.runtimeReadinessStatus}`);
+  lines.push(`- Live status reporting: ${state.liveStatusReportStatus}`);
   if (state.lastHandoffPackagePath) {
     lines.push(`- Handoff package: ${state.lastHandoffPackagePath}`);
   }
@@ -233,8 +322,8 @@ export async function reportStateStatus(params: {
   await writeFile(markdownPath, `${payload.markdown}\n`, "utf8");
   await writeFile(payloadPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 
-  const source = params.state.sourceEventSummary;
-  if (!source || (!source.issueNumber && !source.prNumber)) {
+  const target = resolveStatusReportGitHubTarget(params.state);
+  if (!target) {
     return statusReportSummarySchema.parse({
       status: "payload_ready",
       provider: "payload_only",
@@ -258,7 +347,7 @@ export async function reportStateStatus(params: {
       markdownPath,
       payloadPath,
       targetUrl: null,
-      targetNumber: source.prNumber ?? source.issueNumber,
+      targetNumber: target.targetNumber,
       commentId: null,
       correlationId: payload.correlationId,
       action: "payload_only",
@@ -269,9 +358,9 @@ export async function reportStateStatus(params: {
   const result = await params.adapter.postSummary({
     state: params.state,
     markdownPath,
-    targetNumber: source.prNumber ?? source.issueNumber!,
-    repository: source.repository,
-    isPullRequest: Boolean(source.prNumber),
+    targetNumber: target.targetNumber,
+    repository: target.repository,
+    isPullRequest: target.isPullRequest,
   });
   return statusReportSummarySchema.parse({
     ...result,
@@ -293,6 +382,7 @@ export function applyStatusReportToState(state: OrchestratorState, summary: Stat
   );
   return orchestratorStateSchema.parse({
     ...state,
+    liveStatusReportStatus: mapStatusSummaryToLiveStatus(summary),
     statusReportStatus: summary.status,
     statusReportCorrelationId: target.correlationId,
     lastStatusReportTarget: target,
