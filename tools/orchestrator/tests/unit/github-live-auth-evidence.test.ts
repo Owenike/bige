@@ -101,7 +101,7 @@ test("github live auth evidence persists success details and operator summary", 
     token: null,
   });
   assert.match(summary.summaryText, /Last auth smoke: passed \/ success \/ ready/);
-  assert.match(summary.summaryText, /Sandbox target profile: default \/ config=sandbox-v1/);
+  assert.match(summary.summaryText, /Sandbox target profile: default \/ status=resolved \/ config=sandbox-v1/);
 });
 
 test("github live auth evidence preserves blocked shape when no safe target exists", async () => {

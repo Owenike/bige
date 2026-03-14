@@ -413,13 +413,17 @@ Live auth smoke:
   - `authSmokeTarget`
   - `authSmokePermissionResult`
   - `authSmokeFailureReason`
+  - `sandboxProfileId`
+  - `sandboxProfileStatus`
   - `sandboxTargetProfileId`
   - `sandboxTargetConfigVersion`
   - `targetSelectionStatus`
   - `lastAuthSmokeTarget`
   - `lastAuthSmokeAction`
+  - `lastAuthSmokeSuccessAt`
   - `lastAuthSmokeEvidencePath`
   - `lastLiveSmokeEvidencePath`
+  - `lastLiveSmokeSummary`
   - `lastLiveAuthEvidence`
   - `lastGitHubAuthSmokeResult`
 
@@ -450,6 +454,7 @@ npm run orchestrator:reporting:smoke -- --state-id demo
 node .tmp/orchestrator/src/cli.js reporting:target-check --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js reporting:permissions --state-id demo
 node .tmp/orchestrator/src/cli.js reporting:auth-smoke --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
+node .tmp/orchestrator/src/cli.js reporting:live-success-smoke --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 ```
 
 The smoke path is intentionally gated:
@@ -479,6 +484,15 @@ Sandbox target registry:
   - registry default profile
 - if no safe registry target exists, auth smoke returns `manual_required`
 - if policy and correlated target disagree, auth smoke returns `blocked`
+- operator commands:
+  - `node .tmp/orchestrator/src/cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json`
+  - `node .tmp/orchestrator/src/cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
+  - `node .tmp/orchestrator/src/cli.js sandbox:validate --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
+- safe operator flow:
+  - list the available sandbox profiles
+  - show the default or requested profile
+  - validate the profile before running a live success smoke
+  - only run `reporting:live-success-smoke` when the profile resolves to a known-safe repo/issue/pr target
 
 Minimal registry example:
 ```json
@@ -510,6 +524,10 @@ node .tmp/orchestrator/src/cli.js reporting:audit --state-id demo
 node .tmp/orchestrator/src/cli.js reporting:permissions --state-id demo
 node .tmp/orchestrator/src/cli.js reporting:target-check --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js reporting:auth-smoke --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
+node .tmp/orchestrator/src/cli.js reporting:live-success-smoke --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
+node .tmp/orchestrator/src/cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json
+node .tmp/orchestrator/src/cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
+node .tmp/orchestrator/src/cli.js sandbox:validate --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 ```
 
 Typical next actions:
@@ -525,6 +543,7 @@ Live auth evidence:
 - evidence captures:
   - attempted time
   - sandbox profile/config version
+  - sandbox profile status
   - target selection result
   - permission result
   - final action (`success`, `failed`, `skip`, `blocked`)
@@ -532,6 +551,11 @@ Live auth evidence:
   - last comment id / target reference
   - failure reason / next action
 - this path is safe to inspect even when auth smoke is blocked or skipped
+- a successful live smoke also updates:
+  - `lastAuthSmokeSuccessAt`
+  - `lastLiveSmokeSummary`
+  - `lastStatusReportTarget`
+  - `lastStatusReportAction`
 
 ## Inbound Audit
 Every accepted, rejected, ignored, or duplicate webhook intake now records inbound audit metadata.

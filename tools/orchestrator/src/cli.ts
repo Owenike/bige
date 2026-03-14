@@ -47,6 +47,7 @@ import { formatReportDeliveryAttempts } from "./reporting-audit";
 import { runGitHubLiveAuthSmoke } from "./github-live-auth";
 import { selectGitHubLiveSmokeTarget } from "./github-live-targets";
 import { describeGitHubSandboxTargetRegistry, loadGitHubSandboxTargetRegistry, resolveGitHubSandboxTarget } from "./github-sandbox-targets";
+import { formatSandboxProfileList, formatSandboxProfileValidation, showSandboxProfile, validateSandboxProfile } from "./sandbox-profile-ops";
 import { ingestGitHubWebhook } from "./webhook";
 import { formatWebhookHostingConfig, loadWebhookHostingConfig } from "./runtime-config";
 import { formatWebhookShutdownSummary, startWebhookHosting } from "./webhook-hosting";
@@ -654,6 +655,43 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:list") {
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    process.stdout.write(`${formatSandboxProfileList(sandboxRegistry)}\n\n${JSON.stringify(sandboxRegistry, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "sandbox:show") {
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const profileId = options.get("sandbox-profile") ?? sandboxRegistry.registry.defaultProfileId ?? null;
+    const profile = showSandboxProfile(sandboxRegistry, profileId);
+    process.stdout.write(
+      [
+        `Sandbox profile: ${profileId ?? "none"}`,
+        `Found: ${profile ? "yes" : "no"}`,
+        profile
+          ? `Target: ${profile.targetType} ${profile.repository}#${profile.targetNumber} (${profile.actionPolicy})`
+          : "Target: none",
+        `Default profile: ${sandboxRegistry.registry.defaultProfileId ?? "none"}`,
+        `Config: ${sandboxRegistry.source}/${sandboxRegistry.version} (${sandboxRegistry.path ?? "no-path"})`,
+        "",
+        JSON.stringify({ profile, sandboxRegistry }, null, 2),
+      ].join("\n"),
+    );
+    return;
+  }
+
+  if (command === "sandbox:validate") {
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const validation = validateSandboxProfile({
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      profileId: options.get("sandbox-profile") ?? null,
+    });
+    process.stdout.write(`${formatSandboxProfileValidation(validation)}\n\n${JSON.stringify(validation, null, 2)}\n`);
+    return;
+  }
+
   if (command === "reporting:auth-smoke") {
     const outputRoot = getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report"));
     const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
@@ -686,6 +724,49 @@ async function main() {
         `Action: ${result.result.attemptedAction}`,
         `Target: ${result.result.target.targetType ?? "none"} ${result.result.target.repository ?? "none"}#${result.result.target.targetNumber ?? "none"}`,
         `Sandbox profile: ${result.state.sandboxTargetProfileId ?? "none"} / config=${result.state.sandboxTargetConfigVersion ?? "none"}`,
+        `Summary: ${result.result.summary}`,
+        `Next action: ${result.result.suggestedNextAction}`,
+        `Evidence: ${result.evidencePath}`,
+        "",
+        JSON.stringify(result, null, 2),
+      ].join("\n"),
+    );
+    return;
+  }
+
+  if (command === "reporting:live-success-smoke") {
+    const outputRoot = getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report"));
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const adapter = new GhCliStatusReportingAdapter({
+      enabled: getOption(options, "enabled", "true") === "true",
+      token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+    });
+    const result = await runGitHubLiveAuthSmoke({
+      state: existingState,
+      outputRoot,
+      adapter,
+      enabled: getOption(options, "enabled", "true") === "true",
+      token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+      sandboxRegistry,
+      sandboxProfileId: options.get("sandbox-profile") ?? null,
+      requestedTarget: {
+        repository: options.get("target-repo") ?? null,
+        targetType: options.has("target-type")
+          ? (getOption(options, "target-type", "issue") as "issue" | "pull_request")
+          : null,
+        targetNumber: options.has("target-number") ? Number.parseInt(getOption(options, "target-number", "0"), 10) : null,
+        allowCorrelatedReuse: getOption(options, "allow-correlated-reuse", "false") === "true",
+      },
+    });
+    await dependencies.storage.saveState(result.state);
+    process.stdout.write(
+      [
+        `GitHub live success smoke: ${result.result.status} / ${result.result.permissionResult}`,
+        `Action: ${result.result.attemptedAction}`,
+        `Provider: ${result.result.providerUsed}`,
+        `Sandbox profile: ${result.state.sandboxProfileId ?? result.state.sandboxTargetProfileId ?? "none"} / status=${result.state.sandboxProfileStatus} / config=${result.state.sandboxTargetConfigVersion ?? "none"}`,
+        `Target: ${result.result.target.targetType ?? "none"} ${result.result.target.repository ?? "none"}#${result.result.target.targetNumber ?? "none"}`,
+        `Last success at: ${result.state.lastAuthSmokeSuccessAt ?? "none"}`,
         `Summary: ${result.result.summary}`,
         `Next action: ${result.result.suggestedNextAction}`,
         `Evidence: ${result.evidencePath}`,
@@ -1082,7 +1163,11 @@ async function main() {
       "  node cli.js reporting:smoke --state-id default",
       "  node cli.js reporting:permissions --state-id default",
       "  node cli.js reporting:target-check --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
+      "  node cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
+      "  node cli.js sandbox:validate --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:auth-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
+      "  node cli.js reporting:live-success-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:status --state-id default",
       "  node cli.js reporting:audit --state-id default",
       "  node cli.js queue:enqueue --state-id default --priority 10",

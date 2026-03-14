@@ -23,6 +23,31 @@ on:
         required: false
         default: false
         type: boolean
+      run_github_live_success_smoke:
+        description: Run the live GitHub comment success smoke path against a safe sandbox target
+        required: false
+        default: false
+        type: boolean
+      github_sandbox_profile:
+        description: Sandbox target profile for live GitHub reporting smoke
+        required: false
+        default: default
+        type: string
+      github_sandbox_repo:
+        description: Explicit sandbox repository for live GitHub reporting smoke
+        required: false
+        default: ""
+        type: string
+      github_sandbox_target_type:
+        description: Explicit sandbox target type for live GitHub reporting smoke
+        required: false
+        default: issue
+        type: string
+      github_sandbox_target_number:
+        description: Explicit sandbox issue or PR number for live GitHub reporting smoke
+        required: false
+        default: ""
+        type: string
       run_supabase_live_smoke:
         description: Run the live Supabase backend smoke path
         required: false
@@ -93,6 +118,9 @@ jobs:
           npm run test:orchestrator:github-live-targeting
           npm run test:orchestrator:github-sandbox-targets
           npm run test:orchestrator:github-live-auth-evidence
+          npm run test:orchestrator:github-live-success-smoke
+          npm run test:orchestrator:sandbox-profile-ops
+          npm run test:orchestrator:live-report-runbook
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary
@@ -267,6 +295,70 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: npm run test:orchestrator:live-pass
+
+  orchestrator-github-live-success-smoke:
+    name: Orchestrator GitHub Live Success Smoke
+    needs: orchestrator-validation
+    runs-on: windows-latest
+    if: ${{ inputs.run_github_live_success_smoke }}
+
+    steps:
+      - name: Decide GitHub live success smoke policy
+        id: policy
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          if ((-not $env:GITHUB_TOKEN) -and (-not $env:GH_TOKEN)) {
+            "run_live=false" >> $env:GITHUB_OUTPUT
+            "skip_reason=orchestrator GitHub live success smoke skipped because no GitHub token is available." >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          if (-not "${{ inputs.github_sandbox_repo }}" -or -not "${{ inputs.github_sandbox_target_number }}") {
+            "run_live=false" >> $env:GITHUB_OUTPUT
+            "skip_reason=orchestrator GitHub live success smoke skipped because no explicit sandbox target was provided." >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          "run_live=true" >> $env:GITHUB_OUTPUT
+          "skip_reason=orchestrator GitHub live success smoke is ready to run." >> $env:GITHUB_OUTPUT
+
+      - name: Report GitHub live success smoke skip
+        if: ${{ steps.policy.outputs.run_live != 'true' }}
+        shell: pwsh
+        run: |
+          Write-Host "::notice title=Orchestrator GitHub live success smoke skipped::${{ steps.policy.outputs.skip_reason }}"
+
+      - name: Checkout
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        run: npm ci
+
+      - name: Run GitHub live success smoke
+        if: ${{ steps.policy.outputs.run_live == 'true' }}
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          ORCHESTRATOR_GITHUB_SANDBOX_REPO: ${{ inputs.github_sandbox_repo }}
+          ORCHESTRATOR_GITHUB_SANDBOX_TARGET_TYPE: ${{ inputs.github_sandbox_target_type }}
+          ORCHESTRATOR_GITHUB_SANDBOX_TARGET_NUMBER: ${{ inputs.github_sandbox_target_number }}
+          ORCHESTRATOR_GITHUB_SANDBOX_PROFILE: ${{ inputs.github_sandbox_profile }}
+        run: |
+          npm run orchestrator:init -- --state-id workflow-github-live-success --goal "Workflow GitHub live success smoke" --objective "Validate GitHub live comment success path against a safe sandbox target" --subtasks "github-live-success-smoke,sandbox-targets" --success-criteria "safe GitHub live auth smoke succeeds" --profile "${{ inputs.github_sandbox_profile }}"
+          npm run orchestrator:reporting:live-success-smoke -- --state-id workflow-github-live-success --sandbox-profile "${{ inputs.github_sandbox_profile }}"
 
   orchestrator-supabase-live-smoke:
     name: Orchestrator Supabase Live Smoke

@@ -294,6 +294,14 @@ function withSandboxTarget(state: OrchestratorState, selection: GitHubLiveTarget
 }
 
 export function applyGitHubAuthSmokeToState(state: OrchestratorState, result: GitHubAuthSmokeResult, evidence: GitHubLiveAuthEvidence) {
+  const sandboxProfileStatus =
+    evidence.sandboxTargetProfileId || evidence.sandboxTargetConfigSource === "explicit_override"
+      ? "resolved"
+      : result.status === "manual_required"
+        ? "manual_required"
+        : result.status === "blocked"
+          ? "blocked"
+          : "unknown";
   return orchestratorStateSchema.parse({
     ...state,
     authSmokeStatus: result.status,
@@ -302,6 +310,8 @@ export function applyGitHubAuthSmokeToState(state: OrchestratorState, result: Gi
     authSmokeTarget: result.target,
     authSmokePermissionResult: result.permissionResult,
     authSmokeFailureReason: result.failureReason,
+    sandboxProfileId: evidence.sandboxTargetProfileId,
+    sandboxProfileStatus,
     sandboxTargetProfileId: evidence.sandboxTargetProfileId,
     sandboxTargetConfigVersion: evidence.sandboxTargetConfigVersion,
     targetSelectionStatus: result.target.selectionStatus,
@@ -310,8 +320,10 @@ export function applyGitHubAuthSmokeToState(state: OrchestratorState, result: Gi
       result.attemptedAction === "create" || result.attemptedAction === "update" || result.attemptedAction === "skip" || result.attemptedAction === "blocked"
         ? result.attemptedAction
         : "none",
+    lastAuthSmokeSuccessAt: result.status === "passed" ? result.ranAt : state.lastAuthSmokeSuccessAt,
     lastAuthSmokeEvidencePath: result.evidencePath,
     lastLiveSmokeEvidencePath: result.evidencePath,
+    lastLiveSmokeSummary: result.summary,
     lastLiveAuthEvidence: evidence,
     lastGitHubAuthSmokeResult: result,
     updatedAt: result.ranAt,

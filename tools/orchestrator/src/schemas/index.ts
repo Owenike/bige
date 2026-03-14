@@ -256,6 +256,7 @@ export const statusReportPermissionStatusSchema = z.enum([
 export const githubAuthSmokeStatusSchema = z.enum(["not_run", "skipped", "passed", "failed", "blocked", "manual_required"]);
 export const githubAuthSmokeModeSchema = z.enum(["none", "readiness_only", "sandbox_issue", "sandbox_pull_request", "correlated_reuse"]);
 export const githubTargetSelectionStatusSchema = z.enum(["unknown", "sandbox_explicit", "correlated_reuse", "blocked", "manual_required"]);
+export const sandboxProfileStatusSchema = z.enum(["unknown", "resolved", "manual_required", "blocked"]);
 export const statusReportStatusSchema = z.enum([
   "not_run",
   "payload_ready",
@@ -936,13 +937,17 @@ export const orchestratorStateSchema = z.object({
   authSmokeTarget: githubAuthSmokeTargetSchema.nullable().default(null),
   authSmokePermissionResult: statusReportPermissionStatusSchema.default("unknown"),
   authSmokeFailureReason: z.string().nullable().default(null),
+  sandboxProfileId: z.string().nullable().default(null),
+  sandboxProfileStatus: sandboxProfileStatusSchema.default("unknown"),
   sandboxTargetProfileId: z.string().nullable().default(null),
   sandboxTargetConfigVersion: z.string().nullable().default(null),
   targetSelectionStatus: githubTargetSelectionStatusSchema.default("unknown"),
   lastAuthSmokeTarget: githubAuthSmokeTargetSchema.nullable().default(null),
   lastAuthSmokeAction: z.enum(["none", "create", "update", "skip", "blocked"]).default("none"),
+  lastAuthSmokeSuccessAt: z.string().nullable().default(null),
   lastAuthSmokeEvidencePath: z.string().nullable().default(null),
   lastLiveSmokeEvidencePath: z.string().nullable().default(null),
+  lastLiveSmokeSummary: z.string().nullable().default(null),
   lastLiveAuthEvidence: githubLiveAuthEvidenceSchema.nullable().default(null),
   lastGitHubAuthSmokeResult: githubAuthSmokeResultSchema.nullable().default(null),
   lastPreflightResult: preflightResultSchema.nullable().default(null),
@@ -1557,13 +1562,17 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "authSmokeTarget",
     "authSmokePermissionResult",
     "authSmokeFailureReason",
+    "sandboxProfileId",
+    "sandboxProfileStatus",
     "sandboxTargetProfileId",
     "sandboxTargetConfigVersion",
     "targetSelectionStatus",
     "lastAuthSmokeTarget",
     "lastAuthSmokeAction",
+    "lastAuthSmokeSuccessAt",
     "lastAuthSmokeEvidencePath",
     "lastLiveSmokeEvidencePath",
+    "lastLiveSmokeSummary",
     "lastLiveAuthEvidence",
     "lastGitHubAuthSmokeResult",
     "lastAuditTrail",
@@ -2257,6 +2266,11 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "target_not_found", "create_denied", "update_denied", "target_locked_or_not_updatable", "correlation_target_missing", "correlation_not_updatable", "repository_mismatch", "blocked"],
     },
     authSmokeFailureReason: { type: "string", nullable: true },
+    sandboxProfileId: { type: "string", nullable: true },
+    sandboxProfileStatus: {
+      type: "string",
+      enum: ["unknown", "resolved", "manual_required", "blocked"],
+    },
     sandboxTargetProfileId: { type: "string", nullable: true },
     sandboxTargetConfigVersion: { type: "string", nullable: true },
     targetSelectionStatus: {
@@ -2278,8 +2292,10 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       },
     },
     lastAuthSmokeAction: { type: "string", enum: ["none", "create", "update", "skip", "blocked"] },
+    lastAuthSmokeSuccessAt: { type: "string", nullable: true },
     lastAuthSmokeEvidencePath: { type: "string", nullable: true },
     lastLiveSmokeEvidencePath: { type: "string", nullable: true },
+    lastLiveSmokeSummary: { type: "string", nullable: true },
     lastLiveAuthEvidence: {
       type: "object",
       nullable: true,
