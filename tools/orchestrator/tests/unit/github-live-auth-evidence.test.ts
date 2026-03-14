@@ -19,6 +19,8 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetType: "issue",
           targetNumber: 404,
           actionPolicy: "create_or_update",
+          enabled: true,
+          notes: null,
         },
       },
     },

@@ -21,6 +21,8 @@ export type ResolvedGitHubSandboxTarget = {
   status: "resolved" | "manual_required" | "blocked";
   requestedTarget: RequestedGitHubSandboxTarget | null;
   profileId: string | null;
+  selectionMode: "explicit" | "default" | "fallback" | "blocked";
+  selectionReason: string;
   configVersion: string | null;
   configSource: "default" | "env" | "file" | "explicit_override";
   actionPolicy: GitHubSandboxActionPolicy | null;
@@ -41,6 +43,21 @@ function parseTargetNumber(value: string | undefined) {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? null : parsed;
+}
+
+function resolveSourceRepository(state: OrchestratorState) {
+  return state.sourceEventSummary?.repository ?? state.lastStatusReportTarget?.repository ?? null;
+}
+
+function isEnabledProfile(
+  loaded: LoadedGitHubSandboxTargetRegistry,
+  profileId: string | null,
+): profileId is string {
+  if (!profileId) {
+    return false;
+  }
+  const profile = loaded.registry.profiles[profileId];
+  return Boolean(profile && profile.enabled !== false);
 }
 
 export function loadGitHubSandboxTargetRegistryFromEnv(env: NodeJS.ProcessEnv = process.env): LoadedGitHubSandboxTargetRegistry {
@@ -105,20 +122,84 @@ export async function loadGitHubSandboxTargetRegistry(params?: {
   };
 }
 
-function resolveProfileId(state: OrchestratorState, loaded: LoadedGitHubSandboxTargetRegistry, requestedProfileId: string | null) {
-  if (requestedProfileId && loaded.registry.profiles[requestedProfileId]) {
-    return requestedProfileId;
+function resolveProfileSelection(state: OrchestratorState, loaded: LoadedGitHubSandboxTargetRegistry, requestedProfileId: string | null) {
+  if (requestedProfileId) {
+    const requested = loaded.registry.profiles[requestedProfileId];
+    if (!requested) {
+      return {
+        status: "manual_required" as const,
+        profileId: null,
+        selectionMode: "blocked" as const,
+        selectionReason: `Requested sandbox profile '${requestedProfileId}' does not exist.`,
+        failureReason: "github_auth_smoke_requested_sandbox_profile_missing",
+        suggestedNextAction: "Choose an existing sandbox profile, create it first, or pass an explicit sandbox target override.",
+      };
+    }
+    if (requested.enabled === false) {
+      return {
+        status: "blocked" as const,
+        profileId: requestedProfileId,
+        selectionMode: "blocked" as const,
+        selectionReason: `Requested sandbox profile '${requestedProfileId}' is disabled.`,
+        failureReason: "github_auth_smoke_requested_sandbox_profile_disabled",
+        suggestedNextAction: "Enable the sandbox profile, choose another profile, or pass an explicit sandbox target override.",
+      };
+    }
+    return {
+      status: "resolved" as const,
+      profileId: requestedProfileId,
+      selectionMode: "explicit" as const,
+      selectionReason: `Requested sandbox profile '${requestedProfileId}' was selected explicitly.`,
+      failureReason: null,
+      suggestedNextAction: "Run the auth smoke against the explicitly selected sandbox profile.",
+    };
   }
-  if (loaded.registry.profiles[state.task.profileId]) {
-    return state.task.profileId;
+
+  if (isEnabledProfile(loaded, loaded.registry.defaultProfileId)) {
+    return {
+      status: "resolved" as const,
+      profileId: loaded.registry.defaultProfileId,
+      selectionMode: "default" as const,
+      selectionReason: `Default sandbox profile '${loaded.registry.defaultProfileId}' was selected.`,
+      failureReason: null,
+      suggestedNextAction: "Run the auth smoke against the default sandbox profile.",
+    };
   }
-  if (loaded.registry.defaultProfileId && loaded.registry.profiles[loaded.registry.defaultProfileId]) {
-    return loaded.registry.defaultProfileId;
+
+  if (isEnabledProfile(loaded, state.task.profileId)) {
+    return {
+      status: "resolved" as const,
+      profileId: state.task.profileId,
+      selectionMode: "fallback" as const,
+      selectionReason: `Task profile '${state.task.profileId}' matched a sandbox profile.`,
+      failureReason: null,
+      suggestedNextAction: "Run the auth smoke against the task-matched sandbox profile.",
+    };
   }
-  if (loaded.registry.profiles.default) {
-    return "default";
+
+  const sourceRepository = resolveSourceRepository(state);
+  if (sourceRepository) {
+    const repoMatch = Object.entries(loaded.registry.profiles).find(([, profile]) => profile.enabled !== false && profile.repository === sourceRepository)?.[0] ?? null;
+    if (repoMatch) {
+      return {
+        status: "resolved" as const,
+        profileId: repoMatch,
+        selectionMode: "fallback" as const,
+        selectionReason: `Repository '${sourceRepository}' matched sandbox profile '${repoMatch}'.`,
+        failureReason: null,
+        suggestedNextAction: "Run the auth smoke against the repository-matched sandbox profile.",
+      };
+    }
   }
-  return null;
+
+  return {
+    status: "manual_required" as const,
+    profileId: null,
+    selectionMode: "blocked" as const,
+    selectionReason: "No enabled sandbox profile matched the current request, default, or repository fallback.",
+    failureReason: "github_auth_smoke_missing_sandbox_target_profile",
+    suggestedNextAction: "Set a default sandbox profile, create a repository-matched profile, or pass an explicit sandbox target override.",
+  };
 }
 
 export function resolveGitHubSandboxTarget(params: {
@@ -133,11 +214,13 @@ export function resolveGitHubSandboxTarget(params: {
     if (!(requested.repository && requested.targetType && requested.targetNumber)) {
       return {
         status: "manual_required",
-        requestedTarget: null,
-        profileId: null,
-        configVersion: null,
-        configSource: "explicit_override",
-        actionPolicy: null,
+      requestedTarget: null,
+      profileId: null,
+      selectionMode: "blocked",
+      selectionReason: "Explicit override is incomplete.",
+      configVersion: null,
+      configSource: "explicit_override",
+      actionPolicy: null,
         summary: "GitHub live auth smoke requires repository, target type, and target number for an explicit sandbox override.",
         failureReason: "github_auth_smoke_incomplete_target",
         suggestedNextAction: "Provide --target-repo, --target-type, and --target-number together.",
@@ -153,6 +236,8 @@ export function resolveGitHubSandboxTarget(params: {
         allowCorrelatedReuse: requested.allowCorrelatedReuse ?? false,
       },
       profileId: params.requestedProfileId ?? null,
+      selectionMode: "explicit",
+      selectionReason: "Explicit sandbox target override was provided.",
       configVersion: null,
       configSource: "explicit_override",
       actionPolicy: null,
@@ -172,6 +257,8 @@ export function resolveGitHubSandboxTarget(params: {
         allowCorrelatedReuse: true,
       },
       profileId: params.requestedProfileId ?? null,
+      selectionMode: "explicit",
+      selectionReason: "Explicit correlated target reuse was allowed.",
       configVersion: null,
       configSource: "explicit_override",
       actionPolicy: null,
@@ -187,6 +274,8 @@ export function resolveGitHubSandboxTarget(params: {
       status: "manual_required",
       requestedTarget: null,
       profileId: null,
+      selectionMode: "blocked",
+      selectionReason: "No registry or explicit target was provided.",
       configVersion: null,
       configSource: "default",
       actionPolicy: null,
@@ -196,22 +285,39 @@ export function resolveGitHubSandboxTarget(params: {
     } satisfies ResolvedGitHubSandboxTarget;
   }
 
-  const profileId = resolveProfileId(params.state, loaded, params.requestedProfileId ?? null);
-  if (!profileId) {
+  const profileSelection = resolveProfileSelection(params.state, loaded, params.requestedProfileId ?? null);
+  if (profileSelection.status !== "resolved" || !profileSelection.profileId) {
+    return {
+      status: profileSelection.status,
+      requestedTarget: null,
+      profileId: profileSelection.profileId,
+      selectionMode: profileSelection.selectionMode,
+      selectionReason: profileSelection.selectionReason,
+      configVersion: loaded.version,
+      configSource: loaded.source,
+      actionPolicy: null,
+      summary: profileSelection.selectionReason,
+      failureReason: profileSelection.failureReason,
+      suggestedNextAction: profileSelection.suggestedNextAction,
+    } satisfies ResolvedGitHubSandboxTarget;
+  }
+
+  const profile = loaded.registry.profiles[profileSelection.profileId];
+  if (!profile) {
     return {
       status: "manual_required",
       requestedTarget: null,
       profileId: null,
+      selectionMode: "blocked",
+      selectionReason: `Sandbox profile '${profileSelection.profileId}' was selected but no longer exists in the registry.`,
       configVersion: loaded.version,
       configSource: loaded.source,
       actionPolicy: null,
-      summary: "GitHub live auth smoke has no safe sandbox target for the current profile.",
-      failureReason: "github_auth_smoke_missing_sandbox_target_profile",
-      suggestedNextAction: "Add a default or profile-specific sandbox target, or pass an explicit sandbox override.",
+      summary: `Sandbox profile '${profileSelection.profileId}' is missing from the loaded registry.`,
+      failureReason: "github_auth_smoke_selected_sandbox_profile_missing",
+      suggestedNextAction: "Refresh the sandbox registry, recreate the missing profile, or choose another sandbox profile.",
     } satisfies ResolvedGitHubSandboxTarget;
   }
-
-  const profile = loaded.registry.profiles[profileId];
   return {
     status: "resolved",
     requestedTarget: {
@@ -220,11 +326,13 @@ export function resolveGitHubSandboxTarget(params: {
       targetNumber: profile.targetNumber,
       allowCorrelatedReuse: profile.actionPolicy !== "create_only",
     },
-    profileId,
+    profileId: profileSelection.profileId,
+    selectionMode: profileSelection.selectionMode,
+    selectionReason: profileSelection.selectionReason,
     configVersion: loaded.version,
     configSource: loaded.source,
     actionPolicy: profile.actionPolicy,
-    summary: `GitHub live auth smoke will use sandbox target profile '${profileId}'.`,
+    summary: `GitHub live auth smoke will use sandbox target profile '${profileSelection.profileId}'.`,
     failureReason: null,
     suggestedNextAction: "Run the auth smoke against the configured sandbox target profile.",
   } satisfies ResolvedGitHubSandboxTarget;
@@ -232,7 +340,10 @@ export function resolveGitHubSandboxTarget(params: {
 
 export function describeGitHubSandboxTargetRegistry(loaded: LoadedGitHubSandboxTargetRegistry) {
   const profiles = Object.entries(loaded.registry.profiles)
-    .map(([profileId, profile]) => `${profileId}=${profile.repository}#${profile.targetNumber}(${profile.targetType},${profile.actionPolicy})`)
+    .map(
+      ([profileId, profile]) =>
+        `${profileId}=${profile.repository}#${profile.targetNumber}(${profile.targetType},${profile.actionPolicy},enabled=${profile.enabled !== false})`,
+    )
     .join("; ");
 
   return [

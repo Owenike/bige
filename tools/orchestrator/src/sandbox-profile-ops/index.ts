@@ -8,6 +8,8 @@ export type SandboxProfileRecord = {
   targetType: "issue" | "pull_request";
   targetNumber: number;
   actionPolicy: "create_or_update" | "create_only" | "update_only";
+  enabled: boolean;
+  notes: string | null;
 };
 
 export type SandboxProfileValidationResult = {
@@ -18,6 +20,10 @@ export type SandboxProfileValidationResult = {
   targetType: "issue" | "pull_request" | null;
   targetNumber: number | null;
   actionPolicy: "create_or_update" | "create_only" | "update_only" | null;
+  enabled: boolean | null;
+  notes: string | null;
+  selectionMode: "explicit" | "default" | "fallback" | "blocked";
+  selectionReason: string;
   summary: string;
   failureReason: string | null;
   suggestedNextAction: string;
@@ -34,6 +40,8 @@ export function listSandboxProfiles(loaded: LoadedGitHubSandboxTargetRegistry): 
     targetType: profile.targetType,
     targetNumber: profile.targetNumber,
     actionPolicy: profile.actionPolicy,
+    enabled: profile.enabled !== false,
+    notes: profile.notes,
   }));
 }
 
@@ -52,6 +60,8 @@ export function showSandboxProfile(loaded: LoadedGitHubSandboxTargetRegistry, pr
     targetType: profile.targetType,
     targetNumber: profile.targetNumber,
     actionPolicy: profile.actionPolicy,
+    enabled: profile.enabled !== false,
+    notes: profile.notes,
     configVersion: loaded.version,
     configSource: loaded.source,
     configPath: loaded.path,
@@ -80,6 +90,10 @@ export function validateSandboxProfile(params: {
     targetType: shownProfile?.targetType ?? resolution.requestedTarget?.targetType ?? null,
     targetNumber: shownProfile?.targetNumber ?? resolution.requestedTarget?.targetNumber ?? null,
     actionPolicy: shownProfile?.actionPolicy ?? resolution.actionPolicy ?? null,
+    enabled: shownProfile ? shownProfile.enabled !== false : null,
+    notes: shownProfile?.notes ?? null,
+    selectionMode: resolution.selectionMode,
+    selectionReason: resolution.selectionReason,
     summary: resolution.summary,
     failureReason: resolution.failureReason,
     suggestedNextAction: resolution.suggestedNextAction,
@@ -101,7 +115,7 @@ export function formatSandboxProfileList(loaded: LoadedGitHubSandboxTargetRegist
   lines.push("Profiles:");
   for (const profile of profiles) {
     lines.push(
-      `- ${profile.profileId}${profile.isDefault ? " (default)" : ""}: ${profile.repository}#${profile.targetNumber} (${profile.targetType}, ${profile.actionPolicy})`,
+      `- ${profile.profileId}${profile.isDefault ? " (default)" : ""}: ${profile.repository}#${profile.targetNumber} (${profile.targetType}, ${profile.actionPolicy}, enabled=${profile.enabled})${profile.notes ? ` notes=${profile.notes}` : ""}`,
     );
   }
   return lines.join("\n");
@@ -113,6 +127,9 @@ export function formatSandboxProfileValidation(result: SandboxProfileValidationR
     `Status: ${result.status}`,
     `Target: ${result.targetType ?? "none"} ${result.repository ?? "none"}#${result.targetNumber ?? "none"}`,
     `Action policy: ${result.actionPolicy ?? "none"}`,
+    `Enabled: ${result.enabled ?? "none"}`,
+    `Notes: ${result.notes ?? "none"}`,
+    `Selection: ${result.selectionMode} / ${result.selectionReason}`,
     `Config: ${result.configSource}/${result.configVersion} (${result.configPath ?? "no-path"})`,
     `Summary: ${result.summary}`,
     `Failure: ${result.failureReason ?? "none"}`,

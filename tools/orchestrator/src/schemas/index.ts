@@ -615,12 +615,15 @@ export const githubAuthSmokeResultSchema = z.object({
 });
 
 export const githubSandboxActionPolicySchema = z.enum(["create_or_update", "create_only", "update_only"]);
+export const sandboxProfileSelectionModeSchema = z.enum(["unknown", "explicit", "default", "fallback", "blocked"]);
 
 export const githubSandboxTargetProfileSchema = z.object({
   repository: z.string(),
   targetType: z.enum(["issue", "pull_request"]),
   targetNumber: z.number().int().positive(),
   actionPolicy: githubSandboxActionPolicySchema.default("create_or_update"),
+  enabled: z.boolean().default(true),
+  notes: z.string().nullable().default(null),
 });
 
 export const githubSandboxTargetRegistrySchema = z.object({
@@ -632,6 +635,8 @@ export const githubSandboxTargetRegistrySchema = z.object({
 export const githubLiveAuthEvidenceSchema = z.object({
   attemptedAt: z.string(),
   sandboxTargetProfileId: z.string().nullable().default(null),
+  sandboxProfileSelectionMode: sandboxProfileSelectionModeSchema.default("unknown"),
+  sandboxProfileSelectionReason: z.string().nullable().default(null),
   sandboxTargetConfigVersion: z.string().nullable().default(null),
   sandboxTargetConfigSource: z.enum(["default", "env", "file", "explicit_override"]).default("default"),
   targetSelectionStatus: githubTargetSelectionStatusSchema.default("unknown"),
@@ -937,6 +942,9 @@ export const orchestratorStateSchema = z.object({
   authSmokeTarget: githubAuthSmokeTargetSchema.nullable().default(null),
   authSmokePermissionResult: statusReportPermissionStatusSchema.default("unknown"),
   authSmokeFailureReason: z.string().nullable().default(null),
+  selectedSandboxProfileId: z.string().nullable().default(null),
+  sandboxProfileSelectionMode: sandboxProfileSelectionModeSchema.default("unknown"),
+  sandboxProfileSelectionReason: z.string().nullable().default(null),
   sandboxProfileId: z.string().nullable().default(null),
   sandboxProfileStatus: sandboxProfileStatusSchema.default("unknown"),
   sandboxTargetProfileId: z.string().nullable().default(null),
@@ -948,6 +956,7 @@ export const orchestratorStateSchema = z.object({
   lastAuthSmokeEvidencePath: z.string().nullable().default(null),
   lastLiveSmokeEvidencePath: z.string().nullable().default(null),
   lastLiveSmokeSummary: z.string().nullable().default(null),
+  lastLiveSmokeTarget: githubAuthSmokeTargetSchema.nullable().default(null),
   lastLiveAuthEvidence: githubLiveAuthEvidenceSchema.nullable().default(null),
   lastGitHubAuthSmokeResult: githubAuthSmokeResultSchema.nullable().default(null),
   lastPreflightResult: preflightResultSchema.nullable().default(null),
@@ -1562,6 +1571,9 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "authSmokeTarget",
     "authSmokePermissionResult",
     "authSmokeFailureReason",
+    "selectedSandboxProfileId",
+    "sandboxProfileSelectionMode",
+    "sandboxProfileSelectionReason",
     "sandboxProfileId",
     "sandboxProfileStatus",
     "sandboxTargetProfileId",
@@ -1573,6 +1585,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastAuthSmokeEvidencePath",
     "lastLiveSmokeEvidencePath",
     "lastLiveSmokeSummary",
+    "lastLiveSmokeTarget",
     "lastLiveAuthEvidence",
     "lastGitHubAuthSmokeResult",
     "lastAuditTrail",
@@ -2266,6 +2279,12 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "target_not_found", "create_denied", "update_denied", "target_locked_or_not_updatable", "correlation_target_missing", "correlation_not_updatable", "repository_mismatch", "blocked"],
     },
     authSmokeFailureReason: { type: "string", nullable: true },
+    selectedSandboxProfileId: { type: "string", nullable: true },
+    sandboxProfileSelectionMode: {
+      type: "string",
+      enum: ["unknown", "explicit", "default", "fallback", "blocked"],
+    },
+    sandboxProfileSelectionReason: { type: "string", nullable: true },
     sandboxProfileId: { type: "string", nullable: true },
     sandboxProfileStatus: {
       type: "string",
@@ -2296,12 +2315,28 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     lastAuthSmokeEvidencePath: { type: "string", nullable: true },
     lastLiveSmokeEvidencePath: { type: "string", nullable: true },
     lastLiveSmokeSummary: { type: "string", nullable: true },
+    lastLiveSmokeTarget: {
+      type: "object",
+      nullable: true,
+      required: ["repository", "targetType", "targetNumber", "commentId", "selectionStatus", "selectionSummary"],
+      additionalProperties: false,
+      properties: {
+        repository: { type: "string", nullable: true },
+        targetType: { type: "string", enum: ["issue", "pull_request"], nullable: true },
+        targetNumber: { type: "number", nullable: true },
+        commentId: { type: "number", nullable: true },
+        selectionStatus: { type: "string", enum: ["unknown", "sandbox_explicit", "correlated_reuse", "blocked", "manual_required"] },
+        selectionSummary: { type: "string", nullable: true },
+      },
+    },
     lastLiveAuthEvidence: {
       type: "object",
       nullable: true,
       required: [
         "attemptedAt",
         "sandboxTargetProfileId",
+        "sandboxProfileSelectionMode",
+        "sandboxProfileSelectionReason",
         "sandboxTargetConfigVersion",
         "sandboxTargetConfigSource",
         "targetSelectionStatus",
@@ -2320,6 +2355,11 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       properties: {
         attemptedAt: { type: "string" },
         sandboxTargetProfileId: { type: "string", nullable: true },
+        sandboxProfileSelectionMode: {
+          type: "string",
+          enum: ["unknown", "explicit", "default", "fallback", "blocked"],
+        },
+        sandboxProfileSelectionReason: { type: "string", nullable: true },
         sandboxTargetConfigVersion: { type: "string", nullable: true },
         sandboxTargetConfigSource: { type: "string", enum: ["default", "env", "file", "explicit_override"] },
         targetSelectionStatus: { type: "string", enum: ["unknown", "sandbox_explicit", "correlated_reuse", "blocked", "manual_required"] },

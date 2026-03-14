@@ -121,6 +121,9 @@ jobs:
           npm run test:orchestrator:github-live-success-smoke
           npm run test:orchestrator:sandbox-profile-ops
           npm run test:orchestrator:live-report-runbook
+          npm run test:orchestrator:sandbox-profile-lifecycle
+          npm run test:orchestrator:live-auth-operator-flow
+          npm run test:orchestrator:sandbox-default-selection
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary

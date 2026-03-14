@@ -73,6 +73,9 @@ $suiteMap = @{
     "$outDir\tests\unit\github-live-success-smoke.test.js",
     "$outDir\tests\unit\sandbox-profile-ops.test.js",
     "$outDir\tests\unit\live-report-runbook.test.js",
+    "$outDir\tests\unit\sandbox-profile-lifecycle.test.js",
+    "$outDir\tests\unit\live-auth-operator-flow.test.js",
+    "$outDir\tests\unit\sandbox-default-selection.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -225,6 +228,15 @@ $suiteMap = @{
   )
   "live-report-runbook" = @(
     "$outDir\tests\unit\live-report-runbook.test.js"
+  )
+  "sandbox-profile-lifecycle" = @(
+    "$outDir\tests\unit\sandbox-profile-lifecycle.test.js"
+  )
+  "live-auth-operator-flow" = @(
+    "$outDir\tests\unit\live-auth-operator-flow.test.js"
+  )
+  "sandbox-default-selection" = @(
+    "$outDir\tests\unit\sandbox-default-selection.test.js"
   )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
@@ -386,6 +398,9 @@ $suiteMap = @{
     "$outDir\tests\unit\github-live-success-smoke.test.js",
     "$outDir\tests\unit\sandbox-profile-ops.test.js",
     "$outDir\tests\unit\live-report-runbook.test.js",
+    "$outDir\tests\unit\sandbox-profile-lifecycle.test.js",
+    "$outDir\tests\unit\live-auth-operator-flow.test.js",
+    "$outDir\tests\unit\sandbox-default-selection.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",

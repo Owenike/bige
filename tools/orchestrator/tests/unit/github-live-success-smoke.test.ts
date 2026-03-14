@@ -19,12 +19,16 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetType: "issue",
           targetNumber: 501,
           actionPolicy: "create_or_update",
+          enabled: true,
+          notes: null,
         },
         updateOnly: {
           repository: "example/bige",
           targetType: "issue",
           targetNumber: 777,
           actionPolicy: "update_only",
+          enabled: true,
+          notes: null,
         },
       },
     },
@@ -154,6 +158,7 @@ test("github live success smoke records an update-driven success with an update-
     enabled: true,
     token: "token",
     sandboxRegistry: createRegistry(),
+    sandboxProfileId: "updateOnly",
     execFileImpl,
   });
 

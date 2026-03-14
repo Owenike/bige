@@ -19,12 +19,16 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetType: "issue",
           targetNumber: 101,
           actionPolicy: "create_or_update",
+          enabled: true,
+          notes: null,
         },
         review: {
           repository: "example/bige",
           targetType: "issue",
           targetNumber: 202,
           actionPolicy: "create_or_update",
+          enabled: true,
+          notes: null,
         },
       },
     },
@@ -152,6 +156,7 @@ test("github live auth success path can update an existing correlated comment us
     enabled: true,
     token: "token",
     sandboxRegistry: createRegistry(),
+    sandboxProfileId: "review",
     execFileImpl,
   });
 

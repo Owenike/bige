@@ -40,12 +40,16 @@ async function createRegistry() {
             targetType: "issue",
             targetNumber: 101,
             actionPolicy: "create_or_update",
+            enabled: true,
+            notes: null,
           },
           release: {
             repository: "example/bige",
             targetType: "pull_request",
             targetNumber: 202,
             actionPolicy: "update_only",
+            enabled: true,
+            notes: null,
           },
         },
       },
@@ -75,6 +79,7 @@ test("github sandbox target registry resolves a profile-specific target", async 
   const resolved = resolveGitHubSandboxTarget({
     state: createState("release"),
     loadedRegistry: registry,
+    requestedProfileId: "release",
   });
 
   assert.equal(resolved.status, "resolved");

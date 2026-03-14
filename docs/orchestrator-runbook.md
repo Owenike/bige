@@ -473,26 +473,40 @@ Sandbox target rules:
 Sandbox target registry:
 - the registry can come from JSON config or env-derived defaults
 - supported fields per profile:
+  - `id`
   - `repository`
   - `targetType`
   - `targetNumber`
   - `actionPolicy` = `create_or_update`, `create_only`, or `update_only`
+  - `enabled`
+  - `notes`
 - resolution order:
   - explicit CLI override
   - explicit `--sandbox-profile`
-  - current task profile id
   - registry default profile
+  - current task profile id
+  - repository-matched fallback
 - if no safe registry target exists, auth smoke returns `manual_required`
 - if policy and correlated target disagree, auth smoke returns `blocked`
 - operator commands:
+  - `node .tmp/orchestrator/src/cli.js sandbox:create --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --target-repo example/bige --target-type issue --target-number 101 --set-default true`
+  - `node .tmp/orchestrator/src/cli.js sandbox:update --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --notes "safe smoke target"`
+  - `node .tmp/orchestrator/src/cli.js sandbox:delete --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile old-profile`
+  - `node .tmp/orchestrator/src/cli.js sandbox:set-default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
   - `node .tmp/orchestrator/src/cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json`
   - `node .tmp/orchestrator/src/cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
   - `node .tmp/orchestrator/src/cli.js sandbox:validate --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
 - safe operator flow:
-  - list the available sandbox profiles
-  - show the default or requested profile
-  - validate the profile before running a live success smoke
-  - only run `reporting:live-success-smoke` when the profile resolves to a known-safe repo/issue/pr target
+  - create or update the sandbox profile
+  - set the default profile if you want smoke runs without explicit override
+  - list and show the active profile set
+  - validate the selected profile before running a live success smoke
+  - run `reporting:precheck` to confirm target resolution and permission readiness
+  - only run `reporting:run-live-smoke` or `reporting:live-success-smoke` when the profile resolves to a known-safe repo/issue/pr target
+- lifecycle guardrails:
+  - deleting the default profile clears it and promotes the first remaining enabled profile when possible
+  - disabled profiles cannot become the default profile
+  - missing or invalid profiles return `manual_required` instead of falling back to arbitrary live threads
 
 Minimal registry example:
 ```json
@@ -524,7 +538,13 @@ node .tmp/orchestrator/src/cli.js reporting:audit --state-id demo
 node .tmp/orchestrator/src/cli.js reporting:permissions --state-id demo
 node .tmp/orchestrator/src/cli.js reporting:target-check --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js reporting:auth-smoke --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
+node .tmp/orchestrator/src/cli.js reporting:precheck --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
+node .tmp/orchestrator/src/cli.js reporting:run-live-smoke --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js reporting:live-success-smoke --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
+node .tmp/orchestrator/src/cli.js sandbox:create --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --target-repo example/bige --target-type issue --target-number 101 --set-default true
+node .tmp/orchestrator/src/cli.js sandbox:update --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --notes "safe smoke target"
+node .tmp/orchestrator/src/cli.js sandbox:delete --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile old-profile
+node .tmp/orchestrator/src/cli.js sandbox:set-default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json
 node .tmp/orchestrator/src/cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:validate --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
@@ -543,6 +563,7 @@ Live auth evidence:
 - evidence captures:
   - attempted time
   - sandbox profile/config version
+  - sandbox profile selection mode / selection reason
   - sandbox profile status
   - target selection result
   - permission result
@@ -552,8 +573,12 @@ Live auth evidence:
   - failure reason / next action
 - this path is safe to inspect even when auth smoke is blocked or skipped
 - a successful live smoke also updates:
+  - `selectedSandboxProfileId`
+  - `sandboxProfileSelectionMode`
+  - `sandboxProfileSelectionReason`
   - `lastAuthSmokeSuccessAt`
   - `lastLiveSmokeSummary`
+  - `lastLiveSmokeTarget`
   - `lastStatusReportTarget`
   - `lastStatusReportAction`
 
@@ -1084,6 +1109,22 @@ npm run test:orchestrator:remote-diagnostics
 npm run test:orchestrator:supabase-live
 npm run test:orchestrator:backend-transfer
 npm run test:orchestrator:backend-health
+npm run test:orchestrator:github-live-report
+npm run test:orchestrator:github-report-permissions
+npm run test:orchestrator:report-delivery-audit
+npm run test:orchestrator:reporting-operator-summary
+npm run test:orchestrator:github-live-auth-smoke
+npm run test:orchestrator:github-live-auth-matrix
+npm run test:orchestrator:github-live-targeting
+npm run test:orchestrator:github-live-auth-success
+npm run test:orchestrator:github-sandbox-targets
+npm run test:orchestrator:github-live-auth-evidence
+npm run test:orchestrator:github-live-success-smoke
+npm run test:orchestrator:sandbox-profile-ops
+npm run test:orchestrator:live-report-runbook
+npm run test:orchestrator:sandbox-profile-lifecycle
+npm run test:orchestrator:live-auth-operator-flow
+npm run test:orchestrator:sandbox-default-selection
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine

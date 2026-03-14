@@ -20,12 +20,16 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetType: "issue",
           targetNumber: 42,
           actionPolicy: "create_or_update",
+          enabled: true,
+          notes: null,
         },
         release: {
           repository: "example/bige",
           targetType: "pull_request",
           targetNumber: 88,
           actionPolicy: "update_only",
+          enabled: true,
+          notes: null,
         },
       },
     },
@@ -73,6 +77,7 @@ test("sandbox profile ops validate the active profile", () => {
   const validation = validateSandboxProfile({
     state: createState("release"),
     loadedRegistry: createRegistry(),
+    profileId: "release",
   });
   assert.equal(validation.status, "resolved");
   assert.equal(validation.profileId, "release");
@@ -95,5 +100,5 @@ test("sandbox profile ops block invalid profiles without falling back to arbitra
     profileId: "missing",
   });
   assert.equal(validation.status, "manual_required");
-  assert.equal(validation.failureReason, "github_auth_smoke_missing_sandbox_target_profile");
+  assert.equal(validation.failureReason, "github_auth_smoke_requested_sandbox_profile_missing");
 });

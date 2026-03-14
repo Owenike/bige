@@ -48,6 +48,8 @@ import { runGitHubLiveAuthSmoke } from "./github-live-auth";
 import { selectGitHubLiveSmokeTarget } from "./github-live-targets";
 import { describeGitHubSandboxTargetRegistry, loadGitHubSandboxTargetRegistry, resolveGitHubSandboxTarget } from "./github-sandbox-targets";
 import { formatSandboxProfileList, formatSandboxProfileValidation, showSandboxProfile, validateSandboxProfile } from "./sandbox-profile-ops";
+import { createSandboxProfile, deleteSandboxProfile, setDefaultSandboxProfile, updateSandboxProfile } from "./sandbox-profile-lifecycle";
+import { runLiveAuthOperatorFlow } from "./live-auth-operator";
 import { ingestGitHubWebhook } from "./webhook";
 import { formatWebhookHostingConfig, loadWebhookHostingConfig } from "./runtime-config";
 import { formatWebhookShutdownSummary, startWebhookHosting } from "./webhook-hosting";
@@ -217,6 +219,28 @@ function formatRepairSummary(summary: {
     `Orphan blocked: ${summary.orphanBlockedCount}`,
     `Manual required: ${summary.manualRequiredReasons.join(" | ") || "none"}`,
     `Summary: ${summary.summary}`,
+  ].join("\n");
+}
+
+function formatSandboxLifecycleSummary(summary: {
+  action: string;
+  status: string;
+  profileId: string | null;
+  defaultProfileId: string | null;
+  summary: string;
+  failureReason: string | null;
+  suggestedNextAction: string;
+  path: string | null;
+}) {
+  return [
+    `Sandbox action: ${summary.action}`,
+    `Status: ${summary.status}`,
+    `Profile: ${summary.profileId ?? "none"}`,
+    `Default profile: ${summary.defaultProfileId ?? "none"}`,
+    `Config path: ${summary.path ?? "none"}`,
+    `Summary: ${summary.summary}`,
+    `Failure: ${summary.failureReason ?? "none"}`,
+    `Next action: ${summary.suggestedNextAction}`,
   ].join("\n");
 }
 
@@ -661,6 +685,81 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:create") {
+    const profileId = options.get("sandbox-profile");
+    if (!profileId) {
+      throw new Error("--sandbox-profile is required for sandbox:create.");
+    }
+    const repository = options.get("target-repo");
+    const targetType = options.get("target-type") as "issue" | "pull_request" | undefined;
+    const targetNumber = options.has("target-number") ? Number.parseInt(getOption(options, "target-number", "0"), 10) : null;
+    if (!repository || !targetType || !targetNumber) {
+      throw new Error("--target-repo, --target-type, and --target-number are required for sandbox:create.");
+    }
+    const result = await createSandboxProfile({
+      configPath: options.get("sandbox-config") ?? null,
+      profileId,
+      profile: {
+        repository,
+        targetType,
+        targetNumber,
+        actionPolicy: (options.get("action-policy") as "create_or_update" | "create_only" | "update_only" | undefined) ?? "create_or_update",
+        enabled: getOption(options, "enabled", "true") === "true",
+        notes: options.get("notes") ?? null,
+      },
+      setDefault: getOption(options, "set-default", "false") === "true",
+    });
+    process.stdout.write(`${formatSandboxLifecycleSummary(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "sandbox:update") {
+    const profileId = options.get("sandbox-profile");
+    if (!profileId) {
+      throw new Error("--sandbox-profile is required for sandbox:update.");
+    }
+    const changes: Record<string, unknown> = {};
+    if (options.has("target-repo")) changes.repository = options.get("target-repo");
+    if (options.has("target-type")) changes.targetType = getOption(options, "target-type", "issue");
+    if (options.has("target-number")) changes.targetNumber = Number.parseInt(getOption(options, "target-number", "0"), 10);
+    if (options.has("action-policy")) changes.actionPolicy = options.get("action-policy");
+    if (options.has("enabled")) changes.enabled = getOption(options, "enabled", "true") === "true";
+    if (options.has("notes")) changes.notes = options.get("notes");
+    const result = await updateSandboxProfile({
+      configPath: options.get("sandbox-config") ?? null,
+      profileId,
+      changes,
+    });
+    process.stdout.write(`${formatSandboxLifecycleSummary(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "sandbox:delete") {
+    const profileId = options.get("sandbox-profile");
+    if (!profileId) {
+      throw new Error("--sandbox-profile is required for sandbox:delete.");
+    }
+    const result = await deleteSandboxProfile({
+      configPath: options.get("sandbox-config") ?? null,
+      profileId,
+    });
+    process.stdout.write(`${formatSandboxLifecycleSummary(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "sandbox:set-default") {
+    const profileId = options.get("sandbox-profile");
+    if (!profileId) {
+      throw new Error("--sandbox-profile is required for sandbox:set-default.");
+    }
+    const result = await setDefaultSandboxProfile({
+      configPath: options.get("sandbox-config") ?? null,
+      profileId,
+    });
+    process.stdout.write(`${formatSandboxLifecycleSummary(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
   if (command === "sandbox:show") {
     const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
     const profileId = options.get("sandbox-profile") ?? sandboxRegistry.registry.defaultProfileId ?? null;
@@ -731,6 +830,66 @@ async function main() {
         JSON.stringify(result, null, 2),
       ].join("\n"),
     );
+    return;
+  }
+
+  if (command === "reporting:precheck") {
+    const outputRoot = getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report"));
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const adapter = new GhCliStatusReportingAdapter({
+      enabled: getOption(options, "enabled", "true") === "true",
+      token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+    });
+    const result = await runLiveAuthOperatorFlow({
+      state: existingState,
+      outputRoot,
+      adapter,
+      enabled: getOption(options, "enabled", "true") === "true",
+      token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+      sandboxRegistry,
+      sandboxProfileId: options.get("sandbox-profile") ?? null,
+      requestedTarget: {
+        repository: options.get("target-repo") ?? null,
+        targetType: options.has("target-type")
+          ? (getOption(options, "target-type", "issue") as "issue" | "pull_request")
+          : null,
+        targetNumber: options.has("target-number") ? Number.parseInt(getOption(options, "target-number", "0"), 10) : null,
+        allowCorrelatedReuse: getOption(options, "allow-correlated-reuse", "false") === "true",
+      },
+      execute: false,
+    });
+    await dependencies.storage.saveState(result.state);
+    process.stdout.write(`${result.summaryText}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "reporting:run-live-smoke") {
+    const outputRoot = getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report"));
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const adapter = new GhCliStatusReportingAdapter({
+      enabled: getOption(options, "enabled", "true") === "true",
+      token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+    });
+    const result = await runLiveAuthOperatorFlow({
+      state: existingState,
+      outputRoot,
+      adapter,
+      enabled: getOption(options, "enabled", "true") === "true",
+      token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+      sandboxRegistry,
+      sandboxProfileId: options.get("sandbox-profile") ?? null,
+      requestedTarget: {
+        repository: options.get("target-repo") ?? null,
+        targetType: options.has("target-type")
+          ? (getOption(options, "target-type", "issue") as "issue" | "pull_request")
+          : null,
+        targetNumber: options.has("target-number") ? Number.parseInt(getOption(options, "target-number", "0"), 10) : null,
+        allowCorrelatedReuse: getOption(options, "allow-correlated-reuse", "false") === "true",
+      },
+      execute: true,
+    });
+    await dependencies.storage.saveState(result.state);
+    process.stdout.write(`${result.summaryText}\n\n${JSON.stringify(result, null, 2)}\n`);
     return;
   }
 
@@ -1162,11 +1321,17 @@ async function main() {
       "  node cli.js github-live-report:smoke --state-id default",
       "  node cli.js reporting:smoke --state-id default",
       "  node cli.js reporting:permissions --state-id default",
+      "  node cli.js sandbox:create --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --target-repo example/bige --target-type issue --target-number 101 --set-default true",
+      "  node cli.js sandbox:update --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --enabled true --notes \"safe smoke target\"",
+      "  node cli.js sandbox:delete --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
+      "  node cli.js sandbox:set-default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:target-check --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:validate --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
+      "  node cli.js reporting:precheck --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:auth-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
+      "  node cli.js reporting:run-live-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:live-success-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:status --state-id default",
       "  node cli.js reporting:audit --state-id default",
