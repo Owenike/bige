@@ -151,6 +151,9 @@ jobs:
           npm run test:orchestrator:sandbox-resolution-readiness
           npm run test:orchestrator:sandbox-resolution-evidence-summary
           npm run test:orchestrator:sandbox-closure-gating
+          npm run test:orchestrator:sandbox-resolution-audit-log
+          npm run test:orchestrator:sandbox-closeout-summary
+          npm run test:orchestrator:sandbox-closeout-operator-checklist
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary
