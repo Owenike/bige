@@ -91,6 +91,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-rollback-governance.test.js",
     "$outDir\tests\unit\sandbox-batch-recovery.test.js",
     "$outDir\tests\unit\sandbox-restore-retention.test.js",
+    "$outDir\tests\unit\sandbox-history.test.js",
+    "$outDir\tests\unit\sandbox-compare.test.js",
+    "$outDir\tests\unit\sandbox-recovery-diagnostics.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -298,6 +301,15 @@ $suiteMap = @{
   "sandbox-restore-retention" = @(
     "$outDir\tests\unit\sandbox-restore-retention.test.js"
   )
+  "sandbox-history" = @(
+    "$outDir\tests\unit\sandbox-history.test.js"
+  )
+  "sandbox-compare" = @(
+    "$outDir\tests\unit\sandbox-compare.test.js"
+  )
+  "sandbox-recovery-diagnostics" = @(
+    "$outDir\tests\unit\sandbox-recovery-diagnostics.test.js"
+  )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
   )
@@ -476,6 +488,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-rollback-governance.test.js",
     "$outDir\tests\unit\sandbox-batch-recovery.test.js",
     "$outDir\tests\unit\sandbox-restore-retention.test.js",
+    "$outDir\tests\unit\sandbox-history.test.js",
+    "$outDir\tests\unit\sandbox-compare.test.js",
+    "$outDir\tests\unit\sandbox-recovery-diagnostics.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",

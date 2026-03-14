@@ -617,6 +617,7 @@ export const githubAuthSmokeResultSchema = z.object({
 export const githubSandboxActionPolicySchema = z.enum(["create_or_update", "create_only", "update_only"]);
 export const sandboxProfileSelectionModeSchema = z.enum(["unknown", "explicit", "default", "fallback", "blocked"]);
 export const sandboxGovernanceStatusSchema = z.enum(["unknown", "ready", "blocked", "manual_required"]);
+export const sandboxLookupStatusSchema = z.enum(["not_run", "ready", "blocked", "manual_required"]);
 const defaultGitHubSandboxGovernance = {
   allowedRepositories: [] as string[],
   allowedTargetTypes: ["issue", "pull_request"] as Array<"issue" | "pull_request">,
@@ -1125,6 +1126,11 @@ export const orchestratorStateSchema = z.object({
   lastBatchRecoverySummary: z.string().nullable().default(null),
   restorePointRetentionStatus: sandboxRestoreRetentionStatusSchema.default("not_run"),
   lastRestorePointPruneSummary: z.string().nullable().default(null),
+  lastSandboxHistorySummary: z.string().nullable().default(null),
+  lastSandboxCompareSummary: z.string().nullable().default(null),
+  lastRecoveryIncidentSummary: z.string().nullable().default(null),
+  lastRestorePointLookupStatus: sandboxLookupStatusSchema.default("not_run"),
+  lastRestorePointCompareStatus: sandboxLookupStatusSchema.default("not_run"),
   authSmokeStatus: githubAuthSmokeStatusSchema.default("not_run"),
   authSmokeSuccessStatus: z.enum(["not_run", "success", "non_success"]).default("not_run"),
   authSmokeMode: githubAuthSmokeModeSchema.default("none"),
@@ -1798,6 +1804,11 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastBatchRecoverySummary",
     "restorePointRetentionStatus",
     "lastRestorePointPruneSummary",
+    "lastSandboxHistorySummary",
+    "lastSandboxCompareSummary",
+    "lastRecoveryIncidentSummary",
+    "lastRestorePointLookupStatus",
+    "lastRestorePointCompareStatus",
     "authSmokeStatus",
     "authSmokeSuccessStatus",
     "authSmokeMode",
@@ -2567,6 +2578,17 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       enum: ["not_run", "ready", "pruned", "blocked", "manual_required", "failed"],
     },
     lastRestorePointPruneSummary: { type: "string", nullable: true },
+    lastSandboxHistorySummary: { type: "string", nullable: true },
+    lastSandboxCompareSummary: { type: "string", nullable: true },
+    lastRecoveryIncidentSummary: { type: "string", nullable: true },
+    lastRestorePointLookupStatus: {
+      type: "string",
+      enum: ["not_run", "ready", "blocked", "manual_required"],
+    },
+    lastRestorePointCompareStatus: {
+      type: "string",
+      enum: ["not_run", "ready", "blocked", "manual_required"],
+    },
     authSmokeStatus: {
       type: "string",
       enum: ["not_run", "skipped", "passed", "failed", "blocked", "manual_required"],

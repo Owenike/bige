@@ -58,8 +58,11 @@ import { exportSandboxProfiles, importSandboxProfiles } from "./sandbox-import-e
 import { applySandboxRegistryChange, buildSandboxRegistryDiff, reviewSandboxRegistryChange } from "./sandbox-change-review";
 import { runSandboxBatchChange } from "./sandbox-batch-change";
 import { runSandboxBatchRecovery, summarizeSandboxBatchRecovery } from "./sandbox-batch-recovery";
+import { compareSandboxRestorePoints, formatSandboxCompare } from "./sandbox-compare";
+import { formatSandboxHistory, querySandboxHistory } from "./sandbox-history";
 import { formatSandboxImpactSummary } from "./sandbox-impact-summary";
 import { listSandboxRestorePoints } from "./sandbox-restore-points";
+import { buildSandboxRecoveryDiagnostics, formatSandboxRecoveryDiagnostics } from "./sandbox-recovery-diagnostics";
 import { runSandboxRollback } from "./sandbox-rollback";
 import { evaluateSandboxRollbackGovernance, formatSandboxRollbackGovernanceSummary } from "./sandbox-rollback-governance";
 import {
@@ -1051,7 +1054,7 @@ async function main() {
     return;
   }
 
-  if (command === "sandbox:restore-points") {
+  if (command === "sandbox:restore-points" || command === "sandbox:restore-points:list") {
     const configPath = options.get("sandbox-config");
     if (!configPath) {
       throw new Error("--sandbox-config is required for sandbox:restore-points.");
@@ -1060,7 +1063,39 @@ async function main() {
       configPath,
       limit: options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10,
     });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastSandboxHistorySummary: `Restore point lookup returned ${restorePoints.records.length} item(s).`,
+      lastRestorePointLookupStatus: restorePoints.records.length > 0 ? "ready" : "manual_required",
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
     process.stdout.write(`${summarizeSandboxRestorePoints(restorePoints)}\n\n${JSON.stringify(restorePoints, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "sandbox:history" || command === "sandbox:rollback:history") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const kind =
+      command === "sandbox:rollback:history"
+        ? "rollback"
+        : ((options.get("kind") as "all" | "restore_points" | "rollback" | "batch_recovery" | null) ?? "all");
+    const result = await querySandboxHistory({
+      configPath,
+      kind,
+      limit: options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastSandboxHistorySummary: result.summary,
+      lastRestorePointLookupStatus: result.entries.length > 0 ? "ready" : "manual_required",
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(`${formatSandboxHistory(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
     return;
   }
 
@@ -1522,6 +1557,52 @@ async function main() {
     process.stdout.write(
       `${summarizeSandboxBatchRecovery(result)}\n\n${formatSandboxImpactSummary(result.impactSummary)}\n\n${JSON.stringify(result, null, 2)}\n`,
     );
+    return;
+  }
+
+  if (command === "sandbox:compare") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const result = await compareSandboxRestorePoints({
+      configPath,
+      loadedRegistry: sandboxRegistry,
+      restorePointId: options.get("restore-point-id") ?? null,
+      compareRestorePointId: options.get("compare-restore-point-id") ?? null,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastSandboxCompareSummary: result.summary,
+      lastRestorePointCompareStatus: result.status,
+      lastSandboxDiffSummary: result.diffSummary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCompare(result)}\n\n${formatSandboxImpactSummary(result.impactSummary)}\n\n${JSON.stringify(result, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:recovery:diagnostics") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const result = await buildSandboxRecoveryDiagnostics({
+      configPath,
+      state: existingState,
+      limit: options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastRecoveryIncidentSummary: result.summary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(`${formatSandboxRecoveryDiagnostics(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
     return;
   }
 
