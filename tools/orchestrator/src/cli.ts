@@ -37,6 +37,9 @@ import { inspectBackendHealth, repairBackendHealth } from "./health";
 import { ingestGitHubEvent } from "./github-events";
 import { GhCliStatusReportingAdapter, applyStatusReportToState, reportStateStatus } from "./status-reporting";
 import { ingestGitHubWebhook } from "./webhook";
+import { startWebhookServer } from "./webhook-server";
+import { loadActorPolicyConfigFromEnv, resolveActorAuthorization } from "./actor-policy";
+import { formatInboundAuditSummary, listInboundAuditRecords } from "./inbound-audit";
 
 async function resolveRunId(params: {
   stateId: string;
@@ -380,8 +383,76 @@ async function main() {
         token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
       }),
       statusOutputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report")),
+      auditOutputRoot: getOption(options, "audit-output-root", path.join(repoPath, ".tmp", "orchestrator-inbound")),
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "webhook:serve") {
+    const port = Number.parseInt(getOption(options, "port", "8787"), 10);
+    const handle = await startWebhookServer({
+      port,
+      secret: options.get("webhook-secret") ?? process.env.GITHUB_WEBHOOK_SECRET ?? null,
+      dependencies,
+      repoPath,
+      outputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report")),
+      webhookPath: getOption(options, "webhook-path", "/github"),
+      enqueue: getOption(options, "enqueue", "true") === "true",
+      replayOverride: getOption(options, "replay", "false") === "true",
+      reportStatus: getOption(options, "report-status", "true") === "true",
+    });
+    process.stdout.write(`${JSON.stringify({ started: true, url: handle.url }, null, 2)}\n`);
+    await new Promise<void>((resolve) => {
+      process.once("SIGINT", async () => {
+        await handle.close();
+        resolve();
+      });
+      process.once("SIGTERM", async () => {
+        await handle.close();
+        resolve();
+      });
+    });
+    return;
+  }
+
+  if (command === "actor-policy:check") {
+    const actor = options.get("actor") ?? "";
+    const commandName = options.get("command");
+    const decision = resolveActorAuthorization({
+      actor: actor ? { login: actor, id: null, type: "User" } : null,
+      command: commandName
+        ? (commandName as "run" | "dry_run" | "status" | "retry" | "approve" | "reject")
+        : null,
+      executionMode: options.has("execution-mode")
+        ? (getOption(options, "execution-mode", "dry_run") as ExecutionMode)
+        : null,
+      approvalRequired: getOption(options, "approval-required", "true") === "true",
+      liveRequested: getOption(options, "live", "false") === "true",
+      config: loadActorPolicyConfigFromEnv(),
+    });
+    process.stdout.write(`${JSON.stringify(decision, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "inbound:list") {
+    const records = await listInboundAuditRecords(dependencies.storage);
+    process.stdout.write(
+      `${records.map((record) => `${record.id} | ${record.eventType} | ${record.actorIdentity?.login ?? "none"} | ${record.summary}`).join("\n") || "No inbound audits recorded."}\n`,
+    );
+    return;
+  }
+
+  if (command === "inbound:inspect") {
+    const inboundId = options.get("inbound-id");
+    if (!inboundId) {
+      throw new Error("--inbound-id is required for inbound:inspect.");
+    }
+    const record = await dependencies.storage.loadInboundAudit(inboundId);
+    if (!record) {
+      throw new Error(`Inbound audit ${inboundId} was not found.`);
+    }
+    process.stdout.write(`${formatInboundAuditSummary(record)}\n\n${JSON.stringify(record, null, 2)}\n`);
     return;
   }
 
@@ -798,6 +869,10 @@ async function main() {
       "  node cli.js plan --state-id default",
       "  node cli.js event:intake --payload path/to/event.json --enqueue true --report-status true",
       "  node cli.js webhook:intake --payload path/to/payload.json --headers path/to/headers.json --enqueue true",
+      "  node cli.js webhook:serve --port 8787 --webhook-path /github",
+      "  node cli.js actor-policy:check --actor orchestrator-admin --command run",
+      "  node cli.js inbound:list",
+      "  node cli.js inbound:inspect --inbound-id delivery-123",
       "  node cli.js status:report --state-id default",
       "  node cli.js queue:enqueue --state-id default --priority 10",
       "  node cli.js queue:list",

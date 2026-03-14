@@ -197,6 +197,11 @@ export function buildStatusReportPayload(state: OrchestratorState) {
   if (state.sourceEventId || state.webhookDeliveryId) {
     lines.push(`- Source event: ${state.sourceEventType} / ${state.sourceEventId ?? "none"} / delivery=${state.webhookDeliveryId ?? "none"}`);
   }
+  if (state.inboundEventId || state.actorIdentity?.login) {
+    lines.push(
+      `- Inbound audit: ${state.inboundEventId ?? "none"} / actor=${state.actorIdentity?.login ?? "none"} / auth=${state.actorAuthorizationStatus} / replay=${state.replayProtectionStatus}`,
+    );
+  }
   if (state.lastHandoffPackagePath) {
     lines.push(`- Handoff package: ${state.lastHandoffPackagePath}`);
   }

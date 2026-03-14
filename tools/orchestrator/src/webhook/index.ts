@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import path from "node:path";
 import {
   approvePendingPatch,
   approvePendingPlan,
@@ -6,7 +7,16 @@ import {
   rejectPendingPlan,
   type OrchestratorDependencies,
 } from "../orchestrator";
+import { loadActorPolicyConfigFromEnv, resolveActorAuthorization } from "../actor-policy";
 import { routeParsedCommand } from "../commands";
+import {
+  buildInboundAuditId,
+  buildInboundCorrelationId,
+  createInboundAuditRecord,
+  evaluateReplayProtection,
+  persistInboundArtifacts,
+  saveInboundAuditRecord,
+} from "../inbound-audit";
 import {
   findLatestStateForThread,
   ingestGitHubEvent,
@@ -19,7 +29,9 @@ import { resolveTriggerPolicy } from "../trigger-policy";
 import {
   blockedReasonSchema,
   orchestratorStateSchema,
+  type ActorIdentity,
   type BlockedReason,
+  type CommandRoutingDecision,
   type OrchestratorState,
   type StatusReportSummary,
   type WebhookEventType,
@@ -33,19 +45,49 @@ export type ParsedGitHubWebhook = {
 };
 
 export type WebhookIngestionResult = {
-  status: "created" | "linked_existing" | "replayed" | "routed" | "rejected";
+  status: "created" | "linked_existing" | "replayed" | "routed" | "rejected" | "duplicate";
   signatureStatus: WebhookSignatureStatus;
   blockedReason: BlockedReason | null;
   state: OrchestratorState | null;
   intake: EventIngestionResult | null;
   statusReport: StatusReportSummary | null;
   summary: string;
+  inboundAuditId: string | null;
 };
 
 function normalizeHeaders(headers: Record<string, string | undefined>) {
-  return Object.fromEntries(
-    Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]),
-  );
+  return Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
+}
+
+function createBlockedReason(params: {
+  code: string;
+  summary: string;
+  missingPrerequisites?: string[];
+  recoverable?: boolean;
+  suggestedNextAction: string;
+}) {
+  return blockedReasonSchema.parse({
+    code: params.code,
+    summary: params.summary,
+    missingPrerequisites: params.missingPrerequisites ?? [],
+    recoverable: params.recoverable ?? true,
+    suggestedNextAction: params.suggestedNextAction,
+  });
+}
+
+function extractActorIdentity(payload: unknown): ActorIdentity | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const sender = (payload as { sender?: { login?: unknown; id?: unknown; type?: unknown } }).sender;
+  if (!sender || typeof sender.login !== "string") {
+    return null;
+  }
+  return {
+    login: sender.login,
+    id: typeof sender.id === "number" ? sender.id : null,
+    type: typeof sender.type === "string" ? sender.type : null,
+  };
 }
 
 export function parseGitHubWebhookHeaders(headers: Record<string, string | undefined>): ParsedGitHubWebhook {
@@ -72,11 +114,10 @@ export function verifyGitHubWebhookSignature(params: {
   if (!params.secret) {
     return {
       status: "missing_secret",
-      blockedReason: blockedReasonSchema.parse({
+      blockedReason: createBlockedReason({
         code: "missing_webhook_secret",
         summary: "GitHub webhook secret is missing; webhook ingestion is blocked.",
         missingPrerequisites: ["GITHUB_WEBHOOK_SECRET"],
-        recoverable: true,
         suggestedNextAction: "Set GITHUB_WEBHOOK_SECRET before accepting webhook traffic.",
       }),
     };
@@ -84,11 +125,10 @@ export function verifyGitHubWebhookSignature(params: {
   if (!params.signature) {
     return {
       status: "missing_signature",
-      blockedReason: blockedReasonSchema.parse({
+      blockedReason: createBlockedReason({
         code: "missing_webhook_signature",
         summary: "GitHub webhook signature header is missing.",
         missingPrerequisites: ["x-hub-signature-256"],
-        recoverable: true,
         suggestedNextAction: "Retry the request with the GitHub signature header.",
       }),
     };
@@ -101,10 +141,9 @@ export function verifyGitHubWebhookSignature(params: {
   if (!verified) {
     return {
       status: "invalid_signature",
-      blockedReason: blockedReasonSchema.parse({
+      blockedReason: createBlockedReason({
         code: "invalid_webhook_signature",
         summary: "GitHub webhook signature verification failed.",
-        missingPrerequisites: [],
         recoverable: false,
         suggestedNextAction: "Retry with the correct shared secret or reject the delivery.",
       }),
@@ -116,20 +155,98 @@ export function verifyGitHubWebhookSignature(params: {
   };
 }
 
-async function updateStateForCommand(params: {
+async function updateStateForInbound(params: {
   state: OrchestratorState;
   dependencies: OrchestratorDependencies;
-  decision: ReturnType<typeof routeParsedCommand>;
+  auditId: string;
+  deliveryId: string | null;
+  correlationId: string;
+  actorIdentity: ActorIdentity | null;
+  signatureStatus: WebhookSignatureStatus;
+  actorAuthorizationStatus: OrchestratorState["actorAuthorizationStatus"];
+  replayProtectionStatus: OrchestratorState["replayProtectionStatus"];
+  parsedCommand: OrchestratorState["parsedCommand"];
+  commandRoutingDecision: CommandRoutingDecision | null;
+  commandRoutingStatus: OrchestratorState["commandRoutingStatus"];
 }) {
-  const now = new Date().toISOString();
-  const stateWithDecision = orchestratorStateSchema.parse({
+  const updated = orchestratorStateSchema.parse({
     ...params.state,
-    commandRoutingStatus: params.decision.status,
-    commandRoutingDecision: params.decision,
-    updatedAt: now,
+    webhookDeliveryId: params.deliveryId,
+    webhookSignatureStatus: params.signatureStatus,
+    inboundEventId: params.auditId,
+    inboundDeliveryId: params.deliveryId,
+    inboundCorrelationId: params.correlationId,
+    actorIdentity: params.actorIdentity,
+    actorAuthorizationStatus: params.actorAuthorizationStatus,
+    replayProtectionStatus: params.replayProtectionStatus,
+    inboundAuditStatus: "recorded",
+    parsedCommand: params.parsedCommand,
+    commandRoutingDecision: params.commandRoutingDecision,
+    commandRoutingStatus: params.commandRoutingStatus,
+    updatedAt: new Date().toISOString(),
   });
-  await params.dependencies.storage.saveState(stateWithDecision);
-  return stateWithDecision;
+  await params.dependencies.storage.saveState(updated);
+  return updated;
+}
+
+async function saveAuditAndReturn(params: {
+  dependencies: OrchestratorDependencies;
+  auditId: string;
+  receivedAt: string;
+  deliveryId: string | null;
+  eventType: WebhookEventType;
+  sourceEventType: OrchestratorState["sourceEventType"];
+  sourceEventId: string | null;
+  repository: string | null;
+  issueNumber: number | null;
+  prNumber: number | null;
+  commentId: number | null;
+  actorIdentity: ActorIdentity | null;
+  signatureStatus: WebhookSignatureStatus;
+  parsedCommand: OrchestratorState["parsedCommand"];
+  actorAuthorizationStatus: OrchestratorState["actorAuthorizationStatus"];
+  actorAuthorizationReason: string | null;
+  replayProtectionStatus: OrchestratorState["replayProtectionStatus"];
+  replayProtectionReason: string | null;
+  commandRoutingDecision: CommandRoutingDecision | null;
+  linkedStateId: string | null;
+  linkedRunId: string | null;
+  statusReportCorrelationId: string | null;
+  payloadPath: string | null;
+  headersPath: string | null;
+  summary: string;
+}) {
+  const record = createInboundAuditRecord({
+    id: params.auditId,
+    receivedAt: params.receivedAt,
+    deliveryId: params.deliveryId,
+    eventType: params.eventType,
+    sourceEventType: params.sourceEventType,
+    sourceEventId: params.sourceEventId,
+    repository: params.repository,
+    issueNumber: params.issueNumber,
+    prNumber: params.prNumber,
+    commentId: params.commentId,
+    actorIdentity: params.actorIdentity,
+    signatureStatus: params.signatureStatus,
+    parsedCommand: params.parsedCommand,
+    actorAuthorizationStatus: params.actorAuthorizationStatus,
+    actorAuthorizationReason: params.actorAuthorizationReason,
+    replayProtectionStatus: params.replayProtectionStatus,
+    replayProtectionReason: params.replayProtectionReason,
+    commandRoutingDecision: params.commandRoutingDecision,
+    linkedStateId: params.linkedStateId,
+    linkedRunId: params.linkedRunId,
+    statusReportCorrelationId: params.statusReportCorrelationId,
+    payloadPath: params.payloadPath,
+    headersPath: params.headersPath,
+    summary: params.summary,
+  });
+  await saveInboundAuditRecord({
+    storage: params.dependencies.storage,
+    record,
+  });
+  return record;
 }
 
 export async function ingestGitHubWebhook(params: {
@@ -143,14 +260,69 @@ export async function ingestGitHubWebhook(params: {
   reportStatus?: boolean;
   statusAdapter?: StatusReportingAdapter | null;
   statusOutputRoot: string;
+  auditOutputRoot?: string;
 }) : Promise<WebhookIngestionResult> {
+  const receivedAt = new Date().toISOString();
   const parsedHeaders = parseGitHubWebhookHeaders(params.headers);
+  const payload = JSON.parse(params.rawBody) as unknown;
+  const actorIdentity = extractActorIdentity(payload);
   const signature = verifyGitHubWebhookSignature({
     rawBody: params.rawBody,
     signature: parsedHeaders.signature,
     secret: params.secret,
   });
+  const normalizedEvent = (() => {
+    try {
+      return normalizeGitHubEvent(payload);
+    } catch {
+      return null;
+    }
+  })();
+  const auditId = buildInboundAuditId({
+    deliveryId: parsedHeaders.deliveryId,
+    sourceEventId: normalizedEvent?.sourceEventId ?? null,
+    receivedAt,
+  });
+  const defaultCorrelationId = buildInboundCorrelationId({
+    deliveryId: parsedHeaders.deliveryId,
+    sourceEventId: normalizedEvent?.sourceEventId ?? null,
+    stateId: null,
+  });
+  const auditArtifacts = await persistInboundArtifacts({
+    outputRoot: params.auditOutputRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-inbound"),
+    auditId,
+    rawBody: params.rawBody,
+    headers: params.headers,
+  });
+
   if (signature.status !== "verified") {
+    await saveAuditAndReturn({
+      dependencies: params.dependencies,
+      auditId,
+      receivedAt,
+      deliveryId: parsedHeaders.deliveryId,
+      eventType: parsedHeaders.eventType,
+      sourceEventType: normalizedEvent?.eventType ?? "none",
+      sourceEventId: normalizedEvent?.sourceEventId ?? null,
+      repository: normalizedEvent?.repository ?? null,
+      issueNumber: normalizedEvent?.issueNumber ?? null,
+      prNumber: normalizedEvent?.prNumber ?? null,
+      commentId: normalizedEvent?.commentId ?? null,
+      actorIdentity,
+      signatureStatus: signature.status,
+      parsedCommand: normalizedEvent?.parsedCommand ?? null,
+      actorAuthorizationStatus: "rejected",
+      actorAuthorizationReason: signature.blockedReason?.summary ?? null,
+      replayProtectionStatus: "rejected",
+      replayProtectionReason: signature.blockedReason?.summary ?? null,
+      commandRoutingDecision: null,
+      linkedStateId: null,
+      linkedRunId: null,
+      statusReportCorrelationId: defaultCorrelationId,
+      payloadPath: auditArtifacts.payloadPath,
+      headersPath: auditArtifacts.headersPath,
+      summary: signature.blockedReason?.summary ?? "Webhook was rejected.",
+    });
     return {
       status: "rejected",
       signatureStatus: signature.status,
@@ -159,24 +331,42 @@ export async function ingestGitHubWebhook(params: {
       intake: null,
       statusReport: null,
       summary: signature.blockedReason?.summary ?? "Webhook was rejected.",
+      inboundAuditId: auditId,
     };
   }
 
-  const payload = JSON.parse(params.rawBody) as unknown;
-  const event = normalizeGitHubEvent(payload);
-  const policy = resolveTriggerPolicy({
-    type: event.eventType,
-    repository: event.repository,
-    repoName: event.repoName,
-    labels: event.labels,
-  });
-  if (!policy) {
-    const blockedReason = blockedReasonSchema.parse({
-      code: "missing_trigger_policy",
-      summary: `No trigger policy matched ${event.eventType} for ${event.repository}.`,
-      missingPrerequisites: [],
-      recoverable: true,
-      suggestedNextAction: "Add a trigger policy rule for this event or use a supported event/label combination.",
+  if (!normalizedEvent) {
+    const blockedReason = createBlockedReason({
+      code: "unsupported_webhook_payload",
+      summary: "Webhook payload is unsupported for orchestrator intake.",
+      suggestedNextAction: "Send a supported issues, issue_comment, pull_request, or workflow_dispatch payload.",
+    });
+    await saveAuditAndReturn({
+      dependencies: params.dependencies,
+      auditId,
+      receivedAt,
+      deliveryId: parsedHeaders.deliveryId,
+      eventType: parsedHeaders.eventType,
+      sourceEventType: "none",
+      sourceEventId: null,
+      repository: null,
+      issueNumber: null,
+      prNumber: null,
+      commentId: null,
+      actorIdentity,
+      signatureStatus: signature.status,
+      parsedCommand: null,
+      actorAuthorizationStatus: "rejected",
+      actorAuthorizationReason: blockedReason.summary,
+      replayProtectionStatus: "rejected",
+      replayProtectionReason: blockedReason.summary,
+      commandRoutingDecision: null,
+      linkedStateId: null,
+      linkedRunId: null,
+      statusReportCorrelationId: defaultCorrelationId,
+      payloadPath: auditArtifacts.payloadPath,
+      headersPath: auditArtifacts.headersPath,
+      summary: blockedReason.summary,
     });
     return {
       status: "rejected",
@@ -186,118 +376,308 @@ export async function ingestGitHubWebhook(params: {
       intake: null,
       statusReport: null,
       summary: blockedReason.summary,
+      inboundAuditId: auditId,
     };
   }
+
+  const policy = resolveTriggerPolicy({
+    type: normalizedEvent.eventType,
+    repository: normalizedEvent.repository,
+    repoName: normalizedEvent.repoName,
+    labels: normalizedEvent.labels,
+  });
+  if (!policy) {
+    const blockedReason = createBlockedReason({
+      code: "missing_trigger_policy",
+      summary: `No trigger policy matched ${normalizedEvent.eventType} for ${normalizedEvent.repository}.`,
+      suggestedNextAction: "Add a trigger policy rule for this event or use a supported event/label combination.",
+    });
+    await saveAuditAndReturn({
+      dependencies: params.dependencies,
+      auditId,
+      receivedAt,
+      deliveryId: parsedHeaders.deliveryId,
+      eventType: parsedHeaders.eventType,
+      sourceEventType: normalizedEvent.eventType,
+      sourceEventId: normalizedEvent.sourceEventId,
+      repository: normalizedEvent.repository,
+      issueNumber: normalizedEvent.issueNumber,
+      prNumber: normalizedEvent.prNumber,
+      commentId: normalizedEvent.commentId,
+      actorIdentity,
+      signatureStatus: signature.status,
+      parsedCommand: normalizedEvent.parsedCommand,
+      actorAuthorizationStatus: "rejected",
+      actorAuthorizationReason: blockedReason.summary,
+      replayProtectionStatus: "rejected",
+      replayProtectionReason: blockedReason.summary,
+      commandRoutingDecision: null,
+      linkedStateId: null,
+      linkedRunId: null,
+      statusReportCorrelationId: defaultCorrelationId,
+      payloadPath: auditArtifacts.payloadPath,
+      headersPath: auditArtifacts.headersPath,
+      summary: blockedReason.summary,
+    });
+    return {
+      status: "rejected",
+      signatureStatus: signature.status,
+      blockedReason,
+      state: null,
+      intake: null,
+      statusReport: null,
+      summary: blockedReason.summary,
+      inboundAuditId: auditId,
+    };
+  }
+
+  const actorDecision = resolveActorAuthorization({
+    actor: actorIdentity,
+    command: normalizedEvent.parsedCommand?.kind ?? null,
+    executionMode: normalizedEvent.parsedCommand?.executionMode ?? policy.executionMode,
+    approvalRequired: policy.approvalMode === "human_approval",
+    liveRequested: policy.handoffConfig.githubHandoffEnabled,
+    config: loadActorPolicyConfigFromEnv(),
+  });
+  const actorBlockedReason =
+    actorDecision.status === "rejected" ||
+    (normalizedEvent.parsedCommand?.kind !== "status" && actorDecision.status === "status_only")
+      ? actorDecision.blockedReason
+      : null;
+  if (actorBlockedReason) {
+    await saveAuditAndReturn({
+      dependencies: params.dependencies,
+      auditId,
+      receivedAt,
+      deliveryId: parsedHeaders.deliveryId,
+      eventType: parsedHeaders.eventType,
+      sourceEventType: normalizedEvent.eventType,
+      sourceEventId: normalizedEvent.sourceEventId,
+      repository: normalizedEvent.repository,
+      issueNumber: normalizedEvent.issueNumber,
+      prNumber: normalizedEvent.prNumber,
+      commentId: normalizedEvent.commentId,
+      actorIdentity,
+      signatureStatus: signature.status,
+      parsedCommand: normalizedEvent.parsedCommand,
+      actorAuthorizationStatus: actorDecision.status,
+      actorAuthorizationReason: actorBlockedReason.summary,
+      replayProtectionStatus: "rejected",
+      replayProtectionReason: actorBlockedReason.summary,
+      commandRoutingDecision: null,
+      linkedStateId: null,
+      linkedRunId: null,
+      statusReportCorrelationId: defaultCorrelationId,
+      payloadPath: auditArtifacts.payloadPath,
+      headersPath: auditArtifacts.headersPath,
+      summary: actorBlockedReason.summary,
+    });
+    return {
+      status: "rejected",
+      signatureStatus: signature.status,
+      blockedReason: actorBlockedReason,
+      state: null,
+      intake: null,
+      statusReport: null,
+      summary: actorBlockedReason.summary,
+      inboundAuditId: auditId,
+    };
+  }
+
+  const replay = await evaluateReplayProtection({
+    storage: params.dependencies.storage,
+    deliveryId: parsedHeaders.deliveryId,
+    sourceEventId: normalizedEvent.sourceEventId,
+    replayOverride: params.replayOverride,
+    signatureStatus: signature.status,
+  });
+  if (replay.status === "duplicate_delivery" || replay.status === "duplicate_event") {
+    const duplicateRecord = replay.duplicateRecordId
+      ? await params.dependencies.storage.loadInboundAudit(replay.duplicateRecordId)
+      : null;
+    const linkedState = duplicateRecord?.linkedStateId
+      ? await params.dependencies.storage.loadState(duplicateRecord.linkedStateId)
+      : null;
+    await saveAuditAndReturn({
+      dependencies: params.dependencies,
+      auditId,
+      receivedAt,
+      deliveryId: parsedHeaders.deliveryId,
+      eventType: parsedHeaders.eventType,
+      sourceEventType: normalizedEvent.eventType,
+      sourceEventId: normalizedEvent.sourceEventId,
+      repository: normalizedEvent.repository,
+      issueNumber: normalizedEvent.issueNumber,
+      prNumber: normalizedEvent.prNumber,
+      commentId: normalizedEvent.commentId,
+      actorIdentity,
+      signatureStatus: signature.status,
+      parsedCommand: normalizedEvent.parsedCommand,
+      actorAuthorizationStatus: actorDecision.status,
+      actorAuthorizationReason: actorDecision.summary,
+      replayProtectionStatus: replay.status,
+      replayProtectionReason: replay.summary,
+      commandRoutingDecision: null,
+      linkedStateId: linkedState?.id ?? duplicateRecord?.linkedStateId ?? null,
+      linkedRunId: duplicateRecord?.linkedRunId ?? null,
+      statusReportCorrelationId: duplicateRecord?.statusReportCorrelationId ?? defaultCorrelationId,
+      payloadPath: auditArtifacts.payloadPath,
+      headersPath: auditArtifacts.headersPath,
+      summary: replay.summary,
+    });
+    return {
+      status: "duplicate",
+      signatureStatus: signature.status,
+      blockedReason: createBlockedReason({
+        code: replay.status,
+        summary: replay.summary,
+        suggestedNextAction: "Inspect the existing linked task or use explicit replay override if a retry is required.",
+      }),
+      state: linkedState,
+      intake: null,
+      statusReport: null,
+      summary: replay.summary,
+      inboundAuditId: auditId,
+    };
+  }
+
   const existingThreadState = await findLatestStateForThread({
     dependencies: params.dependencies,
-    repository: event.repository,
-    issueNumber: event.issueNumber,
-    prNumber: event.prNumber,
+    repository: normalizedEvent.repository,
+    issueNumber: normalizedEvent.issueNumber,
+    prNumber: normalizedEvent.prNumber,
   });
 
-  if (event.parsedCommand) {
+  if (normalizedEvent.parsedCommand) {
     const routing = routeParsedCommand({
-      command: event.parsedCommand,
+      command: normalizedEvent.parsedCommand,
       policy,
       existingStateId: existingThreadState?.id ?? null,
     });
 
     if (routing.status === "rejected") {
-      if (existingThreadState) {
-        const updated = await updateStateForCommand({
-          state: orchestratorStateSchema.parse({
-            ...existingThreadState,
-            webhookEventType: parsedHeaders.eventType,
-            webhookDeliveryId: parsedHeaders.deliveryId,
-            webhookSignatureStatus: signature.status,
-            parsedCommand: event.parsedCommand,
-          }),
-          dependencies: params.dependencies,
-          decision: routing,
-        });
-        return {
-          status: "rejected",
-          signatureStatus: signature.status,
-          blockedReason: blockedReasonSchema.parse({
-            code: routing.reasonCode ?? "command_rejected",
-            summary: routing.summary,
-            missingPrerequisites: [],
-            recoverable: true,
-            suggestedNextAction: routing.suggestedNextAction ?? "Review the command routing decision.",
-          }),
-          state: updated,
-          intake: null,
-          statusReport: null,
-          summary: routing.summary,
-        };
-      }
+      const targetState = existingThreadState
+        ? await updateStateForInbound({
+            state: existingThreadState,
+            dependencies: params.dependencies,
+            auditId,
+            deliveryId: parsedHeaders.deliveryId,
+            correlationId: buildInboundCorrelationId({
+              deliveryId: parsedHeaders.deliveryId,
+              sourceEventId: normalizedEvent.sourceEventId,
+              stateId: existingThreadState.id,
+            }),
+            actorIdentity,
+            signatureStatus: signature.status,
+            actorAuthorizationStatus: actorDecision.status,
+            replayProtectionStatus: replay.status,
+            parsedCommand: normalizedEvent.parsedCommand,
+            commandRoutingDecision: routing,
+            commandRoutingStatus: routing.status,
+          })
+        : null;
+      const blockedReason = createBlockedReason({
+        code: routing.reasonCode ?? "command_rejected",
+        summary: routing.summary,
+        suggestedNextAction: routing.suggestedNextAction ?? "Review the command routing decision.",
+      });
+      await saveAuditAndReturn({
+        dependencies: params.dependencies,
+        auditId,
+        receivedAt,
+        deliveryId: parsedHeaders.deliveryId,
+        eventType: parsedHeaders.eventType,
+        sourceEventType: normalizedEvent.eventType,
+        sourceEventId: normalizedEvent.sourceEventId,
+        repository: normalizedEvent.repository,
+        issueNumber: normalizedEvent.issueNumber,
+        prNumber: normalizedEvent.prNumber,
+        commentId: normalizedEvent.commentId,
+        actorIdentity,
+        signatureStatus: signature.status,
+        parsedCommand: normalizedEvent.parsedCommand,
+        actorAuthorizationStatus: actorDecision.status,
+        actorAuthorizationReason: actorDecision.summary,
+        replayProtectionStatus: replay.status,
+        replayProtectionReason: replay.summary,
+        commandRoutingDecision: routing,
+        linkedStateId: targetState?.id ?? null,
+        linkedRunId: null,
+        statusReportCorrelationId: targetState?.statusReportCorrelationId ?? defaultCorrelationId,
+        payloadPath: auditArtifacts.payloadPath,
+        headersPath: auditArtifacts.headersPath,
+        summary: routing.summary,
+      });
       return {
         status: "rejected",
         signatureStatus: signature.status,
-        blockedReason: blockedReasonSchema.parse({
-          code: routing.reasonCode ?? "command_rejected",
-          summary: routing.summary,
-          missingPrerequisites: [],
-          recoverable: true,
-          suggestedNextAction: routing.suggestedNextAction ?? "Review the command routing decision.",
-        }),
-        state: null,
+        blockedReason,
+        state: targetState,
         intake: null,
         statusReport: null,
         summary: routing.summary,
+        inboundAuditId: auditId,
       };
     }
 
     if (existingThreadState && routing.action !== "create_task") {
-      let updatedState = orchestratorStateSchema.parse({
-        ...existingThreadState,
-        webhookEventType: parsedHeaders.eventType,
-        webhookDeliveryId: parsedHeaders.deliveryId,
-        webhookSignatureStatus: signature.status,
-        parsedCommand: event.parsedCommand,
+      let updatedState = await updateStateForInbound({
+        state: existingThreadState,
+        dependencies: params.dependencies,
+        auditId,
+        deliveryId: parsedHeaders.deliveryId,
+        correlationId: buildInboundCorrelationId({
+          deliveryId: parsedHeaders.deliveryId,
+          sourceEventId: normalizedEvent.sourceEventId,
+          stateId: existingThreadState.id,
+        }),
+        actorIdentity,
+        signatureStatus: signature.status,
+        actorAuthorizationStatus: actorDecision.status,
+        replayProtectionStatus: replay.status,
+        parsedCommand: normalizedEvent.parsedCommand,
+        commandRoutingDecision: routing,
+        commandRoutingStatus: routing.status,
       });
 
+      let linkedRunId: string | null = null;
       if (routing.action === "enqueue_existing" || routing.action === "retry") {
         const queueResult = await enqueueStateRun({
           backend: params.dependencies.backend,
           state: updatedState,
-          requestedBy: event.triggerReason,
+          requestedBy: normalizedEvent.triggerReason,
           scheduledAt: new Date().toISOString(),
         });
-        updatedState = orchestratorStateSchema.parse(
-          applyQueueItemToState(updatedState, queueResult.item, new Date()),
-        );
-        updatedState = await updateStateForCommand({
+        linkedRunId = queueResult.item.id;
+        updatedState = orchestratorStateSchema.parse(applyQueueItemToState(updatedState, queueResult.item, new Date()));
+        updatedState = await updateStateForInbound({
           state: updatedState,
           dependencies: params.dependencies,
-          decision: routing,
+          auditId,
+          deliveryId: parsedHeaders.deliveryId,
+          correlationId: buildInboundCorrelationId({
+            deliveryId: parsedHeaders.deliveryId,
+            sourceEventId: normalizedEvent.sourceEventId,
+            stateId: updatedState.id,
+          }),
+          actorIdentity,
+          signatureStatus: signature.status,
+          actorAuthorizationStatus: actorDecision.status,
+          replayProtectionStatus: replay.status,
+          parsedCommand: normalizedEvent.parsedCommand,
+          commandRoutingDecision: routing,
+          commandRoutingStatus: routing.status,
         });
       } else if (routing.action === "approve") {
         updatedState =
           updatedState.approvalStatus === "pending_patch" || updatedState.patchStatus === "waiting_approval"
             ? await approvePendingPatch(updatedState.id, params.dependencies)
             : await approvePendingPlan(updatedState.id, params.dependencies);
-        updatedState = await updateStateForCommand({
-          state: updatedState,
-          dependencies: params.dependencies,
-          decision: routing,
-        });
       } else if (routing.action === "reject") {
         updatedState =
           updatedState.approvalStatus === "pending_patch" || updatedState.patchStatus === "waiting_approval"
-            ? await rejectPendingPatch(updatedState.id, params.dependencies, event.parsedCommand.rawCommand)
-            : await rejectPendingPlan(updatedState.id, params.dependencies, event.parsedCommand.rawCommand);
-        updatedState = await updateStateForCommand({
-          state: updatedState,
-          dependencies: params.dependencies,
-          decision: routing,
-        });
-      } else {
-        updatedState = await updateStateForCommand({
-          state: updatedState,
-          dependencies: params.dependencies,
-          decision: routing,
-        });
+            ? await rejectPendingPatch(updatedState.id, params.dependencies, normalizedEvent.parsedCommand.rawCommand)
+            : await rejectPendingPlan(updatedState.id, params.dependencies, normalizedEvent.parsedCommand.rawCommand);
       }
 
       let statusReport: StatusReportSummary | null = null;
@@ -308,8 +688,53 @@ export async function ingestGitHubWebhook(params: {
           adapter: params.statusAdapter,
         });
         updatedState = applyStatusReportToState(updatedState, statusReport);
-        await params.dependencies.storage.saveState(updatedState);
+        updatedState = await updateStateForInbound({
+          state: updatedState,
+          dependencies: params.dependencies,
+          auditId,
+          deliveryId: parsedHeaders.deliveryId,
+          correlationId: statusReport.correlationId ?? buildInboundCorrelationId({
+            deliveryId: parsedHeaders.deliveryId,
+            sourceEventId: normalizedEvent.sourceEventId,
+            stateId: updatedState.id,
+          }),
+          actorIdentity,
+          signatureStatus: signature.status,
+          actorAuthorizationStatus: actorDecision.status,
+          replayProtectionStatus: replay.status,
+          parsedCommand: normalizedEvent.parsedCommand,
+          commandRoutingDecision: routing,
+          commandRoutingStatus: routing.status,
+        });
       }
+
+      await saveAuditAndReturn({
+        dependencies: params.dependencies,
+        auditId,
+        receivedAt,
+        deliveryId: parsedHeaders.deliveryId,
+        eventType: parsedHeaders.eventType,
+        sourceEventType: normalizedEvent.eventType,
+        sourceEventId: normalizedEvent.sourceEventId,
+        repository: normalizedEvent.repository,
+        issueNumber: normalizedEvent.issueNumber,
+        prNumber: normalizedEvent.prNumber,
+        commentId: normalizedEvent.commentId,
+        actorIdentity,
+        signatureStatus: signature.status,
+        parsedCommand: normalizedEvent.parsedCommand,
+        actorAuthorizationStatus: actorDecision.status,
+        actorAuthorizationReason: actorDecision.summary,
+        replayProtectionStatus: replay.status,
+        replayProtectionReason: replay.summary,
+        commandRoutingDecision: routing,
+        linkedStateId: updatedState.id,
+        linkedRunId,
+        statusReportCorrelationId: updatedState.statusReportCorrelationId,
+        payloadPath: auditArtifacts.payloadPath,
+        headersPath: auditArtifacts.headersPath,
+        summary: routing.summary,
+      });
 
       return {
         status: "routed",
@@ -319,6 +744,7 @@ export async function ingestGitHubWebhook(params: {
         intake: null,
         statusReport,
         summary: routing.summary,
+        inboundAuditId: auditId,
       };
     }
   }
@@ -334,14 +760,25 @@ export async function ingestGitHubWebhook(params: {
     webhookSignatureStatus: signature.status,
   });
 
-  let updatedState = orchestratorStateSchema.parse({
-    ...intake.state,
-    webhookEventType: parsedHeaders.eventType,
-    webhookDeliveryId: parsedHeaders.deliveryId,
-    webhookSignatureStatus: signature.status,
-    parsedCommand: event.parsedCommand,
-    commandRoutingStatus: event.parsedCommand ? "accepted" : "not_applicable",
-    commandRoutingDecision: event.parsedCommand
+  let updatedState = await updateStateForInbound({
+    state: orchestratorStateSchema.parse({
+      ...intake.state,
+      webhookEventType: parsedHeaders.eventType,
+    }),
+    dependencies: params.dependencies,
+    auditId,
+    deliveryId: parsedHeaders.deliveryId,
+    correlationId: buildInboundCorrelationId({
+      deliveryId: parsedHeaders.deliveryId,
+      sourceEventId: normalizedEvent.sourceEventId,
+      stateId: intake.state.id,
+    }),
+    actorIdentity,
+    signatureStatus: signature.status,
+    actorAuthorizationStatus: actorDecision.status,
+    replayProtectionStatus: replay.status,
+    parsedCommand: normalizedEvent.parsedCommand,
+    commandRoutingDecision: normalizedEvent.parsedCommand
       ? {
           status: "accepted",
           action: intake.created ? "create_task" : "enqueue_existing",
@@ -351,8 +788,8 @@ export async function ingestGitHubWebhook(params: {
           targetStateId: intake.state.id,
         }
       : null,
+    commandRoutingStatus: normalizedEvent.parsedCommand ? "accepted" : "not_applicable",
   });
-  await params.dependencies.storage.saveState(updatedState);
 
   let statusReport: StatusReportSummary | null = null;
   if (params.reportStatus) {
@@ -362,8 +799,53 @@ export async function ingestGitHubWebhook(params: {
       adapter: params.statusAdapter,
     });
     updatedState = applyStatusReportToState(updatedState, statusReport);
-    await params.dependencies.storage.saveState(updatedState);
+    updatedState = await updateStateForInbound({
+      state: updatedState,
+      dependencies: params.dependencies,
+      auditId,
+      deliveryId: parsedHeaders.deliveryId,
+      correlationId: statusReport.correlationId ?? buildInboundCorrelationId({
+        deliveryId: parsedHeaders.deliveryId,
+        sourceEventId: normalizedEvent.sourceEventId,
+        stateId: updatedState.id,
+      }),
+      actorIdentity,
+      signatureStatus: signature.status,
+      actorAuthorizationStatus: actorDecision.status,
+      replayProtectionStatus: replay.status,
+      parsedCommand: normalizedEvent.parsedCommand,
+      commandRoutingDecision: updatedState.commandRoutingDecision,
+      commandRoutingStatus: updatedState.commandRoutingStatus,
+    });
   }
+
+  await saveAuditAndReturn({
+    dependencies: params.dependencies,
+    auditId,
+    receivedAt,
+    deliveryId: parsedHeaders.deliveryId,
+    eventType: parsedHeaders.eventType,
+    sourceEventType: normalizedEvent.eventType,
+    sourceEventId: normalizedEvent.sourceEventId,
+    repository: normalizedEvent.repository,
+    issueNumber: normalizedEvent.issueNumber,
+    prNumber: normalizedEvent.prNumber,
+    commentId: normalizedEvent.commentId,
+    actorIdentity,
+    signatureStatus: signature.status,
+    parsedCommand: normalizedEvent.parsedCommand,
+    actorAuthorizationStatus: actorDecision.status,
+    actorAuthorizationReason: actorDecision.summary,
+    replayProtectionStatus: replay.status,
+    replayProtectionReason: replay.summary,
+    commandRoutingDecision: updatedState.commandRoutingDecision,
+    linkedStateId: updatedState.id,
+    linkedRunId: null,
+    statusReportCorrelationId: updatedState.statusReportCorrelationId,
+    payloadPath: auditArtifacts.payloadPath,
+    headersPath: auditArtifacts.headersPath,
+    summary: `Webhook ${parsedHeaders.eventType} was accepted and processed.`,
+  });
 
   return {
     status: intake.status,
@@ -373,5 +855,6 @@ export async function ingestGitHubWebhook(params: {
     intake,
     statusReport,
     summary: `Webhook ${parsedHeaders.eventType} was accepted and processed.`,
+    inboundAuditId: auditId,
   };
 }

@@ -35,6 +35,11 @@ test("duplicate webhook deliveries link to the existing active task instead of c
       name: "bige",
       default_branch: "main",
     },
+    sender: {
+      login: "orchestrator-runner",
+      id: 1,
+      type: "User",
+    },
   });
 
   const first = await ingestGitHubWebhook({
@@ -69,8 +74,8 @@ test("duplicate webhook deliveries link to the existing active task instead of c
   });
 
   assert.equal(first.status, "created");
-  assert.equal(second.status, "linked_existing");
-  assert.equal(second.state?.duplicateOfStateId, first.state?.id);
+  assert.equal(second.status, "duplicate");
+  assert.equal(second.state?.id, first.state?.id);
 });
 
 test("comment command webhook can route to status reporting for an existing thread", async () => {
@@ -126,6 +131,11 @@ test("comment command webhook can route to status reporting for an existing thre
       full_name: "example/bige",
       name: "bige",
       default_branch: "main",
+    },
+    sender: {
+      login: "orchestrator-viewer",
+      id: 2,
+      type: "User",
     },
   });
 

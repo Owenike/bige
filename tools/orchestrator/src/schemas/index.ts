@@ -230,6 +230,9 @@ export const webhookSignatureStatusSchema = z.enum([
 ]);
 export const commandKindSchema = z.enum(["run", "dry_run", "status", "retry", "approve", "reject"]);
 export const commandRoutingStatusSchema = z.enum(["not_applicable", "accepted", "ignored", "rejected", "routed"]);
+export const actorAuthorizationStatusSchema = z.enum(["not_checked", "authorized", "status_only", "rejected"]);
+export const replayProtectionStatusSchema = z.enum(["not_checked", "accepted", "duplicate_delivery", "duplicate_event", "replayed", "rejected"]);
+export const inboundAuditStatusSchema = z.enum(["not_recorded", "recorded", "failed"]);
 export const statusReportStatusSchema = z.enum([
   "not_run",
   "payload_ready",
@@ -442,6 +445,12 @@ export const sourceEventSummarySchema = z.object({
   triggerReason: z.string(),
 });
 
+export const actorIdentitySchema = z.object({
+  login: z.string(),
+  id: z.number().int().positive().nullable().default(null),
+  type: z.string().nullable().default(null),
+});
+
 export const parsedCommandSchema = z.object({
   kind: commandKindSchema,
   executionMode: executionModeSchema.nullable().default(null),
@@ -468,6 +477,54 @@ export const statusReportTargetSchema = z.object({
   targetUrl: z.string().nullable().default(null),
   correlationId: z.string().nullable().default(null),
   updatedAt: z.string(),
+});
+
+export const actorAuthorizationDecisionSchema = z.object({
+  status: actorAuthorizationStatusSchema,
+  summary: z.string(),
+  allowedCommands: z.array(commandKindSchema).default([]),
+  blockedReason: z
+    .object({
+      code: z.string(),
+      summary: z.string(),
+      missingPrerequisites: z.array(z.string()).default([]),
+      recoverable: z.boolean().default(true),
+      suggestedNextAction: z.string(),
+    })
+    .nullable()
+    .default(null),
+});
+
+export const inboundAuditRecordSchema = z.object({
+  id: z.string(),
+  receivedAt: z.string(),
+  deliveryId: z.string().nullable().default(null),
+  eventType: webhookEventTypeSchema,
+  sourceEventType: sourceEventTypeSchema,
+  sourceEventId: z.string().nullable().default(null),
+  repository: z.string().nullable().default(null),
+  issueNumber: z.number().int().positive().nullable().default(null),
+  prNumber: z.number().int().positive().nullable().default(null),
+  commentId: z.number().int().positive().nullable().default(null),
+  actorIdentity: actorIdentitySchema.nullable().default(null),
+  signatureStatus: webhookSignatureStatusSchema,
+  parsedCommand: parsedCommandSchema.nullable().default(null),
+  actorAuthorizationStatus: actorAuthorizationStatusSchema,
+  actorAuthorizationReason: z.string().nullable().default(null),
+  replayProtectionStatus: replayProtectionStatusSchema,
+  replayProtectionReason: z.string().nullable().default(null),
+  commandRoutingDecision: commandRoutingDecisionSchema.nullable().default(null),
+  linkedStateId: z.string().nullable().default(null),
+  linkedRunId: z.string().nullable().default(null),
+  statusReportCorrelationId: z.string().nullable().default(null),
+  payloadPath: z.string().nullable().default(null),
+  headersPath: z.string().nullable().default(null),
+  summary: z.string(),
+});
+
+export const inboundAuditCollectionSchema = z.object({
+  updatedAt: z.string(),
+  items: z.array(inboundAuditRecordSchema).default([]),
 });
 
 export const statusReportSummarySchema = z.object({
@@ -705,6 +762,13 @@ export const orchestratorStateSchema = z.object({
   webhookEventType: webhookEventTypeSchema.default("none"),
   webhookDeliveryId: z.string().nullable().default(null),
   webhookSignatureStatus: webhookSignatureStatusSchema.default("not_checked"),
+  inboundEventId: z.string().nullable().default(null),
+  inboundDeliveryId: z.string().nullable().default(null),
+  inboundCorrelationId: z.string().nullable().default(null),
+  actorIdentity: actorIdentitySchema.nullable().default(null),
+  actorAuthorizationStatus: actorAuthorizationStatusSchema.default("not_checked"),
+  replayProtectionStatus: replayProtectionStatusSchema.default("not_checked"),
+  inboundAuditStatus: inboundAuditStatusSchema.default("not_recorded"),
   parsedCommand: parsedCommandSchema.nullable().default(null),
   commandRoutingStatus: commandRoutingStatusSchema.default("not_applicable"),
   commandRoutingDecision: commandRoutingDecisionSchema.nullable().default(null),
@@ -788,12 +852,19 @@ export type WebhookEventType = z.infer<typeof webhookEventTypeSchema>;
 export type WebhookSignatureStatus = z.infer<typeof webhookSignatureStatusSchema>;
 export type IdempotencyStatus = z.infer<typeof idempotencyStatusSchema>;
 export type CommandKind = z.infer<typeof commandKindSchema>;
+export type ActorIdentity = z.infer<typeof actorIdentitySchema>;
+export type ActorAuthorizationStatus = z.infer<typeof actorAuthorizationStatusSchema>;
+export type ReplayProtectionStatus = z.infer<typeof replayProtectionStatusSchema>;
+export type InboundAuditStatus = z.infer<typeof inboundAuditStatusSchema>;
 export type ParsedCommand = z.infer<typeof parsedCommandSchema>;
 export type CommandRoutingStatus = z.infer<typeof commandRoutingStatusSchema>;
 export type CommandRoutingDecision = z.infer<typeof commandRoutingDecisionSchema>;
 export type StatusReportStatus = z.infer<typeof statusReportStatusSchema>;
 export type SourceEventSummary = z.infer<typeof sourceEventSummarySchema>;
 export type StatusReportTarget = z.infer<typeof statusReportTargetSchema>;
+export type ActorAuthorizationDecision = z.infer<typeof actorAuthorizationDecisionSchema>;
+export type InboundAuditRecord = z.infer<typeof inboundAuditRecordSchema>;
+export type InboundAuditCollection = z.infer<typeof inboundAuditCollectionSchema>;
 export type StatusReportSummary = z.infer<typeof statusReportSummarySchema>;
 export type AuditTrail = z.infer<typeof auditTrailSchema>;
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
@@ -817,6 +888,128 @@ export type QueueWorkerCollection = z.infer<typeof queueWorkerCollectionSchema>;
 const stringArrayJsonSchema: JsonSchema = {
   type: "array",
   items: { type: "string" },
+};
+
+const actorIdentityJsonSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["login", "id", "type"],
+  properties: {
+    login: { type: "string" },
+    id: { type: "number", nullable: true },
+    type: { type: "string", nullable: true },
+  },
+};
+
+export const inboundAuditRecordJsonSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "id",
+    "receivedAt",
+    "deliveryId",
+    "eventType",
+    "sourceEventType",
+    "sourceEventId",
+    "repository",
+    "issueNumber",
+    "prNumber",
+    "commentId",
+    "actorIdentity",
+    "signatureStatus",
+    "parsedCommand",
+    "actorAuthorizationStatus",
+    "actorAuthorizationReason",
+    "replayProtectionStatus",
+    "replayProtectionReason",
+    "commandRoutingDecision",
+    "linkedStateId",
+    "linkedRunId",
+    "statusReportCorrelationId",
+    "payloadPath",
+    "headersPath",
+    "summary",
+  ],
+  properties: {
+    id: { type: "string" },
+    receivedAt: { type: "string" },
+    deliveryId: { type: "string", nullable: true },
+    eventType: {
+      type: "string",
+      enum: ["none", "issues", "issue_comment", "pull_request", "pull_request_review_comment", "workflow_dispatch"],
+    },
+    sourceEventType: {
+      type: "string",
+      enum: ["none", "issue_opened", "issue_labeled", "pull_request_opened", "pull_request_labeled", "pull_request_synchronize", "issue_comment_command", "workflow_dispatch"],
+    },
+    sourceEventId: { type: "string", nullable: true },
+    repository: { type: "string", nullable: true },
+    issueNumber: { type: "number", nullable: true },
+    prNumber: { type: "number", nullable: true },
+    commentId: { type: "number", nullable: true },
+    actorIdentity: { ...actorIdentityJsonSchema, nullable: true },
+    signatureStatus: {
+      type: "string",
+      enum: ["not_checked", "verified", "missing_secret", "missing_signature", "invalid_signature", "rejected"],
+    },
+    parsedCommand: {
+      type: "object",
+      nullable: true,
+      required: ["kind", "executionMode", "profileOverride", "approvalIntent", "rawCommand", "arguments"],
+      additionalProperties: false,
+      properties: {
+        kind: { type: "string", enum: ["run", "dry_run", "status", "retry", "approve", "reject"] },
+        executionMode: { type: "string", enum: ["mock", "dry_run", "apply"], nullable: true },
+        profileOverride: { type: "string", nullable: true },
+        approvalIntent: { type: "string", enum: ["approve", "reject"], nullable: true },
+        rawCommand: { type: "string" },
+        arguments: { type: "array", items: { type: "string" } },
+      },
+    },
+    actorAuthorizationStatus: {
+      type: "string",
+      enum: ["not_checked", "authorized", "status_only", "rejected"],
+    },
+    actorAuthorizationReason: { type: "string", nullable: true },
+    replayProtectionStatus: {
+      type: "string",
+      enum: ["not_checked", "accepted", "duplicate_delivery", "duplicate_event", "replayed", "rejected"],
+    },
+    replayProtectionReason: { type: "string", nullable: true },
+    commandRoutingDecision: {
+      type: "object",
+      nullable: true,
+      required: ["status", "action", "reasonCode", "summary", "suggestedNextAction", "targetStateId"],
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["not_applicable", "accepted", "ignored", "rejected", "routed"] },
+        action: { type: "string", enum: ["none", "create_task", "enqueue_existing", "report_status", "retry", "approve", "reject"] },
+        reasonCode: { type: "string", nullable: true },
+        summary: { type: "string" },
+        suggestedNextAction: { type: "string", nullable: true },
+        targetStateId: { type: "string", nullable: true },
+      },
+    },
+    linkedStateId: { type: "string", nullable: true },
+    linkedRunId: { type: "string", nullable: true },
+    statusReportCorrelationId: { type: "string", nullable: true },
+    payloadPath: { type: "string", nullable: true },
+    headersPath: { type: "string", nullable: true },
+    summary: { type: "string" },
+  },
+};
+
+export const inboundAuditCollectionJsonSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["updatedAt", "items"],
+  properties: {
+    updatedAt: { type: "string" },
+    items: {
+      type: "array",
+      items: inboundAuditRecordJsonSchema,
+    },
+  },
 };
 
 export const queueRunCollectionJsonSchema: JsonSchema = {
@@ -1152,6 +1345,13 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "webhookEventType",
     "webhookDeliveryId",
     "webhookSignatureStatus",
+    "inboundEventId",
+    "inboundDeliveryId",
+    "inboundCorrelationId",
+    "actorIdentity",
+    "actorAuthorizationStatus",
+    "replayProtectionStatus",
+    "inboundAuditStatus",
     "parsedCommand",
     "commandRoutingStatus",
     "commandRoutingDecision",
@@ -1414,6 +1614,22 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     webhookSignatureStatus: {
       type: "string",
       enum: ["not_checked", "verified", "missing_secret", "missing_signature", "invalid_signature", "rejected"],
+    },
+    inboundEventId: { type: "string", nullable: true },
+    inboundDeliveryId: { type: "string", nullable: true },
+    inboundCorrelationId: { type: "string", nullable: true },
+    actorIdentity: { ...actorIdentityJsonSchema, nullable: true },
+    actorAuthorizationStatus: {
+      type: "string",
+      enum: ["not_checked", "authorized", "status_only", "rejected"],
+    },
+    replayProtectionStatus: {
+      type: "string",
+      enum: ["not_checked", "accepted", "duplicate_delivery", "duplicate_event", "replayed", "rejected"],
+    },
+    inboundAuditStatus: {
+      type: "string",
+      enum: ["not_recorded", "recorded", "failed"],
     },
     parsedCommand: {
       type: "object",

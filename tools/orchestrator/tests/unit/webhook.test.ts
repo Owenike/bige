@@ -35,6 +35,11 @@ test("webhook intake accepts valid GitHub issue payloads and creates an orchestr
       name: "bige",
       default_branch: "main",
     },
+    sender: {
+      login: "orchestrator-runner",
+      id: 1,
+      type: "User",
+    },
   });
 
   const result = await ingestGitHubWebhook({
@@ -58,4 +63,5 @@ test("webhook intake accepts valid GitHub issue payloads and creates an orchestr
   assert.equal(result.state?.webhookEventType, "issues");
   assert.equal(result.state?.webhookDeliveryId, "delivery-1");
   assert.equal(result.state?.sourceEventType, "issue_opened");
+  assert.equal(result.state?.actorIdentity?.login, "orchestrator-runner");
 });

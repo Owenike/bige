@@ -2,6 +2,7 @@
 
 ## Env
 - Optional: `OPENAI_API_KEY`
+- Optional: `GITHUB_WEBHOOK_SECRET`
 - Optional: `ORCHESTRATOR_STORAGE_ROOT`
 - Optional: `ORCHESTRATOR_WORKSPACE_ROOT`
 - Optional: `ORCHESTRATOR_BACKEND_TYPE=file|sqlite|supabase`
@@ -12,6 +13,11 @@
 - Optional: `ORCHESTRATOR_GITHUB_HANDOFF=true`
 - Optional: `GITHUB_TOKEN` or `GH_TOKEN`
 - Optional: GitHub CLI auth for `GitHubCliStatusAdapter`
+- Optional: `ORCHESTRATOR_ACTOR_ADMINS`
+- Optional: `ORCHESTRATOR_ACTOR_RUNNERS`
+- Optional: `ORCHESTRATOR_ACTOR_APPROVERS`
+- Optional: `ORCHESTRATOR_ACTOR_STATUS`
+- Optional: `ORCHESTRATOR_ACTOR_LIVE`
 
 ## Preflight Checks
 `orchestrator:preflight` runs a shared readiness pass before live/handoff/promotion paths.
@@ -117,6 +123,34 @@ The intake layer normalizes incoming payloads into:
 - webhook delivery metadata
 - parsed command metadata when the source is a comment command
 
+## Webhook Server
+The orchestrator now ships a local webhook receiver and no longer depends only on payload-file ingestion.
+
+Start it locally:
+```powershell
+npm run orchestrator:webhook:serve -- --port 8787 --webhook-path /github
+```
+
+Supported inbound events:
+- `issues`
+- `issue_comment`
+- `pull_request`
+
+Receiver behavior:
+- reads the raw request body before JSON parsing
+- verifies the GitHub signature against `GITHUB_WEBHOOK_SECRET`
+- extracts `x-github-event` and `x-github-delivery`
+- normalizes the payload through the shared GitHub event intake layer
+- records inbound audit trail and replay protection decisions
+
+Use `curl` or a tunnel/proxy to point GitHub webhooks at the local endpoint.
+
+Failure semantics:
+- missing webhook secret -> `blocked` or `manual_required`
+- invalid signature -> `rejected`
+- unsupported event -> `ignored`
+- duplicate delivery -> `duplicate`
+
 ## Idempotency / Replay
 Event intake uses an idempotency key built from:
 - repository
@@ -182,6 +216,57 @@ Routing summary:
 
 Unsupported or unauthorized commands are explicitly recorded as `rejected` or `ignored`; they are not silently dropped.
 
+## Actor Policy
+Trigger policy decides whether an event shape is routable; actor policy decides whether the specific GitHub actor is allowed to invoke that route.
+
+Current configurable actor policy uses env-backed allowlists:
+- `ORCHESTRATOR_ACTOR_ADMINS`
+- `ORCHESTRATOR_ACTOR_RUNNERS`
+- `ORCHESTRATOR_ACTOR_APPROVERS`
+- `ORCHESTRATOR_ACTOR_STATUS`
+- `ORCHESTRATOR_ACTOR_LIVE`
+
+Current authorization model:
+- status-only actors can request `/orchestrator status`
+- runner actors can request run/dry-run/retry
+- approver actors can request approve/reject
+- live-capable actors are additionally required for live/apply/promotion-adjacent requests
+- admin actors bypass lower-tier restrictions inside the orchestrator boundary
+
+Operator check path:
+```powershell
+npm run orchestrator:actor-policy:check -- --actor octocat --command run --execution-mode dry_run
+```
+
+Authorization outcomes are explicit:
+- `authorized`
+- `rejected`
+- `not_checked`
+
+Unauthorized commands are rejected with a persisted reason; they are not silently ignored.
+
+## Replay Protection
+Replay protection is now stricter than generic task idempotency.
+
+Keys considered:
+- webhook delivery id
+- normalized source event id
+- issue / PR identity
+- comment identity when applicable
+- head SHA when applicable
+
+Decisions:
+- duplicate delivery -> `duplicate`
+- duplicate source event -> `duplicate`
+- explicit replay override -> `replayed`
+- invalid signature replay -> `rejected`
+- unsupported/no-op event -> `ignored`
+
+Replay protection prevents:
+- duplicate queue insertion
+- duplicate task creation
+- duplicate status comment fan-out
+
 ## Status Reporting
 Operator-friendly status reporting can emit:
 - markdown summary file
@@ -220,6 +305,35 @@ Skip / failure behavior:
 - missing issue / PR target -> payload-only summary
 - disabled adapter or no GitHub target -> payload-only summary instead of hard failure
 - no generic fail for unavailable GitHub comment posting
+
+## Inbound Audit
+Every accepted, rejected, ignored, or duplicate webhook intake now records inbound audit metadata.
+
+Persisted audit fields include:
+- `receivedAt`
+- `deliveryId`
+- `eventType`
+- `actor`
+- `signatureStatus`
+- `parsedCommand`
+- `authorizationDecision`
+- `replayDecision`
+- `routingDecision`
+- linked `taskId` / `stateId`
+- status correlation id / target when reporting occurs
+
+Operator commands:
+```powershell
+npm run orchestrator:inbound:list
+npm run orchestrator:inbound:inspect -- --inbound-id <id>
+```
+
+Diagnostics can now show:
+- whether the webhook passed signature verification
+- whether actor policy rejected the command
+- whether replay protection blocked the delivery
+- which task/state was created or reused
+- which status comment target was updated or skipped
 
 ## Live Smoke vs Live Acceptance vs Live Pass
 - `npm run orchestrator:live-smoke -- --enabled true`
@@ -335,6 +449,10 @@ Use diagnostics commands to inspect operator-facing status:
 npm run orchestrator:preflight -- --state-id demo
 npm run orchestrator:event:intake -- --payload path/to/event.json --enqueue true
 npm run orchestrator:webhook:intake -- --payload path/to/payload.json --headers path/to/headers.json
+npm run orchestrator:webhook:serve -- --port 8787 --webhook-path /github
+npm run orchestrator:actor-policy:check -- --actor octocat --command status
+npm run orchestrator:inbound:list
+npm run orchestrator:inbound:inspect -- --inbound-id inbound-123
 npm run orchestrator:status:report -- --state-id demo
 npm run orchestrator:status -- --state-id demo
 npm run orchestrator:diagnostics -- --state-id demo
@@ -742,9 +860,11 @@ npm run test:orchestrator:full-validation
 - `LocalRepoExecutor` remains allow-list only and intentionally conservative.
 - OpenAI planner/reviewer providers are wired for structured output, but live network usage is still optional and not part of the default acceptance suite.
 - GitHub workflow status is still best-effort through `gh`; full CI gate automation is still separate from the main product pipeline.
-- GitHub event intake now supports webhook-style payload ingestion, but still through CLI/workflow entrypoints; this repo does not ship a long-running webhook server.
+- GitHub event intake now supports a local webhook receiver, but it is still a standalone orchestrator service and not wired into the main product runtime.
 - GitHub status reporting is comment/payload oriented; it does not auto-merge, auto-approve, or bypass human review.
 - Comment upsert relies on stored target metadata plus marker-based correlation; it does not rewrite issue or PR body content.
+- Actor authorization is currently env-backed allowlist policy, not a full GitHub org/team role sync model.
+- Replay protection is delivery/event aware, but still bounded by the persisted audit store and not a full distributed anti-replay service.
 - `apply` mode is intentionally approval-gated: the executor prepares patch artifacts, then `approve-patch` / `promote-patch` advance the patch through export and promotion preconditions. Direct write-back to the source repo should still stay under human approval.
 - PR draft handoff is metadata-first by default. Real GitHub draft PR creation is optional and remains gated by `ORCHESTRATOR_GITHUB_HANDOFF` plus token availability.
 - Preflight is fail-fast and safety-first. It does not relax any existing approval, promotion, or command safety rules.

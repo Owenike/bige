@@ -10,6 +10,13 @@ export type OrchestratorDiagnostics = {
   webhookEventType: OrchestratorState["webhookEventType"];
   webhookDeliveryId: string | null;
   webhookSignatureStatus: OrchestratorState["webhookSignatureStatus"];
+  inboundEventId: string | null;
+  inboundDeliveryId: string | null;
+  inboundCorrelationId: string | null;
+  actorIdentity: string | null;
+  actorAuthorizationStatus: OrchestratorState["actorAuthorizationStatus"];
+  replayProtectionStatus: OrchestratorState["replayProtectionStatus"];
+  inboundAuditStatus: OrchestratorState["inboundAuditStatus"];
   idempotencyKey: string | null;
   idempotencyStatus: OrchestratorState["idempotencyStatus"];
   triggerPolicyId: string | null;
@@ -122,6 +129,13 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
     webhookEventType: state.webhookEventType,
     webhookDeliveryId: state.webhookDeliveryId,
     webhookSignatureStatus: state.webhookSignatureStatus,
+    inboundEventId: state.inboundEventId,
+    inboundDeliveryId: state.inboundDeliveryId,
+    inboundCorrelationId: state.inboundCorrelationId,
+    actorIdentity: state.actorIdentity?.login ?? null,
+    actorAuthorizationStatus: state.actorAuthorizationStatus,
+    replayProtectionStatus: state.replayProtectionStatus,
+    inboundAuditStatus: state.inboundAuditStatus,
     idempotencyKey: state.idempotencyKey,
     idempotencyStatus: state.idempotencyStatus,
     triggerPolicyId: state.triggerPolicyId,
@@ -184,7 +198,7 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
   const lines = [
     `State: ${summary.stateId}`,
     `Status: ${summary.status} (iteration ${summary.iterationNumber}, profile ${summary.profileId})`,
-    `Source: type=${summary.sourceEventType}, eventId=${summary.sourceEventId ?? "none"}, webhook=${summary.webhookEventType}/${summary.webhookDeliveryId ?? "none"}/${summary.webhookSignatureStatus}, idempotency=${summary.idempotencyKey ?? "none"} (${summary.idempotencyStatus}), triggerPolicy=${summary.triggerPolicyId ?? "none"}`,
+    `Source: type=${summary.sourceEventType}, eventId=${summary.sourceEventId ?? "none"}, webhook=${summary.webhookEventType}/${summary.webhookDeliveryId ?? "none"}/${summary.webhookSignatureStatus}, inbound=${summary.inboundEventId ?? "none"}/${summary.inboundDeliveryId ?? "none"}/${summary.inboundAuditStatus}, actor=${summary.actorIdentity ?? "none"}/${summary.actorAuthorizationStatus}, replay=${summary.replayProtectionStatus}, correlation=${summary.inboundCorrelationId ?? "none"}, idempotency=${summary.idempotencyKey ?? "none"} (${summary.idempotencyStatus}), triggerPolicy=${summary.triggerPolicyId ?? "none"}`,
     `Command: raw=${summary.parsedCommand ?? "none"}, routing=${summary.commandRoutingStatus}, summary=${summary.commandRoutingSummary ?? "none"}`,
     `Planner: ${summary.plannerSummary}`,
     `Reviewer: ${summary.reviewerSummary}`,
