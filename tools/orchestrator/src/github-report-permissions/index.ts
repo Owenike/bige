@@ -11,6 +11,9 @@ export function mapReadinessToPermissionStatus(readiness: GitHubLiveReportReadin
   if (readiness.failureReason === "missing_gh_cli") {
     return "missing_gh";
   }
+  if (readiness.failureReason === "github_auth_smoke_missing_sandbox_target") {
+    return "blocked";
+  }
   if (readiness.failureReason === "missing_github_thread_target") {
     return "blocked";
   }
@@ -27,10 +30,25 @@ export function classifyGitHubReportingFailure(params: {
 
   if (normalized.includes("http 404") || normalized.includes("not found")) {
     return {
+      permissionStatus:
+        params.attemptedAction === "update" && params.correlatedTargetVisible
+          ? ("correlation_target_missing" as const)
+          : ("target_not_found" as const),
+      failureReason:
+        params.attemptedAction === "update" && params.correlatedTargetVisible
+          ? "github_report_correlation_target_missing"
+          : "github_report_target_not_found",
+      suggestedNextAction:
+        params.attemptedAction === "update" && params.correlatedTargetVisible
+          ? "The correlated comment no longer exists. Clear the stale target or recreate the correlated comment on the sandbox thread."
+          : "Verify that the target repository and issue or pull request number are valid before retrying live reporting.",
+    };
+  }
+  if (normalized.includes("unprocessable") || normalized.includes("validation failed")) {
+    return {
       permissionStatus: "target_invalid" as const,
       failureReason: "github_report_target_invalid",
-      suggestedNextAction:
-        "Verify that the issue, pull request, or correlated comment still exists before retrying live reporting.",
+      suggestedNextAction: "Fix the repository, target type, or target number before retrying live reporting.",
     };
   }
   if (normalized.includes("http 401") || normalized.includes("requires authentication")) {
@@ -38,6 +56,13 @@ export function classifyGitHubReportingFailure(params: {
       permissionStatus: "missing_token" as const,
       failureReason: "github_report_authentication_failed",
       suggestedNextAction: "Provide a valid GITHUB_TOKEN or GH_TOKEN before retrying live reporting.",
+    };
+  }
+  if (normalized.includes("locked")) {
+    return {
+      permissionStatus: "target_locked_or_not_updatable" as const,
+      failureReason: "github_report_target_locked_or_not_updatable",
+      suggestedNextAction: "Choose a different sandbox target or wait until the existing target becomes writable again.",
     };
   }
   if (normalized.includes("http 403") || normalized.includes("resource not accessible")) {
@@ -84,12 +109,20 @@ export function summarizePermissionStatus(status: StatusReportPermissionStatus) 
       return "GitHub live reporting is missing gh.";
     case "target_invalid":
       return "GitHub live reporting target is invalid or no longer exists.";
+    case "target_not_found":
+      return "GitHub live reporting target could not be found.";
     case "create_denied":
       return "GitHub live reporting cannot create a comment on the target thread.";
     case "update_denied":
       return "GitHub live reporting cannot update the correlated comment.";
+    case "target_locked_or_not_updatable":
+      return "GitHub live reporting target is locked or currently not updatable.";
+    case "correlation_target_missing":
+      return "GitHub live reporting expected a correlated comment target, but it no longer exists.";
     case "correlation_not_updatable":
       return "GitHub live reporting can see the correlation target but cannot safely update it.";
+    case "repository_mismatch":
+      return "GitHub live reporting target does not match the expected repository.";
     case "blocked":
       return "GitHub live reporting is blocked by missing thread context.";
     default:

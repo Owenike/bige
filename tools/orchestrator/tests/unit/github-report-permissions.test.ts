@@ -44,7 +44,7 @@ test("github report permission smoke classifies missing token explicitly", async
   assert.equal(result.targetStrategy, "skip");
 });
 
-test("github report permission smoke classifies target invalid on missing issue", async () => {
+test("github report permission smoke classifies target not found on missing issue", async () => {
   const result = await runGitHubReportPermissionSmoke({
     state: createIssueState(),
     enabled: true,
@@ -60,7 +60,7 @@ test("github report permission smoke classifies target invalid on missing issue"
     },
   });
   assert.equal(result.status, "degraded");
-  assert.equal(result.permissionStatus, "target_invalid");
+  assert.equal(result.permissionStatus, "target_not_found");
   assert.equal(result.targetStrategy, "create");
 });
 

@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   inboundAuditCollectionJsonSchema,
@@ -66,6 +66,21 @@ export class FileStorage implements StorageProvider {
         }
         throw error;
       }
+    }
+    if (
+      lastError instanceof Error &&
+      "code" in lastError &&
+      (lastError.code === "EPERM" || lastError.code === "EACCES" || lastError.code === "EEXIST")
+    ) {
+      await writeFile(filePath, value, "utf8");
+      try {
+        await unlink(tempPath);
+      } catch (cleanupError) {
+        if (!(cleanupError instanceof Error) || !("code" in cleanupError) || cleanupError.code !== "ENOENT") {
+          throw cleanupError;
+        }
+      }
+      return;
     }
     throw lastError;
   }

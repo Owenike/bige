@@ -399,6 +399,35 @@ Live GitHub reporting hardening:
 - issue and PR thread targeting now follow the same persisted target metadata model
 - create/update failure is recorded as reporting failure and does not redefine the main orchestration result
 
+Live auth smoke:
+- the auth smoke path is gated and separate from the main orchestration loop
+- required prerequisites:
+  - `GITHUB_TOKEN` or `GH_TOKEN`
+  - `gh` on `PATH`
+  - an explicit sandbox target via `--target-repo`, `--target-type`, `--target-number`, or an explicitly allowed correlated target reuse
+- without an explicit sandbox target, auth smoke returns `manual_required` instead of guessing a real thread
+- smoke metadata now persists:
+  - `authSmokeStatus`
+  - `authSmokeMode`
+  - `authSmokeTarget`
+  - `authSmokePermissionResult`
+  - `authSmokeFailureReason`
+  - `targetSelectionStatus`
+  - `lastLiveSmokeEvidencePath`
+  - `lastGitHubAuthSmokeResult`
+
+Denied / blocked matrix:
+- `missing_token`: live auth smoke cannot authenticate GitHub
+- `missing_gh`: `gh` is unavailable, so live auth smoke cannot run
+- `target_invalid`: the requested issue / PR reference is malformed or GitHub rejected it as invalid
+- `target_not_found`: the issue / PR target does not exist or is not visible
+- `create_denied`: GitHub reachable, but comment creation is denied
+- `update_denied`: GitHub reachable, but updating the chosen comment is denied
+- `correlation_target_missing`: the stored correlated comment no longer exists
+- `correlation_not_updatable`: the correlated comment is visible but cannot be patched
+- `target_locked_or_not_updatable`: the thread or comment is locked
+- `repository_mismatch`: the explicit sandbox target conflicts with the stored correlated repository
+
 Live comment action rules:
 - `create`: no correlated comment target is known for the current issue / PR thread
 - `update`: a correlated comment target already exists, or marker lookup found one in the thread
@@ -411,12 +440,23 @@ Local smoke:
 npm run orchestrator:status:report -- --state-id demo
 npm run orchestrator:github-live-report:smoke -- --state-id demo
 npm run orchestrator:reporting:smoke -- --state-id demo
+node .tmp/orchestrator/src/cli.js reporting:target-check --state-id demo --target-repo example/bige --target-type issue --target-number 1
+node .tmp/orchestrator/src/cli.js reporting:permissions --state-id demo
+node .tmp/orchestrator/src/cli.js reporting:auth-smoke --state-id demo --target-repo example/bige --target-type issue --target-number 1
 ```
 
 The smoke path is intentionally gated:
 - with valid token + `gh`, it should create then update the correlated comment
 - without token or `gh`, it records degraded/skip semantics instead of hard-failing
+- without an explicit sandbox target, live auth smoke returns `manual_required`
 - permission smoke is non-authoritative when no live token is present, but still classifies the exact prerequisite or permission bucket that is missing
+
+Sandbox target rules:
+- `create`: explicit issue / PR sandbox target exists, but no correlated comment exists yet
+- `update`: explicit sandbox target already has a correlated comment, or correlated reuse is explicitly allowed and safe
+- `skip`: live path is degraded because token / `gh` is unavailable
+- `blocked`: the explicit target conflicts with the known correlated repository, or the thread cannot be safely updated
+- `manual_required`: no safe sandbox target was supplied, so the orchestrator refuses to guess a live thread
 
 Delivery audit:
 - every status reporting attempt records an audit entry with action, target, correlation id, readiness, permission result, provider, failure reason, and suggested next action
@@ -429,6 +469,9 @@ npm run orchestrator:reporting:smoke -- --state-id demo
 npm run orchestrator:diagnostics -- --state-id demo
 node .tmp/orchestrator/src/cli.js reporting:status --state-id demo
 node .tmp/orchestrator/src/cli.js reporting:audit --state-id demo
+node .tmp/orchestrator/src/cli.js reporting:permissions --state-id demo
+node .tmp/orchestrator/src/cli.js reporting:target-check --state-id demo --target-repo example/bige --target-type issue --target-number 1
+node .tmp/orchestrator/src/cli.js reporting:auth-smoke --state-id demo --target-repo example/bige --target-type issue --target-number 1
 ```
 
 Typical next actions:
@@ -436,6 +479,7 @@ Typical next actions:
 - missing `gh` -> install `gh` and ensure it is on `PATH`
 - invalid target -> re-run from a valid issue/PR thread or let the next create path recreate correlation
 - update denied / correlation not updatable -> use a token that can patch the correlated comment, or clear the stale target and recreate it
+- no sandbox target -> provide explicit `--target-repo`, `--target-type`, `--target-number`, or intentionally allow correlated reuse for a known-safe thread
 
 ## Inbound Audit
 Every accepted, rejected, ignored, or duplicate webhook intake now records inbound audit metadata.

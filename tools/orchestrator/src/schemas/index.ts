@@ -244,11 +244,18 @@ export const statusReportPermissionStatusSchema = z.enum([
   "missing_token",
   "missing_gh",
   "target_invalid",
+  "target_not_found",
   "create_denied",
   "update_denied",
+  "target_locked_or_not_updatable",
+  "correlation_target_missing",
   "correlation_not_updatable",
+  "repository_mismatch",
   "blocked",
 ]);
+export const githubAuthSmokeStatusSchema = z.enum(["not_run", "skipped", "passed", "failed", "blocked", "manual_required"]);
+export const githubAuthSmokeModeSchema = z.enum(["none", "readiness_only", "sandbox_issue", "sandbox_pull_request", "correlated_reuse"]);
+export const githubTargetSelectionStatusSchema = z.enum(["unknown", "sandbox_explicit", "correlated_reuse", "blocked", "manual_required"]);
 export const statusReportStatusSchema = z.enum([
   "not_run",
   "payload_ready",
@@ -583,6 +590,29 @@ export const reportDeliveryAttemptSchema = z.object({
   suggestedNextAction: z.string().nullable().default(null),
 });
 
+export const githubAuthSmokeTargetSchema = z.object({
+  repository: z.string().nullable().default(null),
+  targetType: z.enum(["issue", "pull_request"]).nullable().default(null),
+  targetNumber: z.number().int().positive().nullable().default(null),
+  commentId: z.number().int().positive().nullable().default(null),
+  selectionStatus: githubTargetSelectionStatusSchema.default("unknown"),
+  selectionSummary: z.string().nullable().default(null),
+});
+
+export const githubAuthSmokeResultSchema = z.object({
+  status: githubAuthSmokeStatusSchema,
+  mode: githubAuthSmokeModeSchema,
+  target: githubAuthSmokeTargetSchema,
+  attemptedAction: z.enum(["none", "create", "update", "skip", "blocked"]).default("none"),
+  permissionResult: statusReportPermissionStatusSchema.default("unknown"),
+  failureReason: z.string().nullable().default(null),
+  providerUsed: z.string(),
+  evidencePath: z.string().nullable().default(null),
+  summary: z.string(),
+  suggestedNextAction: z.string().nullable().default(null),
+  ranAt: z.string(),
+});
+
 export const blockedReasonSchema = z.object({
   code: z.string(),
   summary: z.string(),
@@ -867,6 +897,14 @@ export const orchestratorStateSchema = z.object({
   lastStatusReportSummary: statusReportSummarySchema.nullable().default(null),
   reportDeliveryAttempts: z.array(reportDeliveryAttemptSchema).default([]),
   lastReportDeliveryAuditId: z.string().nullable().default(null),
+  authSmokeStatus: githubAuthSmokeStatusSchema.default("not_run"),
+  authSmokeMode: githubAuthSmokeModeSchema.default("none"),
+  authSmokeTarget: githubAuthSmokeTargetSchema.nullable().default(null),
+  authSmokePermissionResult: statusReportPermissionStatusSchema.default("unknown"),
+  authSmokeFailureReason: z.string().nullable().default(null),
+  targetSelectionStatus: githubTargetSelectionStatusSchema.default("unknown"),
+  lastLiveSmokeEvidencePath: z.string().nullable().default(null),
+  lastGitHubAuthSmokeResult: githubAuthSmokeResultSchema.nullable().default(null),
   lastPreflightResult: preflightResultSchema.nullable().default(null),
   lastBlockedReasons: z.array(blockedReasonSchema).default([]),
   lastAuditTrail: auditTrailSchema.nullable().default(null),
@@ -922,6 +960,11 @@ export type InboundAuditCollection = z.infer<typeof inboundAuditCollectionSchema
 export type StatusReportSummary = z.infer<typeof statusReportSummarySchema>;
 export type StatusReportPermissionStatus = z.infer<typeof statusReportPermissionStatusSchema>;
 export type ReportDeliveryAttempt = z.infer<typeof reportDeliveryAttemptSchema>;
+export type GitHubAuthSmokeStatus = z.infer<typeof githubAuthSmokeStatusSchema>;
+export type GitHubAuthSmokeMode = z.infer<typeof githubAuthSmokeModeSchema>;
+export type GitHubTargetSelectionStatus = z.infer<typeof githubTargetSelectionStatusSchema>;
+export type GitHubAuthSmokeTarget = z.infer<typeof githubAuthSmokeTargetSchema>;
+export type GitHubAuthSmokeResult = z.infer<typeof githubAuthSmokeResultSchema>;
 export type AuditTrail = z.infer<typeof auditTrailSchema>;
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 export type PreflightTarget = z.infer<typeof preflightTargetSchema>;
@@ -1464,6 +1507,14 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastStatusReportSummary",
     "reportDeliveryAttempts",
     "lastReportDeliveryAuditId",
+    "authSmokeStatus",
+    "authSmokeMode",
+    "authSmokeTarget",
+    "authSmokePermissionResult",
+    "authSmokeFailureReason",
+    "targetSelectionStatus",
+    "lastLiveSmokeEvidencePath",
+    "lastGitHubAuthSmokeResult",
     "lastAuditTrail",
     "lastHandoffPackagePath",
     "stopReason",
@@ -2039,7 +2090,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     },
     lastStatusReportPermissionStatus: {
       type: "string",
-      enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "create_denied", "update_denied", "correlation_not_updatable", "blocked"],
+      enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "target_not_found", "create_denied", "update_denied", "target_locked_or_not_updatable", "correlation_target_missing", "correlation_not_updatable", "repository_mismatch", "blocked"],
     },
     lastStatusReportReadinessStatus: {
       type: "string",
@@ -2090,7 +2141,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         commentId: { type: "number", nullable: true },
         correlationId: { type: "string", nullable: true },
         readiness: { type: "string", enum: ["unknown", "ready", "degraded", "blocked"] },
-        permissionStatus: { type: "string", enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "create_denied", "update_denied", "correlation_not_updatable", "blocked"] },
+        permissionStatus: { type: "string", enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "target_not_found", "create_denied", "update_denied", "target_locked_or_not_updatable", "correlation_target_missing", "correlation_not_updatable", "repository_mismatch", "blocked"] },
         targetKind: { type: "string", enum: ["artifact_only", "issue_comment", "pull_request_comment"] },
         targetStrategy: { type: "string", enum: ["unknown", "create", "update", "skip", "blocked"] },
         failureReason: { type: "string", nullable: true },
@@ -2115,7 +2166,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
           action: { type: "string", enum: ["create", "update", "skip", "blocked", "failed"] },
           correlationId: { type: "string", nullable: true },
           readinessStatus: { type: "string", enum: ["unknown", "ready", "degraded", "blocked"] },
-          permissionCheckResult: { type: "string", enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "create_denied", "update_denied", "correlation_not_updatable", "blocked"] },
+          permissionCheckResult: { type: "string", enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "target_not_found", "create_denied", "update_denied", "target_locked_or_not_updatable", "correlation_target_missing", "correlation_not_updatable", "repository_mismatch", "blocked"] },
           failureReason: { type: "string", nullable: true },
           providerUsed: { type: "string" },
           summary: { type: "string" },
@@ -2124,6 +2175,69 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       },
     },
     lastReportDeliveryAuditId: { type: "string", nullable: true },
+    authSmokeStatus: {
+      type: "string",
+      enum: ["not_run", "skipped", "passed", "failed", "blocked", "manual_required"],
+    },
+    authSmokeMode: {
+      type: "string",
+      enum: ["none", "readiness_only", "sandbox_issue", "sandbox_pull_request", "correlated_reuse"],
+    },
+    authSmokeTarget: {
+      type: "object",
+      nullable: true,
+      required: ["repository", "targetType", "targetNumber", "commentId", "selectionStatus", "selectionSummary"],
+      additionalProperties: false,
+      properties: {
+        repository: { type: "string", nullable: true },
+        targetType: { type: "string", enum: ["issue", "pull_request"], nullable: true },
+        targetNumber: { type: "number", nullable: true },
+        commentId: { type: "number", nullable: true },
+        selectionStatus: { type: "string", enum: ["unknown", "sandbox_explicit", "correlated_reuse", "blocked", "manual_required"] },
+        selectionSummary: { type: "string", nullable: true },
+      },
+    },
+    authSmokePermissionResult: {
+      type: "string",
+      enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "target_not_found", "create_denied", "update_denied", "target_locked_or_not_updatable", "correlation_target_missing", "correlation_not_updatable", "repository_mismatch", "blocked"],
+    },
+    authSmokeFailureReason: { type: "string", nullable: true },
+    targetSelectionStatus: {
+      type: "string",
+      enum: ["unknown", "sandbox_explicit", "correlated_reuse", "blocked", "manual_required"],
+    },
+    lastLiveSmokeEvidencePath: { type: "string", nullable: true },
+    lastGitHubAuthSmokeResult: {
+      type: "object",
+      nullable: true,
+      required: ["status", "mode", "target", "attemptedAction", "permissionResult", "failureReason", "providerUsed", "evidencePath", "summary", "suggestedNextAction", "ranAt"],
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["not_run", "skipped", "passed", "failed", "blocked", "manual_required"] },
+        mode: { type: "string", enum: ["none", "readiness_only", "sandbox_issue", "sandbox_pull_request", "correlated_reuse"] },
+        target: {
+          type: "object",
+          required: ["repository", "targetType", "targetNumber", "commentId", "selectionStatus", "selectionSummary"],
+          additionalProperties: false,
+          properties: {
+            repository: { type: "string", nullable: true },
+            targetType: { type: "string", enum: ["issue", "pull_request"], nullable: true },
+            targetNumber: { type: "number", nullable: true },
+            commentId: { type: "number", nullable: true },
+            selectionStatus: { type: "string", enum: ["unknown", "sandbox_explicit", "correlated_reuse", "blocked", "manual_required"] },
+            selectionSummary: { type: "string", nullable: true },
+          },
+        },
+        attemptedAction: { type: "string", enum: ["none", "create", "update", "skip", "blocked"] },
+        permissionResult: { type: "string", enum: ["unknown", "ready", "disabled", "missing_token", "missing_gh", "target_invalid", "target_not_found", "create_denied", "update_denied", "target_locked_or_not_updatable", "correlation_target_missing", "correlation_not_updatable", "repository_mismatch", "blocked"] },
+        failureReason: { type: "string", nullable: true },
+        providerUsed: { type: "string" },
+        evidencePath: { type: "string", nullable: true },
+        summary: { type: "string" },
+        suggestedNextAction: { type: "string", nullable: true },
+        ranAt: { type: "string" },
+      },
+    },
     lastPreflightResult: {
       type: "object",
       nullable: true,
