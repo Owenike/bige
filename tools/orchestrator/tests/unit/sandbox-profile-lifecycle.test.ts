@@ -75,6 +75,22 @@ test("sandbox profile lifecycle can create update delete and set default", async
     },
   });
 
+  const blockedUnsafeDefault = await setDefaultSandboxProfile({
+    configPath,
+    profileId: "review",
+  });
+  assert.equal(blockedUnsafeDefault.status, "manual_required");
+  assert.equal(blockedUnsafeDefault.failureReason, "sandbox_default_profile_not_safe");
+
+  await updateSandboxProfile({
+    configPath,
+    profileId: "review",
+    changes: {
+      actionPolicy: "create_or_update",
+      notes: "reactivated and safe for default",
+    },
+  });
+
   const switchedDefault = await setDefaultSandboxProfile({
     configPath,
     profileId: "review",

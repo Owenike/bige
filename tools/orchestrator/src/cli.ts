@@ -50,6 +50,8 @@ import { describeGitHubSandboxTargetRegistry, loadGitHubSandboxTargetRegistry, r
 import { formatSandboxProfileList, formatSandboxProfileValidation, showSandboxProfile, validateSandboxProfile } from "./sandbox-profile-ops";
 import { createSandboxProfile, deleteSandboxProfile, setDefaultSandboxProfile, updateSandboxProfile } from "./sandbox-profile-lifecycle";
 import { runLiveAuthOperatorFlow } from "./live-auth-operator";
+import { formatSandboxAuditTrail, listSandboxAuditRecords } from "./sandbox-audit";
+import { evaluateSandboxGuardrails, evaluateSandboxProfileGovernance, formatSandboxGuardrailsSummary, formatSandboxGovernanceSummary, inspectSandboxGovernance } from "./sandbox-governance";
 import { ingestGitHubWebhook } from "./webhook";
 import { formatWebhookHostingConfig, loadWebhookHostingConfig } from "./runtime-config";
 import { formatWebhookShutdownSummary, startWebhookHosting } from "./webhook-hosting";
@@ -231,6 +233,9 @@ function formatSandboxLifecycleSummary(summary: {
   failureReason: string | null;
   suggestedNextAction: string;
   path: string | null;
+  auditId: string | null;
+  governanceStatus: string;
+  governanceReason: string | null;
 }) {
   return [
     `Sandbox action: ${summary.action}`,
@@ -238,6 +243,8 @@ function formatSandboxLifecycleSummary(summary: {
     `Profile: ${summary.profileId ?? "none"}`,
     `Default profile: ${summary.defaultProfileId ?? "none"}`,
     `Config path: ${summary.path ?? "none"}`,
+    `Audit: ${summary.auditId ?? "none"}`,
+    `Governance: ${summary.governanceStatus} / ${summary.governanceReason ?? "none"}`,
     `Summary: ${summary.summary}`,
     `Failure: ${summary.failureReason ?? "none"}`,
     `Next action: ${summary.suggestedNextAction}`,
@@ -791,6 +798,62 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:audit") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required for sandbox:audit.");
+    }
+    const audit = await listSandboxAuditRecords({
+      configPath,
+      limit: options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10,
+    });
+    process.stdout.write(`${formatSandboxAuditTrail(audit.records)}\n\n${JSON.stringify(audit, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "sandbox:governance") {
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const profileId = options.get("sandbox-profile") ?? sandboxRegistry.registry.defaultProfileId ?? null;
+    const decision = evaluateSandboxProfileGovernance({
+      loadedRegistry: sandboxRegistry,
+      profileId,
+      requireDefaultSafePolicy: sandboxRegistry.registry.defaultProfileId === profileId,
+    });
+    const inspection = inspectSandboxGovernance(sandboxRegistry);
+    process.stdout.write(
+      `${formatSandboxGovernanceSummary(decision)}\nRegistry invalid profiles: ${inspection.invalidProfileIds.join(", ") || "none"}\nRegistry disabled profiles: ${inspection.disabledProfileIds.join(", ") || "none"}\n\n${JSON.stringify({ decision, inspection, sandboxRegistry }, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:guardrails") {
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const registryResolution = resolveGitHubSandboxTarget({
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      requestedProfileId: options.get("sandbox-profile") ?? null,
+      requestedTarget: {
+        repository: options.get("target-repo") ?? null,
+        targetType: options.has("target-type")
+          ? (getOption(options, "target-type", "issue") as "issue" | "pull_request")
+          : null,
+        targetNumber: options.has("target-number") ? Number.parseInt(getOption(options, "target-number", "0"), 10) : null,
+        allowCorrelatedReuse: getOption(options, "allow-correlated-reuse", "false") === "true",
+      },
+    });
+    const decision = evaluateSandboxGuardrails({
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      selectedProfileId: registryResolution.profileId,
+      selectionMode: registryResolution.selectionMode,
+      selectionReason: registryResolution.selectionReason,
+    });
+    process.stdout.write(
+      `${formatSandboxGuardrailsSummary(decision)}\nSelection summary: ${registryResolution.summary}\n\n${JSON.stringify({ registryResolution, decision }, null, 2)}\n`,
+    );
+    return;
+  }
+
   if (command === "reporting:auth-smoke") {
     const outputRoot = getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report"));
     const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
@@ -1329,6 +1392,9 @@ async function main() {
       "  node cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:validate --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
+      "  node cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
+      "  node cli.js sandbox:audit --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:guardrails --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:precheck --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:auth-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:run-live-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",

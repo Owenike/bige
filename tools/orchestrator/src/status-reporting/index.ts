@@ -730,6 +730,9 @@ export async function inspectGitHubReportingOperatorSummary(params: {
     `Last auth smoke: ${params.state.authSmokeStatus} / ${params.state.authSmokeSuccessStatus} / ${params.state.authSmokePermissionResult}`,
     `Selected sandbox profile: ${params.state.selectedSandboxProfileId ?? "none"} / mode=${params.state.sandboxProfileSelectionMode} / reason=${params.state.sandboxProfileSelectionReason ?? "none"}`,
     `Sandbox target profile: ${params.state.sandboxProfileId ?? params.state.sandboxTargetProfileId ?? "none"} / status=${params.state.sandboxProfileStatus} / config=${params.state.sandboxTargetConfigVersion ?? "none"}`,
+    `Sandbox governance: ${params.state.profileGovernanceStatus} / ${params.state.profileGovernanceReason ?? "none"}`,
+    `Sandbox guardrails: ${params.state.lastSandboxGuardrailsStatus} / ${params.state.lastSandboxGuardrailsReason ?? "none"}`,
+    `Sandbox audit: ${params.state.lastSandboxAuditId ?? "none"}`,
     `Last auth smoke target: ${params.state.lastAuthSmokeTarget?.repository ?? "none"}:${params.state.lastAuthSmokeTarget?.targetType ?? "none"}:${params.state.lastAuthSmokeTarget?.targetNumber ?? "none"}`,
     `Last auth smoke success at: ${params.state.lastAuthSmokeSuccessAt ?? "none"}`,
     `Last auth smoke summary: ${params.state.lastLiveSmokeSummary ?? "none"}`,
@@ -739,6 +742,7 @@ export async function inspectGitHubReportingOperatorSummary(params: {
     `Current target: ${permissionSmoke.targetKind}:${permissionSmoke.targetId ?? "none"}`,
     `Current summary: ${permissionSmoke.summary}`,
     `Next action: ${permissionSmoke.suggestedNextAction}`,
+    `Recent sandbox audit:\n${params.state.recentSandboxAuditSummaries.join("\n") || "none"}`,
     `Recent attempts:\n${formatReportDeliveryAttempts(recentAttempts)}`,
   ];
   return {

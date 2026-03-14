@@ -34,6 +34,12 @@ async function createRegistry() {
       {
         version: "sandbox-v1",
         defaultProfileId: "default",
+        governance: {
+          allowedRepositories: [],
+          allowedTargetTypes: ["issue", "pull_request"],
+          allowedActionPolicies: ["create_or_update", "create_only", "update_only"],
+          defaultAllowedActionPolicies: ["create_or_update", "create_only"],
+        },
         profiles: {
           default: {
             repository: "example/bige",
@@ -113,6 +119,12 @@ test("github sandbox target registry returns manual_required when no safe target
       registry: {
         version: "empty-v1",
         defaultProfileId: null,
+        governance: {
+          allowedRepositories: [],
+          allowedTargetTypes: ["issue", "pull_request"],
+          allowedActionPolicies: ["create_or_update", "create_only", "update_only"],
+          defaultAllowedActionPolicies: ["create_or_update", "create_only"],
+        },
         profiles: {},
       },
       version: "empty-v1",

@@ -76,6 +76,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-profile-lifecycle.test.js",
     "$outDir\tests\unit\live-auth-operator-flow.test.js",
     "$outDir\tests\unit\sandbox-default-selection.test.js",
+    "$outDir\tests\unit\sandbox-governance.test.js",
+    "$outDir\tests\unit\sandbox-audit.test.js",
+    "$outDir\tests\unit\sandbox-guardrails.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -237,6 +240,15 @@ $suiteMap = @{
   )
   "sandbox-default-selection" = @(
     "$outDir\tests\unit\sandbox-default-selection.test.js"
+  )
+  "sandbox-governance" = @(
+    "$outDir\tests\unit\sandbox-governance.test.js"
+  )
+  "sandbox-audit" = @(
+    "$outDir\tests\unit\sandbox-audit.test.js"
+  )
+  "sandbox-guardrails" = @(
+    "$outDir\tests\unit\sandbox-guardrails.test.js"
   )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
@@ -401,6 +413,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-profile-lifecycle.test.js",
     "$outDir\tests\unit\live-auth-operator-flow.test.js",
     "$outDir\tests\unit\sandbox-default-selection.test.js",
+    "$outDir\tests\unit\sandbox-governance.test.js",
+    "$outDir\tests\unit\sandbox-audit.test.js",
+    "$outDir\tests\unit\sandbox-guardrails.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",

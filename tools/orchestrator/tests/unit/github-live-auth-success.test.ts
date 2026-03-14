@@ -13,6 +13,12 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
     registry: {
       version: "sandbox-v1",
       defaultProfileId: "default",
+      governance: {
+        allowedRepositories: [],
+        allowedTargetTypes: ["issue", "pull_request"],
+        allowedActionPolicies: ["create_or_update", "create_only", "update_only"],
+        defaultAllowedActionPolicies: ["create_or_update", "create_only"],
+      },
       profiles: {
         default: {
           repository: "example/bige",

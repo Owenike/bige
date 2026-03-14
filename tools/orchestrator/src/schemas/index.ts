@@ -616,6 +616,20 @@ export const githubAuthSmokeResultSchema = z.object({
 
 export const githubSandboxActionPolicySchema = z.enum(["create_or_update", "create_only", "update_only"]);
 export const sandboxProfileSelectionModeSchema = z.enum(["unknown", "explicit", "default", "fallback", "blocked"]);
+export const sandboxGovernanceStatusSchema = z.enum(["unknown", "ready", "blocked", "manual_required"]);
+const defaultGitHubSandboxGovernance = {
+  allowedRepositories: [] as string[],
+  allowedTargetTypes: ["issue", "pull_request"] as Array<"issue" | "pull_request">,
+  allowedActionPolicies: ["create_or_update", "create_only", "update_only"] as Array<"create_or_update" | "create_only" | "update_only">,
+  defaultAllowedActionPolicies: ["create_or_update", "create_only"] as Array<"create_or_update" | "create_only" | "update_only">,
+};
+
+export const githubSandboxGovernanceSchema = z.object({
+  allowedRepositories: z.array(z.string()).default([]),
+  allowedTargetTypes: z.array(z.enum(["issue", "pull_request"])).default(["issue", "pull_request"]),
+  allowedActionPolicies: z.array(githubSandboxActionPolicySchema).default(["create_or_update", "create_only", "update_only"]),
+  defaultAllowedActionPolicies: z.array(githubSandboxActionPolicySchema).default(["create_or_update", "create_only"]),
+});
 
 export const githubSandboxTargetProfileSchema = z.object({
   repository: z.string(),
@@ -630,6 +644,37 @@ export const githubSandboxTargetRegistrySchema = z.object({
   version: z.string().default("default-empty-v1"),
   defaultProfileId: z.string().nullable().default(null),
   profiles: z.record(z.string(), githubSandboxTargetProfileSchema).default({}),
+  governance: githubSandboxGovernanceSchema.default(defaultGitHubSandboxGovernance),
+});
+
+export const sandboxAuditActionSchema = z.enum(["create", "update", "delete", "set-default", "disable", "enable"]);
+
+export const sandboxAuditProfileSummarySchema = z.object({
+  profileId: z.string().nullable().default(null),
+  repository: z.string().nullable().default(null),
+  targetType: z.enum(["issue", "pull_request"]).nullable().default(null),
+  targetNumber: z.number().int().positive().nullable().default(null),
+  actionPolicy: githubSandboxActionPolicySchema.nullable().default(null),
+  enabled: z.boolean().nullable().default(null),
+  isDefault: z.boolean().default(false),
+  notes: z.string().nullable().default(null),
+});
+
+export const sandboxAuditRecordSchema = z.object({
+  id: z.string(),
+  changedAt: z.string(),
+  action: sandboxAuditActionSchema,
+  profileId: z.string().nullable().default(null),
+  previousSummary: sandboxAuditProfileSummarySchema.nullable().default(null),
+  nextSummary: sandboxAuditProfileSummarySchema.nullable().default(null),
+  changedFields: z.array(z.string()).default([]),
+  actorSource: z.string(),
+  commandSource: z.string().nullable().default(null),
+});
+
+export const sandboxAuditTrailSchema = z.object({
+  updatedAt: z.string(),
+  records: z.array(sandboxAuditRecordSchema).default([]),
 });
 
 export const githubLiveAuthEvidenceSchema = z.object({
@@ -936,6 +981,14 @@ export const orchestratorStateSchema = z.object({
   lastStatusReportSummary: statusReportSummarySchema.nullable().default(null),
   reportDeliveryAttempts: z.array(reportDeliveryAttemptSchema).default([]),
   lastReportDeliveryAuditId: z.string().nullable().default(null),
+  profileGovernanceStatus: sandboxGovernanceStatusSchema.default("unknown"),
+  profileGovernanceReason: z.string().nullable().default(null),
+  profileGovernanceSuggestedNextAction: z.string().nullable().default(null),
+  lastSandboxAuditId: z.string().nullable().default(null),
+  lastSandboxGuardrailsStatus: sandboxGovernanceStatusSchema.default("unknown"),
+  lastSandboxGuardrailsReason: z.string().nullable().default(null),
+  lastSandboxGuardrailsSuggestedNextAction: z.string().nullable().default(null),
+  recentSandboxAuditSummaries: z.array(z.string()).default([]),
   authSmokeStatus: githubAuthSmokeStatusSchema.default("not_run"),
   authSmokeSuccessStatus: z.enum(["not_run", "success", "non_success"]).default("not_run"),
   authSmokeMode: githubAuthSmokeModeSchema.default("none"),
@@ -1022,6 +1075,9 @@ export type GitHubAuthSmokeResult = z.infer<typeof githubAuthSmokeResultSchema>;
 export type GitHubSandboxActionPolicy = z.infer<typeof githubSandboxActionPolicySchema>;
 export type GitHubSandboxTargetProfile = z.infer<typeof githubSandboxTargetProfileSchema>;
 export type GitHubSandboxTargetRegistry = z.infer<typeof githubSandboxTargetRegistrySchema>;
+export type SandboxAuditAction = z.infer<typeof sandboxAuditActionSchema>;
+export type SandboxAuditRecord = z.infer<typeof sandboxAuditRecordSchema>;
+export type SandboxAuditTrail = z.infer<typeof sandboxAuditTrailSchema>;
 export type GitHubLiveAuthEvidence = z.infer<typeof githubLiveAuthEvidenceSchema>;
 export type AuditTrail = z.infer<typeof auditTrailSchema>;
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
@@ -1565,6 +1621,14 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastStatusReportSummary",
     "reportDeliveryAttempts",
     "lastReportDeliveryAuditId",
+    "profileGovernanceStatus",
+    "profileGovernanceReason",
+    "profileGovernanceSuggestedNextAction",
+    "lastSandboxAuditId",
+    "lastSandboxGuardrailsStatus",
+    "lastSandboxGuardrailsReason",
+    "lastSandboxGuardrailsSuggestedNextAction",
+    "recentSandboxAuditSummaries",
     "authSmokeStatus",
     "authSmokeSuccessStatus",
     "authSmokeMode",
@@ -2248,6 +2312,23 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       },
     },
     lastReportDeliveryAuditId: { type: "string", nullable: true },
+    profileGovernanceStatus: {
+      type: "string",
+      enum: ["unknown", "ready", "blocked", "manual_required"],
+    },
+    profileGovernanceReason: { type: "string", nullable: true },
+    profileGovernanceSuggestedNextAction: { type: "string", nullable: true },
+    lastSandboxAuditId: { type: "string", nullable: true },
+    lastSandboxGuardrailsStatus: {
+      type: "string",
+      enum: ["unknown", "ready", "blocked", "manual_required"],
+    },
+    lastSandboxGuardrailsReason: { type: "string", nullable: true },
+    lastSandboxGuardrailsSuggestedNextAction: { type: "string", nullable: true },
+    recentSandboxAuditSummaries: {
+      type: "array",
+      items: { type: "string" },
+    },
     authSmokeStatus: {
       type: "string",
       enum: ["not_run", "skipped", "passed", "failed", "blocked", "manual_required"],

@@ -7,6 +7,8 @@ import {
   type GitHubSandboxTargetRegistry,
 } from "../schemas";
 import { loadGitHubSandboxTargetRegistry } from "../github-sandbox-targets";
+import { appendSandboxAuditRecord } from "../sandbox-audit";
+import { evaluateSandboxProfileGovernance } from "../sandbox-governance";
 
 export type SandboxProfileLifecycleResult = {
   status: "updated" | "manual_required" | "blocked";
@@ -18,6 +20,9 @@ export type SandboxProfileLifecycleResult = {
   suggestedNextAction: string;
   path: string | null;
   registry: GitHubSandboxTargetRegistry | null;
+  auditId: string | null;
+  governanceStatus: "unknown" | "ready" | "blocked" | "manual_required";
+  governanceReason: string | null;
 };
 
 type SandboxProfileInput = {
@@ -113,10 +118,20 @@ async function saveRegistry(resolvedPath: string, registry: GitHubSandboxTargetR
   return normalized;
 }
 
-function toLifecycleResult(params: Omit<SandboxProfileLifecycleResult, "registry"> & { registry?: GitHubSandboxTargetRegistry | null }) {
+function toLifecycleResult(
+  params: Omit<SandboxProfileLifecycleResult, "registry" | "auditId" | "governanceStatus" | "governanceReason"> & {
+    registry?: GitHubSandboxTargetRegistry | null;
+    auditId?: string | null;
+    governanceStatus?: SandboxProfileLifecycleResult["governanceStatus"];
+    governanceReason?: string | null;
+  },
+) {
   return {
     ...params,
     registry: params.registry ?? null,
+    auditId: params.auditId ?? null,
+    governanceStatus: params.governanceStatus ?? "unknown",
+    governanceReason: params.governanceReason ?? null,
   } satisfies SandboxProfileLifecycleResult;
 }
 
@@ -141,6 +156,7 @@ export async function createSandboxProfile(params: {
   }
 
   const registry = cloneRegistry(writable.loaded.registry);
+  const previousRegistry = cloneRegistry(registry);
   if (registry.profiles[params.profileId]) {
     return toLifecycleResult({
       status: "blocked",
@@ -160,6 +176,25 @@ export async function createSandboxProfile(params: {
     registry.defaultProfileId = params.profileId;
   }
   const saved = await saveRegistry(writable.path, registry);
+  const governance = evaluateSandboxProfileGovernance({
+    loadedRegistry: {
+      registry: saved,
+      version: saved.version,
+      source: "file",
+      path: writable.path,
+    },
+    profileId: params.profileId,
+    requireDefaultSafePolicy: saved.defaultProfileId === params.profileId,
+  });
+  const audit = await appendSandboxAuditRecord({
+    configPath: writable.path,
+    action: "create",
+    profileId: params.profileId,
+    previousRegistry,
+    nextRegistry: saved,
+    actorSource: "sandbox:create",
+    commandSource: "cli",
+  });
   return toLifecycleResult({
     status: "updated",
     action: "create",
@@ -170,6 +205,9 @@ export async function createSandboxProfile(params: {
     suggestedNextAction: "Validate the new sandbox profile before using it for live auth smoke.",
     path: writable.path,
     registry: saved,
+    auditId: audit.record.id,
+    governanceStatus: governance.status,
+    governanceReason: null,
   });
 }
 
@@ -193,6 +231,7 @@ export async function updateSandboxProfile(params: {
   }
 
   const registry = cloneRegistry(writable.loaded.registry);
+  const previousRegistry = cloneRegistry(registry);
   const existing = registry.profiles[params.profileId];
   if (!existing) {
     return toLifecycleResult({
@@ -213,6 +252,31 @@ export async function updateSandboxProfile(params: {
     ...params.changes,
   });
   const saved = await saveRegistry(writable.path, registry);
+  const governance = evaluateSandboxProfileGovernance({
+    loadedRegistry: {
+      registry: saved,
+      version: saved.version,
+      source: "file",
+      path: writable.path,
+    },
+    profileId: params.profileId,
+    requireDefaultSafePolicy: saved.defaultProfileId === params.profileId,
+  });
+  const enabledAction =
+    typeof params.changes.enabled === "boolean" && params.changes.enabled !== (existing.enabled !== false)
+      ? params.changes.enabled
+        ? "enable"
+        : "disable"
+      : "update";
+  const audit = await appendSandboxAuditRecord({
+    configPath: writable.path,
+    action: enabledAction,
+    profileId: params.profileId,
+    previousRegistry,
+    nextRegistry: saved,
+    actorSource: `sandbox:${enabledAction}`,
+    commandSource: "cli",
+  });
   return toLifecycleResult({
     status: "updated",
     action: "update",
@@ -223,6 +287,9 @@ export async function updateSandboxProfile(params: {
     suggestedNextAction: "Re-run sandbox validation before using the updated profile for live auth smoke.",
     path: writable.path,
     registry: saved,
+    auditId: audit.record.id,
+    governanceStatus: governance.status,
+    governanceReason: null,
   });
 }
 
@@ -245,6 +312,7 @@ export async function deleteSandboxProfile(params: {
   }
 
   const registry = cloneRegistry(writable.loaded.registry);
+  const previousRegistry = cloneRegistry(registry);
   if (!registry.profiles[params.profileId]) {
     return toLifecycleResult({
       status: "manual_required",
@@ -264,6 +332,15 @@ export async function deleteSandboxProfile(params: {
     registry.defaultProfileId = null;
   }
   const saved = await saveRegistry(writable.path, registry);
+  const audit = await appendSandboxAuditRecord({
+    configPath: writable.path,
+    action: "delete",
+    profileId: params.profileId,
+    previousRegistry,
+    nextRegistry: saved,
+    actorSource: "sandbox:delete",
+    commandSource: "cli",
+  });
   return toLifecycleResult({
     status: "updated",
     action: "delete",
@@ -275,6 +352,7 @@ export async function deleteSandboxProfile(params: {
       saved.defaultProfileId ? `Default sandbox profile is now '${saved.defaultProfileId}'. Validate it before the next live smoke.` : "Set a new default sandbox profile before running live auth smoke without an explicit profile.",
     path: writable.path,
     registry: saved,
+    auditId: audit.record.id,
   });
 }
 
@@ -297,6 +375,7 @@ export async function setDefaultSandboxProfile(params: {
   }
 
   const registry = cloneRegistry(writable.loaded.registry);
+  const previousRegistry = cloneRegistry(registry);
   const profile = registry.profiles[params.profileId];
   if (!profile) {
     return toLifecycleResult({
@@ -324,9 +403,43 @@ export async function setDefaultSandboxProfile(params: {
       registry,
     });
   }
+  const governance = evaluateSandboxProfileGovernance({
+    loadedRegistry: {
+      registry,
+      version: registry.version,
+      source: "file",
+      path: writable.path,
+    },
+    profileId: params.profileId,
+    requireDefaultSafePolicy: true,
+  });
+  if (governance.status !== "ready") {
+    return toLifecycleResult({
+      status: governance.status === "blocked" ? "blocked" : "manual_required",
+      action: "set_default",
+      profileId: params.profileId,
+      defaultProfileId: registry.defaultProfileId,
+      summary: governance.summary,
+      failureReason: governance.reason?.code ?? "sandbox_profile_governance_failed",
+      suggestedNextAction: governance.reason?.suggestedNextAction ?? "Fix sandbox governance issues before switching the default profile.",
+      path: writable.path,
+      registry,
+      governanceStatus: governance.status,
+      governanceReason: governance.reason?.summary ?? null,
+    });
+  }
 
   registry.defaultProfileId = params.profileId;
   const saved = await saveRegistry(writable.path, registry);
+  const audit = await appendSandboxAuditRecord({
+    configPath: writable.path,
+    action: "set-default",
+    profileId: params.profileId,
+    previousRegistry,
+    nextRegistry: saved,
+    actorSource: "sandbox:set-default",
+    commandSource: "cli",
+  });
   return toLifecycleResult({
     status: "updated",
     action: "set_default",
@@ -337,5 +450,8 @@ export async function setDefaultSandboxProfile(params: {
     suggestedNextAction: "Use the default sandbox profile for the next live auth smoke or validate it first.",
     path: writable.path,
     registry: saved,
+    auditId: audit.record.id,
+    governanceStatus: governance.status,
+    governanceReason: null,
   });
 }

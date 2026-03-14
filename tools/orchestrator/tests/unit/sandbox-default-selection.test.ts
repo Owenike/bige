@@ -44,6 +44,12 @@ function createRegistry(params?: {
     registry: {
       version: "sandbox-selection-v1",
       defaultProfileId: params?.defaultProfileId === undefined ? "default" : params.defaultProfileId,
+      governance: {
+        allowedRepositories: [],
+        allowedTargetTypes: ["issue", "pull_request"],
+        allowedActionPolicies: ["create_or_update", "create_only", "update_only"],
+        defaultAllowedActionPolicies: ["create_or_update", "create_only"],
+      },
       profiles: {
         default: {
           repository: "example/bige",
@@ -129,6 +135,12 @@ test("sandbox default selection blocks when no valid profile exists", () => {
       registry: {
         version: "empty-v1",
         defaultProfileId: null,
+        governance: {
+          allowedRepositories: [],
+          allowedTargetTypes: ["issue", "pull_request"],
+          allowedActionPolicies: ["create_or_update", "create_only", "update_only"],
+          defaultAllowedActionPolicies: ["create_or_update", "create_only"],
+        },
         profiles: {},
       },
       version: "empty-v1",

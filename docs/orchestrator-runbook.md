@@ -472,6 +472,11 @@ Sandbox target rules:
 
 Sandbox target registry:
 - the registry can come from JSON config or env-derived defaults
+- registry governance can additionally constrain:
+  - `allowedRepositories`
+  - `allowedTargetTypes`
+  - `allowedActionPolicies`
+  - `defaultAllowedActionPolicies`
 - supported fields per profile:
   - `id`
   - `repository`
@@ -488,6 +493,12 @@ Sandbox target registry:
   - repository-matched fallback
 - if no safe registry target exists, auth smoke returns `manual_required`
 - if policy and correlated target disagree, auth smoke returns `blocked`
+- governance rules:
+  - disabled profiles are never eligible for live smoke
+  - repositories outside the governance allow-list are blocked
+  - target types outside the governance allow-list are blocked
+  - action policies outside the governance allow-list are blocked
+  - default profiles must satisfy the stricter `defaultAllowedActionPolicies` rule
 - operator commands:
   - `node .tmp/orchestrator/src/cli.js sandbox:create --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --target-repo example/bige --target-type issue --target-number 101 --set-default true`
   - `node .tmp/orchestrator/src/cli.js sandbox:update --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --notes "safe smoke target"`
@@ -496,23 +507,39 @@ Sandbox target registry:
   - `node .tmp/orchestrator/src/cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json`
   - `node .tmp/orchestrator/src/cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
   - `node .tmp/orchestrator/src/cli.js sandbox:validate --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
+  - `node .tmp/orchestrator/src/cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
+  - `node .tmp/orchestrator/src/cli.js sandbox:audit --sandbox-config .tmp/orchestrator-sandbox.json`
+  - `node .tmp/orchestrator/src/cli.js sandbox:guardrails --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
 - safe operator flow:
   - create or update the sandbox profile
   - set the default profile if you want smoke runs without explicit override
   - list and show the active profile set
   - validate the selected profile before running a live success smoke
-  - run `reporting:precheck` to confirm target resolution and permission readiness
+  - inspect `sandbox:governance` before switching the default profile
+  - inspect `sandbox:audit` to confirm the latest profile changes
+  - run `reporting:precheck` to confirm target resolution, governance, guardrails, and permission readiness
   - only run `reporting:run-live-smoke` or `reporting:live-success-smoke` when the profile resolves to a known-safe repo/issue/pr target
 - lifecycle guardrails:
   - deleting the default profile clears it and promotes the first remaining enabled profile when possible
   - disabled profiles cannot become the default profile
+  - a default profile that violates governance cannot become the default
   - missing or invalid profiles return `manual_required` instead of falling back to arbitrary live threads
+- audit trail:
+  - `create`, `update`, `delete`, `set-default`, `enable`, and `disable` all write audit records
+  - each audit record stores changed fields, previous summary, next summary, and command source
+  - recent audit summaries are surfaced in operator diagnostics and live smoke precheck output
 
 Minimal registry example:
 ```json
 {
   "version": "sandbox-v1",
   "defaultProfileId": "default",
+  "governance": {
+    "allowedRepositories": ["example/bige"],
+    "allowedTargetTypes": ["issue", "pull_request"],
+    "allowedActionPolicies": ["create_or_update", "create_only", "update_only"],
+    "defaultAllowedActionPolicies": ["create_or_update", "create_only"]
+  },
   "profiles": {
     "default": {
       "repository": "example/bige",
@@ -548,6 +575,9 @@ node .tmp/orchestrator/src/cli.js sandbox:set-default --sandbox-config .tmp/orch
 node .tmp/orchestrator/src/cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json
 node .tmp/orchestrator/src/cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:validate --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
+node .tmp/orchestrator/src/cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
+node .tmp/orchestrator/src/cli.js sandbox:audit --sandbox-config .tmp/orchestrator-sandbox.json
+node .tmp/orchestrator/src/cli.js sandbox:guardrails --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 ```
 
 Typical next actions:
@@ -557,13 +587,17 @@ Typical next actions:
 - update denied / correlation not updatable -> use a token that can patch the correlated comment, or clear the stale target and recreate it
 - no sandbox target -> provide explicit `--target-repo`, `--target-type`, `--target-number`, or intentionally allow correlated reuse for a known-safe thread
 - no sandbox registry profile -> add a registry profile for the current orchestrator task profile, or pass `--sandbox-profile`
+- governance failed -> update the profile or registry governance so the selected repo/type/action policy becomes explicitly safe
+- guardrails failed -> fix the selected/default/fallback profile before re-running live smoke; the orchestrator will not continue into GitHub live smoke
+- sandbox audit review -> use `sandbox:audit` before and after profile lifecycle changes if you need a change trace
 
 Live auth evidence:
 - every auth smoke run writes a JSON evidence file and stores its path in `lastAuthSmokeEvidencePath`
 - evidence captures:
   - attempted time
+  - selected sandbox profile / selection mode / selection reason
+  - governance result / guardrails result
   - sandbox profile/config version
-  - sandbox profile selection mode / selection reason
   - sandbox profile status
   - target selection result
   - permission result
