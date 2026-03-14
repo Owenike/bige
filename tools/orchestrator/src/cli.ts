@@ -57,9 +57,17 @@ import { applySandboxPolicyBundle, formatSandboxPolicyBundle, formatSandboxPolic
 import { exportSandboxProfiles, importSandboxProfiles } from "./sandbox-import-export";
 import { applySandboxRegistryChange, buildSandboxRegistryDiff, reviewSandboxRegistryChange } from "./sandbox-change-review";
 import { runSandboxBatchChange } from "./sandbox-batch-change";
+import { runSandboxBatchRecovery, summarizeSandboxBatchRecovery } from "./sandbox-batch-recovery";
 import { formatSandboxImpactSummary } from "./sandbox-impact-summary";
 import { listSandboxRestorePoints } from "./sandbox-restore-points";
 import { runSandboxRollback } from "./sandbox-rollback";
+import { evaluateSandboxRollbackGovernance, formatSandboxRollbackGovernanceSummary } from "./sandbox-rollback-governance";
+import {
+  formatSandboxRestorePointList,
+  formatSandboxRestoreRetentionSummary,
+  inspectSandboxRestorePointRetention,
+  pruneSandboxRestorePoints,
+} from "./sandbox-restore-retention";
 import { ingestGitHubWebhook } from "./webhook";
 import { formatWebhookHostingConfig, loadWebhookHostingConfig } from "./runtime-config";
 import { formatWebhookShutdownSummary, startWebhookHosting } from "./webhook-hosting";
@@ -1056,6 +1064,30 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:restore-points:prune") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required for sandbox:restore-points:prune.");
+    }
+    const result = await pruneSandboxRestorePoints({
+      configPath,
+      state: existingState,
+      retainRecent: options.has("retain-recent") ? Number.parseInt(getOption(options, "retain-recent", "10"), 10) : undefined,
+      maxAgeHours: options.has("max-age-hours") ? Number.parseInt(getOption(options, "max-age-hours", "0"), 10) : undefined,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      currentRestorePointCount: result.totalCount,
+      currentValidRestorePointCount: result.validCount,
+      restorePointRetentionStatus: result.status,
+      lastRestorePointPruneSummary: result.summary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(`${formatSandboxRestoreRetentionSummary(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
   if (command === "sandbox:governance") {
     const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
     const profileId = options.get("sandbox-profile") ?? sandboxRegistry.registry.defaultProfileId ?? null;
@@ -1312,6 +1344,50 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:rollback:governance") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const restorePoints = await listSandboxRestorePoints({
+      configPath,
+      limit: 500,
+    });
+    const restorePoint =
+      (options.get("restore-point-id")
+        ? restorePoints.trail.records.find((record) => record.id === options.get("restore-point-id"))
+        : restorePoints.records[0]) ?? null;
+    const decision = await evaluateSandboxRollbackGovernance({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      restorePoint,
+      actorSource: command,
+      commandSource: "cli",
+      maxAgeHours: options.has("max-age-hours") ? Number.parseInt(getOption(options, "max-age-hours", "0"), 10) : undefined,
+    });
+    const retention = await inspectSandboxRestorePointRetention({
+      configPath,
+      state: existingState,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastRestorePointId: decision.restorePointId ?? existingState.lastRestorePointId,
+      currentRestorePointCount: retention.totalCount,
+      currentValidRestorePointCount: retention.validCount,
+      rollbackGovernanceStatus: decision.status,
+      rollbackGovernanceReason: decision.reason?.code ?? null,
+      rollbackGovernanceSuggestedNextAction: decision.suggestedNextAction,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxRollbackGovernanceSummary(decision)}\n\n${formatSandboxRestorePointList(restorePoints.records)}\n\n${JSON.stringify({ decision, retention }, null, 2)}\n`,
+    );
+    return;
+  }
+
   if (command === "sandbox:rollback:preview" || command === "sandbox:rollback:validate" || command === "sandbox:rollback:apply") {
     const configPath = options.get("sandbox-config");
     if (!configPath) {
@@ -1332,6 +1408,10 @@ async function main() {
       actorSource: command,
       commandSource: "cli",
     });
+    const retention = await inspectSandboxRestorePointRetention({
+      configPath,
+      state: existingState,
+    });
     const updatedState = orchestratorStateSchema.parse({
       ...existingState,
       lastRestorePointId: result.restorePointId ?? existingState.lastRestorePointId,
@@ -1342,6 +1422,17 @@ async function main() {
       lastRollbackStatus: result.status,
       lastRollbackImpactSummary: result.impactSummary.summaryText,
       lastRollbackAuditId: result.auditId,
+      currentRestorePointCount: retention.totalCount,
+      currentValidRestorePointCount: retention.validCount,
+      rollbackGovernanceStatus:
+        result.status === "blocked" || result.status === "manual_required"
+          ? result.status
+          : "ready",
+      rollbackGovernanceReason:
+        result.status === "blocked" || result.status === "manual_required"
+          ? result.failureReason
+          : existingState.rollbackGovernanceReason,
+      rollbackGovernanceSuggestedNextAction: result.suggestedNextAction,
       lastSandboxDiffSummary: result.diffSummary,
       lastSandboxReviewStatus:
         result.mode === "validate" && result.status === "validated"
@@ -1364,6 +1455,72 @@ async function main() {
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
       `${summarizeSandboxRollback(result)}\n\n${formatSandboxImpactSummary(result.impactSummary)}\n\n${JSON.stringify(result, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:batch-recovery:preview" || command === "sandbox:batch-recovery:validate" || command === "sandbox:batch-recovery:apply") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const restorePointIds = (options.get("restore-point-ids") ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const sandboxProfiles = (options.get("sandbox-profiles") ?? options.get("sandbox-profile") ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const result = await runSandboxBatchRecovery({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      restorePointIds,
+      profileIds: sandboxProfiles,
+      mode:
+        command === "sandbox:batch-recovery:preview"
+          ? "preview"
+          : command === "sandbox:batch-recovery:validate"
+            ? "validate"
+            : "apply",
+      allowPartial: getOption(options, "allow-partial", "false") === "true",
+      actorSource: command,
+      commandSource: "cli",
+    });
+    const retention = await inspectSandboxRestorePointRetention({
+      configPath,
+      state: existingState,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      currentRestorePointCount: retention.totalCount,
+      currentValidRestorePointCount: retention.validCount,
+      rollbackGovernanceStatus: result.governanceStatus,
+      rollbackGovernanceReason:
+        result.status === "blocked" || result.status === "manual_required" ? result.failureReason : existingState.rollbackGovernanceReason,
+      rollbackGovernanceSuggestedNextAction: result.suggestedNextAction,
+      lastBatchRecoveryStatus: result.status,
+      lastBatchRecoverySummary: result.summary,
+      lastRestorePointId:
+        result.mode === "apply" ? result.restorePointId ?? existingState.lastRestorePointId : existingState.lastRestorePointId,
+      lastRestorePointSummary:
+        result.mode === "apply" ? result.restorePointSummary ?? existingState.lastRestorePointSummary : existingState.lastRestorePointSummary,
+      lastRollbackStatus:
+        result.mode === "apply"
+          ? result.status
+          : result.mode === "validate" && result.status === "validated"
+            ? existingState.lastRollbackStatus
+            : existingState.lastRollbackStatus,
+      lastRollbackImpactSummary: result.impactSummary.summaryText,
+      lastRollbackAuditId: result.auditId ?? existingState.lastRollbackAuditId,
+      lastSandboxDiffSummary: result.diffSummary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${summarizeSandboxBatchRecovery(result)}\n\n${formatSandboxImpactSummary(result.impactSummary)}\n\n${JSON.stringify(result, null, 2)}\n`,
     );
     return;
   }

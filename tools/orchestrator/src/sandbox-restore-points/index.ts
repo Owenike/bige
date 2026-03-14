@@ -35,7 +35,7 @@ export function resolveSandboxRestorePointsPath(configPath: string) {
   return `${path.resolve(configPath)}.restore-points.json`;
 }
 
-async function loadRestorePointTrail(restorePointsPath: string): Promise<SandboxRestorePointTrail> {
+export async function loadSandboxRestorePointTrail(restorePointsPath: string): Promise<SandboxRestorePointTrail> {
   try {
     const raw = await readFile(restorePointsPath, "utf8");
     return sandboxRestorePointTrailSchema.parse(JSON.parse(raw));
@@ -50,7 +50,7 @@ async function loadRestorePointTrail(restorePointsPath: string): Promise<Sandbox
   }
 }
 
-async function saveRestorePointTrail(restorePointsPath: string, trail: SandboxRestorePointTrail) {
+export async function saveSandboxRestorePointTrail(restorePointsPath: string, trail: SandboxRestorePointTrail) {
   await mkdir(path.dirname(restorePointsPath), { recursive: true });
   await writeFile(restorePointsPath, `${JSON.stringify(trail, null, 2)}\n`, "utf8");
 }
@@ -64,7 +64,7 @@ export async function listSandboxRestorePoints(params: {
   limit?: number;
 }) {
   const restorePointsPath = resolveSandboxRestorePointsPath(params.configPath);
-  const trail = await loadRestorePointTrail(restorePointsPath);
+  const trail = await loadSandboxRestorePointTrail(restorePointsPath);
   const limit = Math.max(1, params.limit ?? 10);
   return {
     restorePointsPath,
@@ -92,7 +92,7 @@ export async function createSandboxRestorePoint(params: {
 
   const createdAt = new Date().toISOString();
   const restorePointsPath = resolveSandboxRestorePointsPath(params.configPath);
-  const trail = await loadRestorePointTrail(restorePointsPath);
+  const trail = await loadSandboxRestorePointTrail(restorePointsPath);
   const record = sandboxRestorePointSchema.parse({
     id: buildRestorePointId(createdAt, params.source),
     createdAt,
@@ -110,7 +110,7 @@ export async function createSandboxRestorePoint(params: {
     updatedAt: createdAt,
     records: [...trail.records, record].slice(-30),
   });
-  await saveRestorePointTrail(restorePointsPath, nextTrail);
+  await saveSandboxRestorePointTrail(restorePointsPath, nextTrail);
   return {
     status: "created" as const,
     restorePointsPath,

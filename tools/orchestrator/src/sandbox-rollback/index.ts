@@ -3,6 +3,7 @@ import type { LoadedGitHubSandboxTargetRegistry } from "../github-sandbox-target
 import { buildSandboxImpactSummary, type SandboxImpactSummary } from "../sandbox-impact-summary";
 import type { OrchestratorState } from "../schemas";
 import { listSandboxRestorePoints } from "../sandbox-restore-points";
+import { evaluateSandboxRollbackGovernance } from "../sandbox-rollback-governance";
 import { applySandboxRegistryChange, buildSandboxRegistryDiff, reviewSandboxRegistryChange } from "../sandbox-change-review";
 
 export type SandboxRollbackResult = {
@@ -70,6 +71,52 @@ export async function runSandboxRollback(params: {
     affectedProfileIds,
     defaultProfileId: params.loadedRegistry.registry.defaultProfileId,
   });
+
+  const governance = await evaluateSandboxRollbackGovernance({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.loadedRegistry,
+    restorePoint,
+    actorSource: params.actorSource,
+    commandSource: params.commandSource ?? null,
+  });
+
+  if (governance.status !== "ready") {
+    const audit = await appendSandboxAuditRecord({
+      configPath: params.configPath,
+      action:
+        params.mode === "preview"
+          ? "rollback-preview"
+          : params.mode === "validate"
+            ? "rollback-validate"
+            : "rollback-apply",
+      profileId: null,
+      previousRegistry: params.loadedRegistry.registry,
+      nextRegistry: proposedRegistry,
+      actorSource: params.actorSource,
+      commandSource: params.commandSource ?? null,
+      restorePointId: restorePoint.id,
+      rollbackMode: params.mode,
+      decision: governance.status,
+      diffSummary,
+      failureReason: governance.reason?.code ?? null,
+    });
+    return {
+      status: governance.status,
+      mode: params.mode,
+      restorePointId: restorePoint.id,
+      affectedProfileIds,
+      blockedProfileIds: governance.status === "blocked" ? affectedProfileIds : [],
+      manualRequiredProfileIds: governance.status === "manual_required" ? affectedProfileIds : [],
+      diffSummary,
+      impactSummary,
+      summary: governance.summary,
+      failureReason: governance.reason?.code ?? null,
+      suggestedNextAction: governance.suggestedNextAction,
+      auditId: audit.record.id,
+      appliedRegistry: null,
+    } satisfies SandboxRollbackResult;
+  }
 
   if (diffSummary.length === 0) {
     const audit = await appendSandboxAuditRecord({

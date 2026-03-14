@@ -513,6 +513,7 @@ Sandbox target registry:
   - `node .tmp/orchestrator/src/cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
   - `node .tmp/orchestrator/src/cli.js sandbox:audit --sandbox-config .tmp/orchestrator-sandbox.json`
   - `node .tmp/orchestrator/src/cli.js sandbox:restore-points --sandbox-config .tmp/orchestrator-sandbox.json`
+  - `node .tmp/orchestrator/src/cli.js sandbox:restore-points:prune --sandbox-config .tmp/orchestrator-sandbox.json --retain-recent 10 --max-age-hours 720`
   - `node .tmp/orchestrator/src/cli.js sandbox:guardrails --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
   - `node .tmp/orchestrator/src/cli.js sandbox:export --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --output .tmp/sandbox-default.json`
   - `node .tmp/orchestrator/src/cli.js sandbox:import --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json --mode preview`
@@ -525,6 +526,10 @@ Sandbox target registry:
   - `node .tmp/orchestrator/src/cli.js sandbox:rollback:preview --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...`
   - `node .tmp/orchestrator/src/cli.js sandbox:rollback:validate --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...`
   - `node .tmp/orchestrator/src/cli.js sandbox:rollback:apply --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...`
+  - `node .tmp/orchestrator/src/cli.js sandbox:rollback:governance --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...`
+  - `node .tmp/orchestrator/src/cli.js sandbox:batch-recovery:preview --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review`
+  - `node .tmp/orchestrator/src/cli.js sandbox:batch-recovery:validate --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-ids sandbox-restore:...,sandbox-restore:...`
+  - `node .tmp/orchestrator/src/cli.js sandbox:batch-recovery:apply --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-ids sandbox-restore:...,sandbox-restore:... --allow-partial true`
 - safe operator flow:
   - inspect available bundles with `sandbox:bundle:list` and `sandbox:bundle:show`
   - inspect `sandbox:bundle:governance` before attaching a bundle to an existing or default profile
@@ -540,7 +545,10 @@ Sandbox target registry:
   - use `sandbox:batch:preview` before any multi-profile bundle rollout
   - use `sandbox:batch:validate` after preview if you need a gated all-clear before `sandbox:batch:apply`
   - inspect `sandbox:restore-points` before rollback so you know which apply/import/batch change will be undone
+  - inspect `sandbox:rollback:governance` before any rollback apply if you need to know whether a restore point is stale, default-unsafe, or otherwise blocked
   - always run `sandbox:rollback:preview` before `sandbox:rollback:validate` or `sandbox:rollback:apply`
+  - use `sandbox:batch-recovery:preview` and `sandbox:batch-recovery:validate` before any multi-restore recovery
+  - prune stale restore points with `sandbox:restore-points:prune`, but only after checking whether recent audit or manual_required work still references them
   - run `reporting:precheck` to confirm target resolution, governance, guardrails, and permission readiness
   - only run `reporting:run-live-smoke` or `reporting:live-success-smoke` when the profile resolves to a known-safe repo/issue/pr target
 - bundle rules:
@@ -575,8 +583,12 @@ Sandbox target registry:
   - `sandbox:batch:validate` requires the batch to pass governance, guardrails, conflict checks, and default profile safety
   - `sandbox:batch:apply` returns one of `applied`, `partially_applied`, `blocked`, `manual_required`, or `failed`
   - `sandbox:rollback:preview` shows the rollback diff and impact summary without changing live config
+  - `sandbox:rollback:governance` reports whether a restore point is still valid, stale, default-safe, and structurally compatible with the current registry
   - `sandbox:rollback:validate` re-runs governance, guardrails, restore point availability, and default profile safety before apply
   - `sandbox:rollback:apply` returns one of `restored`, `blocked`, `manual_required`, `failed`, or `no_op`
+  - `sandbox:batch-recovery:preview` / `validate` / `apply` work across multiple restore points or profile-backed restore coverage, and report `restored`, `partially_restored`, `blocked`, `manual_required`, `failed`, or `no_op`
+  - restore retention keeps the latest restore point, the recent N restore points, restore points referenced by recent rollback audit, and any restore point still associated with unresolved manual_required work
+  - `sandbox:restore-points:prune` only removes expired restore points that are not protected by retention rules
   - no-op apply or no-op rollback does not create a new restore point
   - import payloads may be:
     - a single profile payload (`kind=profile`)
@@ -602,7 +614,10 @@ Sandbox target registry:
    - no valid batch selection -> `manual_required`
    - batch with invalid profiles and `--allow-partial false` -> `blocked` or `manual_required`
    - missing restore point -> `manual_required`
-   - rollback that would violate governance/guardrails/default safety -> `blocked` or `manual_required`
+  - rollback that would violate governance/guardrails/default safety -> `blocked` or `manual_required`
+   - stale or missing restore point -> `manual_required`
+   - batch recovery with missing coverage or invalid restore ids -> `manual_required`
+   - expired restore point that is still referenced by recent audit -> retained until the operator explicitly resolves the related review/rollback flow
 
 Minimal registry example:
 ```json

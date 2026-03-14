@@ -136,6 +136,9 @@ jobs:
           npm run test:orchestrator:sandbox-restore-points
           npm run test:orchestrator:sandbox-rollback
           npm run test:orchestrator:sandbox-rollback-impact
+          npm run test:orchestrator:sandbox-rollback-governance
+          npm run test:orchestrator:sandbox-batch-recovery
+          npm run test:orchestrator:sandbox-restore-retention
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary
