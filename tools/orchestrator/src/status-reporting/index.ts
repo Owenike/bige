@@ -741,6 +741,8 @@ export async function inspectGitHubReportingOperatorSummary(params: {
     `Sandbox batch: ${params.state.lastBatchChangeStatus} / ${params.state.lastBatchImpactSummary ?? "none"}`,
     `Sandbox batch affected: ${params.state.lastBatchAffectedProfiles.join(", ") || "none"}`,
     `Sandbox batch blocked: ${params.state.lastBatchBlockedProfiles.join(", ") || "none"}`,
+    `Sandbox restore point: ${params.state.lastRestorePointId ?? "none"} / ${params.state.lastRestorePointSummary ?? "none"}`,
+    `Sandbox rollback: ${params.state.lastRollbackStatus} / ${params.state.lastRollbackImpactSummary ?? "none"} / audit=${params.state.lastRollbackAuditId ?? "none"}`,
     `Last auth smoke target: ${params.state.lastAuthSmokeTarget?.repository ?? "none"}:${params.state.lastAuthSmokeTarget?.targetType ?? "none"}:${params.state.lastAuthSmokeTarget?.targetNumber ?? "none"}`,
     `Last auth smoke success at: ${params.state.lastAuthSmokeSuccessAt ?? "none"}`,
     `Last auth smoke summary: ${params.state.lastLiveSmokeSummary ?? "none"}`,

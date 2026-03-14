@@ -512,6 +512,7 @@ Sandbox target registry:
   - `node .tmp/orchestrator/src/cli.js sandbox:validate --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
   - `node .tmp/orchestrator/src/cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
   - `node .tmp/orchestrator/src/cli.js sandbox:audit --sandbox-config .tmp/orchestrator-sandbox.json`
+  - `node .tmp/orchestrator/src/cli.js sandbox:restore-points --sandbox-config .tmp/orchestrator-sandbox.json`
   - `node .tmp/orchestrator/src/cli.js sandbox:guardrails --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
   - `node .tmp/orchestrator/src/cli.js sandbox:export --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --output .tmp/sandbox-default.json`
   - `node .tmp/orchestrator/src/cli.js sandbox:import --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json --mode preview`
@@ -521,6 +522,9 @@ Sandbox target registry:
   - `node .tmp/orchestrator/src/cli.js sandbox:batch:preview --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only`
   - `node .tmp/orchestrator/src/cli.js sandbox:batch:validate --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only`
   - `node .tmp/orchestrator/src/cli.js sandbox:batch:apply --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only --allow-partial false`
+  - `node .tmp/orchestrator/src/cli.js sandbox:rollback:preview --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...`
+  - `node .tmp/orchestrator/src/cli.js sandbox:rollback:validate --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...`
+  - `node .tmp/orchestrator/src/cli.js sandbox:rollback:apply --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...`
 - safe operator flow:
   - inspect available bundles with `sandbox:bundle:list` and `sandbox:bundle:show`
   - inspect `sandbox:bundle:governance` before attaching a bundle to an existing or default profile
@@ -535,6 +539,8 @@ Sandbox target registry:
   - use `sandbox:diff` or `sandbox:review` to inspect change sets before `sandbox:apply`
   - use `sandbox:batch:preview` before any multi-profile bundle rollout
   - use `sandbox:batch:validate` after preview if you need a gated all-clear before `sandbox:batch:apply`
+  - inspect `sandbox:restore-points` before rollback so you know which apply/import/batch change will be undone
+  - always run `sandbox:rollback:preview` before `sandbox:rollback:validate` or `sandbox:rollback:apply`
   - run `reporting:precheck` to confirm target resolution, governance, guardrails, and permission readiness
   - only run `reporting:run-live-smoke` or `reporting:live-success-smoke` when the profile resolves to a known-safe repo/issue/pr target
 - bundle rules:
@@ -559,6 +565,7 @@ Sandbox target registry:
   - `sandbox:diff` is the operator-friendly shorthand when you want the change summary without writing anything
   - `sandbox:review` records a review decision in sandbox audit without applying the config change
   - `sandbox:apply` only writes when bundle references, governance, default safety, and guardrails all pass
+  - every non-no-op `sandbox:apply`, import apply, and batch apply creates a restore point before writing the live config
   - `sandbox:batch:preview` shows:
     - affected profile count
     - changed field summary
@@ -567,6 +574,10 @@ Sandbox target registry:
     - default profile impact
   - `sandbox:batch:validate` requires the batch to pass governance, guardrails, conflict checks, and default profile safety
   - `sandbox:batch:apply` returns one of `applied`, `partially_applied`, `blocked`, `manual_required`, or `failed`
+  - `sandbox:rollback:preview` shows the rollback diff and impact summary without changing live config
+  - `sandbox:rollback:validate` re-runs governance, guardrails, restore point availability, and default profile safety before apply
+  - `sandbox:rollback:apply` returns one of `restored`, `blocked`, `manual_required`, `failed`, or `no_op`
+  - no-op apply or no-op rollback does not create a new restore point
   - import payloads may be:
     - a single profile payload (`kind=profile`)
     - a full registry payload (`kind=registry`)
@@ -580,8 +591,9 @@ Sandbox target registry:
     - `manual_required`
 - audit trail:
   - `create`, `update`, `delete`, `set-default`, `enable`, and `disable` all write audit records
-  - `review` and `import-apply` also write audit records so batch review/apply remains traceable
+  - `review`, `import-apply`, `batch-apply`, `rollback-preview`, `rollback-validate`, and `rollback-apply` also write audit records so review/apply/rollback remains traceable
   - each audit record stores changed fields, previous summary, next summary, and command source
+  - restore points persist affected profiles, previous bundle linkage, previous default profile state, and diff summary in a sidecar restore-point trail
   - recent audit summaries are surfaced in operator diagnostics and live smoke precheck output
  - blocked/manual_required cases:
    - disabled bundle/profile -> `blocked`
@@ -589,6 +601,8 @@ Sandbox target registry:
    - bundle/profile repository mismatch -> `manual_required`
    - no valid batch selection -> `manual_required`
    - batch with invalid profiles and `--allow-partial false` -> `blocked` or `manual_required`
+   - missing restore point -> `manual_required`
+   - rollback that would violate governance/guardrails/default safety -> `blocked` or `manual_required`
 
 Minimal registry example:
 ```json
@@ -661,6 +675,7 @@ node .tmp/orchestrator/src/cli.js sandbox:show --sandbox-config .tmp/orchestrato
 node .tmp/orchestrator/src/cli.js sandbox:validate --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:audit --sandbox-config .tmp/orchestrator-sandbox.json
+node .tmp/orchestrator/src/cli.js sandbox:restore-points --sandbox-config .tmp/orchestrator-sandbox.json
 node .tmp/orchestrator/src/cli.js sandbox:guardrails --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:export --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --output .tmp/sandbox-default.json
 node .tmp/orchestrator/src/cli.js sandbox:import --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json --mode preview
@@ -670,6 +685,9 @@ node .tmp/orchestrator/src/cli.js sandbox:apply --sandbox-config .tmp/orchestrat
 node .tmp/orchestrator/src/cli.js sandbox:batch:preview --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only
 node .tmp/orchestrator/src/cli.js sandbox:batch:validate --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only
 node .tmp/orchestrator/src/cli.js sandbox:batch:apply --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only --allow-partial false
+node .tmp/orchestrator/src/cli.js sandbox:rollback:preview --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...
+node .tmp/orchestrator/src/cli.js sandbox:rollback:validate --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...
+node .tmp/orchestrator/src/cli.js sandbox:rollback:apply --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...
 ```
 
 Typical next actions:
@@ -685,6 +703,8 @@ Typical next actions:
 - bundle missing -> add the bundle definition or remove the stale `bundleId` before review/apply
 - bundle governance failed -> inspect `sandbox:bundle:governance` and fix `enabled`, `allowAsDefault`, `allowLiveSmoke`, or target-type compatibility
 - import preview blocked -> inspect `lastSandboxDiffSummary`, `lastSandboxReviewStatus`, and the first blocked reason before retrying
+- restore point missing -> inspect `sandbox:restore-points` and pick a valid restore point id before rollback
+- rollback blocked -> inspect `lastRollbackImpactSummary`, `lastRollbackAuditId`, and the first governance or guardrails failure before retrying
 - default profile unsafe -> change the action policy or choose a safer default before `sandbox:apply`
 - batch preview blocked -> inspect `lastBatchImpactSummary`, `lastBatchBlockedProfiles`, and decide whether `--allow-partial true` is actually acceptable
 

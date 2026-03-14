@@ -84,7 +84,17 @@ async function saveAuditTrail(auditPath: string, auditTrail: SandboxAuditTrail) 
 }
 
 export function formatSandboxAuditRecord(record: SandboxAuditRecord) {
-  return `${record.changedAt} ${record.action} profile=${record.profileId ?? "none"} fields=${record.changedFields.join(",") || "none"} source=${record.actorSource}`;
+  return [
+    `${record.changedAt}`,
+    record.action,
+    `profile=${record.profileId ?? "none"}`,
+    `fields=${record.changedFields.join(",") || "none"}`,
+    `source=${record.actorSource}`,
+    `restore=${record.restorePointId ?? "none"}`,
+    `rollback=${record.rollbackMode ?? "none"}`,
+    `decision=${record.decision ?? "none"}`,
+    `failure=${record.failureReason ?? "none"}`,
+  ].join(" ");
 }
 
 export function formatSandboxAuditTrail(records: SandboxAuditRecord[]) {
@@ -116,6 +126,11 @@ export async function appendSandboxAuditRecord(params: {
   nextRegistry: GitHubSandboxTargetRegistry;
   actorSource: string;
   commandSource?: string | null;
+  restorePointId?: string | null;
+  rollbackMode?: "preview" | "validate" | "apply" | null;
+  decision?: string | null;
+  diffSummary?: string[];
+  failureReason?: string | null;
 }) {
   const changedAt = new Date().toISOString();
   const auditPath = resolveSandboxAuditPath(params.configPath);
@@ -130,6 +145,11 @@ export async function appendSandboxAuditRecord(params: {
     changedFields: detectChangedFields(params.previousRegistry, params.nextRegistry, params.profileId),
     actorSource: params.actorSource,
     commandSource: params.commandSource ?? null,
+    restorePointId: params.restorePointId ?? null,
+    rollbackMode: params.rollbackMode ?? null,
+    decision: params.decision ?? null,
+    diffSummary: params.diffSummary ?? [],
+    failureReason: params.failureReason ?? null,
   });
   const nextTrail = sandboxAuditTrailSchema.parse({
     updatedAt: changedAt,

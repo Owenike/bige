@@ -45,6 +45,8 @@ export type SandboxBatchChangeResult = {
   guardrailsStatus: "ready" | "blocked" | "manual_required";
   proposedRegistry: GitHubSandboxTargetRegistry | null;
   appliedRegistry: GitHubSandboxTargetRegistry | null;
+  restorePointId?: string | null;
+  restorePointSummary?: string | null;
 };
 
 type BatchProfileChanges = {
@@ -358,6 +360,8 @@ export async function runSandboxBatchChange(params: {
     proposedRegistry: activeProposedRegistry,
     actorSource: params.actorSource,
     commandSource: params.commandSource ?? null,
+    applySource: "batch",
+    auditAction: "batch-apply",
   });
 
   if (applied.status !== "ready" || !applied.appliedRegistry) {
@@ -402,5 +406,7 @@ export async function runSandboxBatchChange(params: {
     guardrailsStatus: applied.guardrailsStatus,
     proposedRegistry: activeProposedRegistry,
     appliedRegistry: applied.appliedRegistry,
+    restorePointId: applied.restorePointId ?? null,
+    restorePointSummary: applied.restorePointSummary ?? null,
   } satisfies SandboxBatchChangeResult;
 }

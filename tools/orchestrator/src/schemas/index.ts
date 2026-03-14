@@ -682,6 +682,10 @@ export const sandboxAuditActionSchema = z.enum([
   "bundle-apply",
   "batch-preview",
   "batch-apply",
+  "restore-point",
+  "rollback-preview",
+  "rollback-validate",
+  "rollback-apply",
 ]);
 
 export const sandboxAuditProfileSummarySchema = z.object({
@@ -707,6 +711,11 @@ export const sandboxAuditRecordSchema = z.object({
   changedFields: z.array(z.string()).default([]),
   actorSource: z.string(),
   commandSource: z.string().nullable().default(null),
+  restorePointId: z.string().nullable().default(null),
+  rollbackMode: z.enum(["preview", "validate", "apply"]).nullable().default(null),
+  decision: z.string().nullable().default(null),
+  diffSummary: z.array(z.string()).default([]),
+  failureReason: z.string().nullable().default(null),
 });
 
 export const sandboxAuditTrailSchema = z.object({
@@ -737,6 +746,34 @@ export const sandboxBatchChangeStatusSchema = z.enum([
   "manual_required",
   "failed",
 ]);
+export const sandboxRollbackStatusSchema = z.enum([
+  "not_run",
+  "previewed",
+  "validated",
+  "restored",
+  "partially_restored",
+  "blocked",
+  "manual_required",
+  "failed",
+  "no_op",
+]);
+
+export const sandboxRestorePointSchema = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  source: z.enum(["apply", "import", "batch", "rollback"]),
+  reason: z.string(),
+  affectedProfileIds: z.array(z.string()).default([]),
+  previousDefaultProfileId: z.string().nullable().default(null),
+  previousProfileSummaries: z.array(sandboxAuditProfileSummarySchema).default([]),
+  previousRegistry: githubSandboxTargetRegistrySchema,
+  diffSummary: z.array(z.string()).default([]),
+});
+
+export const sandboxRestorePointTrailSchema = z.object({
+  updatedAt: z.string(),
+  records: z.array(sandboxRestorePointSchema).default([]),
+});
 
 export const githubLiveAuthEvidenceSchema = z.object({
   attemptedAt: z.string(),
@@ -1066,6 +1103,11 @@ export const orchestratorStateSchema = z.object({
   lastBatchImpactSummary: z.string().nullable().default(null),
   lastBatchAffectedProfiles: z.array(z.string()).default([]),
   lastBatchBlockedProfiles: z.array(z.string()).default([]),
+  lastRestorePointId: z.string().nullable().default(null),
+  lastRestorePointSummary: z.string().nullable().default(null),
+  lastRollbackStatus: sandboxRollbackStatusSchema.default("not_run"),
+  lastRollbackImpactSummary: z.string().nullable().default(null),
+  lastRollbackAuditId: z.string().nullable().default(null),
   authSmokeStatus: githubAuthSmokeStatusSchema.default("not_run"),
   authSmokeSuccessStatus: z.enum(["not_run", "success", "non_success"]).default("not_run"),
   authSmokeMode: githubAuthSmokeModeSchema.default("none"),
@@ -1156,6 +1198,8 @@ export type GitHubSandboxTargetRegistry = z.infer<typeof githubSandboxTargetRegi
 export type SandboxAuditAction = z.infer<typeof sandboxAuditActionSchema>;
 export type SandboxAuditRecord = z.infer<typeof sandboxAuditRecordSchema>;
 export type SandboxAuditTrail = z.infer<typeof sandboxAuditTrailSchema>;
+export type SandboxRestorePoint = z.infer<typeof sandboxRestorePointSchema>;
+export type SandboxRestorePointTrail = z.infer<typeof sandboxRestorePointTrailSchema>;
 export type GitHubLiveAuthEvidence = z.infer<typeof githubLiveAuthEvidenceSchema>;
 export type AuditTrail = z.infer<typeof auditTrailSchema>;
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
@@ -1723,6 +1767,11 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastBatchImpactSummary",
     "lastBatchAffectedProfiles",
     "lastBatchBlockedProfiles",
+    "lastRestorePointId",
+    "lastRestorePointSummary",
+    "lastRollbackStatus",
+    "lastRollbackImpactSummary",
+    "lastRollbackAuditId",
     "authSmokeStatus",
     "authSmokeSuccessStatus",
     "authSmokeMode",
@@ -2466,6 +2515,14 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       type: "array",
       items: { type: "string" },
     },
+    lastRestorePointId: { type: "string", nullable: true },
+    lastRestorePointSummary: { type: "string", nullable: true },
+    lastRollbackStatus: {
+      type: "string",
+      enum: ["not_run", "previewed", "validated", "restored", "partially_restored", "blocked", "manual_required", "failed", "no_op"],
+    },
+    lastRollbackImpactSummary: { type: "string", nullable: true },
+    lastRollbackAuditId: { type: "string", nullable: true },
     authSmokeStatus: {
       type: "string",
       enum: ["not_run", "skipped", "passed", "failed", "blocked", "manual_required"],

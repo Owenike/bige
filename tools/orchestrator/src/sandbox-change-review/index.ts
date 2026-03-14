@@ -3,6 +3,7 @@ import type { OrchestratorState, GitHubSandboxTargetRegistry } from "../schemas"
 import { appendSandboxAuditRecord } from "../sandbox-audit";
 import { evaluateSandboxBundleGovernance } from "../sandbox-bundle-governance";
 import { evaluateSandboxProfileGovernance, evaluateSandboxGuardrails } from "../sandbox-governance";
+import { createSandboxRestorePoint } from "../sandbox-restore-points";
 import {
   cloneSandboxRegistry,
   saveSandboxRegistry,
@@ -292,6 +293,8 @@ export async function applySandboxRegistryChange(params: {
   proposedRegistry: GitHubSandboxTargetRegistry;
   actorSource: string;
   commandSource?: string | null;
+  applySource?: "apply" | "import" | "batch" | "rollback";
+  auditAction?: "import-apply" | "batch-apply" | "rollback-apply";
 }) {
   const review = await reviewSandboxRegistryChange({
     ...params,
@@ -302,24 +305,53 @@ export async function applySandboxRegistryChange(params: {
       ...review,
       appliedRegistry: null,
       applyAuditId: null,
+      restorePointId: null,
+      restorePointSummary: null,
     };
   }
+
+  if (review.diffSummary.length === 0) {
+    return {
+      ...review,
+      summary: "Sandbox apply detected no changes, so no restore point or write was needed.",
+      suggestedNextAction: "No further sandbox apply work is needed.",
+      appliedRegistry: params.loadedRegistry.registry,
+      applyAuditId: null,
+      restorePointId: null,
+      restorePointSummary: "No restore point was created because the reviewed change set was a no-op.",
+    };
+  }
+
+  const restorePoint = await createSandboxRestorePoint({
+    configPath: params.configPath,
+    previousRegistry: params.loadedRegistry.registry,
+    affectedProfileIds: review.affectedProfileIds,
+    diffSummary: review.diffSummary,
+    source: params.applySource ?? "apply",
+    reason: `${params.actorSource}:${params.commandSource ?? "none"}`,
+  });
 
   const saved = await saveSandboxRegistry(params.configPath, params.proposedRegistry);
   const applyAudit = await appendSandboxAuditRecord({
     configPath: params.configPath,
-    action: "import-apply",
+    action: params.auditAction ?? "import-apply",
     profileId: null,
     previousRegistry: params.loadedRegistry.registry,
     nextRegistry: saved,
     actorSource: params.actorSource,
     commandSource: params.commandSource ?? null,
+    restorePointId: restorePoint.record?.id ?? null,
+    decision: "applied",
+    diffSummary: review.diffSummary,
   });
   return {
     ...review,
-    summary: review.diffSummary.length === 0 ? "Sandbox apply skipped because the registry already matched the reviewed change set." : `Sandbox change set applied to ${review.affectedProfileIds.length} profile(s).`,
-    suggestedNextAction: review.diffSummary.length === 0 ? "No further sandbox apply work is needed." : "Re-run sandbox governance or sandbox validate if you want a post-apply verification.",
+    summary: `Sandbox change set applied to ${review.affectedProfileIds.length} profile(s).`,
+    suggestedNextAction: "Re-run sandbox governance or sandbox validate if you want a post-apply verification.",
     appliedRegistry: saved,
     applyAuditId: applyAudit.record.id,
+    restorePointId: restorePoint.record?.id ?? null,
+    restorePointSummary: restorePoint.summary,
+    applySource: params.applySource ?? "apply",
   };
 }

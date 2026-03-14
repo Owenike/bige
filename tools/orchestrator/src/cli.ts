@@ -58,6 +58,8 @@ import { exportSandboxProfiles, importSandboxProfiles } from "./sandbox-import-e
 import { applySandboxRegistryChange, buildSandboxRegistryDiff, reviewSandboxRegistryChange } from "./sandbox-change-review";
 import { runSandboxBatchChange } from "./sandbox-batch-change";
 import { formatSandboxImpactSummary } from "./sandbox-impact-summary";
+import { listSandboxRestorePoints } from "./sandbox-restore-points";
+import { runSandboxRollback } from "./sandbox-rollback";
 import { ingestGitHubWebhook } from "./webhook";
 import { formatWebhookHostingConfig, loadWebhookHostingConfig } from "./runtime-config";
 import { formatWebhookShutdownSummary, startWebhookHosting } from "./webhook-hosting";
@@ -295,11 +297,14 @@ function summarizeSandboxImportExport(result: {
   failureReason: string | null;
   suggestedNextAction: string;
   outputPath: string | null;
+  restorePointId?: string | null;
+  restorePointSummary?: string | null;
 }) {
   return [
     `Sandbox import/export: ${result.status} / ${result.mode}`,
     `Affected profiles: ${result.affectedProfileIds.join(", ") || "none"}`,
     `Diff: ${result.diffSummary.join(" | ") || "none"}`,
+    `Restore point: ${result.restorePointId ?? "none"} / ${result.restorePointSummary ?? "none"}`,
     `Summary: ${result.summary}`,
     `Failure: ${result.failureReason ?? "none"}`,
     `Next action: ${result.suggestedNextAction}`,
@@ -344,9 +349,63 @@ function summarizeSandboxBatchChange(result: {
   impactSummary: {
     summaryText: string;
   };
+  restorePointId?: string | null;
+  restorePointSummary?: string | null;
 }) {
   return [
     `Sandbox batch change: ${result.status} / ${result.mode}`,
+    `Affected profiles: ${result.affectedProfileIds.join(", ") || "none"}`,
+    `Blocked profiles: ${result.blockedProfileIds.join(", ") || "none"}`,
+    `Manual required profiles: ${result.manualRequiredProfileIds.join(", ") || "none"}`,
+    `Impact: ${result.impactSummary.summaryText}`,
+    `Restore point: ${result.restorePointId ?? "none"} / ${result.restorePointSummary ?? "none"}`,
+    `Diff: ${result.diffSummary.join(" | ") || "none"}`,
+    `Summary: ${result.summary}`,
+    `Failure: ${result.failureReason ?? "none"}`,
+    `Next action: ${result.suggestedNextAction}`,
+  ].join("\n");
+}
+
+function summarizeSandboxRestorePoints(result: {
+  restorePointsPath: string;
+  records: Array<{
+    id: string;
+    createdAt: string;
+    source: string;
+    affectedProfileIds: string[];
+    previousDefaultProfileId: string | null;
+    reason: string;
+  }>;
+}) {
+  return [
+    `Sandbox restore points path: ${result.restorePointsPath}`,
+    `Restore points: ${result.records.length}`,
+    ...result.records.map(
+      (record) =>
+        `- ${record.createdAt} ${record.source} profiles=${record.affectedProfileIds.join(",") || "none"} default=${record.previousDefaultProfileId ?? "none"} reason=${record.reason}`,
+    ),
+  ].join("\n");
+}
+
+function summarizeSandboxRollback(result: {
+  status: string;
+  mode: string;
+  restorePointId: string | null;
+  affectedProfileIds: string[];
+  blockedProfileIds: string[];
+  manualRequiredProfileIds: string[];
+  diffSummary: string[];
+  impactSummary: {
+    summaryText: string;
+  };
+  summary: string;
+  failureReason: string | null;
+  suggestedNextAction: string;
+  auditId: string | null;
+}) {
+  return [
+    `Sandbox rollback: ${result.status} / ${result.mode}`,
+    `Restore point: ${result.restorePointId ?? "none"}`,
     `Affected profiles: ${result.affectedProfileIds.join(", ") || "none"}`,
     `Blocked profiles: ${result.blockedProfileIds.join(", ") || "none"}`,
     `Manual required profiles: ${result.manualRequiredProfileIds.join(", ") || "none"}`,
@@ -355,6 +414,7 @@ function summarizeSandboxBatchChange(result: {
     `Summary: ${result.summary}`,
     `Failure: ${result.failureReason ?? "none"}`,
     `Next action: ${result.suggestedNextAction}`,
+    `Audit: ${result.auditId ?? "none"}`,
   ].join("\n");
 }
 
@@ -983,6 +1043,19 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:restore-points") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required for sandbox:restore-points.");
+    }
+    const restorePoints = await listSandboxRestorePoints({
+      configPath,
+      limit: options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10,
+    });
+    process.stdout.write(`${summarizeSandboxRestorePoints(restorePoints)}\n\n${JSON.stringify(restorePoints, null, 2)}\n`);
+    return;
+  }
+
   if (command === "sandbox:governance") {
     const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
     const profileId = options.get("sandbox-profile") ?? sandboxRegistry.registry.defaultProfileId ?? null;
@@ -1070,6 +1143,9 @@ async function main() {
       lastSandboxImportExportStatus: result.status,
       lastSandboxImportExportSummary: result.summary,
       lastSandboxDiffSummary: result.diffSummary,
+      lastRestorePointId: result.mode === "apply" ? result.restorePointId ?? existingState.lastRestorePointId : existingState.lastRestorePointId,
+      lastRestorePointSummary:
+        result.mode === "apply" ? result.restorePointSummary ?? existingState.lastRestorePointSummary : existingState.lastRestorePointSummary,
       lastSandboxApplyStatus:
         result.mode === "apply" && result.status === "imported"
           ? "applied"
@@ -1133,6 +1209,7 @@ async function main() {
       proposedRegistry,
       actorSource: "sandbox:apply",
       commandSource: "cli",
+      applySource: "apply",
     });
     const updatedState = orchestratorStateSchema.parse({
       ...existingState,
@@ -1144,6 +1221,8 @@ async function main() {
           ? "applied"
           : applied.status,
       lastSandboxApplySummary: applied.summary,
+      lastRestorePointId: applied.restorePointId ?? existingState.lastRestorePointId,
+      lastRestorePointSummary: applied.restorePointSummary ?? existingState.lastRestorePointSummary,
       updatedAt: new Date().toISOString(),
     });
     await dependencies.storage.saveState(updatedState);
@@ -1216,6 +1295,9 @@ async function main() {
       lastBatchImpactSummary: result.impactSummary.summaryText,
       lastBatchAffectedProfiles: result.affectedProfileIds,
       lastBatchBlockedProfiles: [...result.blockedProfileIds, ...result.manualRequiredProfileIds],
+      lastRestorePointId: command === "sandbox:batch:apply" ? result.restorePointId ?? existingState.lastRestorePointId : existingState.lastRestorePointId,
+      lastRestorePointSummary:
+        command === "sandbox:batch:apply" ? result.restorePointSummary ?? existingState.lastRestorePointSummary : existingState.lastRestorePointSummary,
       lastSandboxApplyStatus: nextSandboxApplyStatus,
       lastSandboxApplySummary: command === "sandbox:batch:apply" ? result.summary : existingState.lastSandboxApplySummary,
       lastSandboxReviewStatus: nextSandboxReviewStatus,
@@ -1226,6 +1308,62 @@ async function main() {
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
       `${summarizeSandboxBatchChange(result)}\n\n${formatSandboxImpactSummary(result.impactSummary)}\n\n${JSON.stringify(result, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:rollback:preview" || command === "sandbox:rollback:validate" || command === "sandbox:rollback:apply") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const result = await runSandboxRollback({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      restorePointId: options.get("restore-point-id") ?? null,
+      mode:
+        command === "sandbox:rollback:preview"
+          ? "preview"
+          : command === "sandbox:rollback:validate"
+            ? "validate"
+            : "apply",
+      actorSource: command,
+      commandSource: "cli",
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastRestorePointId: result.restorePointId ?? existingState.lastRestorePointId,
+      lastRestorePointSummary:
+        result.restorePointId && result.status !== "no_op"
+          ? `Rollback source restore point '${result.restorePointId}' selected for ${result.mode}.`
+          : existingState.lastRestorePointSummary,
+      lastRollbackStatus: result.status,
+      lastRollbackImpactSummary: result.impactSummary.summaryText,
+      lastRollbackAuditId: result.auditId,
+      lastSandboxDiffSummary: result.diffSummary,
+      lastSandboxReviewStatus:
+        result.mode === "validate" && result.status === "validated"
+          ? "ready"
+          : result.mode === "validate" && (result.status === "blocked" || result.status === "manual_required")
+            ? result.status
+            : existingState.lastSandboxReviewStatus,
+      lastSandboxReviewSummary:
+        result.mode === "validate" ? result.summary : existingState.lastSandboxReviewSummary,
+      lastSandboxApplyStatus:
+        result.mode === "apply" && result.status === "restored"
+          ? "applied"
+          : result.mode === "apply" && (result.status === "blocked" || result.status === "manual_required")
+            ? result.status
+            : existingState.lastSandboxApplyStatus,
+      lastSandboxApplySummary:
+        result.mode === "apply" ? result.summary : existingState.lastSandboxApplySummary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${summarizeSandboxRollback(result)}\n\n${formatSandboxImpactSummary(result.impactSummary)}\n\n${JSON.stringify(result, null, 2)}\n`,
     );
     return;
   }
@@ -1773,6 +1911,7 @@ async function main() {
       "  node cli.js sandbox:validate --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:audit --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:restore-points --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:guardrails --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:export --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --output .tmp/sandbox-default.json",
       "  node cli.js sandbox:import --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json --mode preview",
@@ -1782,6 +1921,9 @@ async function main() {
       "  node cli.js sandbox:batch:preview --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only",
       "  node cli.js sandbox:batch:validate --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only",
       "  node cli.js sandbox:batch:apply --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only --allow-partial false",
+      "  node cli.js sandbox:rollback:preview --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...",
+      "  node cli.js sandbox:rollback:validate --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...",
+      "  node cli.js sandbox:rollback:apply --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...",
       "  node cli.js reporting:precheck --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:auth-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:run-live-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",

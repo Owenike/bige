@@ -50,6 +50,8 @@ export type SandboxImportExportResult = {
   outputPath: string | null;
   registry: GitHubSandboxTargetRegistry | null;
   auditId: string | null;
+  restorePointId?: string | null;
+  restorePointSummary?: string | null;
 };
 
 function buildImportTargetRegistry(
@@ -185,6 +187,8 @@ export async function importSandboxProfiles(params: {
     proposedRegistry,
     actorSource: params.actorSource,
     commandSource: params.commandSource ?? "cli",
+    applySource: "import",
+    auditAction: "import-apply",
   });
   return {
     status: applied.status === "ready" ? "imported" : applied.status,
@@ -197,5 +201,7 @@ export async function importSandboxProfiles(params: {
     outputPath: null,
     registry: applied.appliedRegistry ?? null,
     auditId: applied.applyAuditId ?? applied.auditId,
+    restorePointId: applied.restorePointId ?? null,
+    restorePointSummary: applied.restorePointSummary ?? null,
   } satisfies SandboxImportExportResult;
 }
