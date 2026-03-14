@@ -7,9 +7,15 @@ export type OrchestratorDiagnostics = {
   profileId: string;
   sourceEventType: OrchestratorState["sourceEventType"];
   sourceEventId: string | null;
+  webhookEventType: OrchestratorState["webhookEventType"];
+  webhookDeliveryId: string | null;
+  webhookSignatureStatus: OrchestratorState["webhookSignatureStatus"];
   idempotencyKey: string | null;
   idempotencyStatus: OrchestratorState["idempotencyStatus"];
   triggerPolicyId: string | null;
+  parsedCommand: string | null;
+  commandRoutingStatus: OrchestratorState["commandRoutingStatus"];
+  commandRoutingSummary: string | null;
   lastIterationSummary: string;
   plannerSummary: string;
   reviewerSummary: string;
@@ -53,6 +59,8 @@ export type OrchestratorDiagnostics = {
   statusReporting: {
     status: OrchestratorState["statusReportStatus"];
     summary: string | null;
+    correlationId: string | null;
+    target: string | null;
   };
   nextSuggestedAction: string;
 };
@@ -111,9 +119,15 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
     profileId: state.task.profileId,
     sourceEventType: state.sourceEventType,
     sourceEventId: state.sourceEventId,
+    webhookEventType: state.webhookEventType,
+    webhookDeliveryId: state.webhookDeliveryId,
+    webhookSignatureStatus: state.webhookSignatureStatus,
     idempotencyKey: state.idempotencyKey,
     idempotencyStatus: state.idempotencyStatus,
     triggerPolicyId: state.triggerPolicyId,
+    parsedCommand: state.parsedCommand?.rawCommand ?? null,
+    commandRoutingStatus: state.commandRoutingStatus,
+    commandRoutingSummary: state.commandRoutingDecision?.summary ?? null,
     lastIterationSummary:
       latestIteration?.executionReport?.summaryOfChanges.join(" | ") ??
       state.lastExecutionReport?.summaryOfChanges.join(" | ") ??
@@ -159,6 +173,8 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
     statusReporting: {
       status: state.statusReportStatus,
       summary: state.lastStatusReportSummary?.summary ?? null,
+      correlationId: state.statusReportCorrelationId,
+      target: state.lastStatusReportTarget?.targetUrl ?? state.lastStatusReportTarget?.correlationId ?? null,
     },
     nextSuggestedAction: resolveNextSuggestedAction(state, preflight),
   } satisfies OrchestratorDiagnostics;
@@ -168,14 +184,15 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
   const lines = [
     `State: ${summary.stateId}`,
     `Status: ${summary.status} (iteration ${summary.iterationNumber}, profile ${summary.profileId})`,
-    `Source: type=${summary.sourceEventType}, eventId=${summary.sourceEventId ?? "none"}, idempotency=${summary.idempotencyKey ?? "none"} (${summary.idempotencyStatus}), triggerPolicy=${summary.triggerPolicyId ?? "none"}`,
+    `Source: type=${summary.sourceEventType}, eventId=${summary.sourceEventId ?? "none"}, webhook=${summary.webhookEventType}/${summary.webhookDeliveryId ?? "none"}/${summary.webhookSignatureStatus}, idempotency=${summary.idempotencyKey ?? "none"} (${summary.idempotencyStatus}), triggerPolicy=${summary.triggerPolicyId ?? "none"}`,
+    `Command: raw=${summary.parsedCommand ?? "none"}, routing=${summary.commandRoutingStatus}, summary=${summary.commandRoutingSummary ?? "none"}`,
     `Planner: ${summary.plannerSummary}`,
     `Reviewer: ${summary.reviewerSummary}`,
     `Last iteration: ${summary.lastIterationSummary}`,
     `Artifacts: backend=${summary.artifactSummary.backendType}, backendHealth=${summary.artifactSummary.backendHealthStatus}, queue=${summary.artifactSummary.queueStatus}, transfer=${summary.artifactSummary.transferStatus}, repair=${summary.artifactSummary.repairStatus}, patch=${summary.artifactSummary.patchStatus}, promotion=${summary.artifactSummary.promotionStatus}, handoff=${summary.artifactSummary.handoffStatus}, prDraft=${summary.artifactSummary.prDraftStatus}, liveAcceptance=${summary.artifactSummary.liveAcceptanceStatus}, livePass=${summary.artifactSummary.livePassStatus}, workspace=${summary.artifactSummary.workspaceStatus}`,
     `Worker: status=${summary.workerSummary.workerStatus}, supervision=${summary.workerSummary.supervisionStatus}, workerId=${summary.workerSummary.workerId ?? "none"}, leaseOwner=${summary.workerSummary.leaseOwner ?? "none"}, lastHeartbeat=${summary.workerSummary.lastHeartbeatAt ?? "none"}, lastLeaseRenewal=${summary.workerSummary.lastLeaseRenewalAt ?? "none"}, daemonHeartbeat=${summary.workerSummary.daemonHeartbeatAt ?? "none"}, cancel=${summary.workerSummary.cancellationStatus}, pause=${summary.workerSummary.pauseStatus}, retries=${summary.workerSummary.retryCount}`,
     `Recovery: action=${summary.recoverySummary.action ?? "none"}, reason=${summary.recoverySummary.reason ?? "none"}`,
-    `Status reporting: status=${summary.statusReporting.status}, summary=${summary.statusReporting.summary ?? "none"}`,
+    `Status reporting: status=${summary.statusReporting.status}, correlation=${summary.statusReporting.correlationId ?? "none"}, target=${summary.statusReporting.target ?? "none"}, summary=${summary.statusReporting.summary ?? "none"}`,
     `Blockers: ${summary.blockers.join(" | ") || "none"}`,
     `Missing prerequisites: ${summary.missingPrerequisites.join(", ") || "none"}`,
   ];

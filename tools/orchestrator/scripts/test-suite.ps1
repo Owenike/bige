@@ -62,6 +62,11 @@ $suiteMap = @{
     "$outDir\tests\unit\idempotency.test.js",
     "$outDir\tests\unit\status-reporting.test.js",
     "$outDir\tests\unit\trigger-policy.test.js",
+    "$outDir\tests\unit\webhook.test.js",
+    "$outDir\tests\unit\commands.test.js",
+    "$outDir\tests\unit\signature.test.js",
+    "$outDir\tests\unit\comment-upsert.test.js",
+    "$outDir\tests\unit\event-flow.test.js",
     "$outDir\tests\unit\queue.test.js",
     "$outDir\tests\unit\worker.test.js",
     "$outDir\tests\unit\locking.test.js",
@@ -163,6 +168,21 @@ $suiteMap = @{
   "trigger-policy" = @(
     "$outDir\tests\unit\trigger-policy.test.js"
   )
+  "webhook" = @(
+    "$outDir\tests\unit\webhook.test.js"
+  )
+  "commands" = @(
+    "$outDir\tests\unit\commands.test.js"
+  )
+  "signature" = @(
+    "$outDir\tests\unit\signature.test.js"
+  )
+  "comment-upsert" = @(
+    "$outDir\tests\unit\comment-upsert.test.js"
+  )
+  "event-flow" = @(
+    "$outDir\tests\unit\event-flow.test.js"
+  )
   "queue" = @(
     "$outDir\tests\unit\queue.test.js"
   )
@@ -255,6 +275,11 @@ $suiteMap = @{
     "$outDir\tests\unit\idempotency.test.js",
     "$outDir\tests\unit\status-reporting.test.js",
     "$outDir\tests\unit\trigger-policy.test.js",
+    "$outDir\tests\unit\webhook.test.js",
+    "$outDir\tests\unit\commands.test.js",
+    "$outDir\tests\unit\signature.test.js",
+    "$outDir\tests\unit\comment-upsert.test.js",
+    "$outDir\tests\unit\event-flow.test.js",
     "$outDir\tests\unit\queue.test.js",
     "$outDir\tests\unit\worker.test.js",
     "$outDir\tests\unit\locking.test.js",

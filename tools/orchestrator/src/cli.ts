@@ -36,6 +36,7 @@ import { exportBackendSnapshot, importBackendSnapshot } from "./transfer";
 import { inspectBackendHealth, repairBackendHealth } from "./health";
 import { ingestGitHubEvent } from "./github-events";
 import { GhCliStatusReportingAdapter, applyStatusReportToState, reportStateStatus } from "./status-reporting";
+import { ingestGitHubWebhook } from "./webhook";
 
 async function resolveRunId(params: {
   stateId: string;
@@ -354,6 +355,33 @@ async function main() {
       await dependencies.storage.saveState(updatedState);
     }
     process.stdout.write(`${JSON.stringify({ ...intake, state: updatedState, statusReport }, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "webhook:intake") {
+    const payloadPath = options.get("payload");
+    const headersPath = options.get("headers");
+    if (!payloadPath || !headersPath) {
+      throw new Error("--payload and --headers are required for webhook:intake.");
+    }
+    const rawBody = await readFile(path.resolve(payloadPath), "utf8");
+    const headers = JSON.parse(await readFile(path.resolve(headersPath), "utf8")) as Record<string, string | undefined>;
+    const result = await ingestGitHubWebhook({
+      rawBody,
+      headers,
+      secret: options.get("webhook-secret") ?? process.env.GITHUB_WEBHOOK_SECRET ?? null,
+      dependencies,
+      repoPath,
+      enqueue: getOption(options, "enqueue", "true") === "true",
+      replayOverride: getOption(options, "replay", "false") === "true",
+      reportStatus: getOption(options, "report-status", "true") === "true",
+      statusAdapter: new GhCliStatusReportingAdapter({
+        enabled: getOption(options, "enabled", "true") === "true",
+        token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+      }),
+      statusOutputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-status-report")),
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
   }
 
@@ -769,6 +797,7 @@ async function main() {
       "  node cli.js init --state-id default --goal \"...\"",
       "  node cli.js plan --state-id default",
       "  node cli.js event:intake --payload path/to/event.json --enqueue true --report-status true",
+      "  node cli.js webhook:intake --payload path/to/payload.json --headers path/to/headers.json --enqueue true",
       "  node cli.js status:report --state-id default",
       "  node cli.js queue:enqueue --state-id default --priority 10",
       "  node cli.js queue:list",

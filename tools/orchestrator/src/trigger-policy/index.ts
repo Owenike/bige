@@ -6,6 +6,7 @@ export type TriggerPolicyRule = {
   eventTypes: string[];
   requiredLabels?: string[];
   repoNamePatterns?: string[];
+  allowedCommands?: Array<"run" | "dry_run" | "status" | "retry" | "approve" | "reject">;
   profileId: string;
   executionMode: ExecutionMode;
   autoMode: boolean;
@@ -30,6 +31,7 @@ export type TriggerPolicyDecision = {
   handoffConfig: HandoffConfig;
   triggerReason: string;
   matchedLabels: string[];
+  allowedCommands: Array<"run" | "dry_run" | "status" | "retry" | "approve" | "reject">;
 };
 
 const DEFAULT_HANDOFF_CONFIG: HandoffConfig = {
@@ -51,6 +53,7 @@ export const DEFAULT_TRIGGER_POLICIES: TriggerPolicyRule[] = [
   {
     id: "comment-command-default",
     eventTypes: ["issue_comment_command"],
+    allowedCommands: ["run", "dry_run", "status", "retry", "approve", "reject"],
     profileId: "default",
     executionMode: "dry_run",
     autoMode: false,
@@ -134,6 +137,7 @@ export function resolveTriggerPolicy(
       handoffConfig: normalizeHandoffConfig(rule.handoffConfig),
       triggerReason: rule.triggerReason,
       matchedLabels,
+      allowedCommands: [...(rule.allowedCommands ?? [])],
     };
   }
   return null;

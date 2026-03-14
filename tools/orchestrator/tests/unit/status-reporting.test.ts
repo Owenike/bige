@@ -37,6 +37,7 @@ test("status reporting writes GitHub-friendly payloads and skips cleanly without
 
   const payload = buildStatusReportPayload(state);
   assert.equal(payload.markdown.includes("## Orchestrator Status"), true);
+  assert.equal(payload.correlationId, "orchestrator-status:status-reporting-state");
 
   const skipped = await reportStateStatus({
     state,
@@ -86,13 +87,26 @@ test("status reporting can record a posted comment result through the GitHub ada
     adapter: new GhCliStatusReportingAdapter({
       enabled: true,
       token: "token",
-      execFileImpl: async () => ({
-        stdout: "https://github.com/example/bige/pull/2#issuecomment-1\n",
-        stderr: "",
-      }),
+      execFileImpl: async (_file, args) => {
+        if (args[0] === "api" && args[1] === "repos/example/bige/issues/2/comments" && !args.includes("--method")) {
+          return {
+            stdout: "[]",
+            stderr: "",
+          };
+        }
+        return {
+          stdout: JSON.stringify({
+            id: 1,
+            html_url: "https://github.com/example/bige/pull/2#issuecomment-1",
+          }),
+          stderr: "",
+        };
+      },
     }),
   });
 
-  assert.equal(result.status, "comment_posted");
+  assert.equal(result.status, "comment_created");
   assert.equal(result.targetUrl, "https://github.com/example/bige/pull/2#issuecomment-1");
+  assert.equal(result.commentId, 1);
+  assert.equal(result.correlationId, "orchestrator-status:status-reporting-posted");
 });

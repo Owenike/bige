@@ -212,7 +212,33 @@ export const sourceEventTypeSchema = z.enum([
   "workflow_dispatch",
 ]);
 export const idempotencyStatusSchema = z.enum(["not_checked", "created", "linked_existing", "duplicate_ignored", "replayed"]);
-export const statusReportStatusSchema = z.enum(["not_run", "payload_ready", "comment_posted", "skipped", "failed"]);
+export const webhookEventTypeSchema = z.enum([
+  "none",
+  "issues",
+  "issue_comment",
+  "pull_request",
+  "pull_request_review_comment",
+  "workflow_dispatch",
+]);
+export const webhookSignatureStatusSchema = z.enum([
+  "not_checked",
+  "verified",
+  "missing_secret",
+  "missing_signature",
+  "invalid_signature",
+  "rejected",
+]);
+export const commandKindSchema = z.enum(["run", "dry_run", "status", "retry", "approve", "reject"]);
+export const commandRoutingStatusSchema = z.enum(["not_applicable", "accepted", "ignored", "rejected", "routed"]);
+export const statusReportStatusSchema = z.enum([
+  "not_run",
+  "payload_ready",
+  "comment_posted",
+  "comment_created",
+  "comment_updated",
+  "skipped",
+  "failed",
+]);
 export const queueStatusSchema = z.enum(["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"]);
 export const cancellationStatusSchema = z.enum(["none", "cancel_requested", "cancelled"]);
 export const pauseStatusSchema = z.enum(["none", "pause_requested", "paused"]);
@@ -416,6 +442,34 @@ export const sourceEventSummarySchema = z.object({
   triggerReason: z.string(),
 });
 
+export const parsedCommandSchema = z.object({
+  kind: commandKindSchema,
+  executionMode: executionModeSchema.nullable().default(null),
+  profileOverride: z.string().nullable().default(null),
+  approvalIntent: z.enum(["approve", "reject"]).nullable().default(null),
+  rawCommand: z.string(),
+  arguments: z.array(z.string()).default([]),
+});
+
+export const commandRoutingDecisionSchema = z.object({
+  status: commandRoutingStatusSchema,
+  action: z.enum(["none", "create_task", "enqueue_existing", "report_status", "retry", "approve", "reject"]),
+  reasonCode: z.string().nullable().default(null),
+  summary: z.string(),
+  suggestedNextAction: z.string().nullable().default(null),
+  targetStateId: z.string().nullable().default(null),
+});
+
+export const statusReportTargetSchema = z.object({
+  kind: z.enum(["artifact_only", "issue_comment", "pull_request_comment"]),
+  repository: z.string().nullable().default(null),
+  targetNumber: z.number().int().positive().nullable().default(null),
+  commentId: z.number().int().positive().nullable().default(null),
+  targetUrl: z.string().nullable().default(null),
+  correlationId: z.string().nullable().default(null),
+  updatedAt: z.string(),
+});
+
 export const statusReportSummarySchema = z.object({
   status: statusReportStatusSchema,
   provider: z.string(),
@@ -424,6 +478,9 @@ export const statusReportSummarySchema = z.object({
   payloadPath: z.string().nullable().default(null),
   targetUrl: z.string().nullable().default(null),
   targetNumber: z.number().int().positive().nullable().default(null),
+  commentId: z.number().int().positive().nullable().default(null),
+  correlationId: z.string().nullable().default(null),
+  action: z.enum(["none", "payload_only", "created", "updated", "skipped", "failed"]).default("none"),
   ranAt: z.string(),
 });
 
@@ -645,6 +702,12 @@ export const orchestratorStateSchema = z.object({
   sourceEventType: sourceEventTypeSchema.default("none"),
   sourceEventId: z.string().nullable().default(null),
   sourceEventSummary: sourceEventSummarySchema.nullable().default(null),
+  webhookEventType: webhookEventTypeSchema.default("none"),
+  webhookDeliveryId: z.string().nullable().default(null),
+  webhookSignatureStatus: webhookSignatureStatusSchema.default("not_checked"),
+  parsedCommand: parsedCommandSchema.nullable().default(null),
+  commandRoutingStatus: commandRoutingStatusSchema.default("not_applicable"),
+  commandRoutingDecision: commandRoutingDecisionSchema.nullable().default(null),
   idempotencyKey: z.string().nullable().default(null),
   idempotencyStatus: idempotencyStatusSchema.default("not_checked"),
   duplicateOfStateId: z.string().nullable().default(null),
@@ -683,6 +746,8 @@ export const orchestratorStateSchema = z.object({
   lastGitHubHandoffResult: githubHandoffResultSchema.nullable().default(null),
   lastLiveEvidence: liveEvidenceSchema.nullable().default(null),
   statusReportStatus: statusReportStatusSchema.default("not_run"),
+  statusReportCorrelationId: z.string().nullable().default(null),
+  lastStatusReportTarget: statusReportTargetSchema.nullable().default(null),
   lastStatusReportSummary: statusReportSummarySchema.nullable().default(null),
   lastPreflightResult: preflightResultSchema.nullable().default(null),
   lastBlockedReasons: z.array(blockedReasonSchema).default([]),
@@ -719,9 +784,16 @@ export type BackendHealthSummary = z.infer<typeof backendHealthSummarySchema>;
 export type BackendTransferSummary = z.infer<typeof backendTransferSummarySchema>;
 export type BackendRepairResult = z.infer<typeof backendRepairResultSchema>;
 export type SourceEventType = z.infer<typeof sourceEventTypeSchema>;
+export type WebhookEventType = z.infer<typeof webhookEventTypeSchema>;
+export type WebhookSignatureStatus = z.infer<typeof webhookSignatureStatusSchema>;
 export type IdempotencyStatus = z.infer<typeof idempotencyStatusSchema>;
+export type CommandKind = z.infer<typeof commandKindSchema>;
+export type ParsedCommand = z.infer<typeof parsedCommandSchema>;
+export type CommandRoutingStatus = z.infer<typeof commandRoutingStatusSchema>;
+export type CommandRoutingDecision = z.infer<typeof commandRoutingDecisionSchema>;
 export type StatusReportStatus = z.infer<typeof statusReportStatusSchema>;
 export type SourceEventSummary = z.infer<typeof sourceEventSummarySchema>;
+export type StatusReportTarget = z.infer<typeof statusReportTargetSchema>;
 export type StatusReportSummary = z.infer<typeof statusReportSummarySchema>;
 export type AuditTrail = z.infer<typeof auditTrailSchema>;
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
@@ -1077,6 +1149,12 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "sourceEventType",
     "sourceEventId",
     "sourceEventSummary",
+    "webhookEventType",
+    "webhookDeliveryId",
+    "webhookSignatureStatus",
+    "parsedCommand",
+    "commandRoutingStatus",
+    "commandRoutingDecision",
     "idempotencyKey",
     "idempotencyStatus",
     "duplicateOfStateId",
@@ -1115,6 +1193,8 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastGitHubHandoffResult",
     "lastLiveEvidence",
     "statusReportStatus",
+    "statusReportCorrelationId",
+    "lastStatusReportTarget",
     "lastStatusReportSummary",
     "lastAuditTrail",
     "lastHandoffPackagePath",
@@ -1324,6 +1404,47 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         headSha: { type: "string", nullable: true },
         command: { type: "string", nullable: true },
         triggerReason: { type: "string" },
+      },
+    },
+    webhookEventType: {
+      type: "string",
+      enum: ["none", "issues", "issue_comment", "pull_request", "pull_request_review_comment", "workflow_dispatch"],
+    },
+    webhookDeliveryId: { type: "string", nullable: true },
+    webhookSignatureStatus: {
+      type: "string",
+      enum: ["not_checked", "verified", "missing_secret", "missing_signature", "invalid_signature", "rejected"],
+    },
+    parsedCommand: {
+      type: "object",
+      nullable: true,
+      required: ["kind", "executionMode", "profileOverride", "approvalIntent", "rawCommand", "arguments"],
+      additionalProperties: false,
+      properties: {
+        kind: { type: "string", enum: ["run", "dry_run", "status", "retry", "approve", "reject"] },
+        executionMode: { type: "string", enum: ["mock", "dry_run", "apply"], nullable: true },
+        profileOverride: { type: "string", nullable: true },
+        approvalIntent: { type: "string", enum: ["approve", "reject"], nullable: true },
+        rawCommand: { type: "string" },
+        arguments: { type: "array", items: { type: "string" } },
+      },
+    },
+    commandRoutingStatus: {
+      type: "string",
+      enum: ["not_applicable", "accepted", "ignored", "rejected", "routed"],
+    },
+    commandRoutingDecision: {
+      type: "object",
+      nullable: true,
+      required: ["status", "action", "reasonCode", "summary", "suggestedNextAction", "targetStateId"],
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["not_applicable", "accepted", "ignored", "rejected", "routed"] },
+        action: { type: "string", enum: ["none", "create_task", "enqueue_existing", "report_status", "retry", "approve", "reject"] },
+        reasonCode: { type: "string", nullable: true },
+        summary: { type: "string" },
+        suggestedNextAction: { type: "string", nullable: true },
+        targetStateId: { type: "string", nullable: true },
       },
     },
     idempotencyKey: { type: "string", nullable: true },
@@ -1617,21 +1738,40 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     },
     statusReportStatus: {
       type: "string",
-      enum: ["not_run", "payload_ready", "comment_posted", "skipped", "failed"],
+      enum: ["not_run", "payload_ready", "comment_posted", "comment_created", "comment_updated", "skipped", "failed"],
+    },
+    statusReportCorrelationId: { type: "string", nullable: true },
+    lastStatusReportTarget: {
+      type: "object",
+      nullable: true,
+      required: ["kind", "repository", "targetNumber", "commentId", "targetUrl", "correlationId", "updatedAt"],
+      additionalProperties: false,
+      properties: {
+        kind: { type: "string", enum: ["artifact_only", "issue_comment", "pull_request_comment"] },
+        repository: { type: "string", nullable: true },
+        targetNumber: { type: "number", nullable: true },
+        commentId: { type: "number", nullable: true },
+        targetUrl: { type: "string", nullable: true },
+        correlationId: { type: "string", nullable: true },
+        updatedAt: { type: "string" },
+      },
     },
     lastStatusReportSummary: {
       type: "object",
       nullable: true,
-      required: ["status", "provider", "summary", "markdownPath", "payloadPath", "targetUrl", "targetNumber", "ranAt"],
+      required: ["status", "provider", "summary", "markdownPath", "payloadPath", "targetUrl", "targetNumber", "commentId", "correlationId", "action", "ranAt"],
       additionalProperties: false,
       properties: {
-        status: { type: "string", enum: ["not_run", "payload_ready", "comment_posted", "skipped", "failed"] },
+        status: { type: "string", enum: ["not_run", "payload_ready", "comment_posted", "comment_created", "comment_updated", "skipped", "failed"] },
         provider: { type: "string" },
         summary: { type: "string" },
         markdownPath: { type: "string", nullable: true },
         payloadPath: { type: "string", nullable: true },
         targetUrl: { type: "string", nullable: true },
         targetNumber: { type: "number", nullable: true },
+        commentId: { type: "number", nullable: true },
+        correlationId: { type: "string", nullable: true },
+        action: { type: "string", enum: ["none", "payload_only", "created", "updated", "skipped", "failed"] },
         ranAt: { type: "string" },
       },
     },

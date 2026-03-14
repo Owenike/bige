@@ -83,11 +83,29 @@ Supported intake payloads:
 - pull request `synchronize`
 - issue comment command such as `/orchestrator run`
 - `workflow_dispatch` JSON payload
+- GitHub webhook payloads with verified signature headers
 
 CLI intake path:
 ```powershell
 npm run orchestrator:event:intake -- --payload path/to/event.json --enqueue true --report-status true
 ```
+
+Webhook-style intake path:
+```powershell
+npm run orchestrator:webhook:intake -- --payload path/to/payload.json --headers path/to/headers.json --enqueue true --report-status true
+```
+
+Webhook ingress validates:
+- `x-github-event`
+- `x-github-delivery`
+- `x-hub-signature-256`
+- `GITHUB_WEBHOOK_SECRET`
+
+Webhook failure semantics:
+- missing secret -> explicit `blocked`
+- missing signature -> explicit `blocked`
+- invalid signature -> explicit `rejected`
+- no generic fail for malformed trust configuration
 
 The intake layer normalizes incoming payloads into:
 - task objective
@@ -96,6 +114,8 @@ The intake layer normalizes incoming payloads into:
 - suggested profile / trigger policy
 - approval defaults
 - trigger reason
+- webhook delivery metadata
+- parsed command metadata when the source is a comment command
 
 ## Idempotency / Replay
 Event intake uses an idempotency key built from:
@@ -122,13 +142,45 @@ Current policy layer can express:
 - event type -> approval mode
 - label -> profile / handoff behavior
 - repo name pattern -> policy match
+- comment command -> allowed command set
+- event type -> status-only vs run-capable route
 
 Examples:
 - issue / PR events default to `dry_run` + `human_approval`
 - `orchestrator:handoff` label enables GitHub-friendly handoff/reporting defaults
 - `workflow_dispatch` resolves through a dedicated policy instead of ad hoc CLI conditionals
+- comment commands can be restricted to `status`-only, retry, or approval routes
 
 If no trigger policy matches, intake fails explicitly instead of silently falling back.
+
+## Webhook Commands
+Supported comment grammar:
+- `/orchestrator run`
+- `/orchestrator dry-run`
+- `/orchestrator status`
+- `/orchestrator retry`
+- `/orchestrator approve`
+- `/orchestrator reject`
+
+Optional overrides:
+- `profile=<profile-id>`
+- `mode=mock|dry-run|apply`
+
+Examples:
+```text
+/orchestrator run
+/orchestrator dry-run profile=ops
+/orchestrator status
+/orchestrator approve
+```
+
+Routing summary:
+- `run` / `dry-run`: create a task or enqueue an existing thread-bound task
+- `status`: emit or refresh the correlated status summary
+- `retry`: requeue the existing task
+- `approve` / `reject`: route into plan or patch approval when a matching state exists
+
+Unsupported or unauthorized commands are explicitly recorded as `rejected` or `ignored`; they are not silently dropped.
 
 ## Status Reporting
 Operator-friendly status reporting can emit:
@@ -142,6 +194,7 @@ npm run orchestrator:status:report -- --state-id demo
 ```
 
 `event:intake` can also emit an initial task-created status summary when `--report-status true`.
+`webhook:intake` can emit the same initial or routed status summary after command processing.
 
 Status reports include:
 - current state
@@ -150,10 +203,22 @@ Status reports include:
 - next suggested action
 - handoff / promotion / workspace state
 - artifact or handoff package paths when available
+- source event / delivery metadata
+- parsed command routing summary when the source was a GitHub comment
+
+Comment upsert / correlation:
+- status comments carry a stable marker `<!-- orchestrator-status:<state-id> -->`
+- if a prior comment target is known, the orchestrator patches that comment
+- if the prior target is unknown, the adapter searches the thread for the same marker before posting a new comment
+- persisted correlation fields:
+  - `statusReportCorrelationId`
+  - `lastStatusReportTarget`
+  - `lastStatusReportSummary`
 
 Skip / failure behavior:
 - missing `GITHUB_TOKEN` / `GH_TOKEN` -> explicit `skipped`
 - missing issue / PR target -> payload-only summary
+- disabled adapter or no GitHub target -> payload-only summary instead of hard failure
 - no generic fail for unavailable GitHub comment posting
 
 ## Live Smoke vs Live Acceptance vs Live Pass
@@ -269,6 +334,7 @@ Use diagnostics commands to inspect operator-facing status:
 ```powershell
 npm run orchestrator:preflight -- --state-id demo
 npm run orchestrator:event:intake -- --payload path/to/event.json --enqueue true
+npm run orchestrator:webhook:intake -- --payload path/to/payload.json --headers path/to/headers.json
 npm run orchestrator:status:report -- --state-id demo
 npm run orchestrator:status -- --state-id demo
 npm run orchestrator:diagnostics -- --state-id demo
@@ -277,11 +343,12 @@ npm run orchestrator:diagnostics -- --state-id demo
 Diagnostics summarize:
 - current state / iteration
 - current profile
-- source event / idempotency / trigger policy
+- source event / delivery / signature / idempotency / trigger policy
+- parsed command and command routing decision
 - latest planner / reviewer result
 - latest blockers
 - missing prerequisites
-- status reporting result
+- status reporting result and correlation target
 - patch / promotion / handoff / live / workspace status
 - suggested next action
 
@@ -626,6 +693,11 @@ npm run test:orchestrator:github-events
 npm run test:orchestrator:idempotency
 npm run test:orchestrator:status-reporting
 npm run test:orchestrator:trigger-policy
+npm run test:orchestrator:webhook
+npm run test:orchestrator:commands
+npm run test:orchestrator:signature
+npm run test:orchestrator:comment-upsert
+npm run test:orchestrator:event-flow
 npm run test:orchestrator:queue
 npm run test:orchestrator:worker
 npm run test:orchestrator:locking
@@ -670,8 +742,9 @@ npm run test:orchestrator:full-validation
 - `LocalRepoExecutor` remains allow-list only and intentionally conservative.
 - OpenAI planner/reviewer providers are wired for structured output, but live network usage is still optional and not part of the default acceptance suite.
 - GitHub workflow status is still best-effort through `gh`; full CI gate automation is still separate from the main product pipeline.
-- GitHub event intake currently assumes payload-file / workflow-dispatch style ingestion, not a long-running webhook server.
+- GitHub event intake now supports webhook-style payload ingestion, but still through CLI/workflow entrypoints; this repo does not ship a long-running webhook server.
 - GitHub status reporting is comment/payload oriented; it does not auto-merge, auto-approve, or bypass human review.
+- Comment upsert relies on stored target metadata plus marker-based correlation; it does not rewrite issue or PR body content.
 - `apply` mode is intentionally approval-gated: the executor prepares patch artifacts, then `approve-patch` / `promote-patch` advance the patch through export and promotion preconditions. Direct write-back to the source repo should still stay under human approval.
 - PR draft handoff is metadata-first by default. Real GitHub draft PR creation is optional and remains gated by `ORCHESTRATOR_GITHUB_HANDOFF` plus token availability.
 - Preflight is fail-fast and safety-first. It does not relax any existing approval, promotion, or command safety rules.

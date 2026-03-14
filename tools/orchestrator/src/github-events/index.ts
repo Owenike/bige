@@ -1,15 +1,19 @@
 import path from "node:path";
+import { parseOrchestratorCommand } from "../commands";
 import {
   orchestratorStateSchema,
   sourceEventSummarySchema,
   sourceEventTypeSchema,
   type OrchestratorState,
+  type ParsedCommand,
   type SourceEventSummary,
   type SourceEventType,
+  type WebhookEventType,
+  type WebhookSignatureStatus,
 } from "../schemas";
 import { createInitialState, type OrchestratorDependencies } from "../orchestrator";
 import { enqueueStateRun } from "../queue";
-import { resolveTriggerPolicy, type TriggerPolicyDecision } from "../trigger-policy";
+import { resolveTriggerPolicy } from "../trigger-policy";
 
 type IssuePayload = {
   action: string;
@@ -98,6 +102,7 @@ export type NormalizedGitHubEvent = {
   commentId: number | null;
   labels: string[];
   command: string | null;
+  parsedCommand: ParsedCommand | null;
   title: string;
   body: string;
   objective: string;
@@ -121,11 +126,7 @@ function labelsFrom(values?: Array<{ name?: string }>) {
 }
 
 function normalizeCommand(body: string | null | undefined) {
-  if (!body) {
-    return null;
-  }
-  const match = body.match(/\/orchestrator(?:\s+[^\r\n]+)?/i);
-  return match ? match[0].trim() : null;
+  return parseOrchestratorCommand(body)?.rawCommand ?? null;
 }
 
 function compactBody(value: string | null | undefined) {
@@ -175,6 +176,7 @@ function normalizeIssueEvent(payload: IssuePayload): NormalizedGitHubEvent | nul
     commentId: null,
     labels,
     command: null,
+    parsedCommand: null,
     title,
     body,
     objective: title,
@@ -230,6 +232,7 @@ function normalizePullRequestEvent(payload: PullRequestPayload): NormalizedGitHu
     commentId: null,
     labels,
     command: null,
+    parsedCommand: null,
     title,
     body,
     objective: title,
@@ -246,6 +249,7 @@ function normalizeIssueCommentEvent(payload: IssueCommentPayload): NormalizedGit
   if (payload.action !== "created" || !command) {
     return null;
   }
+  const parsedCommand = parseOrchestratorCommand(payload.comment.body);
   const labels = labelsFrom(payload.issue.labels);
   const repository = payload.repository?.full_name ?? "unknown/unknown";
   const repoName = payload.repository?.name ?? "unknown";
@@ -275,6 +279,7 @@ function normalizeIssueCommentEvent(payload: IssueCommentPayload): NormalizedGit
     commentId: payload.comment.id,
     labels,
     command,
+    parsedCommand,
     title,
     body,
     objective: title,
@@ -316,6 +321,7 @@ function normalizeWorkflowDispatchEvent(payload: WorkflowDispatchPayload): Norma
     commentId: null,
     labels: payload.inputs?.labels ? payload.inputs.labels.split(",").map((value) => value.trim()).filter(Boolean) : [],
     command: null,
+    parsedCommand: null,
     title,
     body,
     objective: title,
@@ -378,6 +384,35 @@ async function findStateByIdempotencyKey(
   return null;
 }
 
+export async function findLatestStateForThread(params: {
+  dependencies: OrchestratorDependencies;
+  repository: string;
+  issueNumber: number | null;
+  prNumber: number | null;
+}) {
+  const ids = await params.dependencies.storage.listStateIds();
+  let latest: OrchestratorState | null = null;
+  for (const id of ids) {
+    const state = await params.dependencies.storage.loadState(id);
+    if (!state?.sourceEventSummary) {
+      continue;
+    }
+    if (state.sourceEventSummary.repository !== params.repository) {
+      continue;
+    }
+    if ((params.issueNumber ?? null) !== (state.sourceEventSummary.issueNumber ?? null)) {
+      continue;
+    }
+    if ((params.prNumber ?? null) !== (state.sourceEventSummary.prNumber ?? null)) {
+      continue;
+    }
+    if (!latest || state.updatedAt > latest.updatedAt) {
+      latest = state;
+    }
+  }
+  return latest;
+}
+
 function eventSubtasks(event: NormalizedGitHubEvent) {
   const subtasks = ["github-intake", "idempotency", "status-reporting", "trigger-policy"];
   if (event.prNumber) {
@@ -396,6 +431,9 @@ export async function ingestGitHubEvent(params: {
   replayOverride?: boolean;
   enqueue?: boolean;
   now?: Date;
+  webhookEventType?: WebhookEventType;
+  webhookDeliveryId?: string | null;
+  webhookSignatureStatus?: WebhookSignatureStatus;
 }): Promise<EventIngestionResult> {
   const now = params.now ?? new Date();
   const event = normalizeGitHubEvent(params.payload);
@@ -414,6 +452,10 @@ export async function ingestGitHubEvent(params: {
   if (existing && !params.replayOverride) {
     const updated = orchestratorStateSchema.parse({
       ...existing,
+      webhookEventType: params.webhookEventType ?? existing.webhookEventType,
+      webhookDeliveryId: params.webhookDeliveryId ?? existing.webhookDeliveryId,
+      webhookSignatureStatus: params.webhookSignatureStatus ?? existing.webhookSignatureStatus,
+      parsedCommand: event.parsedCommand ?? existing.parsedCommand,
       idempotencyStatus: "linked_existing",
       duplicateOfStateId: existing.id,
       triggerPolicyId: existing.triggerPolicyId ?? policy.policyId,
@@ -452,6 +494,10 @@ export async function ingestGitHubEvent(params: {
     sourceEventType: event.eventType,
     sourceEventId: event.sourceEventId,
     sourceEventSummary: event.sourceSummary,
+    webhookEventType: params.webhookEventType ?? "none",
+    webhookDeliveryId: params.webhookDeliveryId ?? null,
+    webhookSignatureStatus: params.webhookSignatureStatus ?? "not_checked",
+    parsedCommand: event.parsedCommand,
     idempotencyKey,
     idempotencyStatus: params.replayOverride && existing ? "replayed" : "created",
     duplicateOfStateId: params.replayOverride && existing ? existing.id : null,

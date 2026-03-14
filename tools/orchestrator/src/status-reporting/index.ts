@@ -1,11 +1,19 @@
 import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import {
+  buildStatusReportCorrelationId,
+  deriveStatusReportTarget,
+  extractCommentIdFromUrl,
+  extractCorrelationIdFromBody,
+  withStatusReportMarker,
+} from "../comment-sync";
 import { buildDiagnosticsSummary, formatDiagnosticsSummary } from "../diagnostics";
 import {
   orchestratorStateSchema,
   statusReportSummarySchema,
+  statusReportTargetSchema,
   type OrchestratorState,
   type StatusReportSummary,
 } from "../schemas";
@@ -64,6 +72,7 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
     isPullRequest: boolean;
   }) {
     const ranAt = new Date().toISOString();
+    const correlationId = buildStatusReportCorrelationId(params.state);
     if (!this.params.enabled) {
       return statusReportSummarySchema.parse({
         status: "skipped",
@@ -73,6 +82,9 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
         payloadPath: null,
         targetUrl: null,
         targetNumber: params.targetNumber,
+        commentId: null,
+        correlationId,
+        action: "skipped",
         ranAt,
       });
     }
@@ -85,23 +97,62 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
         payloadPath: null,
         targetUrl: null,
         targetNumber: params.targetNumber,
+        commentId: null,
+        correlationId,
+        action: "skipped",
         ranAt,
       });
     }
     const execImpl: ExecFileLike = this.params.execFileImpl ?? defaultExecFileLike;
+    const markdown = withStatusReportMarker(await readFile(params.markdownPath, "utf8"), correlationId);
+    const bodyPayloadPath = path.join(path.dirname(params.markdownPath), `${params.state.id}-status-report-gh.json`);
+    await writeFile(bodyPayloadPath, `${JSON.stringify({ body: markdown }, null, 2)}\n`, "utf8");
     try {
-      const args = params.isPullRequest
-        ? ["pr", "comment", String(params.targetNumber), "--repo", params.repository, "--body-file", params.markdownPath]
-        : ["issue", "comment", String(params.targetNumber), "--repo", params.repository, "--body-file", params.markdownPath];
+      let existingCommentId = params.state.lastStatusReportTarget?.commentId ?? null;
+      let existingUrl = params.state.lastStatusReportTarget?.targetUrl ?? null;
+
+      if (!existingCommentId) {
+        const listArgs = ["api", `repos/${params.repository}/issues/${params.targetNumber}/comments`];
+        const { stdout: listStdout } = await execImpl("gh", listArgs, { windowsHide: true });
+        const comments = JSON.parse(listStdout || "[]") as Array<{ id?: number; body?: string; html_url?: string }>;
+        const matched = comments.find((comment) => extractCorrelationIdFromBody(comment.body ?? "") === correlationId);
+        existingCommentId = matched?.id ?? null;
+        existingUrl = matched?.html_url ?? null;
+      }
+
+      if (existingCommentId) {
+        const args = ["api", `repos/${params.repository}/issues/comments/${existingCommentId}`, "--method", "PATCH", "--input", bodyPayloadPath];
+        const { stdout } = await execImpl("gh", args, { windowsHide: true });
+        const payload = stdout.trim() ? (JSON.parse(stdout) as { html_url?: string; id?: number }) : null;
+        return statusReportSummarySchema.parse({
+          status: "comment_updated",
+          provider: this.kind,
+          summary: "GitHub status comment was updated successfully.",
+          markdownPath: params.markdownPath,
+          payloadPath: null,
+          targetUrl: payload?.html_url ?? existingUrl,
+          targetNumber: params.targetNumber,
+          commentId: payload?.id ?? existingCommentId,
+          correlationId,
+          action: "updated",
+          ranAt,
+        });
+      }
+
+      const args = ["api", `repos/${params.repository}/issues/${params.targetNumber}/comments`, "--method", "POST", "--input", bodyPayloadPath];
       const { stdout } = await execImpl("gh", args, { windowsHide: true });
+      const payload = stdout.trim() ? (JSON.parse(stdout) as { html_url?: string; id?: number }) : null;
       return statusReportSummarySchema.parse({
-        status: "comment_posted",
+        status: "comment_created",
         provider: this.kind,
         summary: "GitHub comment summary was posted successfully.",
         markdownPath: params.markdownPath,
         payloadPath: null,
-        targetUrl: stdout.trim() || null,
+        targetUrl: payload?.html_url ?? null,
         targetNumber: params.targetNumber,
+        commentId: payload?.id ?? extractCommentIdFromUrl(payload?.html_url),
+        correlationId,
+        action: "created",
         ranAt,
       });
     } catch (error) {
@@ -113,6 +164,9 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
         payloadPath: null,
         targetUrl: null,
         targetNumber: params.targetNumber,
+        commentId: null,
+        correlationId,
+        action: "failed",
         ranAt,
       });
     }
@@ -121,6 +175,7 @@ export class GhCliStatusReportingAdapter implements StatusReportingAdapter {
 
 export function buildStatusReportPayload(state: OrchestratorState) {
   const diagnostics = buildDiagnosticsSummary(state);
+  const correlationId = buildStatusReportCorrelationId(state);
   const lines = [
     `## Orchestrator Status`,
     ``,
@@ -136,6 +191,12 @@ export function buildStatusReportPayload(state: OrchestratorState) {
     `- Promotion: ${state.promotionStatus}`,
     `- Workspace: ${state.workspaceStatus}`,
   ];
+  if (state.commandRoutingDecision) {
+    lines.push(`- Command routing: ${state.commandRoutingDecision.status} / ${state.commandRoutingDecision.action}`);
+  }
+  if (state.sourceEventId || state.webhookDeliveryId) {
+    lines.push(`- Source event: ${state.sourceEventType} / ${state.sourceEventId ?? "none"} / delivery=${state.webhookDeliveryId ?? "none"}`);
+  }
   if (state.lastHandoffPackagePath) {
     lines.push(`- Handoff package: ${state.lastHandoffPackagePath}`);
   }
@@ -148,8 +209,9 @@ export function buildStatusReportPayload(state: OrchestratorState) {
     sourceEventId: state.sourceEventId,
     triggerPolicyId: state.triggerPolicyId,
     idempotencyKey: state.idempotencyKey,
+    correlationId,
     diagnostics,
-    markdown: lines.join("\n"),
+    markdown: withStatusReportMarker(lines.join("\n"), correlationId),
     generatedAt: new Date().toISOString(),
   };
 }
@@ -176,6 +238,9 @@ export async function reportStateStatus(params: {
       payloadPath,
       targetUrl: null,
       targetNumber: null,
+      commentId: null,
+      correlationId: payload.correlationId,
+      action: "payload_only",
       ranAt: payload.generatedAt,
     });
   }
@@ -189,6 +254,9 @@ export async function reportStateStatus(params: {
       payloadPath,
       targetUrl: null,
       targetNumber: source.prNumber ?? source.issueNumber,
+      commentId: null,
+      correlationId: payload.correlationId,
+      action: "payload_only",
       ranAt: payload.generatedAt,
     });
   }
@@ -208,9 +276,21 @@ export async function reportStateStatus(params: {
 }
 
 export function applyStatusReportToState(state: OrchestratorState, summary: StatusReportSummary) {
+  const target = statusReportTargetSchema.parse(
+    deriveStatusReportTarget({
+      state,
+      correlationId: summary.correlationId ?? buildStatusReportCorrelationId(state),
+      targetUrl: summary.targetUrl,
+      targetNumber: summary.targetNumber,
+      commentId: summary.commentId,
+      updatedAt: summary.ranAt,
+    }),
+  );
   return orchestratorStateSchema.parse({
     ...state,
     statusReportStatus: summary.status,
+    statusReportCorrelationId: target.correlationId,
+    lastStatusReportTarget: target,
     lastStatusReportSummary: summary,
     updatedAt: summary.ranAt,
   });
