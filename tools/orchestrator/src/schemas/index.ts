@@ -766,6 +766,31 @@ export const sandboxRestoreRetentionStatusSchema = z.enum([
   "manual_required",
   "failed",
 ]);
+export const sandboxIncidentSeveritySchema = z.enum(["info", "warning", "blocked", "manual_required", "critical"]);
+export const sandboxIncidentTypeSchema = z.enum([
+  "none",
+  "recovery_observed",
+  "restore_point_missing",
+  "restore_point_expired",
+  "restore_point_invalid",
+  "rollback_governance_failed",
+  "guardrails_failed",
+  "default_profile_safety_failed",
+  "batch_partial_restore",
+  "high_risk_compare",
+  "repeated_blocked_hotspot",
+]);
+export const sandboxOperatorActionSchema = z.enum([
+  "none",
+  "acknowledge",
+  "mark_resolved",
+  "escalate",
+  "request_review",
+  "rerun_preview",
+  "rerun_validate",
+  "rerun_apply",
+]);
+export const sandboxOperatorActionStatusSchema = z.enum(["not_run", "accepted", "blocked", "rejected", "manual_required"]);
 
 export const sandboxRestorePointSchema = z.object({
   id: z.string(),
@@ -1131,6 +1156,12 @@ export const orchestratorStateSchema = z.object({
   lastRecoveryIncidentSummary: z.string().nullable().default(null),
   lastRestorePointLookupStatus: sandboxLookupStatusSchema.default("not_run"),
   lastRestorePointCompareStatus: sandboxLookupStatusSchema.default("not_run"),
+  lastIncidentType: sandboxIncidentTypeSchema.default("none"),
+  lastIncidentSeverity: sandboxIncidentSeveritySchema.nullable().default(null),
+  lastIncidentSummary: z.string().nullable().default(null),
+  lastOperatorAction: sandboxOperatorActionSchema.default("none"),
+  lastOperatorActionStatus: sandboxOperatorActionStatusSchema.default("not_run"),
+  lastEscalationSummary: z.string().nullable().default(null),
   authSmokeStatus: githubAuthSmokeStatusSchema.default("not_run"),
   authSmokeSuccessStatus: z.enum(["not_run", "success", "non_success"]).default("not_run"),
   authSmokeMode: githubAuthSmokeModeSchema.default("none"),
@@ -1809,6 +1840,12 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastRecoveryIncidentSummary",
     "lastRestorePointLookupStatus",
     "lastRestorePointCompareStatus",
+    "lastIncidentType",
+    "lastIncidentSeverity",
+    "lastIncidentSummary",
+    "lastOperatorAction",
+    "lastOperatorActionStatus",
+    "lastEscalationSummary",
     "authSmokeStatus",
     "authSmokeSuccessStatus",
     "authSmokeMode",
@@ -2589,6 +2626,37 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       type: "string",
       enum: ["not_run", "ready", "blocked", "manual_required"],
     },
+    lastIncidentType: {
+      type: "string",
+      enum: [
+        "none",
+        "recovery_observed",
+        "restore_point_missing",
+        "restore_point_expired",
+        "restore_point_invalid",
+        "rollback_governance_failed",
+        "guardrails_failed",
+        "default_profile_safety_failed",
+        "batch_partial_restore",
+        "high_risk_compare",
+        "repeated_blocked_hotspot",
+      ],
+    },
+    lastIncidentSeverity: {
+      type: "string",
+      enum: ["info", "warning", "blocked", "manual_required", "critical"],
+      nullable: true,
+    },
+    lastIncidentSummary: { type: "string", nullable: true },
+    lastOperatorAction: {
+      type: "string",
+      enum: ["none", "acknowledge", "mark_resolved", "escalate", "request_review", "rerun_preview", "rerun_validate", "rerun_apply"],
+    },
+    lastOperatorActionStatus: {
+      type: "string",
+      enum: ["not_run", "accepted", "blocked", "rejected", "manual_required"],
+    },
+    lastEscalationSummary: { type: "string", nullable: true },
     authSmokeStatus: {
       type: "string",
       enum: ["not_run", "skipped", "passed", "failed", "blocked", "manual_required"],

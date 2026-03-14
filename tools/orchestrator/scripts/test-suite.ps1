@@ -94,6 +94,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-history.test.js",
     "$outDir\tests\unit\sandbox-compare.test.js",
     "$outDir\tests\unit\sandbox-recovery-diagnostics.test.js",
+    "$outDir\tests\unit\sandbox-incident-governance.test.js",
+    "$outDir\tests\unit\sandbox-operator-actions.test.js",
+    "$outDir\tests\unit\sandbox-escalation-summary.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -310,6 +313,15 @@ $suiteMap = @{
   "sandbox-recovery-diagnostics" = @(
     "$outDir\tests\unit\sandbox-recovery-diagnostics.test.js"
   )
+  "sandbox-incident-governance" = @(
+    "$outDir\tests\unit\sandbox-incident-governance.test.js"
+  )
+  "sandbox-operator-actions" = @(
+    "$outDir\tests\unit\sandbox-operator-actions.test.js"
+  )
+  "sandbox-escalation-summary" = @(
+    "$outDir\tests\unit\sandbox-escalation-summary.test.js"
+  )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
   )
@@ -491,6 +503,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-history.test.js",
     "$outDir\tests\unit\sandbox-compare.test.js",
     "$outDir\tests\unit\sandbox-recovery-diagnostics.test.js",
+    "$outDir\tests\unit\sandbox-incident-governance.test.js",
+    "$outDir\tests\unit\sandbox-operator-actions.test.js",
+    "$outDir\tests\unit\sandbox-escalation-summary.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",

@@ -58,37 +58,55 @@ export async function querySandboxHistory(params: {
 
   const rollbackEntries: SandboxHistoryEntry[] = audit.trail.records
     .filter((record) => record.action.startsWith("rollback-") && !/batch-recovery/i.test(record.actorSource))
-    .map((record) => ({
+    .map((record) => {
+      const restorePointProfiles =
+        record.restorePointId
+          ? restorePoints.trail.records.find((restorePoint) => restorePoint.id === record.restorePointId)?.affectedProfileIds ?? []
+          : [];
+      return {
       kind: "rollback",
       timestamp: record.changedAt,
       restorePointId: record.restorePointId,
-      affectedProfiles: [
-        ...(record.previousSummary?.profileId ? [record.previousSummary.profileId] : []),
-        ...(record.nextSummary?.profileId ? [record.nextSummary.profileId] : []),
-      ],
+      affectedProfiles: Array.from(
+        new Set([
+          ...(record.previousSummary?.profileId ? [record.previousSummary.profileId] : []),
+          ...(record.nextSummary?.profileId ? [record.nextSummary.profileId] : []),
+          ...restorePointProfiles,
+        ]),
+      ),
       source: record.actorSource,
       result: record.decision ?? record.action,
       summary: record.diffSummary[0] ?? `${record.action} ${record.decision ?? "completed"}`,
       reason: record.failureReason,
       auditId: record.id,
-    }));
+    };
+    });
 
   const batchEntries: SandboxHistoryEntry[] = audit.trail.records
     .filter((record) => /batch-recovery/i.test(record.actorSource))
-    .map((record) => ({
+    .map((record) => {
+      const restorePointProfiles =
+        record.restorePointId
+          ? restorePoints.trail.records.find((restorePoint) => restorePoint.id === record.restorePointId)?.affectedProfileIds ?? []
+          : [];
+      return {
       kind: "batch_recovery",
       timestamp: record.changedAt,
       restorePointId: record.restorePointId,
-      affectedProfiles: [
-        ...(record.previousSummary?.profileId ? [record.previousSummary.profileId] : []),
-        ...(record.nextSummary?.profileId ? [record.nextSummary.profileId] : []),
-      ],
+      affectedProfiles: Array.from(
+        new Set([
+          ...(record.previousSummary?.profileId ? [record.previousSummary.profileId] : []),
+          ...(record.nextSummary?.profileId ? [record.nextSummary.profileId] : []),
+          ...restorePointProfiles,
+        ]),
+      ),
       source: record.actorSource,
       result: record.decision ?? record.action,
       summary: record.diffSummary[0] ?? `${record.actorSource} ${record.decision ?? "completed"}`,
       reason: record.failureReason,
       auditId: record.id,
-    }));
+    };
+    });
 
   const selectedEntries =
     kind === "restore_points"

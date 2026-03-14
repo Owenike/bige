@@ -61,6 +61,9 @@ import { runSandboxBatchRecovery, summarizeSandboxBatchRecovery } from "./sandbo
 import { compareSandboxRestorePoints, formatSandboxCompare } from "./sandbox-compare";
 import { formatSandboxHistory, querySandboxHistory } from "./sandbox-history";
 import { formatSandboxImpactSummary } from "./sandbox-impact-summary";
+import { classifySandboxRecoveryIncidents, formatSandboxIncidentGovernance } from "./sandbox-incident-governance";
+import { buildSandboxEscalationSummary, formatSandboxEscalationSummary } from "./sandbox-escalation";
+import { formatSandboxOperatorActionResult, runSandboxOperatorAction } from "./sandbox-operator-actions";
 import { listSandboxRestorePoints } from "./sandbox-restore-points";
 import { buildSandboxRecoveryDiagnostics, formatSandboxRecoveryDiagnostics } from "./sandbox-recovery-diagnostics";
 import { runSandboxRollback } from "./sandbox-rollback";
@@ -1586,23 +1589,174 @@ async function main() {
     return;
   }
 
-  if (command === "sandbox:recovery:diagnostics") {
+  if (command === "sandbox:incident:governance") {
     const configPath = options.get("sandbox-config");
     if (!configPath) {
       throw new Error("--sandbox-config is required.");
     }
-    const result = await buildSandboxRecoveryDiagnostics({
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const result = await classifySandboxRecoveryIncidents({
       configPath,
       state: existingState,
+      loadedRegistry: sandboxRegistry,
       limit: options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10,
     });
     const updatedState = orchestratorStateSchema.parse({
       ...existingState,
       lastRecoveryIncidentSummary: result.summary,
+      lastIncidentType: result.latestIncident?.type ?? "none",
+      lastIncidentSeverity: result.latestIncident?.severity ?? null,
+      lastIncidentSummary: result.latestIncident?.summary ?? null,
       updatedAt: new Date().toISOString(),
     });
     await dependencies.storage.saveState(updatedState);
-    process.stdout.write(`${formatSandboxRecoveryDiagnostics(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    process.stdout.write(`${formatSandboxIncidentGovernance(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (
+    command === "sandbox:incident:acknowledge" ||
+    command === "sandbox:incident:resolve" ||
+    command === "sandbox:incident:escalate" ||
+    command === "sandbox:incident:request-review" ||
+    command === "sandbox:incident:rerun-preview" ||
+    command === "sandbox:incident:rerun-validate" ||
+    command === "sandbox:incident:rerun-apply"
+  ) {
+    const configPath = options.get("sandbox-config");
+    const incidentId = options.get("incident-id") ?? null;
+    if (!configPath || !incidentId) {
+      throw new Error("--sandbox-config and --incident-id are required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const action =
+      command === "sandbox:incident:acknowledge"
+        ? "acknowledge"
+        : command === "sandbox:incident:resolve"
+          ? "mark_resolved"
+          : command === "sandbox:incident:escalate"
+            ? "escalate"
+            : command === "sandbox:incident:request-review"
+              ? "request_review"
+              : command === "sandbox:incident:rerun-preview"
+                ? "rerun_preview"
+                : command === "sandbox:incident:rerun-validate"
+                  ? "rerun_validate"
+                  : "rerun_apply";
+    const result = await runSandboxOperatorAction({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      incidentId,
+      action,
+      actorSource: command,
+      commandSource: "cli",
+    });
+    const escalation = await buildSandboxEscalationSummary({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastIncidentType: result.incident?.type ?? existingState.lastIncidentType,
+      lastIncidentSeverity: result.incident?.severity ?? existingState.lastIncidentSeverity,
+      lastIncidentSummary: result.incident?.summary ?? existingState.lastIncidentSummary,
+      lastOperatorAction: result.action,
+      lastOperatorActionStatus: result.status,
+      lastEscalationSummary: escalation.summary,
+      lastRecoveryIncidentSummary: escalation.latestIncident ?? existingState.lastRecoveryIncidentSummary,
+      rollbackGovernanceStatus:
+        result.rerunResult?.status === "blocked" || result.rerunResult?.status === "manual_required"
+          ? result.rerunResult.status
+          : existingState.rollbackGovernanceStatus,
+      rollbackGovernanceReason:
+        result.rerunResult?.status === "blocked" || result.rerunResult?.status === "manual_required"
+          ? result.rerunResult.failureReason
+          : existingState.rollbackGovernanceReason,
+      rollbackGovernanceSuggestedNextAction:
+        result.rerunResult?.suggestedNextAction ?? existingState.rollbackGovernanceSuggestedNextAction,
+      lastRollbackStatus: result.rerunResult?.status ?? existingState.lastRollbackStatus,
+      lastRollbackImpactSummary: result.rerunResult?.impactSummary.summaryText ?? existingState.lastRollbackImpactSummary,
+      lastRollbackAuditId: result.rerunResult?.auditId ?? existingState.lastRollbackAuditId,
+      lastSandboxDiffSummary: result.rerunResult?.diffSummary ?? existingState.lastSandboxDiffSummary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxOperatorActionResult(result)}\n\n${formatSandboxEscalationSummary(escalation)}\n\n${JSON.stringify({ result, escalation }, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:escalation:summary") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const result = await buildSandboxEscalationSummary({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      limit: options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10,
+    });
+    const incidents = await classifySandboxRecoveryIncidents({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      limit: options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastRecoveryIncidentSummary: incidents.summary,
+      lastIncidentType: incidents.latestIncident?.type ?? "none",
+      lastIncidentSeverity: incidents.latestIncident?.severity ?? null,
+      lastIncidentSummary: incidents.latestIncident?.summary ?? null,
+      lastEscalationSummary: result.summary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(`${formatSandboxEscalationSummary(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "sandbox:recovery:diagnostics") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const result = await buildSandboxRecoveryDiagnostics({
+      configPath,
+      state: existingState,
+      limit: options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10,
+    });
+    const incidents = await classifySandboxRecoveryIncidents({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      limit: options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10,
+    });
+    const escalation = await buildSandboxEscalationSummary({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      limit: options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastRecoveryIncidentSummary: result.summary,
+      lastIncidentType: incidents.latestIncident?.type ?? "none",
+      lastIncidentSeverity: incidents.latestIncident?.severity ?? null,
+      lastIncidentSummary: incidents.latestIncident?.summary ?? null,
+      lastEscalationSummary: escalation.summary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxRecoveryDiagnostics(result)}\n\n${formatSandboxIncidentGovernance(incidents)}\n\n${formatSandboxEscalationSummary(escalation)}\n\n${JSON.stringify({ result, incidents, escalation }, null, 2)}\n`,
+    );
     return;
   }
 
@@ -2150,6 +2304,19 @@ async function main() {
       "  node cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:audit --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:restore-points --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:restore-points:list --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:history --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:rollback:history --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:compare --sandbox-config .tmp/orchestrator-sandbox.json --restore-point-id sandbox-restore:...",
+      "  node cli.js sandbox:incident:governance --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:incident:acknowledge --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
+      "  node cli.js sandbox:incident:resolve --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
+      "  node cli.js sandbox:incident:escalate --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
+      "  node cli.js sandbox:incident:request-review --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
+      "  node cli.js sandbox:incident:rerun-preview --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
+      "  node cli.js sandbox:incident:rerun-validate --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
+      "  node cli.js sandbox:incident:rerun-apply --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
+      "  node cli.js sandbox:escalation:summary --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:guardrails --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:export --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --output .tmp/sandbox-default.json",
       "  node cli.js sandbox:import --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json --mode preview",

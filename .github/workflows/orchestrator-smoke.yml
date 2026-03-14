@@ -142,6 +142,9 @@ jobs:
           npm run test:orchestrator:sandbox-history
           npm run test:orchestrator:sandbox-compare
           npm run test:orchestrator:sandbox-recovery-diagnostics
+          npm run test:orchestrator:sandbox-incident-governance
+          npm run test:orchestrator:sandbox-operator-actions
+          npm run test:orchestrator:sandbox-escalation-summary
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary

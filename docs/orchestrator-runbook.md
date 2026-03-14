@@ -554,6 +554,10 @@ Sandbox target registry:
   - use `sandbox:history` or `sandbox:rollback:history` when you need an operator-readable trail of restore-point creation, rollback attempts, and batch recovery activity
   - use `sandbox:compare` before rollback apply when you need a readable diff between current config and a restore point, or between two restore points
   - use `sandbox:recovery:diagnostics` when you need a compact incident summary, blocked/manual_required hot spots, and restore-point health
+  - use `sandbox:incident:governance` when you need recovery incidents classified by severity before choosing an operator action
+  - use `sandbox:incident:acknowledge`, `sandbox:incident:resolve`, `sandbox:incident:escalate`, or `sandbox:incident:request-review` for operator-side incident handling
+  - use `sandbox:incident:rerun-preview`, `sandbox:incident:rerun-validate`, or `sandbox:incident:rerun-apply` only when the incident still points to a valid restore point and governance permits a rerun
+  - use `sandbox:escalation:summary` when you need a compact view of unresolved incidents, escalation-needed count, and repeated blocked/manual_required hotspots
   - inspect `sandbox:rollback:governance` before any rollback apply if you need to know whether a restore point is stale, default-unsafe, or otherwise blocked
   - always run `sandbox:rollback:preview` before `sandbox:rollback:validate` or `sandbox:rollback:apply`
   - use `sandbox:batch-recovery:preview` and `sandbox:batch-recovery:validate` before any multi-restore recovery
@@ -606,6 +610,19 @@ Sandbox target registry:
     - recent rollback/batch recovery incidents
     - blocked/manual_required hot spots
     - expired and still-referenced restore points
+  - recovery incidents are classified as `info`, `warning`, `blocked`, `manual_required`, or `critical`
+  - incident severity mapping includes:
+    - missing or expired restore point -> `manual_required`
+    - governance or guardrails failure -> `blocked`
+    - default profile safety or high-risk compare diff -> `critical`
+    - partial batch recovery or repeated blocked hotspot -> `warning`
+  - operator actions are classified as `accepted`, `blocked`, `rejected`, or `manual_required`
+  - `sandbox:incident:rerun-*` re-enters rollback preview/validate/apply, so it still re-checks governance, guardrails, restore point availability, and default profile safety
+  - `sandbox:escalation:summary` highlights:
+    - latest unresolved incident
+    - latest operator action
+    - high-severity unresolved incident count
+    - repeated blocked/manual_required profile hotspots
   - restore retention keeps the latest restore point, the recent N restore points, restore points referenced by recent rollback audit, and any restore point still associated with unresolved manual_required work
   - `sandbox:restore-points:prune` only removes expired restore points that are not protected by retention rules
   - no-op apply or no-op rollback does not create a new restore point
@@ -626,6 +643,7 @@ Sandbox target registry:
   - each audit record stores changed fields, previous summary, next summary, and command source
   - restore points persist affected profiles, previous bundle linkage, previous default profile state, and diff summary in a sidecar restore-point trail
   - recent audit summaries are surfaced in operator diagnostics and live smoke precheck output
+  - incident operator actions are stored in a sidecar action trail so acknowledge/resolve/escalate/rerun decisions remain traceable
  - blocked/manual_required cases:
    - disabled bundle/profile -> `blocked`
    - default-unsafe bundle or profile -> `manual_required`
@@ -637,6 +655,7 @@ Sandbox target registry:
   - stale or missing restore point -> `manual_required`
   - batch recovery with missing coverage or invalid restore ids -> `manual_required`
   - expired restore point that is still referenced by recent audit -> retained until the operator explicitly resolves the related review/rollback flow
+  - incident escalation is recommended when severity is `critical` or when the same blocked/manual_required profile keeps recurring
   - compare/history/diagnostics commands never bypass governance; they stay read-only and only update operator-facing summaries in state
 
 Minimal registry example:
