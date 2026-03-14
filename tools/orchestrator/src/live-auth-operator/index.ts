@@ -7,6 +7,7 @@ import { selectGitHubLiveSmokeTarget, type RequestedGitHubSandboxTarget } from "
 import { resolveGitHubSandboxTarget, type LoadedGitHubSandboxTargetRegistry } from "../github-sandbox-targets";
 import { listSandboxAuditRecords } from "../sandbox-audit";
 import { evaluateSandboxGuardrails } from "../sandbox-governance";
+import { evaluateSandboxBundleGovernance } from "../sandbox-bundle-governance";
 
 export type LiveAuthOperatorFlowResult = {
   readinessStatus: "ready" | "degraded" | "blocked" | "manual_required";
@@ -60,6 +61,15 @@ function applySelectionMetadata(
     loadedRegistry && registryResolution.profileId
       ? loadedRegistry.registry.profiles[registryResolution.profileId] ?? null
       : null;
+  const bundleGovernance =
+    selectedProfile?.bundleId && loadedRegistry
+      ? evaluateSandboxBundleGovernance({
+          loadedRegistry,
+          bundleId: selectedProfile.bundleId,
+          profileId: registryResolution.profileId,
+          intendedUse: "live_smoke",
+        })
+      : null;
   return orchestratorStateSchema.parse({
     ...state,
     selectedSandboxProfileId: registryResolution.profileId,
@@ -80,6 +90,10 @@ function applySelectionMetadata(
     profileGovernanceStatus: state.profileGovernanceStatus,
     profileGovernanceReason: state.profileGovernanceReason,
     profileGovernanceSuggestedNextAction: state.profileGovernanceSuggestedNextAction,
+    bundleGovernanceStatus: bundleGovernance?.status ?? state.bundleGovernanceStatus,
+    bundleGovernanceReason: bundleGovernance?.reason?.summary ?? state.bundleGovernanceReason,
+    bundleGovernanceSuggestedNextAction:
+      bundleGovernance?.reason?.suggestedNextAction ?? state.bundleGovernanceSuggestedNextAction,
     lastSandboxAuditId: state.lastSandboxAuditId,
     lastSandboxGuardrailsStatus: state.lastSandboxGuardrailsStatus,
     lastSandboxGuardrailsReason: state.lastSandboxGuardrailsReason,

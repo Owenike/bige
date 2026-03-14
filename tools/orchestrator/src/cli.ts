@@ -52,9 +52,12 @@ import { createSandboxProfile, deleteSandboxProfile, setDefaultSandboxProfile, u
 import { runLiveAuthOperatorFlow } from "./live-auth-operator";
 import { formatSandboxAuditTrail, listSandboxAuditRecords } from "./sandbox-audit";
 import { evaluateSandboxGuardrails, evaluateSandboxProfileGovernance, formatSandboxGuardrailsSummary, formatSandboxGovernanceSummary, inspectSandboxGovernance } from "./sandbox-governance";
+import { evaluateSandboxBundleGovernance, formatSandboxBundleGovernanceSummary, inspectSandboxBundleGovernance } from "./sandbox-bundle-governance";
 import { applySandboxPolicyBundle, formatSandboxPolicyBundle, formatSandboxPolicyBundleList, showSandboxPolicyBundle } from "./sandbox-policy-bundles";
 import { exportSandboxProfiles, importSandboxProfiles } from "./sandbox-import-export";
 import { applySandboxRegistryChange, buildSandboxRegistryDiff, reviewSandboxRegistryChange } from "./sandbox-change-review";
+import { runSandboxBatchChange } from "./sandbox-batch-change";
+import { formatSandboxImpactSummary } from "./sandbox-impact-summary";
 import { ingestGitHubWebhook } from "./webhook";
 import { formatWebhookHostingConfig, loadWebhookHostingConfig } from "./runtime-config";
 import { formatWebhookShutdownSummary, startWebhookHosting } from "./webhook-hosting";
@@ -325,6 +328,33 @@ function summarizeSandboxReview(result: {
     `Failure: ${result.failureReason ?? "none"}`,
     `Next action: ${result.suggestedNextAction}`,
     `Audit: ${result.auditId ?? "none"}`,
+  ].join("\n");
+}
+
+function summarizeSandboxBatchChange(result: {
+  status: string;
+  mode: string;
+  affectedProfileIds: string[];
+  blockedProfileIds: string[];
+  manualRequiredProfileIds: string[];
+  diffSummary: string[];
+  summary: string;
+  failureReason: string | null;
+  suggestedNextAction: string;
+  impactSummary: {
+    summaryText: string;
+  };
+}) {
+  return [
+    `Sandbox batch change: ${result.status} / ${result.mode}`,
+    `Affected profiles: ${result.affectedProfileIds.join(", ") || "none"}`,
+    `Blocked profiles: ${result.blockedProfileIds.join(", ") || "none"}`,
+    `Manual required profiles: ${result.manualRequiredProfileIds.join(", ") || "none"}`,
+    `Impact: ${result.impactSummary.summaryText}`,
+    `Diff: ${result.diffSummary.join(" | ") || "none"}`,
+    `Summary: ${result.summary}`,
+    `Failure: ${result.failureReason ?? "none"}`,
+    `Next action: ${result.suggestedNextAction}`,
   ].join("\n");
 }
 
@@ -753,6 +783,23 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:bundle:governance") {
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const bundleId = options.get("sandbox-bundle") ?? null;
+    const decision = evaluateSandboxBundleGovernance({
+      loadedRegistry: sandboxRegistry,
+      bundleId,
+      profileId: options.get("sandbox-profile") ?? null,
+      intendedUse:
+        (options.get("intended-use") as "apply" | "default" | "live_smoke" | undefined) ?? "apply",
+    });
+    const inspection = inspectSandboxBundleGovernance(sandboxRegistry);
+    process.stdout.write(
+      `${formatSandboxBundleGovernanceSummary(decision)}\nRegistry invalid bundles: ${inspection.invalidBundleIds.join(", ") || "none"}\nRegistry disabled bundles: ${inspection.disabledBundleIds.join(", ") || "none"}\n\n${JSON.stringify({ decision, inspection, sandboxRegistry }, null, 2)}\n`,
+    );
+    return;
+  }
+
   if (command === "sandbox:create") {
     const profileId = options.get("sandbox-profile");
     if (!profileId) {
@@ -778,6 +825,17 @@ async function main() {
             },
           })
         : null;
+    if (bundleId !== null) {
+      const bundleGovernance = evaluateSandboxBundleGovernance({
+        loadedRegistry: sandboxRegistry,
+        bundleId,
+        intendedUse: getOption(options, "set-default", "false") === "true" ? "default" : "apply",
+      });
+      if (bundleGovernance.status !== "ready") {
+        process.stdout.write(`${formatSandboxBundleGovernanceSummary(bundleGovernance)}\n\n${JSON.stringify(bundleGovernance, null, 2)}\n`);
+        return;
+      }
+    }
     if (bundleResult && bundleResult.status !== "resolved") {
       process.stdout.write(`${bundleResult.summary}\n\n${JSON.stringify(bundleResult, null, 2)}\n`);
       return;
@@ -823,6 +881,16 @@ async function main() {
     if (options.has("enabled")) changes.enabled = getOption(options, "enabled", "true") === "true";
     if (options.has("notes")) changes.notes = options.get("notes");
     if (options.has("sandbox-bundle")) {
+      const bundleGovernance = evaluateSandboxBundleGovernance({
+        loadedRegistry: sandboxRegistry,
+        bundleId: options.get("sandbox-bundle") ?? null,
+        profileId,
+        intendedUse: sandboxRegistry.registry.defaultProfileId === profileId ? "default" : "apply",
+      });
+      if (bundleGovernance.status !== "ready") {
+        process.stdout.write(`${formatSandboxBundleGovernanceSummary(bundleGovernance)}\n\n${JSON.stringify(bundleGovernance, null, 2)}\n`);
+        return;
+      }
       const bundleResult = applySandboxPolicyBundle({
         loadedRegistry: sandboxRegistry,
         bundleId: options.get("sandbox-bundle") ?? null,
@@ -1080,6 +1148,85 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(`${summarizeSandboxReview(applied)}\n\n${JSON.stringify(applied, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "sandbox:batch:preview" || command === "sandbox:batch:validate" || command === "sandbox:batch:apply") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const sandboxProfiles =
+      (options.get("sandbox-profiles") ?? options.get("sandbox-profile") ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+    const result = await runSandboxBatchChange({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      profileIds: sandboxProfiles,
+      bundleId: options.get("sandbox-bundle") ?? null,
+      changes: {
+        repository: options.get("target-repo") ?? undefined,
+        targetType: options.has("target-type")
+          ? (getOption(options, "target-type", "issue") as "issue" | "pull_request")
+          : undefined,
+        targetNumber: options.has("target-number") ? Number.parseInt(getOption(options, "target-number", "0"), 10) : undefined,
+        actionPolicy: options.has("action-policy")
+          ? (options.get("action-policy") as "create_or_update" | "create_only" | "update_only")
+          : undefined,
+        enabled: options.has("enabled") ? getOption(options, "enabled", "true") === "true" : undefined,
+        notes: options.has("notes") ? options.get("notes") ?? null : undefined,
+      },
+      mode:
+        command === "sandbox:batch:preview"
+          ? "preview"
+          : command === "sandbox:batch:validate"
+            ? "validate"
+            : "apply",
+      allowPartial: getOption(options, "allow-partial", "false") === "true",
+      actorSource: command,
+      commandSource: "cli",
+    });
+    const nextSandboxApplyStatus =
+      command !== "sandbox:batch:apply"
+        ? existingState.lastSandboxApplyStatus
+        : result.status === "applied" || result.status === "partially_applied"
+          ? "applied"
+          : result.status === "blocked" || result.status === "manual_required"
+            ? result.status
+            : existingState.lastSandboxApplyStatus;
+    const nextSandboxReviewStatus =
+      command !== "sandbox:batch:validate"
+        ? existingState.lastSandboxReviewStatus
+        : result.status === "validated"
+          ? "ready"
+          : result.status === "blocked" || result.status === "manual_required"
+            ? result.status
+            : existingState.lastSandboxReviewStatus;
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      bundleGovernanceStatus: result.governanceStatus,
+      bundleGovernanceReason:
+        result.profileDecisions.find((item) => item.status !== "ready")?.failureReason ?? existingState.bundleGovernanceReason,
+      lastSandboxDiffSummary: result.diffSummary,
+      lastBatchChangeStatus: result.status,
+      lastBatchImpactSummary: result.impactSummary.summaryText,
+      lastBatchAffectedProfiles: result.affectedProfileIds,
+      lastBatchBlockedProfiles: [...result.blockedProfileIds, ...result.manualRequiredProfileIds],
+      lastSandboxApplyStatus: nextSandboxApplyStatus,
+      lastSandboxApplySummary: command === "sandbox:batch:apply" ? result.summary : existingState.lastSandboxApplySummary,
+      lastSandboxReviewStatus: nextSandboxReviewStatus,
+      lastSandboxReviewSummary:
+        command === "sandbox:batch:validate" ? result.summary : existingState.lastSandboxReviewSummary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${summarizeSandboxBatchChange(result)}\n\n${formatSandboxImpactSummary(result.impactSummary)}\n\n${JSON.stringify(result, null, 2)}\n`,
+    );
     return;
   }
 
@@ -1621,6 +1768,7 @@ async function main() {
       "  node cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:bundle:list --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:bundle:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-bundle create-only",
+      "  node cli.js sandbox:bundle:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-bundle create-only --sandbox-profile default",
       "  node cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:validate --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
@@ -1631,6 +1779,9 @@ async function main() {
       "  node cli.js sandbox:diff --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json",
       "  node cli.js sandbox:review --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json",
       "  node cli.js sandbox:apply --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json",
+      "  node cli.js sandbox:batch:preview --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only",
+      "  node cli.js sandbox:batch:validate --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only",
+      "  node cli.js sandbox:batch:apply --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only --allow-partial false",
       "  node cli.js reporting:precheck --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:auth-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:run-live-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",

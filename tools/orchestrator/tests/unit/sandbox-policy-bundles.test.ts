@@ -13,6 +13,10 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           repository: "example/bige",
           targetType: "issue",
           actionPolicy: "create_or_update",
+          enabled: true,
+          allowAsDefault: true,
+          allowLiveSmoke: true,
+          allowedProfileTargetTypes: ["issue", "pull_request"],
           enabledByDefault: true,
           governanceDefaults: {},
           liveSmokeDefaults: {

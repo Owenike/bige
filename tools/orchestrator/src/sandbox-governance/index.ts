@@ -5,6 +5,7 @@ import type {
   GitHubSandboxTargetProfile,
   OrchestratorState,
 } from "../schemas";
+import { evaluateSandboxBundleGovernance } from "../sandbox-bundle-governance";
 
 export type SandboxGovernanceDecision = {
   status: "ready" | "blocked" | "manual_required";
@@ -225,6 +226,28 @@ export function evaluateSandboxGuardrails(params: {
       profileId: governance.profileId,
       summary: `${params.selectionReason} Guardrails blocked live smoke: ${governance.summary}`,
       reason: governance.reason,
+      selectedProfileId: params.selectedProfileId,
+      selectionMode: params.selectionMode,
+      invalidProfileIds: governance.invalidProfileIds,
+      disabledProfileIds: governance.disabledProfileIds,
+    } satisfies SandboxGuardrailsDecision;
+  }
+
+  const selectedProfile = params.selectedProfileId
+    ? params.loadedRegistry.registry.profiles[params.selectedProfileId]
+    : null;
+  const bundleGovernance = evaluateSandboxBundleGovernance({
+    loadedRegistry: params.loadedRegistry,
+    bundleId: selectedProfile?.bundleId ?? null,
+    profileId: params.selectedProfileId,
+    intendedUse: "live_smoke",
+  });
+  if (selectedProfile?.bundleId && bundleGovernance.status !== "ready") {
+    return {
+      status: bundleGovernance.status,
+      profileId: params.selectedProfileId,
+      summary: `${params.selectionReason} Guardrails blocked live smoke: ${bundleGovernance.summary}`,
+      reason: bundleGovernance.reason,
       selectedProfileId: params.selectedProfileId,
       selectionMode: params.selectionMode,
       invalidProfileIds: governance.invalidProfileIds,

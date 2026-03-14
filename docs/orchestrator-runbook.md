@@ -502,6 +502,7 @@ Sandbox target registry:
 - operator commands:
   - `node .tmp/orchestrator/src/cli.js sandbox:bundle:list --sandbox-config .tmp/orchestrator-sandbox.json`
   - `node .tmp/orchestrator/src/cli.js sandbox:bundle:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-bundle create-only`
+  - `node .tmp/orchestrator/src/cli.js sandbox:bundle:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-bundle create-only --sandbox-profile default`
   - `node .tmp/orchestrator/src/cli.js sandbox:create --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --target-repo example/bige --target-type issue --target-number 101 --set-default true`
   - `node .tmp/orchestrator/src/cli.js sandbox:update --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --notes "safe smoke target"`
   - `node .tmp/orchestrator/src/cli.js sandbox:delete --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile old-profile`
@@ -517,8 +518,12 @@ Sandbox target registry:
   - `node .tmp/orchestrator/src/cli.js sandbox:diff --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json`
   - `node .tmp/orchestrator/src/cli.js sandbox:review --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json`
   - `node .tmp/orchestrator/src/cli.js sandbox:apply --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json`
+  - `node .tmp/orchestrator/src/cli.js sandbox:batch:preview --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only`
+  - `node .tmp/orchestrator/src/cli.js sandbox:batch:validate --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only`
+  - `node .tmp/orchestrator/src/cli.js sandbox:batch:apply --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only --allow-partial false`
 - safe operator flow:
   - inspect available bundles with `sandbox:bundle:list` and `sandbox:bundle:show`
+  - inspect `sandbox:bundle:governance` before attaching a bundle to an existing or default profile
   - create or update the sandbox profile
   - optionally attach a bundle with `--sandbox-bundle create-only|update-only|create-or-update|default|repo-specific`
   - set the default profile if you want smoke runs without explicit override
@@ -528,10 +533,18 @@ Sandbox target registry:
   - inspect `sandbox:audit` to confirm the latest profile changes
   - use `sandbox:export` or `sandbox:import --mode preview` before moving or restoring profiles
   - use `sandbox:diff` or `sandbox:review` to inspect change sets before `sandbox:apply`
+  - use `sandbox:batch:preview` before any multi-profile bundle rollout
+  - use `sandbox:batch:validate` after preview if you need a gated all-clear before `sandbox:batch:apply`
   - run `reporting:precheck` to confirm target resolution, governance, guardrails, and permission readiness
   - only run `reporting:run-live-smoke` or `reporting:live-success-smoke` when the profile resolves to a known-safe repo/issue/pr target
 - bundle rules:
   - built-in bundles include `default`, `create-only`, `update-only`, `create-or-update`, and `repo-specific`
+  - bundle governance checks:
+    - bundle must be enabled
+    - bundle must be marked `allowAsDefault=true` before it can back the default profile
+    - bundle must be marked `allowLiveSmoke=true` before live smoke guardrails will accept it
+    - profile target type must be included in `allowedProfileTargetTypes`
+    - repo-pinned bundles cannot be applied to a profile targeting a different repository
   - a profile may store `bundleId` plus `overrideFields`
   - bundle metadata is operator-facing; the resolved profile still expands into a concrete repo/type/number/action target before governance or live smoke runs
   - if a bundle leaves required target data unset, the operator flow returns `manual_required`
@@ -546,6 +559,14 @@ Sandbox target registry:
   - `sandbox:diff` is the operator-friendly shorthand when you want the change summary without writing anything
   - `sandbox:review` records a review decision in sandbox audit without applying the config change
   - `sandbox:apply` only writes when bundle references, governance, default safety, and guardrails all pass
+  - `sandbox:batch:preview` shows:
+    - affected profile count
+    - changed field summary
+    - blocked profiles
+    - manual_required profiles
+    - default profile impact
+  - `sandbox:batch:validate` requires the batch to pass governance, guardrails, conflict checks, and default profile safety
+  - `sandbox:batch:apply` returns one of `applied`, `partially_applied`, `blocked`, `manual_required`, or `failed`
   - import payloads may be:
     - a single profile payload (`kind=profile`)
     - a full registry payload (`kind=registry`)
@@ -562,6 +583,12 @@ Sandbox target registry:
   - `review` and `import-apply` also write audit records so batch review/apply remains traceable
   - each audit record stores changed fields, previous summary, next summary, and command source
   - recent audit summaries are surfaced in operator diagnostics and live smoke precheck output
+ - blocked/manual_required cases:
+   - disabled bundle/profile -> `blocked`
+   - default-unsafe bundle or profile -> `manual_required`
+   - bundle/profile repository mismatch -> `manual_required`
+   - no valid batch selection -> `manual_required`
+   - batch with invalid profiles and `--allow-partial false` -> `blocked` or `manual_required`
 
 Minimal registry example:
 ```json
@@ -573,6 +600,10 @@ Minimal registry example:
       "repository": "example/bige",
       "targetType": "issue",
       "actionPolicy": "create_or_update",
+      "enabled": true,
+      "allowAsDefault": true,
+      "allowLiveSmoke": true,
+      "allowedProfileTargetTypes": ["issue", "pull_request"],
       "enabledByDefault": true,
       "governanceDefaults": {},
       "liveSmokeDefaults": {
@@ -625,6 +656,7 @@ node .tmp/orchestrator/src/cli.js sandbox:set-default --sandbox-config .tmp/orch
 node .tmp/orchestrator/src/cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json
 node .tmp/orchestrator/src/cli.js sandbox:bundle:list --sandbox-config .tmp/orchestrator-sandbox.json
 node .tmp/orchestrator/src/cli.js sandbox:bundle:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-bundle create-only
+node .tmp/orchestrator/src/cli.js sandbox:bundle:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-bundle create-only --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:validate --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
@@ -635,6 +667,9 @@ node .tmp/orchestrator/src/cli.js sandbox:import --sandbox-config .tmp/orchestra
 node .tmp/orchestrator/src/cli.js sandbox:diff --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json
 node .tmp/orchestrator/src/cli.js sandbox:review --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json
 node .tmp/orchestrator/src/cli.js sandbox:apply --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json
+node .tmp/orchestrator/src/cli.js sandbox:batch:preview --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only
+node .tmp/orchestrator/src/cli.js sandbox:batch:validate --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only
+node .tmp/orchestrator/src/cli.js sandbox:batch:apply --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profiles default,review --sandbox-bundle create-only --allow-partial false
 ```
 
 Typical next actions:
@@ -648,8 +683,10 @@ Typical next actions:
 - guardrails failed -> fix the selected/default/fallback profile before re-running live smoke; the orchestrator will not continue into GitHub live smoke
 - sandbox audit review -> use `sandbox:audit` before and after profile lifecycle changes if you need a change trace
 - bundle missing -> add the bundle definition or remove the stale `bundleId` before review/apply
+- bundle governance failed -> inspect `sandbox:bundle:governance` and fix `enabled`, `allowAsDefault`, `allowLiveSmoke`, or target-type compatibility
 - import preview blocked -> inspect `lastSandboxDiffSummary`, `lastSandboxReviewStatus`, and the first blocked reason before retrying
 - default profile unsafe -> change the action policy or choose a safer default before `sandbox:apply`
+- batch preview blocked -> inspect `lastBatchImpactSummary`, `lastBatchBlockedProfiles`, and decide whether `--allow-partial true` is actually acceptable
 
 Live auth evidence:
 - every auth smoke run writes a JSON evidence file and stores its path in `lastAuthSmokeEvidencePath`

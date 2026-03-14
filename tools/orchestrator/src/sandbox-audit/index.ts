@@ -33,6 +33,8 @@ function summarizeProfile(registry: GitHubSandboxTargetRegistry, profileId: stri
     actionPolicy: profile.actionPolicy,
     enabled: profile.enabled !== false,
     isDefault: registry.defaultProfileId === profileId,
+    bundleId: profile.bundleId ?? null,
+    overrideFields: profile.overrideFields ?? [],
     notes: profile.notes ?? null,
   };
 }
@@ -44,10 +46,13 @@ function detectChangedFields(previousRegistry: GitHubSandboxTargetRegistry, next
   if ((previousRegistry.defaultProfileId ?? null) !== (nextRegistry.defaultProfileId ?? null)) {
     changed.add("defaultProfileId");
   }
-  for (const field of ["repository", "targetType", "targetNumber", "actionPolicy", "enabled", "notes", "isDefault"] as const) {
+  for (const field of ["repository", "targetType", "targetNumber", "actionPolicy", "enabled", "notes", "isDefault", "bundleId"] as const) {
     if ((previous?.[field] ?? null) !== (next?.[field] ?? null)) {
       changed.add(field);
     }
+  }
+  if (JSON.stringify(previous?.overrideFields ?? []) !== JSON.stringify(next?.overrideFields ?? [])) {
+    changed.add("overrideFields");
   }
   if (!previous && next) {
     changed.add("profile_created");

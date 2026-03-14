@@ -28,6 +28,10 @@ const BUILTIN_BUNDLES: Record<string, SandboxPolicyBundle> = {
     repository: null,
     targetType: "issue",
     actionPolicy: "create_or_update",
+    enabled: true,
+    allowAsDefault: true,
+    allowLiveSmoke: true,
+    allowedProfileTargetTypes: ["issue", "pull_request"],
     enabledByDefault: true,
     notes: "Default sandbox bundle.",
   }),
@@ -35,6 +39,10 @@ const BUILTIN_BUNDLES: Record<string, SandboxPolicyBundle> = {
     repository: null,
     targetType: "issue",
     actionPolicy: "create_only",
+    enabled: true,
+    allowAsDefault: true,
+    allowLiveSmoke: true,
+    allowedProfileTargetTypes: ["issue", "pull_request"],
     enabledByDefault: true,
     notes: "Create-only sandbox bundle.",
   }),
@@ -42,6 +50,10 @@ const BUILTIN_BUNDLES: Record<string, SandboxPolicyBundle> = {
     repository: null,
     targetType: "issue",
     actionPolicy: "update_only",
+    enabled: true,
+    allowAsDefault: false,
+    allowLiveSmoke: true,
+    allowedProfileTargetTypes: ["issue", "pull_request"],
     enabledByDefault: true,
     notes: "Update-only sandbox bundle.",
   }),
@@ -49,6 +61,10 @@ const BUILTIN_BUNDLES: Record<string, SandboxPolicyBundle> = {
     repository: null,
     targetType: "issue",
     actionPolicy: "create_or_update",
+    enabled: true,
+    allowAsDefault: true,
+    allowLiveSmoke: true,
+    allowedProfileTargetTypes: ["issue", "pull_request"],
     enabledByDefault: true,
     notes: "Create or update sandbox bundle.",
   }),
@@ -56,6 +72,10 @@ const BUILTIN_BUNDLES: Record<string, SandboxPolicyBundle> = {
     repository: null,
     targetType: "issue",
     actionPolicy: "create_or_update",
+    enabled: true,
+    allowAsDefault: true,
+    allowLiveSmoke: true,
+    allowedProfileTargetTypes: ["issue", "pull_request"],
     enabledByDefault: true,
     notes: "Repository-specific sandbox bundle. Repository must be supplied by override.",
   }),
@@ -113,7 +133,7 @@ export function formatSandboxPolicyBundleList(loadedRegistry: LoadedGitHubSandbo
   lines.push("Bundles:");
   for (const bundle of bundles) {
     lines.push(
-      `- ${bundle.bundleId} [${bundle.source}]: repo=${bundle.repository ?? "override-required"} type=${bundle.targetType ?? "override-required"} action=${bundle.actionPolicy} enabledDefault=${bundle.enabledByDefault}${bundle.notes ? ` notes=${bundle.notes}` : ""}`,
+      `- ${bundle.bundleId} [${bundle.source}]: repo=${bundle.repository ?? "override-required"} type=${bundle.targetType ?? "override-required"} action=${bundle.actionPolicy} enabled=${bundle.enabled} defaultSafe=${bundle.allowAsDefault} liveSmoke=${bundle.allowLiveSmoke} enabledDefault=${bundle.enabledByDefault}${bundle.notes ? ` notes=${bundle.notes}` : ""}`,
     );
   }
   return lines.join("\n");
@@ -129,6 +149,10 @@ export function formatSandboxPolicyBundle(bundle: SandboxBundleRecord | null) {
     `Repository: ${bundle.repository ?? "override-required"}`,
     `Target type: ${bundle.targetType ?? "override-required"}`,
     `Action policy: ${bundle.actionPolicy}`,
+    `Enabled: ${bundle.enabled}`,
+    `Default-safe: ${bundle.allowAsDefault}`,
+    `Live-smoke allowed: ${bundle.allowLiveSmoke}`,
+    `Allowed profile target types: ${bundle.allowedProfileTargetTypes.join(", ") || "none"}`,
     `Enabled by default: ${bundle.enabledByDefault}`,
     `Notes: ${bundle.notes ?? "none"}`,
   ].join("\n");
@@ -191,10 +215,10 @@ export function applySandboxPolicyBundle(params: {
 
   const overrides = params.overrides ?? {};
   const existing = params.existingProfile ?? null;
-  const repository = overrides.repository ?? existing?.repository ?? template.bundle.repository ?? null;
-  const targetType = overrides.targetType ?? existing?.targetType ?? template.bundle.targetType ?? null;
+  const repository = overrides.repository ?? template.bundle.repository ?? existing?.repository ?? null;
+  const targetType = overrides.targetType ?? template.bundle.targetType ?? existing?.targetType ?? null;
   const targetNumber = overrides.targetNumber ?? existing?.targetNumber ?? null;
-  const actionPolicy = overrides.actionPolicy ?? existing?.actionPolicy ?? template.bundle.actionPolicy;
+  const actionPolicy = overrides.actionPolicy ?? template.bundle.actionPolicy;
   const enabled = overrides.enabled ?? existing?.enabled ?? template.bundle.enabledByDefault;
   const notes = overrides.notes ?? existing?.notes ?? template.bundle.notes ?? null;
 

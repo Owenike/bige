@@ -635,6 +635,10 @@ export const sandboxPolicyBundleSchema = z.object({
   repository: z.string().nullable().default(null),
   targetType: z.enum(["issue", "pull_request"]).nullable().default(null),
   actionPolicy: githubSandboxActionPolicySchema.default("create_or_update"),
+  enabled: z.boolean().default(true),
+  allowAsDefault: z.boolean().default(true),
+  allowLiveSmoke: z.boolean().default(true),
+  allowedProfileTargetTypes: z.array(z.enum(["issue", "pull_request"])).default(["issue", "pull_request"]),
   enabledByDefault: z.boolean().default(true),
   governanceDefaults: githubSandboxGovernanceSchema.partial().default({}),
   liveSmokeDefaults: z
@@ -676,6 +680,8 @@ export const sandboxAuditActionSchema = z.enum([
   "import-preview",
   "import-apply",
   "bundle-apply",
+  "batch-preview",
+  "batch-apply",
 ]);
 
 export const sandboxAuditProfileSummarySchema = z.object({
@@ -686,6 +692,8 @@ export const sandboxAuditProfileSummarySchema = z.object({
   actionPolicy: githubSandboxActionPolicySchema.nullable().default(null),
   enabled: z.boolean().nullable().default(null),
   isDefault: z.boolean().default(false),
+  bundleId: z.string().nullable().default(null),
+  overrideFields: z.array(z.string()).default([]),
   notes: z.string().nullable().default(null),
 });
 
@@ -719,6 +727,16 @@ export const sandboxImportExportStatusSchema = z.enum([
 
 export const sandboxReviewStatusSchema = z.enum(["not_run", "ready", "blocked", "manual_required", "failed"]);
 export const sandboxApplyStatusSchema = z.enum(["not_run", "applied", "blocked", "manual_required", "failed"]);
+export const sandboxBatchChangeStatusSchema = z.enum([
+  "not_run",
+  "previewed",
+  "validated",
+  "applied",
+  "partially_applied",
+  "blocked",
+  "manual_required",
+  "failed",
+]);
 
 export const githubLiveAuthEvidenceSchema = z.object({
   attemptedAt: z.string(),
@@ -1027,6 +1045,9 @@ export const orchestratorStateSchema = z.object({
   profileGovernanceStatus: sandboxGovernanceStatusSchema.default("unknown"),
   profileGovernanceReason: z.string().nullable().default(null),
   profileGovernanceSuggestedNextAction: z.string().nullable().default(null),
+  bundleGovernanceStatus: sandboxGovernanceStatusSchema.default("unknown"),
+  bundleGovernanceReason: z.string().nullable().default(null),
+  bundleGovernanceSuggestedNextAction: z.string().nullable().default(null),
   lastSandboxAuditId: z.string().nullable().default(null),
   lastSandboxGuardrailsStatus: sandboxGovernanceStatusSchema.default("unknown"),
   lastSandboxGuardrailsReason: z.string().nullable().default(null),
@@ -1041,6 +1062,10 @@ export const orchestratorStateSchema = z.object({
   lastSandboxReviewSummary: z.string().nullable().default(null),
   lastSandboxApplyStatus: sandboxApplyStatusSchema.default("not_run"),
   lastSandboxApplySummary: z.string().nullable().default(null),
+  lastBatchChangeStatus: sandboxBatchChangeStatusSchema.default("not_run"),
+  lastBatchImpactSummary: z.string().nullable().default(null),
+  lastBatchAffectedProfiles: z.array(z.string()).default([]),
+  lastBatchBlockedProfiles: z.array(z.string()).default([]),
   authSmokeStatus: githubAuthSmokeStatusSchema.default("not_run"),
   authSmokeSuccessStatus: z.enum(["not_run", "success", "non_success"]).default("not_run"),
   authSmokeMode: githubAuthSmokeModeSchema.default("none"),
@@ -1677,6 +1702,9 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "profileGovernanceStatus",
     "profileGovernanceReason",
     "profileGovernanceSuggestedNextAction",
+    "bundleGovernanceStatus",
+    "bundleGovernanceReason",
+    "bundleGovernanceSuggestedNextAction",
     "lastSandboxAuditId",
     "lastSandboxGuardrailsStatus",
     "lastSandboxGuardrailsReason",
@@ -1691,6 +1719,10 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastSandboxReviewSummary",
     "lastSandboxApplyStatus",
     "lastSandboxApplySummary",
+    "lastBatchChangeStatus",
+    "lastBatchImpactSummary",
+    "lastBatchAffectedProfiles",
+    "lastBatchBlockedProfiles",
     "authSmokeStatus",
     "authSmokeSuccessStatus",
     "authSmokeMode",
@@ -2380,6 +2412,12 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     },
     profileGovernanceReason: { type: "string", nullable: true },
     profileGovernanceSuggestedNextAction: { type: "string", nullable: true },
+    bundleGovernanceStatus: {
+      type: "string",
+      enum: ["unknown", "ready", "blocked", "manual_required"],
+    },
+    bundleGovernanceReason: { type: "string", nullable: true },
+    bundleGovernanceSuggestedNextAction: { type: "string", nullable: true },
     lastSandboxAuditId: { type: "string", nullable: true },
     lastSandboxGuardrailsStatus: {
       type: "string",
@@ -2415,6 +2453,19 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       enum: ["not_run", "applied", "blocked", "manual_required", "failed"],
     },
     lastSandboxApplySummary: { type: "string", nullable: true },
+    lastBatchChangeStatus: {
+      type: "string",
+      enum: ["not_run", "previewed", "validated", "applied", "partially_applied", "blocked", "manual_required", "failed"],
+    },
+    lastBatchImpactSummary: { type: "string", nullable: true },
+    lastBatchAffectedProfiles: {
+      type: "array",
+      items: { type: "string" },
+    },
+    lastBatchBlockedProfiles: {
+      type: "array",
+      items: { type: "string" },
+    },
     authSmokeStatus: {
       type: "string",
       enum: ["not_run", "skipped", "passed", "failed", "blocked", "manual_required"],

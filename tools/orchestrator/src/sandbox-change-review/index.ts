@@ -1,6 +1,7 @@
 import type { LoadedGitHubSandboxTargetRegistry } from "../github-sandbox-targets";
 import type { OrchestratorState, GitHubSandboxTargetRegistry } from "../schemas";
 import { appendSandboxAuditRecord } from "../sandbox-audit";
+import { evaluateSandboxBundleGovernance } from "../sandbox-bundle-governance";
 import { evaluateSandboxProfileGovernance, evaluateSandboxGuardrails } from "../sandbox-governance";
 import {
   cloneSandboxRegistry,
@@ -102,9 +103,32 @@ export function buildSandboxRegistryDiff(current: GitHubSandboxTargetRegistry, p
 }
 
 function validateBundleReferences(loadedRegistry: LoadedGitHubSandboxTargetRegistry, proposed: GitHubSandboxTargetRegistry) {
-  const invalidProfileIds = Object.entries(proposed.profiles)
-    .filter(([, profile]) => profile.bundleId && !showSandboxPolicyBundle(loadedRegistry, profile.bundleId))
-    .map(([profileId]) => profileId);
+  const invalidProfileIds: string[] = [];
+  for (const [profileId, profile] of Object.entries(proposed.profiles)) {
+    if (!profile.bundleId) {
+      continue;
+    }
+    if (!showSandboxPolicyBundle(loadedRegistry, profile.bundleId)) {
+      invalidProfileIds.push(profileId);
+      continue;
+    }
+    const governance = evaluateSandboxBundleGovernance({
+      loadedRegistry,
+      bundleId: profile.bundleId,
+      profileId,
+      intendedUse: proposed.defaultProfileId === profileId ? "default" : "apply",
+    });
+    if (governance.status !== "ready") {
+      return {
+        status: governance.status,
+        failureReason: governance.reason?.code ?? "sandbox_bundle_governance_failed",
+        summary: governance.summary,
+        suggestedNextAction:
+          governance.reason?.suggestedNextAction ??
+          "Fix the sandbox bundle governance issue before apply.",
+      };
+    }
+  }
   if (invalidProfileIds.length === 0) {
     return null;
   }
