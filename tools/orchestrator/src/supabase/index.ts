@@ -28,7 +28,9 @@ export interface RemoteDocumentStore {
   readonly kind: "supabase";
   readonly table: string;
   load(key: string): Promise<RemoteDocumentRecord | null>;
+  list(prefix?: string): Promise<RemoteDocumentRecord[]>;
   save(key: string, value: unknown, expectedVersion: number | null): Promise<RemoteDocumentSaveResult>;
+  remove(key: string): Promise<void>;
   initialize(): Promise<RemoteStoreOperationResult>;
   migrate(): Promise<RemoteStoreOperationResult>;
   status(): Promise<RemoteStoreOperationResult>;
@@ -109,6 +111,26 @@ export class SupabaseDocumentStore implements RemoteDocumentStore {
     } satisfies RemoteDocumentRecord;
   }
 
+  async list(prefix?: string) {
+    let query = this.tableClient().select("key,value,version,updated_at").order("key", { ascending: true });
+    if (prefix) {
+      query = query.like("key", `${prefix}%`);
+    }
+    const { data, error } = await query.returns<SupabaseDocumentRow[]>();
+    if (error) {
+      throw new Error(`Supabase document list failed${prefix ? ` for ${prefix}` : ""}: ${error.message}`);
+    }
+    return (data ?? []).map(
+      (row) =>
+        ({
+          key: row.key,
+          value: row.value,
+          version: row.version,
+          updatedAt: row.updated_at,
+        }) satisfies RemoteDocumentRecord,
+    );
+  }
+
   async save(key: string, value: unknown, expectedVersion: number | null) {
     const updatedAt = new Date().toISOString();
     if (expectedVersion === null) {
@@ -164,6 +186,13 @@ export class SupabaseDocumentStore implements RemoteDocumentStore {
       version: data.version,
       updatedAt: data.updated_at,
     } satisfies RemoteDocumentSaveResult;
+  }
+
+  async remove(key: string) {
+    const { error } = await this.tableClient().delete().eq("key", key);
+    if (error) {
+      throw new Error(`Supabase document delete failed for ${key}: ${error.message}`);
+    }
   }
 
   private async runMigration(status: "initialized" | "migrated") {
@@ -241,4 +270,37 @@ export function createSupabaseDocumentStoreFromEnv(options?: {
     migrationExecutor: options?.migrationExecutor ?? null,
     migrationPath: options?.migrationPath,
   });
+}
+
+export function createScopedRemoteDocumentStore(store: RemoteDocumentStore, prefix: string): RemoteDocumentStore {
+  const normalizeKey = (key: string) => `${prefix}${key}`;
+  return {
+    kind: store.kind,
+    table: store.table,
+    async load(key) {
+      return store.load(normalizeKey(key));
+    },
+    async list(listPrefix) {
+      const records = await store.list(normalizeKey(listPrefix ?? ""));
+      return records.map((record) => ({
+        ...record,
+        key: record.key.startsWith(prefix) ? record.key.slice(prefix.length) : record.key,
+      }));
+    },
+    async save(key, value, expectedVersion) {
+      return store.save(normalizeKey(key), value, expectedVersion);
+    },
+    async remove(key) {
+      await store.remove(normalizeKey(key));
+    },
+    async initialize() {
+      return store.initialize();
+    },
+    async migrate() {
+      return store.migrate();
+    },
+    async status() {
+      return store.status();
+    },
+  };
 }

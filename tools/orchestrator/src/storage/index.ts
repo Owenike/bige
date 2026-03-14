@@ -14,6 +14,7 @@ import type { RemoteDocumentStore } from "../supabase";
 export interface StorageProvider {
   loadState(id: string): Promise<OrchestratorState | null>;
   saveState(state: OrchestratorState): Promise<void>;
+  listStateIds(): Promise<string[]>;
   loadQueue(): Promise<QueueRunCollection>;
   saveQueue(queue: QueueRunCollection): Promise<void>;
 }
@@ -55,6 +56,22 @@ export class FileStorage implements StorageProvider {
 
   async saveState(state: OrchestratorState) {
     await this.atomicWrite(this.getStatePath(state.id), `${JSON.stringify(state, null, 2)}\n`);
+  }
+
+  async listStateIds() {
+    try {
+      const { readdir } = await import("node:fs/promises");
+      const entries = await readdir(this.rootDir, { withFileTypes: true });
+      return entries
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".json") && entry.name !== "queue.json")
+        .map((entry) => entry.name.slice(0, -5))
+        .sort();
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        return [];
+      }
+      throw error;
+    }
   }
 
   async loadQueue(): Promise<QueueRunCollection> {
@@ -105,6 +122,15 @@ export class SupabaseStorage implements StorageProvider {
     if (!saved.applied) {
       throw new Error(`SupabaseStorage save conflict for ${key}.`);
     }
+  }
+
+  async listStateIds() {
+    const records = await this.store.list("state:");
+    return records
+      .map((record) => record.key)
+      .filter((key) => key.startsWith("state:"))
+      .map((key) => key.slice("state:".length))
+      .sort();
   }
 
   async loadQueue(): Promise<QueueRunCollection> {

@@ -73,7 +73,7 @@ import { writeLiveEvidence } from "./live-evidence";
 import { runOrchestratorPreflight, type PreflightTargetName } from "./preflight";
 import { normalizeHandoffConfig, resolveTaskProfile } from "./profiles";
 import { FileBackendProvider, SqliteBackendProvider, SupabaseBackendProvider, type BackendProvider } from "./backend";
-import { createSupabaseDocumentStoreFromEnv } from "./supabase";
+import { createSupabaseDocumentStoreFromEnv, type RemoteDocumentStore } from "./supabase";
 
 type ProviderMap<T> = Record<PlannerProviderKind, T | null>;
 type ExecutorProviderMap = Record<ExecutorProviderKind, ExecutionProvider | null>;
@@ -434,6 +434,7 @@ export function createInitialState(params: {
       liveAcceptanceStatus: "not_run",
       livePassStatus: "not_run",
       backendType: params.backendType ?? "file",
+      backendHealthStatus: "unknown",
       queueStatus: "not_queued",
       workerStatus: "idle",
       cancellationStatus: "none",
@@ -457,6 +458,12 @@ export function createInitialState(params: {
       lastArtifactPruneResult: null,
       lastLiveSmokeResult: null,
       lastLiveAcceptanceResult: null,
+      lastBackendLiveSmokeResult: null,
+      lastBackendHealthSummary: null,
+      transferStatus: "not_run",
+      lastTransferSummary: null,
+      repairStatus: "not_run",
+      lastRepairDecision: null,
       lastCleanupDecision: null,
       lastPrDraftMetadata: null,
       lastGitHubHandoffResult: null,
@@ -1568,11 +1575,12 @@ export function createDefaultDependencies(params: {
   mockCiStatus?: CIStatusSummary;
   openaiClient?: OpenAIResponsesClient | null;
   workspaceRoot?: string;
+  supabaseStore?: RemoteDocumentStore | null;
 }) {
   const requestedBackend = params.backendType ?? "file";
   const fallbackBackend = params.backendFallbackType ?? "blocked";
   const backendRoot = params.backendRoot ?? params.storageRoot ?? path.join(params.repoPath, ".tmp", "orchestrator-state");
-  const supabaseStore = requestedBackend === "supabase" ? createSupabaseDocumentStoreFromEnv() : null;
+  const supabaseStore = requestedBackend === "supabase" ? (params.supabaseStore ?? createSupabaseDocumentStoreFromEnv()) : null;
 
   let storage: StorageProvider;
   let backend: BackendProvider;

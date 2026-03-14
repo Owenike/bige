@@ -198,6 +198,9 @@ export const livePassStatusSchema = z.enum(["not_run", "skipped", "passed", "fai
 export const handoffStatusSchema = z.enum(["not_ready", "exported", "handoff_ready", "branch_published", "handoff_failed"]);
 export const prDraftStatusSchema = z.enum(["not_ready", "metadata_ready", "payload_ready", "skipped", "failed"]);
 export const backendTypeSchema = z.enum(["file", "sqlite", "supabase"]);
+export const backendHealthStatusSchema = z.enum(["unknown", "ready", "degraded", "blocked", "manual_required", "skipped", "failed"]);
+export const transferStatusSchema = z.enum(["not_run", "exported", "imported", "completed", "skipped", "blocked", "manual_required", "failed"]);
+export const repairStatusSchema = z.enum(["not_run", "repaired", "skipped", "manual_required", "failed"]);
 export const queueStatusSchema = z.enum(["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"]);
 export const cancellationStatusSchema = z.enum(["none", "cancel_requested", "cancelled"]);
 export const pauseStatusSchema = z.enum(["none", "pause_requested", "paused"]);
@@ -338,6 +341,55 @@ export const liveEvidenceSchema = z.object({
   toolLogPath: z.string().nullable().default(null),
   commandLogPath: z.string().nullable().default(null),
   patchArtifactPath: z.string().nullable().default(null),
+});
+
+export const backendLiveSmokeResultSchema = z.object({
+  backendType: backendTypeSchema,
+  status: z.enum(["skipped", "passed", "failed", "blocked", "manual_required"]),
+  summary: z.string(),
+  reason: z.string(),
+  reportPath: z.string().nullable().default(null),
+  evidencePath: z.string().nullable().default(null),
+  ranAt: z.string(),
+});
+
+export const backendHealthSummarySchema = z.object({
+  backendType: backendTypeSchema,
+  status: backendHealthStatusSchema,
+  queueDepth: z.number().int().nonnegative().default(0),
+  activeLeaseCount: z.number().int().nonnegative().default(0),
+  staleLeaseCount: z.number().int().nonnegative().default(0),
+  orphanRunCount: z.number().int().nonnegative().default(0),
+  pendingApprovalCount: z.number().int().nonnegative().default(0),
+  pendingPromotionCount: z.number().int().nonnegative().default(0),
+  recoverableAnomalyCount: z.number().int().nonnegative().default(0),
+  summary: z.string(),
+  details: z.array(z.string()).default([]),
+  inspectedAt: z.string(),
+});
+
+export const backendTransferSummarySchema = z.object({
+  status: transferStatusSchema,
+  sourceBackend: backendTypeSchema,
+  targetBackend: backendTypeSchema,
+  exportedStateCount: z.number().int().nonnegative().default(0),
+  importedStateCount: z.number().int().nonnegative().default(0),
+  queueItemCount: z.number().int().nonnegative().default(0),
+  workerCount: z.number().int().nonnegative().default(0),
+  skippedItems: z.array(z.string()).default([]),
+  conflicts: z.array(z.string()).default([]),
+  notes: z.array(z.string()).default([]),
+  snapshotPath: z.string().nullable().default(null),
+  createdAt: z.string(),
+});
+
+export const backendRepairResultSchema = z.object({
+  status: repairStatusSchema,
+  staleRequeuedCount: z.number().int().nonnegative().default(0),
+  orphanBlockedCount: z.number().int().nonnegative().default(0),
+  manualRequiredReasons: z.array(z.string()).default([]),
+  summary: z.string(),
+  ranAt: z.string(),
 });
 
 export const blockedReasonSchema = z.object({
@@ -554,6 +606,7 @@ export const orchestratorStateSchema = z.object({
   liveAcceptanceStatus: liveAcceptanceStatusSchema.default("not_run"),
   livePassStatus: livePassStatusSchema.default("not_run"),
   backendType: backendTypeSchema.default("file"),
+  backendHealthStatus: backendHealthStatusSchema.default("unknown"),
   queueStatus: queueStatusSchema.default("not_queued"),
   workerStatus: workerRuntimeStatusSchema.default("idle"),
   cancellationStatus: cancellationStatusSchema.default("none"),
@@ -577,6 +630,12 @@ export const orchestratorStateSchema = z.object({
   lastArtifactPruneResult: artifactPruneResultSchema.nullable().default(null),
   lastLiveSmokeResult: liveSmokeResultSchema.nullable().default(null),
   lastLiveAcceptanceResult: liveSmokeResultSchema.nullable().default(null),
+  lastBackendLiveSmokeResult: backendLiveSmokeResultSchema.nullable().default(null),
+  lastBackendHealthSummary: backendHealthSummarySchema.nullable().default(null),
+  transferStatus: transferStatusSchema.default("not_run"),
+  lastTransferSummary: backendTransferSummarySchema.nullable().default(null),
+  repairStatus: repairStatusSchema.default("not_run"),
+  lastRepairDecision: backendRepairResultSchema.nullable().default(null),
   lastCleanupDecision: cleanupDecisionSchema.nullable().default(null),
   lastPrDraftMetadata: prDraftMetadataSchema.nullable().default(null),
   lastGitHubHandoffResult: githubHandoffResultSchema.nullable().default(null),
@@ -611,11 +670,18 @@ export type CleanupDecision = z.infer<typeof cleanupDecisionSchema>;
 export type PrDraftMetadata = z.infer<typeof prDraftMetadataSchema>;
 export type GitHubHandoffResult = z.infer<typeof githubHandoffResultSchema>;
 export type LiveEvidence = z.infer<typeof liveEvidenceSchema>;
+export type BackendLiveSmokeResult = z.infer<typeof backendLiveSmokeResultSchema>;
+export type BackendHealthSummary = z.infer<typeof backendHealthSummarySchema>;
+export type BackendTransferSummary = z.infer<typeof backendTransferSummarySchema>;
+export type BackendRepairResult = z.infer<typeof backendRepairResultSchema>;
 export type AuditTrail = z.infer<typeof auditTrailSchema>;
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 export type PreflightTarget = z.infer<typeof preflightTargetSchema>;
 export type PreflightResult = z.infer<typeof preflightResultSchema>;
 export type BackendType = z.infer<typeof backendTypeSchema>;
+export type BackendHealthStatus = z.infer<typeof backendHealthStatusSchema>;
+export type TransferStatus = z.infer<typeof transferStatusSchema>;
+export type RepairStatus = z.infer<typeof repairStatusSchema>;
 export type QueueStatus = z.infer<typeof queueStatusSchema>;
 export type CancellationStatus = z.infer<typeof cancellationStatusSchema>;
 export type PauseStatus = z.infer<typeof pauseStatusSchema>;
@@ -958,6 +1024,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "liveAcceptanceStatus",
     "livePassStatus",
     "backendType",
+    "backendHealthStatus",
     "exportArtifactPaths",
     "queueStatus",
     "workerStatus",
@@ -981,6 +1048,12 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastArtifactPruneResult",
     "lastLiveSmokeResult",
     "lastLiveAcceptanceResult",
+    "lastBackendLiveSmokeResult",
+    "lastBackendHealthSummary",
+    "transferStatus",
+    "lastTransferSummary",
+    "repairStatus",
+    "lastRepairDecision",
     "lastCleanupDecision",
     "lastPrDraftMetadata",
     "lastGitHubHandoffResult",
@@ -1172,6 +1245,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       enum: ["not_run", "skipped", "passed", "failed", "blocked"],
     },
     backendType: { type: "string", enum: ["file", "sqlite", "supabase"] },
+    backendHealthStatus: { type: "string", enum: ["unknown", "ready", "degraded", "blocked", "manual_required", "skipped", "failed"] },
     queueStatus: {
       type: "string",
       enum: ["not_queued", "queued", "running", "paused", "completed", "failed", "blocked", "cancelled"],
@@ -1263,6 +1337,109 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         transcriptSummaryPath: { type: "string", nullable: true },
         toolLogPath: { type: "string", nullable: true },
         commandLogPath: { type: "string", nullable: true },
+        ranAt: { type: "string" },
+      },
+    },
+    lastBackendLiveSmokeResult: {
+      type: "object",
+      nullable: true,
+      required: ["backendType", "status", "summary", "reason", "reportPath", "evidencePath", "ranAt"],
+      additionalProperties: false,
+      properties: {
+        backendType: { type: "string", enum: ["file", "sqlite", "supabase"] },
+        status: { type: "string", enum: ["skipped", "passed", "failed", "blocked", "manual_required"] },
+        summary: { type: "string" },
+        reason: { type: "string" },
+        reportPath: { type: "string", nullable: true },
+        evidencePath: { type: "string", nullable: true },
+        ranAt: { type: "string" },
+      },
+    },
+    lastBackendHealthSummary: {
+      type: "object",
+      nullable: true,
+      required: [
+        "backendType",
+        "status",
+        "queueDepth",
+        "activeLeaseCount",
+        "staleLeaseCount",
+        "orphanRunCount",
+        "pendingApprovalCount",
+        "pendingPromotionCount",
+        "recoverableAnomalyCount",
+        "summary",
+        "details",
+        "inspectedAt",
+      ],
+      additionalProperties: false,
+      properties: {
+        backendType: { type: "string", enum: ["file", "sqlite", "supabase"] },
+        status: { type: "string", enum: ["unknown", "ready", "degraded", "blocked", "manual_required", "skipped", "failed"] },
+        queueDepth: { type: "number" },
+        activeLeaseCount: { type: "number" },
+        staleLeaseCount: { type: "number" },
+        orphanRunCount: { type: "number" },
+        pendingApprovalCount: { type: "number" },
+        pendingPromotionCount: { type: "number" },
+        recoverableAnomalyCount: { type: "number" },
+        summary: { type: "string" },
+        details: { type: "array", items: { type: "string" } },
+        inspectedAt: { type: "string" },
+      },
+    },
+    transferStatus: {
+      type: "string",
+      enum: ["not_run", "exported", "imported", "completed", "skipped", "blocked", "manual_required", "failed"],
+    },
+    lastTransferSummary: {
+      type: "object",
+      nullable: true,
+      required: [
+        "status",
+        "sourceBackend",
+        "targetBackend",
+        "exportedStateCount",
+        "importedStateCount",
+        "queueItemCount",
+        "workerCount",
+        "skippedItems",
+        "conflicts",
+        "notes",
+        "snapshotPath",
+        "createdAt",
+      ],
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["not_run", "exported", "imported", "completed", "skipped", "blocked", "manual_required", "failed"] },
+        sourceBackend: { type: "string", enum: ["file", "sqlite", "supabase"] },
+        targetBackend: { type: "string", enum: ["file", "sqlite", "supabase"] },
+        exportedStateCount: { type: "number" },
+        importedStateCount: { type: "number" },
+        queueItemCount: { type: "number" },
+        workerCount: { type: "number" },
+        skippedItems: { type: "array", items: { type: "string" } },
+        conflicts: { type: "array", items: { type: "string" } },
+        notes: { type: "array", items: { type: "string" } },
+        snapshotPath: { type: "string", nullable: true },
+        createdAt: { type: "string" },
+      },
+    },
+    repairStatus: {
+      type: "string",
+      enum: ["not_run", "repaired", "skipped", "manual_required", "failed"],
+    },
+    lastRepairDecision: {
+      type: "object",
+      nullable: true,
+      required: ["status", "staleRequeuedCount", "orphanBlockedCount", "manualRequiredReasons", "summary", "ranAt"],
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["not_run", "repaired", "skipped", "manual_required", "failed"] },
+        staleRequeuedCount: { type: "number" },
+        orphanBlockedCount: { type: "number" },
+        manualRequiredReasons: { type: "array", items: { type: "string" } },
+        summary: { type: "string" },
         ranAt: { type: "string" },
       },
     },

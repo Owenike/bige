@@ -22,6 +22,12 @@ export class MemorySupabaseDocumentStore implements RemoteDocumentStore {
     return this.records.get(key) ?? null;
   }
 
+  async list(prefix?: string) {
+    return [...this.records.values()]
+      .filter((record) => (prefix ? record.key.startsWith(prefix) : true))
+      .sort((left, right) => left.key.localeCompare(right.key));
+  }
+
   async save(key: string, value: unknown, expectedVersion: number | null): Promise<RemoteDocumentSaveResult> {
     const existing = this.records.get(key) ?? null;
     if (existing) {
@@ -66,6 +72,10 @@ export class MemorySupabaseDocumentStore implements RemoteDocumentStore {
       version: created.version,
       updatedAt: created.updatedAt,
     };
+  }
+
+  async remove(key: string) {
+    this.records.delete(key);
   }
 
   async initialize() {

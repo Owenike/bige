@@ -6,6 +6,7 @@ import { createInitialState } from "../../src/orchestrator";
 import { MemorySupabaseDocumentStore } from "./supabase.fixture";
 
 test("remote backend prevents a second worker from claiming the same run", async () => {
+  const scheduledAt = "2026-03-13T23:59:00.000Z";
   const backend = new SupabaseBackendProvider({
     store: new MemorySupabaseDocumentStore(),
   });
@@ -20,7 +21,7 @@ test("remote backend prevents a second worker from claiming the same run", async
     backendType: "supabase",
   });
 
-  await enqueueStateRun({ backend, state });
+  await enqueueStateRun({ backend, state, scheduledAt });
   const first = await acquireNextQueueRun({
     backend,
     workerId: "worker-a",
@@ -39,6 +40,7 @@ test("remote backend prevents a second worker from claiming the same run", async
 });
 
 test("remote backend allows stale lease takeover after expiry", async () => {
+  const scheduledAt = "2026-03-13T23:59:00.000Z";
   const backend = new SupabaseBackendProvider({
     store: new MemorySupabaseDocumentStore(),
   });
@@ -53,7 +55,7 @@ test("remote backend allows stale lease takeover after expiry", async () => {
     backendType: "supabase",
   });
 
-  await enqueueStateRun({ backend, state });
+  await enqueueStateRun({ backend, state, scheduledAt });
   const claimed = await acquireNextQueueRun({
     backend,
     workerId: "worker-a",

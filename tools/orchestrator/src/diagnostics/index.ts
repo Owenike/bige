@@ -17,7 +17,10 @@ export type OrchestratorDiagnostics = {
   }>;
   artifactSummary: {
     backendType: string;
+    backendHealthStatus: string;
     queueStatus: string;
+    transferStatus: string;
+    repairStatus: string;
     patchStatus: string;
     promotionStatus: string;
     handoffStatus: string;
@@ -111,7 +114,10 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
     blockedReasons,
     artifactSummary: {
       backendType: state.backendType,
+      backendHealthStatus: state.backendHealthStatus,
       queueStatus: state.queueStatus,
+      transferStatus: state.transferStatus,
+      repairStatus: state.repairStatus,
       patchStatus: state.patchStatus,
       promotionStatus: state.promotionStatus,
       handoffStatus: state.handoffStatus,
@@ -147,7 +153,7 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     `Planner: ${summary.plannerSummary}`,
     `Reviewer: ${summary.reviewerSummary}`,
     `Last iteration: ${summary.lastIterationSummary}`,
-    `Artifacts: backend=${summary.artifactSummary.backendType}, queue=${summary.artifactSummary.queueStatus}, patch=${summary.artifactSummary.patchStatus}, promotion=${summary.artifactSummary.promotionStatus}, handoff=${summary.artifactSummary.handoffStatus}, prDraft=${summary.artifactSummary.prDraftStatus}, liveAcceptance=${summary.artifactSummary.liveAcceptanceStatus}, livePass=${summary.artifactSummary.livePassStatus}, workspace=${summary.artifactSummary.workspaceStatus}`,
+    `Artifacts: backend=${summary.artifactSummary.backendType}, backendHealth=${summary.artifactSummary.backendHealthStatus}, queue=${summary.artifactSummary.queueStatus}, transfer=${summary.artifactSummary.transferStatus}, repair=${summary.artifactSummary.repairStatus}, patch=${summary.artifactSummary.patchStatus}, promotion=${summary.artifactSummary.promotionStatus}, handoff=${summary.artifactSummary.handoffStatus}, prDraft=${summary.artifactSummary.prDraftStatus}, liveAcceptance=${summary.artifactSummary.liveAcceptanceStatus}, livePass=${summary.artifactSummary.livePassStatus}, workspace=${summary.artifactSummary.workspaceStatus}`,
     `Worker: status=${summary.workerSummary.workerStatus}, supervision=${summary.workerSummary.supervisionStatus}, workerId=${summary.workerSummary.workerId ?? "none"}, leaseOwner=${summary.workerSummary.leaseOwner ?? "none"}, lastHeartbeat=${summary.workerSummary.lastHeartbeatAt ?? "none"}, lastLeaseRenewal=${summary.workerSummary.lastLeaseRenewalAt ?? "none"}, daemonHeartbeat=${summary.workerSummary.daemonHeartbeatAt ?? "none"}, cancel=${summary.workerSummary.cancellationStatus}, pause=${summary.workerSummary.pauseStatus}, retries=${summary.workerSummary.retryCount}`,
     `Recovery: action=${summary.recoverySummary.action ?? "none"}, reason=${summary.recoverySummary.reason ?? "none"}`,
     `Blockers: ${summary.blockers.join(" | ") || "none"}`,

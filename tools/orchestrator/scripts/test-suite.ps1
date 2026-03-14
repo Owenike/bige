@@ -69,12 +69,16 @@ $suiteMap = @{
     "$outDir\tests\unit\supabase-backend.test.js",
     "$outDir\tests\unit\remote-locking.test.js",
     "$outDir\tests\unit\backend-migration.test.js",
-    "$outDir\tests\unit\remote-diagnostics.test.js"
+    "$outDir\tests\unit\remote-diagnostics.test.js",
+    "$outDir\tests\unit\backend-transfer.test.js",
+    "$outDir\tests\unit\multi-worker-remote.test.js",
+    "$outDir\tests\unit\backend-health.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",
-    "$outDir\tests\integration\live-pass.test.js"
+    "$outDir\tests\integration\live-pass.test.js",
+    "$outDir\tests\integration\supabase-live.test.js"
   )
   "schema" = @(
     "$outDir\tests\unit\schema-validation.test.js"
@@ -179,6 +183,18 @@ $suiteMap = @{
   "remote-diagnostics" = @(
     "$outDir\tests\unit\remote-diagnostics.test.js"
   )
+  "backend-transfer" = @(
+    "$outDir\tests\unit\backend-transfer.test.js"
+  )
+  "multi-worker-remote" = @(
+    "$outDir\tests\unit\multi-worker-remote.test.js"
+  )
+  "backend-health" = @(
+    "$outDir\tests\unit\backend-health.test.js"
+  )
+  "supabase-live" = @(
+    "$outDir\tests\integration\supabase-live.test.js"
+  )
   "live-smoke" = @(
     "$outDir\tests\integration\live-smoke.test.js"
   )
@@ -231,10 +247,14 @@ $suiteMap = @{
     "$outDir\tests\unit\remote-locking.test.js",
     "$outDir\tests\unit\backend-migration.test.js",
     "$outDir\tests\unit\remote-diagnostics.test.js",
+    "$outDir\tests\unit\backend-transfer.test.js",
+    "$outDir\tests\unit\multi-worker-remote.test.js",
+    "$outDir\tests\unit\backend-health.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",
     "$outDir\tests\integration\live-pass.test.js",
+    "$outDir\tests\integration\supabase-live.test.js",
     "$outDir\tests\e2e\mock-loop.test.js",
     "$outDir\tests\e2e\multi-iteration-loop.test.js"
   )

@@ -47,7 +47,11 @@ $scripts = @(
   "test:orchestrator:supabase-backend",
   "test:orchestrator:remote-locking",
   "test:orchestrator:backend-migration",
-  "test:orchestrator:remote-diagnostics"
+  "test:orchestrator:remote-diagnostics",
+  "test:orchestrator:supabase-live",
+  "test:orchestrator:backend-transfer",
+  "test:orchestrator:multi-worker-remote",
+  "test:orchestrator:backend-health"
 )
 
 foreach ($script in $scripts) {

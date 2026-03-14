@@ -7,6 +7,7 @@ import { createDefaultDependencies, createInitialState } from "../../src/orchest
 import { acquireNextQueueRun, enqueueStateRun } from "../../src/queue";
 
 test("locking prevents a second worker from taking a conflicting run until the lease expires", async () => {
+  const scheduledAt = "2026-03-13T23:59:00.000Z";
   const storageRoot = await mkdtemp(path.join(tmpdir(), "orchestrator-locking-"));
   const repoPath = process.cwd();
   const workspaceRoot = path.join(repoPath, ".tmp", "orchestrator-workspaces");
@@ -38,8 +39,8 @@ test("locking prevents a second worker from taking a conflicting run until the l
   });
   await dependencies.storage.saveState(firstState);
   await dependencies.storage.saveState(secondState);
-  await enqueueStateRun({ backend: dependencies.backend, state: firstState, priority: 5 });
-  await enqueueStateRun({ backend: dependencies.backend, state: secondState, priority: 4 });
+  await enqueueStateRun({ backend: dependencies.backend, state: firstState, priority: 5, scheduledAt });
+  await enqueueStateRun({ backend: dependencies.backend, state: secondState, priority: 4, scheduledAt });
 
   const claimed = await acquireNextQueueRun({
     backend: dependencies.backend,

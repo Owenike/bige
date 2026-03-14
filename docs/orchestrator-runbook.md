@@ -207,6 +207,13 @@ Diagnostics summarize:
 - worker count
 - readiness / migration details
 
+Additional backend operator paths:
+- `backend:live-smoke`
+- `backend:health`
+- `backend:repair`
+- `backend:export`
+- `backend:import`
+
 ## Queue / Worker / Lock / Recovery
 The orchestrator can now run through a durable queue instead of only ad hoc CLI execution.
 
@@ -388,6 +395,88 @@ Current migration path:
 - apply [tools/orchestrator/src/migrations/orchestrator_supabase.sql](/c:/Users/User/bige/tools/orchestrator/src/migrations/orchestrator_supabase.sql)
 - once the table exists, `backend:status` should report `ready`
 
+Supabase live backend smoke:
+```powershell
+npm run orchestrator:backend:live-smoke -- --backend-type supabase
+```
+
+Live backend smoke checks:
+- Supabase URL
+- service-role/admin key
+- table availability
+- enqueue/dequeue
+- lock acquire/release
+- heartbeat renew
+- stale detection
+
+Result behavior:
+- missing env -> `skipped`
+- backend not initialized -> `manual_required` or `blocked`
+- successful run -> persists backend live smoke result and evidence summary
+
+Required env for Supabase live/backend commands:
+- `ORCHESTRATOR_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL`
+- `ORCHESTRATOR_SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SERVICE_ROLE_KEY`
+- optional `ORCHESTRATOR_SUPABASE_SCHEMA`
+- optional `ORCHESTRATOR_SUPABASE_TABLE`
+
+## Backend Transfer / Bootstrap
+Use transfer tooling when moving orchestrator state between durable backends:
+
+```powershell
+npm run orchestrator:backend:export -- --backend-type file
+npm run orchestrator:backend:import -- --backend-type sqlite --snapshot .tmp/orchestrator-transfer/export.json
+npm run orchestrator:backend:import -- --backend-type supabase --snapshot .tmp/orchestrator-transfer/export.json
+```
+
+Current safe transfer path:
+- `file -> sqlite`
+- `file -> supabase`
+- `sqlite -> supabase`
+
+Transfer includes:
+- task states
+- runs / iterations
+- queue items
+- diagnostics-friendly summary
+
+Transfer intentionally does not preserve live locks/leases as active ownership:
+- running leases are cleared during import
+- imported queue items are normalized to safe states
+- live worker ownership is rebuilt after import instead of copied blindly
+
+Each transfer writes:
+- export/import summary
+- skipped item count
+- conflict count
+- manual follow-up notes when cleanup/rebuild is required
+
+## Backend Health / Repair
+```powershell
+npm run orchestrator:backend:health -- --backend-type supabase
+npm run orchestrator:backend:repair -- --backend-type supabase
+```
+
+`backend:health` summarizes:
+- backend type
+- queue depth
+- active leases
+- stale leases
+- orphan runs
+- pending approval count
+- pending promotion count
+- recoverable anomalies
+
+`backend:repair` can safely:
+- requeue stale runs
+- block orphan queue items
+- leave active orphaned leases as `manual_required`
+
+`backend:repair` does not silently force high-risk corrections:
+- approval pending work is preserved
+- promotion/handoff pending work is preserved
+- active live leases requiring manual judgment are reported instead of auto-cleared
+
 ## Workspace Location
 - Default: `.tmp/orchestrator-workspaces/<state-id>/iteration-<n>`
 - Override with `ORCHESTRATOR_WORKSPACE_ROOT` or `--workspace-root`
@@ -457,6 +546,9 @@ npm run test:orchestrator:supabase-backend
 npm run test:orchestrator:remote-locking
 npm run test:orchestrator:backend-migration
 npm run test:orchestrator:remote-diagnostics
+npm run test:orchestrator:supabase-live
+npm run test:orchestrator:backend-transfer
+npm run test:orchestrator:backend-health
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine
@@ -494,6 +586,8 @@ npm run test:orchestrator:full-validation
   - queue/lock backend is now pluggable across `file`, `sqlite`, and `supabase`
   - `supabase` is still a document-based remote backend, not a high-throughput distributed scheduler
   - recovery is still lease/heartbeat based, not distributed consensus
+  - backend transfer/bootstrap is intentionally conservative and rebuilds live ownership instead of migrating active locks
+  - backend health/repair favors explicit `manual_required` over risky auto-fix for ambiguous remote states
   - cooperative pause/cancel only stop at safe boundaries; they are not hard interrupts in the middle of arbitrary commands
   - `worker:run` is daemon-style supervision, not a fully managed OS/background service
   - approval, handoff, and promotion pending runs are preserved conservatively rather than aggressively reclaimed

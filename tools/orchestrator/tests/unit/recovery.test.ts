@@ -9,6 +9,7 @@ import { acquireNextQueueRun, enqueueStateRun, listQueueRuns } from "../../src/q
 import { recoverStaleQueueRuns } from "../../src/recovery";
 
 test("recovery requeues a stale running run when it is safe to take over", async () => {
+  const scheduledAt = "2026-03-13T23:59:00.000Z";
   const storageRoot = await mkdtemp(path.join(tmpdir(), "orchestrator-recovery-"));
   const repoPath = process.cwd();
   const dependencies = createDefaultDependencies({
@@ -28,7 +29,7 @@ test("recovery requeues a stale running run when it is safe to take over", async
     approvalMode: "auto",
   });
   await dependencies.storage.saveState(state);
-  await enqueueStateRun({ backend: dependencies.backend, state });
+  await enqueueStateRun({ backend: dependencies.backend, state, scheduledAt });
   await acquireNextQueueRun({
     backend: dependencies.backend,
     workerId: "worker-a",
@@ -46,6 +47,7 @@ test("recovery requeues a stale running run when it is safe to take over", async
 });
 
 test("recovery keeps approval-pending work paused instead of taking it over", async () => {
+  const scheduledAt = "2026-03-13T23:59:00.000Z";
   const storageRoot = await mkdtemp(path.join(tmpdir(), "orchestrator-recovery-approval-"));
   const repoPath = process.cwd();
   const dependencies = createDefaultDependencies({
@@ -69,7 +71,7 @@ test("recovery keeps approval-pending work paused instead of taking it over", as
     pendingHumanApproval: true,
   });
   await dependencies.storage.saveState(state);
-  await enqueueStateRun({ backend: dependencies.backend, state });
+  await enqueueStateRun({ backend: dependencies.backend, state, scheduledAt });
   await acquireNextQueueRun({
     backend: dependencies.backend,
     workerId: "worker-a",

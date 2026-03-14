@@ -30,6 +30,9 @@ import { runOrchestratorPreflight, formatPreflightSummary } from "./preflight";
 import { buildDiagnosticsSummary, formatDiagnosticsSummary } from "./diagnostics";
 import { applyQueueItemToState, enqueueStateRun, formatQueueSummary, listQueueRuns, requeueRun, requestCancelRun, requestPauseRun } from "./queue";
 import { getWorkerStatus, runQueueWorker } from "./worker";
+import { runSupabaseBackendLiveSmoke } from "./supabase-live";
+import { exportBackendSnapshot, importBackendSnapshot } from "./transfer";
+import { inspectBackendHealth, repairBackendHealth } from "./health";
 
 async function resolveRunId(params: {
   stateId: string;
@@ -124,6 +127,74 @@ function formatBackendStatus(summary: {
     `Active workers: ${summary.inspection.activeWorkers.join(", ") || "none"}`,
     `Details: ${summary.details.join(" | ") || "none"}`,
     `Migration path: ${summary.migrationPath ?? "none"}`,
+  ].join("\n");
+}
+
+function formatBackendHealth(summary: {
+  backendType: string;
+  status: string;
+  queueDepth: number;
+  activeLeaseCount: number;
+  staleLeaseCount: number;
+  orphanRunCount: number;
+  pendingApprovalCount: number;
+  pendingPromotionCount: number;
+  recoverableAnomalyCount: number;
+  summary: string;
+}) {
+  return [
+    `Backend: ${summary.backendType}`,
+    `Health: ${summary.status}`,
+    `Queue depth: ${summary.queueDepth}`,
+    `Active leases: ${summary.activeLeaseCount}`,
+    `Stale leases: ${summary.staleLeaseCount}`,
+    `Orphan runs: ${summary.orphanRunCount}`,
+    `Pending approval: ${summary.pendingApprovalCount}`,
+    `Pending promotion: ${summary.pendingPromotionCount}`,
+    `Recoverable anomalies: ${summary.recoverableAnomalyCount}`,
+    `Summary: ${summary.summary}`,
+  ].join("\n");
+}
+
+function formatTransferSummary(summary: {
+  status: string;
+  sourceBackend: string;
+  targetBackend: string;
+  exportedStateCount: number;
+  importedStateCount: number;
+  queueItemCount: number;
+  workerCount: number;
+  snapshotPath: string | null;
+  notes: string[];
+  conflicts: string[];
+}) {
+  return [
+    `Transfer status: ${summary.status}`,
+    `Source backend: ${summary.sourceBackend}`,
+    `Target backend: ${summary.targetBackend}`,
+    `Exported states: ${summary.exportedStateCount}`,
+    `Imported states: ${summary.importedStateCount}`,
+    `Queue items: ${summary.queueItemCount}`,
+    `Workers: ${summary.workerCount}`,
+    `Snapshot path: ${summary.snapshotPath ?? "none"}`,
+    `Notes: ${summary.notes.join(" | ") || "none"}`,
+    `Conflicts: ${summary.conflicts.join(" | ") || "none"}`,
+  ].join("\n");
+}
+
+function formatRepairSummary(summary: {
+  status: string;
+  staleRequeuedCount: number;
+  orphanBlockedCount: number;
+  manualRequiredReasons: string[];
+  summary: string;
+}) {
+  return [
+    `Repair status: ${summary.status}`,
+    `Stale requeued: ${summary.staleRequeuedCount}`,
+    `Orphan blocked: ${summary.orphanBlockedCount}`,
+    `Manual required: ${summary.manualRequiredReasons.join(" | ") || "none"}`,
+    `Summary: ${summary.summary}`,
   ].join("\n");
 }
 
@@ -360,6 +431,112 @@ async function main() {
     return;
   }
 
+  if (command === "backend:live-smoke") {
+    const result = await runSupabaseBackendLiveSmoke({
+      repoPath,
+      outputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-backend-live")),
+      enabled: getOption(options, "enabled", "true") === "true",
+    });
+    const state = await dependencies.storage.loadState(stateId);
+    if (state) {
+      const updated = orchestratorStateSchema.parse({
+        ...state,
+        backendHealthStatus:
+          result.status === "passed"
+            ? "ready"
+            : result.status === "manual_required"
+              ? "manual_required"
+              : result.status === "skipped"
+                ? "skipped"
+                : "blocked",
+        lastBackendLiveSmokeResult: result,
+        updatedAt: result.ranAt,
+      });
+      await dependencies.storage.saveState(updated);
+    }
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "backend:health") {
+    const result = await inspectBackendHealth({
+      dependencies,
+    });
+    const state = await dependencies.storage.loadState(stateId);
+    if (state) {
+      const updated = orchestratorStateSchema.parse({
+        ...state,
+        backendHealthStatus: result.status,
+        lastBackendHealthSummary: result,
+        updatedAt: result.inspectedAt,
+      });
+      await dependencies.storage.saveState(updated);
+    }
+    process.stdout.write(`${formatBackendHealth(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "backend:repair") {
+    const result = await repairBackendHealth({
+      dependencies,
+    });
+    const state = await dependencies.storage.loadState(stateId);
+    if (state) {
+      const updated = orchestratorStateSchema.parse({
+        ...state,
+        repairStatus: result.status,
+        lastRepairDecision: result,
+        updatedAt: result.ranAt,
+      });
+      await dependencies.storage.saveState(updated);
+    }
+    process.stdout.write(`${formatRepairSummary(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "backend:export") {
+    const result = await exportBackendSnapshot({
+      dependencies,
+      outputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-backend-transfer")),
+    });
+    const state = await dependencies.storage.loadState(stateId);
+    if (state) {
+      const updated = orchestratorStateSchema.parse({
+        ...state,
+        transferStatus: result.status,
+        lastTransferSummary: result,
+        updatedAt: result.createdAt,
+      });
+      await dependencies.storage.saveState(updated);
+    }
+    process.stdout.write(`${formatTransferSummary(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "backend:import") {
+    const snapshotPath = options.get("snapshot");
+    if (!snapshotPath) {
+      throw new Error("--snapshot is required for backend:import.");
+    }
+    const result = await importBackendSnapshot({
+      dependencies,
+      snapshotPath: path.resolve(snapshotPath),
+      targetBackendType: dependencies.backend.backendType,
+    });
+    const state = await dependencies.storage.loadState(stateId);
+    if (state) {
+      const updated = orchestratorStateSchema.parse({
+        ...state,
+        transferStatus: result.status,
+        lastTransferSummary: result,
+        updatedAt: result.createdAt,
+      });
+      await dependencies.storage.saveState(updated);
+    }
+    process.stdout.write(`${formatTransferSummary(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
   if (command === "backend:init") {
     const result = await dependencies.backend.initialize();
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
@@ -551,6 +728,11 @@ async function main() {
       "  node cli.js backend:init --backend-type supabase",
       "  node cli.js backend:migrate --backend-type supabase",
       "  node cli.js backend:status --backend-type sqlite",
+      "  node cli.js backend:live-smoke --backend-type supabase",
+      "  node cli.js backend:health --backend-type supabase",
+      "  node cli.js backend:repair --backend-type supabase",
+      "  node cli.js backend:export --backend-type file",
+      "  node cli.js backend:import --backend-type supabase --snapshot path/to/export.json",
       "  node cli.js backend:inspect",
       "  node cli.js run:pause --state-id default",
       "  node cli.js run:resume --state-id default",
