@@ -3,6 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import type { LoadedGitHubSandboxTargetRegistry } from "../github-sandbox-targets";
 import type { OrchestratorState } from "../schemas";
+import { resolveSandboxIncidentPolicy } from "../sandbox-incident-policy";
 import { runSandboxRollback } from "../sandbox-rollback";
 import {
   classifySandboxRecoveryIncidents,
@@ -139,13 +140,21 @@ async function appendSandboxOperatorAction(params: {
 }
 
 function actionAllowedForIncident(incident: SandboxRecoveryIncident, action: SandboxOperatorAction) {
-  if (action === "escalate") {
-    return incident.requiresEscalation || ["blocked", "manual_required", "critical"].includes(incident.severity);
+  const policy = resolveSandboxIncidentPolicy(incident);
+  switch (action) {
+    case "escalate":
+      return policy.requireEscalate || policy.blockedTerminalState || policy.manualRequiredTerminalState;
+    case "request_review":
+      return true;
+    case "rerun_preview":
+      return policy.allowRerunPreview && Boolean(incident.restorePointId);
+    case "rerun_validate":
+      return policy.allowRerunValidate && Boolean(incident.restorePointId);
+    case "rerun_apply":
+      return policy.allowRerunApply && Boolean(incident.restorePointId);
+    default:
+      return true;
   }
-  if (action.startsWith("rerun_")) {
-    return Boolean(incident.restorePointId);
-  }
-  return true;
 }
 
 export async function runSandboxOperatorAction(params: {
@@ -178,19 +187,27 @@ export async function runSandboxOperatorAction(params: {
   }
 
   if (!actionAllowedForIncident(incident, params.action)) {
+    const policy = resolveSandboxIncidentPolicy(incident);
     const audit = await appendSandboxOperatorAction({
       configPath: params.configPath,
       incident,
       action: params.action,
-      status: params.action === "escalate" ? "rejected" : "manual_required",
+      status:
+        params.action === "escalate"
+          ? "rejected"
+          : policy.manualRequiredTerminalState || policy.requireRequestReview
+            ? "manual_required"
+            : "blocked",
       actorSource: params.actorSource,
       commandSource: params.commandSource ?? null,
       summary: `Sandbox operator action '${params.action}' is not allowed for incident '${incident.id}'.`,
-      failureReason: params.action === "escalate" ? "sandbox_escalation_not_required" : "sandbox_restore_point_missing",
-      suggestedNextAction:
+      failureReason:
         params.action === "escalate"
-          ? "Use acknowledge or request_review for lower-severity incidents."
-          : "Choose an incident that references a restore point before rerunning recovery actions.",
+          ? "sandbox_escalation_not_required"
+          : policy.manualRequiredTerminalState
+            ? "sandbox_manual_review_required"
+            : "sandbox_restore_point_missing",
+      suggestedNextAction: policy.suggestedNextAction,
     });
     return {
       action: params.action,

@@ -1,6 +1,7 @@
 import type { LoadedGitHubSandboxTargetRegistry } from "../github-sandbox-targets";
 import type { OrchestratorState } from "../schemas";
 import { classifySandboxRecoveryIncidents } from "../sandbox-incident-governance";
+import { resolveSandboxIncidentPolicy } from "../sandbox-incident-policy";
 import { listSandboxOperatorActions } from "../sandbox-operator-actions";
 
 export type SandboxEscalationSummary = {
@@ -39,10 +40,7 @@ export async function buildSandboxEscalationSummary(params: {
   const unresolved = incidents.incidents.filter(
     (incident) => incident.severity !== "info" && latestActionByIncident.get(incident.id)?.action !== "mark_resolved",
   );
-  const escalationNeeded = unresolved.filter(
-    (incident) =>
-      incident.requiresEscalation || incident.severity === "critical" || incident.severity === "manual_required",
-  );
+  const escalationNeeded = unresolved.filter((incident) => resolveSandboxIncidentPolicy(incident).requireEscalate);
   const hotSpotCounter = new Map<string, number>();
   for (const incident of unresolved) {
     for (const profileId of incident.affectedProfiles) {
@@ -60,9 +58,10 @@ export async function buildSandboxEscalationSummary(params: {
     unresolved.length === 0
       ? "No unresolved sandbox recovery incidents currently need escalation."
       : `Sandbox escalation summary: unresolved=${unresolved.length}, escalation-needed=${escalationNeeded.length}, hotspots=${repeatedHotSpots.join(", ") || "none"}.`;
+  const latestPolicy = resolveSandboxIncidentPolicy(latestIncident);
   const suggestedNextAction =
     escalationNeeded.length > 0
-      ? "Escalate or request review for the high-severity unresolved recovery incidents first."
+      ? latestPolicy.suggestedNextAction
       : unresolved.length > 0
         ? "Acknowledge or resolve the remaining recovery incidents before the next recovery apply."
         : "No escalation follow-up is required right now.";

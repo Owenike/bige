@@ -555,9 +555,12 @@ Sandbox target registry:
   - use `sandbox:compare` before rollback apply when you need a readable diff between current config and a restore point, or between two restore points
   - use `sandbox:recovery:diagnostics` when you need a compact incident summary, blocked/manual_required hot spots, and restore-point health
   - use `sandbox:incident:governance` when you need recovery incidents classified by severity before choosing an operator action
+  - use `sandbox:governance:status` when you need the shared recovery governance snapshot instead of rebuilding operator guidance by hand
+  - use `sandbox:incident:policy` when you need the centralized incident policy matrix for the latest or selected incident
   - use `sandbox:incident:acknowledge`, `sandbox:incident:resolve`, `sandbox:incident:escalate`, or `sandbox:incident:request-review` for operator-side incident handling
   - use `sandbox:incident:rerun-preview`, `sandbox:incident:rerun-validate`, or `sandbox:incident:rerun-apply` only when the incident still points to a valid restore point and governance permits a rerun
   - use `sandbox:escalation:summary` when you need a compact view of unresolved incidents, escalation-needed count, and repeated blocked/manual_required hotspots
+  - use `sandbox:operator:handoff` when you need a one-line handoff plus warnings, hotspots, and next-step guidance for the next operator
   - inspect `sandbox:rollback:governance` before any rollback apply if you need to know whether a restore point is stale, default-unsafe, or otherwise blocked
   - always run `sandbox:rollback:preview` before `sandbox:rollback:validate` or `sandbox:rollback:apply`
   - use `sandbox:batch-recovery:preview` and `sandbox:batch-recovery:validate` before any multi-restore recovery
@@ -611,18 +614,40 @@ Sandbox target registry:
     - blocked/manual_required hot spots
     - expired and still-referenced restore points
   - recovery incidents are classified as `info`, `warning`, `blocked`, `manual_required`, or `critical`
+  - recovery governance status is centralized into one shared summary that records:
+    - latest incident severity/type/summary
+    - unresolved incident count
+    - escalation-needed count
+    - latest operator action/action status
+    - whether rerun is recommended
+    - whether manual review is required
+    - whether apply is blocked
+    - whether operator handoff is recommended
   - incident severity mapping includes:
     - missing or expired restore point -> `manual_required`
     - governance or guardrails failure -> `blocked`
     - default profile safety or high-risk compare diff -> `critical`
     - partial batch recovery or repeated blocked hotspot -> `warning`
   - operator actions are classified as `accepted`, `blocked`, `rejected`, or `manual_required`
+  - the incident policy matrix is the single source of truth for:
+    - recommended action
+    - whether `rerun_preview`, `rerun_validate`, or `rerun_apply` is allowed
+    - whether `request_review` or `escalate` is mandatory
+    - whether the incident is already in a blocked/manual-required terminal state
+  - `critical` and `manual_required` incidents never recommend direct `rerun_apply`
   - `sandbox:incident:rerun-*` re-enters rollback preview/validate/apply, so it still re-checks governance, guardrails, restore point availability, and default profile safety
   - `sandbox:escalation:summary` highlights:
     - latest unresolved incident
     - latest operator action
     - high-severity unresolved incident count
     - repeated blocked/manual_required profile hotspots
+  - `sandbox:operator:handoff` highlights:
+    - latest incident summary
+    - latest action summary
+    - unresolved/repeated hotspots
+    - governance warnings
+    - escalation recommendation
+    - a short operator handoff line
   - restore retention keeps the latest restore point, the recent N restore points, restore points referenced by recent rollback audit, and any restore point still associated with unresolved manual_required work
   - `sandbox:restore-points:prune` only removes expired restore points that are not protected by retention rules
   - no-op apply or no-op rollback does not create a new restore point
@@ -1330,6 +1355,9 @@ npm run test:orchestrator:live-report-runbook
 npm run test:orchestrator:sandbox-profile-lifecycle
 npm run test:orchestrator:live-auth-operator-flow
 npm run test:orchestrator:sandbox-default-selection
+npm run test:orchestrator:sandbox-governance-status
+npm run test:orchestrator:sandbox-incident-policy-matrix
+npm run test:orchestrator:sandbox-operator-handoff-summary
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine
