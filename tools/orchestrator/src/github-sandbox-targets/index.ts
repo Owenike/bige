@@ -34,6 +34,7 @@ export type ResolvedGitHubSandboxTarget = {
 const DEFAULT_REGISTRY = githubSandboxTargetRegistrySchema.parse({
   version: "default-empty-v1",
   defaultProfileId: null,
+  bundles: {},
   profiles: {},
 });
 
@@ -86,12 +87,15 @@ export function loadGitHubSandboxTargetRegistryFromEnv(env: NodeJS.ProcessEnv = 
     registry: githubSandboxTargetRegistrySchema.parse({
       version: "env-sandbox-targets-v1",
       defaultProfileId: profileId,
+      bundles: {},
       profiles: {
         [profileId]: {
           repository,
           targetType,
           targetNumber,
           actionPolicy,
+          bundleId: null,
+          overrideFields: [],
         },
       },
     }),

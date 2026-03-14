@@ -41,6 +41,7 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
     registry: {
       version: "sandbox-guardrails-v1",
       defaultProfileId: "default",
+      bundles: {},
       profiles: {
         default: {
           repository: "example/bige-sandbox",
@@ -48,6 +49,8 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetNumber: 101,
           actionPolicy: "create_or_update",
           enabled: true,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
         repo_fallback: {
@@ -56,6 +59,8 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetNumber: 303,
           actionPolicy: "create_or_update",
           enabled: true,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
         disabled: {
@@ -64,6 +69,8 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetNumber: 404,
           actionPolicy: "create_or_update",
           enabled: false,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
       },

@@ -32,6 +32,7 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
     registry: {
       version: "sandbox-v1",
       defaultProfileId: "default",
+      bundles: {},
       governance: {
         allowedRepositories: [],
         allowedTargetTypes: ["issue", "pull_request"],
@@ -45,6 +46,8 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetNumber: 101,
           actionPolicy: "create_or_update",
           enabled: true,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
       },
@@ -107,6 +110,7 @@ test("live auth operator flow blocks early when no safe sandbox profile exists",
       registry: {
         version: "empty-v1",
         defaultProfileId: null,
+        bundles: {},
         governance: {
           allowedRepositories: [],
           allowedTargetTypes: ["issue", "pull_request"],

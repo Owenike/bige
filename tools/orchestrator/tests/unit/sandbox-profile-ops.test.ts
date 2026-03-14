@@ -14,6 +14,7 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
     registry: {
       version: "sandbox-v3",
       defaultProfileId: "default",
+      bundles: {},
       governance: {
         allowedRepositories: [],
         allowedTargetTypes: ["issue", "pull_request"],
@@ -27,6 +28,8 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetNumber: 42,
           actionPolicy: "create_or_update",
           enabled: true,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
         release: {
@@ -35,6 +38,8 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetNumber: 88,
           actionPolicy: "update_only",
           enabled: true,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
       },
@@ -97,6 +102,7 @@ test("sandbox profile ops block invalid profiles without falling back to arbitra
       registry: {
         version: "empty-v1",
         defaultProfileId: null,
+        bundles: {},
         governance: {
           allowedRepositories: [],
           allowedTargetTypes: ["issue", "pull_request"],

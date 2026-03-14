@@ -100,6 +100,15 @@ export type OrchestratorDiagnostics = {
     lastSandboxGuardrailsReason: string | null;
     lastSandboxAuditId: string | null;
     recentSandboxAuditSummaries: string[];
+    sandboxBundleId: string | null;
+    sandboxBundleOverrideFields: string[];
+    lastSandboxDiffSummary: string[];
+    lastSandboxImportExportStatus: string;
+    lastSandboxImportExportSummary: string | null;
+    lastSandboxReviewStatus: string;
+    lastSandboxReviewSummary: string | null;
+    lastSandboxApplyStatus: string;
+    lastSandboxApplySummary: string | null;
     lastAuthSmokeSuccessAt: string | null;
     authSmokeEvidencePath: string | null;
     liveSmokeSummary: string | null;
@@ -264,6 +273,15 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
       lastSandboxGuardrailsReason: state.lastSandboxGuardrailsReason,
       lastSandboxAuditId: state.lastSandboxAuditId,
       recentSandboxAuditSummaries: state.recentSandboxAuditSummaries.slice(-5),
+      sandboxBundleId: state.sandboxBundleId,
+      sandboxBundleOverrideFields: state.sandboxBundleOverrideFields,
+      lastSandboxDiffSummary: state.lastSandboxDiffSummary.slice(-5),
+      lastSandboxImportExportStatus: state.lastSandboxImportExportStatus,
+      lastSandboxImportExportSummary: state.lastSandboxImportExportSummary,
+      lastSandboxReviewStatus: state.lastSandboxReviewStatus,
+      lastSandboxReviewSummary: state.lastSandboxReviewSummary,
+      lastSandboxApplyStatus: state.lastSandboxApplyStatus,
+      lastSandboxApplySummary: state.lastSandboxApplySummary,
       lastAuthSmokeSuccessAt: state.lastAuthSmokeSuccessAt,
       authSmokeEvidencePath: state.lastAuthSmokeEvidencePath,
       liveSmokeSummary: state.lastLiveSmokeSummary,
@@ -289,7 +307,7 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     `Worker: status=${summary.workerSummary.workerStatus}, supervision=${summary.workerSummary.supervisionStatus}, workerId=${summary.workerSummary.workerId ?? "none"}, leaseOwner=${summary.workerSummary.leaseOwner ?? "none"}, lastHeartbeat=${summary.workerSummary.lastHeartbeatAt ?? "none"}, lastLeaseRenewal=${summary.workerSummary.lastLeaseRenewalAt ?? "none"}, daemonHeartbeat=${summary.workerSummary.daemonHeartbeatAt ?? "none"}, cancel=${summary.workerSummary.cancellationStatus}, pause=${summary.workerSummary.pauseStatus}, retries=${summary.workerSummary.retryCount}`,
     `Recovery: action=${summary.recoverySummary.action ?? "none"}, reason=${summary.recoverySummary.reason ?? "none"}`,
     `Status reporting: status=${summary.statusReporting.status}, readiness=${summary.statusReporting.readiness}, readinessStatus=${summary.statusReporting.readinessStatus}, live=${summary.statusReporting.liveStatus}, permission=${summary.statusReporting.permissionStatus}, action=${summary.statusReporting.action}, strategy=${summary.statusReporting.targetStrategy}, correlation=${summary.statusReporting.correlationId ?? "none"}, target=${summary.statusReporting.target ?? "none"}, audit=${summary.statusReporting.lastAuditId ?? "none"}, failure=${summary.statusReporting.failureReason ?? "none"}, summary=${summary.statusReporting.summary ?? "none"}`,
-    `Auth smoke: status=${summary.statusReporting.authSmokeStatus}, success=${summary.statusReporting.authSmokeSuccessStatus}, mode=${summary.statusReporting.authSmokeMode}, permission=${summary.statusReporting.authSmokePermissionResult}, selection=${summary.statusReporting.targetSelectionStatus}, target=${summary.statusReporting.authSmokeTarget ?? "none"}, selectedProfile=${summary.statusReporting.selectedSandboxProfileId ?? "none"}, selectionMode=${summary.statusReporting.sandboxProfileSelectionMode}, selectionReason=${summary.statusReporting.sandboxProfileSelectionReason ?? "none"}, profile=${summary.statusReporting.sandboxProfileId ?? summary.statusReporting.sandboxTargetProfileId ?? "none"}, profileStatus=${summary.statusReporting.sandboxProfileStatus}, governance=${summary.statusReporting.profileGovernanceStatus}/${summary.statusReporting.profileGovernanceReason ?? "none"}, guardrails=${summary.statusReporting.lastSandboxGuardrailsStatus}/${summary.statusReporting.lastSandboxGuardrailsReason ?? "none"}, config=${summary.statusReporting.sandboxTargetConfigVersion ?? "none"}, lastAudit=${summary.statusReporting.lastSandboxAuditId ?? "none"}, successAt=${summary.statusReporting.lastAuthSmokeSuccessAt ?? "none"}, liveTarget=${summary.statusReporting.liveSmokeTarget ?? "none"}, evidence=${summary.statusReporting.authSmokeEvidencePath ?? "none"}, summary=${summary.statusReporting.liveSmokeSummary ?? "none"}, failure=${summary.statusReporting.authSmokeFailureReason ?? "none"}`,
+    `Auth smoke: status=${summary.statusReporting.authSmokeStatus}, success=${summary.statusReporting.authSmokeSuccessStatus}, mode=${summary.statusReporting.authSmokeMode}, permission=${summary.statusReporting.authSmokePermissionResult}, selection=${summary.statusReporting.targetSelectionStatus}, target=${summary.statusReporting.authSmokeTarget ?? "none"}, selectedProfile=${summary.statusReporting.selectedSandboxProfileId ?? "none"}, selectionMode=${summary.statusReporting.sandboxProfileSelectionMode}, selectionReason=${summary.statusReporting.sandboxProfileSelectionReason ?? "none"}, profile=${summary.statusReporting.sandboxProfileId ?? summary.statusReporting.sandboxTargetProfileId ?? "none"}, profileStatus=${summary.statusReporting.sandboxProfileStatus}, bundle=${summary.statusReporting.sandboxBundleId ?? "none"}, overrides=${summary.statusReporting.sandboxBundleOverrideFields.join(",") || "none"}, governance=${summary.statusReporting.profileGovernanceStatus}/${summary.statusReporting.profileGovernanceReason ?? "none"}, guardrails=${summary.statusReporting.lastSandboxGuardrailsStatus}/${summary.statusReporting.lastSandboxGuardrailsReason ?? "none"}, config=${summary.statusReporting.sandboxTargetConfigVersion ?? "none"}, lastAudit=${summary.statusReporting.lastSandboxAuditId ?? "none"}, importExport=${summary.statusReporting.lastSandboxImportExportStatus}/${summary.statusReporting.lastSandboxImportExportSummary ?? "none"}, review=${summary.statusReporting.lastSandboxReviewStatus}/${summary.statusReporting.lastSandboxReviewSummary ?? "none"}, apply=${summary.statusReporting.lastSandboxApplyStatus}/${summary.statusReporting.lastSandboxApplySummary ?? "none"}, successAt=${summary.statusReporting.lastAuthSmokeSuccessAt ?? "none"}, liveTarget=${summary.statusReporting.liveSmokeTarget ?? "none"}, evidence=${summary.statusReporting.authSmokeEvidencePath ?? "none"}, summary=${summary.statusReporting.liveSmokeSummary ?? "none"}, failure=${summary.statusReporting.authSmokeFailureReason ?? "none"}`,
     `Blockers: ${summary.blockers.join(" | ") || "none"}`,
     `Missing prerequisites: ${summary.missingPrerequisites.join(", ") || "none"}`,
   ];
@@ -309,6 +327,12 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     lines.push("Recent sandbox audit:");
     for (const attempt of summary.statusReporting.recentSandboxAuditSummaries) {
       lines.push(`- ${attempt}`);
+    }
+  }
+  if (summary.statusReporting.lastSandboxDiffSummary.length > 0) {
+    lines.push("Latest sandbox diff:");
+    for (const diff of summary.statusReporting.lastSandboxDiffSummary) {
+      lines.push(`- ${diff}`);
     }
   }
   lines.push(`Next action: ${summary.nextSuggestedAction}`);

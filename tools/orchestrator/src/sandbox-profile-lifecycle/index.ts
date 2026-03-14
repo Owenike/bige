@@ -4,6 +4,7 @@ import {
   githubSandboxTargetProfileSchema,
   githubSandboxTargetRegistrySchema,
   type GitHubSandboxActionPolicy,
+  type GitHubSandboxTargetProfile,
   type GitHubSandboxTargetRegistry,
 } from "../schemas";
 import { loadGitHubSandboxTargetRegistry } from "../github-sandbox-targets";
@@ -31,21 +32,24 @@ type SandboxProfileInput = {
   targetNumber: number;
   actionPolicy: GitHubSandboxActionPolicy;
   enabled?: boolean;
+  bundleId?: string | null;
+  overrideFields?: string[];
   notes?: string | null;
 };
 
 const EMPTY_REGISTRY = githubSandboxTargetRegistrySchema.parse({
   version: "sandbox-managed-v1",
   defaultProfileId: null,
+  bundles: {},
   profiles: {},
 });
 
-function cloneRegistry(registry: GitHubSandboxTargetRegistry) {
+export function cloneSandboxRegistry(registry: GitHubSandboxTargetRegistry) {
   return githubSandboxTargetRegistrySchema.parse(JSON.parse(JSON.stringify(registry)));
 }
 
-function normalizeRegistry(registry: GitHubSandboxTargetRegistry) {
-  const next = cloneRegistry(registry);
+export function normalizeSandboxRegistry(registry: GitHubSandboxTargetRegistry) {
+  const next = cloneSandboxRegistry(registry);
   const enabledProfiles = Object.entries(next.profiles)
     .filter(([, profile]) => profile.enabled !== false)
     .map(([profileId]) => profileId)
@@ -59,7 +63,7 @@ function normalizeRegistry(registry: GitHubSandboxTargetRegistry) {
   return next;
 }
 
-async function ensureWritableRegistry(configPath?: string | null) {
+export async function ensureWritableSandboxRegistry(configPath?: string | null) {
   const requestedPath = configPath ?? process.env.ORCHESTRATOR_GITHUB_SANDBOX_TARGETS_CONFIG ?? null;
   if (!requestedPath) {
     return {
@@ -112,10 +116,17 @@ async function ensureWritableRegistry(configPath?: string | null) {
   }
 }
 
-async function saveRegistry(resolvedPath: string, registry: GitHubSandboxTargetRegistry) {
-  const normalized = normalizeRegistry(registry);
+export async function saveSandboxRegistry(resolvedPath: string, registry: GitHubSandboxTargetRegistry) {
+  const normalized = normalizeSandboxRegistry(registry);
   await writeFile(resolvedPath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
   return normalized;
+}
+
+export function summarizeSandboxProfile(profile: GitHubSandboxTargetProfile | null) {
+  if (!profile) {
+    return "none";
+  }
+  return `${profile.repository}#${profile.targetNumber} (${profile.targetType}, ${profile.actionPolicy}, enabled=${profile.enabled !== false}, bundle=${profile.bundleId ?? "none"}, overrides=${profile.overrideFields.join(",") || "none"})`;
 }
 
 function toLifecycleResult(
@@ -141,7 +152,7 @@ export async function createSandboxProfile(params: {
   profile: SandboxProfileInput;
   setDefault?: boolean;
 }) {
-  const writable = await ensureWritableRegistry(params.configPath);
+  const writable = await ensureWritableSandboxRegistry(params.configPath);
   if (writable.status !== "updated" || !writable.path || !writable.loaded) {
     return toLifecycleResult({
       status: writable.status,
@@ -155,8 +166,8 @@ export async function createSandboxProfile(params: {
     });
   }
 
-  const registry = cloneRegistry(writable.loaded.registry);
-  const previousRegistry = cloneRegistry(registry);
+  const registry = cloneSandboxRegistry(writable.loaded.registry);
+  const previousRegistry = cloneSandboxRegistry(registry);
   if (registry.profiles[params.profileId]) {
     return toLifecycleResult({
       status: "blocked",
@@ -175,7 +186,7 @@ export async function createSandboxProfile(params: {
   if (params.setDefault) {
     registry.defaultProfileId = params.profileId;
   }
-  const saved = await saveRegistry(writable.path, registry);
+  const saved = await saveSandboxRegistry(writable.path, registry);
   const governance = evaluateSandboxProfileGovernance({
     loadedRegistry: {
       registry: saved,
@@ -216,7 +227,7 @@ export async function updateSandboxProfile(params: {
   profileId: string;
   changes: Partial<SandboxProfileInput>;
 }) {
-  const writable = await ensureWritableRegistry(params.configPath);
+  const writable = await ensureWritableSandboxRegistry(params.configPath);
   if (writable.status !== "updated" || !writable.path || !writable.loaded) {
     return toLifecycleResult({
       status: writable.status,
@@ -230,8 +241,8 @@ export async function updateSandboxProfile(params: {
     });
   }
 
-  const registry = cloneRegistry(writable.loaded.registry);
-  const previousRegistry = cloneRegistry(registry);
+  const registry = cloneSandboxRegistry(writable.loaded.registry);
+  const previousRegistry = cloneSandboxRegistry(registry);
   const existing = registry.profiles[params.profileId];
   if (!existing) {
     return toLifecycleResult({
@@ -251,7 +262,7 @@ export async function updateSandboxProfile(params: {
     ...existing,
     ...params.changes,
   });
-  const saved = await saveRegistry(writable.path, registry);
+  const saved = await saveSandboxRegistry(writable.path, registry);
   const governance = evaluateSandboxProfileGovernance({
     loadedRegistry: {
       registry: saved,
@@ -297,7 +308,7 @@ export async function deleteSandboxProfile(params: {
   configPath?: string | null;
   profileId: string;
 }) {
-  const writable = await ensureWritableRegistry(params.configPath);
+  const writable = await ensureWritableSandboxRegistry(params.configPath);
   if (writable.status !== "updated" || !writable.path || !writable.loaded) {
     return toLifecycleResult({
       status: writable.status,
@@ -311,8 +322,8 @@ export async function deleteSandboxProfile(params: {
     });
   }
 
-  const registry = cloneRegistry(writable.loaded.registry);
-  const previousRegistry = cloneRegistry(registry);
+  const registry = cloneSandboxRegistry(writable.loaded.registry);
+  const previousRegistry = cloneSandboxRegistry(registry);
   if (!registry.profiles[params.profileId]) {
     return toLifecycleResult({
       status: "manual_required",
@@ -331,7 +342,7 @@ export async function deleteSandboxProfile(params: {
   if (registry.defaultProfileId === params.profileId) {
     registry.defaultProfileId = null;
   }
-  const saved = await saveRegistry(writable.path, registry);
+  const saved = await saveSandboxRegistry(writable.path, registry);
   const audit = await appendSandboxAuditRecord({
     configPath: writable.path,
     action: "delete",
@@ -360,7 +371,7 @@ export async function setDefaultSandboxProfile(params: {
   configPath?: string | null;
   profileId: string;
 }) {
-  const writable = await ensureWritableRegistry(params.configPath);
+  const writable = await ensureWritableSandboxRegistry(params.configPath);
   if (writable.status !== "updated" || !writable.path || !writable.loaded) {
     return toLifecycleResult({
       status: writable.status,
@@ -374,8 +385,8 @@ export async function setDefaultSandboxProfile(params: {
     });
   }
 
-  const registry = cloneRegistry(writable.loaded.registry);
-  const previousRegistry = cloneRegistry(registry);
+  const registry = cloneSandboxRegistry(writable.loaded.registry);
+  const previousRegistry = cloneSandboxRegistry(registry);
   const profile = registry.profiles[params.profileId];
   if (!profile) {
     return toLifecycleResult({
@@ -430,7 +441,7 @@ export async function setDefaultSandboxProfile(params: {
   }
 
   registry.defaultProfileId = params.profileId;
-  const saved = await saveRegistry(writable.path, registry);
+  const saved = await saveSandboxRegistry(writable.path, registry);
   const audit = await appendSandboxAuditRecord({
     configPath: writable.path,
     action: "set-default",

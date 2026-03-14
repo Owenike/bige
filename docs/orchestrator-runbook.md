@@ -500,6 +500,8 @@ Sandbox target registry:
   - action policies outside the governance allow-list are blocked
   - default profiles must satisfy the stricter `defaultAllowedActionPolicies` rule
 - operator commands:
+  - `node .tmp/orchestrator/src/cli.js sandbox:bundle:list --sandbox-config .tmp/orchestrator-sandbox.json`
+  - `node .tmp/orchestrator/src/cli.js sandbox:bundle:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-bundle create-only`
   - `node .tmp/orchestrator/src/cli.js sandbox:create --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --target-repo example/bige --target-type issue --target-number 101 --set-default true`
   - `node .tmp/orchestrator/src/cli.js sandbox:update --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --notes "safe smoke target"`
   - `node .tmp/orchestrator/src/cli.js sandbox:delete --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile old-profile`
@@ -510,22 +512,54 @@ Sandbox target registry:
   - `node .tmp/orchestrator/src/cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
   - `node .tmp/orchestrator/src/cli.js sandbox:audit --sandbox-config .tmp/orchestrator-sandbox.json`
   - `node .tmp/orchestrator/src/cli.js sandbox:guardrails --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default`
+  - `node .tmp/orchestrator/src/cli.js sandbox:export --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --output .tmp/sandbox-default.json`
+  - `node .tmp/orchestrator/src/cli.js sandbox:import --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json --mode preview`
+  - `node .tmp/orchestrator/src/cli.js sandbox:diff --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json`
+  - `node .tmp/orchestrator/src/cli.js sandbox:review --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json`
+  - `node .tmp/orchestrator/src/cli.js sandbox:apply --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json`
 - safe operator flow:
+  - inspect available bundles with `sandbox:bundle:list` and `sandbox:bundle:show`
   - create or update the sandbox profile
+  - optionally attach a bundle with `--sandbox-bundle create-only|update-only|create-or-update|default|repo-specific`
   - set the default profile if you want smoke runs without explicit override
   - list and show the active profile set
   - validate the selected profile before running a live success smoke
   - inspect `sandbox:governance` before switching the default profile
   - inspect `sandbox:audit` to confirm the latest profile changes
+  - use `sandbox:export` or `sandbox:import --mode preview` before moving or restoring profiles
+  - use `sandbox:diff` or `sandbox:review` to inspect change sets before `sandbox:apply`
   - run `reporting:precheck` to confirm target resolution, governance, guardrails, and permission readiness
   - only run `reporting:run-live-smoke` or `reporting:live-success-smoke` when the profile resolves to a known-safe repo/issue/pr target
+- bundle rules:
+  - built-in bundles include `default`, `create-only`, `update-only`, `create-or-update`, and `repo-specific`
+  - a profile may store `bundleId` plus `overrideFields`
+  - bundle metadata is operator-facing; the resolved profile still expands into a concrete repo/type/number/action target before governance or live smoke runs
+  - if a bundle leaves required target data unset, the operator flow returns `manual_required`
 - lifecycle guardrails:
   - deleting the default profile clears it and promotes the first remaining enabled profile when possible
   - disabled profiles cannot become the default profile
   - a default profile that violates governance cannot become the default
   - missing or invalid profiles return `manual_required` instead of falling back to arbitrary live threads
+- import/export and review/apply:
+  - `sandbox:export` can export one profile or the full registry; `--snapshot true` writes a point-in-time registry snapshot
+  - `sandbox:import --mode preview` never writes live config; it only resolves the incoming payload, computes diff, and reports governance/guardrails outcomes
+  - `sandbox:diff` is the operator-friendly shorthand when you want the change summary without writing anything
+  - `sandbox:review` records a review decision in sandbox audit without applying the config change
+  - `sandbox:apply` only writes when bundle references, governance, default safety, and guardrails all pass
+  - import payloads may be:
+    - a single profile payload (`kind=profile`)
+    - a full registry payload (`kind=registry`)
+    - a snapshot payload (`kind=snapshot`)
+  - import/apply outcomes are classified as:
+    - `create`
+    - `update`
+    - `conflict`
+    - `invalid`
+    - `blocked`
+    - `manual_required`
 - audit trail:
   - `create`, `update`, `delete`, `set-default`, `enable`, and `disable` all write audit records
+  - `review` and `import-apply` also write audit records so batch review/apply remains traceable
   - each audit record stores changed fields, previous summary, next summary, and command source
   - recent audit summaries are surfaced in operator diagnostics and live smoke precheck output
 
@@ -534,6 +568,20 @@ Minimal registry example:
 {
   "version": "sandbox-v1",
   "defaultProfileId": "default",
+  "bundles": {
+    "repo-safe": {
+      "repository": "example/bige",
+      "targetType": "issue",
+      "actionPolicy": "create_or_update",
+      "enabledByDefault": true,
+      "governanceDefaults": {},
+      "liveSmokeDefaults": {
+        "allowCorrelatedReuse": true,
+        "preferredSelectionMode": "default"
+      },
+      "notes": "repo safe bundle"
+    }
+  },
   "governance": {
     "allowedRepositories": ["example/bige"],
     "allowedTargetTypes": ["issue", "pull_request"],
@@ -545,7 +593,9 @@ Minimal registry example:
       "repository": "example/bige",
       "targetType": "issue",
       "targetNumber": 101,
-      "actionPolicy": "create_or_update"
+      "actionPolicy": "create_or_update",
+      "bundleId": "repo-safe",
+      "overrideFields": ["targetNumber"]
     }
   }
 }
@@ -573,11 +623,18 @@ node .tmp/orchestrator/src/cli.js sandbox:update --sandbox-config .tmp/orchestra
 node .tmp/orchestrator/src/cli.js sandbox:delete --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile old-profile
 node .tmp/orchestrator/src/cli.js sandbox:set-default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json
+node .tmp/orchestrator/src/cli.js sandbox:bundle:list --sandbox-config .tmp/orchestrator-sandbox.json
+node .tmp/orchestrator/src/cli.js sandbox:bundle:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-bundle create-only
 node .tmp/orchestrator/src/cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:validate --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
 node .tmp/orchestrator/src/cli.js sandbox:audit --sandbox-config .tmp/orchestrator-sandbox.json
 node .tmp/orchestrator/src/cli.js sandbox:guardrails --state-id demo --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default
+node .tmp/orchestrator/src/cli.js sandbox:export --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --output .tmp/sandbox-default.json
+node .tmp/orchestrator/src/cli.js sandbox:import --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json --mode preview
+node .tmp/orchestrator/src/cli.js sandbox:diff --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json
+node .tmp/orchestrator/src/cli.js sandbox:review --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json
+node .tmp/orchestrator/src/cli.js sandbox:apply --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json
 ```
 
 Typical next actions:
@@ -590,6 +647,9 @@ Typical next actions:
 - governance failed -> update the profile or registry governance so the selected repo/type/action policy becomes explicitly safe
 - guardrails failed -> fix the selected/default/fallback profile before re-running live smoke; the orchestrator will not continue into GitHub live smoke
 - sandbox audit review -> use `sandbox:audit` before and after profile lifecycle changes if you need a change trace
+- bundle missing -> add the bundle definition or remove the stale `bundleId` before review/apply
+- import preview blocked -> inspect `lastSandboxDiffSummary`, `lastSandboxReviewStatus`, and the first blocked reason before retrying
+- default profile unsafe -> change the action policy or choose a safer default before `sandbox:apply`
 
 Live auth evidence:
 - every auth smoke run writes a JSON evidence file and stores its path in `lastAuthSmokeEvidencePath`

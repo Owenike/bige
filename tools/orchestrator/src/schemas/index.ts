@@ -631,23 +631,52 @@ export const githubSandboxGovernanceSchema = z.object({
   defaultAllowedActionPolicies: z.array(githubSandboxActionPolicySchema).default(["create_or_update", "create_only"]),
 });
 
+export const sandboxPolicyBundleSchema = z.object({
+  repository: z.string().nullable().default(null),
+  targetType: z.enum(["issue", "pull_request"]).nullable().default(null),
+  actionPolicy: githubSandboxActionPolicySchema.default("create_or_update"),
+  enabledByDefault: z.boolean().default(true),
+  governanceDefaults: githubSandboxGovernanceSchema.partial().default({}),
+  liveSmokeDefaults: z
+    .object({
+      allowCorrelatedReuse: z.boolean().default(true),
+      preferredSelectionMode: z.enum(["explicit", "default", "fallback"]).nullable().default(null),
+    })
+    .default({ allowCorrelatedReuse: true, preferredSelectionMode: null }),
+  notes: z.string().nullable().default(null),
+});
+
 export const githubSandboxTargetProfileSchema = z.object({
   repository: z.string(),
   targetType: z.enum(["issue", "pull_request"]),
   targetNumber: z.number().int().positive(),
   actionPolicy: githubSandboxActionPolicySchema.default("create_or_update"),
   enabled: z.boolean().default(true),
+  bundleId: z.string().nullable().default(null),
+  overrideFields: z.array(z.string()).default([]),
   notes: z.string().nullable().default(null),
 });
 
 export const githubSandboxTargetRegistrySchema = z.object({
   version: z.string().default("default-empty-v1"),
   defaultProfileId: z.string().nullable().default(null),
+  bundles: z.record(z.string(), sandboxPolicyBundleSchema).default({}),
   profiles: z.record(z.string(), githubSandboxTargetProfileSchema).default({}),
   governance: githubSandboxGovernanceSchema.default(defaultGitHubSandboxGovernance),
 });
 
-export const sandboxAuditActionSchema = z.enum(["create", "update", "delete", "set-default", "disable", "enable"]);
+export const sandboxAuditActionSchema = z.enum([
+  "create",
+  "update",
+  "delete",
+  "set-default",
+  "disable",
+  "enable",
+  "review",
+  "import-preview",
+  "import-apply",
+  "bundle-apply",
+]);
 
 export const sandboxAuditProfileSummarySchema = z.object({
   profileId: z.string().nullable().default(null),
@@ -676,6 +705,20 @@ export const sandboxAuditTrailSchema = z.object({
   updatedAt: z.string(),
   records: z.array(sandboxAuditRecordSchema).default([]),
 });
+
+export const sandboxImportExportStatusSchema = z.enum([
+  "not_run",
+  "exported",
+  "snapshot_created",
+  "previewed",
+  "imported",
+  "blocked",
+  "manual_required",
+  "failed",
+]);
+
+export const sandboxReviewStatusSchema = z.enum(["not_run", "ready", "blocked", "manual_required", "failed"]);
+export const sandboxApplyStatusSchema = z.enum(["not_run", "applied", "blocked", "manual_required", "failed"]);
 
 export const githubLiveAuthEvidenceSchema = z.object({
   attemptedAt: z.string(),
@@ -989,6 +1032,15 @@ export const orchestratorStateSchema = z.object({
   lastSandboxGuardrailsReason: z.string().nullable().default(null),
   lastSandboxGuardrailsSuggestedNextAction: z.string().nullable().default(null),
   recentSandboxAuditSummaries: z.array(z.string()).default([]),
+  sandboxBundleId: z.string().nullable().default(null),
+  sandboxBundleOverrideFields: z.array(z.string()).default([]),
+  lastSandboxDiffSummary: z.array(z.string()).default([]),
+  lastSandboxImportExportStatus: sandboxImportExportStatusSchema.default("not_run"),
+  lastSandboxImportExportSummary: z.string().nullable().default(null),
+  lastSandboxReviewStatus: sandboxReviewStatusSchema.default("not_run"),
+  lastSandboxReviewSummary: z.string().nullable().default(null),
+  lastSandboxApplyStatus: sandboxApplyStatusSchema.default("not_run"),
+  lastSandboxApplySummary: z.string().nullable().default(null),
   authSmokeStatus: githubAuthSmokeStatusSchema.default("not_run"),
   authSmokeSuccessStatus: z.enum(["not_run", "success", "non_success"]).default("not_run"),
   authSmokeMode: githubAuthSmokeModeSchema.default("none"),
@@ -1073,6 +1125,7 @@ export type GitHubTargetSelectionStatus = z.infer<typeof githubTargetSelectionSt
 export type GitHubAuthSmokeTarget = z.infer<typeof githubAuthSmokeTargetSchema>;
 export type GitHubAuthSmokeResult = z.infer<typeof githubAuthSmokeResultSchema>;
 export type GitHubSandboxActionPolicy = z.infer<typeof githubSandboxActionPolicySchema>;
+export type SandboxPolicyBundle = z.infer<typeof sandboxPolicyBundleSchema>;
 export type GitHubSandboxTargetProfile = z.infer<typeof githubSandboxTargetProfileSchema>;
 export type GitHubSandboxTargetRegistry = z.infer<typeof githubSandboxTargetRegistrySchema>;
 export type SandboxAuditAction = z.infer<typeof sandboxAuditActionSchema>;
@@ -1629,6 +1682,15 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastSandboxGuardrailsReason",
     "lastSandboxGuardrailsSuggestedNextAction",
     "recentSandboxAuditSummaries",
+    "sandboxBundleId",
+    "sandboxBundleOverrideFields",
+    "lastSandboxDiffSummary",
+    "lastSandboxImportExportStatus",
+    "lastSandboxImportExportSummary",
+    "lastSandboxReviewStatus",
+    "lastSandboxReviewSummary",
+    "lastSandboxApplyStatus",
+    "lastSandboxApplySummary",
     "authSmokeStatus",
     "authSmokeSuccessStatus",
     "authSmokeMode",
@@ -2329,6 +2391,30 @@ export const orchestratorStateJsonSchema: JsonSchema = {
       type: "array",
       items: { type: "string" },
     },
+    sandboxBundleId: { type: "string", nullable: true },
+    sandboxBundleOverrideFields: {
+      type: "array",
+      items: { type: "string" },
+    },
+    lastSandboxDiffSummary: {
+      type: "array",
+      items: { type: "string" },
+    },
+    lastSandboxImportExportStatus: {
+      type: "string",
+      enum: ["not_run", "exported", "snapshot_created", "previewed", "imported", "blocked", "manual_required", "failed"],
+    },
+    lastSandboxImportExportSummary: { type: "string", nullable: true },
+    lastSandboxReviewStatus: {
+      type: "string",
+      enum: ["not_run", "ready", "blocked", "manual_required", "failed"],
+    },
+    lastSandboxReviewSummary: { type: "string", nullable: true },
+    lastSandboxApplyStatus: {
+      type: "string",
+      enum: ["not_run", "applied", "blocked", "manual_required", "failed"],
+    },
+    lastSandboxApplySummary: { type: "string", nullable: true },
     authSmokeStatus: {
       type: "string",
       enum: ["not_run", "skipped", "passed", "failed", "blocked", "manual_required"],

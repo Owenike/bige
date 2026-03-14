@@ -127,6 +127,9 @@ jobs:
           npm run test:orchestrator:sandbox-governance
           npm run test:orchestrator:sandbox-audit
           npm run test:orchestrator:sandbox-guardrails
+          npm run test:orchestrator:sandbox-policy-bundles
+          npm run test:orchestrator:sandbox-profile-import-export
+          npm run test:orchestrator:sandbox-change-review
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary

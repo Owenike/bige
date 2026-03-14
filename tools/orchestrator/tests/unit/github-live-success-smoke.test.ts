@@ -13,6 +13,7 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
     registry: {
       version: "sandbox-v2",
       defaultProfileId: "default",
+      bundles: {},
       governance: {
         allowedRepositories: [],
         allowedTargetTypes: ["issue", "pull_request"],
@@ -26,6 +27,8 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetNumber: 501,
           actionPolicy: "create_or_update",
           enabled: true,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
         updateOnly: {
@@ -34,6 +37,8 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetNumber: 777,
           actionPolicy: "update_only",
           enabled: true,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
       },

@@ -13,6 +13,7 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
     registry: {
       version: "sandbox-v1",
       defaultProfileId: "default",
+      bundles: {},
       governance: {
         allowedRepositories: [],
         allowedTargetTypes: ["issue", "pull_request"],
@@ -26,6 +27,8 @@ function createRegistry(): LoadedGitHubSandboxTargetRegistry {
           targetNumber: 404,
           actionPolicy: "create_or_update",
           enabled: true,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
       },
@@ -130,6 +133,7 @@ test("github live auth evidence preserves blocked shape when no safe target exis
       registry: {
         version: "empty-v1",
         defaultProfileId: null,
+        bundles: {},
         governance: {
           allowedRepositories: [],
           allowedTargetTypes: ["issue", "pull_request"],

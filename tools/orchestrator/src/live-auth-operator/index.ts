@@ -52,9 +52,14 @@ function applyTargetToState(state: OrchestratorState, selection: ReturnType<type
 
 function applySelectionMetadata(
   state: OrchestratorState,
+  loadedRegistry: LoadedGitHubSandboxTargetRegistry | null,
   registryResolution: ReturnType<typeof resolveGitHubSandboxTarget>,
   selection: ReturnType<typeof selectGitHubLiveSmokeTarget> | null,
 ) {
+  const selectedProfile =
+    loadedRegistry && registryResolution.profileId
+      ? loadedRegistry.registry.profiles[registryResolution.profileId] ?? null
+      : null;
   return orchestratorStateSchema.parse({
     ...state,
     selectedSandboxProfileId: registryResolution.profileId,
@@ -67,6 +72,10 @@ function applySelectionMetadata(
         : registryResolution.status === "blocked"
           ? "blocked"
           : "manual_required",
+    sandboxBundleId: selectedProfile?.bundleId ?? state.sandboxBundleId,
+    sandboxBundleOverrideFields: selectedProfile?.overrideFields ?? state.sandboxBundleOverrideFields,
+    sandboxTargetProfileId: registryResolution.profileId,
+    sandboxTargetConfigVersion: loadedRegistry?.version ?? state.sandboxTargetConfigVersion,
     lastLiveSmokeTarget: selection?.target ?? state.lastLiveSmokeTarget,
     profileGovernanceStatus: state.profileGovernanceStatus,
     profileGovernanceReason: state.profileGovernanceReason,
@@ -115,7 +124,7 @@ export async function runLiveAuthOperatorFlow(params: {
         })
       : null;
 
-  let stateWithSelection = applySelectionMetadata(params.state, registryResolution, selection);
+  let stateWithSelection = applySelectionMetadata(params.state, params.sandboxRegistry ?? null, registryResolution, selection);
   const guardrails =
     registryResolution.status === "resolved"
       ? evaluateSandboxGuardrails({

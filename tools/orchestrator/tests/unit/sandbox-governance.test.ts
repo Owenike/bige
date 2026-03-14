@@ -8,6 +8,7 @@ function createRegistry(overrides?: Partial<LoadedGitHubSandboxTargetRegistry["r
     registry: {
       version: "sandbox-governance-v1",
       defaultProfileId: "default",
+      bundles: {},
       profiles: {
         default: {
           repository: "example/bige-sandbox",
@@ -15,6 +16,8 @@ function createRegistry(overrides?: Partial<LoadedGitHubSandboxTargetRegistry["r
           targetNumber: 101,
           actionPolicy: "create_or_update",
           enabled: true,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
         review: {
@@ -23,6 +26,8 @@ function createRegistry(overrides?: Partial<LoadedGitHubSandboxTargetRegistry["r
           targetNumber: 202,
           actionPolicy: "update_only",
           enabled: true,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
       },

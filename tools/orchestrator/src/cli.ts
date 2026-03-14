@@ -52,6 +52,9 @@ import { createSandboxProfile, deleteSandboxProfile, setDefaultSandboxProfile, u
 import { runLiveAuthOperatorFlow } from "./live-auth-operator";
 import { formatSandboxAuditTrail, listSandboxAuditRecords } from "./sandbox-audit";
 import { evaluateSandboxGuardrails, evaluateSandboxProfileGovernance, formatSandboxGuardrailsSummary, formatSandboxGovernanceSummary, inspectSandboxGovernance } from "./sandbox-governance";
+import { applySandboxPolicyBundle, formatSandboxPolicyBundle, formatSandboxPolicyBundleList, showSandboxPolicyBundle } from "./sandbox-policy-bundles";
+import { exportSandboxProfiles, importSandboxProfiles } from "./sandbox-import-export";
+import { applySandboxRegistryChange, buildSandboxRegistryDiff, reviewSandboxRegistryChange } from "./sandbox-change-review";
 import { ingestGitHubWebhook } from "./webhook";
 import { formatWebhookHostingConfig, loadWebhookHostingConfig } from "./runtime-config";
 import { formatWebhookShutdownSummary, startWebhookHosting } from "./webhook-hosting";
@@ -278,6 +281,51 @@ async function loadSandboxRegistryFromOptions(options: Map<string, string>) {
   return loadGitHubSandboxTargetRegistry({
     configPath: options.get("sandbox-config") ?? null,
   });
+}
+
+function summarizeSandboxImportExport(result: {
+  status: string;
+  mode: string;
+  affectedProfileIds: string[];
+  diffSummary: string[];
+  summary: string;
+  failureReason: string | null;
+  suggestedNextAction: string;
+  outputPath: string | null;
+}) {
+  return [
+    `Sandbox import/export: ${result.status} / ${result.mode}`,
+    `Affected profiles: ${result.affectedProfileIds.join(", ") || "none"}`,
+    `Diff: ${result.diffSummary.join(" | ") || "none"}`,
+    `Summary: ${result.summary}`,
+    `Failure: ${result.failureReason ?? "none"}`,
+    `Next action: ${result.suggestedNextAction}`,
+    `Output: ${result.outputPath ?? "none"}`,
+  ].join("\n");
+}
+
+function summarizeSandboxReview(result: {
+  status: string;
+  affectedProfileIds: string[];
+  diffSummary: string[];
+  summary: string;
+  failureReason: string | null;
+  suggestedNextAction: string;
+  governanceStatus: string;
+  guardrailsStatus: string;
+  auditId: string | null;
+}) {
+  return [
+    `Sandbox review: ${result.status}`,
+    `Affected profiles: ${result.affectedProfileIds.join(", ") || "none"}`,
+    `Governance: ${result.governanceStatus}`,
+    `Guardrails: ${result.guardrailsStatus}`,
+    `Diff: ${result.diffSummary.join(" | ") || "none"}`,
+    `Summary: ${result.summary}`,
+    `Failure: ${result.failureReason ?? "none"}`,
+    `Next action: ${result.suggestedNextAction}`,
+    `Audit: ${result.auditId ?? "none"}`,
+  ].join("\n");
 }
 
 async function main() {
@@ -692,28 +740,68 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:bundle:list") {
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    process.stdout.write(`${formatSandboxPolicyBundleList(sandboxRegistry)}\n\n${JSON.stringify(sandboxRegistry.registry.bundles, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "sandbox:bundle:show") {
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const bundle = showSandboxPolicyBundle(sandboxRegistry, options.get("sandbox-bundle") ?? null);
+    process.stdout.write(`${formatSandboxPolicyBundle(bundle)}\n\n${JSON.stringify({ bundle, sandboxRegistry }, null, 2)}\n`);
+    return;
+  }
+
   if (command === "sandbox:create") {
     const profileId = options.get("sandbox-profile");
     if (!profileId) {
       throw new Error("--sandbox-profile is required for sandbox:create.");
     }
-    const repository = options.get("target-repo");
-    const targetType = options.get("target-type") as "issue" | "pull_request" | undefined;
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const bundleId = options.get("sandbox-bundle") ?? null;
     const targetNumber = options.has("target-number") ? Number.parseInt(getOption(options, "target-number", "0"), 10) : null;
-    if (!repository || !targetType || !targetNumber) {
-      throw new Error("--target-repo, --target-type, and --target-number are required for sandbox:create.");
+    const bundleResult =
+      bundleId !== null
+        ? applySandboxPolicyBundle({
+            loadedRegistry: sandboxRegistry,
+            bundleId,
+            overrides: {
+              repository: options.get("target-repo") ?? undefined,
+              targetType: options.has("target-type")
+                ? (getOption(options, "target-type", "issue") as "issue" | "pull_request")
+                : undefined,
+              targetNumber: targetNumber ?? undefined,
+              actionPolicy: options.get("action-policy") as "create_or_update" | "create_only" | "update_only" | undefined,
+              enabled: options.has("enabled") ? getOption(options, "enabled", "true") === "true" : undefined,
+              notes: options.get("notes") ?? undefined,
+            },
+          })
+        : null;
+    if (bundleResult && bundleResult.status !== "resolved") {
+      process.stdout.write(`${bundleResult.summary}\n\n${JSON.stringify(bundleResult, null, 2)}\n`);
+      return;
     }
+    const directRepository = options.get("target-repo");
+    const directTargetType = options.get("target-type") as "issue" | "pull_request" | undefined;
+    if (
+      !bundleResult &&
+      (!directRepository || !directTargetType || !targetNumber)
+    ) {
+      throw new Error("--target-repo, --target-type, and --target-number are required for sandbox:create unless --sandbox-bundle resolves them.");
+    }
+    const profile = bundleResult?.profile ?? {
+      repository: directRepository!,
+      targetType: directTargetType!,
+      targetNumber: targetNumber!,
+      actionPolicy: (options.get("action-policy") as "create_or_update" | "create_only" | "update_only" | undefined) ?? "create_or_update",
+      enabled: getOption(options, "enabled", "true") === "true",
+      notes: options.get("notes") ?? null,
+    };
     const result = await createSandboxProfile({
       configPath: options.get("sandbox-config") ?? null,
       profileId,
-      profile: {
-        repository,
-        targetType,
-        targetNumber,
-        actionPolicy: (options.get("action-policy") as "create_or_update" | "create_only" | "update_only" | undefined) ?? "create_or_update",
-        enabled: getOption(options, "enabled", "true") === "true",
-        notes: options.get("notes") ?? null,
-      },
+      profile,
       setDefault: getOption(options, "set-default", "false") === "true",
     });
     process.stdout.write(`${formatSandboxLifecycleSummary(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
@@ -725,6 +813,8 @@ async function main() {
     if (!profileId) {
       throw new Error("--sandbox-profile is required for sandbox:update.");
     }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const existingProfile = sandboxRegistry.registry.profiles[profileId] ?? null;
     const changes: Record<string, unknown> = {};
     if (options.has("target-repo")) changes.repository = options.get("target-repo");
     if (options.has("target-type")) changes.targetType = getOption(options, "target-type", "issue");
@@ -732,6 +822,19 @@ async function main() {
     if (options.has("action-policy")) changes.actionPolicy = options.get("action-policy");
     if (options.has("enabled")) changes.enabled = getOption(options, "enabled", "true") === "true";
     if (options.has("notes")) changes.notes = options.get("notes");
+    if (options.has("sandbox-bundle")) {
+      const bundleResult = applySandboxPolicyBundle({
+        loadedRegistry: sandboxRegistry,
+        bundleId: options.get("sandbox-bundle") ?? null,
+        existingProfile,
+        overrides: changes,
+      });
+      if (bundleResult.status !== "resolved" || !bundleResult.profile) {
+        process.stdout.write(`${bundleResult.summary}\n\n${JSON.stringify(bundleResult, null, 2)}\n`);
+        return;
+      }
+      Object.assign(changes, bundleResult.profile);
+    }
     const result = await updateSandboxProfile({
       configPath: options.get("sandbox-config") ?? null,
       profileId,
@@ -778,6 +881,7 @@ async function main() {
         profile
           ? `Target: ${profile.targetType} ${profile.repository}#${profile.targetNumber} (${profile.actionPolicy})`
           : "Target: none",
+        `Bundle: ${profile?.bundleId ?? "none"} / overrides=${profile?.overrideFields.join(", ") || "none"}`,
         `Default profile: ${sandboxRegistry.registry.defaultProfileId ?? "none"}`,
         `Config: ${sandboxRegistry.source}/${sandboxRegistry.version} (${sandboxRegistry.path ?? "no-path"})`,
         "",
@@ -851,6 +955,131 @@ async function main() {
     process.stdout.write(
       `${formatSandboxGuardrailsSummary(decision)}\nSelection summary: ${registryResolution.summary}\n\n${JSON.stringify({ registryResolution, decision }, null, 2)}\n`,
     );
+    return;
+  }
+
+  if (command === "sandbox:export") {
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const outputPath = path.resolve(
+      options.get("output") ??
+        path.join(repoPath, ".tmp", "orchestrator-sandbox", options.get("sandbox-profile") ? `${options.get("sandbox-profile")}.json` : "sandbox-export.json"),
+    );
+    const result = await exportSandboxProfiles({
+      loadedRegistry: sandboxRegistry,
+      outputPath,
+      profileId: options.get("sandbox-profile") ?? null,
+      snapshot: getOption(options, "snapshot", "false") === "true",
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastSandboxImportExportStatus: result.status,
+      lastSandboxImportExportSummary: result.summary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(`${summarizeSandboxImportExport(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "sandbox:import") {
+    const configPath = options.get("sandbox-config");
+    const inputPath = options.get("input");
+    if (!configPath || !inputPath) {
+      throw new Error("--sandbox-config and --input are required for sandbox:import.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const result = await importSandboxProfiles({
+      configPath,
+      inputPath,
+      loadedRegistry: sandboxRegistry,
+      state: existingState,
+      mode: (options.get("mode") as "preview" | "apply" | undefined) ?? "preview",
+      actorSource: `sandbox:import:${(options.get("mode") as "preview" | "apply" | undefined) ?? "preview"}`,
+      commandSource: "cli",
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastSandboxImportExportStatus: result.status,
+      lastSandboxImportExportSummary: result.summary,
+      lastSandboxDiffSummary: result.diffSummary,
+      lastSandboxApplyStatus:
+        result.mode === "apply" && result.status === "imported"
+          ? "applied"
+          : result.mode === "apply" && (result.status === "blocked" || result.status === "manual_required")
+            ? result.status
+            : existingState.lastSandboxApplyStatus,
+      lastSandboxApplySummary: result.mode === "apply" ? result.summary : existingState.lastSandboxApplySummary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(`${summarizeSandboxImportExport(result)}\n\n${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "sandbox:diff" || command === "sandbox:review" || command === "sandbox:apply") {
+    const configPath = options.get("sandbox-config");
+    const inputPath = options.get("input");
+    if (!configPath || !inputPath) {
+      throw new Error("--sandbox-config and --input are required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const importPreview = await importSandboxProfiles({
+      configPath,
+      inputPath,
+      loadedRegistry: sandboxRegistry,
+      state: existingState,
+      mode: "preview",
+      actorSource: "sandbox:review",
+      commandSource: "cli",
+    });
+    if (command === "sandbox:diff") {
+      process.stdout.write(`${summarizeSandboxImportExport(importPreview)}\n\n${JSON.stringify(importPreview, null, 2)}\n`);
+      return;
+    }
+    const proposedRegistry = importPreview.registry ?? sandboxRegistry.registry;
+    const review = await reviewSandboxRegistryChange({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      proposedRegistry,
+      actorSource: "sandbox:review",
+      commandSource: "cli",
+      recordAudit: command === "sandbox:review",
+    });
+    if (command === "sandbox:review") {
+      const updatedState = orchestratorStateSchema.parse({
+        ...existingState,
+        lastSandboxDiffSummary: review.diffSummary,
+        lastSandboxReviewStatus: review.status,
+        lastSandboxReviewSummary: review.summary,
+        updatedAt: new Date().toISOString(),
+      });
+      await dependencies.storage.saveState(updatedState);
+      process.stdout.write(`${summarizeSandboxReview(review)}\n\n${JSON.stringify(review, null, 2)}\n`);
+      return;
+    }
+    const applied = await applySandboxRegistryChange({
+      configPath,
+      state: existingState,
+      loadedRegistry: sandboxRegistry,
+      proposedRegistry,
+      actorSource: "sandbox:apply",
+      commandSource: "cli",
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      lastSandboxDiffSummary: applied.diffSummary,
+      lastSandboxReviewStatus: applied.status === "ready" ? "ready" : applied.status,
+      lastSandboxReviewSummary: applied.summary,
+      lastSandboxApplyStatus:
+        applied.status === "ready"
+          ? "applied"
+          : applied.status,
+      lastSandboxApplySummary: applied.summary,
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(`${summarizeSandboxReview(applied)}\n\n${JSON.stringify(applied, null, 2)}\n`);
     return;
   }
 
@@ -1390,11 +1619,18 @@ async function main() {
       "  node cli.js sandbox:set-default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:target-check --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:list --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:bundle:list --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:bundle:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-bundle create-only",
       "  node cli.js sandbox:show --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:validate --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:governance --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js sandbox:audit --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:guardrails --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
+      "  node cli.js sandbox:export --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default --output .tmp/sandbox-default.json",
+      "  node cli.js sandbox:import --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json --mode preview",
+      "  node cli.js sandbox:diff --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json",
+      "  node cli.js sandbox:review --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json",
+      "  node cli.js sandbox:apply --sandbox-config .tmp/orchestrator-sandbox.json --input .tmp/sandbox-default.json",
       "  node cli.js reporting:precheck --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:auth-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",
       "  node cli.js reporting:run-live-smoke --state-id default --sandbox-config .tmp/orchestrator-sandbox.json --sandbox-profile default",

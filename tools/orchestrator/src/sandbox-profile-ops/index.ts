@@ -9,6 +9,8 @@ export type SandboxProfileRecord = {
   targetNumber: number;
   actionPolicy: "create_or_update" | "create_only" | "update_only";
   enabled: boolean;
+  bundleId: string | null;
+  overrideFields: string[];
   notes: string | null;
 };
 
@@ -21,6 +23,8 @@ export type SandboxProfileValidationResult = {
   targetNumber: number | null;
   actionPolicy: "create_or_update" | "create_only" | "update_only" | null;
   enabled: boolean | null;
+  bundleId: string | null;
+  overrideFields: string[];
   notes: string | null;
   selectionMode: "explicit" | "default" | "fallback" | "blocked";
   selectionReason: string;
@@ -41,6 +45,8 @@ export function listSandboxProfiles(loaded: LoadedGitHubSandboxTargetRegistry): 
     targetNumber: profile.targetNumber,
     actionPolicy: profile.actionPolicy,
     enabled: profile.enabled !== false,
+    bundleId: profile.bundleId ?? null,
+    overrideFields: profile.overrideFields ?? [],
     notes: profile.notes,
   }));
 }
@@ -61,6 +67,8 @@ export function showSandboxProfile(loaded: LoadedGitHubSandboxTargetRegistry, pr
     targetNumber: profile.targetNumber,
     actionPolicy: profile.actionPolicy,
     enabled: profile.enabled !== false,
+    bundleId: profile.bundleId ?? null,
+    overrideFields: profile.overrideFields ?? [],
     notes: profile.notes,
     configVersion: loaded.version,
     configSource: loaded.source,
@@ -91,6 +99,8 @@ export function validateSandboxProfile(params: {
     targetNumber: shownProfile?.targetNumber ?? resolution.requestedTarget?.targetNumber ?? null,
     actionPolicy: shownProfile?.actionPolicy ?? resolution.actionPolicy ?? null,
     enabled: shownProfile ? shownProfile.enabled !== false : null,
+    bundleId: shownProfile?.bundleId ?? null,
+    overrideFields: shownProfile?.overrideFields ?? [],
     notes: shownProfile?.notes ?? null,
     selectionMode: resolution.selectionMode,
     selectionReason: resolution.selectionReason,
@@ -115,7 +125,7 @@ export function formatSandboxProfileList(loaded: LoadedGitHubSandboxTargetRegist
   lines.push("Profiles:");
   for (const profile of profiles) {
     lines.push(
-      `- ${profile.profileId}${profile.isDefault ? " (default)" : ""}: ${profile.repository}#${profile.targetNumber} (${profile.targetType}, ${profile.actionPolicy}, enabled=${profile.enabled})${profile.notes ? ` notes=${profile.notes}` : ""}`,
+      `- ${profile.profileId}${profile.isDefault ? " (default)" : ""}: ${profile.repository}#${profile.targetNumber} (${profile.targetType}, ${profile.actionPolicy}, enabled=${profile.enabled}, bundle=${profile.bundleId ?? "none"}, overrides=${profile.overrideFields.join(",") || "none"})${profile.notes ? ` notes=${profile.notes}` : ""}`,
     );
   }
   return lines.join("\n");
@@ -128,6 +138,7 @@ export function formatSandboxProfileValidation(result: SandboxProfileValidationR
     `Target: ${result.targetType ?? "none"} ${result.repository ?? "none"}#${result.targetNumber ?? "none"}`,
     `Action policy: ${result.actionPolicy ?? "none"}`,
     `Enabled: ${result.enabled ?? "none"}`,
+    `Bundle: ${result.bundleId ?? "none"} / overrides=${result.overrideFields.join(", ") || "none"}`,
     `Notes: ${result.notes ?? "none"}`,
     `Selection: ${result.selectionMode} / ${result.selectionReason}`,
     `Config: ${result.configSource}/${result.configVersion} (${result.configPath ?? "no-path"})`,

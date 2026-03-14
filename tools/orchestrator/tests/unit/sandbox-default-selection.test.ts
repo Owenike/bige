@@ -44,6 +44,7 @@ function createRegistry(params?: {
     registry: {
       version: "sandbox-selection-v1",
       defaultProfileId: params?.defaultProfileId === undefined ? "default" : params.defaultProfileId,
+      bundles: {},
       governance: {
         allowedRepositories: [],
         allowedTargetTypes: ["issue", "pull_request"],
@@ -57,6 +58,8 @@ function createRegistry(params?: {
           targetNumber: 101,
           actionPolicy: "create_or_update",
           enabled: true,
+          bundleId: null,
+          overrideFields: [],
           notes: null,
         },
         ...(params?.includeTaskProfile
@@ -67,6 +70,8 @@ function createRegistry(params?: {
               targetNumber: 202,
               actionPolicy: "update_only" as const,
               enabled: true,
+              bundleId: null,
+              overrideFields: [],
               notes: null,
             },
             }
@@ -79,6 +84,8 @@ function createRegistry(params?: {
               targetNumber: 303,
               actionPolicy: "create_or_update" as const,
               enabled: true,
+              bundleId: null,
+              overrideFields: [],
               notes: null,
             },
             }
@@ -135,6 +142,7 @@ test("sandbox default selection blocks when no valid profile exists", () => {
       registry: {
         version: "empty-v1",
         defaultProfileId: null,
+        bundles: {},
         governance: {
           allowedRepositories: [],
           allowedTargetTypes: ["issue", "pull_request"],

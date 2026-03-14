@@ -34,6 +34,7 @@ async function createRegistry() {
       {
         version: "sandbox-v1",
         defaultProfileId: "default",
+        bundles: {},
         governance: {
           allowedRepositories: [],
           allowedTargetTypes: ["issue", "pull_request"],
@@ -47,6 +48,8 @@ async function createRegistry() {
             targetNumber: 101,
             actionPolicy: "create_or_update",
             enabled: true,
+            bundleId: null,
+            overrideFields: [],
             notes: null,
           },
           release: {
@@ -55,6 +58,8 @@ async function createRegistry() {
             targetNumber: 202,
             actionPolicy: "update_only",
             enabled: true,
+            bundleId: null,
+            overrideFields: [],
             notes: null,
           },
         },
@@ -119,6 +124,7 @@ test("github sandbox target registry returns manual_required when no safe target
       registry: {
         version: "empty-v1",
         defaultProfileId: null,
+        bundles: {},
         governance: {
           allowedRepositories: [],
           allowedTargetTypes: ["issue", "pull_request"],
