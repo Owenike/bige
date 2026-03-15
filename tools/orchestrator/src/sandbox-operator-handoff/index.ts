@@ -1,7 +1,7 @@
 import type { LoadedGitHubSandboxTargetRegistry } from "../github-sandbox-targets";
 import type { OrchestratorState } from "../schemas";
 import { buildSandboxCloseoutSummary } from "../sandbox-closeout-summary";
-import { buildSandboxCloseoutCompletionSummary } from "../sandbox-closeout-completion-summary";
+import { buildSandboxCloseoutCompletionResolutionSummary } from "../sandbox-closeout-completion-resolution-summary";
 import { buildSandboxCloseoutDispositionSummary } from "../sandbox-closeout-disposition-summary";
 import { buildSandboxCloseoutReviewHistory } from "../sandbox-closeout-review-history";
 import { buildSandboxCloseoutReviewResolutionSummary } from "../sandbox-closeout-review-resolution-summary";
@@ -91,12 +91,13 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     closeoutDispositionSummary,
     closeoutReviewResolutionSummary,
   });
-  const closeoutCompletionSummary = await buildSandboxCloseoutCompletionSummary({
-    configPath: params.configPath,
-    state: params.state,
-    loadedRegistry: params.loadedRegistry,
-    limit,
-  });
+  const closeoutCompletionResolutionSummary =
+    await buildSandboxCloseoutCompletionResolutionSummary({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+    });
   const repeatedHotspots = incidents.incidents
     .filter((incident) => incident.type === "repeated_blocked_hotspot")
     .flatMap((incident) => incident.affectedProfiles)
@@ -109,8 +110,8 @@ export async function buildSandboxOperatorHandoffSummary(params: {
       : null;
   const handoffLine =
     governance.latestUnresolvedIncidentCount === 0
-      ? `Sandbox recovery handoff: ${closeoutCompletionSummary.summaryLine}`
-      : `Sandbox recovery handoff: ${closeoutCompletionSummary.summaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
+      ? `Sandbox recovery handoff: ${closeoutCompletionResolutionSummary.summaryLine}`
+      : `Sandbox recovery handoff: ${closeoutCompletionResolutionSummary.summaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
   const summary =
     governance.latestUnresolvedIncidentCount === 0
       ? "No unresolved sandbox recovery incident currently requires operator handoff."
@@ -121,7 +122,7 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     latestActionSummary,
     unresolvedHotspots: governance.unresolvedHotspots,
     repeatedBlockedManualRequiredHotspots: repeatedHotspots,
-    recommendedNextStep: closeoutCompletionSummary.recommendedNextOperatorStep,
+    recommendedNextStep: closeoutCompletionResolutionSummary.recommendedNextOperatorStep,
     governanceWarnings: governance.governanceWarnings,
     escalationRecommendation,
     handoffLine,

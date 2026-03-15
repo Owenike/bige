@@ -3,8 +3,6 @@ param()
 $ErrorActionPreference = "Stop"
 
 $scripts = @(
-  "typecheck",
-  "lint",
   "test:orchestrator:typecheck",
   "test:orchestrator:lint",
   "test:orchestrator:unit",
@@ -99,6 +97,9 @@ $scripts = @(
   "test:orchestrator:sandbox-closeout-completion-audit",
   "test:orchestrator:sandbox-closeout-completion-summary",
   "test:orchestrator:sandbox-closeout-completion-queue",
+  "test:orchestrator:sandbox-closeout-completion-history",
+  "test:orchestrator:sandbox-closeout-completion-resolution-summary",
+  "test:orchestrator:sandbox-closeout-completion-carry-forward-queue",
   "test:orchestrator:github-report-permissions",
   "test:orchestrator:report-delivery-audit",
   "test:orchestrator:reporting-operator-summary",

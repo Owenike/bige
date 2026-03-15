@@ -121,6 +121,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-completion-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-completion-summary.test.js",
     "$outDir\tests\unit\sandbox-closeout-completion-queue.test.js",
+    "$outDir\tests\unit\sandbox-closeout-completion-history.test.js",
+    "$outDir\tests\unit\sandbox-closeout-completion-resolution-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-completion-carry-forward-queue.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -418,6 +421,15 @@ $suiteMap = @{
   "sandbox-closeout-completion-queue" = @(
     "$outDir\tests\unit\sandbox-closeout-completion-queue.test.js"
   )
+  "sandbox-closeout-completion-history" = @(
+    "$outDir\tests\unit\sandbox-closeout-completion-history.test.js"
+  )
+  "sandbox-closeout-completion-resolution-summary" = @(
+    "$outDir\tests\unit\sandbox-closeout-completion-resolution-summary.test.js"
+  )
+  "sandbox-closeout-completion-carry-forward-queue" = @(
+    "$outDir\tests\unit\sandbox-closeout-completion-carry-forward-queue.test.js"
+  )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
   )
@@ -626,6 +638,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-completion-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-completion-summary.test.js",
     "$outDir\tests\unit\sandbox-closeout-completion-queue.test.js",
+    "$outDir\tests\unit\sandbox-closeout-completion-history.test.js",
+    "$outDir\tests\unit\sandbox-closeout-completion-resolution-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-completion-carry-forward-queue.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",

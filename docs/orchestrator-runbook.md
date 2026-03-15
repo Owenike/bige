@@ -780,6 +780,18 @@ Sandbox target registry:
     - which closeout items still have not reached `review-complete` or `closeout-complete`
     - whether follow-up remains open, whether settlement is blocked, and whether completion is still blocked
     - blocked reasons, missing evidence, and the next operator step required before completion queue exit
+  - closeout completion history is centralized into one shared trend record that stores:
+    - the latest and previous completion audit entry
+    - repeated `review-complete`, `closeout-complete`, `completion-blocked`, `queue-retained`, and `followup-open` patterns
+    - repeated revert-from-complete patterns when a case was once complete and later pulled back into governance
+  - closeout completion resolution summary is centralized into one shared completion-thread decision that stores:
+    - whether the thread is `completion_settled`, `completion_reverted`, `review_complete_only`, `closeout_complete`, `followup_open`, or `queue_retained`
+    - whether the case may truly be treated as fully completed
+    - unresolved completion reasons and the recommended next operator step
+  - closeout completion carry-forward queue is centralized into one shared governance backlog that stores:
+    - which incomplete completion cases must be carried forward into later governance review
+    - whether the case still needs `review-complete`, `closeout-complete`, follow-up cleanup, or revert handling
+    - carry-forward reasons, missing evidence, and the next operator step required before the case can leave governance
   - review action interpretation:
     - `approve_closeout` only becomes effective when the existing closeout summary/checklist already say the incident is safe to close; otherwise it remains blocked/manual_required/rejected
     - `reject_closeout` keeps follow-up open and should be treated as an explicit governance refusal to close the incident
@@ -794,10 +806,13 @@ Sandbox target registry:
     - `sandbox:closeout:review:audit`, `sandbox:closeout:review:history`, and `sandbox:closeout:review:resolution` should be read together when you need to know why a review thread is still open or why it was allowed to settle
     - `sandbox:closeout:settlement:audit`, `sandbox:closeout:followup:summary`, and `sandbox:closeout:followup:queue` should be read together when you need to know whether settlement really holds, whether follow-up still blocks closeout, and why a case is still retained in governance
     - `sandbox:closeout:completion:audit`, `sandbox:closeout:completion:summary`, and `sandbox:closeout:completion:queue` should be read together when you need to know why a case is still not `review-complete` or `closeout-complete`
+    - `sandbox:closeout:completion:history`, `sandbox:closeout:completion:resolution`, and `sandbox:closeout:completion:carry-forward` should be read together when you need to know whether completion has really stabilized, whether a case reverted from complete, and which incomplete cases must still carry forward
     - a review thread is only considered fully reviewed when the review resolution summary says `review_settled`; settlement may still be blocked if follow-up remains open
     - a closeout is only considered complete when settlement audit says `closeout_complete`; `review_complete` by itself still means closeout-complete may be blocked by open follow-up obligations
     - `followup_open` or `queue_retained` in completion audit means the case must stay in governance, even if settlement itself looked allowed
     - `closeout_complete` should only be treated as final when completion summary says `closeout_complete` and completion queue is empty
+    - repeated `not-complete`, repeated `queue-retained`, or revert-from-complete in completion history means the completion thread is not yet stable, even if one audit briefly allowed completion
+    - follow-up open or carry-forward queue retained means the case must not be treated as `review-complete` or `closeout-complete`, even if settlement once looked allowed
   - restore retention keeps the latest restore point, the recent N restore points, restore points referenced by recent rollback audit, and any restore point still associated with unresolved manual_required work
   - `sandbox:restore-points:prune` only removes expired restore points that are not protected by retention rules
   - no-op apply or no-op rollback does not create a new restore point
