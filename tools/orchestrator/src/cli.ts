@@ -79,6 +79,18 @@ import {
   buildSandboxCloseoutOperatorChecklist,
   formatSandboxCloseoutOperatorChecklist,
 } from "./sandbox-closeout-checklist";
+import {
+  buildSandboxResolutionAuditHistory,
+  formatSandboxResolutionAuditHistory,
+} from "./sandbox-resolution-audit-history";
+import {
+  buildSandboxCloseoutReviewSummary,
+  formatSandboxCloseoutReviewSummary,
+} from "./sandbox-closeout-review-summary";
+import {
+  buildSandboxCloseoutReviewQueue,
+  formatSandboxCloseoutReviewQueue,
+} from "./sandbox-closeout-review-queue";
 import { buildSandboxOperatorHandoffSummary, formatSandboxOperatorHandoffSummary } from "./sandbox-operator-handoff";
 import { formatSandboxOperatorActionResult, runSandboxOperatorAction } from "./sandbox-operator-actions";
 import { listSandboxRestorePoints } from "./sandbox-restore-points";
@@ -525,6 +537,30 @@ async function resolveSandboxGovernanceArtifacts(params: {
     loadedRegistry: params.sandboxRegistry,
     limit: params.limit,
   });
+  const resolutionAuditHistory = await buildSandboxResolutionAuditHistory({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+  });
+  const closeoutReviewSummary = await buildSandboxCloseoutReviewSummary({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+    resolutionAuditHistory,
+    closeoutSummary,
+    closeoutChecklist,
+  });
+  const closeoutReviewQueue = await buildSandboxCloseoutReviewQueue({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+    resolutionAuditHistory,
+    closeoutSummary,
+    closeoutChecklist,
+  });
   return {
     incidents,
     governanceStatus,
@@ -537,6 +573,9 @@ async function resolveSandboxGovernanceArtifacts(params: {
     resolutionAuditLog,
     closeoutSummary,
     closeoutChecklist,
+    resolutionAuditHistory,
+    closeoutReviewSummary,
+    closeoutReviewQueue,
   };
 }
 
@@ -551,6 +590,9 @@ function buildSandboxGovernanceStatePatch(params: {
   resolutionAuditLog?: Awaited<ReturnType<typeof appendSandboxResolutionAuditLog>> | null;
   closeoutSummary?: Awaited<ReturnType<typeof buildSandboxCloseoutSummary>>;
   closeoutChecklist?: Awaited<ReturnType<typeof buildSandboxCloseoutOperatorChecklist>>;
+  resolutionAuditHistory?: Awaited<ReturnType<typeof buildSandboxResolutionAuditHistory>>;
+  closeoutReviewSummary?: Awaited<ReturnType<typeof buildSandboxCloseoutReviewSummary>>;
+  closeoutReviewQueue?: Awaited<ReturnType<typeof buildSandboxCloseoutReviewQueue>>;
 }) {
   return {
     lastGovernanceStatus: params.governanceStatus,
@@ -562,6 +604,9 @@ function buildSandboxGovernanceStatePatch(params: {
     ...(params.resolutionAuditLog ? { lastResolutionAuditLog: params.resolutionAuditLog } : {}),
     ...(params.closeoutSummary ? { lastCloseoutSummary: params.closeoutSummary } : {}),
     ...(params.closeoutChecklist ? { lastCloseoutChecklist: params.closeoutChecklist } : {}),
+    ...(params.resolutionAuditHistory ? { lastResolutionAuditHistory: params.resolutionAuditHistory } : {}),
+    ...(params.closeoutReviewSummary ? { lastCloseoutReviewSummary: params.closeoutReviewSummary } : {}),
+    ...(params.closeoutReviewQueue ? { lastCloseoutReviewQueue: params.closeoutReviewQueue } : {}),
     lastRecoveryIncidentSummary: params.resolutionEvidenceSummary.latestIncidentSummary ?? params.resolutionEvidenceSummary.summary,
     lastIncidentType: params.resolutionReadiness.latestIncidentType,
     lastIncidentSeverity: params.resolutionReadiness.latestIncidentSeverity,
@@ -1916,7 +1961,7 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxOperatorHandoffSummary(governance.handoffSummary)}\n\n${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${JSON.stringify(governance.handoffSummary, null, 2)}\n`,
+      `${formatSandboxOperatorHandoffSummary(governance.handoffSummary)}\n\n${formatSandboxCloseoutReviewSummary(governance.closeoutReviewSummary)}\n\n${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${JSON.stringify(governance.handoffSummary, null, 2)}\n`,
     );
     return;
   }
@@ -2041,7 +2086,7 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${formatSandboxResolutionAuditLogs({ records: governance.resolutionAuditLog ? [governance.resolutionAuditLog] : [] })}\n\n${JSON.stringify(governance.closeoutSummary, null, 2)}\n`,
+      `${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${formatSandboxCloseoutReviewSummary(governance.closeoutReviewSummary)}\n\n${formatSandboxResolutionAuditLogs({ records: governance.resolutionAuditLog ? [governance.resolutionAuditLog] : [] })}\n\n${JSON.stringify(governance.closeoutSummary, null, 2)}\n`,
     );
     return;
   }
@@ -2069,7 +2114,82 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxCloseoutOperatorChecklist(governance.closeoutChecklist)}\n\n${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${JSON.stringify(governance.closeoutChecklist, null, 2)}\n`,
+      `${formatSandboxCloseoutOperatorChecklist(governance.closeoutChecklist)}\n\n${formatSandboxCloseoutReviewQueue(governance.closeoutReviewQueue)}\n\n${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${JSON.stringify(governance.closeoutChecklist, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:resolution:audit:history") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxResolutionAuditHistory(governance.resolutionAuditHistory)}\n\n${JSON.stringify(governance.resolutionAuditHistory, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:closeout:review:summary") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutReviewSummary(governance.closeoutReviewSummary)}\n\n${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${JSON.stringify(governance.closeoutReviewSummary, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:closeout:review:queue") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutReviewQueue(governance.closeoutReviewQueue)}\n\n${formatSandboxCloseoutReviewSummary(governance.closeoutReviewSummary)}\n\n${JSON.stringify(governance.closeoutReviewQueue, null, 2)}\n`,
     );
     return;
   }
@@ -2098,7 +2218,7 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxRecoveryDiagnostics(result)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${formatSandboxResolutionEvidenceSummary(governance.resolutionEvidenceSummary)}\n\n${formatSandboxResolutionReadiness(governance.resolutionReadiness)}\n\n${formatSandboxClosureGatingDecision(governance.closureGatingDecision)}\n\n${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${formatSandboxCloseoutOperatorChecklist(governance.closeoutChecklist)}\n\n${formatSandboxIncidentPolicy(governance.incidentPolicy)}\n\n${formatSandboxOperatorHandoffSummary(governance.handoffSummary)}\n\n${JSON.stringify({ result, governance }, null, 2)}\n`,
+      `${formatSandboxRecoveryDiagnostics(result)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${formatSandboxResolutionAuditHistory(governance.resolutionAuditHistory)}\n\n${formatSandboxResolutionEvidenceSummary(governance.resolutionEvidenceSummary)}\n\n${formatSandboxResolutionReadiness(governance.resolutionReadiness)}\n\n${formatSandboxClosureGatingDecision(governance.closureGatingDecision)}\n\n${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${formatSandboxCloseoutReviewSummary(governance.closeoutReviewSummary)}\n\n${formatSandboxCloseoutReviewQueue(governance.closeoutReviewQueue)}\n\n${formatSandboxCloseoutOperatorChecklist(governance.closeoutChecklist)}\n\n${formatSandboxIncidentPolicy(governance.incidentPolicy)}\n\n${formatSandboxOperatorHandoffSummary(governance.handoffSummary)}\n\n${JSON.stringify({ result, governance }, null, 2)}\n`,
     );
     return;
   }
@@ -2657,9 +2777,12 @@ async function main() {
       "  node cli.js sandbox:resolution:readiness --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:resolution:evidence --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:resolution:audit --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:resolution:audit:history --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:incident:closure-check --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:summary --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:checklist --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:review:summary --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:review:queue --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:incident:acknowledge --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
       "  node cli.js sandbox:incident:resolve --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",
       "  node cli.js sandbox:incident:escalate --sandbox-config .tmp/orchestrator-sandbox.json --incident-id sandbox-incident:...",

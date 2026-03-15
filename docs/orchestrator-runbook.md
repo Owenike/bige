@@ -564,9 +564,12 @@ Sandbox target registry:
   - use `sandbox:resolution:evidence` when you need the shared evidence summary that diagnostics, handoff, readiness, and closure-check all consume
   - use `sandbox:resolution:readiness` when you need a centralized answer for whether the latest incident set is closure-ready, still operator-flow, or review/escalation-gated
   - use `sandbox:resolution:audit` when you need the closeout audit trail that captures the exact evidence/readiness/gating snapshot used during a closure check
+  - use `sandbox:resolution:audit:history` when you need the recent closeout trail, repeated blocked/review_required/resolved_not_ready patterns, and the latest/previous audit pair in one place
   - use `sandbox:incident:closure-check` when you need the explicit closure gating decision, blocked reason codes, and next action before treating an incident as safely closed
   - use `sandbox:closeout:summary` when you need the operator-readable closeout decision, evidence sufficiency, and latest audit line in one view
   - use `sandbox:closeout:checklist` when you need the closeout checklist that shows which governance/evidence items are still unsatisfied before closure
+  - use `sandbox:closeout:review:summary` when you need a human-readable answer for whether closeout is complete, review_pending, escalation_pending, or resolved_but_followup_needed
+  - use `sandbox:closeout:review:queue` when you need the current governance queue of closeout items that still require review, escalation, or evidence follow-up
   - inspect `sandbox:rollback:governance` before any rollback apply if you need to know whether a restore point is stale, default-unsafe, or otherwise blocked
   - always run `sandbox:rollback:preview` before `sandbox:rollback:validate` or `sandbox:rollback:apply`
   - use `sandbox:batch-recovery:preview` and `sandbox:batch-recovery:validate` before any multi-restore recovery
@@ -628,6 +631,22 @@ Sandbox target registry:
     - whether rerun is recommended
     - whether manual review is required
     - whether apply is blocked
+  - resolution evidence, readiness, closure gating, resolution audit, closeout summary, closeout checklist, closeout review summary, and closeout review queue are all operator-governance summaries only; they do not create a new recovery execution path
+  - `mark_resolved` remains operator metadata; it does not mean the incident is fixed, and it does not by itself remove the incident from closeout review
+  - interpret repeated closeout patterns as follows:
+    - repeated `blocked` means the same blocked reason keeps preventing closure and operator flow should stop at review/escalation instead of retrying apply
+    - repeated `review_required` means the same review gate is being hit across multiple closeout attempts and the incident should stay in the review queue
+    - repeated `resolved_not_ready` means the incident was marked resolved more than once without enough evidence or gating clearance to close it safely
+  - interpret the closeout review queue as a governance backlog, not an execution queue:
+    - `review_pending` means the closeout item still needs operator review before it can be considered complete
+    - `escalation_pending` means the closeout item still needs escalation before it can leave the queue
+    - `evidence_follow_up` means the closeout item still lacks enough rerun/validate/apply evidence to be treated as complete
+    - `blocked` means the closeout item is still in a terminal blocked/manual_required condition and must not be treated as complete
+  - closeout is only considered complete when:
+    - the closeout summary says closure-ready
+    - the checklist says safe-to-closeout
+    - the review queue no longer carries the item as pending follow-up
+    - the latest resolution audit line confirms the evidence/readiness/gating snapshot used for that decision
     - whether operator handoff is recommended
   - incident severity mapping includes:
     - missing or expired restore point -> `manual_required`
@@ -1421,6 +1440,9 @@ npm run test:orchestrator:sandbox-closure-gating
 npm run test:orchestrator:sandbox-resolution-audit-log
 npm run test:orchestrator:sandbox-closeout-summary
 npm run test:orchestrator:sandbox-closeout-operator-checklist
+npm run test:orchestrator:sandbox-resolution-audit-history
+npm run test:orchestrator:sandbox-closeout-review-summary
+npm run test:orchestrator:sandbox-closeout-review-queue
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine
