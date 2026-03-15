@@ -4,6 +4,9 @@ import { buildSandboxCloseoutSummary } from "../sandbox-closeout-summary";
 import { buildSandboxCloseoutCompletionDispositionSummary } from "../sandbox-closeout-completion-disposition-summary";
 import { buildSandboxCloseoutCompletionFinalizationSummary } from "../sandbox-closeout-completion-finalization-summary";
 import { buildSandboxCloseoutFinalizationStabilitySummary } from "../sandbox-closeout-finalization-stability-summary";
+import { buildSandboxCloseoutStabilityDrift } from "../sandbox-closeout-stability-drift";
+import { buildSandboxCloseoutReopenRecurrence } from "../sandbox-closeout-reopen-recurrence";
+import { buildSandboxCloseoutStabilityWatchlist } from "../sandbox-closeout-stability-watchlist";
 import { buildSandboxCloseoutCompletionLifecycle } from "../sandbox-closeout-completion-lifecycle";
 import { buildSandboxCloseoutCompletionResolutionSummary } from "../sandbox-closeout-completion-resolution-summary";
 import { buildSandboxCloseoutDispositionSummary } from "../sandbox-closeout-disposition-summary";
@@ -136,12 +139,38 @@ export async function buildSandboxOperatorHandoffSummary(params: {
       limit,
       closeoutCompletionFinalizationSummary,
     });
+  const closeoutStabilityDrift = await buildSandboxCloseoutStabilityDrift({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.loadedRegistry,
+    limit,
+    closeoutFinalizationStabilitySummary,
+  });
+  const closeoutReopenRecurrence = await buildSandboxCloseoutReopenRecurrence({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.loadedRegistry,
+    limit,
+    closeoutFinalizationStabilitySummary,
+  });
+  const closeoutStabilityWatchlist = await buildSandboxCloseoutStabilityWatchlist({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.loadedRegistry,
+    limit,
+    closeoutStabilityDrift,
+    closeoutReopenRecurrence,
+    closeoutFinalizationStabilitySummary,
+  });
   const repeatedHotspots = incidents.incidents
     .filter((incident) => incident.type === "repeated_blocked_hotspot")
     .flatMap((incident) => incident.affectedProfiles)
     .filter((profileId, index, array) => array.indexOf(profileId) === index)
     .sort();
   const latestActionSummary =
+    closeoutStabilityWatchlist.summaryLine ??
+    closeoutStabilityDrift.summaryLine ??
+    closeoutReopenRecurrence.summaryLine ??
     closeoutFinalizationStabilitySummary.summaryLine ??
     closeoutCompletionFinalizationSummary.summaryLine ??
     closeoutCompletionDispositionSummary.summaryLine ??
@@ -153,8 +182,8 @@ export async function buildSandboxOperatorHandoffSummary(params: {
       : null;
   const handoffLine =
     governance.latestUnresolvedIncidentCount === 0
-      ? `Sandbox recovery handoff: ${closeoutFinalizationStabilitySummary.summaryLine}`
-      : `Sandbox recovery handoff: ${closeoutFinalizationStabilitySummary.summaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
+      ? `Sandbox recovery handoff: ${closeoutStabilityWatchlist.summaryLine}`
+      : `Sandbox recovery handoff: ${closeoutStabilityWatchlist.summaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
   const summary =
     governance.latestUnresolvedIncidentCount === 0
       ? "No unresolved sandbox recovery incident currently requires operator handoff."
@@ -166,7 +195,7 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     unresolvedHotspots: governance.unresolvedHotspots,
     repeatedBlockedManualRequiredHotspots: repeatedHotspots,
     recommendedNextStep:
-      closeoutFinalizationStabilitySummary.recommendedNextOperatorStep,
+      closeoutStabilityWatchlist.recommendedNextOperatorStep,
     governanceWarnings: governance.governanceWarnings,
     escalationRecommendation,
     handoffLine,

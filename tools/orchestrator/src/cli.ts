@@ -186,6 +186,18 @@ import {
   formatSandboxCloseoutPostFinalizationFollowupQueue,
 } from "./sandbox-closeout-post-finalization-followup-queue";
 import {
+  buildSandboxCloseoutStabilityDrift,
+  formatSandboxCloseoutStabilityDrift,
+} from "./sandbox-closeout-stability-drift";
+import {
+  buildSandboxCloseoutReopenRecurrence,
+  formatSandboxCloseoutReopenRecurrence,
+} from "./sandbox-closeout-reopen-recurrence";
+import {
+  buildSandboxCloseoutStabilityWatchlist,
+  formatSandboxCloseoutStabilityWatchlist,
+} from "./sandbox-closeout-stability-watchlist";
+import {
   buildSandboxCloseoutCompletionResolutionSummary,
   formatSandboxCloseoutCompletionResolutionSummary,
 } from "./sandbox-closeout-completion-resolution-summary";
@@ -1001,6 +1013,34 @@ async function resolveSandboxGovernanceArtifacts(params: {
       closeoutCompletionCarryForwardQueue: finalizedCloseoutCompletionCarryForwardQueue,
       closeoutFollowupSummary: closeoutFollowupSummaryWithAudit,
     });
+  const closeoutStabilityDrift = await buildSandboxCloseoutStabilityDrift({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+    closeoutFinalizationAuditHistory,
+    closeoutFinalizationStabilitySummary,
+    closeoutPostFinalizationFollowupQueue,
+  });
+  const closeoutReopenRecurrence = await buildSandboxCloseoutReopenRecurrence({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+    closeoutFinalizationAuditHistory,
+    closeoutFinalizationStabilitySummary,
+    closeoutPostFinalizationFollowupQueue,
+  });
+  const closeoutStabilityWatchlist = await buildSandboxCloseoutStabilityWatchlist({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+    closeoutStabilityDrift,
+    closeoutReopenRecurrence,
+    closeoutFinalizationStabilitySummary,
+    closeoutPostFinalizationFollowupQueue,
+  });
   const handoffSummary = await buildSandboxOperatorHandoffSummary({
     configPath: params.configPath,
     state: params.state,
@@ -1046,6 +1086,9 @@ async function resolveSandboxGovernanceArtifacts(params: {
     closeoutFinalizationAuditHistory,
     closeoutFinalizationStabilitySummary,
     closeoutPostFinalizationFollowupQueue,
+    closeoutStabilityDrift,
+    closeoutReopenRecurrence,
+    closeoutStabilityWatchlist,
   };
 }
 
@@ -1108,6 +1151,15 @@ function buildSandboxGovernanceStatePatch(params: {
   >;
   closeoutPostFinalizationFollowupQueue?: Awaited<
     ReturnType<typeof buildSandboxCloseoutPostFinalizationFollowupQueue>
+  >;
+  closeoutStabilityDrift?: Awaited<
+    ReturnType<typeof buildSandboxCloseoutStabilityDrift>
+  >;
+  closeoutReopenRecurrence?: Awaited<
+    ReturnType<typeof buildSandboxCloseoutReopenRecurrence>
+  >;
+  closeoutStabilityWatchlist?: Awaited<
+    ReturnType<typeof buildSandboxCloseoutStabilityWatchlist>
   >;
 }) {
   return {
@@ -1191,6 +1243,15 @@ function buildSandboxGovernanceStatePatch(params: {
           lastCloseoutPostFinalizationFollowupQueue:
             params.closeoutPostFinalizationFollowupQueue,
         }
+      : {}),
+    ...(params.closeoutStabilityDrift
+      ? { lastCloseoutStabilityDrift: params.closeoutStabilityDrift }
+      : {}),
+    ...(params.closeoutReopenRecurrence
+      ? { lastCloseoutReopenRecurrence: params.closeoutReopenRecurrence }
+      : {}),
+    ...(params.closeoutStabilityWatchlist
+      ? { lastCloseoutStabilityWatchlist: params.closeoutStabilityWatchlist }
       : {}),
     lastRecoveryIncidentSummary: params.resolutionEvidenceSummary.latestIncidentSummary ?? params.resolutionEvidenceSummary.summary,
     lastIncidentType: params.resolutionReadiness.latestIncidentType,
@@ -3473,6 +3534,81 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:closeout:stability:drift") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutStabilityDrift(governance.closeoutStabilityDrift)}\n\n${formatSandboxCloseoutFinalizationStabilitySummary(governance.closeoutFinalizationStabilitySummary)}\n\n${formatSandboxCloseoutPostFinalizationFollowupQueue(governance.closeoutPostFinalizationFollowupQueue)}\n\n${JSON.stringify(governance.closeoutStabilityDrift, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:closeout:reopen:recurrence") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutReopenRecurrence(governance.closeoutReopenRecurrence)}\n\n${formatSandboxCloseoutFinalizationAuditHistory(governance.closeoutFinalizationAuditHistory)}\n\n${formatSandboxCloseoutFinalizationStabilitySummary(governance.closeoutFinalizationStabilitySummary)}\n\n${JSON.stringify(governance.closeoutReopenRecurrence, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:closeout:stability:watchlist") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutStabilityWatchlist(governance.closeoutStabilityWatchlist)}\n\n${formatSandboxCloseoutStabilityDrift(governance.closeoutStabilityDrift)}\n\n${formatSandboxCloseoutReopenRecurrence(governance.closeoutReopenRecurrence)}\n\n${JSON.stringify(governance.closeoutStabilityWatchlist, null, 2)}\n`,
+    );
+    return;
+  }
+
   if (command === "sandbox:recovery:diagnostics") {
     const configPath = options.get("sandbox-config");
     if (!configPath) {
@@ -4083,6 +4219,12 @@ async function main() {
       "  node cli.js sandbox:closeout:completion:decision:audit --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:completion:decision:history --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:completion:finalization:summary --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:finalization:history --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:finalization:stability --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:post-finalization:followup:queue --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:stability:drift --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:reopen:recurrence --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:stability:watchlist --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:review:approve --sandbox-config .tmp/orchestrator-sandbox.json --audit-id sandbox-resolution-audit:... --reason \"closure evidence is sufficient\"",
       "  node cli.js sandbox:closeout:review:reject --sandbox-config .tmp/orchestrator-sandbox.json --reason \"blocked reasons remain\"",
       "  node cli.js sandbox:closeout:review:followup --sandbox-config .tmp/orchestrator-sandbox.json --note \"collect rerun validate evidence\"",

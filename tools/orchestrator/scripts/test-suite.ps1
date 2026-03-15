@@ -133,6 +133,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-finalization-audit-history.test.js",
     "$outDir\tests\unit\sandbox-closeout-finalization-stability-summary.test.js",
     "$outDir\tests\unit\sandbox-closeout-post-finalization-followup-queue.test.js",
+    "$outDir\tests\unit\sandbox-closeout-stability-drift.test.js",
+    "$outDir\tests\unit\sandbox-closeout-reopen-recurrence.test.js",
+    "$outDir\tests\unit\sandbox-closeout-stability-watchlist.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -466,6 +469,15 @@ $suiteMap = @{
   "sandbox-closeout-post-finalization-followup-queue" = @(
     "$outDir\tests\unit\sandbox-closeout-post-finalization-followup-queue.test.js"
   )
+  "sandbox-closeout-stability-drift" = @(
+    "$outDir\tests\unit\sandbox-closeout-stability-drift.test.js"
+  )
+  "sandbox-closeout-reopen-recurrence" = @(
+    "$outDir\tests\unit\sandbox-closeout-reopen-recurrence.test.js"
+  )
+  "sandbox-closeout-stability-watchlist" = @(
+    "$outDir\tests\unit\sandbox-closeout-stability-watchlist.test.js"
+  )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
   )
@@ -686,6 +698,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-finalization-audit-history.test.js",
     "$outDir\tests\unit\sandbox-closeout-finalization-stability-summary.test.js",
     "$outDir\tests\unit\sandbox-closeout-post-finalization-followup-queue.test.js",
+    "$outDir\tests\unit\sandbox-closeout-stability-drift.test.js",
+    "$outDir\tests\unit\sandbox-closeout-reopen-recurrence.test.js",
+    "$outDir\tests\unit\sandbox-closeout-stability-watchlist.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
