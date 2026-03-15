@@ -768,6 +768,18 @@ Sandbox target registry:
     - which closeout items still have open follow-up obligations
     - whether settlement is blocked, whether review is complete, and whether closeout is complete
     - blocked reasons, missing evidence, and the next operator step required before queue exit
+  - closeout completion audit is centralized into one shared completion decision record that stores:
+    - the exact settlement / follow-up summary / follow-up queue snapshots used when deciding whether a case is `review-complete`, `closeout-complete`, or still incomplete
+    - whether completion is `review_complete_allowed`, `closeout_complete_allowed`, `completion_blocked`, `followup_open`, or `queue_retained`
+    - completion blocked reasons, supporting reasons, queue-retained reasons, missing evidence, and missing follow-up signals
+  - closeout completion summary is centralized into one shared completion interpretation that records:
+    - whether the case is `review_complete`, `closeout_complete`, `completion_blocked`, `followup_still_open`, or `queue_still_retained`
+    - whether review-complete has truly been reached, whether closeout-complete has truly been reached, and what still blocks completion
+    - completion reasons, evidence gaps, governance warnings, and the recommended next operator step
+  - closeout completion queue is centralized into one shared governance backlog that records:
+    - which closeout items still have not reached `review-complete` or `closeout-complete`
+    - whether follow-up remains open, whether settlement is blocked, and whether completion is still blocked
+    - blocked reasons, missing evidence, and the next operator step required before completion queue exit
   - review action interpretation:
     - `approve_closeout` only becomes effective when the existing closeout summary/checklist already say the incident is safe to close; otherwise it remains blocked/manual_required/rejected
     - `reject_closeout` keeps follow-up open and should be treated as an explicit governance refusal to close the incident
@@ -781,8 +793,11 @@ Sandbox target registry:
     - repeated `reopen_review`, repeated `reject_closeout`, or repeated `request_followup` means the review thread is not settled even if one individual action was accepted
     - `sandbox:closeout:review:audit`, `sandbox:closeout:review:history`, and `sandbox:closeout:review:resolution` should be read together when you need to know why a review thread is still open or why it was allowed to settle
     - `sandbox:closeout:settlement:audit`, `sandbox:closeout:followup:summary`, and `sandbox:closeout:followup:queue` should be read together when you need to know whether settlement really holds, whether follow-up still blocks closeout, and why a case is still retained in governance
+    - `sandbox:closeout:completion:audit`, `sandbox:closeout:completion:summary`, and `sandbox:closeout:completion:queue` should be read together when you need to know why a case is still not `review-complete` or `closeout-complete`
     - a review thread is only considered fully reviewed when the review resolution summary says `review_settled`; settlement may still be blocked if follow-up remains open
     - a closeout is only considered complete when settlement audit says `closeout_complete`; `review_complete` by itself still means closeout-complete may be blocked by open follow-up obligations
+    - `followup_open` or `queue_retained` in completion audit means the case must stay in governance, even if settlement itself looked allowed
+    - `closeout_complete` should only be treated as final when completion summary says `closeout_complete` and completion queue is empty
   - restore retention keeps the latest restore point, the recent N restore points, restore points referenced by recent rollback audit, and any restore point still associated with unresolved manual_required work
   - `sandbox:restore-points:prune` only removes expired restore points that are not protected by retention rules
   - no-op apply or no-op rollback does not create a new restore point

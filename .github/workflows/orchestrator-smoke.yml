@@ -166,6 +166,9 @@ jobs:
           npm run test:orchestrator:sandbox-closeout-settlement-audit
           npm run test:orchestrator:sandbox-closeout-followup-summary
           npm run test:orchestrator:sandbox-closeout-followup-queue
+          npm run test:orchestrator:sandbox-closeout-completion-audit
+          npm run test:orchestrator:sandbox-closeout-completion-summary
+          npm run test:orchestrator:sandbox-closeout-completion-queue
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary

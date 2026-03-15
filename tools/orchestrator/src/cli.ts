@@ -123,6 +123,11 @@ import {
   listSandboxCloseoutSettlementAudits,
 } from "./sandbox-closeout-settlement-audit";
 import {
+  appendSandboxCloseoutCompletionAudit,
+  formatSandboxCloseoutCompletionAudits,
+  listSandboxCloseoutCompletionAudits,
+} from "./sandbox-closeout-completion-audit";
+import {
   buildSandboxCloseoutFollowupSummary,
   formatSandboxCloseoutFollowupSummary,
 } from "./sandbox-closeout-followup-summary";
@@ -130,6 +135,14 @@ import {
   buildSandboxCloseoutFollowupQueue,
   formatSandboxCloseoutFollowupQueue,
 } from "./sandbox-closeout-followup-queue";
+import {
+  buildSandboxCloseoutCompletionSummary,
+  formatSandboxCloseoutCompletionSummary,
+} from "./sandbox-closeout-completion-summary";
+import {
+  buildSandboxCloseoutCompletionQueue,
+  formatSandboxCloseoutCompletionQueue,
+} from "./sandbox-closeout-completion-queue";
 import { buildSandboxOperatorHandoffSummary, formatSandboxOperatorHandoffSummary } from "./sandbox-operator-handoff";
 import { formatSandboxOperatorActionResult, runSandboxOperatorAction } from "./sandbox-operator-actions";
 import { listSandboxRestorePoints } from "./sandbox-restore-points";
@@ -508,6 +521,7 @@ async function resolveSandboxGovernanceArtifacts(params: {
   recordCloseoutAudit?: boolean;
   recordCloseoutReviewAudit?: boolean;
   recordCloseoutSettlementAudit?: boolean;
+  recordCloseoutCompletionAudit?: boolean;
   actorSource?: string;
   commandSource?: string | null;
 }) {
@@ -721,6 +735,69 @@ async function resolveSandboxGovernanceArtifacts(params: {
     closeoutReviewQueue,
     latestSettlementAudit: closeoutSettlementAudit,
   });
+  const closeoutCompletionSummary = await buildSandboxCloseoutCompletionSummary({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+    closeoutDispositionSummary,
+    closeoutReviewLifecycle,
+    closeoutReviewResolutionSummary,
+    closeoutFollowupSummary: closeoutFollowupSummaryWithAudit,
+    closeoutFollowupQueue,
+    resolutionEvidenceSummary,
+    closureGatingDecision,
+    latestSettlementAudit: closeoutSettlementAudit,
+  });
+  const recordedCloseoutCompletionAudit =
+    params.recordCloseoutCompletionAudit &&
+    params.actorSource &&
+    closeoutSettlementAudit !== null
+      ? await appendSandboxCloseoutCompletionAudit({
+          configPath: params.configPath,
+          actorSource: params.actorSource,
+          commandSource: params.commandSource ?? null,
+          settlementAuditSnapshot: closeoutSettlementAudit,
+          followupSummarySnapshot: closeoutFollowupSummaryWithAudit,
+          followupQueueSnapshot: closeoutFollowupQueue,
+          latestIncidentType: resolutionReadiness.latestIncidentType,
+          latestIncidentSeverity: resolutionReadiness.latestIncidentSeverity,
+          latestIncidentSummary: resolutionReadiness.latestIncidentSummary,
+        })
+      : null;
+  const closeoutCompletionAudit =
+    recordedCloseoutCompletionAudit ??
+    (await listSandboxCloseoutCompletionAudits({
+      configPath: params.configPath,
+      limit: 1,
+    })).records[0] ??
+    null;
+  const closeoutCompletionSummaryWithAudit = await buildSandboxCloseoutCompletionSummary({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+    closeoutDispositionSummary,
+    closeoutReviewLifecycle,
+    closeoutReviewResolutionSummary,
+    closeoutFollowupSummary: closeoutFollowupSummaryWithAudit,
+    closeoutFollowupQueue,
+    resolutionEvidenceSummary,
+    closureGatingDecision,
+    latestSettlementAudit: closeoutSettlementAudit,
+    latestCompletionAudit: closeoutCompletionAudit,
+  });
+  const closeoutCompletionQueue = await buildSandboxCloseoutCompletionQueue({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.sandboxRegistry,
+    limit: params.limit,
+    closeoutCompletionSummary: closeoutCompletionSummaryWithAudit,
+    closeoutFollowupSummary: closeoutFollowupSummaryWithAudit,
+    closeoutFollowupQueue,
+    latestSettlementAudit: closeoutSettlementAudit,
+    latestCompletionAudit: closeoutCompletionAudit,
+  });
   const handoffSummary = await buildSandboxOperatorHandoffSummary({
     configPath: params.configPath,
     state: params.state,
@@ -751,6 +828,9 @@ async function resolveSandboxGovernanceArtifacts(params: {
     closeoutSettlementAudit,
     closeoutFollowupSummary: closeoutFollowupSummaryWithAudit,
     closeoutFollowupQueue,
+    closeoutCompletionAudit,
+    closeoutCompletionSummary: closeoutCompletionSummaryWithAudit,
+    closeoutCompletionQueue,
   };
 }
 
@@ -777,6 +857,9 @@ function buildSandboxGovernanceStatePatch(params: {
   closeoutSettlementAudit?: Awaited<ReturnType<typeof appendSandboxCloseoutSettlementAudit>> | null;
   closeoutFollowupSummary?: Awaited<ReturnType<typeof buildSandboxCloseoutFollowupSummary>>;
   closeoutFollowupQueue?: Awaited<ReturnType<typeof buildSandboxCloseoutFollowupQueue>>;
+  closeoutCompletionAudit?: Awaited<ReturnType<typeof appendSandboxCloseoutCompletionAudit>> | null;
+  closeoutCompletionSummary?: Awaited<ReturnType<typeof buildSandboxCloseoutCompletionSummary>>;
+  closeoutCompletionQueue?: Awaited<ReturnType<typeof buildSandboxCloseoutCompletionQueue>>;
 }) {
   return {
     lastGovernanceStatus: params.governanceStatus,
@@ -802,6 +885,9 @@ function buildSandboxGovernanceStatePatch(params: {
     ...(params.closeoutSettlementAudit ? { lastCloseoutSettlementAudit: params.closeoutSettlementAudit } : {}),
     ...(params.closeoutFollowupSummary ? { lastCloseoutFollowupSummary: params.closeoutFollowupSummary } : {}),
     ...(params.closeoutFollowupQueue ? { lastCloseoutFollowupQueue: params.closeoutFollowupQueue } : {}),
+    ...(params.closeoutCompletionAudit ? { lastCloseoutCompletionAudit: params.closeoutCompletionAudit } : {}),
+    ...(params.closeoutCompletionSummary ? { lastCloseoutCompletionSummary: params.closeoutCompletionSummary } : {}),
+    ...(params.closeoutCompletionQueue ? { lastCloseoutCompletionQueue: params.closeoutCompletionQueue } : {}),
     lastRecoveryIncidentSummary: params.resolutionEvidenceSummary.latestIncidentSummary ?? params.resolutionEvidenceSummary.summary,
     lastIncidentType: params.resolutionReadiness.latestIncidentType,
     lastIncidentSeverity: params.resolutionReadiness.latestIncidentSeverity,
@@ -2155,6 +2241,10 @@ async function main() {
       state: existingState,
       sandboxRegistry,
       limit,
+      recordCloseoutSettlementAudit: true,
+      recordCloseoutCompletionAudit: true,
+      actorSource: command,
+      commandSource: "cli",
     });
     const updatedState = orchestratorStateSchema.parse({
       ...existingState,
@@ -2163,7 +2253,7 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxOperatorHandoffSummary(governance.handoffSummary)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutReviewSummary(governance.closeoutReviewSummary)}\n\n${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${JSON.stringify(governance.handoffSummary, null, 2)}\n`,
+      `${formatSandboxOperatorHandoffSummary(governance.handoffSummary)}\n\n${formatSandboxCloseoutCompletionSummary(governance.closeoutCompletionSummary)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutReviewSummary(governance.closeoutReviewSummary)}\n\n${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${JSON.stringify(governance.handoffSummary, null, 2)}\n`,
     );
     return;
   }
@@ -2208,6 +2298,10 @@ async function main() {
       state: existingState,
       sandboxRegistry,
       limit,
+      recordCloseoutSettlementAudit: true,
+      recordCloseoutCompletionAudit: true,
+      actorSource: command,
+      commandSource: "cli",
     });
     const updatedState = orchestratorStateSchema.parse({
       ...existingState,
@@ -2444,7 +2538,7 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxCloseoutReviewActionResult(result)}\n\n${formatSandboxCloseoutDispositionSummary(governance.closeoutDispositionSummary)}\n\n${formatSandboxCloseoutReviewLifecycle(governance.closeoutReviewLifecycle)}\n\n${formatSandboxCloseoutReviewAuditTrail({ records: governance.closeoutReviewAuditTrail ? [governance.closeoutReviewAuditTrail] : [] })}\n\n${formatSandboxCloseoutReviewResolutionSummary(governance.closeoutReviewResolutionSummary)}\n\n${formatSandboxCloseoutSettlementAudits({ records: governance.closeoutSettlementAudit ? [governance.closeoutSettlementAudit] : [] })}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutFollowupQueue(governance.closeoutFollowupQueue)}\n\n${formatSandboxCloseoutReviewQueue(governance.closeoutReviewQueue)}\n\n${JSON.stringify({ result, governance }, null, 2)}\n`,
+      `${formatSandboxCloseoutReviewActionResult(result)}\n\n${formatSandboxCloseoutDispositionSummary(governance.closeoutDispositionSummary)}\n\n${formatSandboxCloseoutReviewLifecycle(governance.closeoutReviewLifecycle)}\n\n${formatSandboxCloseoutReviewAuditTrail({ records: governance.closeoutReviewAuditTrail ? [governance.closeoutReviewAuditTrail] : [] })}\n\n${formatSandboxCloseoutReviewResolutionSummary(governance.closeoutReviewResolutionSummary)}\n\n${formatSandboxCloseoutSettlementAudits({ records: governance.closeoutSettlementAudit ? [governance.closeoutSettlementAudit] : [] })}\n\n${formatSandboxCloseoutCompletionAudits({ records: governance.closeoutCompletionAudit ? [governance.closeoutCompletionAudit] : [] })}\n\n${formatSandboxCloseoutCompletionSummary(governance.closeoutCompletionSummary)}\n\n${formatSandboxCloseoutCompletionQueue(governance.closeoutCompletionQueue)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutFollowupQueue(governance.closeoutFollowupQueue)}\n\n${formatSandboxCloseoutReviewQueue(governance.closeoutReviewQueue)}\n\n${JSON.stringify({ result, governance }, null, 2)}\n`,
     );
     return;
   }
@@ -2573,7 +2667,7 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxCloseoutReviewResolutionSummary(governance.closeoutReviewResolutionSummary)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutReviewLifecycle(governance.closeoutReviewLifecycle)}\n\n${formatSandboxCloseoutDispositionSummary(governance.closeoutDispositionSummary)}\n\n${JSON.stringify(governance.closeoutReviewResolutionSummary, null, 2)}\n`,
+      `${formatSandboxCloseoutReviewResolutionSummary(governance.closeoutReviewResolutionSummary)}\n\n${formatSandboxCloseoutCompletionSummary(governance.closeoutCompletionSummary)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutReviewLifecycle(governance.closeoutReviewLifecycle)}\n\n${formatSandboxCloseoutDispositionSummary(governance.closeoutDispositionSummary)}\n\n${JSON.stringify(governance.closeoutReviewResolutionSummary, null, 2)}\n`,
     );
     return;
   }
@@ -2591,6 +2685,7 @@ async function main() {
       sandboxRegistry,
       limit,
       recordCloseoutSettlementAudit: true,
+      recordCloseoutCompletionAudit: true,
       actorSource: "cli",
       commandSource: command,
     });
@@ -2605,7 +2700,7 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxCloseoutSettlementAudits({ records: auditTrail.records })}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutReviewResolutionSummary(governance.closeoutReviewResolutionSummary)}\n\n${JSON.stringify({ latest: governance.closeoutSettlementAudit, records: auditTrail.records }, null, 2)}\n`,
+      `${formatSandboxCloseoutSettlementAudits({ records: auditTrail.records })}\n\n${formatSandboxCloseoutCompletionSummary(governance.closeoutCompletionSummary)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutReviewResolutionSummary(governance.closeoutReviewResolutionSummary)}\n\n${JSON.stringify({ latest: governance.closeoutSettlementAudit, records: auditTrail.records }, null, 2)}\n`,
     );
     return;
   }
@@ -2630,7 +2725,7 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutReviewResolutionSummary(governance.closeoutReviewResolutionSummary)}\n\n${formatSandboxCloseoutReviewQueue(governance.closeoutReviewQueue)}\n\n${JSON.stringify(governance.closeoutFollowupSummary, null, 2)}\n`,
+      `${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutCompletionSummary(governance.closeoutCompletionSummary)}\n\n${formatSandboxCloseoutReviewResolutionSummary(governance.closeoutReviewResolutionSummary)}\n\n${formatSandboxCloseoutReviewQueue(governance.closeoutReviewQueue)}\n\n${JSON.stringify(governance.closeoutFollowupSummary, null, 2)}\n`,
     );
     return;
   }
@@ -2655,7 +2750,90 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxCloseoutFollowupQueue(governance.closeoutFollowupQueue)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${JSON.stringify(governance.closeoutFollowupQueue, null, 2)}\n`,
+      `${formatSandboxCloseoutFollowupQueue(governance.closeoutFollowupQueue)}\n\n${formatSandboxCloseoutCompletionQueue(governance.closeoutCompletionQueue)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${JSON.stringify(governance.closeoutFollowupQueue, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:closeout:completion:audit") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+      recordCloseoutSettlementAudit: true,
+      recordCloseoutCompletionAudit: true,
+      actorSource: "cli",
+      commandSource: command,
+    });
+    const auditTrail = await listSandboxCloseoutCompletionAudits({
+      configPath,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutCompletionAudits({ records: auditTrail.records })}\n\n${formatSandboxCloseoutCompletionSummary(governance.closeoutCompletionSummary)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${JSON.stringify({ latest: governance.closeoutCompletionAudit, records: auditTrail.records }, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:closeout:completion:summary") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutCompletionSummary(governance.closeoutCompletionSummary)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutReviewResolutionSummary(governance.closeoutReviewResolutionSummary)}\n\n${JSON.stringify(governance.closeoutCompletionSummary, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:closeout:completion:queue") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutCompletionQueue(governance.closeoutCompletionQueue)}\n\n${formatSandboxCloseoutCompletionSummary(governance.closeoutCompletionSummary)}\n\n${formatSandboxCloseoutFollowupQueue(governance.closeoutFollowupQueue)}\n\n${JSON.stringify(governance.closeoutCompletionQueue, null, 2)}\n`,
     );
     return;
   }
@@ -2684,7 +2862,7 @@ async function main() {
     });
     await dependencies.storage.saveState(updatedState);
     process.stdout.write(
-      `${formatSandboxRecoveryDiagnostics(result)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${formatSandboxResolutionAuditHistory(governance.resolutionAuditHistory)}\n\n${formatSandboxResolutionEvidenceSummary(governance.resolutionEvidenceSummary)}\n\n${formatSandboxResolutionReadiness(governance.resolutionReadiness)}\n\n${formatSandboxClosureGatingDecision(governance.closureGatingDecision)}\n\n${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${formatSandboxCloseoutReviewSummary(governance.closeoutReviewSummary)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutFollowupQueue(governance.closeoutFollowupQueue)}\n\n${formatSandboxCloseoutReviewQueue(governance.closeoutReviewQueue)}\n\n${formatSandboxCloseoutOperatorChecklist(governance.closeoutChecklist)}\n\n${formatSandboxIncidentPolicy(governance.incidentPolicy)}\n\n${formatSandboxOperatorHandoffSummary(governance.handoffSummary)}\n\n${JSON.stringify({ result, governance }, null, 2)}\n`,
+      `${formatSandboxRecoveryDiagnostics(result)}\n\n${formatSandboxGovernanceStatus(governance.governanceStatus)}\n\n${formatSandboxResolutionAuditHistory(governance.resolutionAuditHistory)}\n\n${formatSandboxResolutionEvidenceSummary(governance.resolutionEvidenceSummary)}\n\n${formatSandboxResolutionReadiness(governance.resolutionReadiness)}\n\n${formatSandboxClosureGatingDecision(governance.closureGatingDecision)}\n\n${formatSandboxCloseoutSummary(governance.closeoutSummary)}\n\n${formatSandboxCloseoutReviewSummary(governance.closeoutReviewSummary)}\n\n${formatSandboxCloseoutCompletionAudits({ records: governance.closeoutCompletionAudit ? [governance.closeoutCompletionAudit] : [] })}\n\n${formatSandboxCloseoutCompletionSummary(governance.closeoutCompletionSummary)}\n\n${formatSandboxCloseoutCompletionQueue(governance.closeoutCompletionQueue)}\n\n${formatSandboxCloseoutFollowupSummary(governance.closeoutFollowupSummary)}\n\n${formatSandboxCloseoutFollowupQueue(governance.closeoutFollowupQueue)}\n\n${formatSandboxCloseoutReviewQueue(governance.closeoutReviewQueue)}\n\n${formatSandboxCloseoutOperatorChecklist(governance.closeoutChecklist)}\n\n${formatSandboxIncidentPolicy(governance.incidentPolicy)}\n\n${formatSandboxOperatorHandoffSummary(governance.handoffSummary)}\n\n${JSON.stringify({ result, governance }, null, 2)}\n`,
     );
     return;
   }
@@ -3255,6 +3433,9 @@ async function main() {
       "  node cli.js sandbox:closeout:settlement:audit --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:followup:summary --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:followup:queue --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:completion:audit --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:completion:summary --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:completion:queue --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:review:approve --sandbox-config .tmp/orchestrator-sandbox.json --audit-id sandbox-resolution-audit:... --reason \"closure evidence is sufficient\"",
       "  node cli.js sandbox:closeout:review:reject --sandbox-config .tmp/orchestrator-sandbox.json --reason \"blocked reasons remain\"",
       "  node cli.js sandbox:closeout:review:followup --sandbox-config .tmp/orchestrator-sandbox.json --note \"collect rerun validate evidence\"",
