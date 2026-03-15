@@ -6,8 +6,14 @@ import type { OrchestratorState } from "../../../src/schemas";
 import { loadGitHubSandboxTargetRegistry } from "../../../src/github-sandbox-targets";
 import { buildSandboxClosureGatingDecision } from "../../../src/sandbox-closure-gating";
 import { appendSandboxCloseoutCompletionAudit } from "../../../src/sandbox-closeout-completion-audit";
+import { runSandboxCloseoutCompletionAction } from "../../../src/sandbox-closeout-completion-actions";
 import { buildSandboxCloseoutCompletionCarryForwardQueue } from "../../../src/sandbox-closeout-completion-carry-forward-queue";
+import { appendSandboxCloseoutCompletionDecisionAudit } from "../../../src/sandbox-closeout-completion-decision-audit";
+import { buildSandboxCloseoutCompletionDecisionHistory } from "../../../src/sandbox-closeout-completion-decision-history";
+import { buildSandboxCloseoutCompletionDispositionSummary } from "../../../src/sandbox-closeout-completion-disposition-summary";
 import { buildSandboxCloseoutCompletionHistory } from "../../../src/sandbox-closeout-completion-history";
+import { buildSandboxCloseoutCompletionFinalizationSummary } from "../../../src/sandbox-closeout-completion-finalization-summary";
+import { buildSandboxCloseoutCompletionLifecycle } from "../../../src/sandbox-closeout-completion-lifecycle";
 import { buildSandboxCloseoutCompletionResolutionSummary } from "../../../src/sandbox-closeout-completion-resolution-summary";
 import { buildSandboxCloseoutCompletionSummary } from "../../../src/sandbox-closeout-completion-summary";
 import { buildSandboxCloseoutCompletionQueue } from "../../../src/sandbox-closeout-completion-queue";
@@ -278,5 +284,137 @@ export async function prepareCloseoutCompletionContext(params: {
     completionHistory,
     completionResolution,
     completionCarryForwardQueue,
+  };
+}
+
+export async function runCloseoutCompletionDecision(params: {
+  configPath: string;
+  state: OrchestratorState;
+  loadedRegistry: Awaited<ReturnType<typeof loadGitHubSandboxTargetRegistry>>;
+  action:
+    | "confirm_review_complete"
+    | "confirm_closeout_complete"
+    | "keep_carry_forward"
+    | "reopen_completion";
+  actorSource: string;
+  commandSource: string;
+  completionAuditId: string | null;
+  reason?: string | null;
+  note?: string | null;
+  limit?: number;
+}) {
+  const limit = Math.max(5, params.limit ?? 20);
+  const result = await runSandboxCloseoutCompletionAction({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.loadedRegistry,
+    action: params.action,
+    actorSource: params.actorSource,
+    commandSource: params.commandSource,
+    completionAuditId: params.completionAuditId,
+    reason: params.reason ?? null,
+    note: params.note ?? null,
+    limit,
+  });
+  const completionHistory = await buildSandboxCloseoutCompletionHistory({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.loadedRegistry,
+    limit,
+  });
+  const completionResolution = await buildSandboxCloseoutCompletionResolutionSummary({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.loadedRegistry,
+    limit,
+    closeoutCompletionHistory: completionHistory,
+  });
+  const completionCarryForwardQueue =
+    await buildSandboxCloseoutCompletionCarryForwardQueue({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutCompletionHistory: completionHistory,
+      closeoutCompletionResolutionSummary: completionResolution,
+    });
+  const completionDispositionSummary =
+    await buildSandboxCloseoutCompletionDispositionSummary({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutCompletionHistory: completionHistory,
+      closeoutCompletionResolutionSummary: completionResolution,
+      closeoutCompletionCarryForwardQueue: completionCarryForwardQueue,
+      latestCompletionAction: result.completionAction,
+    });
+  const completionLifecycle = await buildSandboxCloseoutCompletionLifecycle({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.loadedRegistry,
+    limit,
+    closeoutCompletionHistory: completionHistory,
+    closeoutCompletionResolutionSummary: completionResolution,
+    closeoutCompletionCarryForwardQueue: completionCarryForwardQueue,
+    closeoutCompletionDispositionSummary: completionDispositionSummary,
+    latestCompletionAction: result.completionAction,
+  });
+  const finalizedCompletionCarryForwardQueue =
+    await buildSandboxCloseoutCompletionCarryForwardQueue({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutCompletionHistory: completionHistory,
+      closeoutCompletionResolutionSummary: completionResolution,
+      closeoutCompletionDispositionSummary: completionDispositionSummary,
+      closeoutCompletionLifecycle: completionLifecycle,
+    });
+  const completionDecisionAudit =
+    await appendSandboxCloseoutCompletionDecisionAudit({
+      configPath: params.configPath,
+      actorSource: params.actorSource,
+      commandSource: params.commandSource,
+      completionAction: result.completionAction,
+      dispositionSummary: completionDispositionSummary,
+      completionLifecycle,
+      completionCarryForwardQueue: finalizedCompletionCarryForwardQueue,
+      completionResolutionSummary: completionResolution,
+      latestIncidentType: params.state.lastIncidentType ?? "none",
+      latestIncidentSeverity: params.state.lastIncidentSeverity ?? null,
+      latestIncidentSummary: params.state.lastIncidentSummary ?? null,
+    });
+  const completionDecisionHistory =
+    await buildSandboxCloseoutCompletionDecisionHistory({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+    });
+  const completionFinalizationSummary =
+    await buildSandboxCloseoutCompletionFinalizationSummary({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutCompletionDecisionAudit: completionDecisionAudit,
+      closeoutCompletionDecisionHistory: completionDecisionHistory,
+      closeoutCompletionDispositionSummary: completionDispositionSummary,
+      closeoutCompletionLifecycle: completionLifecycle,
+      closeoutCompletionCarryForwardQueue: finalizedCompletionCarryForwardQueue,
+      closeoutCompletionResolutionSummary: completionResolution,
+    });
+
+  return {
+    result,
+    completionHistory,
+    completionResolution,
+    completionCarryForwardQueue: finalizedCompletionCarryForwardQueue,
+    completionDispositionSummary,
+    completionLifecycle,
+    completionDecisionAudit,
+    completionDecisionHistory,
+    completionFinalizationSummary,
   };
 }

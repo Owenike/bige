@@ -97,6 +97,9 @@ export type OrchestratorDiagnostics = {
     lastCloseoutCompletionAction: OrchestratorState["lastCloseoutCompletionAction"];
     lastCloseoutCompletionDispositionSummary: OrchestratorState["lastCloseoutCompletionDispositionSummary"];
     lastCloseoutCompletionLifecycle: OrchestratorState["lastCloseoutCompletionLifecycle"];
+    lastCloseoutCompletionDecisionAudit: OrchestratorState["lastCloseoutCompletionDecisionAudit"];
+    lastCloseoutCompletionDecisionHistory: OrchestratorState["lastCloseoutCompletionDecisionHistory"];
+    lastCloseoutCompletionFinalizationSummary: OrchestratorState["lastCloseoutCompletionFinalizationSummary"];
   };
   statusReporting: {
     status: OrchestratorState["statusReportStatus"];
@@ -180,6 +183,9 @@ export type OrchestratorDiagnostics = {
 };
 
 function resolveNextSuggestedAction(state: OrchestratorState, preflight: PreflightResult | null) {
+  if (state.lastCloseoutCompletionFinalizationSummary?.recommendedNextOperatorStep) {
+    return state.lastCloseoutCompletionFinalizationSummary.recommendedNextOperatorStep;
+  }
   if (state.lastCloseoutCompletionLifecycle?.recommendedNextOperatorStep) {
     return state.lastCloseoutCompletionLifecycle.recommendedNextOperatorStep;
   }
@@ -385,6 +391,10 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
       lastCloseoutCompletionAction: state.lastCloseoutCompletionAction,
       lastCloseoutCompletionDispositionSummary: state.lastCloseoutCompletionDispositionSummary,
       lastCloseoutCompletionLifecycle: state.lastCloseoutCompletionLifecycle,
+      lastCloseoutCompletionDecisionAudit: state.lastCloseoutCompletionDecisionAudit,
+      lastCloseoutCompletionDecisionHistory: state.lastCloseoutCompletionDecisionHistory,
+      lastCloseoutCompletionFinalizationSummary:
+        state.lastCloseoutCompletionFinalizationSummary,
     },
     statusReporting: {
       status: state.statusReportStatus,
@@ -519,6 +529,9 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     `Closeout completion action: action=${summary.sandboxGovernance.lastCloseoutCompletionAction?.latestCompletionAction ?? "none"}, status=${summary.sandboxGovernance.lastCloseoutCompletionAction?.latestCompletionActionStatus ?? "none"}, reason=${summary.sandboxGovernance.lastCloseoutCompletionAction?.latestCompletionActionReason ?? "none"}, note=${summary.sandboxGovernance.lastCloseoutCompletionAction?.latestCompletionActionNote ?? "none"}, next=${summary.sandboxGovernance.lastCloseoutCompletionAction?.suggestedNextAction ?? "none"}`,
     `Closeout completion disposition: result=${summary.sandboxGovernance.lastCloseoutCompletionDispositionSummary?.dispositionResult ?? "none"}, carryForwardOpen=${summary.sandboxGovernance.lastCloseoutCompletionDispositionSummary?.carryForwardRemainsOpen ?? false}, queueExit=${summary.sandboxGovernance.lastCloseoutCompletionDispositionSummary?.completionQueueExitAllowed ?? false}, next=${summary.sandboxGovernance.lastCloseoutCompletionDispositionSummary?.recommendedNextOperatorStep ?? "none"}`,
     `Closeout completion lifecycle: status=${summary.sandboxGovernance.lastCloseoutCompletionLifecycle?.lifecycleStatus ?? "none"}, queueRemain=${summary.sandboxGovernance.lastCloseoutCompletionLifecycle?.carryForwardQueueShouldRemain ?? false}, queueExit=${summary.sandboxGovernance.lastCloseoutCompletionLifecycle?.carryForwardQueueExitAllowed ?? false}, reviewFinalized=${summary.sandboxGovernance.lastCloseoutCompletionLifecycle?.reviewCompleteFinalized ?? false}, closeoutFinalized=${summary.sandboxGovernance.lastCloseoutCompletionLifecycle?.closeoutCompleteFinalized ?? false}, next=${summary.sandboxGovernance.lastCloseoutCompletionLifecycle?.recommendedNextOperatorStep ?? "none"}`,
+    `Closeout completion decision audit: action=${summary.sandboxGovernance.lastCloseoutCompletionDecisionAudit?.latestCompletionAction ?? "none"}, status=${summary.sandboxGovernance.lastCloseoutCompletionDecisionAudit?.latestCompletionActionStatus ?? "none"}, finalized=${summary.sandboxGovernance.lastCloseoutCompletionDecisionAudit?.completionFinalized ?? false}, retained=${summary.sandboxGovernance.lastCloseoutCompletionDecisionAudit?.completionRetained ?? false}, reopened=${summary.sandboxGovernance.lastCloseoutCompletionDecisionAudit?.completionReopened ?? false}, queueRetained=${summary.sandboxGovernance.lastCloseoutCompletionDecisionAudit?.queueRetainedReasons.join(" | ") || "none"}`,
+    `Closeout completion decision history: retained=${summary.sandboxGovernance.lastCloseoutCompletionDecisionHistory?.retainedEntryCount ?? 0}, latestAction=${summary.sandboxGovernance.lastCloseoutCompletionDecisionHistory?.latestCompletionAction ?? "none"}, latestDisposition=${summary.sandboxGovernance.lastCloseoutCompletionDecisionHistory?.latestDispositionResult ?? "none"}, repeatedRetained=${summary.sandboxGovernance.lastCloseoutCompletionDecisionHistory?.repeatedKeepCarryForwardPatterns.join(" | ") || "none"}, repeatedReopened=${summary.sandboxGovernance.lastCloseoutCompletionDecisionHistory?.repeatedReopenCompletionPatterns.join(" | ") || "none"}`,
+    `Closeout completion finalization: status=${summary.sandboxGovernance.lastCloseoutCompletionFinalizationSummary?.finalizationStatus ?? "none"}, finalComplete=${summary.sandboxGovernance.lastCloseoutCompletionFinalizationSummary?.completionThreadFinalComplete ?? false}, finalizedButReopenable=${summary.sandboxGovernance.lastCloseoutCompletionFinalizationSummary?.completionThreadFinalizedButReopenable ?? false}, retained=${summary.sandboxGovernance.lastCloseoutCompletionFinalizationSummary?.completionThreadRetained ?? false}, reopened=${summary.sandboxGovernance.lastCloseoutCompletionFinalizationSummary?.completionThreadReopened ?? false}, next=${summary.sandboxGovernance.lastCloseoutCompletionFinalizationSummary?.recommendedNextOperatorStep ?? "none"}`,
     `Operator handoff: ${summary.sandboxGovernance.lastOperatorHandoffSummary?.handoffLine ?? "none"}`,
     `Status reporting: status=${summary.statusReporting.status}, readiness=${summary.statusReporting.readiness}, readinessStatus=${summary.statusReporting.readinessStatus}, live=${summary.statusReporting.liveStatus}, permission=${summary.statusReporting.permissionStatus}, action=${summary.statusReporting.action}, strategy=${summary.statusReporting.targetStrategy}, correlation=${summary.statusReporting.correlationId ?? "none"}, target=${summary.statusReporting.target ?? "none"}, audit=${summary.statusReporting.lastAuditId ?? "none"}, failure=${summary.statusReporting.failureReason ?? "none"}, summary=${summary.statusReporting.summary ?? "none"}`,
     `Auth smoke: status=${summary.statusReporting.authSmokeStatus}, success=${summary.statusReporting.authSmokeSuccessStatus}, mode=${summary.statusReporting.authSmokeMode}, permission=${summary.statusReporting.authSmokePermissionResult}, selection=${summary.statusReporting.targetSelectionStatus}, target=${summary.statusReporting.authSmokeTarget ?? "none"}, selectedProfile=${summary.statusReporting.selectedSandboxProfileId ?? "none"}, selectionMode=${summary.statusReporting.sandboxProfileSelectionMode}, selectionReason=${summary.statusReporting.sandboxProfileSelectionReason ?? "none"}, profile=${summary.statusReporting.sandboxProfileId ?? summary.statusReporting.sandboxTargetProfileId ?? "none"}, profileStatus=${summary.statusReporting.sandboxProfileStatus}, bundle=${summary.statusReporting.sandboxBundleId ?? "none"}, overrides=${summary.statusReporting.sandboxBundleOverrideFields.join(",") || "none"}, governance=${summary.statusReporting.profileGovernanceStatus}/${summary.statusReporting.profileGovernanceReason ?? "none"}, bundleGovernance=${summary.statusReporting.bundleGovernanceStatus}/${summary.statusReporting.bundleGovernanceReason ?? "none"}, guardrails=${summary.statusReporting.lastSandboxGuardrailsStatus}/${summary.statusReporting.lastSandboxGuardrailsReason ?? "none"}, config=${summary.statusReporting.sandboxTargetConfigVersion ?? "none"}, lastAudit=${summary.statusReporting.lastSandboxAuditId ?? "none"}, importExport=${summary.statusReporting.lastSandboxImportExportStatus}/${summary.statusReporting.lastSandboxImportExportSummary ?? "none"}, review=${summary.statusReporting.lastSandboxReviewStatus}/${summary.statusReporting.lastSandboxReviewSummary ?? "none"}, apply=${summary.statusReporting.lastSandboxApplyStatus}/${summary.statusReporting.lastSandboxApplySummary ?? "none"}, batch=${summary.statusReporting.lastBatchChangeStatus}/${summary.statusReporting.lastBatchImpactSummary ?? "none"}, restore=${summary.statusReporting.lastRestorePointId ?? "none"}/${summary.statusReporting.lastRestorePointSummary ?? "none"} count=${summary.statusReporting.currentValidRestorePointCount}/${summary.statusReporting.currentRestorePointCount} retention=${summary.statusReporting.restorePointRetentionStatus}/${summary.statusReporting.lastRestorePointPruneSummary ?? "none"} history=${summary.statusReporting.lastRestorePointLookupStatus}/${summary.statusReporting.lastSandboxHistorySummary ?? "none"} compare=${summary.statusReporting.lastRestorePointCompareStatus}/${summary.statusReporting.lastSandboxCompareSummary ?? "none"}, rollback=${summary.statusReporting.lastRollbackStatus}/${summary.statusReporting.lastRollbackImpactSummary ?? "none"}/${summary.statusReporting.lastRollbackAuditId ?? "none"} governance=${summary.statusReporting.rollbackGovernanceStatus}/${summary.statusReporting.rollbackGovernanceReason ?? "none"} recovery=${summary.statusReporting.lastBatchRecoveryStatus}/${summary.statusReporting.lastBatchRecoverySummary ?? "none"} incidents=${summary.statusReporting.lastRecoveryIncidentSummary ?? "none"} latestIncident=${summary.statusReporting.lastIncidentType}/${summary.statusReporting.lastIncidentSeverity ?? "none"}/${summary.statusReporting.lastIncidentSummary ?? "none"} operator=${summary.statusReporting.lastOperatorAction}/${summary.statusReporting.lastOperatorActionStatus} escalation=${summary.statusReporting.lastEscalationSummary ?? "none"}, successAt=${summary.statusReporting.lastAuthSmokeSuccessAt ?? "none"}, liveTarget=${summary.statusReporting.liveSmokeTarget ?? "none"}, evidence=${summary.statusReporting.authSmokeEvidencePath ?? "none"}, summary=${summary.statusReporting.liveSmokeSummary ?? "none"}, failure=${summary.statusReporting.authSmokeFailureReason ?? "none"}`,
@@ -689,6 +702,30 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
   if (summary.sandboxGovernance.lastCloseoutCompletionLifecycle?.lifecycleReasons.length) {
     lines.push("Closeout completion lifecycle reasons:");
     for (const reason of summary.sandboxGovernance.lastCloseoutCompletionLifecycle.lifecycleReasons) {
+      lines.push(`- ${reason}`);
+    }
+  }
+  if (summary.sandboxGovernance.lastCloseoutCompletionDecisionAudit?.queueRetainedReasons.length) {
+    lines.push("Closeout completion decision audit retained reasons:");
+    for (const reason of summary.sandboxGovernance.lastCloseoutCompletionDecisionAudit.queueRetainedReasons) {
+      lines.push(`- ${reason}`);
+    }
+  }
+  if (summary.sandboxGovernance.lastCloseoutCompletionDecisionHistory?.repeatedKeepCarryForwardPatterns.length) {
+    lines.push("Repeated closeout completion retained patterns:");
+    for (const pattern of summary.sandboxGovernance.lastCloseoutCompletionDecisionHistory.repeatedKeepCarryForwardPatterns) {
+      lines.push(`- ${pattern}`);
+    }
+  }
+  if (summary.sandboxGovernance.lastCloseoutCompletionDecisionHistory?.repeatedReopenCompletionPatterns.length) {
+    lines.push("Repeated closeout completion reopened patterns:");
+    for (const pattern of summary.sandboxGovernance.lastCloseoutCompletionDecisionHistory.repeatedReopenCompletionPatterns) {
+      lines.push(`- ${pattern}`);
+    }
+  }
+  if (summary.sandboxGovernance.lastCloseoutCompletionFinalizationSummary?.unresolvedFinalizationReasons.length) {
+    lines.push("Closeout completion finalization reasons:");
+    for (const reason of summary.sandboxGovernance.lastCloseoutCompletionFinalizationSummary.unresolvedFinalizationReasons) {
       lines.push(`- ${reason}`);
     }
   }

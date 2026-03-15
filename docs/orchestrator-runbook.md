@@ -804,6 +804,18 @@ Sandbox target registry:
     - whether the case is `review_complete_finalized`, `closeout_complete_finalized`, `carry_forward_retained`, `completion_reopened`, or `blocked`
     - whether carry-forward queue should remain, whether queue exit is allowed, and whether completion is actually finalized
     - lifecycle reasons and the recommended next operator step
+  - closeout completion decision audit is centralized into one shared completion-decision snapshot trail that records:
+    - the latest completion action plus the exact disposition/lifecycle/carry-forward/resolution snapshots used for that decision
+    - whether the decision left the thread finalized, retained, or reopened
+    - queue-retained reasons plus missing follow-up or missing-evidence signals when the thread still cannot leave governance
+  - closeout completion decision history is centralized into one shared completion-thread history that records:
+    - repeated `confirm_review_complete`, `confirm_closeout_complete`, `keep_carry_forward`, and `reopen_completion` patterns
+    - repeated queue-retained patterns plus repeated finalized-to-reopened patterns
+    - the latest and previous completion decision audits so operators can see how the thread evolved
+  - closeout completion finalization summary is centralized into one shared finalization decision that records:
+    - whether the thread is `final_complete`, `finalized_but_reopenable`, `retained`, `reopened`, `followup_open`, or `queue_retained`
+    - whether the case may actually be treated as review-complete, closeout-complete, or final-complete
+    - unresolved finalization reasons and the recommended next operator step
   - review action interpretation:
     - `approve_closeout` only becomes effective when the existing closeout summary/checklist already say the incident is safe to close; otherwise it remains blocked/manual_required/rejected
     - `reject_closeout` keeps follow-up open and should be treated as an explicit governance refusal to close the incident
@@ -834,6 +846,9 @@ Sandbox target registry:
     - `confirm_review_complete` may finalize the review-complete portion of the thread while still leaving carry-forward open for later closeout-complete work
     - `confirm_closeout_complete` should only be treated as finalized when completion lifecycle says `closeout_complete_finalized`
     - `keep_carry_forward` or `completion_reopened` means the carry-forward queue must remain and the case must not be treated as fully completed
+    - `sandbox:closeout:completion:decision:audit`, `sandbox:closeout:completion:decision:history`, and `sandbox:closeout:completion:finalization:summary` should be read together when you need to know why a completion decision was taken, whether the thread repeatedly retained or reopened, and whether finalized still falls short of true final-complete
+    - repeated `keep_carry_forward` or repeated `reopen_completion` means the completion thread is not final-complete even if one individual action was accepted
+    - finalized does not automatically mean final-complete; if decision history shows finalized-to-reopened churn or finalization summary still says `followup_open` / `queue_retained`, the case must remain in governance
   - restore retention keeps the latest restore point, the recent N restore points, restore points referenced by recent rollback audit, and any restore point still associated with unresolved manual_required work
   - `sandbox:restore-points:prune` only removes expired restore points that are not protected by retention rules
   - no-op apply or no-op rollback does not create a new restore point

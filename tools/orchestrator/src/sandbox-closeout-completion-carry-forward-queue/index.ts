@@ -20,6 +20,8 @@ import {
   buildSandboxCloseoutFollowupSummary,
   type SandboxCloseoutFollowupSummary,
 } from "../sandbox-closeout-followup-summary";
+import type { SandboxCloseoutCompletionDispositionSummary } from "../sandbox-closeout-completion-disposition-summary";
+import type { SandboxCloseoutCompletionLifecycle } from "../sandbox-closeout-completion-lifecycle";
 
 export type SandboxCloseoutCompletionCarryForwardQueueEntry = {
   completionAuditId: string | null;
@@ -72,6 +74,8 @@ export async function buildSandboxCloseoutCompletionCarryForwardQueue(params: {
   closeoutCompletionQueue?: SandboxCloseoutCompletionQueue;
   closeoutFollowupSummary?: SandboxCloseoutFollowupSummary;
   closeoutFollowupQueue?: SandboxCloseoutFollowupQueue;
+  closeoutCompletionDispositionSummary?: SandboxCloseoutCompletionDispositionSummary;
+  closeoutCompletionLifecycle?: SandboxCloseoutCompletionLifecycle;
 }) {
   const limit = Math.max(3, params.limit ?? 10);
   const closeoutCompletionHistory =
@@ -122,7 +126,12 @@ export async function buildSandboxCloseoutCompletionCarryForwardQueue(params: {
       closeoutFollowupQueue,
     }));
 
+  const finalizedQueueExitAllowed =
+    params.closeoutCompletionDispositionSummary?.completionQueueExitAllowed === true ||
+    (params.closeoutCompletionLifecycle?.closeoutCompleteFinalized === true &&
+      params.closeoutCompletionLifecycle?.carryForwardQueueExitAllowed === true);
   const queueStatus: SandboxCloseoutCompletionCarryForwardQueue["queueStatus"] =
+    finalizedQueueExitAllowed ||
     closeoutCompletionResolutionSummary.caseCanBeTreatedAsFullyCompleted
       ? "empty"
       : closeoutCompletionResolutionSummary.completionThreadReverted
