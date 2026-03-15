@@ -130,6 +130,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-completion-decision-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-completion-decision-history.test.js",
     "$outDir\tests\unit\sandbox-closeout-completion-finalization-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-finalization-audit-history.test.js",
+    "$outDir\tests\unit\sandbox-closeout-finalization-stability-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-post-finalization-followup-queue.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -454,6 +457,15 @@ $suiteMap = @{
   "sandbox-closeout-completion-finalization-summary" = @(
     "$outDir\tests\unit\sandbox-closeout-completion-finalization-summary.test.js"
   )
+  "sandbox-closeout-finalization-audit-history" = @(
+    "$outDir\tests\unit\sandbox-closeout-finalization-audit-history.test.js"
+  )
+  "sandbox-closeout-finalization-stability-summary" = @(
+    "$outDir\tests\unit\sandbox-closeout-finalization-stability-summary.test.js"
+  )
+  "sandbox-closeout-post-finalization-followup-queue" = @(
+    "$outDir\tests\unit\sandbox-closeout-post-finalization-followup-queue.test.js"
+  )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
   )
@@ -671,6 +683,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-completion-decision-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-completion-decision-history.test.js",
     "$outDir\tests\unit\sandbox-closeout-completion-finalization-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-finalization-audit-history.test.js",
+    "$outDir\tests\unit\sandbox-closeout-finalization-stability-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-post-finalization-followup-queue.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
