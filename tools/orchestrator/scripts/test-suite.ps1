@@ -115,6 +115,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-review-audit-trail.test.js",
     "$outDir\tests\unit\sandbox-closeout-review-history.test.js",
     "$outDir\tests\unit\sandbox-closeout-review-resolution-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-settlement-audit.test.js",
+    "$outDir\tests\unit\sandbox-closeout-followup-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-followup-queue.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -394,6 +397,15 @@ $suiteMap = @{
   "sandbox-closeout-review-resolution-summary" = @(
     "$outDir\tests\unit\sandbox-closeout-review-resolution-summary.test.js"
   )
+  "sandbox-closeout-settlement-audit" = @(
+    "$outDir\tests\unit\sandbox-closeout-settlement-audit.test.js"
+  )
+  "sandbox-closeout-followup-summary" = @(
+    "$outDir\tests\unit\sandbox-closeout-followup-summary.test.js"
+  )
+  "sandbox-closeout-followup-queue" = @(
+    "$outDir\tests\unit\sandbox-closeout-followup-queue.test.js"
+  )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
   )
@@ -596,6 +608,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-review-audit-trail.test.js",
     "$outDir\tests\unit\sandbox-closeout-review-history.test.js",
     "$outDir\tests\unit\sandbox-closeout-review-resolution-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-settlement-audit.test.js",
+    "$outDir\tests\unit\sandbox-closeout-followup-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-followup-queue.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
