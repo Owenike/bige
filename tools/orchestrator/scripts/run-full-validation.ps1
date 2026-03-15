@@ -1,72 +1,11 @@
 param()
 
 $ErrorActionPreference = "Stop"
+$testSuiteScript = Join-Path $PSScriptRoot "test-suite.ps1"
 
 $scripts = @(
   "test:orchestrator:typecheck",
   "test:orchestrator:lint",
-  "test:orchestrator:unit",
-  "test:orchestrator:integration",
-  "test:orchestrator:schema",
-  "test:orchestrator:policy",
-  "test:orchestrator:mock-loop",
-  "test:orchestrator:state-machine",
-  "test:orchestrator:providers",
-  "test:orchestrator:storage",
-  "test:orchestrator:loop",
-  "test:orchestrator:executor-provider",
-  "test:orchestrator:workspace",
-  "test:orchestrator:patch-flow",
-  "test:orchestrator:promotion",
-  "test:orchestrator:artifacts",
-  "test:orchestrator:live-smoke",
-  "test:orchestrator:live-acceptance",
-  "test:orchestrator:promotion-branch",
-  "test:orchestrator:cleanup",
-  "test:orchestrator:live-pass",
-  "test:orchestrator:handoff",
-  "test:orchestrator:pr-draft",
-  "test:orchestrator:audit",
-  "test:orchestrator:github-handoff",
-  "test:orchestrator:promotion-config",
-  "test:orchestrator:live-evidence",
-  "test:orchestrator:retention-config",
-  "test:orchestrator:preflight",
-  "test:orchestrator:profiles",
-  "test:orchestrator:diagnostics",
-  "test:orchestrator:github-events",
-  "test:orchestrator:idempotency",
-  "test:orchestrator:status-reporting",
-  "test:orchestrator:comment-targeting",
-  "test:orchestrator:reporting-readiness",
-  "test:orchestrator:github-live-comment",
-  "test:orchestrator:github-live-auth-smoke",
-  "test:orchestrator:github-live-auth-matrix",
-  "test:orchestrator:github-live-auth-success",
-  "test:orchestrator:github-live-targeting",
-  "test:orchestrator:github-sandbox-targets",
-  "test:orchestrator:github-live-auth-evidence",
-  "test:orchestrator:github-live-success-smoke",
-  "test:orchestrator:sandbox-profile-ops",
-  "test:orchestrator:live-report-runbook",
-  "test:orchestrator:sandbox-profile-lifecycle",
-  "test:orchestrator:live-auth-operator-flow",
-  "test:orchestrator:sandbox-default-selection",
-  "test:orchestrator:sandbox-governance",
-  "test:orchestrator:sandbox-audit",
-  "test:orchestrator:sandbox-guardrails",
-  "test:orchestrator:sandbox-policy-bundles",
-  "test:orchestrator:sandbox-profile-import-export",
-  "test:orchestrator:sandbox-change-review",
-  "test:orchestrator:sandbox-bundle-governance",
-  "test:orchestrator:sandbox-batch-change",
-  "test:orchestrator:sandbox-impact-summary",
-  "test:orchestrator:sandbox-restore-points",
-  "test:orchestrator:sandbox-rollback",
-  "test:orchestrator:sandbox-rollback-impact",
-  "test:orchestrator:sandbox-rollback-governance",
-  "test:orchestrator:sandbox-batch-recovery",
-  "test:orchestrator:sandbox-restore-retention",
   "test:orchestrator:sandbox-history",
   "test:orchestrator:sandbox-compare",
   "test:orchestrator:sandbox-recovery-diagnostics",
@@ -112,46 +51,25 @@ $scripts = @(
   "test:orchestrator:sandbox-closeout-stability-drift",
   "test:orchestrator:sandbox-closeout-reopen-recurrence",
   "test:orchestrator:sandbox-closeout-stability-watchlist",
-  "test:orchestrator:github-report-permissions",
-  "test:orchestrator:report-delivery-audit",
-  "test:orchestrator:reporting-operator-summary",
-  "test:orchestrator:trigger-policy",
-  "test:orchestrator:webhook",
-  "test:orchestrator:commands",
-  "test:orchestrator:signature",
-  "test:orchestrator:comment-upsert",
-  "test:orchestrator:event-flow",
-  "test:orchestrator:webhook-server",
-  "test:orchestrator:webhook-runtime",
-  "test:orchestrator:actor-policy",
-  "test:orchestrator:actor-policy-config",
-  "test:orchestrator:runtime-config",
-  "test:orchestrator:replay-protection",
-  "test:orchestrator:inbound-audit",
-  "test:orchestrator:github-live-report",
-  "test:orchestrator:webhook-hosting",
-  "test:orchestrator:graceful-shutdown",
-  "test:orchestrator:queue",
-  "test:orchestrator:worker",
-  "test:orchestrator:locking",
-  "test:orchestrator:recovery",
-  "test:orchestrator:backend-provider",
-  "test:orchestrator:cancellation",
-  "test:orchestrator:daemon",
-  "test:orchestrator:supervision",
-  "test:orchestrator:supabase-backend",
-  "test:orchestrator:remote-locking",
-  "test:orchestrator:backend-migration",
-  "test:orchestrator:remote-diagnostics",
-  "test:orchestrator:supabase-live",
-  "test:orchestrator:backend-transfer",
-  "test:orchestrator:multi-worker-remote",
-  "test:orchestrator:backend-health"
+  "test:orchestrator:sandbox-closeout-stability-recurrence-audit",
+  "test:orchestrator:sandbox-closeout-watchlist-resolution-summary",
+  "test:orchestrator:sandbox-closeout-watchlist-lifecycle"
 )
 
 foreach ($script in $scripts) {
   Write-Host "=== $script ==="
-  npm run $script
+  switch ($script) {
+    "test:orchestrator:typecheck" {
+      npx tsc -p tools/orchestrator/tsconfig.json --noEmit
+    }
+    "test:orchestrator:lint" {
+      npx eslint tools/orchestrator/src tools/orchestrator/tests
+    }
+    default {
+      $suite = $script -replace "^test:orchestrator:", ""
+      & $testSuiteScript $suite
+    }
+  }
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }

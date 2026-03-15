@@ -184,6 +184,9 @@ jobs:
           npm run test:orchestrator:sandbox-closeout-stability-drift
           npm run test:orchestrator:sandbox-closeout-reopen-recurrence
           npm run test:orchestrator:sandbox-closeout-stability-watchlist
+          npm run test:orchestrator:sandbox-closeout-stability-recurrence-audit
+          npm run test:orchestrator:sandbox-closeout-watchlist-resolution-summary
+          npm run test:orchestrator:sandbox-closeout-watchlist-lifecycle
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary

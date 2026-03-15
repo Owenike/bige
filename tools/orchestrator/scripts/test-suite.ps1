@@ -136,6 +136,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-stability-drift.test.js",
     "$outDir\tests\unit\sandbox-closeout-reopen-recurrence.test.js",
     "$outDir\tests\unit\sandbox-closeout-stability-watchlist.test.js",
+    "$outDir\tests\unit\sandbox-closeout-stability-recurrence-audit.test.js",
+    "$outDir\tests\unit\sandbox-closeout-watchlist-resolution-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-watchlist-lifecycle.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -478,6 +481,15 @@ $suiteMap = @{
   "sandbox-closeout-stability-watchlist" = @(
     "$outDir\tests\unit\sandbox-closeout-stability-watchlist.test.js"
   )
+  "sandbox-closeout-stability-recurrence-audit" = @(
+    "$outDir\tests\unit\sandbox-closeout-stability-recurrence-audit.test.js"
+  )
+  "sandbox-closeout-watchlist-resolution-summary" = @(
+    "$outDir\tests\unit\sandbox-closeout-watchlist-resolution-summary.test.js"
+  )
+  "sandbox-closeout-watchlist-lifecycle" = @(
+    "$outDir\tests\unit\sandbox-closeout-watchlist-lifecycle.test.js"
+  )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
   )
@@ -701,6 +713,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-stability-drift.test.js",
     "$outDir\tests\unit\sandbox-closeout-reopen-recurrence.test.js",
     "$outDir\tests\unit\sandbox-closeout-stability-watchlist.test.js",
+    "$outDir\tests\unit\sandbox-closeout-stability-recurrence-audit.test.js",
+    "$outDir\tests\unit\sandbox-closeout-watchlist-resolution-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-watchlist-lifecycle.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -750,5 +765,6 @@ if (-not $targets) {
   throw "Unknown suite '$Suite'."
 }
 
-node --test $targets
+# Keep the Node test runner single-threaded to reduce Windows sandbox flakiness.
+node --test --test-concurrency=1 $targets
 exit $LASTEXITCODE
