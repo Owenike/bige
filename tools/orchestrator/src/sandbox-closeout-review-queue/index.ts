@@ -136,6 +136,52 @@ export async function buildSandboxCloseoutReviewQueue(params: {
     });
   const latestAuditId = resolutionAuditHistory.latestEntry?.id ?? null;
   if (
+    latestReviewAction &&
+    latestReviewAction.auditId === latestAuditId &&
+    entries.length === 0 &&
+    resolutionAuditHistory.latestEntry
+  ) {
+    const record = resolutionAuditHistory.latestEntry;
+    const evidenceFollowUpRequired =
+      latestReviewAction.latestReviewAction === "reject_closeout" ||
+      latestReviewAction.latestReviewAction === "request_followup" ||
+      record.validationEvidenceRequired ||
+      record.resolutionEvidenceSnapshot.evidenceGapCodes.length > 0;
+    const reviewRequired =
+      latestReviewAction.latestReviewAction === "defer_review" ||
+      latestReviewAction.latestReviewAction === "reopen_review" ||
+      record.reviewRequired;
+    const escalationRequired = record.escalationRequired;
+    const queueStatus =
+      latestReviewAction.latestReviewAction === "reject_closeout" ||
+      latestReviewAction.latestReviewAction === "request_followup"
+        ? "evidence_follow_up"
+        : latestReviewAction.latestReviewAction === "defer_review" ||
+            latestReviewAction.latestReviewAction === "reopen_review"
+          ? "review_pending"
+          : buildQueueStatus({
+              reviewRequired,
+              escalationRequired,
+              evidenceFollowUpRequired,
+              closeoutDecisionStatus: record.closeoutDecision,
+            });
+    entries = [
+      {
+        auditId: record.id,
+        auditedAt: record.auditedAt,
+        queueStatus,
+        closeoutDecisionStatus: record.closeoutDecision,
+        reviewRequired,
+        escalationRequired,
+        evidenceFollowUpRequired,
+        blockedReasonsSummary: record.closeoutBlockedReasons,
+        missingEvidenceSummary: record.resolutionEvidenceSnapshot.evidenceGaps,
+        recommendedNextOperatorStep: latestReviewAction.suggestedNextAction,
+        summaryLine: `${record.summaryLine} ReviewAction=${latestReviewAction.latestReviewAction}/${latestReviewAction.latestReviewActionStatus}.`,
+      },
+    ];
+  }
+  if (
     latestReviewAction?.latestReviewAction === "approve_closeout" &&
     latestReviewAction.latestReviewActionStatus === "accepted" &&
     latestReviewAction.auditId === latestAuditId

@@ -741,6 +741,20 @@ Sandbox target registry:
     - whether the review queue should remain open or may exit
     - whether closeout is complete, reopened, deferred, or returned to follow-up
     - lifecycle reasons and the recommended next operator step
+  - closeout review audit trail is centralized into one shared governance record that stores, per review decision:
+    - the formal review action/status/reason/note
+    - the exact disposition/lifecycle/review-queue/review-summary snapshots used at decision time
+    - whether the review thread reopened, whether follow-up remained open, and whether queue exit was allowed
+    - queue-retained reasons and missing follow-up/evidence signals for post-closeout review
+  - closeout review history is centralized into one shared trend summary that records:
+    - the latest and previous review audit entry
+    - repeated reject/follow-up/defer/reopen patterns
+    - repeated queue-retained versus queue-exit patterns across the same review thread
+  - closeout review resolution summary is centralized into one shared settling decision that records:
+    - whether the review thread is `review_settled`, `review_reopened`, `followup_open`, `deferred_pending`, or `rejected_not_resolved`
+    - whether queue exit is truly allowed
+    - whether the closeout may be treated as fully reviewed
+    - unresolved review reasons and the next operator step
   - review action interpretation:
     - `approve_closeout` only becomes effective when the existing closeout summary/checklist already say the incident is safe to close; otherwise it remains blocked/manual_required/rejected
     - `reject_closeout` keeps follow-up open and should be treated as an explicit governance refusal to close the incident
@@ -750,6 +764,10 @@ Sandbox target registry:
   - queue exit rules:
     - queue exit is only allowed when disposition is `closeout_approved`, the queue is empty for the latest audit item, and the existing closeout checklist still says safe-to-closeout
     - `critical`, `manual_required`, and `blocked` situations still must not be treated as queue-exitable or closeout-complete even after a review action exists
+  - review-thread interpretation rules:
+    - repeated `reopen_review`, repeated `reject_closeout`, or repeated `request_followup` means the review thread is not settled even if one individual action was accepted
+    - `sandbox:closeout:review:audit`, `sandbox:closeout:review:history`, and `sandbox:closeout:review:resolution` should be read together when you need to know why a review thread is still open or why it was allowed to settle
+    - a review thread is only considered fully reviewed when the review resolution summary says `review_settled`; queue presence, follow-up-open status, or queue-exit denial means closeout is still governance-open
   - restore retention keeps the latest restore point, the recent N restore points, restore points referenced by recent rollback audit, and any restore point still associated with unresolved manual_required work
   - `sandbox:restore-points:prune` only removes expired restore points that are not protected by retention rules
   - no-op apply or no-op rollback does not create a new restore point

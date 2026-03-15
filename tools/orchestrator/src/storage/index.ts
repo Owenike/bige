@@ -58,11 +58,13 @@ export class FileStorage implements StorageProvider {
         if (
           error instanceof Error &&
           "code" in error &&
-          (error.code === "EPERM" || error.code === "EACCES") &&
-          attempt < 3
+          (error.code === "EPERM" || error.code === "EACCES" || error.code === "EEXIST")
         ) {
-          await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
-          continue;
+          if (attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+            continue;
+          }
+          break;
         }
         throw error;
       }
