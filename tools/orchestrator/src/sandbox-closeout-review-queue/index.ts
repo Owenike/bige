@@ -1,5 +1,7 @@
 import type { LoadedGitHubSandboxTargetRegistry } from "../github-sandbox-targets";
 import type { OrchestratorState } from "../schemas";
+import type { SandboxCloseoutReviewActionRecord } from "../sandbox-closeout-review-actions";
+import { listSandboxCloseoutReviewActions } from "../sandbox-closeout-review-actions";
 import {
   buildSandboxResolutionAuditHistory,
   type SandboxResolutionAuditHistory,
@@ -64,6 +66,7 @@ export async function buildSandboxCloseoutReviewQueue(params: {
   resolutionAuditHistory?: SandboxResolutionAuditHistory;
   closeoutSummary?: SandboxCloseoutSummary;
   closeoutChecklist?: SandboxCloseoutOperatorChecklist;
+  latestReviewAction?: SandboxCloseoutReviewActionRecord | null;
 }) {
   const limit = Math.max(5, params.limit ?? 10);
   const resolutionAuditHistory =
@@ -90,8 +93,15 @@ export async function buildSandboxCloseoutReviewQueue(params: {
       loadedRegistry: params.loadedRegistry,
       limit,
     }));
+  const latestReviewAction =
+    params.latestReviewAction ??
+    (await listSandboxCloseoutReviewActions({
+      configPath: params.configPath,
+      limit: 1,
+    })).records[0] ??
+    null;
 
-  const entries = resolutionAuditHistory.entries
+  let entries = resolutionAuditHistory.entries
     .filter(
       (record) =>
         record.closeoutDecision !== "closure_ready" ||
@@ -124,6 +134,47 @@ export async function buildSandboxCloseoutReviewQueue(params: {
         summaryLine: record.summaryLine,
       } satisfies SandboxCloseoutReviewQueueEntry;
     });
+  const latestAuditId = resolutionAuditHistory.latestEntry?.id ?? null;
+  if (
+    latestReviewAction?.latestReviewAction === "approve_closeout" &&
+    latestReviewAction.latestReviewActionStatus === "accepted" &&
+    latestReviewAction.auditId === latestAuditId
+  ) {
+    entries = [];
+  } else if (
+    latestReviewAction &&
+    latestReviewAction.auditId === latestAuditId &&
+    entries[0]
+  ) {
+    const firstEntry = entries[0];
+    const actionAdjustedStatus =
+      latestReviewAction.latestReviewAction === "reject_closeout" ||
+      latestReviewAction.latestReviewAction === "request_followup"
+        ? "evidence_follow_up"
+        : latestReviewAction.latestReviewAction === "defer_review" ||
+            latestReviewAction.latestReviewAction === "reopen_review"
+          ? "review_pending"
+          : firstEntry.queueStatus;
+    entries = [
+      {
+        ...firstEntry,
+        queueStatus: actionAdjustedStatus,
+        reviewRequired:
+          latestReviewAction.latestReviewAction === "defer_review" ||
+          latestReviewAction.latestReviewAction === "reopen_review"
+            ? true
+            : firstEntry.reviewRequired,
+        evidenceFollowUpRequired:
+          latestReviewAction.latestReviewAction === "reject_closeout" ||
+          latestReviewAction.latestReviewAction === "request_followup"
+            ? true
+            : firstEntry.evidenceFollowUpRequired,
+        recommendedNextOperatorStep: latestReviewAction.suggestedNextAction,
+        summaryLine: `${firstEntry.summaryLine} ReviewAction=${latestReviewAction.latestReviewAction}/${latestReviewAction.latestReviewActionStatus}.`,
+      },
+      ...entries.slice(1),
+    ];
+  }
   const latestQueueEntry = entries[0] ?? null;
   const queueStatus = latestQueueEntry?.queueStatus ?? "empty";
   const reviewRequired =

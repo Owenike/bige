@@ -570,6 +570,9 @@ Sandbox target registry:
   - use `sandbox:closeout:checklist` when you need the closeout checklist that shows which governance/evidence items are still unsatisfied before closure
   - use `sandbox:closeout:review:summary` when you need a human-readable answer for whether closeout is complete, review_pending, escalation_pending, or resolved_but_followup_needed
   - use `sandbox:closeout:review:queue` when you need the current governance queue of closeout items that still require review, escalation, or evidence follow-up
+  - use `sandbox:closeout:review:approve`, `sandbox:closeout:review:reject`, `sandbox:closeout:review:followup`, `sandbox:closeout:review:defer`, or `sandbox:closeout:review:reopen` when you need to leave a formal closeout review decision trail without changing live sandbox config
+  - use `sandbox:closeout:disposition:summary` when you need the formal governance disposition for the latest closeout review decision
+  - use `sandbox:closeout:review:lifecycle` when you need the queue-retain vs queue-exit interpretation for the latest review decision
   - inspect `sandbox:rollback:governance` before any rollback apply if you need to know whether a restore point is stale, default-unsafe, or otherwise blocked
   - always run `sandbox:rollback:preview` before `sandbox:rollback:validate` or `sandbox:rollback:apply`
   - use `sandbox:batch-recovery:preview` and `sandbox:batch-recovery:validate` before any multi-restore recovery
@@ -724,6 +727,29 @@ Sandbox target registry:
     - `closeout summary` may still show `resolved_not_ready` even after an operator marked the incident resolved
     - `closeout checklist` should be treated as the final operator sanity check before closure handoff
     - `closeout audit` is the traceable record to review during handoff or post-incident review when you need to know why closure was or was not allowed
+  - closeout review actions are centralized into one shared governance trail that records:
+    - the latest formal review action (`approve_closeout`, `reject_closeout`, `request_followup`, `defer_review`, `reopen_review`)
+    - the latest review action status/reason/note
+    - whether closeout was approved, rejected, deferred, reopened, or kept open for follow-up
+    - a short review action summary line suitable for diagnostics and handoff
+  - closeout disposition summary is centralized into one shared operator view that records:
+    - the latest formal review action and status
+    - the latest evidence/readiness/gating summaries used for disposition
+    - the disposition result (`closeout_approved`, `closeout_rejected`, `followup_required`, `review_deferred`, `reopened_for_review`)
+    - disposition reasons, warnings, and whether queue exit is currently allowed
+  - closeout review lifecycle is centralized into one shared governance state that records:
+    - whether the review queue should remain open or may exit
+    - whether closeout is complete, reopened, deferred, or returned to follow-up
+    - lifecycle reasons and the recommended next operator step
+  - review action interpretation:
+    - `approve_closeout` only becomes effective when the existing closeout summary/checklist already say the incident is safe to close; otherwise it remains blocked/manual_required/rejected
+    - `reject_closeout` keeps follow-up open and should be treated as an explicit governance refusal to close the incident
+    - `request_followup` means evidence or operator follow-up still remains open before closeout
+    - `defer_review` means the item stays in review_pending and should be handed off, not treated as complete
+    - `reopen_review` means the item re-enters review and must stay in the governance queue
+  - queue exit rules:
+    - queue exit is only allowed when disposition is `closeout_approved`, the queue is empty for the latest audit item, and the existing closeout checklist still says safe-to-closeout
+    - `critical`, `manual_required`, and `blocked` situations still must not be treated as queue-exitable or closeout-complete even after a review action exists
   - restore retention keeps the latest restore point, the recent N restore points, restore points referenced by recent rollback audit, and any restore point still associated with unresolved manual_required work
   - `sandbox:restore-points:prune` only removes expired restore points that are not protected by retention rules
   - no-op apply or no-op rollback does not create a new restore point
@@ -1443,6 +1469,9 @@ npm run test:orchestrator:sandbox-closeout-operator-checklist
 npm run test:orchestrator:sandbox-resolution-audit-history
 npm run test:orchestrator:sandbox-closeout-review-summary
 npm run test:orchestrator:sandbox-closeout-review-queue
+npm run test:orchestrator:sandbox-closeout-review-actions
+npm run test:orchestrator:sandbox-closeout-disposition-summary
+npm run test:orchestrator:sandbox-closeout-review-lifecycle
 npm run test:orchestrator:mock-loop
 npm run test:orchestrator:loop
 npm run test:orchestrator:state-machine

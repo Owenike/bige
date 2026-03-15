@@ -1,6 +1,7 @@
 import type { LoadedGitHubSandboxTargetRegistry } from "../github-sandbox-targets";
 import type { OrchestratorState } from "../schemas";
 import { buildSandboxCloseoutSummary } from "../sandbox-closeout-summary";
+import { buildSandboxCloseoutDispositionSummary } from "../sandbox-closeout-disposition-summary";
 import { buildSandboxCloseoutReviewSummary } from "../sandbox-closeout-review-summary";
 import { buildSandboxGovernanceStatus } from "../sandbox-governance-status";
 import { classifySandboxRecoveryIncidents } from "../sandbox-incident-governance";
@@ -56,6 +57,14 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     limit,
     closeoutSummary,
   });
+  const closeoutDispositionSummary = await buildSandboxCloseoutDispositionSummary({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.loadedRegistry,
+    limit,
+    closeoutSummary,
+    closeoutReviewSummary,
+  });
   const repeatedHotspots = incidents.incidents
     .filter((incident) => incident.type === "repeated_blocked_hotspot")
     .flatMap((incident) => incident.affectedProfiles)
@@ -68,8 +77,8 @@ export async function buildSandboxOperatorHandoffSummary(params: {
       : null;
   const handoffLine =
     governance.latestUnresolvedIncidentCount === 0
-      ? `Sandbox recovery handoff: ${closeoutReviewSummary.reviewSummaryLine}`
-      : `Sandbox recovery handoff: ${closeoutReviewSummary.reviewSummaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
+      ? `Sandbox recovery handoff: ${closeoutDispositionSummary.summaryLine}`
+      : `Sandbox recovery handoff: ${closeoutDispositionSummary.summaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
   const summary =
     governance.latestUnresolvedIncidentCount === 0
       ? "No unresolved sandbox recovery incident currently requires operator handoff."
@@ -80,7 +89,7 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     latestActionSummary,
     unresolvedHotspots: governance.unresolvedHotspots,
     repeatedBlockedManualRequiredHotspots: repeatedHotspots,
-    recommendedNextStep: closeoutReviewSummary.recommendedNextReviewAction,
+    recommendedNextStep: closeoutDispositionSummary.recommendedNextOperatorStep,
     governanceWarnings: governance.governanceWarnings,
     escalationRecommendation,
     handoffLine,
