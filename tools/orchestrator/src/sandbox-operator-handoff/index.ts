@@ -10,6 +10,9 @@ import { buildSandboxCloseoutStabilityWatchlist } from "../sandbox-closeout-stab
 import { buildSandboxCloseoutStabilityRecurrenceAudit } from "../sandbox-closeout-stability-recurrence-audit";
 import { buildSandboxCloseoutWatchlistResolutionSummary } from "../sandbox-closeout-watchlist-resolution-summary";
 import { buildSandboxCloseoutWatchlistLifecycle } from "../sandbox-closeout-watchlist-lifecycle";
+import { buildSandboxCloseoutWatchlistExitAudit } from "../sandbox-closeout-watchlist-exit-audit";
+import { buildSandboxCloseoutWatchlistReAddHistory } from "../sandbox-closeout-watchlist-readd-history";
+import { buildSandboxCloseoutStabilityRecoverySummary } from "../sandbox-closeout-stability-recovery-summary";
 import { buildSandboxCloseoutCompletionLifecycle } from "../sandbox-closeout-completion-lifecycle";
 import { buildSandboxCloseoutCompletionResolutionSummary } from "../sandbox-closeout-completion-resolution-summary";
 import { buildSandboxCloseoutDispositionSummary } from "../sandbox-closeout-disposition-summary";
@@ -193,15 +196,54 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     limit,
     closeoutStabilityDrift,
     closeoutReopenRecurrence,
+      closeoutStabilityWatchlist,
+      closeoutWatchlistResolutionSummary,
+    });
+  const closeoutWatchlistExitAudit = await buildSandboxCloseoutWatchlistExitAudit({
+    configPath: params.configPath,
+    state: params.state,
+    loadedRegistry: params.loadedRegistry,
+    limit,
+    closeoutStabilityDrift,
+    closeoutReopenRecurrence,
     closeoutStabilityWatchlist,
     closeoutWatchlistResolutionSummary,
+    closeoutWatchlistLifecycle,
   });
+  const closeoutWatchlistReAddHistory =
+    await buildSandboxCloseoutWatchlistReAddHistory({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutStabilityDrift,
+      closeoutReopenRecurrence,
+      closeoutStabilityWatchlist,
+      closeoutWatchlistLifecycle,
+      closeoutWatchlistExitAudit,
+    });
+  const closeoutStabilityRecoverySummary =
+    await buildSandboxCloseoutStabilityRecoverySummary({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutStabilityDrift,
+      closeoutReopenRecurrence,
+      closeoutWatchlistExitAudit,
+      closeoutWatchlistReAddHistory,
+      closeoutWatchlistResolutionSummary,
+      closeoutWatchlistLifecycle,
+    });
   const repeatedHotspots = incidents.incidents
     .filter((incident) => incident.type === "repeated_blocked_hotspot")
     .flatMap((incident) => incident.affectedProfiles)
     .filter((profileId, index, array) => array.indexOf(profileId) === index)
     .sort();
   const latestActionSummary =
+    closeoutStabilityRecoverySummary.summaryLine ??
+    closeoutWatchlistReAddHistory.summaryLine ??
+    closeoutWatchlistExitAudit.summaryLine ??
     closeoutWatchlistLifecycle.summaryLine ??
     closeoutWatchlistResolutionSummary.summaryLine ??
     closeoutStabilityRecurrenceAudit.summaryLine ??
@@ -219,8 +261,8 @@ export async function buildSandboxOperatorHandoffSummary(params: {
       : null;
   const handoffLine =
     governance.latestUnresolvedIncidentCount === 0
-      ? `Sandbox recovery handoff: ${closeoutWatchlistLifecycle.summaryLine}`
-      : `Sandbox recovery handoff: ${closeoutWatchlistLifecycle.summaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
+      ? `Sandbox recovery handoff: ${closeoutStabilityRecoverySummary.summaryLine}`
+      : `Sandbox recovery handoff: ${closeoutStabilityRecoverySummary.summaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
   const summary =
     governance.latestUnresolvedIncidentCount === 0
       ? "No unresolved sandbox recovery incident currently requires operator handoff."
@@ -232,7 +274,7 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     unresolvedHotspots: governance.unresolvedHotspots,
     repeatedBlockedManualRequiredHotspots: repeatedHotspots,
     recommendedNextStep:
-      closeoutWatchlistLifecycle.recommendedNextOperatorStep,
+      closeoutStabilityRecoverySummary.recommendedNextOperatorStep,
     governanceWarnings: governance.governanceWarnings,
     escalationRecommendation,
     handoffLine,

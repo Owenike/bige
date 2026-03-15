@@ -53,7 +53,10 @@ $scripts = @(
   "test:orchestrator:sandbox-closeout-stability-watchlist",
   "test:orchestrator:sandbox-closeout-stability-recurrence-audit",
   "test:orchestrator:sandbox-closeout-watchlist-resolution-summary",
-  "test:orchestrator:sandbox-closeout-watchlist-lifecycle"
+  "test:orchestrator:sandbox-closeout-watchlist-lifecycle",
+  "test:orchestrator:sandbox-closeout-watchlist-exit-audit",
+  "test:orchestrator:sandbox-closeout-watchlist-readd-history",
+  "test:orchestrator:sandbox-closeout-stability-recovery-summary"
 )
 
 foreach ($script in $scripts) {
