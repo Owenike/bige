@@ -149,8 +149,11 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-regression-resolution-summary.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-monitoring-exit-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovery-clearance-audit.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovery-clearance-history.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-exit-history.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-lifecycle.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovered-reentry-audit.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovered-lifecycle-history.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -532,11 +535,20 @@ $suiteMap = @{
   "sandbox-closeout-recovery-clearance-audit" = @(
     "$outDir\tests\unit\sandbox-closeout-recovery-clearance-audit.test.js"
   )
+  "sandbox-closeout-recovery-clearance-history" = @(
+    "$outDir\tests\unit\sandbox-closeout-recovery-clearance-history.test.js"
+  )
   "sandbox-closeout-recovered-exit-history" = @(
     "$outDir\tests\unit\sandbox-closeout-recovered-exit-history.test.js"
   )
   "sandbox-closeout-recovered-lifecycle" = @(
     "$outDir\tests\unit\sandbox-closeout-recovered-lifecycle.test.js"
+  )
+  "sandbox-closeout-recovered-reentry-audit" = @(
+    "$outDir\tests\unit\sandbox-closeout-recovered-reentry-audit.test.js"
+  )
+  "sandbox-closeout-recovered-lifecycle-history" = @(
+    "$outDir\tests\unit\sandbox-closeout-recovered-lifecycle-history.test.js"
   )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
@@ -774,8 +786,11 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-regression-resolution-summary.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-monitoring-exit-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovery-clearance-audit.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovery-clearance-history.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-exit-history.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-lifecycle.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovered-reentry-audit.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovered-lifecycle-history.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",

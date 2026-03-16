@@ -199,6 +199,9 @@ jobs:
           npm run test:orchestrator:sandbox-closeout-recovery-clearance-audit
           npm run test:orchestrator:sandbox-closeout-recovered-exit-history
           npm run test:orchestrator:sandbox-closeout-recovered-lifecycle
+          npm run test:orchestrator:sandbox-closeout-recovery-clearance-history
+          npm run test:orchestrator:sandbox-closeout-recovered-reentry-audit
+          npm run test:orchestrator:sandbox-closeout-recovered-lifecycle-history
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary

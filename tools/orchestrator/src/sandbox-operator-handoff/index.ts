@@ -20,8 +20,11 @@ import { buildSandboxCloseoutRecoveryConfidenceTrend } from "../sandbox-closeout
 import { buildSandboxCloseoutRegressionResolutionSummary } from "../sandbox-closeout-regression-resolution-summary";
 import { buildSandboxCloseoutRecoveredMonitoringExitAudit } from "../sandbox-closeout-recovered-monitoring-exit-audit";
 import { buildSandboxCloseoutRecoveryClearanceAudit } from "../sandbox-closeout-recovery-clearance-audit";
+import { buildSandboxCloseoutRecoveryClearanceHistory } from "../sandbox-closeout-recovery-clearance-history";
 import { buildSandboxCloseoutRecoveredExitHistory } from "../sandbox-closeout-recovered-exit-history";
 import { buildSandboxCloseoutRecoveredLifecycle } from "../sandbox-closeout-recovered-lifecycle";
+import { buildSandboxCloseoutRecoveredLifecycleHistory } from "../sandbox-closeout-recovered-lifecycle-history";
+import { buildSandboxCloseoutRecoveredReentryAudit } from "../sandbox-closeout-recovered-reentry-audit";
 import { buildSandboxCloseoutCompletionLifecycle } from "../sandbox-closeout-completion-lifecycle";
 import { buildSandboxCloseoutCompletionResolutionSummary } from "../sandbox-closeout-completion-resolution-summary";
 import { buildSandboxCloseoutDispositionSummary } from "../sandbox-closeout-disposition-summary";
@@ -350,12 +353,49 @@ export async function buildSandboxOperatorHandoffSummary(params: {
       closeoutRegressionResolutionSummary,
       closeoutRecoveredMonitoringExitAudit,
     });
+  const closeoutRecoveryClearanceHistory =
+    await buildSandboxCloseoutRecoveryClearanceHistory({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutRecoveryClearanceAudit,
+      closeoutRecoveredExitHistory,
+      closeoutRecoveredLifecycle,
+    });
+  const closeoutRecoveredReentryAudit =
+    await buildSandboxCloseoutRecoveredReentryAudit({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutRecoveredExitHistory,
+      closeoutRecoveryClearanceHistory,
+      closeoutRecoveryConfidenceTrend,
+      closeoutRegressionResolutionSummary,
+      closeoutRecoveredLifecycle,
+    });
+  const closeoutRecoveredLifecycleHistory =
+    await buildSandboxCloseoutRecoveredLifecycleHistory({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutRecoveredLifecycle,
+      closeoutRecoveryClearanceHistory,
+      closeoutRecoveredReentryAudit,
+      closeoutRecoveryRegressionAudit,
+      closeoutRecoveredMonitoringExitAudit,
+    });
   const repeatedHotspots = incidents.incidents
     .filter((incident) => incident.type === "repeated_blocked_hotspot")
     .flatMap((incident) => incident.affectedProfiles)
     .filter((profileId, index, array) => array.indexOf(profileId) === index)
     .sort();
   const latestActionSummary =
+    closeoutRecoveredLifecycleHistory.summaryLine ??
+    closeoutRecoveredReentryAudit.summaryLine ??
+    closeoutRecoveryClearanceHistory.summaryLine ??
     closeoutRecoveredLifecycle.summaryLine ??
     closeoutRecoveredExitHistory.summaryLine ??
     closeoutRecoveryClearanceAudit.summaryLine ??
@@ -385,8 +425,8 @@ export async function buildSandboxOperatorHandoffSummary(params: {
       : null;
   const handoffLine =
     governance.latestUnresolvedIncidentCount === 0
-      ? `Sandbox recovery handoff: ${closeoutRecoveredLifecycle.summaryLine}`
-      : `Sandbox recovery handoff: ${closeoutRecoveredLifecycle.summaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
+      ? `Sandbox recovery handoff: ${closeoutRecoveredLifecycleHistory.summaryLine}`
+      : `Sandbox recovery handoff: ${closeoutRecoveredLifecycleHistory.summaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
   const summary =
     governance.latestUnresolvedIncidentCount === 0
       ? "No unresolved sandbox recovery incident currently requires operator handoff."
@@ -398,6 +438,9 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     unresolvedHotspots: governance.unresolvedHotspots,
     repeatedBlockedManualRequiredHotspots: repeatedHotspots,
     recommendedNextStep:
+      closeoutRecoveredLifecycleHistory.recommendedNextOperatorStep ||
+      closeoutRecoveredReentryAudit.recommendedNextOperatorStep ||
+      closeoutRecoveryClearanceHistory.recommendedNextOperatorStep ||
       closeoutRecoveredLifecycle.recommendedNextOperatorStep ||
       closeoutRecoveredExitHistory.recommendedNextOperatorStep ||
       closeoutRecoveryClearanceAudit.recommendedNextOperatorStep ||
