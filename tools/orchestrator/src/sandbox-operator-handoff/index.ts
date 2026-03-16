@@ -16,6 +16,9 @@ import { buildSandboxCloseoutStabilityRecoverySummary } from "../sandbox-closeou
 import { buildSandboxCloseoutRecoveryConfidence } from "../sandbox-closeout-recovery-confidence";
 import { buildSandboxCloseoutRecoveryRegressionAudit } from "../sandbox-closeout-recovery-regression-audit";
 import { buildSandboxCloseoutRecoveredMonitoringQueue } from "../sandbox-closeout-recovered-monitoring-queue";
+import { buildSandboxCloseoutRecoveryConfidenceTrend } from "../sandbox-closeout-recovery-confidence-trend";
+import { buildSandboxCloseoutRegressionResolutionSummary } from "../sandbox-closeout-regression-resolution-summary";
+import { buildSandboxCloseoutRecoveredMonitoringExitAudit } from "../sandbox-closeout-recovered-monitoring-exit-audit";
 import { buildSandboxCloseoutCompletionLifecycle } from "../sandbox-closeout-completion-lifecycle";
 import { buildSandboxCloseoutCompletionResolutionSummary } from "../sandbox-closeout-completion-resolution-summary";
 import { buildSandboxCloseoutDispositionSummary } from "../sandbox-closeout-disposition-summary";
@@ -274,12 +277,50 @@ export async function buildSandboxOperatorHandoffSummary(params: {
       closeoutWatchlistReAddHistory,
       closeoutStabilityRecoverySummary,
     });
+  const closeoutRecoveryConfidenceTrend =
+    await buildSandboxCloseoutRecoveryConfidenceTrend({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutRecoveryConfidence,
+      closeoutRecoveryRegressionAudit,
+      closeoutRecoveredMonitoringQueue,
+      closeoutWatchlistReAddHistory,
+    });
+  const closeoutRegressionResolutionSummary =
+    await buildSandboxCloseoutRegressionResolutionSummary({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutRecoveryRegressionAudit,
+      closeoutRecoveryConfidence,
+      closeoutWatchlistExitAudit,
+      closeoutWatchlistReAddHistory,
+      closeoutRecoveredMonitoringQueue,
+    });
+  const closeoutRecoveredMonitoringExitAudit =
+    await buildSandboxCloseoutRecoveredMonitoringExitAudit({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutRecoveryConfidenceTrend,
+      closeoutRegressionResolutionSummary,
+      closeoutRecoveredMonitoringQueue,
+      closeoutWatchlistExitAudit,
+      closeoutWatchlistReAddHistory,
+    });
   const repeatedHotspots = incidents.incidents
     .filter((incident) => incident.type === "repeated_blocked_hotspot")
     .flatMap((incident) => incident.affectedProfiles)
     .filter((profileId, index, array) => array.indexOf(profileId) === index)
     .sort();
   const latestActionSummary =
+    closeoutRecoveredMonitoringExitAudit.summaryLine ??
+    closeoutRegressionResolutionSummary.summaryLine ??
+    closeoutRecoveryConfidenceTrend.summaryLine ??
     closeoutRecoveredMonitoringQueue.summaryLine ??
     closeoutRecoveryRegressionAudit.summaryLine ??
     closeoutRecoveryConfidence.summaryLine ??
@@ -316,6 +357,9 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     unresolvedHotspots: governance.unresolvedHotspots,
     repeatedBlockedManualRequiredHotspots: repeatedHotspots,
     recommendedNextStep:
+      closeoutRecoveredMonitoringExitAudit.recommendedNextOperatorStep ||
+      closeoutRegressionResolutionSummary.recommendedNextOperatorStep ||
+      closeoutRecoveryConfidenceTrend.recommendedNextOperatorStep ||
       closeoutRecoveryRegressionAudit.recommendedNextOperatorStep ||
       closeoutRecoveredMonitoringQueue.recommendedNextOperatorStep ||
       closeoutRecoveryConfidence.recommendedNextOperatorStep ||

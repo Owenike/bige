@@ -145,6 +145,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-recovery-confidence.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovery-regression-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-monitoring-queue.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovery-confidence-trend.test.js",
+    "$outDir\tests\unit\sandbox-closeout-regression-resolution-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovered-monitoring-exit-audit.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -514,6 +517,15 @@ $suiteMap = @{
   "sandbox-closeout-recovered-monitoring-queue" = @(
     "$outDir\tests\unit\sandbox-closeout-recovered-monitoring-queue.test.js"
   )
+  "sandbox-closeout-recovery-confidence-trend" = @(
+    "$outDir\tests\unit\sandbox-closeout-recovery-confidence-trend.test.js"
+  )
+  "sandbox-closeout-regression-resolution-summary" = @(
+    "$outDir\tests\unit\sandbox-closeout-regression-resolution-summary.test.js"
+  )
+  "sandbox-closeout-recovered-monitoring-exit-audit" = @(
+    "$outDir\tests\unit\sandbox-closeout-recovered-monitoring-exit-audit.test.js"
+  )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
   )
@@ -746,6 +758,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-recovery-confidence.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovery-regression-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-monitoring-queue.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovery-confidence-trend.test.js",
+    "$outDir\tests\unit\sandbox-closeout-regression-resolution-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovered-monitoring-exit-audit.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",

@@ -59,7 +59,10 @@ $scripts = @(
   "test:orchestrator:sandbox-closeout-stability-recovery-summary",
   "test:orchestrator:sandbox-closeout-recovery-confidence",
   "test:orchestrator:sandbox-closeout-recovery-regression-audit",
-  "test:orchestrator:sandbox-closeout-recovered-monitoring-queue"
+  "test:orchestrator:sandbox-closeout-recovered-monitoring-queue",
+  "test:orchestrator:sandbox-closeout-recovery-confidence-trend",
+  "test:orchestrator:sandbox-closeout-regression-resolution-summary",
+  "test:orchestrator:sandbox-closeout-recovered-monitoring-exit-audit"
 )
 
 foreach ($script in $scripts) {
