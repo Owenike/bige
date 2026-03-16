@@ -7,20 +7,29 @@ export type JobTriggerMode = "scheduled" | "manual" | "api" | "inline";
 export type JobStatus = "running" | "success" | "failed" | "partial";
 
 export type DeliveryChannel = "in_app" | "email" | "line" | "sms" | "webhook" | "other";
-export type DeliveryStatus = "pending" | "retrying" | "sent" | "failed" | "skipped" | "dead_letter";
+export type DeliveryStatus = "pending" | "retrying" | "sent" | "failed" | "skipped" | "dead_letter" | "cancelled";
 
 export type DeliveryRow = {
   id: string;
   tenant_id: string | null;
   branch_id: string | null;
+  booking_id: string | null;
+  member_id: string | null;
+  resend_of_delivery_id: string | null;
   notification_id: string | null;
   opportunity_id: string | null;
   source_ref_type: string | null;
   source_ref_id: string | null;
+  template_key: string | null;
   recipient_user_id: string | null;
   recipient_role: AppRole | null;
+  recipient_name: string | null;
+  recipient_phone: string | null;
+  recipient_email: string | null;
   channel: DeliveryChannel;
   status: DeliveryStatus;
+  scheduled_for: string | null;
+  cancelled_at: string | null;
   attempts: number;
   retry_count: number;
   max_attempts: number;
@@ -33,6 +42,10 @@ export type DeliveryRow = {
   last_error: string | null;
   error_code: string | null;
   error_message: string | null;
+  skipped_reason: string | null;
+  failure_reason: string | null;
+  delivery_mode: "simulated" | "provider";
+  provider: string | null;
   provider_message_id: string | null;
   provider_response: Record<string, unknown> | null;
   dedupe_key: string | null;
@@ -67,14 +80,23 @@ type DeliveryInsertInput = {
   rows: Array<{
     tenantId?: string | null;
     branchId?: string | null;
+    bookingId?: string | null;
+    memberId?: string | null;
+    resendOfDeliveryId?: string | null;
     notificationId?: string | null;
     opportunityId?: string | null;
     sourceRefType?: string | null;
     sourceRefId?: string | null;
+    templateKey?: string | null;
     recipientUserId?: string | null;
     recipientRole?: AppRole | null;
+    recipientName?: string | null;
+    recipientPhone?: string | null;
+    recipientEmail?: string | null;
     channel: DeliveryChannel;
     status: DeliveryStatus;
+    scheduledFor?: string | null;
+    cancelledAt?: string | null;
     attempts?: number;
     retryCount?: number;
     maxAttempts?: number;
@@ -87,6 +109,10 @@ type DeliveryInsertInput = {
     lastError?: string | null;
     errorCode?: string | null;
     errorMessage?: string | null;
+    skippedReason?: string | null;
+    failureReason?: string | null;
+    deliveryMode?: "simulated" | "provider";
+    provider?: string | null;
     providerMessageId?: string | null;
     providerResponse?: Record<string, unknown> | null;
     dedupeKey?: string | null;
@@ -151,14 +177,23 @@ export async function insertDeliveryRows(input: DeliveryInsertInput) {
   const rows = input.rows.map((row) => ({
     tenant_id: row.tenantId ?? null,
     branch_id: row.branchId ?? null,
+    booking_id: row.bookingId ?? null,
+    member_id: row.memberId ?? null,
+    resend_of_delivery_id: row.resendOfDeliveryId ?? null,
     notification_id: row.notificationId ?? null,
     opportunity_id: row.opportunityId ?? null,
     source_ref_type: row.sourceRefType ?? null,
     source_ref_id: row.sourceRefId ?? null,
+    template_key: row.templateKey ?? null,
     recipient_user_id: row.recipientUserId ?? null,
     recipient_role: row.recipientRole ?? null,
+    recipient_name: row.recipientName ?? null,
+    recipient_phone: row.recipientPhone ?? null,
+    recipient_email: row.recipientEmail ?? null,
     channel: row.channel,
       status: row.status,
+      scheduled_for: row.scheduledFor ?? null,
+      cancelled_at: row.cancelledAt ?? null,
       attempts: typeof row.attempts === "number" ? row.attempts : 0,
       retry_count: typeof row.retryCount === "number" ? row.retryCount : Math.max((typeof row.attempts === "number" ? row.attempts : 0) - 1, 0),
       max_attempts: typeof row.maxAttempts === "number" ? row.maxAttempts : 3,
@@ -171,6 +206,10 @@ export async function insertDeliveryRows(input: DeliveryInsertInput) {
       last_error: row.lastError ?? row.errorMessage ?? null,
       error_code: row.errorCode ?? null,
       error_message: row.errorMessage ?? null,
+      skipped_reason: row.skippedReason ?? null,
+      failure_reason: row.failureReason ?? row.errorMessage ?? null,
+    delivery_mode: row.deliveryMode ?? "simulated",
+    provider: row.provider ?? null,
     provider_message_id: row.providerMessageId ?? null,
     provider_response: row.providerResponse || {},
     dedupe_key: row.dedupeKey ?? null,
@@ -181,7 +220,7 @@ export async function insertDeliveryRows(input: DeliveryInsertInput) {
   const insert = await supabase
     .from("notification_deliveries")
     .upsert(rows, { onConflict: "channel,dedupe_key", ignoreDuplicates: true })
-    .select("id, tenant_id, branch_id, notification_id, opportunity_id, source_ref_type, source_ref_id, recipient_user_id, recipient_role, channel, status, attempts, retry_count, max_attempts, last_attempt_at, next_retry_at, sent_at, delivered_at, failed_at, dead_letter_at, last_error, error_code, error_message, provider_message_id, provider_response, dedupe_key, payload, created_by, created_at, updated_at");
+    .select("id, tenant_id, branch_id, booking_id, member_id, resend_of_delivery_id, notification_id, opportunity_id, source_ref_type, source_ref_id, template_key, recipient_user_id, recipient_role, recipient_name, recipient_phone, recipient_email, channel, status, scheduled_for, cancelled_at, attempts, retry_count, max_attempts, last_attempt_at, next_retry_at, sent_at, delivered_at, failed_at, dead_letter_at, last_error, error_code, error_message, skipped_reason, failure_reason, delivery_mode, provider, provider_message_id, provider_response, dedupe_key, payload, created_by, created_at, updated_at");
   if (insert.error) return { ok: false as const, error: insert.error.message, items: [] as DeliveryRow[] };
   return { ok: true as const, items: (insert.data || []) as DeliveryRow[] };
 }
@@ -198,9 +237,13 @@ export async function updateDeliveryStatus(params: {
   deliveredAt?: string | null;
   failedAt?: string | null;
   deadLetterAt?: string | null;
+  cancelledAt?: string | null;
   lastError?: string | null;
   errorCode?: string | null;
   errorMessage?: string | null;
+  skippedReason?: string | null;
+  failureReason?: string | null;
+  provider?: string | null;
   providerMessageId?: string | null;
   providerResponse?: Record<string, unknown> | null;
 }) {
@@ -215,9 +258,13 @@ export async function updateDeliveryStatus(params: {
     delivered_at: string | null;
     failed_at: string | null;
     dead_letter_at: string | null;
+    cancelled_at: string | null;
     last_error: string | null;
     error_code: string | null;
     error_message: string | null;
+    skipped_reason: string | null;
+    failure_reason: string | null;
+    provider?: string | null;
     provider_message_id?: string | null;
     provider_response?: Record<string, unknown> | null;
     updated_at: string;
@@ -231,13 +278,19 @@ export async function updateDeliveryStatus(params: {
     delivered_at: params.deliveredAt ?? null,
     failed_at: params.failedAt ?? null,
     dead_letter_at: params.deadLetterAt ?? null,
+    cancelled_at: params.cancelledAt ?? null,
     last_error: params.lastError ?? params.errorMessage ?? null,
     error_code: params.errorCode ?? null,
     error_message: params.errorMessage ?? null,
+    skipped_reason: params.skippedReason ?? null,
+    failure_reason: params.failureReason ?? params.errorMessage ?? null,
     updated_at: nowIso(),
   };
   if (Object.prototype.hasOwnProperty.call(params, "providerMessageId")) {
     patch.provider_message_id = params.providerMessageId ?? null;
+  }
+  if (Object.prototype.hasOwnProperty.call(params, "provider")) {
+    patch.provider = params.provider ?? null;
   }
   if (Object.prototype.hasOwnProperty.call(params, "providerResponse")) {
     patch.provider_response = params.providerResponse ?? null;
@@ -278,7 +331,7 @@ export async function listDeliveryRows(params: {
   const supabase = params.supabase ?? createSupabaseAdminClient();
   let query = supabase
     .from("notification_deliveries")
-    .select("id, tenant_id, branch_id, notification_id, opportunity_id, source_ref_type, source_ref_id, recipient_user_id, recipient_role, channel, status, attempts, retry_count, max_attempts, last_attempt_at, next_retry_at, sent_at, delivered_at, failed_at, dead_letter_at, last_error, error_code, error_message, provider_message_id, provider_response, dedupe_key, payload, created_by, created_at, updated_at")
+    .select("id, tenant_id, branch_id, booking_id, member_id, resend_of_delivery_id, notification_id, opportunity_id, source_ref_type, source_ref_id, template_key, recipient_user_id, recipient_role, recipient_name, recipient_phone, recipient_email, channel, status, scheduled_for, cancelled_at, attempts, retry_count, max_attempts, last_attempt_at, next_retry_at, sent_at, delivered_at, failed_at, dead_letter_at, last_error, error_code, error_message, skipped_reason, failure_reason, delivery_mode, provider, provider_message_id, provider_response, dedupe_key, payload, created_by, created_at, updated_at")
     .order("created_at", { ascending: false })
     .limit(Math.min(500, Math.max(1, params.limit || 120)));
   if (params.tenantId) query = query.eq("tenant_id", params.tenantId);

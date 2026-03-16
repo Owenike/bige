@@ -1,0 +1,16 @@
+{
+  "name": "newebpay-live-regression-sample",
+  "meta": {
+    "currentPaymentStatus": "paid",
+    "currentBookingPaymentStatus": "deposit_paid",
+    "depositRequiredAmount": 1000,
+    "depositPaidAmount": 1000,
+    "finalAmount": 3000,
+    "paymentAmount": 1000
+  },
+  "payload": {
+    "MerchantTradeNo": "order_live_regression",
+    "Status": "failed",
+    "tradeNo": "gw_live_regression"
+  }
+}

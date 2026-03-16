@@ -4,7 +4,19 @@ import { createClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "./supabase/admin";
 import { evaluateTenantAccess, type TenantStatus, type TenantSubscriptionSnapshot } from "./tenant-subscription";
 
-export type AppRole = "platform_admin" | "manager" | "supervisor" | "branch_manager" | "frontdesk" | "coach" | "sales" | "member";
+export type AppRole =
+  | "platform_admin"
+  | "manager"
+  | "supervisor"
+  | "branch_manager"
+  | "store_owner"
+  | "store_manager"
+  | "frontdesk"
+  | "coach"
+  | "therapist"
+  | "sales"
+  | "member"
+  | "customer";
 
 type ErrorCode =
   | "UNAUTHORIZED"
@@ -34,9 +46,11 @@ type ErrorCode =
   | "CONTRACT_STATE_INVALID"
   | "INTERNAL_ERROR";
 
-const ROLE_MANAGER_EQUIVALENTS = new Set<AppRole>(["manager", "supervisor", "branch_manager"]);
+const ROLE_MANAGER_EQUIVALENTS = new Set<AppRole>(["manager", "supervisor", "branch_manager", "store_owner", "store_manager"]);
 const ROLE_FRONTDESK_EQUIVALENTS = new Set<AppRole>(["frontdesk"]);
 const ROLE_PLATFORM_ADMIN_EQUIVALENTS = new Set<AppRole>(["platform_admin"]);
+const ROLE_COACH_EQUIVALENTS = new Set<AppRole>(["coach", "therapist"]);
+const ROLE_MEMBER_EQUIVALENTS = new Set<AppRole>(["member", "customer"]);
 
 function normalizeRole(input: unknown): AppRole | null {
   if (typeof input !== "string") return null;
@@ -45,10 +59,14 @@ function normalizeRole(input: unknown): AppRole | null {
     input === "manager" ||
     input === "supervisor" ||
     input === "branch_manager" ||
+    input === "store_owner" ||
+    input === "store_manager" ||
     input === "frontdesk" ||
     input === "coach" ||
+    input === "therapist" ||
     input === "sales" ||
-    input === "member"
+    input === "member" ||
+    input === "customer"
   ) {
     return input;
   }
@@ -61,6 +79,8 @@ function roleMatchesAllowed(role: AppRole, allowedRoles: AppRole[]) {
     if (allowed === "manager" && ROLE_MANAGER_EQUIVALENTS.has(role)) return true;
     if (allowed === "frontdesk" && ROLE_FRONTDESK_EQUIVALENTS.has(role)) return true;
     if (allowed === "platform_admin" && ROLE_PLATFORM_ADMIN_EQUIVALENTS.has(role)) return true;
+    if (allowed === "coach" && ROLE_COACH_EQUIVALENTS.has(role)) return true;
+    if (allowed === "member" && ROLE_MEMBER_EQUIVALENTS.has(role)) return true;
   }
   return false;
 }

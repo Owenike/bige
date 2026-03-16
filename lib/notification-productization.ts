@@ -2,6 +2,12 @@ import { z } from "zod";
 import type { AppRole } from "./auth-context";
 
 export const NOTIFICATION_EVENT_KEYS = [
+  "booking_created",
+  "booking_rescheduled",
+  "booking_cancelled",
+  "booking_reminder_day_before",
+  "booking_reminder_1h",
+  "booking_deposit_pending",
   "tenant_subscription_expiring",
   "tenant_subscription_grace",
   "tenant_subscription_blocked",
@@ -128,7 +134,10 @@ export function parseBooleanQuery(input: string | null, fallback: boolean) {
   return fallback;
 }
 
-export const retryStatusesSchema = z.array(z.enum(["failed", "retrying", "pending", "sent", "skipped", "dead_letter"])).max(6).optional();
+export const retryStatusesSchema = z
+  .array(z.enum(["failed", "retrying", "pending", "sent", "skipped", "dead_letter", "cancelled"]))
+  .max(7)
+  .optional();
 
 export const retryRequestSchema = z
   .object({

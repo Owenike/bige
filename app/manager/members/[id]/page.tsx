@@ -13,6 +13,7 @@ type DetailPayload = {
       id: string;
       fullName: string;
       phone: string | null;
+      email?: string | null;
       notes: string | null;
       photoUrl: string | null;
       storeId: string | null;
@@ -117,6 +118,7 @@ export default function ManagerMemberDetailPage() {
               <h2 className="sectionTitle">{zh ? "基本資料" : "Profile"}</h2>
               <p className="sub">{payload.member.fullName}</p>
               <p className="sub">{payload.member.phone || "-"}</p>
+              <p className="sub">{payload.member.email || "-"}</p>
               <p className="sub">
                 {zh ? "分館" : "Branch"}: {payload.member.storeId || "-"}
               </p>

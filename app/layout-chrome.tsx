@@ -13,9 +13,10 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isFrontdeskRoute = pathname?.startsWith("/frontdesk");
   const isMemberRoute = pathname?.startsWith("/member");
   const isCoachRoute = pathname?.startsWith("/coach");
+  const isPublicBookingRoute = pathname?.startsWith("/booking");
   const isHomeRoute = pathname === "/";
   const isWorkspaceRoute = isFrontdeskRoute || isMemberRoute || isCoachRoute;
-  const showTopbar = !isEmbedded && !isWorkspaceRoute && !isHomeRoute;
+  const showTopbar = !isEmbedded && !isWorkspaceRoute && !isHomeRoute && !isPublicBookingRoute;
   const shellClassName = [
     "shell",
     isEmbedded ? "shellEmbedded" : "",
@@ -61,7 +62,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
 
       {children}
 
-      {!isEmbedded ? (
+      {!isEmbedded && !isPublicBookingRoute ? (
         <footer className="footer">
           <div className="footerInner">
             <div>c {new Date().getFullYear()} BIGE</div>

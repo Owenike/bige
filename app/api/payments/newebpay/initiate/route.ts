@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createOrReuseBookingDepositPayment } from "../../../../../lib/booking-deposit-payments";
 import { TEMP_DISABLE_ROLE_GUARD, requireProfile } from "../../../../../lib/auth-context";
 
 export async function POST(request: Request) {
@@ -7,9 +8,67 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const orderId = typeof body?.orderId === "string" ? body.orderId : "";
+  const bookingId = typeof body?.bookingId === "string" ? body.bookingId : "";
 
-  if (!orderId || !auth.context.tenantId) {
-    return NextResponse.json({ error: "orderId and tenant context are required" }, { status: 400 });
+  if ((!orderId && !bookingId) || !auth.context.tenantId) {
+    return NextResponse.json({ error: "orderId or bookingId and tenant context are required" }, { status: 400 });
+  }
+
+  if (bookingId) {
+    const bookingResult = await auth.supabase
+      .from("bookings")
+      .select("id, tenant_id, branch_id, member_id, status")
+      .eq("id", bookingId)
+      .eq("tenant_id", auth.context.tenantId)
+      .maybeSingle();
+
+    if (bookingResult.error || !bookingResult.data) {
+      return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+    }
+
+    if (!TEMP_DISABLE_ROLE_GUARD && auth.context.role === "frontdesk" && auth.context.branchId && String(bookingResult.data.branch_id || "") !== auth.context.branchId) {
+      return NextResponse.json({ error: "Forbidden booking access for current branch" }, { status: 403 });
+    }
+
+    if (!TEMP_DISABLE_ROLE_GUARD && auth.context.role === "member") {
+      const memberResult = await auth.supabase
+        .from("members")
+        .select("id")
+        .eq("auth_user_id", auth.context.userId)
+        .eq("tenant_id", auth.context.tenantId)
+        .maybeSingle();
+
+      if (memberResult.error || !memberResult.data) {
+        return NextResponse.json({ error: "Member not found" }, { status: 404 });
+      }
+
+      if (String(bookingResult.data.member_id || "") !== String(memberResult.data.id)) {
+        return NextResponse.json({ error: "Forbidden booking access" }, { status: 403 });
+      }
+    }
+
+    try {
+      const depositPayment = await createOrReuseBookingDepositPayment({
+        supabase: auth.supabase,
+        tenantId: auth.context.tenantId,
+        bookingId,
+        actorId: auth.context.userId,
+        channel: auth.context.role === "member" ? "online" : "frontdesk",
+      });
+
+      return NextResponse.json({
+        depositPayment: depositPayment.depositPayment,
+        paymentCreated: depositPayment.paymentCreated,
+        reusedPendingPayment: depositPayment.reusedPendingPayment,
+        voidedStalePendingPayment: depositPayment.voidedStalePendingPayment,
+        alreadyPaid: depositPayment.alreadyPaid,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Unable to create booking deposit payment" },
+        { status: 400 },
+      );
+    }
   }
 
   const { data: order, error: orderError } = await auth.supabase

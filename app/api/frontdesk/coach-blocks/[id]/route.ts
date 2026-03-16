@@ -13,8 +13,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (!auth.ok) return auth.response;
   if (!auth.context.tenantId) return NextResponse.json({ error: "Missing tenant context" }, { status: 400 });
 
-  const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
-  if (!shiftGuard.ok) return shiftGuard.response;
+  if (auth.context.role === "frontdesk") {
+    const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
+    if (!shiftGuard.ok) return shiftGuard.response;
+  }
 
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
@@ -23,6 +25,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const endsAt = toIso(body?.endsAt);
   const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
   const note = typeof body?.note === "string" && body.note.trim() ? body.note.trim() : null;
+  const blockType =
+    body?.blockType === "time_off" || body?.blockType === "blocked" || body?.blockType === "offsite" || body?.blockType === "other"
+      ? body.blockType
+      : null;
 
   const existing = await auth.supabase
     .from("coach_blocks")
@@ -76,13 +82,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (startsAt) updatePayload.starts_at = startsAt;
   if (endsAt) updatePayload.ends_at = endsAt;
   if (body?.note !== undefined) updatePayload.note = note;
+  if (blockType) updatePayload.block_type = blockType;
 
   const updated = await auth.supabase
     .from("coach_blocks")
     .update(updatePayload)
     .eq("tenant_id", auth.context.tenantId)
     .eq("id", id)
-    .select("id, coach_id, starts_at, ends_at, reason, note, status")
+    .select("id, coach_id, branch_id, starts_at, ends_at, reason, note, status, block_type")
     .maybeSingle();
   if (updated.error) return NextResponse.json({ error: updated.error.message }, { status: 500 });
 

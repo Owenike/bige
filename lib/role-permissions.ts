@@ -3,10 +3,14 @@ export type PermissionRole =
   | "manager"
   | "supervisor"
   | "branch_manager"
+  | "store_owner"
+  | "store_manager"
   | "frontdesk"
   | "coach"
+  | "therapist"
   | "sales"
-  | "member";
+  | "member"
+  | "customer";
 
 export const PERMISSION_ACTIONS = [
   "staff.read",
@@ -56,6 +60,10 @@ export const PERMISSION_ACTIONS = [
   "crm.write",
   "crm.assign",
   "crm.followup",
+  "storefront.read",
+  "storefront.write",
+  "booking_settings.read",
+  "booking_settings.write",
 ] as const;
 
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
@@ -78,6 +86,9 @@ export const ROLE_PERMISSIONS: Record<PermissionRole, readonly PermissionAction[
     "coach_slots.read",
     "coach_slots.write",
     "reports.read",
+    "notifications.overview.read",
+    "notifications.delivery_events.read",
+    "notifications.delivery_events.write",
     "refunds.request",
     "refunds.approve",
     "orders.void.request",
@@ -97,6 +108,10 @@ export const ROLE_PERMISSIONS: Record<PermissionRole, readonly PermissionAction[
     "crm.write",
     "crm.assign",
     "crm.followup",
+    "storefront.read",
+    "storefront.write",
+    "booking_settings.read",
+    "booking_settings.write",
   ],
   supervisor: [
     "staff.read",
@@ -107,6 +122,8 @@ export const ROLE_PERMISSIONS: Record<PermissionRole, readonly PermissionAction[
     "branches.read",
     "coach_slots.read",
     "reports.read",
+    "notifications.overview.read",
+    "notifications.delivery_events.read",
     "refunds.request",
     "orders.void.request",
     "pass_adjustments.request",
@@ -116,6 +133,8 @@ export const ROLE_PERMISSIONS: Record<PermissionRole, readonly PermissionAction[
     "plans.read",
     "member_plans.read",
     "crm.read",
+    "storefront.read",
+    "booking_settings.read",
   ],
   branch_manager: [
     "staff.read",
@@ -126,6 +145,9 @@ export const ROLE_PERMISSIONS: Record<PermissionRole, readonly PermissionAction[
     "branches.read",
     "coach_slots.read",
     "reports.read",
+    "notifications.overview.read",
+    "notifications.delivery_events.read",
+    "notifications.delivery_events.write",
     "refunds.request",
     "orders.void.request",
     "pass_adjustments.request",
@@ -135,6 +157,79 @@ export const ROLE_PERMISSIONS: Record<PermissionRole, readonly PermissionAction[
     "plans.read",
     "member_plans.read",
     "crm.read",
+    "storefront.read",
+    "storefront.write",
+    "booking_settings.read",
+    "booking_settings.write",
+  ],
+  store_owner: [
+    "staff.read",
+    "staff.create",
+    "staff.update",
+    "staff.disable",
+    "members.read",
+    "members.update",
+    "products.read",
+    "products.write",
+    "services.read",
+    "services.write",
+    "branches.read",
+    "branches.write",
+    "coach_slots.read",
+    "coach_slots.write",
+    "reports.read",
+    "notifications.overview.read",
+    "notifications.delivery_events.read",
+    "notifications.delivery_events.write",
+    "refunds.request",
+    "refunds.approve",
+    "orders.void.request",
+    "orders.void.approve",
+    "pass_adjustments.request",
+    "pass_adjustments.approve",
+    "audit.read",
+    "orders.read",
+    "orders.write",
+    "payments.read",
+    "payments.write",
+    "plans.read",
+    "plans.write",
+    "member_plans.read",
+    "member_plans.write",
+    "crm.read",
+    "crm.write",
+    "crm.assign",
+    "crm.followup",
+    "storefront.read",
+    "storefront.write",
+    "booking_settings.read",
+    "booking_settings.write",
+  ],
+  store_manager: [
+    "staff.read",
+    "members.read",
+    "members.update",
+    "products.read",
+    "services.read",
+    "branches.read",
+    "coach_slots.read",
+    "reports.read",
+    "notifications.overview.read",
+    "notifications.delivery_events.read",
+    "notifications.delivery_events.write",
+    "refunds.request",
+    "orders.void.request",
+    "pass_adjustments.request",
+    "audit.read",
+    "orders.read",
+    "payments.read",
+    "plans.read",
+    "member_plans.read",
+    "crm.read",
+    "storefront.read",
+    "storefront.write",
+    "booking_settings.read",
+    "booking_settings.write",
   ],
   frontdesk: [
     "members.read",
@@ -153,8 +248,14 @@ export const ROLE_PERMISSIONS: Record<PermissionRole, readonly PermissionAction[
     "pass_adjustments.request",
     "crm.write",
     "crm.followup",
+    "storefront.read",
+    "booking_settings.read",
   ],
   coach: [
+    "members.read",
+    "coach_slots.read",
+  ],
+  therapist: [
     "members.read",
     "coach_slots.read",
   ],
@@ -173,6 +274,7 @@ export const ROLE_PERMISSIONS: Record<PermissionRole, readonly PermissionAction[
     "crm.followup",
   ],
   member: [],
+  customer: [],
 };
 
 export function normalizePermissionRole(input: string | null | undefined): PermissionRole | null {
@@ -182,10 +284,14 @@ export function normalizePermissionRole(input: string | null | undefined): Permi
     input === "manager" ||
     input === "supervisor" ||
     input === "branch_manager" ||
+    input === "store_owner" ||
+    input === "store_manager" ||
     input === "frontdesk" ||
     input === "coach" ||
+    input === "therapist" ||
     input === "sales" ||
-    input === "member"
+    input === "member" ||
+    input === "customer"
   ) {
     return input;
   }

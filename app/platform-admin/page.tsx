@@ -335,6 +335,11 @@ export default function PlatformAdminPage() {
           <div className="fdGlassPanel">
             <div className="fdEyebrow">{zh ? "平台管理" : "PLATFORM ADMIN"}</div>
             <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>{zh ? "租戶與帳號控制台" : "Tenant and Account Console"}</h1>
+            <div className="actions" style={{ marginTop: 10 }}>
+              <Link className="fdPillBtn fdPillBtnPrimary" href="/platform-admin/overview">Operations Overview</Link>
+              <Link className="fdPillBtn" href="/platform-admin/tenant-ops">Tenant Ops</Link>
+              <Link className="fdPillBtn" href="/platform-admin/feature-flags">Feature Flags</Link>
+            </div>
           </div>
         </section>
         {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}

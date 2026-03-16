@@ -1,0 +1,609 @@
+.page {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 520px at 0% 0%, rgba(223, 220, 213, 0.62), transparent 58%),
+    linear-gradient(180deg, #efebe4 0%, #f7f5f0 42%, #f2efe9 100%);
+  color: #101010;
+}
+
+.shell {
+  width: min(1280px, calc(100vw - 48px));
+  margin: 0 auto;
+  padding: 28px 0 48px;
+}
+
+.desktopOnly {
+  display: block;
+}
+
+.mobileOnly {
+  display: none;
+}
+
+.header {
+  position: sticky;
+  top: 20px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding: 12px 16px;
+  border: 1px solid rgba(16, 16, 16, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 20px 32px rgba(16, 16, 16, 0.05);
+  backdrop-filter: blur(16px);
+}
+
+.brandLockup {
+  display: grid;
+  gap: 2px;
+}
+
+.brandEyebrow {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #868686;
+}
+
+.brandTitle {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.brandBranch {
+  font-size: 12px;
+  color: #767676;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.navLink {
+  font-size: 13px;
+  color: #525252;
+}
+
+.ctaButton,
+.secondaryButton,
+.stickyButton,
+.summaryButton,
+.slotButton,
+.choiceCard,
+.contactLink {
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.ctaButton,
+.stickyButton,
+.summaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 18px;
+  border: 1px solid #111111;
+  border-radius: 999px;
+  background: #111111;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(16, 16, 16, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #111111;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ctaButton:hover,
+.secondaryButton:hover,
+.stickyButton:hover,
+.summaryButton:hover,
+.contactLink:hover,
+.navLink:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+  gap: 20px;
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+
+.heroPanel,
+.heroMedia,
+.contentCard,
+.stepCard,
+.summaryCard,
+.stickyBar,
+.mobileShell,
+.noticeCard,
+.contactCard,
+.serviceCard,
+.emptyCard,
+.message,
+.inlineNotice {
+  border: 1px solid rgba(16, 16, 16, 0.08);
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 24px 44px rgba(16, 16, 16, 0.05);
+}
+
+.heroPanel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 28px;
+}
+
+.heroMedia {
+  position: relative;
+  min-height: 420px;
+  overflow: hidden;
+  background:
+    linear-gradient(140deg, rgba(16, 16, 16, 0.28), rgba(16, 16, 16, 0.08)),
+    linear-gradient(140deg, #d9d3ca, #f5f2ec);
+}
+
+.heroMedia::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(16, 16, 16, 0.06), rgba(16, 16, 16, 0.38));
+}
+
+.heroImage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.heroOverlay {
+  position: absolute;
+  inset: auto 20px 20px 20px;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  color: #ffffff;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.heroTitle {
+  margin: 0;
+  font-size: clamp(42px, 5.2vw, 78px);
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+  font-weight: 600;
+}
+
+.heroSubtitle {
+  margin: 0;
+  max-width: 54ch;
+  color: #525252;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.heroSubtle {
+  margin: 0;
+  max-width: 56ch;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.heroActions,
+.heroMeta,
+.serviceMeta,
+.summaryActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.metaPill,
+.summaryPill,
+.stepStatus,
+.miniBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(16, 16, 16, 0.08);
+  border-radius: 999px;
+  background: rgba(248, 247, 244, 0.96);
+  color: #4e4e4e;
+  font-size: 12px;
+}
+
+.sectionGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 460px);
+  gap: 20px;
+  align-items: start;
+}
+
+.contentColumn,
+.bookingColumn,
+.stepList,
+.stepBody,
+.summaryGrid,
+.stickyMeta,
+.mobileStack,
+.mobileStepGroup,
+.mobileServiceStrip,
+.loadingState {
+  display: grid;
+  gap: 14px;
+}
+
+.bookingColumn {
+  position: sticky;
+  top: 108px;
+}
+
+.contentCard,
+.noticeCard,
+.contactCard,
+.summaryCard {
+  padding: 24px;
+}
+
+.sectionEyebrow {
+  margin: 0 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #8a8a8a;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: clamp(28px, 3.1vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+.sectionCopy,
+.serviceDescription,
+.choiceDescription,
+.summaryMuted,
+.helperText,
+.emptyText,
+.contactBody,
+.noticeBody,
+.stepDescription {
+  margin: 0;
+  color: #666666;
+  line-height: 1.7;
+  font-size: 13px;
+}
+
+.serviceGrid,
+.choiceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.serviceCard,
+.choiceCard {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid rgba(16, 16, 16, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.94);
+  text-align: left;
+  cursor: pointer;
+}
+
+.serviceCard.isSelected,
+.choiceCard.isSelected,
+.slotButton.isSelected {
+  border-color: rgba(16, 16, 16, 0.22);
+  box-shadow: 0 20px 36px rgba(16, 16, 16, 0.08);
+}
+
+.isSelected {
+  border-color: rgba(16, 16, 16, 0.22);
+  box-shadow: 0 20px 36px rgba(16, 16, 16, 0.08);
+}
+
+.serviceTopLine,
+.choiceTopLine,
+.stepHead,
+.summaryRow,
+.noticeItem,
+.contactItem,
+.hourItem,
+.stickyBar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.serviceName,
+.choiceTitle,
+.stepTitle {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.fieldBlock {
+  display: grid;
+  gap: 8px;
+}
+
+.isFull {
+  grid-column: 1 / -1;
+}
+
+.fieldLabel,
+.summaryLabel,
+.stickyTitle {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8a8a8a;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  border: 1px solid rgba(16, 16, 16, 0.08);
+  border-radius: 22px;
+  background: #faf9f7;
+  color: #111111;
+  padding: 14px 16px;
+  font: inherit;
+}
+
+.textarea {
+  min-height: 108px;
+  resize: vertical;
+}
+
+.calendarWrap {
+  display: grid;
+  gap: 12px;
+}
+
+.slotGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.slotButton {
+  min-height: 48px;
+  border: 1px solid rgba(16, 16, 16, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #111111;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.summaryRow {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(16, 16, 16, 0.06);
+}
+
+.summaryRow:last-child,
+.noticeItem:first-child,
+.contactItem:first-child,
+.hourItem:first-child {
+  padding-bottom: 0;
+  padding-top: 0;
+  border-bottom: 0;
+  border-top: 0;
+}
+
+.summaryValue {
+  text-align: right;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #111111;
+}
+
+.summaryPrice {
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-weight: 600;
+}
+
+.stickyBar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 45;
+  align-items: center;
+  padding: 14px 16px;
+  margin-top: 16px;
+  border-radius: 26px;
+}
+
+.stickyAmount {
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-weight: 600;
+}
+
+.noticeList,
+.contactList,
+.hoursList {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.noticeItem,
+.contactItem,
+.hourItem {
+  padding-top: 10px;
+  border-top: 1px solid rgba(16, 16, 16, 0.06);
+}
+
+.contactLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(16, 16, 16, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #111111;
+}
+
+.emptyCard,
+.message,
+.inlineNotice {
+  padding: 16px 18px;
+}
+
+.message.isError {
+  border-color: rgba(133, 56, 56, 0.18);
+  background: rgba(255, 246, 246, 0.96);
+  color: #7a2f2f;
+}
+
+.isError {
+  border-color: rgba(133, 56, 56, 0.18);
+  background: rgba(255, 246, 246, 0.96);
+  color: #7a2f2f;
+}
+
+.message.isSuccess {
+  border-color: rgba(50, 106, 76, 0.16);
+  background: rgba(247, 252, 248, 0.96);
+  color: #245437;
+}
+
+.isSuccess {
+  border-color: rgba(50, 106, 76, 0.16);
+  background: rgba(247, 252, 248, 0.96);
+  color: #245437;
+}
+
+.mobileShell {
+  padding: 16px;
+}
+
+.mobileHeroMedia {
+  position: relative;
+  min-height: 280px;
+  overflow: hidden;
+  border-radius: 28px;
+  margin-top: 14px;
+  background:
+    linear-gradient(140deg, rgba(16, 16, 16, 0.28), rgba(16, 16, 16, 0.08)),
+    linear-gradient(140deg, #d9d3ca, #f5f2ec);
+}
+
+.mobileHeroMedia::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(16, 16, 16, 0.04), rgba(16, 16, 16, 0.4));
+}
+
+.mobileHeroContent {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  color: #ffffff;
+}
+
+.mobileTitle {
+  margin: 0;
+  font-size: clamp(32px, 10vw, 48px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  font-weight: 600;
+}
+
+.loadingState {
+  min-height: 60vh;
+  place-items: center;
+  color: #666666;
+  font-size: 14px;
+}
+
+@media (max-width: 960px) {
+  .shell {
+    width: min(100vw, calc(100vw - 20px));
+    padding: 12px 0 28px;
+  }
+
+  .desktopOnly {
+    display: none;
+  }
+
+  .mobileOnly {
+    display: block;
+  }
+
+  .serviceGrid,
+  .choiceGrid,
+  .fieldGrid,
+  .slotGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .stickyBar {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+}

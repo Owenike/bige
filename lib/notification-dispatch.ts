@@ -3,12 +3,13 @@ import { createSupabaseAdminClient } from "./supabase/admin";
 import {
   listDeliveryRows,
   updateDeliveryStatus,
-  type DeliveryChannel,
   type DeliveryRow,
   type DeliveryStatus,
 } from "./notification-ops";
-import { buildExternalContent, resolveExternalChannels, shouldRetryExternalFailure } from "./notification-external";
-import { sendNotification } from "./integrations/notify";
+import { resolveExternalChannels, shouldRetryExternalFailure } from "./notification-external";
+import { shouldSkipBookingDelivery } from "./booking-notifications";
+import { dispatchNotificationViaAdapter, type DeliveryRuntimeCache } from "./notification-delivery-adapter";
+import { ingestNotificationDeliveryEvent } from "./notification-delivery-events";
 
 type DispatchMode = "inline" | "job";
 
@@ -33,15 +34,6 @@ type DispatchSummary = {
 const PROVIDER_RESPONSE_MAX_STRING = 300;
 const PROVIDER_RESPONSE_MAX_KEYS = 20;
 const PROVIDER_RESPONSE_MAX_DEPTH = 3;
-
-type AttemptOutcome = {
-  status: DeliveryStatus;
-  errorCode: string | null;
-  errorMessage: string | null;
-  shouldRetry: boolean;
-  providerMessageId: string | null;
-  providerResponse: Record<string, unknown> | null;
-};
 
 function nowIso() {
   return new Date().toISOString();
@@ -83,6 +75,8 @@ function sanitizeProviderResponse(payload: Record<string, unknown> | null): Reco
 }
 
 function shouldAttemptNow(row: DeliveryRow, includeFailed = false, mode: DispatchMode = "job") {
+  if (row.status === "cancelled") return false;
+  if (row.scheduled_for && new Date(row.scheduled_for).getTime() > Date.now()) return false;
   const maxAttempts = row.max_attempts || 3;
   const attempts = row.attempts || 0;
   if (row.status === "pending") return true;
@@ -97,228 +91,76 @@ function shouldAttemptNow(row: DeliveryRow, includeFailed = false, mode: Dispatc
   return false;
 }
 
-async function resolveRecipientEmail(params: {
-  supabase: SupabaseClient;
-  recipientUserId: string | null;
-  cache: Map<string, string | null>;
-}) {
-  if (!params.recipientUserId) {
-    return { email: null, errorCode: "RECIPIENT_CONTACT_MISSING", errorMessage: "recipient_user_id is missing" };
-  }
-  if (params.cache.has(params.recipientUserId)) {
-    const email = params.cache.get(params.recipientUserId) || null;
-    return email
-      ? { email, errorCode: null, errorMessage: null }
-      : { email: null, errorCode: "RECIPIENT_CONTACT_MISSING", errorMessage: "Recipient email is missing" };
-  }
-  const userResult = await params.supabase.auth.admin.getUserById(params.recipientUserId);
-  if (userResult.error) {
-    return {
-      email: null,
-      errorCode: "RECIPIENT_LOOKUP_FAILED",
-      errorMessage: userResult.error.message,
-    };
-  }
-  const email = userResult.data.user?.email?.trim()?.toLowerCase() || null;
-  params.cache.set(params.recipientUserId, email);
-  return email
-    ? { email, errorCode: null, errorMessage: null }
-    : { email: null, errorCode: "RECIPIENT_CONTACT_MISSING", errorMessage: "Recipient email is missing" };
-}
-
-async function attemptWebhook(row: DeliveryRow): Promise<AttemptOutcome> {
-  const endpoint = process.env.NOTIFICATION_WEBHOOK_URL || "";
-  if (!endpoint) {
-    return {
-      status: "skipped",
-      errorCode: "CHANNEL_NOT_CONFIGURED",
-      errorMessage: "NOTIFICATION_WEBHOOK_URL is not configured",
-      shouldRetry: false,
-      providerMessageId: null,
-        providerResponse: {
-          channel: "webhook",
-          configured: false,
-          reason: "missing_endpoint",
-        },
-      };
-  }
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(process.env.NOTIFICATION_WEBHOOK_TOKEN
-          ? { Authorization: `Bearer ${process.env.NOTIFICATION_WEBHOOK_TOKEN}` }
-          : {}),
-      },
-      body: JSON.stringify({
-        deliveryId: row.id,
-        tenantId: row.tenant_id,
-        branchId: row.branch_id,
-        notificationId: row.notification_id,
-        opportunityId: row.opportunity_id,
-        sourceRefType: row.source_ref_type,
-        sourceRefId: row.source_ref_id,
-        recipientUserId: row.recipient_user_id,
-        recipientRole: row.recipient_role,
-        channel: row.channel,
-        payload: row.payload || {},
-        createdAt: row.created_at,
-      }),
-    });
-    const responseText = await response.text();
-    if (response.ok) {
-      return {
-        status: "sent",
-        errorCode: null,
-        errorMessage: null,
-        shouldRetry: false,
-        providerMessageId: null,
-        providerResponse: {
-          channel: "webhook",
-          status: response.status,
-          response: responseText.slice(0, 500),
-          ok: true,
-        },
-      };
-    }
-    return {
-      status: "failed",
-      errorCode: `HTTP_${response.status}`,
-      errorMessage: `Webhook responded with ${response.status}: ${responseText.slice(0, 200)}`,
-      shouldRetry: response.status >= 500 || response.status === 429,
-      providerMessageId: null,
-        providerResponse: {
-          channel: "webhook",
-          status: response.status,
-          response: responseText.slice(0, 500),
-          ok: false,
-        },
-      };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Webhook request failed";
-    const timeout = errorMessage.toLowerCase().includes("abort") || errorMessage.toLowerCase().includes("timeout");
-    return {
-      status: "failed",
-      errorCode: timeout ? "TIMEOUT" : "NETWORK_ERROR",
-      errorMessage,
-      shouldRetry: true,
-      providerMessageId: null,
-      providerResponse: {
-        channel: "webhook",
-        ok: false,
-        timeout,
-      },
-    };
-  }
-}
-
-function classifyExternalFailure(params: {
-  channel: DeliveryChannel;
-  errorText: string;
-}) {
-  const text = params.errorText.toLowerCase();
-  if (text.includes("missing email endpoint") || text.includes("missing webhook endpoint")) {
-    return { errorCode: "CHANNEL_NOT_CONFIGURED", shouldRetry: false, status: "skipped" as DeliveryStatus };
-  }
-  if (text.includes("abort") || text.includes("timeout") || text.includes("timed out")) {
-    return { errorCode: "TIMEOUT", shouldRetry: true, status: "failed" as DeliveryStatus };
-  }
-  const httpCodeMatch = /\bhttp\s*(\d{3})\b/i.exec(params.errorText);
-  if (httpCodeMatch) {
-    const httpCode = Number(httpCodeMatch[1]);
-    return {
-      errorCode: `HTTP_${httpCode}`,
-      shouldRetry: httpCode >= 500 || httpCode === 429,
-      status: "failed" as DeliveryStatus,
-    };
-  }
-  return {
-    errorCode: `${String(params.channel).toUpperCase()}_PROVIDER_ERROR`,
-    shouldRetry: true,
-    status: "failed" as DeliveryStatus,
-  };
-}
-
-async function attemptEmail(params: {
+async function recordDeliveryEvent(params: {
   supabase: SupabaseClient;
   row: DeliveryRow;
-  recipientCache: Map<string, string | null>;
-}): Promise<AttemptOutcome> {
-  const recipient = await resolveRecipientEmail({
+  eventType: "delivered" | "failed";
+  provider: string | null;
+  providerMessageId: string | null;
+  providerResponse: Record<string, unknown> | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  statusAfter?: DeliveryStatus;
+  markDeadLetter?: boolean;
+}) {
+  await ingestNotificationDeliveryEvent({
     supabase: params.supabase,
-    recipientUserId: params.row.recipient_user_id,
-    cache: params.recipientCache,
-  });
-  if (!recipient.email) {
-    return {
-      status: "skipped",
-      errorCode: recipient.errorCode,
-      errorMessage: recipient.errorMessage,
-      shouldRetry: false,
-      providerMessageId: null,
-      providerResponse: {
-        channel: "email",
-        recipientLookup: "failed",
-      },
-    };
-  }
-  const content = buildExternalContent(params.row);
-  const notifyResult = await sendNotification({
-    channel: "email",
-    target: recipient.email,
-    message: content.text,
-    templateKey: content.templateKey,
-  });
-  if (notifyResult.ok) {
-    return {
-      status: "sent",
-      errorCode: null,
-      errorMessage: null,
-      shouldRetry: false,
-      providerMessageId: notifyResult.providerRef,
-      providerResponse: {
-        channel: "email",
-        templateKey: content.templateKey,
-        recipient: recipient.email,
-        subject: content.subject,
-      },
-    };
-  }
-
-  const errorText = notifyResult.error || "EMAIL_SEND_FAILED";
-  const classified = classifyExternalFailure({
-    channel: "email",
-    errorText,
-  });
-  const shouldRetry = shouldRetryExternalFailure({
-    channel: "email",
-    errorCode: classified.errorCode,
-    errorMessage: errorText,
-  });
-
-  return {
-    status: classified.status,
-    errorCode: classified.errorCode,
-    errorMessage: errorText,
-    shouldRetry: classified.shouldRetry && shouldRetry,
-    providerMessageId: notifyResult.providerRef,
-    providerResponse: {
-      channel: "email",
-      templateKey: content.templateKey,
-      recipient: recipient.email,
-      providerRef: notifyResult.providerRef,
-      ok: false,
+    deliveryId: params.row.id,
+    eventType: params.eventType,
+    provider: params.provider,
+    providerMessageId: params.providerMessageId,
+    providerResponse: params.providerResponse || undefined,
+    errorCode: params.errorCode || null,
+    errorMessage: params.errorMessage || null,
+    statusAfter: params.statusAfter || null,
+    markDeadLetter: params.markDeadLetter,
+    applyStatusUpdate: false,
+    metadata: {
+      bookingId: params.row.booking_id,
+      sourceRefType: params.row.source_ref_type,
     },
-  };
+  }).catch(() => null);
 }
 
 async function dispatchOne(params: {
   supabase: SupabaseClient;
   row: DeliveryRow;
-  mode: DispatchMode;
-  recipientCache: Map<string, string | null>;
+  runtimeCache: DeliveryRuntimeCache;
 }) {
+  const bookingSkip = await shouldSkipBookingDelivery({
+    supabase: params.supabase,
+    row: params.row,
+  });
+  if (bookingSkip?.shouldSkip) {
+    const lastAttemptAt = nowIso();
+    const updated = await updateDeliveryStatus({
+      supabase: params.supabase,
+      id: params.row.id,
+      status: bookingSkip.status,
+      attempts: params.row.attempts || 0,
+      retryCount: params.row.retry_count || 0,
+      lastAttemptAt: params.row.last_attempt_at,
+      sentAt: params.row.sent_at,
+      deliveredAt: params.row.delivered_at,
+      failedAt: bookingSkip.status === "failed" ? lastAttemptAt : params.row.failed_at,
+      deadLetterAt: params.row.dead_letter_at,
+      cancelledAt: bookingSkip.status === "cancelled" ? lastAttemptAt : params.row.cancelled_at,
+      nextRetryAt: null,
+      lastError: bookingSkip.reason,
+      errorCode: bookingSkip.status === "failed" ? "BOOKING_NOTIFICATION_INVALID" : null,
+      errorMessage: bookingSkip.status === "failed" ? bookingSkip.reason : null,
+      skippedReason: bookingSkip.status === "cancelled" ? bookingSkip.reason : params.row.skipped_reason,
+      failureReason: bookingSkip.status === "failed" ? bookingSkip.reason : params.row.failure_reason,
+      provider: params.row.provider,
+      providerMessageId: params.row.provider_message_id,
+      providerResponse: sanitizeProviderResponse({
+        reason: bookingSkip.reason,
+        bookingId: params.row.booking_id,
+      }),
+    });
+    return { ok: updated.ok, status: bookingSkip.status };
+  }
+
   const attempts = (params.row.attempts || 0) + 1;
   const maxAttempts = params.row.max_attempts || 3;
   const lastAttemptAt = nowIso();
@@ -344,6 +186,7 @@ async function dispatchOne(params: {
       lastError: null,
       errorCode: null,
       errorMessage: null,
+      provider: params.row.provider || "in_app",
       providerMessageId: params.row.provider_message_id,
       providerResponse: sanitizeProviderResponse(params.row.provider_response),
     });
@@ -381,29 +224,11 @@ async function dispatchOne(params: {
     return { ok: updated.ok, status: "skipped" as DeliveryStatus };
   }
 
-  let outcome: AttemptOutcome;
-
-  if (params.row.channel === "email") {
-    outcome = await attemptEmail({
-      supabase: params.supabase,
-      row: params.row,
-      recipientCache: params.recipientCache,
-    });
-  } else if (params.row.channel === "webhook") {
-    outcome = await attemptWebhook(params.row);
-  } else {
-    outcome = {
-      status: "skipped",
-      errorCode: "CHANNEL_NOT_IMPLEMENTED",
-      errorMessage: `Channel ${params.row.channel} is not implemented in this phase`,
-      shouldRetry: false,
-      providerMessageId: null,
-      providerResponse: {
-        channel: params.row.channel,
-        reason: "not_implemented",
-      },
-    };
-  }
+  const outcome = await dispatchNotificationViaAdapter({
+    supabase: params.supabase,
+    row: params.row,
+    cache: params.runtimeCache,
+  });
 
   if (outcome.status === "sent") {
     const updated = await updateDeliveryStatus({
@@ -417,13 +242,28 @@ async function dispatchOne(params: {
       deliveredAt: null,
       failedAt: null,
       deadLetterAt: null,
+      cancelledAt: null,
       lastError: null,
       nextRetryAt: null,
       errorCode: null,
       errorMessage: null,
+      skippedReason: null,
+      failureReason: null,
+      provider: outcome.provider,
       providerMessageId: outcome.providerMessageId,
       providerResponse: sanitizeProviderResponse(outcome.providerResponse),
     });
+    if (updated.ok) {
+      await recordDeliveryEvent({
+        supabase: params.supabase,
+        row: params.row,
+        eventType: "delivered",
+        provider: outcome.provider,
+        providerMessageId: outcome.providerMessageId,
+        providerResponse: sanitizeProviderResponse(outcome.providerResponse),
+        statusAfter: "sent",
+      });
+    }
     return { ok: updated.ok, status: "sent" as DeliveryStatus };
   }
 
@@ -451,13 +291,31 @@ async function dispatchOne(params: {
     deliveredAt: null,
     failedAt: canRetry || terminalStatus === "skipped" ? null : lastAttemptAt,
     deadLetterAt: terminalStatus === "dead_letter" ? lastAttemptAt : null,
+    cancelledAt: null,
     nextRetryAt: canRetry ? nextRetryIso(15) : null,
     errorCode: outcome.errorCode,
     errorMessage: outcome.errorMessage,
     lastError: outcome.errorMessage,
+    skippedReason: terminalStatus === "skipped" ? outcome.errorMessage : null,
+    failureReason: terminalStatus === "dead_letter" || terminalStatus === "retrying" ? outcome.errorMessage : null,
+    provider: outcome.provider,
     providerMessageId: outcome.providerMessageId,
     providerResponse: sanitizeProviderResponse(outcome.providerResponse),
   });
+  if (updated.ok && terminalStatus !== "skipped") {
+    await recordDeliveryEvent({
+      supabase: params.supabase,
+      row: params.row,
+      eventType: "failed",
+      provider: outcome.provider,
+      providerMessageId: outcome.providerMessageId,
+      providerResponse: sanitizeProviderResponse(outcome.providerResponse),
+      errorCode: outcome.errorCode,
+      errorMessage: outcome.errorMessage,
+      statusAfter: terminalStatus,
+      markDeadLetter: terminalStatus === "dead_letter",
+    });
+  }
   return { ok: updated.ok, status: terminalStatus };
 }
 
@@ -485,14 +343,15 @@ export async function dispatchNotificationDeliveries(params: DispatchParams): Pr
     retrying: 0,
     deadLetter: 0,
   };
-  const recipientCache = new Map<string, string | null>();
+  const runtimeCache: DeliveryRuntimeCache = {
+    settings: new Map(),
+  };
 
   for (const row of candidates) {
     const outcome = await dispatchOne({
       supabase,
       row,
-      mode: params.mode,
-      recipientCache,
+      runtimeCache,
     });
     if (!outcome.ok) continue;
     summary.processed += 1;

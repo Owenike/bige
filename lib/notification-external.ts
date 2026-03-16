@@ -17,6 +17,20 @@ export function resolveExternalChannels(params: {
   const role = params.recipientRole;
   if (!role) return [];
 
+  if (
+    (role === "member" || role === "customer") &&
+    [
+      "booking_created",
+      "booking_rescheduled",
+      "booking_cancelled",
+      "booking_reminder_day_before",
+      "booking_reminder_1h",
+      "booking_deposit_pending",
+    ].includes(params.eventType)
+  ) {
+    return ["email", "line", "sms"];
+  }
+
   if (role === "frontdesk" || role === "coach" || role === "member") {
     return [];
   }

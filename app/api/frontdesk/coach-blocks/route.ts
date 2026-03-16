@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
   let query = auth.supabase
     .from("coach_blocks")
-    .select("id, coach_id, starts_at, ends_at, reason, note, status, created_at, updated_at")
+    .select("id, coach_id, branch_id, starts_at, ends_at, reason, note, status, block_type, created_at, updated_at")
     .eq("tenant_id", auth.context.tenantId)
     .order("starts_at", { ascending: true })
     .limit(400);
@@ -51,15 +51,22 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
   if (!auth.context.tenantId) return NextResponse.json({ error: "Missing tenant context" }, { status: 400 });
 
-  const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
-  if (!shiftGuard.ok) return shiftGuard.response;
+  if (auth.context.role === "frontdesk") {
+    const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
+    if (!shiftGuard.ok) return shiftGuard.response;
+  }
 
   const body = await request.json().catch(() => null);
   const coachId = typeof body?.coachId === "string" ? body.coachId.trim() : "";
+  const branchId = typeof body?.branchId === "string" ? body.branchId.trim() : auth.context.branchId;
   const startsAt = toIso(body?.startsAt);
   const endsAt = toIso(body?.endsAt);
   const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
   const note = typeof body?.note === "string" && body.note.trim() ? body.note.trim() : null;
+  const blockType =
+    body?.blockType === "time_off" || body?.blockType === "blocked" || body?.blockType === "offsite" || body?.blockType === "other"
+      ? body.blockType
+      : "blocked";
 
   if (!coachId || !startsAt || !endsAt || !reason) {
     return NextResponse.json({ error: "coachId, startsAt, endsAt, reason are required" }, { status: 400 });
@@ -113,16 +120,17 @@ export async function POST(request: Request) {
     .from("coach_blocks")
     .insert({
       tenant_id: auth.context.tenantId,
-      branch_id: auth.context.branchId,
+      branch_id: branchId || null,
       coach_id: coachId,
       starts_at: startsAt,
       ends_at: endsAt,
       reason,
       note,
+      block_type: blockType,
       status: "active",
       created_by: auth.context.userId,
     })
-    .select("id, coach_id, starts_at, ends_at, reason, note, status")
+    .select("id, coach_id, branch_id, starts_at, ends_at, reason, note, status, block_type")
     .maybeSingle();
   if (insert.error) {
     if (isMissingCoachBlocksTable(insert.error.message)) {
@@ -140,9 +148,11 @@ export async function POST(request: Request) {
     reason,
     payload: {
       coachId,
+      branchId: branchId || null,
       startsAt,
       endsAt,
       note,
+      blockType,
     },
   }).catch(() => null);
 

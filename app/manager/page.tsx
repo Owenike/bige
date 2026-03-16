@@ -531,15 +531,24 @@ export default function ManagerDashboardPage() {
         <section className="fdGlassSubPanel" style={{ padding: 14 }}>
           <h2 className="sectionTitle">{zh ? "\u7ba1\u7406\u529f\u80fd" : "Management Areas"}</h2>
           <div className="actions" style={{ marginTop: 8 }}>
+            <a className="fdPillBtn fdPillBtnPrimary" href="/manager/bookings">{zh ? "預約總覽" : "Booking Overview"}</a>
+            <a className="fdPillBtn" href="/manager/reports">{zh ? "營運報表" : "Reports"}</a>
             <a className="fdPillBtn" href="/manager/products">{zh ? "\u5546\u54c1" : "Products"}</a>
             <a className="fdPillBtn" href="/manager/branches">{zh ? "\u5206\u9928" : "Branches"}</a>
             <a className="fdPillBtn" href="/manager/services">{zh ? "\u670d\u52d9" : "Services"}</a>
+            <a className="fdPillBtn" href="/manager/settings">{zh ? "\u8a2d\u5b9a\u4e2d\u6a1e" : "Settings Hub"}</a>
+            <a className="fdPillBtn" href="/manager/settings/brand">{zh ? "\u54c1\u724c\u5167\u5bb9" : "Brand Content"}</a>
+            <a className="fdPillBtn" href="/manager/settings/booking">{zh ? "\u9810\u7d04\u898f\u5247" : "Booking Rules"}</a>
+            <a className="fdPillBtn" href="/manager/therapists">{zh ? "\u5e2b\u5085\u6392\u73ed" : "Therapist Scheduling"}</a>
+            <a className="fdPillBtn" href="/manager/packages">{zh ? "\u5957\u7968\u7ba1\u7406" : "Packages"}</a>
             <a className="fdPillBtn" href="/manager/coach-slots">{zh ? "\u6559\u7df4\u6642\u6bb5" : "Coach Slots"}</a>
             <a className="fdPillBtn" href="/manager/staff">{zh ? "\u4eba\u54e1" : "Staff"}</a>
             <a className="fdPillBtn" href="/manager/plans">{zh ? "\u6703\u54e1\u65b9\u6848" : "Member Plans"}</a>
             <Link className="fdPillBtn" href="/manager/crm">{zh ? "CRM / 線索" : "CRM / Leads"}</Link>
             <Link className="fdPillBtn" href="/manager/opportunities">{zh ? "續約 / 回購機會" : "Renewal Opportunities"}</Link>
             <Link className="fdPillBtn" href="/manager/notifications-ops">{zh ? "通知運維" : "Notification Ops"}</Link>
+            <Link className="fdPillBtn" href="/manager/notifications">{zh ? "通知列表" : "Notifications"}</Link>
+            <Link className="fdPillBtn" href="/manager/notification-coverage">{zh ? "送達覆蓋率" : "Delivery Coverage"}</Link>
             <Link className="fdPillBtn" href="/manager/notifications-audit">{zh ? "通知稽核" : "Notification Audit"}</Link>
             <Link className="fdPillBtn" href="/manager/notifications-config-integrity">{zh ? "配置完整性" : "Config Integrity"}</Link>
             <Link className="fdPillBtn" href="/manager/notifications-preflight">{zh ? "預檢報告" : "Runtime Preflight"}</Link>

@@ -1,5 +1,5 @@
 ﻿export type NotifyChannel = "line" | "sms" | "email";
-type NotifyProvider = "generic" | "mock";
+type NotifyProvider = "generic" | "mock" | "line_messaging_api";
 
 export interface NotifyInput {
   channel: NotifyChannel;
@@ -41,7 +41,9 @@ interface NotifyChannelConfig {
 
 function providerFromEnv(value: string | undefined): NotifyProvider {
   const normalized = String(value || "").trim().toLowerCase();
-  return normalized === "mock" ? "mock" : "generic";
+  if (normalized === "mock") return "mock";
+  if (normalized === "line_messaging_api") return "line_messaging_api";
+  return "generic";
 }
 
 function timeoutFromEnv(value: string | undefined): number {
@@ -119,17 +121,21 @@ async function sendWithGenericProvider(input: NotifyInput, cfg: NotifyChannelCon
     });
 
     const text = await res.text();
+    const providerRef =
+      (input.channel === "line" ? res.headers.get("x-line-request-id") : null) ||
+      text.slice(0, 120) ||
+      null;
     if (!res.ok) {
       return {
         ok: false,
-        providerRef: null,
-        error: text || `HTTP ${res.status}`,
+        providerRef,
+        error: `HTTP ${res.status}${text ? ` ${text}` : ""}`,
       };
     }
 
     return {
       ok: true,
-      providerRef: text.slice(0, 120) || null,
+      providerRef,
       error: null,
     };
   } catch (error) {

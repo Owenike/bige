@@ -1,0 +1,267 @@
+.page {
+  display: grid;
+  gap: 16px;
+}
+
+.hero,
+.toolbar,
+.card,
+.panel,
+.tableCard {
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.45);
+}
+
+.title {
+  margin: 8px 0 0;
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1.04;
+}
+
+.subtitle {
+  margin: 10px 0 0;
+  color: rgba(17, 17, 17, 0.62);
+  max-width: 840px;
+}
+
+.actions,
+.presetRow,
+.chipRow,
+.toggleGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.toolbar {
+  display: grid;
+  gap: 12px;
+}
+
+.filterGrid,
+.metricGrid,
+.splitGrid,
+.tenantGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.filterGrid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.metricGrid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.splitGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tenantGrid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.48);
+}
+
+.control {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0 14px;
+}
+
+.metricLabel {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.46);
+}
+
+.metricValue {
+  margin-top: 10px;
+  font-size: 30px;
+  font-weight: 600;
+}
+
+.metricSub,
+.muted,
+.secondary {
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 13px;
+}
+
+.tenantCard {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 24px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.tenantTop,
+.rowBetween {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.tenantName {
+  margin: 0;
+  font-size: 20px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(17, 17, 17, 0.05);
+  border: 1px solid rgba(17, 17, 17, 0.06);
+  font-size: 12px;
+}
+
+.badgeMuted {
+  color: rgba(17, 17, 17, 0.56);
+}
+
+.badgeActive {
+  background: rgba(17, 17, 17, 0.08);
+}
+
+.miniGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.miniItem {
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(17, 17, 17, 0.03);
+}
+
+.miniValue {
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.capabilityCard {
+  padding: 14px;
+  border-radius: 20px;
+  background: rgba(17, 17, 17, 0.03);
+  display: grid;
+  gap: 10px;
+}
+
+.capabilityMeta {
+  display: grid;
+  gap: 4px;
+}
+
+.statusRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.statusChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.listItem {
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(17, 17, 17, 0.03);
+  display: grid;
+  gap: 4px;
+}
+
+.tableWrap {
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 14px 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.06);
+  vertical-align: top;
+}
+
+.table th {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.46);
+}
+
+.message {
+  border-radius: 18px;
+  padding: 12px 14px;
+}
+
+.error {
+  background: rgba(122, 92, 92, 0.12);
+  color: #7a5c5c;
+}
+
+.warning {
+  background: rgba(17, 17, 17, 0.04);
+}
+
+@media (max-width: 1080px) {
+  .filterGrid,
+  .splitGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .filterGrid,
+  .splitGrid,
+  .miniGrid {
+    grid-template-columns: 1fr;
+  }
+}

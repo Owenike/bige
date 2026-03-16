@@ -18,11 +18,10 @@ function buildDiffSummary(before: Record<string, unknown>, after: Record<string,
 }
 
 export async function GET(request: Request) {
-  const auth = await requireProfile(["platform_admin", "manager"], request);
+  const auth = await requireProfile(["platform_admin"], request);
   if (!auth.ok) return auth.response;
 
-  const tenantIdFromQuery = new URL(request.url).searchParams.get("tenantId");
-  const tenantId = auth.context.role === "platform_admin" ? tenantIdFromQuery : auth.context.tenantId;
+  const tenantId = new URL(request.url).searchParams.get("tenantId");
 
   if (!tenantId) return NextResponse.json({ error: "tenantId is required" }, { status: 400 });
 

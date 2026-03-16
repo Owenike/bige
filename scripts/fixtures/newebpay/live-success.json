@@ -1,0 +1,17 @@
+{
+  "name": "newebpay-live-success-sample",
+  "meta": {
+    "currentPaymentStatus": "pending",
+    "currentBookingPaymentStatus": "deposit_pending",
+    "depositRequiredAmount": 1000,
+    "depositPaidAmount": 0,
+    "finalAmount": 3000,
+    "paymentAmount": 1000
+  },
+  "payload": {
+    "paymentId": "pay_live_success",
+    "orderId": "order_live_success",
+    "status": "paid",
+    "gatewayRef": "gw_live_success"
+  }
+}

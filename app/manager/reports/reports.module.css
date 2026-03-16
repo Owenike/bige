@@ -1,0 +1,218 @@
+.page {
+  display: grid;
+  gap: 16px;
+}
+
+.heroCard {
+  padding: 20px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.46);
+}
+
+.title {
+  margin: 8px 0 0;
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1.04;
+}
+
+.subtitle {
+  margin: 10px 0 0;
+  max-width: 840px;
+  color: rgba(17, 17, 17, 0.66);
+}
+
+.toolbar {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.presetRow,
+.filterGrid,
+.cardGrid,
+.splitGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.presetRow {
+  grid-template-columns: repeat(auto-fit, minmax(120px, max-content));
+}
+
+.filterGrid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.fieldWide {
+  grid-column: span 2;
+}
+
+.label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.48);
+}
+
+.control {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0 14px;
+}
+
+.toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cardGrid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.metricCard,
+.panel,
+.tableCard {
+  padding: 16px;
+  border-radius: 24px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.metricLabel {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.45);
+}
+
+.metricValue {
+  margin-top: 10px;
+  font-size: 30px;
+  font-weight: 600;
+}
+
+.metricSub {
+  margin-top: 6px;
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 13px;
+}
+
+.splitGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.panelTitle {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.listItem {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(17, 17, 17, 0.03);
+}
+
+.primary {
+  font-weight: 600;
+}
+
+.secondary {
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 13px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+}
+
+.tableWrap {
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 14px 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.06);
+  vertical-align: top;
+}
+
+.table th {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.46);
+}
+
+.message {
+  border-radius: 18px;
+  padding: 12px 14px;
+}
+
+.messageError {
+  background: rgba(122, 92, 92, 0.12);
+  color: #7a5c5c;
+}
+
+.loading {
+  color: rgba(17, 17, 17, 0.58);
+}
+
+@media (max-width: 1080px) {
+  .filterGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .splitGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .filterGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fieldWide {
+    grid-column: span 1;
+  }
+}

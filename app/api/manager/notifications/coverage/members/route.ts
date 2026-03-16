@@ -1,0 +1,40 @@
+import { apiError, apiSuccess, requireProfile } from "../../../../../../lib/auth-context";
+import { listManagerMemberRecipientCoverage } from "../../../../../../lib/notification-coverage";
+import { requirePermission } from "../../../../../../lib/permissions";
+
+export async function GET(request: Request) {
+  const auth = await requireProfile(["manager", "supervisor", "branch_manager"], request);
+  if (!auth.ok) return auth.response;
+  if (!auth.context.tenantId) return apiError(400, "FORBIDDEN", "Missing tenant scope");
+
+  const permission = requirePermission(auth.context, "notifications.overview.read");
+  if (!permission.ok) return permission.response;
+
+  const searchParams = new URL(request.url).searchParams;
+  const bucketParam = searchParams.get("bucket");
+  const result = await listManagerMemberRecipientCoverage({
+    supabase: auth.supabase,
+    context: auth.context,
+    branchId: searchParams.get("branch_id"),
+    bucket:
+      bucketParam === "recipient_missing:email" ||
+      bucketParam === "recipient_missing:line_user_id" ||
+      bucketParam === "channel_disabled" ||
+      bucketParam === "provider_unconfigured" ||
+      bucketParam === "preference_opt_out" ||
+      bucketParam === "invalid_recipient" ||
+      bucketParam === "template_missing" ||
+      bucketParam === "other"
+        ? bucketParam
+        : null,
+    dateFrom: searchParams.get("date_from"),
+    dateTo: searchParams.get("date_to"),
+    search: searchParams.get("search"),
+    limit: Number(searchParams.get("limit") || 150),
+  });
+  if (!result.ok) return apiError(500, "INTERNAL_ERROR", result.error);
+
+  return apiSuccess({
+    items: result.items,
+  });
+}

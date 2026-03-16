@@ -1,0 +1,514 @@
+.page {
+  display: grid;
+  gap: 14px;
+}
+
+.heroCard {
+  padding: 18px;
+}
+
+.heroEyebrow {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.48);
+}
+
+.heroTitle {
+  margin: 8px 0 0;
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1.05;
+}
+
+.heroBody {
+  margin: 10px 0 0;
+  max-width: 820px;
+  color: rgba(17, 17, 17, 0.68);
+}
+
+.summaryGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.summaryCard {
+  padding: 14px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.summaryLabel {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.46);
+}
+
+.summaryValue {
+  margin-top: 10px;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.summaryHint {
+  margin-top: 6px;
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 13px;
+}
+
+.toolbarCard {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.toolbarHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbarTitle {
+  margin: 0;
+  font-size: 18px;
+}
+
+.toolbarHint {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: rgba(17, 17, 17, 0.58);
+}
+
+.filterGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.filterField {
+  display: grid;
+  gap: 6px;
+}
+
+.filterWide {
+  grid-column: span 2;
+}
+
+.filterLabel {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.5);
+}
+
+.control {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.88);
+  padding: 0 14px;
+  color: #111111;
+}
+
+.toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.toolbarChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toolbarMeta {
+  font-size: 13px;
+  color: rgba(17, 17, 17, 0.58);
+}
+
+.layout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tableCard {
+  padding: 0;
+  overflow: hidden;
+}
+
+.tableWrap {
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 16px 18px;
+  text-align: left;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.06);
+  vertical-align: top;
+}
+
+.table th {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.48);
+  white-space: nowrap;
+}
+
+.table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+
+.table tbody tr:hover {
+  background: rgba(17, 17, 17, 0.03);
+}
+
+.selectedRow {
+  background: rgba(17, 17, 17, 0.05);
+}
+
+.primaryText {
+  font-weight: 600;
+}
+
+.secondaryText {
+  margin-top: 4px;
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 13px;
+}
+
+.timeText {
+  min-width: 150px;
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+  color: #111111;
+}
+
+.badgePending {
+  background: rgba(17, 17, 17, 0.06);
+}
+
+.badgeConfirmed {
+  background: rgba(17, 17, 17, 0.1);
+}
+
+.badgeCompleted {
+  background: rgba(11, 112, 84, 0.12);
+  color: #0b7054;
+}
+
+.badgeCancelled {
+  background: rgba(122, 92, 92, 0.12);
+  color: #7a5c5c;
+}
+
+.badgeNoShow {
+  background: rgba(96, 77, 124, 0.12);
+  color: #604d7c;
+}
+
+.badgePaid {
+  background: rgba(17, 17, 17, 0.08);
+}
+
+.badgeDepositDue {
+  background: rgba(216, 211, 255, 0.38);
+}
+
+.badgeRefunded {
+  background: rgba(122, 92, 92, 0.14);
+  color: #7a5c5c;
+}
+
+.badgeSmokePass {
+  background: rgba(11, 112, 84, 0.12);
+  color: #0b7054;
+}
+
+.badgeSmokePartial {
+  background: rgba(161, 124, 28, 0.16);
+  color: #8d6611;
+}
+
+.badgeSmokeFail {
+  background: rgba(122, 92, 92, 0.14);
+  color: #7a5c5c;
+}
+
+.badgeSmokeNone {
+  background: rgba(17, 17, 17, 0.06);
+  color: rgba(17, 17, 17, 0.72);
+}
+
+.depositText {
+  font-size: 13px;
+  color: rgba(17, 17, 17, 0.62);
+}
+
+.emptyState {
+  padding: 24px 18px;
+  color: rgba(17, 17, 17, 0.58);
+}
+
+.drawerBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 15, 0.16);
+  backdrop-filter: blur(8px);
+  z-index: 50;
+}
+
+.drawer {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  width: min(520px, calc(100vw - 32px));
+  border-radius: 28px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 70px rgba(17, 17, 17, 0.12);
+  z-index: 60;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+}
+
+.drawerHeader {
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.06);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.drawerTitle {
+  margin: 0;
+  font-size: 24px;
+}
+
+.drawerSub {
+  margin: 4px 0 0;
+  color: rgba(17, 17, 17, 0.58);
+}
+
+.drawerBody {
+  overflow: auto;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.detailCard {
+  border-radius: 22px;
+  border: 1px solid rgba(17, 17, 17, 0.07);
+  background: rgba(255, 255, 255, 0.88);
+  padding: 14px;
+}
+
+.detailTitle {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.detailGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detailField {
+  display: grid;
+  gap: 4px;
+}
+
+.detailFieldWide {
+  grid-column: 1 / -1;
+}
+
+.detailLabel {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.48);
+}
+
+.detailValue {
+  font-size: 15px;
+  color: #111111;
+}
+
+.logList {
+  display: grid;
+  gap: 10px;
+}
+
+.logItem {
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(17, 17, 17, 0.03);
+}
+
+.logMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  color: rgba(17, 17, 17, 0.52);
+  font-size: 12px;
+}
+
+.drawerFooter {
+  padding: 16px 18px 18px;
+  border-top: 1px solid rgba(17, 17, 17, 0.06);
+  display: grid;
+  gap: 10px;
+}
+
+.actionTextarea {
+  width: 100%;
+  min-height: 88px;
+  border-radius: 18px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inlineLinkButton {
+  border: 0;
+  background: transparent;
+  color: #0b7054;
+  padding: 0;
+  margin-top: 8px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.message {
+  border-radius: 18px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+.messageError {
+  background: rgba(122, 92, 92, 0.1);
+  color: #7a5c5c;
+}
+
+.messageSuccess {
+  background: rgba(11, 112, 84, 0.1);
+  color: #0b7054;
+}
+
+.mobileCards {
+  display: none;
+}
+
+.mobileCard {
+  padding: 14px;
+  border-top: 1px solid rgba(17, 17, 17, 0.06);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.cardMeta {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+@media (max-width: 1180px) {
+  .filterGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 880px) {
+  .filterGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filterWide {
+    grid-column: span 2;
+  }
+
+  .tableWrap {
+    display: none;
+  }
+
+  .mobileCards {
+    display: block;
+  }
+
+  .drawer {
+    top: auto;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    border-radius: 28px 28px 0 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .filterGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .filterWide {
+    grid-column: span 1;
+  }
+
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+}

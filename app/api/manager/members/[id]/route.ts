@@ -2,10 +2,17 @@ import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-co
 import { requirePermission } from "../../../../../lib/permissions";
 import { evaluateContractStatus } from "../../../../../lib/member-plan-lifecycle";
 import { checkMemberEligibility } from "../../../../../lib/entitlement-eligibility";
+import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 
 function normalizeText(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function normalizeEmail(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
   return trimmed || null;
 }
 
@@ -28,7 +35,7 @@ async function loadMember(params: { request: Request; memberId: string }) {
 
   const memberResult = await auth.supabase
     .from("members")
-    .select("id, full_name, phone, notes, photo_url, store_id, created_at, updated_at")
+    .select("id, full_name, phone, email, auth_user_id, notes, photo_url, store_id, created_at, updated_at")
     .eq("tenant_id", auth.context.tenantId)
     .eq("id", params.memberId)
     .maybeSingle();
@@ -245,6 +252,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       id: scoped.member.id,
       fullName: scoped.member.full_name,
       phone: scoped.member.phone,
+      email: "email" in scoped.member ? (scoped.member.email as string | null) : null,
       notes: scoped.member.notes,
       photoUrl: scoped.member.photo_url,
       storeId: scoped.member.store_id,
@@ -277,6 +285,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   const fullName = normalizeText(body?.fullName);
   const phone = normalizeText(body?.phone);
+  const email = normalizeEmail(body?.email);
   const notes = normalizeText(body?.notes);
   const storeId = normalizeText(body?.storeId);
 
@@ -286,6 +295,33 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     updatePayload.full_name = fullName;
   }
   if ("phone" in (body || {})) updatePayload.phone = phone;
+  if ("email" in (body || {})) {
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return apiError(400, "FORBIDDEN", "email is invalid");
+    }
+    if (email && email !== String(scoped.member.email || "").trim().toLowerCase()) {
+      const duplicateEmailResult = await scoped.auth.supabase
+        .from("members")
+        .select("id")
+        .eq("tenant_id", scoped.auth.context.tenantId)
+        .eq("email", email)
+        .neq("id", id)
+        .limit(1)
+        .maybeSingle();
+      if (duplicateEmailResult.error) return apiError(500, "INTERNAL_ERROR", duplicateEmailResult.error.message);
+      if (duplicateEmailResult.data) return apiError(409, "FORBIDDEN", "Duplicate email");
+
+      if (scoped.member.auth_user_id) {
+        const admin = createSupabaseAdminClient();
+        const authUpdate = await admin.auth.admin.updateUserById(String(scoped.member.auth_user_id), {
+          email,
+          email_confirm: true,
+        });
+        if (authUpdate.error) return apiError(500, "INTERNAL_ERROR", authUpdate.error.message);
+      }
+    }
+    updatePayload.email = email;
+  }
   if ("notes" in (body || {})) updatePayload.notes = notes;
   if ("storeId" in (body || {})) {
     if (storeId) {
@@ -311,7 +347,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .update(updatePayload)
     .eq("tenant_id", scoped.auth.context.tenantId)
     .eq("id", id)
-    .select("id, full_name, phone, notes, store_id, updated_at")
+    .select("id, full_name, phone, email, notes, store_id, updated_at")
     .maybeSingle();
   if (result.error) return apiError(500, "INTERNAL_ERROR", result.error.message);
   if (!result.data) return apiError(404, "ENTITLEMENT_NOT_FOUND", "Member not found");
@@ -331,6 +367,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       id: result.data.id,
       fullName: result.data.full_name,
       phone: result.data.phone,
+      email: "email" in result.data ? (result.data.email as string | null) : null,
       notes: result.data.notes,
       storeId: result.data.store_id,
       updatedAt: result.data.updated_at,

@@ -1,0 +1,282 @@
+.page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(20, 20, 20, 0.05), transparent 38%),
+    #f6f3ef;
+  padding: 32px 24px 56px;
+  color: #181614;
+}
+
+.shell {
+  max-width: 1380px;
+  margin: 0 auto;
+  display: grid;
+  gap: 20px;
+}
+
+.hero {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(24, 22, 20, 0.08);
+  border-radius: 32px;
+  padding: 28px;
+  box-shadow: 0 16px 50px rgba(24, 22, 20, 0.06);
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(24, 22, 20, 0.52);
+}
+
+.title {
+  margin: 12px 0 10px;
+  font-size: clamp(30px, 5vw, 48px);
+  line-height: 1.02;
+}
+
+.heroText {
+  max-width: 760px;
+  color: rgba(24, 22, 20, 0.7);
+  line-height: 1.7;
+}
+
+.heroActions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.linkButton,
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  border-radius: 999px;
+  border: 1px solid rgba(24, 22, 20, 0.12);
+  padding: 10px 16px;
+  background: white;
+  color: #181614;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.primaryButton {
+  background: #181614;
+  color: white;
+}
+
+.dangerButton {
+  border-color: rgba(129, 54, 54, 0.18);
+  color: #7d3a3a;
+}
+
+.linkButton:hover,
+.primaryButton:hover,
+.secondaryButton:hover,
+.dangerButton:hover {
+  transform: translateY(-1px);
+}
+
+.statusBar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.message,
+.error {
+  border-radius: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(24, 22, 20, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.error {
+  border-color: rgba(145, 63, 63, 0.16);
+  color: #7d3a3a;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 20px;
+}
+
+.panel,
+.card {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(24, 22, 20, 0.08);
+  border-radius: 28px;
+  padding: 22px;
+  box-shadow: 0 12px 34px rgba(24, 22, 20, 0.04);
+}
+
+.panelTitle {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.panelText {
+  margin: 0;
+  color: rgba(24, 22, 20, 0.66);
+  line-height: 1.6;
+}
+
+.list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.listItem {
+  border-radius: 22px;
+  border: 1px solid rgba(24, 22, 20, 0.08);
+  padding: 16px;
+  background: rgba(249, 247, 243, 0.82);
+  cursor: pointer;
+}
+
+.listItem[data-active="true"] {
+  border-color: rgba(24, 22, 20, 0.2);
+  background: white;
+}
+
+.itemTitleRow,
+.rowBetween {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.itemTitle {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.meta,
+.subtle {
+  color: rgba(24, 22, 20, 0.62);
+  font-size: 13px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(24, 22, 20, 0.08);
+  font-size: 12px;
+}
+
+.grid {
+  display: grid;
+  gap: 20px;
+}
+
+.twoCol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(24, 22, 20, 0.12);
+  background: rgba(250, 248, 244, 0.95);
+  padding: 12px 14px;
+  color: #181614;
+}
+
+.textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.fieldGrid {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.fieldLabel {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(24, 22, 20, 0.72);
+}
+
+.branchPills,
+.servicePills,
+.scheduleList,
+.blockList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: rgba(24, 22, 20, 0.06);
+  font-size: 12px;
+}
+
+.checkboxList {
+  display: grid;
+  gap: 10px;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(24, 22, 20, 0.08);
+  border-radius: 18px;
+  background: rgba(250, 248, 244, 0.9);
+}
+
+.stack {
+  display: grid;
+  gap: 16px;
+}
+
+.scheduleCard,
+.blockCard {
+  border: 1px solid rgba(24, 22, 20, 0.08);
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(250, 248, 244, 0.9);
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+@media (max-width: 1100px) {
+  .layout,
+  .twoCol {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding: 18px 14px 36px;
+  }
+
+  .hero,
+  .panel,
+  .card {
+    border-radius: 24px;
+    padding: 18px;
+  }
+}

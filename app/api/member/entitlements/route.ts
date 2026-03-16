@@ -53,7 +53,7 @@ export async function GET(request: Request) {
       .limit(limit),
     auth.supabase
       .from("member_plan_catalog")
-      .select("id, code, name, plan_type, fulfillment_kind, is_active")
+      .select("id, code, name, plan_type, fulfillment_kind, is_active, branch_id, service_scope, price_amount")
       .eq("tenant_id", auth.context.tenantId)
       .limit(500),
     auth.supabase
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
       .limit(limit),
     auth.supabase
       .from("entry_passes")
-      .select("id, member_plan_contract_id, pass_type, remaining, total_sessions, expires_at, status")
+      .select("id, member_plan_contract_id, plan_catalog_id, branch_id, pass_type, remaining, reserved_sessions, total_sessions, expires_at, status")
       .eq("tenant_id", auth.context.tenantId)
       .eq("member_id", memberId)
       .order("created_at", { ascending: false })
@@ -89,6 +89,9 @@ export async function GET(request: Request) {
       planType: string | null;
       fulfillmentKind: string | null;
       isActive: boolean;
+      branchId: string | null;
+      serviceScope: string[];
+      priceAmount: number;
     }
   >();
   for (const plan of ((plansRes.data || []) as Array<{
@@ -98,6 +101,9 @@ export async function GET(request: Request) {
     plan_type: string | null;
     fulfillment_kind: string | null;
     is_active: boolean | null;
+    branch_id: string | null;
+    service_scope: unknown;
+    price_amount: number | string | null;
   }>)) {
     plansById.set(plan.id, {
       code: plan.code ?? null,
@@ -105,6 +111,11 @@ export async function GET(request: Request) {
       planType: plan.plan_type ?? null,
       fulfillmentKind: plan.fulfillment_kind ?? null,
       isActive: plan.is_active !== false,
+      branchId: plan.branch_id ?? null,
+      serviceScope: Array.isArray(plan.service_scope)
+        ? plan.service_scope.filter((item): item is string => typeof item === "string")
+        : [],
+      priceAmount: Number(plan.price_amount ?? 0),
     });
   }
 
@@ -166,6 +177,13 @@ export async function GET(request: Request) {
       note: typeof contract.note === "string" ? contract.note : null,
       subscription: subscription || null,
       pass: pass || null,
+      packageMeta: plan
+        ? {
+            branchId: plan.branchId,
+            serviceScope: plan.serviceScope,
+            priceAmount: plan.priceAmount,
+          }
+        : null,
       usableFor: {
         entry: entryEligible,
         booking: entryEligible || coachEligible,
