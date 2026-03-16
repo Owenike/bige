@@ -2557,6 +2557,29 @@ export const sandboxCloseoutRecoveryClearanceHistorySchema = z.object({
   summaryLine: z.string(),
 });
 
+export const sandboxCloseoutRecoveredReentryAuditSchema = z.object({
+  latestRecoveredLifecycleStatus:
+    sandboxCloseoutRecoveredLifecycleSchema.shape.lifecycleStatus,
+  latestReentryStatus: z.enum([
+    "no_reentry",
+    "monitoring_exit_then_reenter",
+    "cleared_then_reenter",
+    "recovered_then_regressed",
+    "reopened_after_cleared",
+  ]),
+  reentryDetected: z.boolean().default(false),
+  reentrySource: z.string().nullable().default(null),
+  reentryReasons: z.array(z.string()).default([]),
+  reentrySeverity: z.enum(["none", "low", "medium", "high"]).default("none"),
+  reentryCount: z.number().int().nonnegative().default(0),
+  repeatedExitThenReenterPatterns: z.array(z.string()).default([]),
+  repeatedClearedThenReenterPatterns: z.array(z.string()).default([]),
+  repeatedRecoveredThenRegressedPatterns: z.array(z.string()).default([]),
+  reentryRemainsActive: z.boolean().default(false),
+  recommendedNextOperatorStep: z.string(),
+  summaryLine: z.string(),
+});
+
 export const sandboxCloseoutRecoveredLifecycleHistoryEntrySchema = z.object({
   recordedAt: z.string().nullable().default(null),
   lifecycleStatus: sandboxCloseoutRecoveredLifecycleSchema.shape.lifecycleStatus,
@@ -3041,6 +3064,8 @@ export const orchestratorStateSchema = z.object({
     sandboxCloseoutRecoveredExitHistorySchema.nullable().default(null),
   lastCloseoutRecoveredLifecycle:
     sandboxCloseoutRecoveredLifecycleSchema.nullable().default(null),
+  lastCloseoutRecoveredReentryAudit:
+    sandboxCloseoutRecoveredReentryAuditSchema.nullable().default(null),
   lastCloseoutRecoveredLifecycleHistory:
     sandboxCloseoutRecoveredLifecycleHistorySchema.nullable().default(null),
   authSmokeStatus: githubAuthSmokeStatusSchema.default("not_run"),
@@ -3779,8 +3804,11 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastCloseoutRegressionResolutionSummary",
     "lastCloseoutRecoveredMonitoringExitAudit",
     "lastCloseoutRecoveryClearanceAudit",
+    "lastCloseoutRecoveryClearanceHistory",
     "lastCloseoutRecoveredExitHistory",
     "lastCloseoutRecoveredLifecycle",
+    "lastCloseoutRecoveredReentryAudit",
+    "lastCloseoutRecoveredLifecycleHistory",
     "authSmokeStatus",
     "authSmokeSuccessStatus",
     "authSmokeMode",
