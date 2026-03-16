@@ -12,7 +12,9 @@ foreach ($full in $pages) {
 
   $hasCard =
     ($txt -match 'className="[^"]*(card|fdGlassSubPanel|fdActionCard|formCard|kv)') -or
-    ($txt -match 'className=\{[^\}]*"[^"]*(card|fdGlassSubPanel|fdActionCard|formCard|kv)')
+    ($txt -match 'className=\{[^\}]*"[^"]*(card|fdGlassSubPanel|fdActionCard|formCard|kv)') -or
+    ($txt -match 'className=\{[^\}]*styles\.[A-Za-z0-9_]*(card|Card|fdGlassSubPanel|fdActionCard|formCard|kv)') -or
+    ($txt -match '<[A-Z][A-Za-z0-9_]*(Card|Drawer|Table|Hero|Header|StickyBar|Summary|Calendar|Grid|FilterBar|Preview)\b')
 
   if ($hasCard) { continue }
 

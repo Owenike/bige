@@ -2527,6 +2527,66 @@ export const sandboxCloseoutRecoveredLifecycleSchema = z.object({
   summaryLine: z.string(),
 });
 
+export const sandboxCloseoutRecoveryClearanceHistoryEntrySchema = z.object({
+  recordedAt: z.string().nullable().default(null),
+  recoveryClearanceStatus:
+    sandboxCloseoutRecoveryClearanceAuditSchema.shape.recoveryClearanceStatus,
+  recoveryClearanceAllowed: z.boolean().default(false),
+  caseClearedFromGovernanceMonitoring: z.boolean().default(false),
+  caseRemainsReopenable: z.boolean().default(false),
+  caseRemainsRegressionProne: z.boolean().default(false),
+  summaryLine: z.string(),
+});
+
+export const sandboxCloseoutRecoveryClearanceHistorySchema = z.object({
+  entries: z.array(sandboxCloseoutRecoveryClearanceHistoryEntrySchema).default([]),
+  latestClearanceAuditEntry:
+    sandboxCloseoutRecoveryClearanceHistoryEntrySchema.nullable().default(null),
+  previousClearanceAuditEntry:
+    sandboxCloseoutRecoveryClearanceHistoryEntrySchema.nullable().default(null),
+  latestClearanceStatus:
+    sandboxCloseoutRecoveryClearanceAuditSchema.shape.recoveryClearanceStatus,
+  repeatedClearanceAllowedPatterns: z.array(z.string()).default([]),
+  repeatedClearanceBlockedPatterns: z.array(z.string()).default([]),
+  repeatedClearanceAllowedButReopenablePatterns: z.array(z.string()).default([]),
+  repeatedClearanceThenReEnterPatterns: z.array(z.string()).default([]),
+  repeatedClearanceThenRegressedPatterns: z.array(z.string()).default([]),
+  historyRetainedEntryCount: z.number().int().nonnegative().default(0),
+  historyReasons: z.array(z.string()).default([]),
+  recommendedNextOperatorStep: z.string(),
+  summaryLine: z.string(),
+});
+
+export const sandboxCloseoutRecoveredLifecycleHistoryEntrySchema = z.object({
+  recordedAt: z.string().nullable().default(null),
+  lifecycleStatus: sandboxCloseoutRecoveredLifecycleSchema.shape.lifecycleStatus,
+  caseMonitored: z.boolean().default(true),
+  caseCleared: z.boolean().default(false),
+  caseHasReEnteredGovernance: z.boolean().default(false),
+  caseHasRegressed: z.boolean().default(false),
+  caseRemainsReopenable: z.boolean().default(false),
+  summaryLine: z.string(),
+});
+
+export const sandboxCloseoutRecoveredLifecycleHistorySchema = z.object({
+  entries: z.array(sandboxCloseoutRecoveredLifecycleHistoryEntrySchema).default([]),
+  latestLifecycleEntry:
+    sandboxCloseoutRecoveredLifecycleHistoryEntrySchema.nullable().default(null),
+  previousLifecycleEntry:
+    sandboxCloseoutRecoveredLifecycleHistoryEntrySchema.nullable().default(null),
+  latestLifecycleStatus: sandboxCloseoutRecoveredLifecycleSchema.shape.lifecycleStatus,
+  repeatedMonitoredPatterns: z.array(z.string()).default([]),
+  repeatedClearedPatterns: z.array(z.string()).default([]),
+  repeatedReEnteredPatterns: z.array(z.string()).default([]),
+  repeatedRegressedPatterns: z.array(z.string()).default([]),
+  repeatedRecoveredButReopenablePatterns: z.array(z.string()).default([]),
+  lifecycleTransitionSummary: z.array(z.string()).default([]),
+  historyRetainedEntryCount: z.number().int().nonnegative().default(0),
+  historyReasons: z.array(z.string()).default([]),
+  recommendedNextOperatorStep: z.string(),
+  summaryLine: z.string(),
+});
+
 export const sandboxRestorePointSchema = z.object({
   id: z.string(),
   createdAt: z.string(),
@@ -2975,10 +3035,14 @@ export const orchestratorStateSchema = z.object({
     sandboxCloseoutRecoveredMonitoringExitAuditSchema.nullable().default(null),
   lastCloseoutRecoveryClearanceAudit:
     sandboxCloseoutRecoveryClearanceAuditSchema.nullable().default(null),
+  lastCloseoutRecoveryClearanceHistory:
+    sandboxCloseoutRecoveryClearanceHistorySchema.nullable().default(null),
   lastCloseoutRecoveredExitHistory:
     sandboxCloseoutRecoveredExitHistorySchema.nullable().default(null),
   lastCloseoutRecoveredLifecycle:
     sandboxCloseoutRecoveredLifecycleSchema.nullable().default(null),
+  lastCloseoutRecoveredLifecycleHistory:
+    sandboxCloseoutRecoveredLifecycleHistorySchema.nullable().default(null),
   authSmokeStatus: githubAuthSmokeStatusSchema.default("not_run"),
   authSmokeSuccessStatus: z.enum(["not_run", "success", "non_success"]).default("not_run"),
   authSmokeMode: githubAuthSmokeModeSchema.default("none"),
