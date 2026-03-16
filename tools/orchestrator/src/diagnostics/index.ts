@@ -124,6 +124,12 @@ export type OrchestratorDiagnostics = {
     lastCloseoutRecoveredLifecycle: OrchestratorState["lastCloseoutRecoveredLifecycle"];
     lastCloseoutRecoveredReentryAudit: OrchestratorState["lastCloseoutRecoveredReentryAudit"];
     lastCloseoutRecoveredLifecycleHistory: OrchestratorState["lastCloseoutRecoveredLifecycleHistory"];
+    lastCloseoutRecoveryRetirementAudit:
+      OrchestratorState["lastCloseoutRecoveryRetirementAudit"];
+    lastCloseoutRecoveredRetirementSummary:
+      OrchestratorState["lastCloseoutRecoveredRetirementSummary"];
+    lastCloseoutRecoveryRetirementQueue:
+      OrchestratorState["lastCloseoutRecoveryRetirementQueue"];
   };
   statusReporting: {
     status: OrchestratorState["statusReportStatus"];
@@ -207,6 +213,15 @@ export type OrchestratorDiagnostics = {
 };
 
 function resolveNextSuggestedAction(state: OrchestratorState, preflight: PreflightResult | null) {
+  if (state.lastCloseoutRecoveryRetirementQueue?.recommendedNextOperatorStep) {
+    return state.lastCloseoutRecoveryRetirementQueue.recommendedNextOperatorStep;
+  }
+  if (state.lastCloseoutRecoveredRetirementSummary?.recommendedNextOperatorStep) {
+    return state.lastCloseoutRecoveredRetirementSummary.recommendedNextOperatorStep;
+  }
+  if (state.lastCloseoutRecoveryRetirementAudit?.recommendedNextOperatorStep) {
+    return state.lastCloseoutRecoveryRetirementAudit.recommendedNextOperatorStep;
+  }
   if (state.lastCloseoutRecoveredLifecycleHistory?.recommendedNextOperatorStep) {
     return state.lastCloseoutRecoveredLifecycleHistory.recommendedNextOperatorStep;
   }
@@ -525,6 +540,12 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
         state.lastCloseoutRecoveredReentryAudit,
       lastCloseoutRecoveredLifecycleHistory:
         state.lastCloseoutRecoveredLifecycleHistory,
+      lastCloseoutRecoveryRetirementAudit:
+        state.lastCloseoutRecoveryRetirementAudit,
+      lastCloseoutRecoveredRetirementSummary:
+        state.lastCloseoutRecoveredRetirementSummary,
+      lastCloseoutRecoveryRetirementQueue:
+        state.lastCloseoutRecoveryRetirementQueue,
     },
     statusReporting: {
       status: state.statusReportStatus,
@@ -686,6 +707,9 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
       `Closeout recovered lifecycle: status=${summary.sandboxGovernance.lastCloseoutRecoveredLifecycle?.lifecycleStatus ?? "none"}, monitored=${summary.sandboxGovernance.lastCloseoutRecoveredLifecycle?.caseMonitored ?? false}, cleared=${summary.sandboxGovernance.lastCloseoutRecoveredLifecycle?.caseCleared ?? false}, reentered=${summary.sandboxGovernance.lastCloseoutRecoveredLifecycle?.caseHasReEnteredGovernance ?? false}, regressed=${summary.sandboxGovernance.lastCloseoutRecoveredLifecycle?.caseHasRegressed ?? false}, next=${summary.sandboxGovernance.lastCloseoutRecoveredLifecycle?.recommendedNextOperatorStep ?? "none"}`,
       `Closeout recovered re-entry audit: status=${summary.sandboxGovernance.lastCloseoutRecoveredReentryAudit?.latestReentryStatus ?? "none"}, detected=${summary.sandboxGovernance.lastCloseoutRecoveredReentryAudit?.reentryDetected ?? false}, source=${summary.sandboxGovernance.lastCloseoutRecoveredReentryAudit?.reentrySource ?? "none"}, severity=${summary.sandboxGovernance.lastCloseoutRecoveredReentryAudit?.reentrySeverity ?? "none"}, active=${summary.sandboxGovernance.lastCloseoutRecoveredReentryAudit?.reentryRemainsActive ?? false}, next=${summary.sandboxGovernance.lastCloseoutRecoveredReentryAudit?.recommendedNextOperatorStep ?? "none"}`,
       `Closeout recovered lifecycle history: latest=${summary.sandboxGovernance.lastCloseoutRecoveredLifecycleHistory?.latestLifecycleStatus ?? "none"}, previous=${summary.sandboxGovernance.lastCloseoutRecoveredLifecycleHistory?.previousLifecycleEntry?.lifecycleStatus ?? "none"}, transitions=${summary.sandboxGovernance.lastCloseoutRecoveredLifecycleHistory?.lifecycleTransitionSummary.join("|") || "none"}, retained=${summary.sandboxGovernance.lastCloseoutRecoveredLifecycleHistory?.historyRetainedEntryCount ?? 0}, next=${summary.sandboxGovernance.lastCloseoutRecoveredLifecycleHistory?.recommendedNextOperatorStep ?? "none"}`,
+      `Closeout recovery retirement audit: status=${summary.sandboxGovernance.lastCloseoutRecoveryRetirementAudit?.recoveryRetirementStatus ?? "none"}, allowed=${summary.sandboxGovernance.lastCloseoutRecoveryRetirementAudit?.retirementAllowed ?? false}, leavesActive=${summary.sandboxGovernance.lastCloseoutRecoveryRetirementAudit?.caseLeavesActiveGovernance ?? false}, reopenable=${summary.sandboxGovernance.lastCloseoutRecoveryRetirementAudit?.caseRemainsReopenable ?? false}, next=${summary.sandboxGovernance.lastCloseoutRecoveryRetirementAudit?.recommendedNextOperatorStep ?? "none"}`,
+      `Closeout recovered retirement summary: ready=${summary.sandboxGovernance.lastCloseoutRecoveredRetirementSummary?.retirementReady ?? false}, provisional=${summary.sandboxGovernance.lastCloseoutRecoveredRetirementSummary?.retirementProvisional ?? false}, blocked=${summary.sandboxGovernance.lastCloseoutRecoveredRetirementSummary?.retirementBlocked ?? false}, stillActive=${summary.sandboxGovernance.lastCloseoutRecoveredRetirementSummary?.caseRecoveredButStillActive ?? false}, retireable=${summary.sandboxGovernance.lastCloseoutRecoveredRetirementSummary?.caseRecoveredAndRetireable ?? false}, next=${summary.sandboxGovernance.lastCloseoutRecoveredRetirementSummary?.recommendedNextOperatorStep ?? "none"}`,
+      `Closeout recovery retirement queue: status=${summary.sandboxGovernance.lastCloseoutRecoveryRetirementQueue?.queueStatus ?? "none"}, recovered=${summary.sandboxGovernance.lastCloseoutRecoveryRetirementQueue?.recovered ?? false}, ready=${summary.sandboxGovernance.lastCloseoutRecoveryRetirementQueue?.retirementReady ?? false}, regressionRisk=${summary.sandboxGovernance.lastCloseoutRecoveryRetirementQueue?.regressionRiskFlag ?? false}, reentryRisk=${summary.sandboxGovernance.lastCloseoutRecoveryRetirementQueue?.reentryRiskFlag ?? false}, next=${summary.sandboxGovernance.lastCloseoutRecoveryRetirementQueue?.recommendedNextOperatorStep ?? "none"}`,
     `Operator handoff: ${summary.sandboxGovernance.lastOperatorHandoffSummary?.handoffLine ?? "none"}`,
     `Status reporting: status=${summary.statusReporting.status}, readiness=${summary.statusReporting.readiness}, readinessStatus=${summary.statusReporting.readinessStatus}, live=${summary.statusReporting.liveStatus}, permission=${summary.statusReporting.permissionStatus}, action=${summary.statusReporting.action}, strategy=${summary.statusReporting.targetStrategy}, correlation=${summary.statusReporting.correlationId ?? "none"}, target=${summary.statusReporting.target ?? "none"}, audit=${summary.statusReporting.lastAuditId ?? "none"}, failure=${summary.statusReporting.failureReason ?? "none"}, summary=${summary.statusReporting.summary ?? "none"}`,
     `Auth smoke: status=${summary.statusReporting.authSmokeStatus}, success=${summary.statusReporting.authSmokeSuccessStatus}, mode=${summary.statusReporting.authSmokeMode}, permission=${summary.statusReporting.authSmokePermissionResult}, selection=${summary.statusReporting.targetSelectionStatus}, target=${summary.statusReporting.authSmokeTarget ?? "none"}, selectedProfile=${summary.statusReporting.selectedSandboxProfileId ?? "none"}, selectionMode=${summary.statusReporting.sandboxProfileSelectionMode}, selectionReason=${summary.statusReporting.sandboxProfileSelectionReason ?? "none"}, profile=${summary.statusReporting.sandboxProfileId ?? summary.statusReporting.sandboxTargetProfileId ?? "none"}, profileStatus=${summary.statusReporting.sandboxProfileStatus}, bundle=${summary.statusReporting.sandboxBundleId ?? "none"}, overrides=${summary.statusReporting.sandboxBundleOverrideFields.join(",") || "none"}, governance=${summary.statusReporting.profileGovernanceStatus}/${summary.statusReporting.profileGovernanceReason ?? "none"}, bundleGovernance=${summary.statusReporting.bundleGovernanceStatus}/${summary.statusReporting.bundleGovernanceReason ?? "none"}, guardrails=${summary.statusReporting.lastSandboxGuardrailsStatus}/${summary.statusReporting.lastSandboxGuardrailsReason ?? "none"}, config=${summary.statusReporting.sandboxTargetConfigVersion ?? "none"}, lastAudit=${summary.statusReporting.lastSandboxAuditId ?? "none"}, importExport=${summary.statusReporting.lastSandboxImportExportStatus}/${summary.statusReporting.lastSandboxImportExportSummary ?? "none"}, review=${summary.statusReporting.lastSandboxReviewStatus}/${summary.statusReporting.lastSandboxReviewSummary ?? "none"}, apply=${summary.statusReporting.lastSandboxApplyStatus}/${summary.statusReporting.lastSandboxApplySummary ?? "none"}, batch=${summary.statusReporting.lastBatchChangeStatus}/${summary.statusReporting.lastBatchImpactSummary ?? "none"}, restore=${summary.statusReporting.lastRestorePointId ?? "none"}/${summary.statusReporting.lastRestorePointSummary ?? "none"} count=${summary.statusReporting.currentValidRestorePointCount}/${summary.statusReporting.currentRestorePointCount} retention=${summary.statusReporting.restorePointRetentionStatus}/${summary.statusReporting.lastRestorePointPruneSummary ?? "none"} history=${summary.statusReporting.lastRestorePointLookupStatus}/${summary.statusReporting.lastSandboxHistorySummary ?? "none"} compare=${summary.statusReporting.lastRestorePointCompareStatus}/${summary.statusReporting.lastSandboxCompareSummary ?? "none"}, rollback=${summary.statusReporting.lastRollbackStatus}/${summary.statusReporting.lastRollbackImpactSummary ?? "none"}/${summary.statusReporting.lastRollbackAuditId ?? "none"} governance=${summary.statusReporting.rollbackGovernanceStatus}/${summary.statusReporting.rollbackGovernanceReason ?? "none"} recovery=${summary.statusReporting.lastBatchRecoveryStatus}/${summary.statusReporting.lastBatchRecoverySummary ?? "none"} incidents=${summary.statusReporting.lastRecoveryIncidentSummary ?? "none"} latestIncident=${summary.statusReporting.lastIncidentType}/${summary.statusReporting.lastIncidentSeverity ?? "none"}/${summary.statusReporting.lastIncidentSummary ?? "none"} operator=${summary.statusReporting.lastOperatorAction}/${summary.statusReporting.lastOperatorActionStatus} escalation=${summary.statusReporting.lastEscalationSummary ?? "none"}, successAt=${summary.statusReporting.lastAuthSmokeSuccessAt ?? "none"}, liveTarget=${summary.statusReporting.liveSmokeTarget ?? "none"}, evidence=${summary.statusReporting.authSmokeEvidencePath ?? "none"}, summary=${summary.statusReporting.liveSmokeSummary ?? "none"}, failure=${summary.statusReporting.authSmokeFailureReason ?? "none"}`,
@@ -1042,6 +1066,24 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
   if (summary.sandboxGovernance.lastCloseoutRecoveredLifecycleHistory?.historyReasons.length) {
     lines.push("Closeout recovered lifecycle history reasons:");
     for (const reason of summary.sandboxGovernance.lastCloseoutRecoveredLifecycleHistory.historyReasons) {
+      lines.push(`- ${reason}`);
+    }
+  }
+  if (summary.sandboxGovernance.lastCloseoutRecoveryRetirementAudit?.retirementBlockedReasons.length) {
+    lines.push("Closeout recovery retirement audit blocked reasons:");
+    for (const reason of summary.sandboxGovernance.lastCloseoutRecoveryRetirementAudit.retirementBlockedReasons) {
+      lines.push(`- ${reason}`);
+    }
+  }
+  if (summary.sandboxGovernance.lastCloseoutRecoveredRetirementSummary?.retirementWarnings.length) {
+    lines.push("Closeout recovered retirement summary warnings:");
+    for (const reason of summary.sandboxGovernance.lastCloseoutRecoveredRetirementSummary.retirementWarnings) {
+      lines.push(`- ${reason}`);
+    }
+  }
+  if (summary.sandboxGovernance.lastCloseoutRecoveryRetirementQueue?.retirementBlockedReasons.length) {
+    lines.push("Closeout recovery retirement queue blocked reasons:");
+    for (const reason of summary.sandboxGovernance.lastCloseoutRecoveryRetirementQueue.retirementBlockedReasons) {
       lines.push(`- ${reason}`);
     }
   }

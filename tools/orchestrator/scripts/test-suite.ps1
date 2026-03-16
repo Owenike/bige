@@ -154,6 +154,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-recovered-lifecycle.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-reentry-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-lifecycle-history.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovery-retirement-audit.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovered-retirement-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovery-retirement-queue.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -550,6 +553,15 @@ $suiteMap = @{
   "sandbox-closeout-recovered-lifecycle-history" = @(
     "$outDir\tests\unit\sandbox-closeout-recovered-lifecycle-history.test.js"
   )
+  "sandbox-closeout-recovery-retirement-audit" = @(
+    "$outDir\tests\unit\sandbox-closeout-recovery-retirement-audit.test.js"
+  )
+  "sandbox-closeout-recovered-retirement-summary" = @(
+    "$outDir\tests\unit\sandbox-closeout-recovered-retirement-summary.test.js"
+  )
+  "sandbox-closeout-recovery-retirement-queue" = @(
+    "$outDir\tests\unit\sandbox-closeout-recovery-retirement-queue.test.js"
+  )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
   )
@@ -791,6 +803,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-recovered-lifecycle.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-reentry-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-lifecycle-history.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovery-retirement-audit.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovered-retirement-summary.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovery-retirement-queue.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",

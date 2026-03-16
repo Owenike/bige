@@ -270,6 +270,18 @@ import {
   formatSandboxCloseoutRecoveredReentryAudit,
 } from "./sandbox-closeout-recovered-reentry-audit";
 import {
+  buildSandboxCloseoutRecoveryRetirementAudit,
+  formatSandboxCloseoutRecoveryRetirementAudit,
+} from "./sandbox-closeout-recovery-retirement-audit";
+import {
+  buildSandboxCloseoutRecoveredRetirementSummary,
+  formatSandboxCloseoutRecoveredRetirementSummary,
+} from "./sandbox-closeout-recovered-retirement-summary";
+import {
+  buildSandboxCloseoutRecoveryRetirementQueue,
+  formatSandboxCloseoutRecoveryRetirementQueue,
+} from "./sandbox-closeout-recovery-retirement-queue";
+import {
   buildSandboxCloseoutCompletionResolutionSummary,
   formatSandboxCloseoutCompletionResolutionSummary,
 } from "./sandbox-closeout-completion-resolution-summary";
@@ -1330,6 +1342,43 @@ async function resolveSandboxGovernanceArtifacts(params: {
       closeoutRecoveryRegressionAudit,
       closeoutRecoveredMonitoringExitAudit,
     });
+  const closeoutRecoveryRetirementAudit =
+    await buildSandboxCloseoutRecoveryRetirementAudit({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.sandboxRegistry,
+      limit: params.limit,
+      closeoutRecoveryClearanceAudit,
+      closeoutRecoveredExitHistory,
+      closeoutRecoveredLifecycle,
+      closeoutRecoveryConfidenceTrend,
+      closeoutRegressionResolutionSummary,
+      closeoutRecoveredMonitoringExitAudit,
+    });
+  const closeoutRecoveredRetirementSummary =
+    await buildSandboxCloseoutRecoveredRetirementSummary({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.sandboxRegistry,
+      limit: params.limit,
+      closeoutRecoveryRetirementAudit,
+      closeoutRecoveryClearanceHistory,
+      closeoutRecoveredReentryAudit,
+      closeoutRecoveredLifecycleHistory,
+      closeoutRecoveryConfidenceTrend,
+      closeoutRegressionResolutionSummary,
+    });
+  const closeoutRecoveryRetirementQueue =
+    await buildSandboxCloseoutRecoveryRetirementQueue({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.sandboxRegistry,
+      limit: params.limit,
+      closeoutRecoveryRetirementAudit,
+      closeoutRecoveredRetirementSummary,
+      closeoutRecoveryClearanceHistory,
+      closeoutRecoveredLifecycleHistory,
+    });
   const handoffSummary = await buildSandboxOperatorHandoffSummary({
     configPath: params.configPath,
     state: params.state,
@@ -1396,6 +1445,9 @@ async function resolveSandboxGovernanceArtifacts(params: {
     closeoutRecoveredLifecycle,
     closeoutRecoveredReentryAudit,
     closeoutRecoveredLifecycleHistory,
+    closeoutRecoveryRetirementAudit,
+    closeoutRecoveredRetirementSummary,
+    closeoutRecoveryRetirementQueue,
   };
 }
 
@@ -1521,6 +1573,15 @@ function buildSandboxGovernanceStatePatch(params: {
   >;
   closeoutRecoveredLifecycleHistory?: Awaited<
     ReturnType<typeof buildSandboxCloseoutRecoveredLifecycleHistory>
+  >;
+  closeoutRecoveryRetirementAudit?: Awaited<
+    ReturnType<typeof buildSandboxCloseoutRecoveryRetirementAudit>
+  >;
+  closeoutRecoveredRetirementSummary?: Awaited<
+    ReturnType<typeof buildSandboxCloseoutRecoveredRetirementSummary>
+  >;
+  closeoutRecoveryRetirementQueue?: Awaited<
+    ReturnType<typeof buildSandboxCloseoutRecoveryRetirementQueue>
   >;
 }) {
   return {
@@ -1711,6 +1772,24 @@ function buildSandboxGovernanceStatePatch(params: {
       ? {
           lastCloseoutRecoveredLifecycleHistory:
             params.closeoutRecoveredLifecycleHistory,
+        }
+      : {}),
+    ...(params.closeoutRecoveryRetirementAudit
+      ? {
+          lastCloseoutRecoveryRetirementAudit:
+            params.closeoutRecoveryRetirementAudit,
+        }
+      : {}),
+    ...(params.closeoutRecoveredRetirementSummary
+      ? {
+          lastCloseoutRecoveredRetirementSummary:
+            params.closeoutRecoveredRetirementSummary,
+        }
+      : {}),
+    ...(params.closeoutRecoveryRetirementQueue
+      ? {
+          lastCloseoutRecoveryRetirementQueue:
+            params.closeoutRecoveryRetirementQueue,
         }
       : {}),
     lastRecoveryIncidentSummary: params.resolutionEvidenceSummary.latestIncidentSummary ?? params.resolutionEvidenceSummary.summary,
@@ -4519,6 +4598,81 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:closeout:recovery:retirement:audit") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutRecoveryRetirementAudit(governance.closeoutRecoveryRetirementAudit)}\n\n${formatSandboxCloseoutRecoveredRetirementSummary(governance.closeoutRecoveredRetirementSummary)}\n\n${formatSandboxCloseoutRecoveredLifecycle(governance.closeoutRecoveredLifecycle)}\n\n${JSON.stringify(governance.closeoutRecoveryRetirementAudit, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:closeout:recovered:retirement:summary") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutRecoveredRetirementSummary(governance.closeoutRecoveredRetirementSummary)}\n\n${formatSandboxCloseoutRecoveryRetirementAudit(governance.closeoutRecoveryRetirementAudit)}\n\n${formatSandboxCloseoutRecoveryRetirementQueue(governance.closeoutRecoveryRetirementQueue)}\n\n${JSON.stringify(governance.closeoutRecoveredRetirementSummary, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:closeout:recovery:retirement:queue") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutRecoveryRetirementQueue(governance.closeoutRecoveryRetirementQueue)}\n\n${formatSandboxCloseoutRecoveredRetirementSummary(governance.closeoutRecoveredRetirementSummary)}\n\n${formatSandboxCloseoutRecoveryRetirementAudit(governance.closeoutRecoveryRetirementAudit)}\n\n${JSON.stringify(governance.closeoutRecoveryRetirementQueue, null, 2)}\n`,
+    );
+    return;
+  }
+
   if (command === "sandbox:recovery:diagnostics") {
     const configPath = options.get("sandbox-config");
     if (!configPath) {
@@ -5153,6 +5307,9 @@ async function main() {
       "  node cli.js sandbox:closeout:recovered:reentry:audit --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:recovered:lifecycle --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:recovered:lifecycle:history --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:recovery:retirement:audit --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:recovered:retirement:summary --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:recovery:retirement:queue --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:review:approve --sandbox-config .tmp/orchestrator-sandbox.json --audit-id sandbox-resolution-audit:... --reason \"closure evidence is sufficient\"",
       "  node cli.js sandbox:closeout:review:reject --sandbox-config .tmp/orchestrator-sandbox.json --reason \"blocked reasons remain\"",
       "  node cli.js sandbox:closeout:review:followup --sandbox-config .tmp/orchestrator-sandbox.json --note \"collect rerun validate evidence\"",
