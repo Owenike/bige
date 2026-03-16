@@ -222,6 +222,18 @@ import {
   formatSandboxCloseoutStabilityRecoverySummary,
 } from "./sandbox-closeout-stability-recovery-summary";
 import {
+  buildSandboxCloseoutRecoveryConfidence,
+  formatSandboxCloseoutRecoveryConfidence,
+} from "./sandbox-closeout-recovery-confidence";
+import {
+  buildSandboxCloseoutRecoveryRegressionAudit,
+  formatSandboxCloseoutRecoveryRegressionAudit,
+} from "./sandbox-closeout-recovery-regression-audit";
+import {
+  buildSandboxCloseoutRecoveredMonitoringQueue,
+  formatSandboxCloseoutRecoveredMonitoringQueue,
+} from "./sandbox-closeout-recovered-monitoring-queue";
+import {
   buildSandboxCloseoutCompletionResolutionSummary,
   formatSandboxCloseoutCompletionResolutionSummary,
 } from "./sandbox-closeout-completion-resolution-summary";
@@ -1140,6 +1152,44 @@ async function resolveSandboxGovernanceArtifacts(params: {
       closeoutWatchlistLifecycle,
       closeoutPostFinalizationFollowupQueue,
     });
+  const closeoutRecoveryConfidence =
+    await buildSandboxCloseoutRecoveryConfidence({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.sandboxRegistry,
+      limit: params.limit,
+      closeoutStabilityRecoverySummary,
+      closeoutWatchlistExitAudit,
+      closeoutWatchlistReAddHistory,
+      closeoutStabilityDrift,
+      closeoutReopenRecurrence,
+      closeoutPostFinalizationFollowupQueue,
+    });
+  const closeoutRecoveryRegressionAudit =
+    await buildSandboxCloseoutRecoveryRegressionAudit({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.sandboxRegistry,
+      limit: params.limit,
+      closeoutRecoveryConfidence,
+      closeoutStabilityRecoverySummary,
+      closeoutWatchlistReAddHistory,
+      closeoutStabilityDrift,
+      closeoutReopenRecurrence,
+    });
+  const closeoutRecoveredMonitoringQueue =
+    await buildSandboxCloseoutRecoveredMonitoringQueue({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.sandboxRegistry,
+      limit: params.limit,
+      closeoutRecoveryConfidence,
+      closeoutRecoveryRegressionAudit,
+      closeoutWatchlistExitAudit,
+      closeoutWatchlistReAddHistory,
+      closeoutStabilityRecoverySummary,
+      closeoutPostFinalizationFollowupQueue,
+    });
   const handoffSummary = await buildSandboxOperatorHandoffSummary({
     configPath: params.configPath,
     state: params.state,
@@ -1194,6 +1244,9 @@ async function resolveSandboxGovernanceArtifacts(params: {
     closeoutWatchlistExitAudit,
     closeoutWatchlistReAddHistory,
     closeoutStabilityRecoverySummary,
+    closeoutRecoveryConfidence,
+    closeoutRecoveryRegressionAudit,
+    closeoutRecoveredMonitoringQueue,
   };
 }
 
@@ -1283,6 +1336,15 @@ function buildSandboxGovernanceStatePatch(params: {
   >;
   closeoutStabilityRecoverySummary?: Awaited<
     ReturnType<typeof buildSandboxCloseoutStabilityRecoverySummary>
+  >;
+  closeoutRecoveryConfidence?: Awaited<
+    ReturnType<typeof buildSandboxCloseoutRecoveryConfidence>
+  >;
+  closeoutRecoveryRegressionAudit?: Awaited<
+    ReturnType<typeof buildSandboxCloseoutRecoveryRegressionAudit>
+  >;
+  closeoutRecoveredMonitoringQueue?: Awaited<
+    ReturnType<typeof buildSandboxCloseoutRecoveredMonitoringQueue>
   >;
 }) {
   return {
@@ -1404,6 +1466,21 @@ function buildSandboxGovernanceStatePatch(params: {
       ? {
           lastCloseoutStabilityRecoverySummary:
             params.closeoutStabilityRecoverySummary,
+        }
+      : {}),
+    ...(params.closeoutRecoveryConfidence
+      ? { lastCloseoutRecoveryConfidence: params.closeoutRecoveryConfidence }
+      : {}),
+    ...(params.closeoutRecoveryRegressionAudit
+      ? {
+          lastCloseoutRecoveryRegressionAudit:
+            params.closeoutRecoveryRegressionAudit,
+        }
+      : {}),
+    ...(params.closeoutRecoveredMonitoringQueue
+      ? {
+          lastCloseoutRecoveredMonitoringQueue:
+            params.closeoutRecoveredMonitoringQueue,
         }
       : {}),
     lastRecoveryIncidentSummary: params.resolutionEvidenceSummary.latestIncidentSummary ?? params.resolutionEvidenceSummary.summary,
@@ -3912,6 +3989,81 @@ async function main() {
     return;
   }
 
+  if (command === "sandbox:closeout:recovery:confidence") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutRecoveryConfidence(governance.closeoutRecoveryConfidence)}\n\n${formatSandboxCloseoutStabilityRecoverySummary(governance.closeoutStabilityRecoverySummary)}\n\n${formatSandboxCloseoutWatchlistExitAudit(governance.closeoutWatchlistExitAudit)}\n\n${JSON.stringify(governance.closeoutRecoveryConfidence, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:closeout:recovery:regression:audit") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutRecoveryRegressionAudit(governance.closeoutRecoveryRegressionAudit)}\n\n${formatSandboxCloseoutRecoveryConfidence(governance.closeoutRecoveryConfidence)}\n\n${formatSandboxCloseoutWatchlistReAddHistory(governance.closeoutWatchlistReAddHistory)}\n\n${JSON.stringify(governance.closeoutRecoveryRegressionAudit, null, 2)}\n`,
+    );
+    return;
+  }
+
+  if (command === "sandbox:closeout:recovered:monitoring:queue") {
+    const configPath = options.get("sandbox-config");
+    if (!configPath) {
+      throw new Error("--sandbox-config is required.");
+    }
+    const sandboxRegistry = await loadSandboxRegistryFromOptions(options);
+    const limit = options.has("limit") ? Number.parseInt(getOption(options, "limit", "10"), 10) : 10;
+    const governance = await resolveSandboxGovernanceArtifacts({
+      configPath,
+      state: existingState,
+      sandboxRegistry,
+      limit,
+    });
+    const updatedState = orchestratorStateSchema.parse({
+      ...existingState,
+      ...buildSandboxGovernanceStatePatch(governance),
+      updatedAt: new Date().toISOString(),
+    });
+    await dependencies.storage.saveState(updatedState);
+    process.stdout.write(
+      `${formatSandboxCloseoutRecoveredMonitoringQueue(governance.closeoutRecoveredMonitoringQueue)}\n\n${formatSandboxCloseoutRecoveryConfidence(governance.closeoutRecoveryConfidence)}\n\n${formatSandboxCloseoutRecoveryRegressionAudit(governance.closeoutRecoveryRegressionAudit)}\n\n${JSON.stringify(governance.closeoutRecoveredMonitoringQueue, null, 2)}\n`,
+    );
+    return;
+  }
+
   if (command === "sandbox:recovery:diagnostics") {
     const configPath = options.get("sandbox-config");
     if (!configPath) {
@@ -4534,6 +4686,9 @@ async function main() {
       "  node cli.js sandbox:closeout:watchlist:exit:audit --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:watchlist:readd:history --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:stability:recovery:summary --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:recovery:confidence --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:recovery:regression:audit --sandbox-config .tmp/orchestrator-sandbox.json",
+      "  node cli.js sandbox:closeout:recovered:monitoring:queue --sandbox-config .tmp/orchestrator-sandbox.json",
       "  node cli.js sandbox:closeout:review:approve --sandbox-config .tmp/orchestrator-sandbox.json --audit-id sandbox-resolution-audit:... --reason \"closure evidence is sufficient\"",
       "  node cli.js sandbox:closeout:review:reject --sandbox-config .tmp/orchestrator-sandbox.json --reason \"blocked reasons remain\"",
       "  node cli.js sandbox:closeout:review:followup --sandbox-config .tmp/orchestrator-sandbox.json --note \"collect rerun validate evidence\"",
