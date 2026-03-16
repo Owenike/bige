@@ -62,9 +62,7 @@ async function loadResolvedSettings(params: {
     tenantId: params.tenantId,
     branchId: params.branchId,
   });
-  if (!resolved.ok) {
-    throw new Error(resolved.error);
-  }
+  if ("error" in resolved) throw new Error(resolved.error);
   params.cache.settings.set(key, resolved.data);
   return resolved.data;
 }

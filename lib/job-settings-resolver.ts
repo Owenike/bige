@@ -250,10 +250,10 @@ export async function resolveJobSettings(params: {
     listTenantFeatureFlags({ supabase, tenantId: params.tenantId }),
   ]);
 
-  if (!jobRowsResult.ok) return { ok: false, error: jobRowsResult.error };
-  if (!notificationRowsResult.ok) return { ok: false, error: notificationRowsResult.error };
-  if (!deliveryRowsResult.ok) return { ok: false, error: deliveryRowsResult.error };
-  if (!featureFlagsResult.ok) return { ok: false, error: featureFlagsResult.error };
+  if ("error" in jobRowsResult) return { ok: false as const, error: jobRowsResult.error };
+  if ("error" in notificationRowsResult) return { ok: false as const, error: notificationRowsResult.error };
+  if ("error" in deliveryRowsResult) return { ok: false as const, error: deliveryRowsResult.error };
+  if ("error" in featureFlagsResult) return { ok: false as const, error: featureFlagsResult.error ?? "feature_flags_load_failed" };
 
   if (jobRowsResult.warning) warnings.push(jobRowsResult.warning);
   if (notificationRowsResult.warning) warnings.push(notificationRowsResult.warning);
@@ -447,11 +447,11 @@ async function updateOrInsert(
       .select(params.select)
       .maybeSingle();
     if (updated.error) return { ok: false as const, error: updated.error.message, item: null as Record<string, unknown> | null };
-    return { ok: true as const, item: (updated.data || null) as Record<string, unknown> | null };
+    return { ok: true as const, item: ((updated.data || null) as unknown) as Record<string, unknown> | null };
   }
   const inserted = await supabase.from(params.table).insert(params.payload).select(params.select).maybeSingle();
   if (inserted.error) return { ok: false as const, error: inserted.error.message, item: null as Record<string, unknown> | null };
-  return { ok: true as const, item: (inserted.data || null) as Record<string, unknown> | null };
+  return { ok: true as const, item: ((inserted.data || null) as unknown) as Record<string, unknown> | null };
 }
 
 export async function upsertTenantJobSetting(params: {

@@ -383,7 +383,7 @@ async function resolveRecipientPreference(params: {
     throw new Error(rolePreferenceResult.error);
   }
   if (!userPreferenceResult.ok) {
-    throw new Error(userPreferenceResult.error);
+    throw new Error("error" in userPreferenceResult ? userPreferenceResult.error : "notification_user_preference_unavailable");
   }
 
   const hasExplicitRule = Boolean(rolePreferenceResult.item || userPreferenceResult.item);
