@@ -235,6 +235,11 @@ jobs:
           npm run test:orchestrator:gpt-code-report-bridge
           npm run test:orchestrator:gpt-code-report-output
           npm run test:orchestrator:gpt-code-report-transport
+          npm run test:orchestrator:gpt-code-report-transport-entry
+          npm run test:orchestrator:gpt-code-report-auto-dispatch
+          npm run test:orchestrator:gpt-code-report-transport-watcher
+          npm run test:orchestrator:gpt-code-report-dispatch-outcome
+          npm run test:orchestrator:gpt-code-report-auto-dispatch-e2e
           npm run test:orchestrator:mock-loop
           npm run test:orchestrator:loop
           npm run test:orchestrator:state-machine

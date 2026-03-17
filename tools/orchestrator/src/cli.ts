@@ -321,6 +321,7 @@ import { describeActorPolicyConfig, loadActorPolicyConfig } from "./actor-policy
 import { formatInboundAuditSummary, listInboundAuditRecords } from "./inbound-audit";
 import { evaluateWebhookRuntime, formatWebhookRuntimeSummary } from "./webhook-runtime";
 import { ingestGptCodeReportFromFile } from "./gpt-code-report-bridge";
+import { runGptCodeReportTransportWatcher, submitGptCodeReportTransportEntry } from "./gpt-code-report-transport";
 
 async function resolveRunId(params: {
   stateId: string;
@@ -540,6 +541,22 @@ async function loadSandboxRegistryFromOptions(options: Map<string, string>) {
   return loadGitHubSandboxTargetRegistry({
     configPath: options.get("sandbox-config") ?? null,
   });
+}
+
+async function readReportTextForTransportCommand(options: Map<string, string>) {
+  const reportPath = options.get("report");
+  if (reportPath) {
+    return readFile(path.resolve(reportPath), "utf8");
+  }
+  if (options.get("stdin") === "true" || !process.stdin.isTTY) {
+    const chunks: string[] = [];
+    process.stdin.setEncoding("utf8");
+    for await (const chunk of process.stdin) {
+      chunks.push(chunk);
+    }
+    return chunks.join("");
+  }
+  throw new Error("Provide --report or pipe report text via stdin.");
 }
 
 function summarizeSandboxImportExport(result: {
@@ -2188,6 +2205,29 @@ async function main() {
       reportPath,
       dependencies,
       outputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-report-bridge", stateId, "latest")),
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "report:transport:submit") {
+    const source = getOption(options, "source", "cli") as "stdin" | "cli" | "repo_drop" | "manual" | "test";
+    const reportText = await readReportTextForTransportCommand(options);
+    const result = await submitGptCodeReportTransportEntry({
+      stateId,
+      reportText,
+      source,
+      dependencies,
+      transportRoot: options.get("transport-root") ?? undefined,
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "report:transport:watch") {
+    const result = await runGptCodeReportTransportWatcher({
+      dependencies,
+      stateId: options.get("state-id") ?? undefined,
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
@@ -5547,6 +5587,8 @@ async function main() {
       "  node cli.js inspect --state-id default",
       "  node cli.js diagnostics --state-id default",
       "  node cli.js report:intake --state-id default --report path/to/gpt-code-report.md",
+      "  node cli.js report:transport:submit --state-id default --stdin true --source cli",
+      "  node cli.js report:transport:watch --state-id default",
       "  node cli.js resume --state-id default",
       "  node cli.js workspace:cleanup --state-id default --workspace-root .tmp/orchestrator-workspaces",
       "  node cli.js cleanup --state-id default --stale-minutes 120",

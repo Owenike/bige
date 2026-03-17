@@ -639,6 +639,7 @@ export function createInitialState(params: {
       lastLiveSmokeTarget: null,
       lastLiveAuthEvidence: null,
       lastGitHubAuthSmokeResult: null,
+      lastGptCodeAutomationState: null,
       lastPreflightResult: null,
       lastBlockedReasons: [],
       lastAuditTrail: null,

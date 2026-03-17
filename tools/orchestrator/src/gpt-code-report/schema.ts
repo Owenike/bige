@@ -174,9 +174,63 @@ export const gptCodeReportBridgeResultSchema = z.object({
   generatedAt: z.string(),
 });
 
+export const gptCodeTransportSourceSchema = z.enum(["stdin", "cli", "repo_drop", "manual", "test"]);
+
+export const gptCodeTransportEntryResultSchema = z.object({
+  stateId: z.string(),
+  status: z.enum(["queued", "failed"]),
+  transportSource: gptCodeTransportSourceSchema,
+  intakeArtifactPath: z.string(),
+  generatedAt: z.string(),
+});
+
+export const gptCodeDispatchEnvelopeSchema = z.object({
+  stateId: z.string(),
+  dispatchedAt: z.string(),
+  dispatchTarget: z.string(),
+  consumer: z.string(),
+  nextInstruction: z.string(),
+  outputPayloadPath: z.string(),
+  nextInstructionPath: z.string(),
+  reviewVerdict: z.enum(["accept", "revise", "stop", "escalate"]),
+  needsManualReview: z.boolean(),
+});
+
+export const gptCodeDispatchGateDecisionSchema = z.object({
+  status: z.enum(["ready", "manual_required", "not_needed"]),
+  reasons: z.array(z.string()).default([]),
+  recommendedNextStep: z.string(),
+});
+
+export const gptCodeTransportDispatchResultSchema = z.object({
+  stateId: z.string(),
+  intakeStatus: z.enum(["accepted", "manual_required", "failed"]),
+  bridgeStatus: z.enum(["accepted", "needs_manual_review", "failed"]),
+  dispatchStatus: z.enum(["dispatched", "manual_required", "failed", "not_needed"]),
+  dispatchTarget: z.string().nullable().default(null),
+  dispatchArtifactPath: z.string().nullable().default(null),
+  outputPayloadPath: z.string().nullable().default(null),
+  nextInstructionPath: z.string().nullable().default(null),
+  generatedAt: z.string(),
+});
+
+export const gptCodeTransportWatcherSummarySchema = z.object({
+  processedStateIds: z.array(z.string()).default([]),
+  dispatchedStateIds: z.array(z.string()).default([]),
+  manualReviewStateIds: z.array(z.string()).default([]),
+  failedStateIds: z.array(z.string()).default([]),
+  generatedAt: z.string(),
+});
+
 export type GptCodeStructuredReport = z.infer<typeof gptCodeStructuredReportSchema>;
 export type GptCodeNormalizedReport = z.infer<typeof gptCodeNormalizedReportSchema>;
 export type GptCodeEvidenceCrossCheck = z.infer<typeof gptCodeEvidenceCrossCheckSchema>;
 export type GptCodeReportOutputTarget = z.infer<typeof gptCodeReportOutputTargetSchema>;
 export type GptCodeReportOutputPayload = z.infer<typeof gptCodeReportOutputPayloadSchema>;
 export type GptCodeReportBridgeResult = z.infer<typeof gptCodeReportBridgeResultSchema>;
+export type GptCodeTransportSource = z.infer<typeof gptCodeTransportSourceSchema>;
+export type GptCodeTransportEntryResult = z.infer<typeof gptCodeTransportEntryResultSchema>;
+export type GptCodeDispatchEnvelope = z.infer<typeof gptCodeDispatchEnvelopeSchema>;
+export type GptCodeDispatchGateDecision = z.infer<typeof gptCodeDispatchGateDecisionSchema>;
+export type GptCodeTransportDispatchResult = z.infer<typeof gptCodeTransportDispatchResultSchema>;
+export type GptCodeTransportWatcherSummary = z.infer<typeof gptCodeTransportWatcherSummarySchema>;

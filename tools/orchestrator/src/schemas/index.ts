@@ -272,6 +272,10 @@ export const cancellationStatusSchema = z.enum(["none", "cancel_requested", "can
 export const pauseStatusSchema = z.enum(["none", "pause_requested", "paused"]);
 export const workerRuntimeStatusSchema = z.enum(["idle", "polling", "running", "backing_off", "stopped"]);
 export const supervisionStatusSchema = z.enum(["inactive", "healthy", "backing_off", "recovering", "stopped"]);
+export const gptCodeTransportIntakeStatusSchema = z.enum(["not_received", "queued", "accepted", "manual_required", "failed"]);
+export const gptCodeTransportBridgeStatusSchema = z.enum(["not_run", "accepted", "needs_manual_review", "failed"]);
+export const gptCodeDispatchStatusSchema = z.enum(["not_queued", "queued", "dispatched", "manual_required", "failed"]);
+export const gptCodeDispatchOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed"]);
 export const recoveryDecisionSchema = z.object({
   runId: z.string(),
   action: z.enum(["none", "requeued", "retained", "paused", "blocked", "cancelled"]),
@@ -332,6 +336,25 @@ export const queueWorkerRecordSchema = z.object({
 export const queueWorkerCollectionSchema = z.object({
   updatedAt: z.string(),
   workers: z.array(queueWorkerRecordSchema).default([]),
+});
+
+export const gptCodeAutomationStateSchema = z.object({
+  transportSource: z.string().nullable().default(null),
+  intakeStatus: gptCodeTransportIntakeStatusSchema.default("not_received"),
+  bridgeStatus: gptCodeTransportBridgeStatusSchema.default("not_run"),
+  dispatchStatus: gptCodeDispatchStatusSchema.default("not_queued"),
+  dispatchTarget: z.string().nullable().default(null),
+  dispatchOutcome: gptCodeDispatchOutcomeSchema.default("not_run"),
+  intakeArtifactPath: z.string().nullable().default(null),
+  bridgeArtifactRoot: z.string().nullable().default(null),
+  outputPayloadPath: z.string().nullable().default(null),
+  nextInstructionPath: z.string().nullable().default(null),
+  dispatchArtifactPath: z.string().nullable().default(null),
+  lastReceivedAt: z.string().nullable().default(null),
+  lastAttemptedAt: z.string().nullable().default(null),
+  lastDispatchedAt: z.string().nullable().default(null),
+  recommendedNextStep: z.string().nullable().default(null),
+  manualReviewReason: z.string().nullable().default(null),
 });
 
 export const artifactPruneResultSchema = z.object({
@@ -3116,6 +3139,7 @@ export const orchestratorStateSchema = z.object({
   lastPrDraftMetadata: prDraftMetadataSchema.nullable().default(null),
   lastGitHubHandoffResult: githubHandoffResultSchema.nullable().default(null),
   lastLiveEvidence: liveEvidenceSchema.nullable().default(null),
+  lastGptCodeAutomationState: gptCodeAutomationStateSchema.nullable().default(null),
   liveStatusReportReadiness: liveStatusReportReadinessSchema.default("unknown"),
   liveStatusReportStatus: liveStatusReportStatusSchema.default("unknown"),
   lastStatusReportPermissionStatus: statusReportPermissionStatusSchema.default("unknown"),
@@ -3389,6 +3413,11 @@ export type QueueRunItem = z.infer<typeof queueRunItemSchema>;
 export type QueueRunCollection = z.infer<typeof queueRunCollectionSchema>;
 export type QueueWorkerRecord = z.infer<typeof queueWorkerRecordSchema>;
 export type QueueWorkerCollection = z.infer<typeof queueWorkerCollectionSchema>;
+export type GptCodeTransportIntakeStatus = z.infer<typeof gptCodeTransportIntakeStatusSchema>;
+export type GptCodeTransportBridgeStatus = z.infer<typeof gptCodeTransportBridgeStatusSchema>;
+export type GptCodeDispatchStatus = z.infer<typeof gptCodeDispatchStatusSchema>;
+export type GptCodeDispatchOutcome = z.infer<typeof gptCodeDispatchOutcomeSchema>;
+export type GptCodeAutomationState = z.infer<typeof gptCodeAutomationStateSchema>;
 
 const stringArrayJsonSchema: JsonSchema = {
   type: "array",
@@ -3816,6 +3845,48 @@ export const ciStatusSummaryJsonSchema: JsonSchema = {
   },
 };
 
+const gptCodeAutomationStateJsonSchema: JsonSchema = {
+  type: "object",
+  nullable: true,
+  additionalProperties: false,
+  required: [
+    "transportSource",
+    "intakeStatus",
+    "bridgeStatus",
+    "dispatchStatus",
+    "dispatchTarget",
+    "dispatchOutcome",
+    "intakeArtifactPath",
+    "bridgeArtifactRoot",
+    "outputPayloadPath",
+    "nextInstructionPath",
+    "dispatchArtifactPath",
+    "lastReceivedAt",
+    "lastAttemptedAt",
+    "lastDispatchedAt",
+    "recommendedNextStep",
+    "manualReviewReason",
+  ],
+  properties: {
+    transportSource: { type: "string", nullable: true },
+    intakeStatus: { type: "string", enum: ["not_received", "queued", "accepted", "manual_required", "failed"] },
+    bridgeStatus: { type: "string", enum: ["not_run", "accepted", "needs_manual_review", "failed"] },
+    dispatchStatus: { type: "string", enum: ["not_queued", "queued", "dispatched", "manual_required", "failed"] },
+    dispatchTarget: { type: "string", nullable: true },
+    dispatchOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed"] },
+    intakeArtifactPath: { type: "string", nullable: true },
+    bridgeArtifactRoot: { type: "string", nullable: true },
+    outputPayloadPath: { type: "string", nullable: true },
+    nextInstructionPath: { type: "string", nullable: true },
+    dispatchArtifactPath: { type: "string", nullable: true },
+    lastReceivedAt: { type: "string", nullable: true },
+    lastAttemptedAt: { type: "string", nullable: true },
+    lastDispatchedAt: { type: "string", nullable: true },
+    recommendedNextStep: { type: "string", nullable: true },
+    manualReviewReason: { type: "string", nullable: true },
+  },
+};
+
 export const orchestratorStateJsonSchema: JsonSchema = {
   type: "object",
   additionalProperties: false,
@@ -3900,6 +3971,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastPrDraftMetadata",
     "lastGitHubHandoffResult",
     "lastLiveEvidence",
+    "lastGptCodeAutomationState",
     "liveStatusReportReadiness",
     "liveStatusReportStatus",
     "lastStatusReportPermissionStatus",
@@ -4613,6 +4685,7 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         patchArtifactPath: { type: "string", nullable: true },
       },
     },
+    lastGptCodeAutomationState: gptCodeAutomationStateJsonSchema,
     liveStatusReportReadiness: {
       type: "string",
       enum: ["unknown", "ready", "degraded", "blocked"],

@@ -195,7 +195,11 @@ $suiteMap = @{
     "$outDir\tests\unit\gpt-code-report-renderer.test.js",
     "$outDir\tests\unit\gpt-code-report-intake.test.js",
     "$outDir\tests\unit\gpt-code-report-bridge.test.js",
-    "$outDir\tests\unit\gpt-code-report-output.test.js"
+    "$outDir\tests\unit\gpt-code-report-output.test.js",
+    "$outDir\tests\unit\gpt-code-report-transport-entry.test.js",
+    "$outDir\tests\unit\gpt-code-report-auto-dispatch.test.js",
+    "$outDir\tests\unit\gpt-code-report-transport-watcher.test.js",
+    "$outDir\tests\unit\gpt-code-report-dispatch-outcome.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js",
@@ -703,8 +707,23 @@ $suiteMap = @{
   "gpt-code-report-output" = @(
     "$outDir\tests\unit\gpt-code-report-output.test.js"
   )
+  "gpt-code-report-transport-entry" = @(
+    "$outDir\tests\unit\gpt-code-report-transport-entry.test.js"
+  )
+  "gpt-code-report-auto-dispatch" = @(
+    "$outDir\tests\unit\gpt-code-report-auto-dispatch.test.js"
+  )
+  "gpt-code-report-transport-watcher" = @(
+    "$outDir\tests\unit\gpt-code-report-transport-watcher.test.js"
+  )
+  "gpt-code-report-dispatch-outcome" = @(
+    "$outDir\tests\unit\gpt-code-report-dispatch-outcome.test.js"
+  )
   "gpt-code-report-transport" = @(
     "$outDir\tests\e2e\gpt-code-report-transport.test.js"
+  )
+  "gpt-code-report-auto-dispatch-e2e" = @(
+    "$outDir\tests\e2e\gpt-code-report-auto-dispatch.test.js"
   )
   "supabase-live" = @(
     "$outDir\tests\integration\supabase-live.test.js"
@@ -887,6 +906,10 @@ $suiteMap = @{
     "$outDir\tests\unit\gpt-code-report-intake.test.js",
     "$outDir\tests\unit\gpt-code-report-bridge.test.js",
     "$outDir\tests\unit\gpt-code-report-output.test.js",
+    "$outDir\tests\unit\gpt-code-report-transport-entry.test.js",
+    "$outDir\tests\unit\gpt-code-report-auto-dispatch.test.js",
+    "$outDir\tests\unit\gpt-code-report-transport-watcher.test.js",
+    "$outDir\tests\unit\gpt-code-report-dispatch-outcome.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",
@@ -898,6 +921,7 @@ $suiteMap = @{
     "$outDir\tests\integration\graceful-shutdown.test.js",
     "$outDir\tests\e2e\gpt-code-report-ingest.test.js",
     "$outDir\tests\e2e\gpt-code-report-transport.test.js",
+    "$outDir\tests\e2e\gpt-code-report-auto-dispatch.test.js",
     "$outDir\tests\e2e\mock-loop.test.js",
     "$outDir\tests\e2e\multi-iteration-loop.test.js"
   )
