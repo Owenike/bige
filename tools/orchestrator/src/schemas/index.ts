@@ -210,6 +210,7 @@ export const sourceEventTypeSchema = z.enum([
   "pull_request_synchronize",
   "issue_comment_command",
   "issue_comment_report",
+  "pull_request_review_comment_report",
   "workflow_dispatch",
 ]);
 export const idempotencyStatusSchema = z.enum(["not_checked", "created", "linked_existing", "duplicate_ignored", "replayed"]);
@@ -276,11 +277,37 @@ export const supervisionStatusSchema = z.enum(["inactive", "healthy", "backing_o
 export const gptCodeTransportIntakeStatusSchema = z.enum(["not_received", "queued", "accepted", "manual_required", "failed"]);
 export const gptCodeTransportBridgeStatusSchema = z.enum(["not_run", "accepted", "needs_manual_review", "failed"]);
 export const gptCodeDispatchStatusSchema = z.enum(["not_queued", "queued", "dispatched", "manual_required", "failed"]);
-export const gptCodeDispatchOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed"]);
+export const gptCodeDispatchOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed", "retryable"]);
 export const gptCodeSourceAdapterStatusSchema = z.enum(["not_received", "received", "linked", "manual_required", "failed"]);
-export const gptCodeTargetAdapterStatusSchema = z.enum(["not_attempted", "dispatched", "manual_required", "failed"]);
+export const gptCodeTargetAdapterStatusSchema = z.enum(["not_attempted", "dispatched", "manual_required", "failed", "retryable"]);
 export const gptCodeAutomaticTriggerStatusSchema = z.enum(["not_triggered", "triggered", "manual_required", "failed"]);
-export const gptCodeExternalAutomationOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed"]);
+export const gptCodeExternalAutomationOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed", "retryable"]);
+export const gptCodeSourceLaneClassificationSchema = z.enum([
+  "github_issue_comment_lane",
+  "github_pull_request_review_comment_lane",
+]);
+export const gptCodeTargetLaneClassificationSchema = z.enum([
+  "github_issue_thread_comment_lane",
+  "github_pull_request_thread_comment_lane",
+  "github_source_thread_fallback_lane",
+  "repo_local_outbox_lane",
+]);
+export const gptCodeRoutingDecisionSchema = z.enum([
+  "state_thread_target",
+  "source_thread_fallback",
+  "manual_required",
+]);
+export const gptCodeFallbackDecisionSchema = z.enum([
+  "not_needed",
+  "source_thread_fallback",
+  "manual_required",
+]);
+export const gptCodeDispatchFailureClassSchema = z.enum([
+  "auth",
+  "routing",
+  "transient",
+  "unknown",
+]);
 export const recoveryDecisionSchema = z.object({
   runId: z.string(),
   action: z.enum(["none", "requeued", "retained", "paused", "blocked", "cancelled"]),
@@ -346,6 +373,7 @@ export const queueWorkerCollectionSchema = z.object({
 export const gptCodeAutomationStateSchema = z.object({
   sourceAdapterStatus: gptCodeSourceAdapterStatusSchema.default("not_received"),
   sourceType: z.string().nullable().default(null),
+  sourceLaneClassification: gptCodeSourceLaneClassificationSchema.nullable().default(null),
   sourceId: z.string().nullable().default(null),
   sourceCorrelationId: z.string().nullable().default(null),
   sourcePayloadPath: z.string().nullable().default(null),
@@ -365,11 +393,19 @@ export const gptCodeAutomationStateSchema = z.object({
   automaticTriggerStatus: gptCodeAutomaticTriggerStatusSchema.default("not_triggered"),
   targetAdapterStatus: gptCodeTargetAdapterStatusSchema.default("not_attempted"),
   targetType: z.string().nullable().default(null),
+  targetLaneClassification: gptCodeTargetLaneClassificationSchema.nullable().default(null),
   targetDestination: z.string().nullable().default(null),
   targetAttemptCount: z.number().int().nonnegative().default(0),
+  targetRetryCount: z.number().int().nonnegative().default(0),
+  targetMaxAttempts: z.number().int().positive().default(2),
+  routingDecision: gptCodeRoutingDecisionSchema.nullable().default(null),
+  fallbackDecision: gptCodeFallbackDecisionSchema.nullable().default(null),
+  dispatchCorrelationId: z.string().nullable().default(null),
   targetExternalReferenceId: z.string().nullable().default(null),
   targetExternalUrl: z.string().nullable().default(null),
   targetDispatchArtifactPath: z.string().nullable().default(null),
+  lastTargetFailureClass: gptCodeDispatchFailureClassSchema.nullable().default(null),
+  dispatchReliabilityOutcome: gptCodeDispatchOutcomeSchema.default("not_run"),
   externalAutomationOutcome: gptCodeExternalAutomationOutcomeSchema.default("not_run"),
   lastReceivedAt: z.string().nullable().default(null),
   lastAttemptedAt: z.string().nullable().default(null),
@@ -3877,6 +3913,7 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
   required: [
     "sourceAdapterStatus",
     "sourceType",
+    "sourceLaneClassification",
     "sourceId",
     "sourceCorrelationId",
     "sourcePayloadPath",
@@ -3896,11 +3933,19 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     "automaticTriggerStatus",
     "targetAdapterStatus",
     "targetType",
+    "targetLaneClassification",
     "targetDestination",
     "targetAttemptCount",
+    "targetRetryCount",
+    "targetMaxAttempts",
+    "routingDecision",
+    "fallbackDecision",
+    "dispatchCorrelationId",
     "targetExternalReferenceId",
     "targetExternalUrl",
     "targetDispatchArtifactPath",
+    "lastTargetFailureClass",
+    "dispatchReliabilityOutcome",
     "externalAutomationOutcome",
     "lastReceivedAt",
     "lastAttemptedAt",
@@ -3911,6 +3956,7 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
   properties: {
     sourceAdapterStatus: { type: "string", enum: ["not_received", "received", "linked", "manual_required", "failed"] },
     sourceType: { type: "string", nullable: true },
+    sourceLaneClassification: { type: "string", nullable: true, enum: ["github_issue_comment_lane", "github_pull_request_review_comment_lane"] },
     sourceId: { type: "string", nullable: true },
     sourceCorrelationId: { type: "string", nullable: true },
     sourcePayloadPath: { type: "string", nullable: true },
@@ -3928,14 +3974,22 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     nextInstructionPath: { type: "string", nullable: true },
     dispatchArtifactPath: { type: "string", nullable: true },
     automaticTriggerStatus: { type: "string", enum: ["not_triggered", "triggered", "manual_required", "failed"] },
-    targetAdapterStatus: { type: "string", enum: ["not_attempted", "dispatched", "manual_required", "failed"] },
+    targetAdapterStatus: { type: "string", enum: ["not_attempted", "dispatched", "manual_required", "failed", "retryable"] },
     targetType: { type: "string", nullable: true },
+    targetLaneClassification: { type: "string", nullable: true, enum: ["github_issue_thread_comment_lane", "github_pull_request_thread_comment_lane", "github_source_thread_fallback_lane", "repo_local_outbox_lane"] },
     targetDestination: { type: "string", nullable: true },
     targetAttemptCount: { type: "number" },
+    targetRetryCount: { type: "number" },
+    targetMaxAttempts: { type: "number" },
+    routingDecision: { type: "string", nullable: true, enum: ["state_thread_target", "source_thread_fallback", "manual_required"] },
+    fallbackDecision: { type: "string", nullable: true, enum: ["not_needed", "source_thread_fallback", "manual_required"] },
+    dispatchCorrelationId: { type: "string", nullable: true },
     targetExternalReferenceId: { type: "string", nullable: true },
     targetExternalUrl: { type: "string", nullable: true },
     targetDispatchArtifactPath: { type: "string", nullable: true },
-    externalAutomationOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed"] },
+    lastTargetFailureClass: { type: "string", nullable: true, enum: ["auth", "routing", "transient", "unknown"] },
+    dispatchReliabilityOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable"] },
+    externalAutomationOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable"] },
     lastReceivedAt: { type: "string", nullable: true },
     lastAttemptedAt: { type: "string", nullable: true },
     lastDispatchedAt: { type: "string", nullable: true },

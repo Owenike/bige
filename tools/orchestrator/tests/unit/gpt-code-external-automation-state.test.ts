@@ -74,7 +74,11 @@ test("external automation state records manual review when gating blocks auto di
   const updated = await dependencies.storage.loadState(state.id);
 
   assert.equal(result?.outcome, "manual_required");
+  assert.equal(updated?.lastGptCodeAutomationState?.sourceLaneClassification, "github_issue_comment_lane");
   assert.equal(updated?.lastGptCodeAutomationState?.targetAdapterStatus, "manual_required");
+  assert.equal(updated?.lastGptCodeAutomationState?.routingDecision, "manual_required");
+  assert.equal(updated?.lastGptCodeAutomationState?.fallbackDecision, "manual_required");
+  assert.equal(updated?.lastGptCodeAutomationState?.dispatchReliabilityOutcome, "manual_required");
   assert.equal(updated?.lastGptCodeAutomationState?.externalAutomationOutcome, "manual_required");
   assert.equal((updated?.lastGptCodeAutomationState?.manualReviewReason?.length ?? 0) > 0, true);
 });

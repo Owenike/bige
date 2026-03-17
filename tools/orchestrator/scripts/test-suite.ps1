@@ -203,7 +203,8 @@ $suiteMap = @{
     "$outDir\tests\unit\gpt-code-external-source-adapter.test.js",
     "$outDir\tests\unit\gpt-code-external-target-adapter.test.js",
     "$outDir\tests\unit\gpt-code-external-trigger.test.js",
-    "$outDir\tests\unit\gpt-code-external-automation-state.test.js"
+    "$outDir\tests\unit\gpt-code-external-automation-state.test.js",
+    "$outDir\tests\unit\gpt-code-external-dispatch-reliability.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js",
@@ -741,6 +742,9 @@ $suiteMap = @{
   "gpt-code-external-automation-state" = @(
     "$outDir\tests\unit\gpt-code-external-automation-state.test.js"
   )
+  "gpt-code-external-dispatch-reliability" = @(
+    "$outDir\tests\unit\gpt-code-external-dispatch-reliability.test.js"
+  )
   "gpt-code-external-automation" = @(
     "$outDir\tests\e2e\gpt-code-external-automation.test.js"
   )
@@ -933,6 +937,7 @@ $suiteMap = @{
     "$outDir\tests\unit\gpt-code-external-target-adapter.test.js",
     "$outDir\tests\unit\gpt-code-external-trigger.test.js",
     "$outDir\tests\unit\gpt-code-external-automation-state.test.js",
+    "$outDir\tests\unit\gpt-code-external-dispatch-reliability.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",

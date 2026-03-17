@@ -40,6 +40,7 @@ import {
 } from "../schemas";
 import {
   extractGptCodeReportFromGitHubComment,
+  getExternalSourceEventType,
   runGptCodeExternalAutomationFromWebhook,
   type GptCodeExternalTargetAdapter,
 } from "../gpt-code-external-automation";
@@ -408,6 +409,7 @@ export async function ingestGitHubWebhook(params: {
     receivedAt,
   });
   if (reportSource) {
+    const reportSourceEventType = getExternalSourceEventType(reportSource);
     const actorDecision = resolveActorAuthorization({
       actor: actorIdentity,
       command: null,
@@ -428,7 +430,7 @@ export async function ingestGitHubWebhook(params: {
         receivedAt,
         deliveryId: parsedHeaders.deliveryId,
         eventType: parsedHeaders.eventType,
-        sourceEventType: "issue_comment_report",
+        sourceEventType: reportSourceEventType,
         sourceEventId: reportSource.sourceId,
         repository: reportSource.repository,
         issueNumber: reportSource.issueNumber,
@@ -481,7 +483,7 @@ export async function ingestGitHubWebhook(params: {
         receivedAt,
         deliveryId: parsedHeaders.deliveryId,
         eventType: parsedHeaders.eventType,
-        sourceEventType: "issue_comment_report",
+        sourceEventType: reportSourceEventType,
         sourceEventId: reportSource.sourceId,
         repository: reportSource.repository,
         issueNumber: reportSource.issueNumber,
@@ -540,7 +542,7 @@ export async function ingestGitHubWebhook(params: {
         receivedAt,
         deliveryId: parsedHeaders.deliveryId,
         eventType: parsedHeaders.eventType,
-        sourceEventType: "issue_comment_report",
+        sourceEventType: reportSourceEventType,
         sourceEventId: reportSource.sourceId,
         repository: reportSource.repository,
         issueNumber: reportSource.issueNumber,
@@ -589,7 +591,7 @@ export async function ingestGitHubWebhook(params: {
       receivedAt,
       deliveryId: parsedHeaders.deliveryId,
       eventType: parsedHeaders.eventType,
-      sourceEventType: "issue_comment_report",
+      sourceEventType: reportSourceEventType,
       sourceEventId: reportSource.sourceId,
       repository: reportSource.repository,
       issueNumber: reportSource.issueNumber,

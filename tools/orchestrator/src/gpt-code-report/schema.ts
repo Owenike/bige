@@ -174,7 +174,15 @@ export const gptCodeReportBridgeResultSchema = z.object({
   generatedAt: z.string(),
 });
 
-export const gptCodeTransportSourceSchema = z.enum(["stdin", "cli", "repo_drop", "manual", "test", "github_issue_comment"]);
+export const gptCodeTransportSourceSchema = z.enum([
+  "stdin",
+  "cli",
+  "repo_drop",
+  "manual",
+  "test",
+  "github_issue_comment",
+  "github_pull_request_review_comment",
+]);
 
 export const gptCodeTransportEntryResultSchema = z.object({
   stateId: z.string(),
@@ -223,7 +231,8 @@ export const gptCodeTransportWatcherSummarySchema = z.object({
 });
 
 export const gptCodeExternalSourceMetadataSchema = z.object({
-  sourceType: z.enum(["github_issue_comment"]),
+  sourceType: z.enum(["github_issue_comment", "github_pull_request_review_comment"]),
+  sourceLaneClassification: z.enum(["github_issue_comment_lane", "github_pull_request_review_comment_lane"]),
   sourceId: z.string(),
   sourceCorrelationId: z.string(),
   repository: z.string(),
@@ -238,9 +247,22 @@ export const gptCodeExternalSourceMetadataSchema = z.object({
 export const gptCodeExternalTargetDispatchSchema = z.object({
   stateId: z.string(),
   targetType: z.enum(["github_issue_comment"]),
+  targetLaneClassification: z.enum([
+    "github_issue_thread_comment_lane",
+    "github_pull_request_thread_comment_lane",
+    "github_source_thread_fallback_lane",
+    "repo_local_outbox_lane",
+  ]),
   targetDestination: z.string(),
+  routingDecision: z.enum(["state_thread_target", "source_thread_fallback", "manual_required"]),
+  fallbackDecision: z.enum(["not_needed", "source_thread_fallback", "manual_required"]),
   attemptCount: z.number().int().nonnegative(),
-  outcome: z.enum(["success", "manual_required", "failed"]),
+  retryCount: z.number().int().nonnegative().default(0),
+  maxAttempts: z.number().int().positive().default(2),
+  outcome: z.enum(["success", "manual_required", "failed", "retryable"]),
+  retryEligible: z.boolean().default(false),
+  failureClass: z.enum(["auth", "routing", "transient", "unknown"]).nullable().default(null),
+  correlationId: z.string(),
   externalReferenceId: z.string().nullable().default(null),
   externalUrl: z.string().nullable().default(null),
   dispatchArtifactPath: z.string().nullable().default(null),
@@ -254,7 +276,7 @@ export const gptCodeExternalAutomationResultSchema = z.object({
   automaticTriggerStatus: z.enum(["triggered", "manual_required", "failed"]),
   transportDispatchStatus: z.enum(["dispatched", "manual_required", "failed", "not_needed"]),
   targetDispatch: gptCodeExternalTargetDispatchSchema.nullable().default(null),
-  outcome: z.enum(["success", "manual_required", "failed"]),
+  outcome: z.enum(["success", "manual_required", "failed", "retryable"]),
   generatedAt: z.string(),
 });
 

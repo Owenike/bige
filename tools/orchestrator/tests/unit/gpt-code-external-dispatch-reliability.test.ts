@@ -7,8 +7,8 @@ import { createDefaultDependencies, createInitialState } from "../../src/orchest
 import { runGptCodeExternalAutomationFromWebhook } from "../../src/gpt-code-external-automation";
 import { completedSliceReport } from "./helpers/gpt-code-report-fixtures";
 
-test("external automation trigger can intake a GitHub report comment and auto-dispatch to an external target", async () => {
-  const storageRoot = await mkdtemp(path.join(tmpdir(), "gpt-code-external-trigger-"));
+test("external automation retries a retryable target dispatch and records reliability metadata", async () => {
+  const storageRoot = await mkdtemp(path.join(tmpdir(), "gpt-code-external-reliability-"));
   const repoPath = process.cwd();
   const dependencies = createDefaultDependencies({
     repoPath,
@@ -17,15 +17,15 @@ test("external automation trigger can intake a GitHub report comment and auto-di
   });
   const state = {
     ...createInitialState({
-      id: "external-trigger-state",
+      id: "external-reliability-state",
       repoPath,
       repoName: "bige",
-      userGoal: "Auto trigger from external source",
-      objective: "Process a GitHub report comment without manual transport submit",
-      subtasks: ["external-source", "external-target", "trigger"],
+      userGoal: "Track retryable external dispatch",
+      objective: "Retry a transient external target failure once and persist reliability facts",
+      subtasks: ["external-source", "retry", "dispatch-reliability"],
       allowedFiles: ["tools/orchestrator", "package.json", ".github/workflows"],
       forbiddenFiles: ["app/api/platform/notifications"],
-      successCriteria: ["external trigger dispatches automatically"],
+      successCriteria: ["retry metadata is persisted"],
       autoMode: true,
       approvalMode: "auto",
     }),
@@ -43,30 +43,54 @@ test("external automation trigger can intake a GitHub report comment and auto-di
   };
   await dependencies.storage.saveState(state);
 
+  let attempts = 0;
   const result = await runGptCodeExternalAutomationFromWebhook({
     payload: {
       action: "created",
       issue: {
         number: 44,
-        title: "Transport MVP",
+        title: "Retryable external dispatch",
       },
       comment: {
-        id: 9911,
+        id: 9944,
         body: completedSliceReport,
       },
       repository: {
         full_name: "example/bige",
       },
     },
-    deliveryId: "delivery-report-trigger",
-    payloadPath: "C:/tmp/report-payload.json",
-    headersPath: "C:/tmp/report-headers.json",
+    deliveryId: "delivery-report-retry",
+    payloadPath: "C:/tmp/report-retry-payload.json",
+    headersPath: "C:/tmp/report-retry-headers.json",
     receivedAt: "2026-03-18T00:00:00.000Z",
     dependencies,
     actualGitStatusShort: " M package-lock.json\n M app/forgot-password/page.tsx",
     externalTargetAdapter: {
       kind: "github_issue_comment",
+      maxAttempts: 2,
       async dispatchNextInstruction() {
+        attempts += 1;
+        if (attempts === 1) {
+          return {
+            stateId: state.id,
+            targetType: "github_issue_comment",
+            targetLaneClassification: "github_issue_thread_comment_lane",
+            targetDestination: "github://example/bige/issues/44/comments",
+            routingDecision: "state_thread_target",
+            fallbackDecision: "not_needed",
+            attemptCount: 1,
+            retryCount: 0,
+            maxAttempts: 2,
+            outcome: "retryable",
+            retryEligible: true,
+            failureClass: "transient",
+            correlationId: "orchestrator-next-instruction:external-reliability-state",
+            externalReferenceId: null,
+            externalUrl: null,
+            dispatchArtifactPath: "C:/tmp/external-retry-attempt-1.json",
+            dispatchedAt: "2026-03-18T00:00:01.000Z",
+          };
+        }
         return {
           stateId: state.id,
           targetType: "github_issue_comment",
@@ -74,17 +98,17 @@ test("external automation trigger can intake a GitHub report comment and auto-di
           targetDestination: "github://example/bige/issues/44/comments",
           routingDecision: "state_thread_target",
           fallbackDecision: "not_needed",
-          attemptCount: 1,
-          retryCount: 0,
+          attemptCount: 2,
+          retryCount: 1,
           maxAttempts: 2,
           outcome: "success",
           retryEligible: false,
           failureClass: null,
-          correlationId: "orchestrator-next-instruction:external-trigger-state",
-          externalReferenceId: "20001",
-          externalUrl: "https://github.com/example/bige/issues/44#issuecomment-20001",
-          dispatchArtifactPath: "C:/tmp/external-target-dispatch.json",
-          dispatchedAt: "2026-03-18T00:00:01.000Z",
+          correlationId: "orchestrator-next-instruction:external-reliability-state",
+          externalReferenceId: "40001",
+          externalUrl: "https://github.com/example/bige/issues/44#issuecomment-40001",
+          dispatchArtifactPath: "C:/tmp/external-retry-attempt-2.json",
+          dispatchedAt: "2026-03-18T00:00:02.000Z",
         };
       },
     },
@@ -92,12 +116,9 @@ test("external automation trigger can intake a GitHub report comment and auto-di
   const updated = await dependencies.storage.loadState(state.id);
 
   assert.equal(result?.outcome, "success");
-  assert.equal(updated?.lastGptCodeAutomationState?.sourceAdapterStatus, "linked");
-  assert.equal(updated?.lastGptCodeAutomationState?.automaticTriggerStatus, "triggered");
+  assert.equal(attempts, 2);
+  assert.equal(updated?.lastGptCodeAutomationState?.targetAttemptCount, 2);
+  assert.equal(updated?.lastGptCodeAutomationState?.targetRetryCount, 1);
+  assert.equal(updated?.lastGptCodeAutomationState?.dispatchReliabilityOutcome, "success");
   assert.equal(updated?.lastGptCodeAutomationState?.targetAdapterStatus, "dispatched");
-  assert.equal(updated?.lastGptCodeAutomationState?.sourceLaneClassification, "github_issue_comment_lane");
-  assert.equal(updated?.lastGptCodeAutomationState?.targetLaneClassification, "github_issue_thread_comment_lane");
-  assert.equal(updated?.lastGptCodeAutomationState?.routingDecision, "state_thread_target");
-  assert.equal(updated?.lastGptCodeAutomationState?.fallbackDecision, "not_needed");
-  assert.equal(updated?.lastGptCodeAutomationState?.externalAutomationOutcome, "success");
 });

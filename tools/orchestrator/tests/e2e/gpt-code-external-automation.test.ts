@@ -37,29 +37,28 @@ test("external source webhook can trigger transport, bridge, and external target
       autoMode: true,
       approvalMode: "auto",
     }),
-    sourceEventType: "issue_opened" as const,
-    sourceEventId: "issue:44:opened",
+    sourceEventType: "pull_request_opened" as const,
+    sourceEventId: "pr:44:opened",
     sourceEventSummary: {
       repository: "example/bige",
       branch: "main",
-      issueNumber: 44,
-      prNumber: null,
+      issueNumber: null,
+      prNumber: 44,
       commentId: null,
       label: null,
       headSha: null,
       command: null,
-      triggerReason: "issue_opened from example/bige#44",
+      triggerReason: "pull_request_opened from example/bige#44",
     },
   };
   await dependencies.storage.saveState(existing);
 
   const rawBody = JSON.stringify({
     action: "created",
-    issue: {
+    pull_request: {
       id: 44,
       number: 44,
       title: "External automation e2e",
-      labels: [{ name: "orchestrator" }],
     },
     comment: {
       id: 93001,
@@ -76,11 +75,12 @@ test("external source webhook can trigger transport, bridge, and external target
       type: "User",
     },
   });
+  let attempts = 0;
 
   const result = await ingestGitHubWebhook({
     rawBody,
     headers: {
-      "x-github-event": "issue_comment",
+      "x-github-event": "pull_request_review_comment",
       "x-github-delivery": "delivery-external-automation",
       "x-hub-signature-256": sign(rawBody, "secret"),
     },
@@ -92,16 +92,47 @@ test("external source webhook can trigger transport, bridge, and external target
     statusAdapter: null,
     externalTargetAdapter: {
       kind: "github_issue_comment",
+      maxAttempts: 2,
       async dispatchNextInstruction() {
+        attempts += 1;
+        if (attempts === 1) {
+          return {
+            stateId: existing.id,
+            targetType: "github_issue_comment",
+            targetLaneClassification: "github_pull_request_thread_comment_lane",
+            targetDestination: "github://example/bige/issues/44/comments",
+            routingDecision: "state_thread_target",
+            fallbackDecision: "not_needed",
+            attemptCount: 1,
+            retryCount: 0,
+            maxAttempts: 2,
+            outcome: "retryable",
+            retryEligible: true,
+            failureClass: "transient",
+            correlationId: "orchestrator-next-instruction:external-e2e-state",
+            externalReferenceId: null,
+            externalUrl: null,
+            dispatchArtifactPath: path.join(root, "external-target-dispatch-attempt-1.json"),
+            dispatchedAt: "2026-03-18T00:00:01.000Z",
+          };
+        }
         return {
           stateId: existing.id,
           targetType: "github_issue_comment",
+          targetLaneClassification: "github_pull_request_thread_comment_lane",
           targetDestination: "github://example/bige/issues/44/comments",
-          attemptCount: 1,
+          routingDecision: "state_thread_target",
+          fallbackDecision: "not_needed",
+          attemptCount: 2,
+          retryCount: 1,
+          maxAttempts: 2,
           outcome: "success",
+          retryEligible: false,
+          failureClass: null,
+          correlationId: "orchestrator-next-instruction:external-e2e-state",
           externalReferenceId: "30001",
           externalUrl: "https://github.com/example/bige/issues/44#issuecomment-30001",
-          dispatchArtifactPath: path.join(root, "external-target-dispatch.json"),
+          dispatchArtifactPath: path.join(root, "external-target-dispatch-attempt-2.json"),
           dispatchedAt: "2026-03-18T00:00:02.000Z",
         };
       },
@@ -112,9 +143,20 @@ test("external source webhook can trigger transport, bridge, and external target
   const updated = await dependencies.storage.loadState(existing.id);
 
   assert.equal(result.status, "routed");
-  assert.equal(updated?.lastGptCodeAutomationState?.sourceType, "github_issue_comment");
+  assert.equal(updated?.lastGptCodeAutomationState?.sourceType, "github_pull_request_review_comment");
+  assert.equal(
+    updated?.lastGptCodeAutomationState?.sourceLaneClassification,
+    "github_pull_request_review_comment_lane",
+  );
   assert.equal(updated?.lastGptCodeAutomationState?.automaticTriggerStatus, "triggered");
   assert.equal(updated?.lastGptCodeAutomationState?.targetAdapterStatus, "dispatched");
+  assert.equal(
+    updated?.lastGptCodeAutomationState?.targetLaneClassification,
+    "github_pull_request_thread_comment_lane",
+  );
+  assert.equal(updated?.lastGptCodeAutomationState?.routingDecision, "state_thread_target");
+  assert.equal(updated?.lastGptCodeAutomationState?.fallbackDecision, "not_needed");
+  assert.equal(updated?.lastGptCodeAutomationState?.targetRetryCount, 1);
   assert.equal(updated?.lastGptCodeAutomationState?.externalAutomationOutcome, "success");
   assert.equal(
     updated?.lastExecutionReport?.artifacts.some((artifact) => artifact.kind === "gpt_code_external_target_dispatch"),

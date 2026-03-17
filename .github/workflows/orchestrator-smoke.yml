@@ -244,6 +244,7 @@ jobs:
           npm run test:orchestrator:gpt-code-external-target-adapter
           npm run test:orchestrator:gpt-code-external-trigger
           npm run test:orchestrator:gpt-code-external-automation-state
+          npm run test:orchestrator:gpt-code-external-dispatch-reliability
           npm run test:orchestrator:gpt-code-external-automation
           npm run test:orchestrator:mock-loop
           npm run test:orchestrator:loop
