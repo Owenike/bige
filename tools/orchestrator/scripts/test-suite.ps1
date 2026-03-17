@@ -189,7 +189,10 @@ $suiteMap = @{
     "$outDir\tests\unit\remote-diagnostics.test.js",
     "$outDir\tests\unit\backend-transfer.test.js",
     "$outDir\tests\unit\multi-worker-remote.test.js",
-    "$outDir\tests\unit\backend-health.test.js"
+    "$outDir\tests\unit\backend-health.test.js",
+    "$outDir\tests\unit\gpt-code-report-parser.test.js",
+    "$outDir\tests\unit\gpt-code-report-normalize.test.js",
+    "$outDir\tests\unit\gpt-code-report-renderer.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js",
@@ -676,6 +679,18 @@ $suiteMap = @{
   "backend-health" = @(
     "$outDir\tests\unit\backend-health.test.js"
   )
+  "gpt-code-report-parser" = @(
+    "$outDir\tests\unit\gpt-code-report-parser.test.js"
+  )
+  "gpt-code-report-normalize" = @(
+    "$outDir\tests\unit\gpt-code-report-normalize.test.js"
+  )
+  "gpt-code-report-renderer" = @(
+    "$outDir\tests\unit\gpt-code-report-renderer.test.js"
+  )
+  "gpt-code-report-ingest" = @(
+    "$outDir\tests\e2e\gpt-code-report-ingest.test.js"
+  )
   "supabase-live" = @(
     "$outDir\tests\integration\supabase-live.test.js"
   )
@@ -851,6 +866,9 @@ $suiteMap = @{
     "$outDir\tests\unit\backend-transfer.test.js",
     "$outDir\tests\unit\multi-worker-remote.test.js",
     "$outDir\tests\unit\backend-health.test.js",
+    "$outDir\tests\unit\gpt-code-report-parser.test.js",
+    "$outDir\tests\unit\gpt-code-report-normalize.test.js",
+    "$outDir\tests\unit\gpt-code-report-renderer.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",
@@ -860,6 +878,7 @@ $suiteMap = @{
     "$outDir\tests\integration\webhook-runtime.test.js",
     "$outDir\tests\integration\webhook-hosting.test.js",
     "$outDir\tests\integration\graceful-shutdown.test.js",
+    "$outDir\tests\e2e\gpt-code-report-ingest.test.js",
     "$outDir\tests\e2e\mock-loop.test.js",
     "$outDir\tests\e2e\multi-iteration-loop.test.js"
   )

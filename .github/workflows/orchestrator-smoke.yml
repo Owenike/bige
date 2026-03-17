@@ -227,6 +227,10 @@ jobs:
           npm run test:orchestrator:backend-transfer
           npm run test:orchestrator:multi-worker-remote
           npm run test:orchestrator:backend-health
+          npm run test:orchestrator:gpt-code-report-parser
+          npm run test:orchestrator:gpt-code-report-normalize
+          npm run test:orchestrator:gpt-code-report-renderer
+          npm run test:orchestrator:gpt-code-report-ingest
           npm run test:orchestrator:mock-loop
           npm run test:orchestrator:loop
           npm run test:orchestrator:state-machine
