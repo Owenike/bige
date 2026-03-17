@@ -157,6 +157,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-recovery-retirement-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-retirement-summary.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovery-retirement-queue.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovery-retirement-history.test.js",
+    "$outDir\tests\unit\sandbox-closeout-retirement-exit-criteria.test.js",
+    "$outDir\tests\unit\sandbox-closeout-retired-case-audit-history.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",
@@ -562,6 +565,15 @@ $suiteMap = @{
   "sandbox-closeout-recovery-retirement-queue" = @(
     "$outDir\tests\unit\sandbox-closeout-recovery-retirement-queue.test.js"
   )
+  "sandbox-closeout-recovery-retirement-history" = @(
+    "$outDir\tests\unit\sandbox-closeout-recovery-retirement-history.test.js"
+  )
+  "sandbox-closeout-retirement-exit-criteria" = @(
+    "$outDir\tests\unit\sandbox-closeout-retirement-exit-criteria.test.js"
+  )
+  "sandbox-closeout-retired-case-audit-history" = @(
+    "$outDir\tests\unit\sandbox-closeout-retired-case-audit-history.test.js"
+  )
   "github-report-permissions" = @(
     "$outDir\tests\unit\github-report-permissions.test.js"
   )
@@ -806,6 +818,9 @@ $suiteMap = @{
     "$outDir\tests\unit\sandbox-closeout-recovery-retirement-audit.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovered-retirement-summary.test.js",
     "$outDir\tests\unit\sandbox-closeout-recovery-retirement-queue.test.js",
+    "$outDir\tests\unit\sandbox-closeout-recovery-retirement-history.test.js",
+    "$outDir\tests\unit\sandbox-closeout-retirement-exit-criteria.test.js",
+    "$outDir\tests\unit\sandbox-closeout-retired-case-audit-history.test.js",
     "$outDir\tests\unit\github-report-permissions.test.js",
     "$outDir\tests\unit\report-delivery-audit.test.js",
     "$outDir\tests\unit\reporting-operator-summary.test.js",

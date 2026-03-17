@@ -28,6 +28,9 @@ import { buildSandboxCloseoutRecoveredReentryAudit } from "../sandbox-closeout-r
 import { buildSandboxCloseoutRecoveryRetirementAudit } from "../sandbox-closeout-recovery-retirement-audit";
 import { buildSandboxCloseoutRecoveredRetirementSummary } from "../sandbox-closeout-recovered-retirement-summary";
 import { buildSandboxCloseoutRecoveryRetirementQueue } from "../sandbox-closeout-recovery-retirement-queue";
+import { buildSandboxCloseoutRecoveryRetirementHistory } from "../sandbox-closeout-recovery-retirement-history";
+import { buildSandboxCloseoutRetirementExitCriteria } from "../sandbox-closeout-retirement-exit-criteria";
+import { buildSandboxCloseoutRetiredCaseAuditHistory } from "../sandbox-closeout-retired-case-audit-history";
 import { buildSandboxCloseoutCompletionLifecycle } from "../sandbox-closeout-completion-lifecycle";
 import { buildSandboxCloseoutCompletionResolutionSummary } from "../sandbox-closeout-completion-resolution-summary";
 import { buildSandboxCloseoutDispositionSummary } from "../sandbox-closeout-disposition-summary";
@@ -427,12 +430,52 @@ export async function buildSandboxOperatorHandoffSummary(params: {
       closeoutRecoveryClearanceHistory,
       closeoutRecoveredLifecycleHistory,
     });
+  const closeoutRecoveryRetirementHistory =
+    await buildSandboxCloseoutRecoveryRetirementHistory({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutRecoveryRetirementAudit,
+      closeoutRecoveredReentryAudit,
+      closeoutRecoveredLifecycle,
+      closeoutWatchlistReAddHistory,
+    });
+  const closeoutRetirementExitCriteria =
+    await buildSandboxCloseoutRetirementExitCriteria({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutRecoveryRetirementAudit,
+      closeoutRecoveredRetirementSummary,
+      closeoutRecoveryRetirementQueue,
+      closeoutRecoveryClearanceHistory,
+      closeoutRecoveredLifecycleHistory,
+      closeoutRecoveryConfidenceTrend,
+      closeoutRegressionResolutionSummary,
+    });
+  const closeoutRetiredCaseAuditHistory =
+    await buildSandboxCloseoutRetiredCaseAuditHistory({
+      configPath: params.configPath,
+      state: params.state,
+      loadedRegistry: params.loadedRegistry,
+      limit,
+      closeoutRecoveryRetirementHistory,
+      closeoutRecoveredExitHistory,
+      closeoutRecoveredLifecycle,
+      closeoutRecoveryRegressionAudit,
+      closeoutWatchlistReAddHistory,
+    });
   const repeatedHotspots = incidents.incidents
     .filter((incident) => incident.type === "repeated_blocked_hotspot")
     .flatMap((incident) => incident.affectedProfiles)
     .filter((profileId, index, array) => array.indexOf(profileId) === index)
     .sort();
   const latestActionSummary =
+    closeoutRetiredCaseAuditHistory.summaryLine ??
+    closeoutRetirementExitCriteria.summaryLine ??
+    closeoutRecoveryRetirementHistory.summaryLine ??
     closeoutRecoveryRetirementQueue.summaryLine ??
     closeoutRecoveredRetirementSummary.summaryLine ??
     closeoutRecoveryRetirementAudit.summaryLine ??
@@ -468,8 +511,8 @@ export async function buildSandboxOperatorHandoffSummary(params: {
       : null;
   const handoffLine =
     governance.latestUnresolvedIncidentCount === 0
-      ? `Sandbox recovery handoff: ${closeoutRecoveryRetirementQueue.summaryLine}`
-      : `Sandbox recovery handoff: ${closeoutRecoveryRetirementQueue.summaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
+      ? `Sandbox recovery handoff: ${closeoutRetiredCaseAuditHistory.summaryLine}`
+      : `Sandbox recovery handoff: ${closeoutRetiredCaseAuditHistory.summaryLine} Hotspots=${governance.unresolvedHotspots.join(", ") || "none"}.`;
   const summary =
     governance.latestUnresolvedIncidentCount === 0
       ? "No unresolved sandbox recovery incident currently requires operator handoff."
@@ -481,6 +524,9 @@ export async function buildSandboxOperatorHandoffSummary(params: {
     unresolvedHotspots: governance.unresolvedHotspots,
     repeatedBlockedManualRequiredHotspots: repeatedHotspots,
     recommendedNextStep:
+      closeoutRetirementExitCriteria.recommendedNextOperatorStep ||
+      closeoutRetiredCaseAuditHistory.recommendedNextOperatorStep ||
+      closeoutRecoveryRetirementHistory.recommendedNextOperatorStep ||
       closeoutRecoveryRetirementQueue.recommendedNextOperatorStep ||
       closeoutRecoveredRetirementSummary.recommendedNextOperatorStep ||
       closeoutRecoveryRetirementAudit.recommendedNextOperatorStep ||

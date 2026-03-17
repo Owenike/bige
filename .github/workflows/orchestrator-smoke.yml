@@ -205,6 +205,9 @@ jobs:
           npm run test:orchestrator:sandbox-closeout-recovery-retirement-audit
           npm run test:orchestrator:sandbox-closeout-recovered-retirement-summary
           npm run test:orchestrator:sandbox-closeout-recovery-retirement-queue
+          npm run test:orchestrator:sandbox-closeout-recovery-retirement-history
+          npm run test:orchestrator:sandbox-closeout-retirement-exit-criteria
+          npm run test:orchestrator:sandbox-closeout-retired-case-audit-history
           npm run test:orchestrator:github-report-permissions
           npm run test:orchestrator:report-delivery-audit
           npm run test:orchestrator:reporting-operator-summary

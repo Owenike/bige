@@ -2706,6 +2706,108 @@ export const sandboxCloseoutRecoveryRetirementQueueSchema = z.object({
   summaryLine: z.string(),
 });
 
+export const sandboxCloseoutRecoveryRetirementHistoryEntrySchema = z.object({
+  recordedAt: z.string().nullable().default(null),
+  recoveryRetirementStatus:
+    sandboxCloseoutRecoveryRetirementAuditSchema.shape.recoveryRetirementStatus,
+  retirementAllowed: z.boolean().default(false),
+  caseLeavesActiveGovernance: z.boolean().default(false),
+  caseRemainsReopenable: z.boolean().default(false),
+  caseRemainsRegressionProne: z.boolean().default(false),
+  summaryLine: z.string(),
+});
+
+export const sandboxCloseoutRecoveryRetirementHistorySchema = z.object({
+  entries: z.array(sandboxCloseoutRecoveryRetirementHistoryEntrySchema).default([]),
+  latestRetirementAuditEntry:
+    sandboxCloseoutRecoveryRetirementHistoryEntrySchema.nullable().default(null),
+  previousRetirementAuditEntry:
+    sandboxCloseoutRecoveryRetirementHistoryEntrySchema.nullable().default(null),
+  latestRetirementStatus:
+    sandboxCloseoutRecoveryRetirementAuditSchema.shape.recoveryRetirementStatus,
+  repeatedRetirementAllowedPatterns: z.array(z.string()).default([]),
+  repeatedRetirementBlockedPatterns: z.array(z.string()).default([]),
+  repeatedRetirementAllowedButReopenablePatterns: z.array(z.string()).default([]),
+  repeatedRetiredThenReenteredPatterns: z.array(z.string()).default([]),
+  repeatedRetiredThenRegressedPatterns: z.array(z.string()).default([]),
+  repeatedRetiredThenWatchlistReaddedPatterns: z.array(z.string()).default([]),
+  historyRetainedEntryCount: z.number().int().nonnegative().default(0),
+  historyReasons: z.array(z.string()).default([]),
+  recommendedNextOperatorStep: z.string(),
+  summaryLine: z.string(),
+});
+
+export const sandboxCloseoutRetirementExitCriteriaSchema = z.object({
+  latestRecoveryStatus:
+    sandboxCloseoutRecoveryRetirementAuditSchema.shape.latestRecoveryStatus,
+  latestRetirementStatus:
+    sandboxCloseoutRecoveryRetirementAuditSchema.shape.recoveryRetirementStatus,
+  latestClearanceStatus:
+    sandboxCloseoutRecoveryRetirementAuditSchema.shape.latestRecoveryClearanceStatus,
+  latestRegressionResolutionStatus:
+    sandboxCloseoutRecoveryRetirementAuditSchema.shape.latestRegressionResolutionStatus,
+  latestMonitoringStatus:
+    sandboxCloseoutRecoveredRetirementSummarySchema.shape.latestMonitoringStatus,
+  latestWatchlistStatus:
+    sandboxCloseoutRecoveryRetirementAuditSchema.shape.latestWatchlistStatus,
+  retirementExitCriteriaStatus: z.enum([
+    "strict_pass",
+    "provisional_pass",
+    "blocked_by_regression",
+    "blocked_by_reentry_risk",
+    "blocked_by_followup",
+    "blocked_by_watchlist_readd_risk",
+    "blocked",
+  ]).default("blocked"),
+  retirementCriteriaMet: z.boolean().default(false),
+  retirementCriteriaBlockers: z.array(z.string()).default([]),
+  retirementCriteriaSupportingReasons: z.array(z.string()).default([]),
+  criteriaAreStrictPass: z.boolean().default(false),
+  criteriaAreProvisionalPass: z.boolean().default(false),
+  criteriaRemainUnmet: z.boolean().default(true),
+  recommendedNextOperatorStep: z.string(),
+  summaryLine: z.string(),
+});
+
+export const sandboxCloseoutRetiredCaseAuditHistoryEntrySchema = z.object({
+  recordedAt: z.string().nullable().default(null),
+  postRetirementStatus: z.enum([
+    "not_retired",
+    "retired_and_stable",
+    "retired_then_reentered",
+    "retired_then_regressed",
+    "retired_then_readded",
+  ]).default("not_retired"),
+  latestReentryStatus: z.string().nullable().default(null),
+  latestRegressionStatus:
+    sandboxCloseoutRecoveryRegressionAuditSchema.shape.latestRegressionStatus,
+  latestWatchlistReaddStatus: z.string().nullable().default(null),
+  retiredCaseStateRemainsStable: z.boolean().default(false),
+  summaryLine: z.string(),
+});
+
+export const sandboxCloseoutRetiredCaseAuditHistorySchema = z.object({
+  entries: z.array(sandboxCloseoutRetiredCaseAuditHistoryEntrySchema).default([]),
+  latestRetiredCaseAuditEntry:
+    sandboxCloseoutRetiredCaseAuditHistoryEntrySchema.nullable().default(null),
+  previousRetiredCaseAuditEntry:
+    sandboxCloseoutRetiredCaseAuditHistoryEntrySchema.nullable().default(null),
+  latestPostRetirementStatus:
+    sandboxCloseoutRetiredCaseAuditHistoryEntrySchema.shape.postRetirementStatus,
+  latestReentryStatus: z.string().nullable().default(null),
+  latestRegressionStatus:
+    sandboxCloseoutRecoveryRegressionAuditSchema.shape.latestRegressionStatus,
+  latestWatchlistReaddStatus: z.string().nullable().default(null),
+  repeatedRetiredThenReenteredPatterns: z.array(z.string()).default([]),
+  repeatedRetiredThenRegressedPatterns: z.array(z.string()).default([]),
+  repeatedRetiredThenWatchlistReaddedPatterns: z.array(z.string()).default([]),
+  retiredCaseStateRemainsStable: z.boolean().default(false),
+  historyRetainedEntryCount: z.number().int().nonnegative().default(0),
+  auditReasons: z.array(z.string()).default([]),
+  recommendedNextOperatorStep: z.string(),
+  summaryLine: z.string(),
+});
+
 export const sandboxRestorePointSchema = z.object({
   id: z.string(),
   createdAt: z.string(),
@@ -3170,6 +3272,12 @@ export const orchestratorStateSchema = z.object({
     sandboxCloseoutRecoveredRetirementSummarySchema.nullable().default(null),
   lastCloseoutRecoveryRetirementQueue:
     sandboxCloseoutRecoveryRetirementQueueSchema.nullable().default(null),
+  lastCloseoutRecoveryRetirementHistory:
+    sandboxCloseoutRecoveryRetirementHistorySchema.nullable().default(null),
+  lastCloseoutRetirementExitCriteria:
+    sandboxCloseoutRetirementExitCriteriaSchema.nullable().default(null),
+  lastCloseoutRetiredCaseAuditHistory:
+    sandboxCloseoutRetiredCaseAuditHistorySchema.nullable().default(null),
   authSmokeStatus: githubAuthSmokeStatusSchema.default("not_run"),
   authSmokeSuccessStatus: z.enum(["not_run", "success", "non_success"]).default("not_run"),
   authSmokeMode: githubAuthSmokeModeSchema.default("none"),
@@ -3914,6 +4022,9 @@ export const orchestratorStateJsonSchema: JsonSchema = {
     "lastCloseoutRecoveryRetirementAudit",
     "lastCloseoutRecoveredRetirementSummary",
     "lastCloseoutRecoveryRetirementQueue",
+    "lastCloseoutRecoveryRetirementHistory",
+    "lastCloseoutRetirementExitCriteria",
+    "lastCloseoutRetiredCaseAuditHistory",
     "authSmokeStatus",
     "authSmokeSuccessStatus",
     "authSmokeMode",
@@ -7264,6 +7375,121 @@ export const orchestratorStateJsonSchema: JsonSchema = {
         reentryRiskFlag: { type: "boolean" },
         monitoringRequiredFlag: { type: "boolean" },
         retirementBlockedReasons: { type: "array", items: { type: "string" } },
+        recommendedNextOperatorStep: { type: "string" },
+        summaryLine: { type: "string" },
+      },
+    },
+    lastCloseoutRecoveryRetirementHistory: {
+      type: "object",
+      nullable: true,
+      required: [
+        "entries",
+        "latestRetirementAuditEntry",
+        "previousRetirementAuditEntry",
+        "latestRetirementStatus",
+        "repeatedRetirementAllowedPatterns",
+        "repeatedRetirementBlockedPatterns",
+        "repeatedRetirementAllowedButReopenablePatterns",
+        "repeatedRetiredThenReenteredPatterns",
+        "repeatedRetiredThenRegressedPatterns",
+        "repeatedRetiredThenWatchlistReaddedPatterns",
+        "historyRetainedEntryCount",
+        "historyReasons",
+        "recommendedNextOperatorStep",
+        "summaryLine",
+      ],
+      additionalProperties: false,
+      properties: {
+        entries: { type: "array", items: { type: "object" } },
+        latestRetirementAuditEntry: { type: "object", nullable: true },
+        previousRetirementAuditEntry: { type: "object", nullable: true },
+        latestRetirementStatus: { type: "string" },
+        repeatedRetirementAllowedPatterns: { type: "array", items: { type: "string" } },
+        repeatedRetirementBlockedPatterns: { type: "array", items: { type: "string" } },
+        repeatedRetirementAllowedButReopenablePatterns: { type: "array", items: { type: "string" } },
+        repeatedRetiredThenReenteredPatterns: { type: "array", items: { type: "string" } },
+        repeatedRetiredThenRegressedPatterns: { type: "array", items: { type: "string" } },
+        repeatedRetiredThenWatchlistReaddedPatterns: { type: "array", items: { type: "string" } },
+        historyRetainedEntryCount: { type: "number" },
+        historyReasons: { type: "array", items: { type: "string" } },
+        recommendedNextOperatorStep: { type: "string" },
+        summaryLine: { type: "string" },
+      },
+    },
+    lastCloseoutRetirementExitCriteria: {
+      type: "object",
+      nullable: true,
+      required: [
+        "latestRecoveryStatus",
+        "latestRetirementStatus",
+        "latestClearanceStatus",
+        "latestRegressionResolutionStatus",
+        "latestMonitoringStatus",
+        "latestWatchlistStatus",
+        "retirementExitCriteriaStatus",
+        "retirementCriteriaMet",
+        "retirementCriteriaBlockers",
+        "retirementCriteriaSupportingReasons",
+        "criteriaAreStrictPass",
+        "criteriaAreProvisionalPass",
+        "criteriaRemainUnmet",
+        "recommendedNextOperatorStep",
+        "summaryLine",
+      ],
+      additionalProperties: false,
+      properties: {
+        latestRecoveryStatus: { type: "string" },
+        latestRetirementStatus: { type: "string" },
+        latestClearanceStatus: { type: "string" },
+        latestRegressionResolutionStatus: { type: "string" },
+        latestMonitoringStatus: { type: "string" },
+        latestWatchlistStatus: { type: "string" },
+        retirementExitCriteriaStatus: { type: "string" },
+        retirementCriteriaMet: { type: "boolean" },
+        retirementCriteriaBlockers: { type: "array", items: { type: "string" } },
+        retirementCriteriaSupportingReasons: { type: "array", items: { type: "string" } },
+        criteriaAreStrictPass: { type: "boolean" },
+        criteriaAreProvisionalPass: { type: "boolean" },
+        criteriaRemainUnmet: { type: "boolean" },
+        recommendedNextOperatorStep: { type: "string" },
+        summaryLine: { type: "string" },
+      },
+    },
+    lastCloseoutRetiredCaseAuditHistory: {
+      type: "object",
+      nullable: true,
+      required: [
+        "entries",
+        "latestRetiredCaseAuditEntry",
+        "previousRetiredCaseAuditEntry",
+        "latestPostRetirementStatus",
+        "latestReentryStatus",
+        "latestRegressionStatus",
+        "latestWatchlistReaddStatus",
+        "repeatedRetiredThenReenteredPatterns",
+        "repeatedRetiredThenRegressedPatterns",
+        "repeatedRetiredThenWatchlistReaddedPatterns",
+        "retiredCaseStateRemainsStable",
+        "historyRetainedEntryCount",
+        "auditReasons",
+        "recommendedNextOperatorStep",
+        "summaryLine",
+      ],
+      additionalProperties: false,
+      properties: {
+        entries: { type: "array", items: { type: "object" } },
+        latestRetiredCaseAuditEntry: { type: "object", nullable: true },
+        previousRetiredCaseAuditEntry: { type: "object", nullable: true },
+        latestPostRetirementStatus: { type: "string" },
+        latestReentryStatus: { type: "string", nullable: true },
+        latestRegressionStatus: { type: "string" },
+        latestWatchlistReaddStatus: { type: "string", nullable: true },
+        repeatedRetiredThenReenteredPatterns: { type: "array", items: { type: "string" } },
+        repeatedRetiredThenRegressedPatterns: { type: "array", items: { type: "string" } },
+        repeatedRetiredThenWatchlistReaddedPatterns: { type: "array", items: { type: "string" } },
+        retiredCaseStateRemainsStable: { type: "boolean" },
+        historyRetainedEntryCount: { type: "number" },
+        auditReasons: { type: "array", items: { type: "string" } },
         recommendedNextOperatorStep: { type: "string" },
         summaryLine: { type: "string" },
       },
