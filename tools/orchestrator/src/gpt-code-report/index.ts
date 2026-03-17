@@ -1,3 +1,4 @@
+import path from "node:path";
 import {
   ciStatusSummarySchema,
   executionReportSchema,
@@ -559,6 +560,15 @@ function parseGitStatusShortPaths(gitStatusShort: string) {
     .filter(Boolean);
 }
 
+function normalizeComparablePath(filePath: string) {
+  const trimmed = filePath.trim().replace(/\\/g, "/").replace(/^\/([A-Za-z]:\/)/, "$1");
+  const normalizedCwd = path.normalize(process.cwd()).replace(/\\/g, "/").replace(/^\/([A-Za-z]:\/)/, "$1");
+  if (trimmed.toLowerCase().startsWith(`${normalizedCwd.toLowerCase()}/`)) {
+    return trimmed.slice(normalizedCwd.length + 1);
+  }
+  return trimmed;
+}
+
 export function crossCheckGptCodeChineseReport(params: {
   normalizedReport: GptCodeNormalizedReport;
   actualCI?: CIStatusSummary | null;
@@ -594,11 +604,11 @@ export function crossCheckGptCodeChineseReport(params: {
   }
 
   if (params.actualGitStatusShort != null) {
-    const actualPaths = parseGitStatusShortPaths(params.actualGitStatusShort);
+    const actualPaths = parseGitStatusShortPaths(params.actualGitStatusShort).map(normalizeComparablePath);
     const reportedPaths = [
       ...params.normalizedReport.dirtyTreeSummary.currentTurnFiles,
       ...params.normalizedReport.dirtyTreeSummary.unrelatedFiles,
-    ];
+    ].map(normalizeComparablePath);
     if (JSON.stringify([...new Set(reportedPaths)].sort()) !== JSON.stringify([...new Set(actualPaths)].sort())) {
       mismatches.push({
         field: "git_dirty_tree",

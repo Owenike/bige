@@ -320,6 +320,7 @@ import { resolveActorAuthorization } from "./actor-policy";
 import { describeActorPolicyConfig, loadActorPolicyConfig } from "./actor-policy-config";
 import { formatInboundAuditSummary, listInboundAuditRecords } from "./inbound-audit";
 import { evaluateWebhookRuntime, formatWebhookRuntimeSummary } from "./webhook-runtime";
+import { ingestGptCodeReportFromFile } from "./gpt-code-report-bridge";
 
 async function resolveRunId(params: {
   stateId: string;
@@ -2174,6 +2175,21 @@ async function main() {
 
   if (command === "review") {
     process.stdout.write(`${JSON.stringify(existingState.lastReviewVerdict, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "report:intake") {
+    const reportPath = options.get("report");
+    if (!reportPath) {
+      throw new Error("--report is required for report:intake.");
+    }
+    const result = await ingestGptCodeReportFromFile({
+      stateId,
+      reportPath,
+      dependencies,
+      outputRoot: getOption(options, "output-root", path.join(repoPath, ".tmp", "orchestrator-report-bridge", stateId, "latest")),
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
   }
 
@@ -5530,6 +5546,7 @@ async function main() {
       "  node cli.js preflight --state-id default",
       "  node cli.js inspect --state-id default",
       "  node cli.js diagnostics --state-id default",
+      "  node cli.js report:intake --state-id default --report path/to/gpt-code-report.md",
       "  node cli.js resume --state-id default",
       "  node cli.js workspace:cleanup --state-id default --workspace-root .tmp/orchestrator-workspaces",
       "  node cli.js cleanup --state-id default --stale-minutes 120",

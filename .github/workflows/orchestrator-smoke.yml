@@ -231,6 +231,10 @@ jobs:
           npm run test:orchestrator:gpt-code-report-normalize
           npm run test:orchestrator:gpt-code-report-renderer
           npm run test:orchestrator:gpt-code-report-ingest
+          npm run test:orchestrator:gpt-code-report-intake
+          npm run test:orchestrator:gpt-code-report-bridge
+          npm run test:orchestrator:gpt-code-report-output
+          npm run test:orchestrator:gpt-code-report-transport
           npm run test:orchestrator:mock-loop
           npm run test:orchestrator:loop
           npm run test:orchestrator:state-machine

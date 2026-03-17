@@ -192,7 +192,10 @@ $suiteMap = @{
     "$outDir\tests\unit\backend-health.test.js",
     "$outDir\tests\unit\gpt-code-report-parser.test.js",
     "$outDir\tests\unit\gpt-code-report-normalize.test.js",
-    "$outDir\tests\unit\gpt-code-report-renderer.test.js"
+    "$outDir\tests\unit\gpt-code-report-renderer.test.js",
+    "$outDir\tests\unit\gpt-code-report-intake.test.js",
+    "$outDir\tests\unit\gpt-code-report-bridge.test.js",
+    "$outDir\tests\unit\gpt-code-report-output.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js",
@@ -691,6 +694,18 @@ $suiteMap = @{
   "gpt-code-report-ingest" = @(
     "$outDir\tests\e2e\gpt-code-report-ingest.test.js"
   )
+  "gpt-code-report-intake" = @(
+    "$outDir\tests\unit\gpt-code-report-intake.test.js"
+  )
+  "gpt-code-report-bridge" = @(
+    "$outDir\tests\unit\gpt-code-report-bridge.test.js"
+  )
+  "gpt-code-report-output" = @(
+    "$outDir\tests\unit\gpt-code-report-output.test.js"
+  )
+  "gpt-code-report-transport" = @(
+    "$outDir\tests\e2e\gpt-code-report-transport.test.js"
+  )
   "supabase-live" = @(
     "$outDir\tests\integration\supabase-live.test.js"
   )
@@ -869,6 +884,9 @@ $suiteMap = @{
     "$outDir\tests\unit\gpt-code-report-parser.test.js",
     "$outDir\tests\unit\gpt-code-report-normalize.test.js",
     "$outDir\tests\unit\gpt-code-report-renderer.test.js",
+    "$outDir\tests\unit\gpt-code-report-intake.test.js",
+    "$outDir\tests\unit\gpt-code-report-bridge.test.js",
+    "$outDir\tests\unit\gpt-code-report-output.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",
@@ -879,6 +897,7 @@ $suiteMap = @{
     "$outDir\tests\integration\webhook-hosting.test.js",
     "$outDir\tests\integration\graceful-shutdown.test.js",
     "$outDir\tests\e2e\gpt-code-report-ingest.test.js",
+    "$outDir\tests\e2e\gpt-code-report-transport.test.js",
     "$outDir\tests\e2e\mock-loop.test.js",
     "$outDir\tests\e2e\multi-iteration-loop.test.js"
   )

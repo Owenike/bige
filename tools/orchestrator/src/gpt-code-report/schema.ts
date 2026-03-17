@@ -143,6 +143,40 @@ export const gptCodeEvidenceCrossCheckSchema = z.object({
   needsManualReview: z.boolean(),
 });
 
+export const gptCodeReportOutputTargetSchema = z.object({
+  artifactRoot: z.string(),
+  parsedReportPath: z.string(),
+  normalizedReportPath: z.string(),
+  crossCheckPath: z.string(),
+  nextInstructionPath: z.string(),
+  outputPayloadPath: z.string(),
+});
+
+export const gptCodeReportOutputPayloadSchema = z.object({
+  stateId: z.string(),
+  generatedAt: z.string(),
+  needsManualReview: z.boolean(),
+  reviewVerdict: z.enum(["accept", "revise", "stop", "escalate"]),
+  nextInstruction: z.string(),
+  recommendedNextStep: z.string(),
+  plannerObjective: z.string().nullable().default(null),
+  outputTarget: gptCodeReportOutputTargetSchema,
+});
+
+export const gptCodeReportBridgeResultSchema = z.object({
+  stateId: z.string(),
+  status: z.enum(["accepted", "needs_manual_review"]),
+  parsedReport: gptCodeStructuredReportSchema,
+  normalizedReport: gptCodeNormalizedReportSchema,
+  evidenceCrossCheck: gptCodeEvidenceCrossCheckSchema,
+  outputTarget: gptCodeReportOutputTargetSchema,
+  outputPayload: gptCodeReportOutputPayloadSchema,
+  generatedAt: z.string(),
+});
+
 export type GptCodeStructuredReport = z.infer<typeof gptCodeStructuredReportSchema>;
 export type GptCodeNormalizedReport = z.infer<typeof gptCodeNormalizedReportSchema>;
 export type GptCodeEvidenceCrossCheck = z.infer<typeof gptCodeEvidenceCrossCheckSchema>;
+export type GptCodeReportOutputTarget = z.infer<typeof gptCodeReportOutputTargetSchema>;
+export type GptCodeReportOutputPayload = z.infer<typeof gptCodeReportOutputPayloadSchema>;
+export type GptCodeReportBridgeResult = z.infer<typeof gptCodeReportBridgeResultSchema>;
