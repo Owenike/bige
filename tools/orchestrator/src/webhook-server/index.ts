@@ -4,6 +4,7 @@ import { GhCliStatusReportingAdapter } from "../status-reporting";
 import type { OrchestratorDependencies } from "../orchestrator";
 import { evaluateWebhookRuntime, type WebhookRuntimeSummary } from "../webhook-runtime";
 import { buildWebhookRoute } from "../runtime-config";
+import { GhCliGptCodeGitHubCommentTargetAdapter } from "../gpt-code-external-automation";
 
 async function readRawBody(request: IncomingMessage) {
   const chunks: Buffer[] = [];
@@ -150,6 +151,10 @@ export async function handleWebhookHttpRequest(params: {
       replayOverride: params.replayOverride ?? false,
       reportStatus: params.reportStatus ?? true,
       statusAdapter: new GhCliStatusReportingAdapter({
+        enabled: true,
+        token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+      }),
+      externalTargetAdapter: new GhCliGptCodeGitHubCommentTargetAdapter({
         enabled: true,
         token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
       }),

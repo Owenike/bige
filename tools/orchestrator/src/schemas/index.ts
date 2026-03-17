@@ -209,6 +209,7 @@ export const sourceEventTypeSchema = z.enum([
   "pull_request_labeled",
   "pull_request_synchronize",
   "issue_comment_command",
+  "issue_comment_report",
   "workflow_dispatch",
 ]);
 export const idempotencyStatusSchema = z.enum(["not_checked", "created", "linked_existing", "duplicate_ignored", "replayed"]);
@@ -276,6 +277,10 @@ export const gptCodeTransportIntakeStatusSchema = z.enum(["not_received", "queue
 export const gptCodeTransportBridgeStatusSchema = z.enum(["not_run", "accepted", "needs_manual_review", "failed"]);
 export const gptCodeDispatchStatusSchema = z.enum(["not_queued", "queued", "dispatched", "manual_required", "failed"]);
 export const gptCodeDispatchOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed"]);
+export const gptCodeSourceAdapterStatusSchema = z.enum(["not_received", "received", "linked", "manual_required", "failed"]);
+export const gptCodeTargetAdapterStatusSchema = z.enum(["not_attempted", "dispatched", "manual_required", "failed"]);
+export const gptCodeAutomaticTriggerStatusSchema = z.enum(["not_triggered", "triggered", "manual_required", "failed"]);
+export const gptCodeExternalAutomationOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed"]);
 export const recoveryDecisionSchema = z.object({
   runId: z.string(),
   action: z.enum(["none", "requeued", "retained", "paused", "blocked", "cancelled"]),
@@ -339,6 +344,13 @@ export const queueWorkerCollectionSchema = z.object({
 });
 
 export const gptCodeAutomationStateSchema = z.object({
+  sourceAdapterStatus: gptCodeSourceAdapterStatusSchema.default("not_received"),
+  sourceType: z.string().nullable().default(null),
+  sourceId: z.string().nullable().default(null),
+  sourceCorrelationId: z.string().nullable().default(null),
+  sourcePayloadPath: z.string().nullable().default(null),
+  sourceHeadersPath: z.string().nullable().default(null),
+  sourceReceivedAt: z.string().nullable().default(null),
   transportSource: z.string().nullable().default(null),
   intakeStatus: gptCodeTransportIntakeStatusSchema.default("not_received"),
   bridgeStatus: gptCodeTransportBridgeStatusSchema.default("not_run"),
@@ -350,6 +362,15 @@ export const gptCodeAutomationStateSchema = z.object({
   outputPayloadPath: z.string().nullable().default(null),
   nextInstructionPath: z.string().nullable().default(null),
   dispatchArtifactPath: z.string().nullable().default(null),
+  automaticTriggerStatus: gptCodeAutomaticTriggerStatusSchema.default("not_triggered"),
+  targetAdapterStatus: gptCodeTargetAdapterStatusSchema.default("not_attempted"),
+  targetType: z.string().nullable().default(null),
+  targetDestination: z.string().nullable().default(null),
+  targetAttemptCount: z.number().int().nonnegative().default(0),
+  targetExternalReferenceId: z.string().nullable().default(null),
+  targetExternalUrl: z.string().nullable().default(null),
+  targetDispatchArtifactPath: z.string().nullable().default(null),
+  externalAutomationOutcome: gptCodeExternalAutomationOutcomeSchema.default("not_run"),
   lastReceivedAt: z.string().nullable().default(null),
   lastAttemptedAt: z.string().nullable().default(null),
   lastDispatchedAt: z.string().nullable().default(null),
@@ -3417,6 +3438,10 @@ export type GptCodeTransportIntakeStatus = z.infer<typeof gptCodeTransportIntake
 export type GptCodeTransportBridgeStatus = z.infer<typeof gptCodeTransportBridgeStatusSchema>;
 export type GptCodeDispatchStatus = z.infer<typeof gptCodeDispatchStatusSchema>;
 export type GptCodeDispatchOutcome = z.infer<typeof gptCodeDispatchOutcomeSchema>;
+export type GptCodeSourceAdapterStatus = z.infer<typeof gptCodeSourceAdapterStatusSchema>;
+export type GptCodeTargetAdapterStatus = z.infer<typeof gptCodeTargetAdapterStatusSchema>;
+export type GptCodeAutomaticTriggerStatus = z.infer<typeof gptCodeAutomaticTriggerStatusSchema>;
+export type GptCodeExternalAutomationOutcome = z.infer<typeof gptCodeExternalAutomationOutcomeSchema>;
 export type GptCodeAutomationState = z.infer<typeof gptCodeAutomationStateSchema>;
 
 const stringArrayJsonSchema: JsonSchema = {
@@ -3850,6 +3875,13 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
   nullable: true,
   additionalProperties: false,
   required: [
+    "sourceAdapterStatus",
+    "sourceType",
+    "sourceId",
+    "sourceCorrelationId",
+    "sourcePayloadPath",
+    "sourceHeadersPath",
+    "sourceReceivedAt",
     "transportSource",
     "intakeStatus",
     "bridgeStatus",
@@ -3861,6 +3893,15 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     "outputPayloadPath",
     "nextInstructionPath",
     "dispatchArtifactPath",
+    "automaticTriggerStatus",
+    "targetAdapterStatus",
+    "targetType",
+    "targetDestination",
+    "targetAttemptCount",
+    "targetExternalReferenceId",
+    "targetExternalUrl",
+    "targetDispatchArtifactPath",
+    "externalAutomationOutcome",
     "lastReceivedAt",
     "lastAttemptedAt",
     "lastDispatchedAt",
@@ -3868,6 +3909,13 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     "manualReviewReason",
   ],
   properties: {
+    sourceAdapterStatus: { type: "string", enum: ["not_received", "received", "linked", "manual_required", "failed"] },
+    sourceType: { type: "string", nullable: true },
+    sourceId: { type: "string", nullable: true },
+    sourceCorrelationId: { type: "string", nullable: true },
+    sourcePayloadPath: { type: "string", nullable: true },
+    sourceHeadersPath: { type: "string", nullable: true },
+    sourceReceivedAt: { type: "string", nullable: true },
     transportSource: { type: "string", nullable: true },
     intakeStatus: { type: "string", enum: ["not_received", "queued", "accepted", "manual_required", "failed"] },
     bridgeStatus: { type: "string", enum: ["not_run", "accepted", "needs_manual_review", "failed"] },
@@ -3879,6 +3927,15 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     outputPayloadPath: { type: "string", nullable: true },
     nextInstructionPath: { type: "string", nullable: true },
     dispatchArtifactPath: { type: "string", nullable: true },
+    automaticTriggerStatus: { type: "string", enum: ["not_triggered", "triggered", "manual_required", "failed"] },
+    targetAdapterStatus: { type: "string", enum: ["not_attempted", "dispatched", "manual_required", "failed"] },
+    targetType: { type: "string", nullable: true },
+    targetDestination: { type: "string", nullable: true },
+    targetAttemptCount: { type: "number" },
+    targetExternalReferenceId: { type: "string", nullable: true },
+    targetExternalUrl: { type: "string", nullable: true },
+    targetDispatchArtifactPath: { type: "string", nullable: true },
+    externalAutomationOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed"] },
     lastReceivedAt: { type: "string", nullable: true },
     lastAttemptedAt: { type: "string", nullable: true },
     lastDispatchedAt: { type: "string", nullable: true },

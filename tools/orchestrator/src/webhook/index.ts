@@ -38,6 +38,11 @@ import {
   type WebhookEventType,
   type WebhookSignatureStatus,
 } from "../schemas";
+import {
+  extractGptCodeReportFromGitHubComment,
+  runGptCodeExternalAutomationFromWebhook,
+  type GptCodeExternalTargetAdapter,
+} from "../gpt-code-external-automation";
 
 export type ParsedGitHubWebhook = {
   eventType: WebhookEventType;
@@ -266,9 +271,11 @@ export async function ingestGitHubWebhook(params: {
   replayOverride?: boolean;
   reportStatus?: boolean;
   statusAdapter?: StatusReportingAdapter | null;
+  externalTargetAdapter?: GptCodeExternalTargetAdapter | null;
   statusOutputRoot: string;
   auditOutputRoot?: string;
   actorPolicyConfigPath?: string | null;
+  actualGitStatusShort?: string | null;
 }) : Promise<WebhookIngestionResult> {
   const receivedAt = new Date().toISOString();
   const parsedHeaders = parseGitHubWebhookHeaders(params.headers);
@@ -389,6 +396,247 @@ export async function ingestGitHubWebhook(params: {
       intake: null,
       statusReport: null,
       summary: signature.blockedReason?.summary ?? "Webhook was rejected.",
+      inboundAuditId: auditId,
+    };
+  }
+
+  const reportSource = extractGptCodeReportFromGitHubComment({
+    payload,
+    deliveryId: parsedHeaders.deliveryId,
+    payloadPath: auditArtifacts.payloadPath,
+    headersPath: auditArtifacts.headersPath,
+    receivedAt,
+  });
+  if (reportSource) {
+    const actorDecision = resolveActorAuthorization({
+      actor: actorIdentity,
+      command: null,
+      executionMode: null,
+      approvalRequired: false,
+      liveRequested: false,
+      config: actorPolicyConfig.config,
+      configVersion: actorPolicyConfig.version,
+    });
+    const actorBlockedReason =
+      actorDecision.status === "rejected" || actorDecision.status === "status_only"
+        ? actorDecision.blockedReason
+        : null;
+    if (actorBlockedReason) {
+      await saveAuditAndReturn({
+        dependencies: params.dependencies,
+        auditId,
+        receivedAt,
+        deliveryId: parsedHeaders.deliveryId,
+        eventType: parsedHeaders.eventType,
+        sourceEventType: "issue_comment_report",
+        sourceEventId: reportSource.sourceId,
+        repository: reportSource.repository,
+        issueNumber: reportSource.issueNumber,
+        prNumber: reportSource.prNumber,
+        commentId: reportSource.commentId,
+        actorIdentity,
+        signatureStatus: signature.status,
+        parsedCommand: null,
+        actorAuthorizationStatus: actorDecision.status,
+        actorAuthorizationReason: actorBlockedReason.summary,
+        replayProtectionStatus: "rejected",
+        replayProtectionReason: actorBlockedReason.summary,
+        commandRoutingDecision: null,
+        linkedStateId: null,
+        linkedRunId: null,
+        statusReportCorrelationId: reportSource.sourceCorrelationId,
+        payloadPath: auditArtifacts.payloadPath,
+        headersPath: auditArtifacts.headersPath,
+        summary: actorBlockedReason.summary,
+      });
+      return {
+        status: "rejected",
+        signatureStatus: signature.status,
+        blockedReason: actorBlockedReason,
+        state: null,
+        intake: null,
+        statusReport: null,
+        summary: actorBlockedReason.summary,
+        inboundAuditId: auditId,
+      };
+    }
+
+    const replay = await evaluateReplayProtection({
+      storage: params.dependencies.storage,
+      deliveryId: parsedHeaders.deliveryId,
+      sourceEventId: reportSource.sourceId,
+      replayOverride: params.replayOverride,
+      signatureStatus: signature.status,
+    });
+    if (replay.status === "duplicate_delivery" || replay.status === "duplicate_event") {
+      const duplicateRecord = replay.duplicateRecordId
+        ? await params.dependencies.storage.loadInboundAudit(replay.duplicateRecordId)
+        : null;
+      const linkedState = duplicateRecord?.linkedStateId
+        ? await params.dependencies.storage.loadState(duplicateRecord.linkedStateId)
+        : null;
+      await saveAuditAndReturn({
+        dependencies: params.dependencies,
+        auditId,
+        receivedAt,
+        deliveryId: parsedHeaders.deliveryId,
+        eventType: parsedHeaders.eventType,
+        sourceEventType: "issue_comment_report",
+        sourceEventId: reportSource.sourceId,
+        repository: reportSource.repository,
+        issueNumber: reportSource.issueNumber,
+        prNumber: reportSource.prNumber,
+        commentId: reportSource.commentId,
+        actorIdentity,
+        signatureStatus: signature.status,
+        parsedCommand: null,
+        actorAuthorizationStatus: actorDecision.status,
+        actorAuthorizationReason: actorDecision.summary,
+        replayProtectionStatus: replay.status,
+        replayProtectionReason: replay.summary,
+        commandRoutingDecision: null,
+        linkedStateId: linkedState?.id ?? duplicateRecord?.linkedStateId ?? null,
+        linkedRunId: duplicateRecord?.linkedRunId ?? null,
+        statusReportCorrelationId: reportSource.sourceCorrelationId,
+        payloadPath: auditArtifacts.payloadPath,
+        headersPath: auditArtifacts.headersPath,
+        summary: replay.summary,
+      });
+      return {
+        status: "duplicate",
+        signatureStatus: signature.status,
+        blockedReason: createBlockedReason({
+          code: replay.status,
+          summary: replay.summary,
+          suggestedNextAction: "Inspect the existing linked task or use explicit replay override if a retry is required.",
+        }),
+        state: linkedState,
+        intake: null,
+        statusReport: null,
+        summary: replay.summary,
+        inboundAuditId: auditId,
+      };
+    }
+
+    const externalAutomation = await runGptCodeExternalAutomationFromWebhook({
+      payload,
+      deliveryId: parsedHeaders.deliveryId,
+      payloadPath: auditArtifacts.payloadPath,
+      headersPath: auditArtifacts.headersPath,
+      receivedAt,
+      dependencies: params.dependencies,
+      externalTargetAdapter: params.externalTargetAdapter ?? null,
+      actualGitStatusShort: params.actualGitStatusShort,
+    });
+    if (!externalAutomation) {
+      const blockedReason = createBlockedReason({
+        code: "external_report_not_routed",
+        summary: "GPT CODE report webhook was detected but could not be routed into external automation.",
+        suggestedNextAction: "Inspect the webhook payload and report parser before retrying the delivery.",
+      });
+      await saveAuditAndReturn({
+        dependencies: params.dependencies,
+        auditId,
+        receivedAt,
+        deliveryId: parsedHeaders.deliveryId,
+        eventType: parsedHeaders.eventType,
+        sourceEventType: "issue_comment_report",
+        sourceEventId: reportSource.sourceId,
+        repository: reportSource.repository,
+        issueNumber: reportSource.issueNumber,
+        prNumber: reportSource.prNumber,
+        commentId: reportSource.commentId,
+        actorIdentity,
+        signatureStatus: signature.status,
+        parsedCommand: null,
+        actorAuthorizationStatus: actorDecision.status,
+        actorAuthorizationReason: actorDecision.summary,
+        replayProtectionStatus: replay.status,
+        replayProtectionReason: replay.summary,
+        commandRoutingDecision: null,
+        linkedStateId: null,
+        linkedRunId: null,
+        statusReportCorrelationId: reportSource.sourceCorrelationId,
+        payloadPath: auditArtifacts.payloadPath,
+        headersPath: auditArtifacts.headersPath,
+        summary: blockedReason.summary,
+      });
+      return {
+        status: "rejected",
+        signatureStatus: signature.status,
+        blockedReason,
+        state: null,
+        intake: null,
+        statusReport: null,
+        summary: blockedReason.summary,
+        inboundAuditId: auditId,
+      };
+    }
+    const linkedState =
+      externalAutomation.stateId !== "unlinked"
+        ? await params.dependencies.storage.loadState(externalAutomation.stateId)
+        : null;
+    const summary =
+      externalAutomation.outcome === "success"
+        ? "External GPT CODE report was received, bridged, and dispatched automatically."
+        : externalAutomation.outcome === "manual_required"
+          ? "External GPT CODE report was received but requires manual review before completion."
+          : "External GPT CODE report intake failed before completion.";
+
+    await saveAuditAndReturn({
+      dependencies: params.dependencies,
+      auditId,
+      receivedAt,
+      deliveryId: parsedHeaders.deliveryId,
+      eventType: parsedHeaders.eventType,
+      sourceEventType: "issue_comment_report",
+      sourceEventId: reportSource.sourceId,
+      repository: reportSource.repository,
+      issueNumber: reportSource.issueNumber,
+      prNumber: reportSource.prNumber,
+      commentId: reportSource.commentId,
+      actorIdentity,
+      signatureStatus: signature.status,
+      parsedCommand: null,
+      actorAuthorizationStatus: actorDecision.status,
+      actorAuthorizationReason: actorDecision.summary,
+      replayProtectionStatus: replay.status,
+      replayProtectionReason: replay.summary,
+      commandRoutingDecision: null,
+      linkedStateId: linkedState?.id ?? null,
+      linkedRunId: null,
+      statusReportCorrelationId: reportSource.sourceCorrelationId,
+      payloadPath: auditArtifacts.payloadPath,
+      headersPath: auditArtifacts.headersPath,
+      summary,
+    });
+
+    if (!linkedState) {
+      const blockedReason = createBlockedReason({
+        code: "missing_thread_state_for_report",
+        summary: "External GPT CODE report could not be linked to an existing thread state.",
+        suggestedNextAction: "Link or create the thread state before retrying report intake.",
+      });
+      return {
+        status: "rejected",
+        signatureStatus: signature.status,
+        blockedReason,
+        state: null,
+        intake: null,
+        statusReport: null,
+        summary: blockedReason.summary,
+        inboundAuditId: auditId,
+      };
+    }
+
+    return {
+      status: "routed",
+      signatureStatus: signature.status,
+      blockedReason: null,
+      state: linkedState,
+      intake: null,
+      statusReport: null,
+      summary,
       inboundAuditId: auditId,
     };
   }

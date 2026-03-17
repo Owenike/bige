@@ -174,7 +174,7 @@ export const gptCodeReportBridgeResultSchema = z.object({
   generatedAt: z.string(),
 });
 
-export const gptCodeTransportSourceSchema = z.enum(["stdin", "cli", "repo_drop", "manual", "test"]);
+export const gptCodeTransportSourceSchema = z.enum(["stdin", "cli", "repo_drop", "manual", "test", "github_issue_comment"]);
 
 export const gptCodeTransportEntryResultSchema = z.object({
   stateId: z.string(),
@@ -222,6 +222,42 @@ export const gptCodeTransportWatcherSummarySchema = z.object({
   generatedAt: z.string(),
 });
 
+export const gptCodeExternalSourceMetadataSchema = z.object({
+  sourceType: z.enum(["github_issue_comment"]),
+  sourceId: z.string(),
+  sourceCorrelationId: z.string(),
+  repository: z.string(),
+  issueNumber: z.number().int().positive().nullable().default(null),
+  prNumber: z.number().int().positive().nullable().default(null),
+  commentId: z.number().int().positive(),
+  payloadPath: z.string().nullable().default(null),
+  headersPath: z.string().nullable().default(null),
+  receivedAt: z.string(),
+});
+
+export const gptCodeExternalTargetDispatchSchema = z.object({
+  stateId: z.string(),
+  targetType: z.enum(["github_issue_comment"]),
+  targetDestination: z.string(),
+  attemptCount: z.number().int().nonnegative(),
+  outcome: z.enum(["success", "manual_required", "failed"]),
+  externalReferenceId: z.string().nullable().default(null),
+  externalUrl: z.string().nullable().default(null),
+  dispatchArtifactPath: z.string().nullable().default(null),
+  dispatchedAt: z.string(),
+});
+
+export const gptCodeExternalAutomationResultSchema = z.object({
+  stateId: z.string(),
+  source: gptCodeExternalSourceMetadataSchema,
+  sourceStatus: z.enum(["received", "linked", "manual_required", "failed"]),
+  automaticTriggerStatus: z.enum(["triggered", "manual_required", "failed"]),
+  transportDispatchStatus: z.enum(["dispatched", "manual_required", "failed", "not_needed"]),
+  targetDispatch: gptCodeExternalTargetDispatchSchema.nullable().default(null),
+  outcome: z.enum(["success", "manual_required", "failed"]),
+  generatedAt: z.string(),
+});
+
 export type GptCodeStructuredReport = z.infer<typeof gptCodeStructuredReportSchema>;
 export type GptCodeNormalizedReport = z.infer<typeof gptCodeNormalizedReportSchema>;
 export type GptCodeEvidenceCrossCheck = z.infer<typeof gptCodeEvidenceCrossCheckSchema>;
@@ -234,3 +270,6 @@ export type GptCodeDispatchEnvelope = z.infer<typeof gptCodeDispatchEnvelopeSche
 export type GptCodeDispatchGateDecision = z.infer<typeof gptCodeDispatchGateDecisionSchema>;
 export type GptCodeTransportDispatchResult = z.infer<typeof gptCodeTransportDispatchResultSchema>;
 export type GptCodeTransportWatcherSummary = z.infer<typeof gptCodeTransportWatcherSummarySchema>;
+export type GptCodeExternalSourceMetadata = z.infer<typeof gptCodeExternalSourceMetadataSchema>;
+export type GptCodeExternalTargetDispatch = z.infer<typeof gptCodeExternalTargetDispatchSchema>;
+export type GptCodeExternalAutomationResult = z.infer<typeof gptCodeExternalAutomationResultSchema>;
