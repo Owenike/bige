@@ -41,8 +41,11 @@ type ExecFileLike = (
 type IssueCommentPayload = {
   action?: string;
   issue?: {
+    id?: number;
     number?: number;
     title?: string;
+    body?: string | null;
+    updated_at?: string;
     pull_request?: unknown;
   };
   comment?: {
@@ -57,8 +60,11 @@ type IssueCommentPayload = {
 type PullRequestReviewCommentPayload = {
   action?: string;
   pull_request?: {
+    id?: number;
     number?: number;
     title?: string;
+    body?: string | null;
+    updated_at?: string;
   };
   comment?: {
     id?: number;
@@ -67,18 +73,21 @@ type PullRequestReviewCommentPayload = {
   repository?: {
     full_name?: string;
   };
+  number?: number;
 };
 
 type ExternalGitHubTargetRoute = {
   repository: string;
   targetNumber: number;
   targetDestination: string;
+  targetCommentId: string | null;
   targetLaneClassification:
     | "github_issue_thread_comment_lane"
     | "github_pull_request_thread_comment_lane"
+    | "github_status_report_comment_lane"
     | "github_source_thread_fallback_lane";
-  routingDecision: "state_thread_target" | "source_thread_fallback";
-  fallbackDecision: "not_needed" | "source_thread_fallback";
+  routingDecision: "status_report_target" | "state_thread_target" | "source_thread_fallback";
+  fallbackDecision: "not_needed" | "status_report_target_fallback" | "source_thread_fallback";
   isPullRequest: boolean;
 };
 
@@ -165,6 +174,20 @@ function looksLikeGptCodeChineseReport(body: string) {
 function classifyGitHubDispatchFailure(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
   if (
+    message.includes("404") ||
+    message.includes("not found") ||
+    message.includes("no comment found") ||
+    message.includes("unprocessable") ||
+    message.includes("422") ||
+    message.includes("gone")
+  ) {
+    return {
+      outcome: "failed" as const,
+      failureClass: "target_invalid" as const,
+      retryEligible: false,
+    };
+  }
+  if (
     message.includes("bad credentials") ||
     message.includes("authentication") ||
     message.includes("403") ||
@@ -203,15 +226,29 @@ function classifyGitHubDispatchFailure(error: unknown) {
 }
 
 function mapSourceTypeToTransportSource(source: GptCodeExternalSourceMetadata) {
-  return source.sourceType === "github_pull_request_review_comment"
-    ? "github_pull_request_review_comment"
-    : "github_issue_comment";
+  switch (source.sourceType) {
+    case "github_pull_request_review_comment":
+      return "github_pull_request_review_comment";
+    case "github_issue_body":
+      return "github_issue_body";
+    case "github_pull_request_body":
+      return "github_pull_request_body";
+    default:
+      return "github_issue_comment";
+  }
 }
 
 function mapSourceTypeToSourceEventType(source: GptCodeExternalSourceMetadata) {
-  return source.sourceType === "github_pull_request_review_comment"
-    ? "pull_request_review_comment_report"
-    : "issue_comment_report";
+  switch (source.sourceType) {
+    case "github_pull_request_review_comment":
+      return "pull_request_review_comment_report";
+    case "github_issue_body":
+      return "issue_body_report";
+    case "github_pull_request_body":
+      return "pull_request_body_report";
+    default:
+      return "issue_comment_report";
+  }
 }
 
 function mapTargetOutcomeToStatus(outcome: GptCodeExternalTargetDispatch["outcome"]) {
@@ -237,7 +274,31 @@ function mapTargetOutcomeToRecommendedNextStep(outcome: GptCodeExternalTargetDis
   return "Review the external target dispatch outcome manually.";
 }
 
-function resolveExternalGitHubTargetRoute(params: {
+function sourcePrefersStatusReportTarget(source: GptCodeExternalSourceMetadata) {
+  return source.sourceType === "github_issue_body" || source.sourceType === "github_pull_request_body";
+}
+
+function resolveStatusReportTargetRoute(params: {
+  state: OrchestratorState;
+}): ExternalGitHubTargetRoute | null {
+  const target = params.state.lastStatusReportTarget;
+  if (!target || target.kind === "artifact_only" || !target.commentId || !target.repository || !target.targetNumber) {
+    return null;
+  }
+
+  return {
+    repository: target.repository,
+    targetNumber: target.targetNumber,
+    targetDestination: `github://${target.repository}/issues/comments/${target.commentId}`,
+    targetCommentId: String(target.commentId),
+    targetLaneClassification: "github_status_report_comment_lane",
+    routingDecision: "status_report_target",
+    fallbackDecision: "not_needed",
+    isPullRequest: target.kind === "pull_request_comment",
+  };
+}
+
+function resolvePrimaryThreadOrSourceFallbackRoute(params: {
   state: OrchestratorState;
   source: GptCodeExternalSourceMetadata;
 }): ExternalGitHubTargetRoute | null {
@@ -247,6 +308,7 @@ function resolveExternalGitHubTargetRoute(params: {
       repository: threadTarget.repository,
       targetNumber: threadTarget.targetNumber,
       targetDestination: `github://${threadTarget.repository}/issues/${threadTarget.targetNumber}/comments`,
+      targetCommentId: null,
       targetLaneClassification: threadTarget.isPullRequest
         ? "github_pull_request_thread_comment_lane"
         : "github_issue_thread_comment_lane",
@@ -265,11 +327,41 @@ function resolveExternalGitHubTargetRoute(params: {
     repository: params.source.repository,
     targetNumber: fallbackNumber,
     targetDestination: `github://${params.source.repository}/issues/${fallbackNumber}/comments`,
+    targetCommentId: null,
     targetLaneClassification: "github_source_thread_fallback_lane",
     routingDecision: "source_thread_fallback",
     fallbackDecision: "source_thread_fallback",
     isPullRequest: params.source.prNumber != null,
   };
+}
+
+function resolveExternalGitHubTargetRoute(params: {
+  state: OrchestratorState;
+  source: GptCodeExternalSourceMetadata;
+}): ExternalGitHubTargetRoute | null {
+  if (sourcePrefersStatusReportTarget(params.source)) {
+    const statusRoute = resolveStatusReportTargetRoute({
+      state: params.state,
+    });
+    if (statusRoute) {
+      return statusRoute;
+    }
+  }
+
+  return resolvePrimaryThreadOrSourceFallbackRoute(params);
+}
+
+function extractReportTextFromSourcePayload(payload: unknown, source: GptCodeExternalSourceMetadata) {
+  if (source.sourceType === "github_issue_comment" || source.sourceType === "github_pull_request_review_comment") {
+    const commentPayload = payload as IssueCommentPayload | PullRequestReviewCommentPayload;
+    return (commentPayload.comment?.body ?? "").trim();
+  }
+  if (source.sourceType === "github_issue_body") {
+    const issuePayload = payload as IssueCommentPayload;
+    return (issuePayload.issue?.body ?? "").trim();
+  }
+  const pullRequestPayload = payload as PullRequestReviewCommentPayload;
+  return (pullRequestPayload.pull_request?.body ?? "").trim();
 }
 
 async function persistTargetDispatchArtifact(params: {
@@ -327,6 +419,34 @@ export function extractGptCodeReportFromGitHubComment(params: {
     });
   }
 
+  if (
+    (issueCommentPayload.action === "opened" || issueCommentPayload.action === "edited") &&
+    issueCommentPayload.issue?.number &&
+    issueCommentPayload.issue?.id &&
+    issueCommentPayload.repository?.full_name
+  ) {
+    const body = (issueCommentPayload.issue.body ?? "").trim();
+    if (!body || !looksLikeGptCodeChineseReport(body)) {
+      return null;
+    }
+
+    return gptCodeExternalSourceMetadataSchema.parse({
+      sourceType: issueCommentPayload.issue.pull_request ? "github_pull_request_body" : "github_issue_body",
+      sourceLaneClassification: issueCommentPayload.issue.pull_request
+        ? "github_pull_request_body_lane"
+        : "github_issue_body_lane",
+      sourceId: `github-${issueCommentPayload.issue.pull_request ? "pull-request" : "issue"}-body:${issueCommentPayload.issue.id}:${issueCommentPayload.action}:${issueCommentPayload.issue.updated_at ?? "unknown"}`,
+      sourceCorrelationId: `inbound:${params.deliveryId ?? issueCommentPayload.issue.id}`,
+      repository: issueCommentPayload.repository.full_name,
+      issueNumber: issueCommentPayload.issue.pull_request ? null : issueCommentPayload.issue.number,
+      prNumber: issueCommentPayload.issue.pull_request ? issueCommentPayload.issue.number : null,
+      commentId: null,
+      payloadPath: params.payloadPath,
+      headersPath: params.headersPath,
+      receivedAt: params.receivedAt,
+    });
+  }
+
   const reviewCommentPayload = params.payload as PullRequestReviewCommentPayload;
   if (
     reviewCommentPayload.action === "created" &&
@@ -354,6 +474,32 @@ export function extractGptCodeReportFromGitHubComment(params: {
     });
   }
 
+  if (
+    (reviewCommentPayload.action === "opened" || reviewCommentPayload.action === "edited") &&
+    reviewCommentPayload.pull_request?.number &&
+    reviewCommentPayload.pull_request?.id &&
+    reviewCommentPayload.repository?.full_name
+  ) {
+    const body = (reviewCommentPayload.pull_request.body ?? "").trim();
+    if (!body || !looksLikeGptCodeChineseReport(body)) {
+      return null;
+    }
+
+    return gptCodeExternalSourceMetadataSchema.parse({
+      sourceType: "github_pull_request_body",
+      sourceLaneClassification: "github_pull_request_body_lane",
+      sourceId: `github-pull-request-body:${reviewCommentPayload.pull_request.id}:${reviewCommentPayload.action}:${reviewCommentPayload.pull_request.updated_at ?? "unknown"}`,
+      sourceCorrelationId: `inbound:${params.deliveryId ?? reviewCommentPayload.pull_request.id}`,
+      repository: reviewCommentPayload.repository.full_name,
+      issueNumber: null,
+      prNumber: reviewCommentPayload.pull_request.number ?? reviewCommentPayload.number ?? null,
+      commentId: null,
+      payloadPath: params.payloadPath,
+      headersPath: params.headersPath,
+      receivedAt: params.receivedAt,
+    });
+  }
+
   return null;
 }
 
@@ -367,6 +513,153 @@ export interface GptCodeExternalTargetAdapter {
     outputPayloadPath: string;
     outputRoot: string;
   }): Promise<GptCodeExternalTargetDispatch>;
+}
+
+async function writeTargetDispatchResult(params: {
+  outputRoot: string;
+  attemptCount: number;
+  result: Omit<GptCodeExternalTargetDispatch, "dispatchArtifactPath">;
+}) {
+  const dispatchArtifactPath = path.join(params.outputRoot, `github-target-dispatch-attempt-${params.attemptCount}.json`);
+  const result = gptCodeExternalTargetDispatchSchema.parse({
+    ...params.result,
+    dispatchArtifactPath,
+  });
+  await writeFile(dispatchArtifactPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  return result;
+}
+
+async function dispatchInstructionToGitHubRoute(params: {
+  route: ExternalGitHubTargetRoute;
+  state: OrchestratorState;
+  nextInstructionPath: string;
+  outputRoot: string;
+  attemptCount: number;
+  retryCount: number;
+  maxAttempts: number;
+  targetType: GptCodeExternalTargetDispatch["targetType"];
+  enabled: boolean;
+  token: string | null;
+  execImpl: ExecFileLike;
+  now: string;
+}) {
+  const correlationId = buildInstructionCorrelationId(params.state.id);
+  const body = withInstructionMarker(await readFile(params.nextInstructionPath, "utf8"), params.state.id);
+  const bodyPayloadPath = path.join(params.outputRoot, `github-target-body-attempt-${params.attemptCount}.json`);
+  await writeFile(bodyPayloadPath, `${JSON.stringify({ body }, null, 2)}\n`, "utf8");
+
+  if (!params.enabled || !params.token) {
+    return writeTargetDispatchResult({
+      outputRoot: params.outputRoot,
+      attemptCount: params.attemptCount,
+      result: {
+        stateId: params.state.id,
+        targetType: params.targetType,
+        targetLaneClassification: params.route.targetLaneClassification,
+        targetDestination: params.route.targetDestination,
+        routingDecision: params.route.routingDecision,
+        fallbackDecision: params.route.fallbackDecision,
+        attemptCount: params.attemptCount,
+        retryCount: params.retryCount,
+        maxAttempts: params.maxAttempts,
+        outcome: "manual_required",
+        retryEligible: false,
+        failureClass: "auth",
+        correlationId,
+        externalReferenceId: null,
+        externalUrl: null,
+        dispatchedAt: params.now,
+      },
+    });
+  }
+
+  let existingCommentId =
+    params.route.targetCommentId ??
+    (params.route.targetLaneClassification === "github_status_report_comment_lane"
+      ? params.state.lastStatusReportTarget?.commentId?.toString() ?? null
+      : params.state.lastGptCodeAutomationState?.targetExternalReferenceId ?? null);
+  let existingUrl =
+    params.route.targetLaneClassification === "github_status_report_comment_lane"
+      ? params.state.lastStatusReportTarget?.targetUrl ?? null
+      : params.state.lastGptCodeAutomationState?.targetExternalUrl ?? null;
+
+  try {
+    if (!existingCommentId && params.route.targetLaneClassification !== "github_status_report_comment_lane") {
+      const { stdout: listStdout } = await params.execImpl(
+        "gh",
+        ["api", `repos/${params.route.repository}/issues/${params.route.targetNumber}/comments`],
+        { windowsHide: true },
+      );
+      const comments = JSON.parse(listStdout || "[]") as Array<{ id?: number; body?: string; html_url?: string }>;
+      const matched = comments.find((comment) => extractInstructionCorrelationId(comment.body ?? "") === correlationId);
+      existingCommentId = matched?.id ? String(matched.id) : null;
+      existingUrl = matched?.html_url ?? null;
+    }
+
+    let responsePayload: { id?: number; html_url?: string } | null = null;
+    if (existingCommentId) {
+      const { stdout } = await params.execImpl(
+        "gh",
+        ["api", `repos/${params.route.repository}/issues/comments/${existingCommentId}`, "--method", "PATCH", "--input", bodyPayloadPath],
+        { windowsHide: true },
+      );
+      responsePayload = stdout.trim() ? (JSON.parse(stdout) as { id?: number; html_url?: string }) : null;
+    } else {
+      const { stdout } = await params.execImpl(
+        "gh",
+        ["api", `repos/${params.route.repository}/issues/${params.route.targetNumber}/comments`, "--method", "POST", "--input", bodyPayloadPath],
+        { windowsHide: true },
+      );
+      responsePayload = stdout.trim() ? (JSON.parse(stdout) as { id?: number; html_url?: string }) : null;
+    }
+
+    return writeTargetDispatchResult({
+      outputRoot: params.outputRoot,
+      attemptCount: params.attemptCount,
+      result: {
+        stateId: params.state.id,
+        targetType: params.targetType,
+        targetLaneClassification: params.route.targetLaneClassification,
+        targetDestination: params.route.targetDestination,
+        routingDecision: params.route.routingDecision,
+        fallbackDecision: params.route.fallbackDecision,
+        attemptCount: params.attemptCount,
+        retryCount: params.retryCount,
+        maxAttempts: params.maxAttempts,
+        outcome: "success",
+        retryEligible: false,
+        failureClass: null,
+        correlationId,
+        externalReferenceId: String(responsePayload?.id ?? existingCommentId ?? ""),
+        externalUrl: responsePayload?.html_url ?? existingUrl,
+        dispatchedAt: params.now,
+      },
+    });
+  } catch (error) {
+    const classified = classifyGitHubDispatchFailure(error);
+    return writeTargetDispatchResult({
+      outputRoot: params.outputRoot,
+      attemptCount: params.attemptCount,
+      result: {
+        stateId: params.state.id,
+        targetType: params.targetType,
+        targetLaneClassification: params.route.targetLaneClassification,
+        targetDestination: params.route.targetDestination,
+        routingDecision: params.route.routingDecision,
+        fallbackDecision: params.route.fallbackDecision,
+        attemptCount: params.attemptCount,
+        retryCount: params.retryCount,
+        maxAttempts: params.maxAttempts,
+        outcome: classified.outcome,
+        retryEligible: classified.retryEligible,
+        failureClass: classified.failureClass,
+        correlationId,
+        externalReferenceId: existingCommentId,
+        externalUrl: existingUrl,
+        dispatchedAt: params.now,
+      },
+    });
+  }
 }
 
 export class GhCliGptCodeGitHubCommentTargetAdapter implements GptCodeExternalTargetAdapter {
@@ -428,126 +721,52 @@ export class GhCliGptCodeGitHubCommentTargetAdapter implements GptCodeExternalTa
       await writeFile(dispatchArtifactPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
       return result;
     }
-
-    const body = withInstructionMarker(await readFile(params.nextInstructionPath, "utf8"), params.state.id);
-    const bodyPayloadPath = path.join(params.outputRoot, `github-target-body-attempt-${attemptCount}.json`);
-    await writeFile(bodyPayloadPath, `${JSON.stringify({ body }, null, 2)}\n`, "utf8");
-
-    if (!this.params.enabled || !this.params.token) {
-      const dispatchArtifactPath = path.join(
-        params.outputRoot,
-        `github-target-dispatch-attempt-${attemptCount}.json`,
-      );
-      const result = gptCodeExternalTargetDispatchSchema.parse({
-        stateId: params.state.id,
-        targetType: this.kind,
-        targetLaneClassification: route.targetLaneClassification,
-        targetDestination: route.targetDestination,
-        routingDecision: route.routingDecision,
-        fallbackDecision: route.fallbackDecision,
-        attemptCount,
-        retryCount,
-        maxAttempts: this.maxAttempts,
-        outcome: "manual_required",
-        retryEligible: false,
-        failureClass: "auth",
-        correlationId,
-        externalReferenceId: null,
-        externalUrl: null,
-        dispatchArtifactPath,
-        dispatchedAt: now,
-      });
-      await writeFile(dispatchArtifactPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
-      return result;
-    }
-
     const execImpl: ExecFileLike = this.params.execFileImpl ?? defaultExecFileLike;
-    let existingCommentId = params.state.lastGptCodeAutomationState?.targetExternalReferenceId ?? null;
-    let existingUrl = params.state.lastGptCodeAutomationState?.targetExternalUrl ?? null;
-
-    try {
-      if (!existingCommentId) {
-        const { stdout: listStdout } = await execImpl(
-          "gh",
-          ["api", `repos/${route.repository}/issues/${route.targetNumber}/comments`],
-          { windowsHide: true },
-        );
-        const comments = JSON.parse(listStdout || "[]") as Array<{ id?: number; body?: string; html_url?: string }>;
-        const matched = comments.find((comment) => extractInstructionCorrelationId(comment.body ?? "") === correlationId);
-        existingCommentId = matched?.id ? String(matched.id) : null;
-        existingUrl = matched?.html_url ?? null;
-      }
-
-      let responsePayload: { id?: number; html_url?: string } | null = null;
-      if (existingCommentId) {
-        const { stdout } = await execImpl(
-          "gh",
-          ["api", `repos/${route.repository}/issues/comments/${existingCommentId}`, "--method", "PATCH", "--input", bodyPayloadPath],
-          { windowsHide: true },
-        );
-        responsePayload = stdout.trim() ? (JSON.parse(stdout) as { id?: number; html_url?: string }) : null;
-      } else {
-        const { stdout } = await execImpl(
-          "gh",
-          ["api", `repos/${route.repository}/issues/${route.targetNumber}/comments`, "--method", "POST", "--input", bodyPayloadPath],
-          { windowsHide: true },
-        );
-        responsePayload = stdout.trim() ? (JSON.parse(stdout) as { id?: number; html_url?: string }) : null;
-      }
-
-      const dispatchArtifactPath = path.join(
-        params.outputRoot,
-        `github-target-dispatch-attempt-${attemptCount}.json`,
-      );
-      const result = gptCodeExternalTargetDispatchSchema.parse({
-        stateId: params.state.id,
-        targetType: this.kind,
-        targetLaneClassification: route.targetLaneClassification,
-        targetDestination: route.targetDestination,
-        routingDecision: route.routingDecision,
-        fallbackDecision: route.fallbackDecision,
-        attemptCount,
-        retryCount,
-        maxAttempts: this.maxAttempts,
-        outcome: "success",
-        retryEligible: false,
-        failureClass: null,
-        correlationId,
-        externalReferenceId: String(responsePayload?.id ?? existingCommentId ?? ""),
-        externalUrl: responsePayload?.html_url ?? existingUrl,
-        dispatchArtifactPath,
-        dispatchedAt: now,
+    const primaryDispatch = await dispatchInstructionToGitHubRoute({
+      route,
+      state: params.state,
+      nextInstructionPath: params.nextInstructionPath,
+      outputRoot: params.outputRoot,
+      attemptCount,
+      retryCount,
+      maxAttempts: this.maxAttempts,
+      targetType: this.kind,
+      enabled: this.params.enabled,
+      token: this.params.token,
+      execImpl,
+      now,
+    });
+    if (
+      primaryDispatch.outcome === "failed" &&
+      primaryDispatch.failureClass === "target_invalid" &&
+      route.routingDecision === "status_report_target"
+    ) {
+      const fallbackRoute = resolvePrimaryThreadOrSourceFallbackRoute({
+        state: params.state,
+        source: params.source,
       });
-      await writeFile(dispatchArtifactPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
-      return result;
-    } catch (error) {
-      const classified = classifyGitHubDispatchFailure(error);
-      const dispatchArtifactPath = path.join(
-        params.outputRoot,
-        `github-target-dispatch-attempt-${attemptCount}.json`,
-      );
-      const result = gptCodeExternalTargetDispatchSchema.parse({
-        stateId: params.state.id,
-        targetType: this.kind,
-        targetLaneClassification: route.targetLaneClassification,
-        targetDestination: route.targetDestination,
-        routingDecision: route.routingDecision,
-        fallbackDecision: route.fallbackDecision,
-        attemptCount,
-        retryCount,
-        maxAttempts: this.maxAttempts,
-        outcome: classified.outcome,
-        retryEligible: classified.retryEligible,
-        failureClass: classified.failureClass,
-        correlationId,
-        externalReferenceId: existingCommentId,
-        externalUrl: existingUrl,
-        dispatchArtifactPath,
-        dispatchedAt: now,
-      });
-      await writeFile(dispatchArtifactPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
-      return result;
+      if (fallbackRoute) {
+        return dispatchInstructionToGitHubRoute({
+          route: {
+            ...fallbackRoute,
+            fallbackDecision: "status_report_target_fallback",
+          },
+          state: params.state,
+          nextInstructionPath: params.nextInstructionPath,
+          outputRoot: params.outputRoot,
+          attemptCount,
+          retryCount,
+          maxAttempts: this.maxAttempts,
+          targetType: this.kind,
+          enabled: this.params.enabled,
+          token: this.params.token,
+          execImpl,
+          now,
+        });
+      }
     }
+
+    return primaryDispatch;
   }
 }
 
@@ -575,8 +794,7 @@ export async function runGptCodeExternalAutomationFromWebhook(params: {
     return null;
   }
 
-  const payload = params.payload as IssueCommentPayload | PullRequestReviewCommentPayload;
-  const reportText = (payload.comment?.body ?? "").trim();
+  const reportText = extractReportTextFromSourcePayload(params.payload, source);
   const state = await findLatestStateForThread({
     dependencies: params.dependencies,
     repository: source.repository,

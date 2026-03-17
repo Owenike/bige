@@ -113,3 +113,85 @@ test("external target adapter can route through source fallback when the state t
   assert.equal(result.fallbackDecision, "source_thread_fallback");
   assert.equal(result.externalReferenceId, "12345");
 });
+
+test("external target adapter can dispatch through the correlated status report comment lane for body-based sources", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gpt-code-external-status-target-"));
+  const nextInstructionPath = path.join(root, "next-instruction.md");
+  const outputPayloadPath = path.join(root, "output-payload.json");
+  await writeFile(nextInstructionPath, "下一輪請補 external source coverage。\n", "utf8");
+  await writeFile(outputPayloadPath, "{}\n", "utf8");
+
+  const state = {
+    ...createInitialState({
+      id: "external-status-target-state",
+      repoPath: process.cwd(),
+      repoName: "bige",
+      userGoal: "Dispatch to a correlated status report target",
+      objective: "Reuse the live status comment as an external automation target",
+      subtasks: ["external-target", "status-report-target"],
+      successCriteria: ["external target receives the next instruction"],
+    }),
+    sourceEventSummary: {
+      repository: "example/bige",
+      branch: "main",
+      issueNumber: 46,
+      prNumber: null,
+      commentId: null,
+      label: null,
+      headSha: null,
+      command: null,
+      triggerReason: "issue_opened from example/bige#46",
+    },
+    lastStatusReportTarget: {
+      kind: "issue_comment" as const,
+      repository: "example/bige",
+      targetNumber: 46,
+      commentId: 60001,
+      targetUrl: "https://github.com/example/bige/issues/46#issuecomment-60001",
+      correlationId: "status-report:external-status-target-state",
+      updatedAt: "2026-03-18T00:00:00.000Z",
+    },
+  };
+
+  const adapter = new GhCliGptCodeGitHubCommentTargetAdapter({
+    enabled: true,
+    token: "token",
+    execFileImpl: async (_file, args) => {
+      const joined = args.join(" ");
+      assert.equal(joined.includes("issues/comments/60001"), true);
+      return {
+        stdout: JSON.stringify({
+          id: 60001,
+          html_url: "https://github.com/example/bige/issues/46#issuecomment-60001",
+        }),
+        stderr: "",
+      };
+    },
+  });
+
+  const result = await adapter.dispatchNextInstruction({
+    state,
+    source: {
+      sourceType: "github_issue_body",
+      sourceLaneClassification: "github_issue_body_lane",
+      sourceId: "github-issue-body:600:opened:2026-03-18T00:00:00.000Z",
+      sourceCorrelationId: "inbound:delivery-report-4",
+      repository: "example/bige",
+      issueNumber: 46,
+      prNumber: null,
+      commentId: null,
+      payloadPath: "C:/tmp/status-target-payload.json",
+      headersPath: "C:/tmp/status-target-headers.json",
+      receivedAt: "2026-03-18T00:00:00.000Z",
+    },
+    nextInstructionPath,
+    outputPayloadPath,
+    outputRoot: root,
+  });
+
+  assert.equal(result.outcome, "success");
+  assert.equal(result.targetLaneClassification, "github_status_report_comment_lane");
+  assert.equal(result.routingDecision, "status_report_target");
+  assert.equal(result.fallbackDecision, "not_needed");
+  assert.equal(result.externalReferenceId, "60001");
+});

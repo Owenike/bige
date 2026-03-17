@@ -210,6 +210,8 @@ export const sourceEventTypeSchema = z.enum([
   "pull_request_synchronize",
   "issue_comment_command",
   "issue_comment_report",
+  "issue_body_report",
+  "pull_request_body_report",
   "pull_request_review_comment_report",
   "workflow_dispatch",
 ]);
@@ -285,26 +287,32 @@ export const gptCodeExternalAutomationOutcomeSchema = z.enum(["not_run", "succes
 export const gptCodeSourceLaneClassificationSchema = z.enum([
   "github_issue_comment_lane",
   "github_pull_request_review_comment_lane",
+  "github_issue_body_lane",
+  "github_pull_request_body_lane",
 ]);
 export const gptCodeTargetLaneClassificationSchema = z.enum([
   "github_issue_thread_comment_lane",
   "github_pull_request_thread_comment_lane",
+  "github_status_report_comment_lane",
   "github_source_thread_fallback_lane",
   "repo_local_outbox_lane",
 ]);
 export const gptCodeRoutingDecisionSchema = z.enum([
+  "status_report_target",
   "state_thread_target",
   "source_thread_fallback",
   "manual_required",
 ]);
 export const gptCodeFallbackDecisionSchema = z.enum([
   "not_needed",
+  "status_report_target_fallback",
   "source_thread_fallback",
   "manual_required",
 ]);
 export const gptCodeDispatchFailureClassSchema = z.enum([
   "auth",
   "routing",
+  "target_invalid",
   "transient",
   "unknown",
 ]);
@@ -3956,7 +3964,16 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
   properties: {
     sourceAdapterStatus: { type: "string", enum: ["not_received", "received", "linked", "manual_required", "failed"] },
     sourceType: { type: "string", nullable: true },
-    sourceLaneClassification: { type: "string", nullable: true, enum: ["github_issue_comment_lane", "github_pull_request_review_comment_lane"] },
+    sourceLaneClassification: {
+      type: "string",
+      nullable: true,
+      enum: [
+        "github_issue_comment_lane",
+        "github_pull_request_review_comment_lane",
+        "github_issue_body_lane",
+        "github_pull_request_body_lane",
+      ],
+    },
     sourceId: { type: "string", nullable: true },
     sourceCorrelationId: { type: "string", nullable: true },
     sourcePayloadPath: { type: "string", nullable: true },
@@ -3967,7 +3984,7 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     bridgeStatus: { type: "string", enum: ["not_run", "accepted", "needs_manual_review", "failed"] },
     dispatchStatus: { type: "string", enum: ["not_queued", "queued", "dispatched", "manual_required", "failed"] },
     dispatchTarget: { type: "string", nullable: true },
-    dispatchOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed"] },
+    dispatchOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable"] },
     intakeArtifactPath: { type: "string", nullable: true },
     bridgeArtifactRoot: { type: "string", nullable: true },
     outputPayloadPath: { type: "string", nullable: true },
@@ -3976,18 +3993,40 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     automaticTriggerStatus: { type: "string", enum: ["not_triggered", "triggered", "manual_required", "failed"] },
     targetAdapterStatus: { type: "string", enum: ["not_attempted", "dispatched", "manual_required", "failed", "retryable"] },
     targetType: { type: "string", nullable: true },
-    targetLaneClassification: { type: "string", nullable: true, enum: ["github_issue_thread_comment_lane", "github_pull_request_thread_comment_lane", "github_source_thread_fallback_lane", "repo_local_outbox_lane"] },
+    targetLaneClassification: {
+      type: "string",
+      nullable: true,
+      enum: [
+        "github_issue_thread_comment_lane",
+        "github_pull_request_thread_comment_lane",
+        "github_status_report_comment_lane",
+        "github_source_thread_fallback_lane",
+        "repo_local_outbox_lane",
+      ],
+    },
     targetDestination: { type: "string", nullable: true },
     targetAttemptCount: { type: "number" },
     targetRetryCount: { type: "number" },
     targetMaxAttempts: { type: "number" },
-    routingDecision: { type: "string", nullable: true, enum: ["state_thread_target", "source_thread_fallback", "manual_required"] },
-    fallbackDecision: { type: "string", nullable: true, enum: ["not_needed", "source_thread_fallback", "manual_required"] },
+    routingDecision: {
+      type: "string",
+      nullable: true,
+      enum: ["status_report_target", "state_thread_target", "source_thread_fallback", "manual_required"],
+    },
+    fallbackDecision: {
+      type: "string",
+      nullable: true,
+      enum: ["not_needed", "status_report_target_fallback", "source_thread_fallback", "manual_required"],
+    },
     dispatchCorrelationId: { type: "string", nullable: true },
     targetExternalReferenceId: { type: "string", nullable: true },
     targetExternalUrl: { type: "string", nullable: true },
     targetDispatchArtifactPath: { type: "string", nullable: true },
-    lastTargetFailureClass: { type: "string", nullable: true, enum: ["auth", "routing", "transient", "unknown"] },
+    lastTargetFailureClass: {
+      type: "string",
+      nullable: true,
+      enum: ["auth", "routing", "target_invalid", "transient", "unknown"],
+    },
     dispatchReliabilityOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable"] },
     externalAutomationOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable"] },
     lastReceivedAt: { type: "string", nullable: true },

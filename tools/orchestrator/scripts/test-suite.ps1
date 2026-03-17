@@ -202,6 +202,7 @@ $suiteMap = @{
     "$outDir\tests\unit\gpt-code-report-dispatch-outcome.test.js",
     "$outDir\tests\unit\gpt-code-external-source-adapter.test.js",
     "$outDir\tests\unit\gpt-code-external-target-adapter.test.js",
+    "$outDir\tests\unit\gpt-code-external-routing.test.js",
     "$outDir\tests\unit\gpt-code-external-trigger.test.js",
     "$outDir\tests\unit\gpt-code-external-automation-state.test.js",
     "$outDir\tests\unit\gpt-code-external-dispatch-reliability.test.js"
@@ -736,6 +737,9 @@ $suiteMap = @{
   "gpt-code-external-target-adapter" = @(
     "$outDir\tests\unit\gpt-code-external-target-adapter.test.js"
   )
+  "gpt-code-external-routing" = @(
+    "$outDir\tests\unit\gpt-code-external-routing.test.js"
+  )
   "gpt-code-external-trigger" = @(
     "$outDir\tests\unit\gpt-code-external-trigger.test.js"
   )
@@ -747,6 +751,9 @@ $suiteMap = @{
   )
   "gpt-code-external-automation" = @(
     "$outDir\tests\e2e\gpt-code-external-automation.test.js"
+  )
+  "gpt-code-external-coverage" = @(
+    "$outDir\tests\e2e\gpt-code-external-coverage.test.js"
   )
   "supabase-live" = @(
     "$outDir\tests\integration\supabase-live.test.js"
@@ -935,6 +942,7 @@ $suiteMap = @{
     "$outDir\tests\unit\gpt-code-report-dispatch-outcome.test.js",
     "$outDir\tests\unit\gpt-code-external-source-adapter.test.js",
     "$outDir\tests\unit\gpt-code-external-target-adapter.test.js",
+    "$outDir\tests\unit\gpt-code-external-routing.test.js",
     "$outDir\tests\unit\gpt-code-external-trigger.test.js",
     "$outDir\tests\unit\gpt-code-external-automation-state.test.js",
     "$outDir\tests\unit\gpt-code-external-dispatch-reliability.test.js",
@@ -951,6 +959,7 @@ $suiteMap = @{
     "$outDir\tests\e2e\gpt-code-report-transport.test.js",
     "$outDir\tests\e2e\gpt-code-report-auto-dispatch.test.js",
     "$outDir\tests\e2e\gpt-code-external-automation.test.js",
+    "$outDir\tests\e2e\gpt-code-external-coverage.test.js",
     "$outDir\tests\e2e\mock-loop.test.js",
     "$outDir\tests\e2e\multi-iteration-loop.test.js"
   )

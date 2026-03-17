@@ -63,3 +63,32 @@ test("external source adapter extracts GPT CODE report metadata from a GitHub pu
   assert.equal(metadata?.prNumber, 77);
   assert.equal(metadata?.commentId, 9922);
 });
+
+test("external source adapter extracts GPT CODE report metadata from a GitHub issue body payload", () => {
+  const metadata = extractGptCodeReportFromGitHubComment({
+    payload: {
+      action: "edited",
+      issue: {
+        id: 501,
+        number: 45,
+        title: "External source body lane",
+        body: completedSliceReport,
+        updated_at: "2026-03-18T00:00:01.000Z",
+      },
+      repository: {
+        full_name: "example/bige",
+      },
+    },
+    deliveryId: "delivery-report-3",
+    payloadPath: "C:/tmp/issue-body-payload.json",
+    headersPath: "C:/tmp/issue-body-headers.json",
+    receivedAt: "2026-03-18T00:00:02.000Z",
+  });
+
+  assert.equal(metadata?.sourceType, "github_issue_body");
+  assert.equal(metadata?.sourceLaneClassification, "github_issue_body_lane");
+  assert.equal(metadata?.repository, "example/bige");
+  assert.equal(metadata?.issueNumber, 45);
+  assert.equal(metadata?.commentId, null);
+  assert.equal(metadata?.sourceId, "github-issue-body:501:edited:2026-03-18T00:00:01.000Z");
+});

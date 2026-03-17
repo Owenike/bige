@@ -182,6 +182,8 @@ export const gptCodeTransportSourceSchema = z.enum([
   "test",
   "github_issue_comment",
   "github_pull_request_review_comment",
+  "github_issue_body",
+  "github_pull_request_body",
 ]);
 
 export const gptCodeTransportEntryResultSchema = z.object({
@@ -231,14 +233,24 @@ export const gptCodeTransportWatcherSummarySchema = z.object({
 });
 
 export const gptCodeExternalSourceMetadataSchema = z.object({
-  sourceType: z.enum(["github_issue_comment", "github_pull_request_review_comment"]),
-  sourceLaneClassification: z.enum(["github_issue_comment_lane", "github_pull_request_review_comment_lane"]),
+  sourceType: z.enum([
+    "github_issue_comment",
+    "github_pull_request_review_comment",
+    "github_issue_body",
+    "github_pull_request_body",
+  ]),
+  sourceLaneClassification: z.enum([
+    "github_issue_comment_lane",
+    "github_pull_request_review_comment_lane",
+    "github_issue_body_lane",
+    "github_pull_request_body_lane",
+  ]),
   sourceId: z.string(),
   sourceCorrelationId: z.string(),
   repository: z.string(),
   issueNumber: z.number().int().positive().nullable().default(null),
   prNumber: z.number().int().positive().nullable().default(null),
-  commentId: z.number().int().positive(),
+  commentId: z.number().int().positive().nullable().default(null),
   payloadPath: z.string().nullable().default(null),
   headersPath: z.string().nullable().default(null),
   receivedAt: z.string(),
@@ -250,18 +262,19 @@ export const gptCodeExternalTargetDispatchSchema = z.object({
   targetLaneClassification: z.enum([
     "github_issue_thread_comment_lane",
     "github_pull_request_thread_comment_lane",
+    "github_status_report_comment_lane",
     "github_source_thread_fallback_lane",
     "repo_local_outbox_lane",
   ]),
   targetDestination: z.string(),
-  routingDecision: z.enum(["state_thread_target", "source_thread_fallback", "manual_required"]),
-  fallbackDecision: z.enum(["not_needed", "source_thread_fallback", "manual_required"]),
+  routingDecision: z.enum(["status_report_target", "state_thread_target", "source_thread_fallback", "manual_required"]),
+  fallbackDecision: z.enum(["not_needed", "status_report_target_fallback", "source_thread_fallback", "manual_required"]),
   attemptCount: z.number().int().nonnegative(),
   retryCount: z.number().int().nonnegative().default(0),
   maxAttempts: z.number().int().positive().default(2),
   outcome: z.enum(["success", "manual_required", "failed", "retryable"]),
   retryEligible: z.boolean().default(false),
-  failureClass: z.enum(["auth", "routing", "transient", "unknown"]).nullable().default(null),
+  failureClass: z.enum(["auth", "routing", "target_invalid", "transient", "unknown"]).nullable().default(null),
   correlationId: z.string(),
   externalReferenceId: z.string().nullable().default(null),
   externalUrl: z.string().nullable().default(null),
