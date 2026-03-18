@@ -195,3 +195,84 @@ test("external target adapter can dispatch through the correlated status report 
   assert.equal(result.fallbackDecision, "not_needed");
   assert.equal(result.externalReferenceId, "60001");
 });
+
+test("external target adapter can dispatch through the correlated live smoke comment lane for pull request body sources", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gpt-code-external-live-smoke-target-"));
+  const nextInstructionPath = path.join(root, "next-instruction.md");
+  const outputPayloadPath = path.join(root, "output-payload.json");
+  await writeFile(nextInstructionPath, "PR body sourced automation should reuse live smoke target\n", "utf8");
+  await writeFile(outputPayloadPath, "{}\n", "utf8");
+
+  const state = {
+    ...createInitialState({
+      id: "external-live-smoke-target-state",
+      repoPath: process.cwd(),
+      repoName: "bige",
+      userGoal: "Dispatch to a correlated live smoke target",
+      objective: "Reuse the live smoke comment as an external automation target",
+      subtasks: ["external-target", "live-smoke-target"],
+      successCriteria: ["external target receives the next instruction"],
+    }),
+    sourceEventSummary: {
+      repository: "example/bige",
+      branch: "main",
+      issueNumber: null,
+      prNumber: 78,
+      commentId: null,
+      label: null,
+      headSha: null,
+      command: null,
+      triggerReason: "pull_request_opened from example/bige#78",
+    },
+    lastLiveSmokeTarget: {
+      repository: "example/bige",
+      targetType: "pull_request" as const,
+      targetNumber: 78,
+      commentId: 61001,
+      selectionStatus: "correlated_reuse" as const,
+      selectionSummary: "Reuse the correlated live smoke pull request comment.",
+    },
+  };
+
+  const adapter = new GhCliGptCodeGitHubCommentTargetAdapter({
+    enabled: true,
+    token: "token",
+    execFileImpl: async (_file, args) => {
+      const joined = args.join(" ");
+      assert.equal(joined.includes("issues/comments/61001"), true);
+      return {
+        stdout: JSON.stringify({
+          id: 61001,
+          html_url: "https://github.com/example/bige/pull/78#issuecomment-61001",
+        }),
+        stderr: "",
+      };
+    },
+  });
+
+  const result = await adapter.dispatchNextInstruction({
+    state,
+    source: {
+      sourceType: "github_pull_request_body",
+      sourceLaneClassification: "github_pull_request_body_lane",
+      sourceId: "github-pull-request-body:701:opened:2026-03-18T00:00:03.000Z",
+      sourceCorrelationId: "inbound:delivery-report-4",
+      repository: "example/bige",
+      issueNumber: null,
+      prNumber: 78,
+      commentId: null,
+      payloadPath: "C:/tmp/pr-body-payload.json",
+      headersPath: "C:/tmp/pr-body-headers.json",
+      receivedAt: "2026-03-18T00:00:04.000Z",
+    },
+    nextInstructionPath,
+    outputPayloadPath,
+    outputRoot: root,
+  });
+
+  assert.equal(result.outcome, "success");
+  assert.equal(result.targetLaneClassification, "github_live_smoke_comment_lane");
+  assert.equal(result.routingDecision, "live_smoke_target");
+  assert.equal(result.fallbackDecision, "not_needed");
+  assert.equal(result.externalReferenceId, "61001");
+});

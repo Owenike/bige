@@ -134,3 +134,133 @@ test("external automation coverage can intake an issue body report and route fro
   assert.equal(updated?.lastGptCodeAutomationState?.dispatchReliabilityOutcome, "success");
   assert.equal(updated?.lastGptCodeAutomationState?.targetExternalReferenceId, "88002");
 });
+
+test("external automation coverage can intake a pull request body report and route from a stale live smoke target to the status report target", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gpt-code-external-pr-coverage-e2e-"));
+  const repoPath = process.cwd();
+  const dependencies = createDefaultDependencies({
+    repoPath,
+    storageRoot: root,
+    backendType: "file",
+    backendFallbackType: "blocked",
+    executorMode: "mock",
+    workspaceRoot: path.join(root, "workspaces"),
+  });
+
+  const existing = {
+    ...createInitialState({
+      id: "external-pr-coverage-state",
+      repoPath,
+      repoName: "bige",
+      userGoal: "Expand pull request external automation coverage",
+      objective: "Route pull request body sourced automation through live smoke and status report target selection",
+      subtasks: ["external-source", "external-target", "routing"],
+      allowedFiles: ["tools/orchestrator", "package.json", ".github/workflows"],
+      forbiddenFiles: ["app/api/platform/notifications"],
+      successCriteria: ["pull request body coverage is automated"],
+      autoMode: true,
+      approvalMode: "auto",
+    }),
+    sourceEventType: "pull_request_opened" as const,
+    sourceEventId: "pr:78:opened",
+    sourceEventSummary: {
+      repository: "example/bige",
+      branch: "main",
+      issueNumber: null,
+      prNumber: 78,
+      commentId: null,
+      label: null,
+      headSha: null,
+      command: null,
+      triggerReason: "pull_request_opened from example/bige#78",
+    },
+    lastLiveSmokeTarget: {
+      repository: "example/bige",
+      targetType: "pull_request" as const,
+      targetNumber: 78,
+      commentId: 99001,
+      selectionStatus: "correlated_reuse" as const,
+      selectionSummary: "Reuse the correlated live smoke pull request comment.",
+    },
+    lastStatusReportTarget: {
+      kind: "pull_request_comment" as const,
+      repository: "example/bige",
+      targetNumber: 78,
+      commentId: 99002,
+      targetUrl: "https://github.com/example/bige/pull/78#issuecomment-99002",
+      correlationId: "status-report:external-pr-coverage-state",
+      updatedAt: "2026-03-18T00:00:00.000Z",
+    },
+  };
+  await dependencies.storage.saveState(existing);
+
+  const rawBody = JSON.stringify({
+    action: "edited",
+    pull_request: {
+      id: 78001,
+      number: 78,
+      title: "External PR automation coverage",
+      body: completedSliceReport,
+      updated_at: "2026-03-18T00:00:05.000Z",
+    },
+    repository: {
+      full_name: "example/bige",
+      name: "bige",
+      default_branch: "main",
+    },
+    sender: {
+      login: "orchestrator-runner",
+      id: 1,
+      type: "User",
+    },
+  });
+
+  const externalTargetAdapter = new GhCliGptCodeGitHubCommentTargetAdapter({
+    enabled: true,
+    token: "token",
+    execFileImpl: async (_file, args) => {
+      const joined = args.join(" ");
+      if (joined.includes("issues/comments/99001") && joined.includes("PATCH")) {
+        throw new Error("HTTP 404 target not found");
+      }
+      if (joined.includes("issues/comments/99002") && joined.includes("PATCH")) {
+        return {
+          stdout: JSON.stringify({
+            id: 99002,
+            html_url: "https://github.com/example/bige/pull/78#issuecomment-99002",
+          }),
+          stderr: "",
+        };
+      }
+      throw new Error(`unexpected gh invocation: ${joined}`);
+    },
+  });
+
+  const result = await ingestGitHubWebhook({
+    rawBody,
+    headers: {
+      "x-github-event": "pull_request",
+      "x-github-delivery": "delivery-external-pr-coverage",
+      "x-hub-signature-256": sign(rawBody, "secret"),
+    },
+    secret: "secret",
+    dependencies,
+    repoPath,
+    enqueue: false,
+    reportStatus: false,
+    statusAdapter: null,
+    externalTargetAdapter,
+    actualGitStatusShort: " M package-lock.json\n M app/forgot-password/page.tsx",
+    statusOutputRoot: path.join(root, "status"),
+  });
+  const updated = await dependencies.storage.loadState(existing.id);
+
+  assert.equal(result.status, "routed");
+  assert.equal(updated?.lastGptCodeAutomationState?.sourceType, "github_pull_request_body");
+  assert.equal(updated?.lastGptCodeAutomationState?.sourceLaneClassification, "github_pull_request_body_lane");
+  assert.equal(updated?.lastGptCodeAutomationState?.targetLaneClassification, "github_status_report_comment_lane");
+  assert.equal(updated?.lastGptCodeAutomationState?.routingDecision, "status_report_target");
+  assert.equal(updated?.lastGptCodeAutomationState?.fallbackDecision, "live_smoke_target_fallback");
+  assert.equal(updated?.lastGptCodeAutomationState?.dispatchReliabilityOutcome, "success");
+  assert.equal(updated?.lastGptCodeAutomationState?.targetExternalReferenceId, "99002");
+});

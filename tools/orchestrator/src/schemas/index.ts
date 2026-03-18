@@ -293,11 +293,13 @@ export const gptCodeSourceLaneClassificationSchema = z.enum([
 export const gptCodeTargetLaneClassificationSchema = z.enum([
   "github_issue_thread_comment_lane",
   "github_pull_request_thread_comment_lane",
+  "github_live_smoke_comment_lane",
   "github_status_report_comment_lane",
   "github_source_thread_fallback_lane",
   "repo_local_outbox_lane",
 ]);
 export const gptCodeRoutingDecisionSchema = z.enum([
+  "live_smoke_target",
   "status_report_target",
   "state_thread_target",
   "source_thread_fallback",
@@ -305,6 +307,7 @@ export const gptCodeRoutingDecisionSchema = z.enum([
 ]);
 export const gptCodeFallbackDecisionSchema = z.enum([
   "not_needed",
+  "live_smoke_target_fallback",
   "status_report_target_fallback",
   "source_thread_fallback",
   "manual_required",
@@ -3999,6 +4002,7 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
       enum: [
         "github_issue_thread_comment_lane",
         "github_pull_request_thread_comment_lane",
+        "github_live_smoke_comment_lane",
         "github_status_report_comment_lane",
         "github_source_thread_fallback_lane",
         "repo_local_outbox_lane",
@@ -4011,12 +4015,12 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     routingDecision: {
       type: "string",
       nullable: true,
-      enum: ["status_report_target", "state_thread_target", "source_thread_fallback", "manual_required"],
+      enum: ["live_smoke_target", "status_report_target", "state_thread_target", "source_thread_fallback", "manual_required"],
     },
     fallbackDecision: {
       type: "string",
       nullable: true,
-      enum: ["not_needed", "status_report_target_fallback", "source_thread_fallback", "manual_required"],
+      enum: ["not_needed", "live_smoke_target_fallback", "status_report_target_fallback", "source_thread_fallback", "manual_required"],
     },
     dispatchCorrelationId: { type: "string", nullable: true },
     targetExternalReferenceId: { type: "string", nullable: true },

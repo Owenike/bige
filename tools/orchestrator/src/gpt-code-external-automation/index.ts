@@ -84,10 +84,15 @@ type ExternalGitHubTargetRoute = {
   targetLaneClassification:
     | "github_issue_thread_comment_lane"
     | "github_pull_request_thread_comment_lane"
+    | "github_live_smoke_comment_lane"
     | "github_status_report_comment_lane"
     | "github_source_thread_fallback_lane";
-  routingDecision: "status_report_target" | "state_thread_target" | "source_thread_fallback";
-  fallbackDecision: "not_needed" | "status_report_target_fallback" | "source_thread_fallback";
+  routingDecision: "live_smoke_target" | "status_report_target" | "state_thread_target" | "source_thread_fallback";
+  fallbackDecision:
+    | "not_needed"
+    | "live_smoke_target_fallback"
+    | "status_report_target_fallback"
+    | "source_thread_fallback";
   isPullRequest: boolean;
 };
 
@@ -278,6 +283,43 @@ function sourcePrefersStatusReportTarget(source: GptCodeExternalSourceMetadata) 
   return source.sourceType === "github_issue_body" || source.sourceType === "github_pull_request_body";
 }
 
+function sourcePrefersLiveSmokeTarget(source: GptCodeExternalSourceMetadata) {
+  return source.sourceType === "github_pull_request_body";
+}
+
+function resolveLiveSmokeTargetRoute(params: {
+  state: OrchestratorState;
+  source: GptCodeExternalSourceMetadata;
+}): ExternalGitHubTargetRoute | null {
+  const target = params.state.lastLiveSmokeTarget;
+  if (!target?.repository || !target.commentId || !target.targetNumber || !target.targetType) {
+    return null;
+  }
+  if (target.repository !== params.source.repository) {
+    return null;
+  }
+  if (params.source.prNumber != null) {
+    if (target.targetType !== "pull_request" || target.targetNumber !== params.source.prNumber) {
+      return null;
+    }
+  } else if (params.source.issueNumber != null) {
+    if (target.targetType !== "issue" || target.targetNumber !== params.source.issueNumber) {
+      return null;
+    }
+  }
+
+  return {
+    repository: target.repository,
+    targetNumber: target.targetNumber,
+    targetDestination: `github://${target.repository}/issues/comments/${target.commentId}`,
+    targetCommentId: String(target.commentId),
+    targetLaneClassification: "github_live_smoke_comment_lane",
+    routingDecision: "live_smoke_target",
+    fallbackDecision: "not_needed",
+    isPullRequest: target.targetType === "pull_request",
+  };
+}
+
 function resolveStatusReportTargetRoute(params: {
   state: OrchestratorState;
 }): ExternalGitHubTargetRoute | null {
@@ -339,6 +381,13 @@ function resolveExternalGitHubTargetRoute(params: {
   state: OrchestratorState;
   source: GptCodeExternalSourceMetadata;
 }): ExternalGitHubTargetRoute | null {
+  if (sourcePrefersLiveSmokeTarget(params.source)) {
+    const liveSmokeRoute = resolveLiveSmokeTargetRoute(params);
+    if (liveSmokeRoute) {
+      return liveSmokeRoute;
+    }
+  }
+
   if (sourcePrefersStatusReportTarget(params.source)) {
     const statusRoute = resolveStatusReportTargetRoute({
       state: params.state,
@@ -349,6 +398,53 @@ function resolveExternalGitHubTargetRoute(params: {
   }
 
   return resolvePrimaryThreadOrSourceFallbackRoute(params);
+}
+
+function resolveFallbackRouteAfterInvalidTarget(params: {
+  state: OrchestratorState;
+  source: GptCodeExternalSourceMetadata;
+  failedRoute: ExternalGitHubTargetRoute;
+}) {
+  if (params.failedRoute.routingDecision === "live_smoke_target") {
+    const statusRoute = sourcePrefersStatusReportTarget(params.source)
+      ? resolveStatusReportTargetRoute({
+          state: params.state,
+        })
+      : null;
+    if (statusRoute && statusRoute.targetDestination !== params.failedRoute.targetDestination) {
+      return {
+        ...statusRoute,
+        fallbackDecision: "live_smoke_target_fallback" as const,
+      };
+    }
+
+    const threadRoute = resolvePrimaryThreadOrSourceFallbackRoute({
+      state: params.state,
+      source: params.source,
+    });
+    if (threadRoute) {
+      return {
+        ...threadRoute,
+        fallbackDecision: "live_smoke_target_fallback" as const,
+      };
+    }
+    return null;
+  }
+
+  if (params.failedRoute.routingDecision === "status_report_target") {
+    const threadRoute = resolvePrimaryThreadOrSourceFallbackRoute({
+      state: params.state,
+      source: params.source,
+    });
+    if (threadRoute) {
+      return {
+        ...threadRoute,
+        fallbackDecision: "status_report_target_fallback" as const,
+      };
+    }
+  }
+
+  return null;
 }
 
 function extractReportTextFromSourcePayload(payload: unknown, source: GptCodeExternalSourceMetadata) {
@@ -739,18 +835,16 @@ export class GhCliGptCodeGitHubCommentTargetAdapter implements GptCodeExternalTa
     if (
       primaryDispatch.outcome === "failed" &&
       primaryDispatch.failureClass === "target_invalid" &&
-      route.routingDecision === "status_report_target"
+      (route.routingDecision === "status_report_target" || route.routingDecision === "live_smoke_target")
     ) {
-      const fallbackRoute = resolvePrimaryThreadOrSourceFallbackRoute({
+      const fallbackRoute = resolveFallbackRouteAfterInvalidTarget({
         state: params.state,
         source: params.source,
+        failedRoute: route,
       });
       if (fallbackRoute) {
         return dispatchInstructionToGitHubRoute({
-          route: {
-            ...fallbackRoute,
-            fallbackDecision: "status_report_target_fallback",
-          },
+          route: fallbackRoute,
           state: params.state,
           nextInstructionPath: params.nextInstructionPath,
           outputRoot: params.outputRoot,

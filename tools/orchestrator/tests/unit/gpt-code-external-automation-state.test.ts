@@ -82,3 +82,77 @@ test("external automation state records manual review when gating blocks auto di
   assert.equal(updated?.lastGptCodeAutomationState?.externalAutomationOutcome, "manual_required");
   assert.equal((updated?.lastGptCodeAutomationState?.manualReviewReason?.length ?? 0) > 0, true);
 });
+
+test("external automation state records live smoke routing facts for a pull request body lane", async () => {
+  const storageRoot = await mkdtemp(path.join(tmpdir(), "gpt-code-external-live-smoke-state-"));
+  const repoPath = process.cwd();
+  const dependencies = createDefaultDependencies({
+    repoPath,
+    storageRoot,
+    executorMode: "mock",
+  });
+  const state = {
+    ...createInitialState({
+      id: "external-live-smoke-state",
+      repoPath,
+      repoName: "bige",
+      userGoal: "Track external automation live smoke lane state",
+      objective: "Persist live smoke routing metadata for a pull request body source",
+      subtasks: ["external-source", "state"],
+      allowedFiles: ["tools/orchestrator", "package.json", ".github/workflows"],
+      forbiddenFiles: ["app/api/platform/notifications"],
+      successCriteria: ["live smoke routing state is persisted"],
+      autoMode: true,
+      approvalMode: "auto",
+    }),
+    sourceEventSummary: {
+      repository: "example/bige",
+      branch: "main",
+      issueNumber: null,
+      prNumber: 78,
+      commentId: null,
+      label: null,
+      headSha: null,
+      command: null,
+      triggerReason: "pull_request_opened from example/bige#78",
+    },
+  };
+  await dependencies.storage.saveState(state);
+
+  const result = await runGptCodeExternalAutomationFromWebhook({
+    payload: {
+      action: "edited",
+      pull_request: {
+        id: 78,
+        number: 78,
+        title: "Live smoke lane state",
+        body: inspectionSliceReport,
+        updated_at: "2026-03-18T00:00:00.000Z",
+      },
+      repository: {
+        full_name: "example/bige",
+      },
+    },
+    deliveryId: "delivery-report-live-smoke-state",
+    payloadPath: "C:/tmp/report-live-smoke-state-payload.json",
+    headersPath: "C:/tmp/report-live-smoke-state-headers.json",
+    receivedAt: "2026-03-18T00:00:00.000Z",
+    dependencies,
+    actualGitStatusShort: " M package-lock.json",
+    externalTargetAdapter: {
+      kind: "github_issue_comment",
+      async dispatchNextInstruction() {
+        throw new Error("should not dispatch when gating blocks auto dispatch");
+      },
+    },
+  });
+  const updated = await dependencies.storage.loadState(state.id);
+
+  assert.equal(result?.outcome, "manual_required");
+  assert.equal(updated?.lastGptCodeAutomationState?.sourceType, "github_pull_request_body");
+  assert.equal(updated?.lastGptCodeAutomationState?.sourceLaneClassification, "github_pull_request_body_lane");
+  assert.equal(updated?.lastGptCodeAutomationState?.targetAdapterStatus, "manual_required");
+  assert.equal(updated?.lastGptCodeAutomationState?.routingDecision, "manual_required");
+  assert.equal(updated?.lastGptCodeAutomationState?.fallbackDecision, "manual_required");
+  assert.equal(updated?.lastGptCodeAutomationState?.externalAutomationOutcome, "manual_required");
+});

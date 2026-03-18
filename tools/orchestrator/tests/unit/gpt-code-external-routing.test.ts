@@ -92,3 +92,96 @@ test("external routing prefers the correlated status report target for body-base
   assert.equal(result.fallbackDecision, "status_report_target_fallback");
   assert.equal(result.externalReferenceId, "22222");
 });
+
+test("external routing prefers the correlated live smoke target for pull request body sources and falls back to the status report target when it is stale", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gpt-code-external-live-smoke-routing-"));
+  const nextInstructionPath = path.join(root, "next-instruction.md");
+  const outputPayloadPath = path.join(root, "output-payload.json");
+  await writeFile(nextInstructionPath, "route PR body automation through live smoke then status report fallback\n", "utf8");
+  await writeFile(outputPayloadPath, "{}\n", "utf8");
+
+  const state = {
+    ...createInitialState({
+      id: "external-live-smoke-routing-state",
+      repoPath: process.cwd(),
+      repoName: "bige",
+      userGoal: "Route PR body automation output",
+      objective: "Prefer a correlated live smoke target but fall back to the status report target when it is stale",
+      subtasks: ["external-routing"],
+      successCriteria: ["routing and fallback are explicit"],
+    }),
+    sourceEventSummary: {
+      repository: "example/bige",
+      branch: "main",
+      issueNumber: null,
+      prNumber: 78,
+      commentId: null,
+      label: null,
+      headSha: null,
+      command: null,
+      triggerReason: "pull_request_opened from example/bige#78",
+    },
+    lastLiveSmokeTarget: {
+      repository: "example/bige",
+      targetType: "pull_request" as const,
+      targetNumber: 78,
+      commentId: 61001,
+      selectionStatus: "correlated_reuse" as const,
+      selectionSummary: "Reuse the correlated live smoke pull request comment.",
+    },
+    lastStatusReportTarget: {
+      kind: "pull_request_comment" as const,
+      repository: "example/bige",
+      targetNumber: 78,
+      commentId: 62002,
+      targetUrl: "https://github.com/example/bige/pull/78#issuecomment-62002",
+      correlationId: "status-report:external-live-smoke-routing-state",
+      updatedAt: "2026-03-18T00:00:00.000Z",
+    },
+  };
+
+  const adapter = new GhCliGptCodeGitHubCommentTargetAdapter({
+    enabled: true,
+    token: "token",
+    execFileImpl: async (_file, args) => {
+      const joined = args.join(" ");
+      if (joined.includes("issues/comments/61001") && joined.includes("PATCH")) {
+        throw new Error("HTTP 404 target not found");
+      }
+      assert.equal(joined.includes("issues/comments/62002"), true);
+      return {
+        stdout: JSON.stringify({
+          id: 62002,
+          html_url: "https://github.com/example/bige/pull/78#issuecomment-62002",
+        }),
+        stderr: "",
+      };
+    },
+  });
+
+  const result = await adapter.dispatchNextInstruction({
+    state,
+    source: {
+      sourceType: "github_pull_request_body",
+      sourceLaneClassification: "github_pull_request_body_lane",
+      sourceId: "github-pull-request-body:701:opened:2026-03-18T00:00:03.000Z",
+      sourceCorrelationId: "inbound:delivery-report-4",
+      repository: "example/bige",
+      issueNumber: null,
+      prNumber: 78,
+      commentId: null,
+      payloadPath: "C:/tmp/pr-body-payload.json",
+      headersPath: "C:/tmp/pr-body-headers.json",
+      receivedAt: "2026-03-18T00:00:04.000Z",
+    },
+    nextInstructionPath,
+    outputPayloadPath,
+    outputRoot: root,
+  });
+
+  assert.equal(result.outcome, "success");
+  assert.equal(result.targetLaneClassification, "github_status_report_comment_lane");
+  assert.equal(result.routingDecision, "status_report_target");
+  assert.equal(result.fallbackDecision, "live_smoke_target_fallback");
+  assert.equal(result.externalReferenceId, "62002");
+});
