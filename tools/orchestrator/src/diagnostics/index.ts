@@ -236,6 +236,13 @@ export type OrchestratorDiagnostics = {
     fallbackChainSummary: string | null;
     recoverabilitySummary: string | null;
     operatorHandoffSummary: string | null;
+    replayEligibility: string;
+    replayBlockReason: string | null;
+    replayAttemptCount: number;
+    lastReplayAction: string;
+    lastReplayOutcome: string;
+    recoveryHistorySummary: string | null;
+    operatorRecoveryRecommendation: string | null;
     manualReviewReason: string | null;
     recommendedNextStep: string | null;
   };
@@ -243,6 +250,9 @@ export type OrchestratorDiagnostics = {
 };
 
 function resolveNextSuggestedAction(state: OrchestratorState, preflight: PreflightResult | null) {
+  if (state.lastGptCodeAutomationState?.operatorRecoveryRecommendation) {
+    return state.lastGptCodeAutomationState.operatorRecoveryRecommendation;
+  }
   if (state.lastCloseoutRetiredCaseAuditHistory?.recommendedNextOperatorStep) {
     return state.lastCloseoutRetiredCaseAuditHistory.recommendedNextOperatorStep;
   }
@@ -703,6 +713,13 @@ export function buildDiagnosticsSummary(state: OrchestratorState, preflight: Pre
       fallbackChainSummary: state.lastGptCodeAutomationState?.fallbackChainSummary ?? null,
       recoverabilitySummary: state.lastGptCodeAutomationState?.recoverabilitySummary ?? null,
       operatorHandoffSummary: state.lastGptCodeAutomationState?.operatorHandoffSummary ?? null,
+      replayEligibility: state.lastGptCodeAutomationState?.replayEligibility ?? "not_evaluated",
+      replayBlockReason: state.lastGptCodeAutomationState?.replayBlockReason ?? null,
+      replayAttemptCount: state.lastGptCodeAutomationState?.replayAttemptCount ?? 0,
+      lastReplayAction: state.lastGptCodeAutomationState?.lastReplayAction ?? "none",
+      lastReplayOutcome: state.lastGptCodeAutomationState?.lastReplayOutcome ?? "not_run",
+      recoveryHistorySummary: state.lastGptCodeAutomationState?.recoveryHistorySummary ?? null,
+      operatorRecoveryRecommendation: state.lastGptCodeAutomationState?.operatorRecoveryRecommendation ?? null,
       manualReviewReason: state.lastGptCodeAutomationState?.manualReviewReason ?? null,
       recommendedNextStep: state.lastGptCodeAutomationState?.recommendedNextStep ?? null,
     },
@@ -725,7 +742,7 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
     `Recovery: action=${summary.recoverySummary.action ?? "none"}, reason=${summary.recoverySummary.reason ?? "none"}`,
     `Recovery governance: latest=${summary.sandboxGovernance.lastGovernanceStatus?.latestIncidentType ?? "none"}/${summary.sandboxGovernance.lastGovernanceStatus?.latestIncidentSeverity ?? "none"}, unresolved=${summary.sandboxGovernance.lastGovernanceStatus?.latestUnresolvedIncidentCount ?? 0}, escalation=${summary.sandboxGovernance.lastGovernanceStatus?.latestEscalationNeededCount ?? 0}, action=${summary.sandboxGovernance.lastGovernanceStatus?.recommendedAction ?? "none"}, rerun=${summary.sandboxGovernance.lastGovernanceStatus?.rerunRecommended ?? false}, manualReview=${summary.sandboxGovernance.lastGovernanceStatus?.manualReviewRequired ?? false}, applyBlocked=${summary.sandboxGovernance.lastGovernanceStatus?.applyBlocked ?? false}, handoff=${summary.sandboxGovernance.lastGovernanceStatus?.operatorHandoffRecommended ?? false}, summary=${summary.sandboxGovernance.lastGovernanceStatus?.summary ?? "none"}`,
     `Recovery policy: action=${summary.sandboxGovernance.lastIncidentPolicy?.recommendedAction ?? "none"}, preview=${summary.sandboxGovernance.lastIncidentPolicy?.allowRerunPreview ?? false}, validate=${summary.sandboxGovernance.lastIncidentPolicy?.allowRerunValidate ?? false}, apply=${summary.sandboxGovernance.lastIncidentPolicy?.allowRerunApply ?? false}, requestReview=${summary.sandboxGovernance.lastIncidentPolicy?.requireRequestReview ?? false}, escalate=${summary.sandboxGovernance.lastIncidentPolicy?.requireEscalate ?? false}, blockedTerminal=${summary.sandboxGovernance.lastIncidentPolicy?.blockedTerminalState ?? false}, manualRequiredTerminal=${summary.sandboxGovernance.lastIncidentPolicy?.manualRequiredTerminalState ?? false}`,
-    `External automation: source=${summary.externalAutomation.sourceType ?? "none"}/${summary.externalAutomation.sourceLaneClassification ?? "none"}, trigger=${summary.externalAutomation.automaticTriggerStatus}, target=${summary.externalAutomation.targetAdapterStatus}/${summary.externalAutomation.targetLaneClassification ?? "none"}, routing=${summary.externalAutomation.routingDecision ?? "none"}, fallback=${summary.externalAutomation.fallbackDecision ?? "none"}, destination=${summary.externalAutomation.targetDestination ?? "none"}, attempts=${summary.externalAutomation.attemptCount}/${summary.externalAutomation.maxAttempts}, retries=${summary.externalAutomation.retryCount}, canRetry=${summary.externalAutomation.canRetryDispatch}, exhausted=${summary.externalAutomation.dispatchExhausted}, failure=${summary.externalAutomation.lastFailureClass ?? "none"}, reliability=${summary.externalAutomation.dispatchReliabilityOutcome}, outcome=${summary.externalAutomation.externalAutomationOutcome}`,
+    `External automation: source=${summary.externalAutomation.sourceType ?? "none"}/${summary.externalAutomation.sourceLaneClassification ?? "none"}, trigger=${summary.externalAutomation.automaticTriggerStatus}, target=${summary.externalAutomation.targetAdapterStatus}/${summary.externalAutomation.targetLaneClassification ?? "none"}, routing=${summary.externalAutomation.routingDecision ?? "none"}, fallback=${summary.externalAutomation.fallbackDecision ?? "none"}, destination=${summary.externalAutomation.targetDestination ?? "none"}, attempts=${summary.externalAutomation.attemptCount}/${summary.externalAutomation.maxAttempts}, retries=${summary.externalAutomation.retryCount}, canRetry=${summary.externalAutomation.canRetryDispatch}, exhausted=${summary.externalAutomation.dispatchExhausted}, failure=${summary.externalAutomation.lastFailureClass ?? "none"}, reliability=${summary.externalAutomation.dispatchReliabilityOutcome}, outcome=${summary.externalAutomation.externalAutomationOutcome}, replay=${summary.externalAutomation.replayEligibility}/${summary.externalAutomation.lastReplayAction}/${summary.externalAutomation.lastReplayOutcome}#${summary.externalAutomation.replayAttemptCount}`,
     `Resolution readiness: status=${summary.sandboxGovernance.lastResolutionReadiness?.readinessStatus ?? "none"}, confidence=${summary.sandboxGovernance.lastResolutionReadiness?.readinessConfidence ?? "none"}, closureAllowed=${summary.sandboxGovernance.lastResolutionReadiness?.closureAllowed ?? false}, unresolved=${summary.sandboxGovernance.lastResolutionReadiness?.unresolvedIncidentsRemain ?? false}, escalation=${summary.sandboxGovernance.lastResolutionReadiness?.escalationStillNeeded ?? false}, manualReview=${summary.sandboxGovernance.lastResolutionReadiness?.manualReviewStillRequired ?? false}, blockedReasons=${summary.sandboxGovernance.lastResolutionReadiness?.closureBlockedReasonCodes.join(", ") || "none"}, summary=${summary.sandboxGovernance.lastResolutionReadiness?.summary ?? "none"}`,
     `Resolution evidence: confidence=${summary.sandboxGovernance.lastResolutionEvidenceSummary?.closureConfidence ?? "none"}, rerunEvidence=${summary.sandboxGovernance.lastResolutionEvidenceSummary?.rerunEvidenceExists ?? false}, validateEvidence=${summary.sandboxGovernance.lastResolutionEvidenceSummary?.validationEvidenceExists ?? false}, applyEvidence=${summary.sandboxGovernance.lastResolutionEvidenceSummary?.applyEvidenceExists ?? false}, gaps=${summary.sandboxGovernance.lastResolutionEvidenceSummary?.evidenceGapCodes.join(", ") || "none"}, summary=${summary.sandboxGovernance.lastResolutionEvidenceSummary?.summary ?? "none"}`,
     `Closure gating: status=${summary.sandboxGovernance.lastClosureGatingDecision?.closureStatus ?? "none"}, allowed=${summary.sandboxGovernance.lastClosureGatingDecision?.closureAllowed ?? false}, requestReview=${summary.sandboxGovernance.lastClosureGatingDecision?.requestReviewRequired ?? false}, rerunValidate=${summary.sandboxGovernance.lastClosureGatingDecision?.rerunValidateRequired ?? false}, rerunApply=${summary.sandboxGovernance.lastClosureGatingDecision?.rerunApplyRequired ?? false}, escalate=${summary.sandboxGovernance.lastClosureGatingDecision?.escalateRequired ?? false}, reasons=${summary.sandboxGovernance.lastClosureGatingDecision?.blockedReasonCodes.join(", ") || "none"}`,
@@ -833,6 +850,15 @@ export function formatDiagnosticsSummary(summary: OrchestratorDiagnostics) {
   }
   if (summary.externalAutomation.operatorHandoffSummary) {
     lines.push(`External automation handoff: ${summary.externalAutomation.operatorHandoffSummary}`);
+  }
+  if (summary.externalAutomation.recoveryHistorySummary) {
+    lines.push(`External automation recovery history: ${summary.externalAutomation.recoveryHistorySummary}`);
+  }
+  if (summary.externalAutomation.operatorRecoveryRecommendation) {
+    lines.push(`External automation recovery recommendation: ${summary.externalAutomation.operatorRecoveryRecommendation}`);
+  }
+  if (summary.externalAutomation.replayBlockReason) {
+    lines.push(`External automation replay block reason: ${summary.externalAutomation.replayBlockReason}`);
   }
   if (summary.externalAutomation.manualReviewReason) {
     lines.push(`External automation manual review reason: ${summary.externalAutomation.manualReviewReason}`);

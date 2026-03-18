@@ -322,6 +322,10 @@ import { formatInboundAuditSummary, listInboundAuditRecords } from "./inbound-au
 import { evaluateWebhookRuntime, formatWebhookRuntimeSummary } from "./webhook-runtime";
 import { ingestGptCodeReportFromFile } from "./gpt-code-report-bridge";
 import { runGptCodeReportTransportWatcher, submitGptCodeReportTransportEntry } from "./gpt-code-report-transport";
+import {
+  GhCliGptCodeGitHubCommentTargetAdapter,
+  runGptCodeExternalAutomationRecovery,
+} from "./gpt-code-external-automation";
 
 async function resolveRunId(params: {
   stateId: string;
@@ -2228,6 +2232,22 @@ async function main() {
     const result = await runGptCodeReportTransportWatcher({
       dependencies,
       stateId: options.get("state-id") ?? undefined,
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "external:replay") {
+    const requestedAction = getOption(options, "action", "auto") as "auto" | "resume" | "replay";
+    const result = await runGptCodeExternalAutomationRecovery({
+      stateId,
+      dependencies,
+      requestedAction,
+      recoveryRoot: options.get("output-root") ?? undefined,
+      externalTargetAdapter: new GhCliGptCodeGitHubCommentTargetAdapter({
+        enabled: getOption(options, "enabled", "true") === "true",
+        token: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null,
+      }),
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
@@ -5589,6 +5609,7 @@ async function main() {
       "  node cli.js report:intake --state-id default --report path/to/gpt-code-report.md",
       "  node cli.js report:transport:submit --state-id default --stdin true --source cli",
       "  node cli.js report:transport:watch --state-id default",
+      "  node cli.js external:replay --state-id default --action auto",
       "  node cli.js resume --state-id default",
       "  node cli.js workspace:cleanup --state-id default --workspace-root .tmp/orchestrator-workspaces",
       "  node cli.js cleanup --state-id default --stale-minutes 120",

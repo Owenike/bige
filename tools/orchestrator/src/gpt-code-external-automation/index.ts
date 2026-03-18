@@ -7,9 +7,11 @@ import { findLatestStateForThread } from "../github-events";
 import { parseGptCodeChineseReport } from "../gpt-code-report";
 import {
   gptCodeExternalAutomationResultSchema,
+  gptCodeExternalRecoveryResultSchema,
   gptCodeExternalSourceMetadataSchema,
   gptCodeExternalTargetDispatchSchema,
   type GptCodeExternalAutomationResult,
+  type GptCodeExternalRecoveryResult,
   type GptCodeExternalSourceMetadata,
   type GptCodeExternalTargetDispatch,
 } from "../gpt-code-report/schema";
@@ -96,6 +98,37 @@ type ExternalGitHubTargetRoute = {
     | "status_report_target_fallback"
     | "source_thread_fallback";
   isPullRequest: boolean;
+};
+
+type GptCodeRecoveryRequestedAction = "auto" | "resume" | "replay";
+type GptCodeRecoveryResolvedAction = "none" | "resume" | "replay";
+type GptCodeReplayEligibility =
+  | "not_evaluated"
+  | "safe_to_resume"
+  | "safe_to_replay"
+  | "manual_only"
+  | "exhausted_permanently"
+  | "blocked";
+type GptCodeReplayOutcome =
+  | "not_run"
+  | "success"
+  | "manual_required"
+  | "failed"
+  | "retryable"
+  | "exhausted"
+  | "blocked";
+
+type ReplayEligibilityDecision = {
+  replayEligibility: GptCodeReplayEligibility;
+  replayBlockReason: string | null;
+  requestedAction: GptCodeRecoveryRequestedAction;
+  resolvedAction: GptCodeRecoveryResolvedAction;
+  source: GptCodeExternalSourceMetadata | null;
+  route: ExternalGitHubTargetRoute | null;
+  targetAvailable: boolean;
+  correlationConsistent: boolean;
+  externalReferenceConsistent: boolean;
+  recommendedAction: string;
 };
 
 async function defaultExecFileLike(file: string, args: readonly string[], options?: { windowsHide?: boolean }) {
@@ -387,30 +420,42 @@ function buildFallbackSummary(routeTrace: string[]) {
   return `Fallback chain: ${routeTrace.join(" => ")}`;
 }
 
-function toDispatchAttemptRecord(dispatch: GptCodeExternalTargetDispatch) {
+function toDispatchAttemptRecord(params: {
+  dispatch: GptCodeExternalTargetDispatch;
+  recoveryAction?: GptCodeRecoveryResolvedAction;
+  replayAttemptCount?: number;
+}) {
   return gptCodeDispatchAttemptRecordSchema.parse({
-    attemptCount: dispatch.attemptCount,
-    retryCount: dispatch.retryCount,
-    targetLaneClassification: dispatch.targetLaneClassification,
-    targetDestination: dispatch.targetDestination,
-    routingDecision: dispatch.routingDecision,
-    fallbackDecision: dispatch.fallbackDecision,
-    outcome: dispatch.outcome,
-    retryEligible: dispatch.retryEligible,
-    failureClass: dispatch.failureClass,
-    externalReferenceId: dispatch.externalReferenceId,
-    externalUrl: dispatch.externalUrl,
-    dispatchedAt: dispatch.dispatchedAt,
-    routeTrace: dispatch.routeTrace,
-    deliverySummary: dispatch.deliverySummary,
+    attemptCount: params.dispatch.attemptCount,
+    retryCount: params.dispatch.retryCount,
+    recoveryAction: params.recoveryAction ?? "none",
+    recoveryAttemptCount: params.replayAttemptCount ?? 0,
+    targetLaneClassification: params.dispatch.targetLaneClassification,
+    targetDestination: params.dispatch.targetDestination,
+    routingDecision: params.dispatch.routingDecision,
+    fallbackDecision: params.dispatch.fallbackDecision,
+    outcome: params.dispatch.outcome,
+    retryEligible: params.dispatch.retryEligible,
+    failureClass: params.dispatch.failureClass,
+    externalReferenceId: params.dispatch.externalReferenceId,
+    externalUrl: params.dispatch.externalUrl,
+    dispatchedAt: params.dispatch.dispatchedAt,
+    routeTrace: params.dispatch.routeTrace,
+    deliverySummary: params.dispatch.deliverySummary,
   });
 }
 
 function upsertDispatchAttemptHistory(params: {
   current: GptCodeDispatchAttemptRecord[];
   dispatch: GptCodeExternalTargetDispatch;
+  recoveryAction?: GptCodeRecoveryResolvedAction;
+  replayAttemptCount?: number;
 }) {
-  const next = toDispatchAttemptRecord(params.dispatch);
+  const next = toDispatchAttemptRecord({
+    dispatch: params.dispatch,
+    recoveryAction: params.recoveryAction,
+    replayAttemptCount: params.replayAttemptCount,
+  });
   const history = [...params.current.filter((entry) => entry.attemptCount !== next.attemptCount), next];
   return history.sort((left, right) => left.attemptCount - right.attemptCount);
 }
@@ -420,7 +465,11 @@ function summarizeDispatchHistory(history: GptCodeDispatchAttemptRecord[]) {
     return "No external target dispatch attempts recorded yet.";
   }
   return history
-    .map((entry) => `#${entry.attemptCount} ${entry.outcome} ${entry.targetLaneClassification ?? "none"} ${entry.failureClass ?? "ok"}`)
+    .map((entry) => {
+      const recoverySuffix =
+        entry.recoveryAction !== "none" ? ` ${entry.recoveryAction}:${entry.recoveryAttemptCount}` : "";
+      return `#${entry.attemptCount} ${entry.outcome} ${entry.targetLaneClassification ?? "none"} ${entry.failureClass ?? "ok"}${recoverySuffix}`;
+    })
     .join(" | ");
 }
 
@@ -481,9 +530,28 @@ function summarizeOperatorHandoff(params: {
   ].join(" ");
 }
 
+function summarizeRecoveryHistory(params: {
+  currentSummary: string | null | undefined;
+  recoveryAction: GptCodeRecoveryResolvedAction;
+  replayAttemptCount: number;
+  outcome: GptCodeReplayOutcome;
+  dispatchedAt: string | null;
+}) {
+  const latest = `recovery#${params.replayAttemptCount} ${params.recoveryAction} -> ${params.outcome} at ${params.dispatchedAt ?? "unknown"}`;
+  if (!params.currentSummary) {
+    return latest;
+  }
+  return `${params.currentSummary} | ${latest}`;
+}
+
 function buildAutomationPatchFromDispatch(params: {
   currentState: OrchestratorState;
   dispatch: GptCodeExternalTargetDispatch;
+  recoveryAction?: GptCodeRecoveryResolvedAction;
+  replayAttemptCount?: number;
+  replayEligibility?: GptCodeReplayEligibility;
+  replayBlockReason?: string | null;
+  operatorRecoveryRecommendation?: string | null;
 }) {
   const currentAutomation = params.currentState.lastGptCodeAutomationState;
   const { exhausted, canRetry, normalizedOutcome } = classifyDispatchRecoverability({
@@ -520,7 +588,19 @@ function buildAutomationPatchFromDispatch(params: {
   const dispatchAttemptHistory = upsertDispatchAttemptHistory({
     current: currentAutomation?.dispatchAttemptHistory ?? [],
     dispatch: normalizedDispatch,
+    recoveryAction: params.recoveryAction,
+    replayAttemptCount: params.replayAttemptCount,
   });
+  const recoveryHistorySummary =
+    params.recoveryAction && params.recoveryAction !== "none" && typeof params.replayAttemptCount === "number"
+      ? summarizeRecoveryHistory({
+          currentSummary: currentAutomation?.recoveryHistorySummary ?? null,
+          recoveryAction: params.recoveryAction,
+          replayAttemptCount: params.replayAttemptCount,
+          outcome: normalizedDispatch.outcome,
+          dispatchedAt: normalizedDispatch.dispatchedAt,
+        })
+      : (currentAutomation?.recoveryHistorySummary ?? null);
 
   return {
     normalizedDispatch,
@@ -559,6 +639,20 @@ function buildAutomationPatchFromDispatch(params: {
         canRetry,
         exhausted,
       }),
+      replayEligibility: params.replayEligibility ?? currentAutomation?.replayEligibility ?? "not_evaluated",
+      replayBlockReason: params.replayBlockReason ?? null,
+      replayAttemptCount: params.replayAttemptCount ?? currentAutomation?.replayAttemptCount ?? 0,
+      lastReplayAction: params.recoveryAction ?? currentAutomation?.lastReplayAction ?? "none",
+      lastReplayOutcome:
+        params.recoveryAction && params.recoveryAction !== "none"
+          ? normalizedDispatch.outcome
+          : (currentAutomation?.lastReplayOutcome ?? "not_run"),
+      recoveryHistorySummary,
+      operatorRecoveryRecommendation:
+        params.operatorRecoveryRecommendation ??
+        normalizedDispatch.recommendedNextStep ??
+        currentAutomation?.operatorRecoveryRecommendation ??
+        null,
       canRetryDispatch: canRetry,
       dispatchExhausted: exhausted,
       dispatchReliabilityOutcome: normalizedDispatch.outcome,
@@ -569,6 +663,198 @@ function buildAutomationPatchFromDispatch(params: {
       manualReviewReason: normalizedDispatch.manualReviewReason,
     } satisfies Partial<GptCodeAutomationState>,
   };
+}
+
+function isReplaySafeFailureClass(failureClass: GptCodeAutomationState["lastTargetFailureClass"]) {
+  return failureClass === "network" || failureClass === "transient" || failureClass === "rate_limited" || failureClass === "target_invalid";
+}
+
+function rebuildExternalSourceFromState(state: OrchestratorState) {
+  const automation = state.lastGptCodeAutomationState;
+  const summary = state.sourceEventSummary;
+  if (!automation?.sourceType || !automation.sourceLaneClassification || !summary?.repository) {
+    return null;
+  }
+
+  return gptCodeExternalSourceMetadataSchema.parse({
+    sourceType: automation.sourceType,
+    sourceLaneClassification: automation.sourceLaneClassification,
+    sourceId: automation.sourceId ?? `${automation.sourceType}:${state.id}`,
+    sourceCorrelationId: automation.sourceCorrelationId ?? `recovery:${state.id}`,
+    repository: summary.repository,
+    issueNumber: summary.issueNumber,
+    prNumber: summary.prNumber,
+    commentId: summary.commentId,
+    payloadPath: automation.sourcePayloadPath,
+    headersPath: automation.sourceHeadersPath,
+    receivedAt: automation.sourceReceivedAt ?? automation.lastReceivedAt ?? state.updatedAt,
+  });
+}
+
+function buildRecoveryRecommendation(params: ReplayEligibilityDecision) {
+  if (params.replayEligibility === "safe_to_resume") {
+    return "External lane can safely resume using the current GitHub target path and remaining retry budget.";
+  }
+  if (params.replayEligibility === "safe_to_replay") {
+    return "External lane can be replayed once under operator control; reuse the existing next instruction and re-check the routed target.";
+  }
+  if (params.replayEligibility === "exhausted_permanently") {
+    return "External lane is exhausted for automatic recovery; inspect auth/routing/target health before any manual re-dispatch.";
+  }
+  if (params.replayEligibility === "manual_only") {
+    return "External lane still needs manual review before any replay because the dispatch prerequisites are incomplete.";
+  }
+  return params.replayBlockReason ?? "External lane replay is currently blocked.";
+}
+
+function evaluateReplayEligibility(params: {
+  state: OrchestratorState;
+  requestedAction: GptCodeRecoveryRequestedAction;
+}) {
+  const automation = params.state.lastGptCodeAutomationState;
+  if (!automation) {
+    const decision: ReplayEligibilityDecision = {
+      replayEligibility: "blocked",
+      replayBlockReason: "No external automation state exists yet for this orchestrator state.",
+      requestedAction: params.requestedAction,
+      resolvedAction: "none",
+      source: null,
+      route: null,
+      targetAvailable: false,
+      correlationConsistent: false,
+      externalReferenceConsistent: false,
+      recommendedAction: "Wait for a GitHub external lane run before attempting replay or resume.",
+    };
+    return decision;
+  }
+
+  const source = rebuildExternalSourceFromState(params.state);
+  const correlationId = buildInstructionCorrelationId(params.state.id);
+  const correlationConsistent = !automation.dispatchCorrelationId || automation.dispatchCorrelationId === correlationId;
+  const route = source ? resolveExternalGitHubTargetRoute({ state: params.state, source }) : null;
+  const targetAvailable = route !== null;
+  const externalReferenceConsistent =
+    !automation.targetExternalReferenceId ||
+    !route?.targetCommentId ||
+    automation.targetExternalReferenceId === route.targetCommentId;
+  const dispatchPrerequisitesReady =
+    automation.intakeStatus === "accepted" &&
+    automation.bridgeStatus === "accepted" &&
+    automation.dispatchStatus === "dispatched" &&
+    Boolean(automation.nextInstructionPath) &&
+    Boolean(automation.outputPayloadPath);
+  const safeRetryAvailable =
+    automation.canRetryDispatch &&
+    automation.dispatchOutcome === "retryable" &&
+    automation.targetAdapterStatus === "retryable";
+  const recoveryCapable =
+    automation.targetAttemptCount > 0 &&
+    isReplaySafeFailureClass(automation.lastTargetFailureClass) &&
+    dispatchPrerequisitesReady;
+
+  let replayEligibility: GptCodeReplayEligibility = "blocked";
+  let replayBlockReason: string | null = null;
+  let resolvedAction: GptCodeRecoveryResolvedAction = "none";
+
+  if (!dispatchPrerequisitesReady || !source) {
+    replayEligibility = "manual_only";
+    replayBlockReason =
+      "Transport/bridge artifacts are incomplete for replay; operator review must resolve the upstream block first.";
+  } else if (!correlationConsistent) {
+    replayEligibility = "blocked";
+    replayBlockReason = "Dispatch correlation no longer matches the current state; replay was refused.";
+  } else if (!targetAvailable) {
+    replayEligibility = "blocked";
+    replayBlockReason = "No valid GitHub target route is currently available for this lane.";
+  } else if (params.requestedAction === "resume") {
+    if (!safeRetryAvailable) {
+      replayEligibility = automation.dispatchExhausted ? "exhausted_permanently" : "manual_only";
+      replayBlockReason = automation.dispatchExhausted
+        ? "The lane already exhausted its safe automatic retries; resume is no longer allowed."
+        : "Resume is only allowed while a safe retry remains available.";
+    } else if (!externalReferenceConsistent) {
+      replayEligibility = "blocked";
+      replayBlockReason = "The current GitHub target no longer matches the recorded external reference; replay is required instead of resume.";
+    } else {
+      replayEligibility = "safe_to_resume";
+      resolvedAction = "resume";
+    }
+  } else if (params.requestedAction === "replay") {
+    if (!recoveryCapable) {
+      replayEligibility = automation.dispatchExhausted ? "exhausted_permanently" : "manual_only";
+      replayBlockReason = automation.dispatchExhausted
+        ? "This lane exhausted safe retries and does not meet the guarded replay conditions."
+        : "Replay is only allowed after a dispatch attempt with recoverable target failure classes.";
+    } else {
+      replayEligibility = "safe_to_replay";
+      resolvedAction = "replay";
+    }
+  } else if (safeRetryAvailable && externalReferenceConsistent) {
+    replayEligibility = "safe_to_resume";
+    resolvedAction = "resume";
+  } else if (recoveryCapable) {
+    replayEligibility = "safe_to_replay";
+    resolvedAction = "replay";
+  } else if (automation.dispatchExhausted || automation.dispatchOutcome === "exhausted") {
+    replayEligibility = "exhausted_permanently";
+    replayBlockReason = "The lane exhausted its safe retries and no guarded replay condition is currently satisfied.";
+  } else {
+    replayEligibility = "manual_only";
+    replayBlockReason = automation.manualReviewReason ?? "Operator review is required before replay can proceed safely.";
+  }
+
+  const decision: ReplayEligibilityDecision = {
+    replayEligibility,
+    replayBlockReason,
+    requestedAction: params.requestedAction,
+    resolvedAction,
+    source,
+    route,
+    targetAvailable,
+    correlationConsistent,
+    externalReferenceConsistent,
+    recommendedAction: "",
+  };
+  decision.recommendedAction = buildRecoveryRecommendation(decision);
+  return decision;
+}
+
+export function evaluateGptCodeExternalAutomationReplayEligibility(params: {
+  state: OrchestratorState;
+  requestedAction?: GptCodeRecoveryRequestedAction;
+}) {
+  return evaluateReplayEligibility({
+    state: params.state,
+    requestedAction: params.requestedAction ?? "auto",
+  });
+}
+
+function buildRecoveryEvaluationPatch(params: {
+  currentState: OrchestratorState;
+  decision: ReplayEligibilityDecision;
+  lastReplayOutcome?: GptCodeReplayOutcome;
+}) {
+  return {
+    replayEligibility: params.decision.replayEligibility,
+    replayBlockReason: params.decision.replayBlockReason,
+    lastReplayOutcome: params.lastReplayOutcome ?? params.currentState.lastGptCodeAutomationState?.lastReplayOutcome ?? "not_run",
+    operatorRecoveryRecommendation: params.decision.recommendedAction,
+    recommendedNextStep: params.decision.recommendedAction,
+  } satisfies Partial<GptCodeAutomationState>;
+}
+
+function summarizeRecoveryDecisionHistory(params: {
+  currentSummary: string | null | undefined;
+  requestedAction: GptCodeRecoveryRequestedAction;
+  replayEligibility: GptCodeReplayEligibility;
+  outcome: GptCodeReplayOutcome;
+  at: string;
+}) {
+  const latest = `decision ${params.requestedAction} -> ${params.replayEligibility} (${params.outcome}) at ${params.at}`;
+  if (!params.currentSummary) {
+    return latest;
+  }
+  return `${params.currentSummary} | ${latest}`;
 }
 
 function sourcePrefersStatusReportTarget(source: GptCodeExternalSourceMetadata) {
@@ -766,6 +1052,40 @@ async function persistTargetDispatchArtifact(params: {
       kind: "gpt_code_external_target_dispatch",
       label: "GPT CODE external target dispatch result",
       path: params.targetDispatch.dispatchArtifactPath,
+      value: null,
+    },
+  ]);
+  await params.dependencies.storage.saveState(updated);
+  return updated;
+}
+
+async function writeExternalRecoveryResult(params: {
+  outputRoot: string;
+  result: Omit<GptCodeExternalRecoveryResult, "recoveryArtifactPath">;
+}) {
+  await mkdir(params.outputRoot, { recursive: true });
+  const recoveryArtifactPath = path.join(params.outputRoot, "recovery-result.json");
+  const result = gptCodeExternalRecoveryResultSchema.parse({
+    ...params.result,
+    recoveryArtifactPath,
+  });
+  await writeFile(recoveryArtifactPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  return result;
+}
+
+async function persistRecoveryArtifact(params: {
+  state: OrchestratorState;
+  dependencies: OrchestratorDependencies;
+  recoveryArtifactPath: string | null;
+}) {
+  if (!params.recoveryArtifactPath) {
+    return params.state;
+  }
+  const updated = appendArtifacts(params.state, [
+    {
+      kind: "gpt_code_external_recovery",
+      label: "GPT CODE external recovery result",
+      path: params.recoveryArtifactPath,
       value: null,
     },
   ]);
@@ -1514,6 +1834,188 @@ export async function runGptCodeExternalAutomationFromWebhook(params: {
     outcome: finalPatch.normalizedDispatch.outcome,
     generatedAt: params.receivedAt,
   });
+}
+
+export async function runGptCodeExternalAutomationRecovery(params: {
+  stateId: string;
+  dependencies: OrchestratorDependencies;
+  requestedAction?: GptCodeRecoveryRequestedAction;
+  externalTargetAdapter?: GptCodeExternalTargetAdapter | null;
+  recoveryRoot?: string;
+}) {
+  const state = await params.dependencies.storage.loadState(params.stateId);
+  if (!state) {
+    throw new Error(`State ${params.stateId} was not found.`);
+  }
+
+  const requestedAction = params.requestedAction ?? "auto";
+  const recoveryRoot =
+    params.recoveryRoot ?? path.join(state.task.repoPath, ".tmp", "orchestrator-external-recovery", state.id, "latest");
+  const decision = evaluateReplayEligibility({
+    state,
+    requestedAction,
+  });
+
+  let updatedState = await saveStateWithAutomationPatch({
+    state,
+    dependencies: params.dependencies,
+    patch: buildRecoveryEvaluationPatch({
+      currentState: state,
+      decision,
+    }),
+  });
+
+  const nextInstructionPath = updatedState.lastGptCodeAutomationState?.nextInstructionPath ?? null;
+  const outputPayloadPath = updatedState.lastGptCodeAutomationState?.outputPayloadPath ?? null;
+  const blockedResult = async (
+    outcome: Exclude<GptCodeReplayOutcome, "not_run">,
+    reason: string | null,
+  ) => {
+    updatedState = await saveStateWithAutomationPatch({
+      state: updatedState,
+      dependencies: params.dependencies,
+      patch: {
+        ...buildRecoveryEvaluationPatch({
+          currentState: updatedState,
+          decision: {
+            ...decision,
+            replayBlockReason: reason ?? decision.replayBlockReason,
+          },
+          lastReplayOutcome: outcome,
+        }),
+        lastReplayAction: "none",
+        recoveryHistorySummary: summarizeRecoveryDecisionHistory({
+          currentSummary: updatedState.lastGptCodeAutomationState?.recoveryHistorySummary ?? null,
+          requestedAction,
+          replayEligibility: decision.replayEligibility,
+          outcome,
+          at: (params.dependencies.now ?? (() => new Date()))().toISOString(),
+        }),
+      },
+    });
+    const result = await writeExternalRecoveryResult({
+      outputRoot: recoveryRoot,
+      result: {
+        stateId: updatedState.id,
+        requestedAction,
+        resolvedAction: decision.resolvedAction,
+        replayEligibility: decision.replayEligibility,
+        replayBlockReason: reason ?? decision.replayBlockReason,
+        targetDispatch: null,
+        outcome,
+        generatedAt: (params.dependencies.now ?? (() => new Date()))().toISOString(),
+      },
+    });
+    updatedState = await persistRecoveryArtifact({
+      state: updatedState,
+      dependencies: params.dependencies,
+      recoveryArtifactPath: result.recoveryArtifactPath,
+    });
+    return result;
+  };
+
+  if (decision.resolvedAction === "none" || !decision.source) {
+    return blockedResult(
+      decision.replayEligibility === "manual_only" ? "manual_required" : "blocked",
+      decision.replayBlockReason,
+    );
+  }
+  if (!params.externalTargetAdapter) {
+    return blockedResult("manual_required", "External target adapter is not configured for replay or resume.");
+  }
+  if (!nextInstructionPath || !outputPayloadPath) {
+    return blockedResult("manual_required", "External recovery requires both next-instruction and output payload artifacts.");
+  }
+
+  try {
+    await readFile(nextInstructionPath, "utf8");
+    await readFile(outputPayloadPath, "utf8");
+  } catch (error) {
+    return blockedResult(
+      "manual_required",
+      `External recovery artifacts are no longer available: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  const replayAttemptCount = (updatedState.lastGptCodeAutomationState?.replayAttemptCount ?? 0) + 1;
+  let targetDispatch = await params.externalTargetAdapter.dispatchNextInstruction({
+    state: updatedState,
+    source: decision.source,
+    nextInstructionPath,
+    outputPayloadPath,
+    outputRoot: recoveryRoot,
+  });
+  updatedState = await persistTargetDispatchArtifact({
+    state: updatedState,
+    dependencies: params.dependencies,
+    targetDispatch,
+  });
+
+  while (decision.resolvedAction === "resume" && targetDispatch.outcome === "retryable" && targetDispatch.attemptCount < targetDispatch.maxAttempts) {
+    const retryPatch = buildAutomationPatchFromDispatch({
+      currentState: updatedState,
+      dispatch: targetDispatch,
+      recoveryAction: decision.resolvedAction,
+      replayAttemptCount,
+      replayEligibility: decision.replayEligibility,
+      replayBlockReason: null,
+      operatorRecoveryRecommendation: decision.recommendedAction,
+    });
+    updatedState = await saveStateWithAutomationPatch({
+      state: updatedState,
+      dependencies: params.dependencies,
+      patch: retryPatch.patch,
+    });
+
+    targetDispatch = await params.externalTargetAdapter.dispatchNextInstruction({
+      state: updatedState,
+      source: decision.source,
+      nextInstructionPath: updatedState.lastGptCodeAutomationState?.nextInstructionPath ?? nextInstructionPath,
+      outputPayloadPath: updatedState.lastGptCodeAutomationState?.outputPayloadPath ?? outputPayloadPath,
+      outputRoot: recoveryRoot,
+    });
+    updatedState = await persistTargetDispatchArtifact({
+      state: updatedState,
+      dependencies: params.dependencies,
+      targetDispatch,
+    });
+  }
+
+  const finalPatch = buildAutomationPatchFromDispatch({
+    currentState: updatedState,
+    dispatch: targetDispatch,
+    recoveryAction: decision.resolvedAction,
+    replayAttemptCount,
+    replayEligibility: decision.replayEligibility,
+    replayBlockReason: null,
+    operatorRecoveryRecommendation: decision.recommendedAction,
+  });
+
+  updatedState = await saveStateWithAutomationPatch({
+    state: updatedState,
+    dependencies: params.dependencies,
+    patch: finalPatch.patch,
+  });
+
+  const result = await writeExternalRecoveryResult({
+    outputRoot: recoveryRoot,
+    result: {
+      stateId: updatedState.id,
+      requestedAction,
+      resolvedAction: decision.resolvedAction,
+      replayEligibility: decision.replayEligibility,
+      replayBlockReason: null,
+      targetDispatch: finalPatch.normalizedDispatch,
+      outcome: finalPatch.normalizedDispatch.outcome,
+      generatedAt: finalPatch.normalizedDispatch.dispatchedAt,
+    },
+  });
+  updatedState = await persistRecoveryArtifact({
+    state: updatedState,
+    dependencies: params.dependencies,
+    recoveryArtifactPath: result.recoveryArtifactPath,
+  });
+  return result;
 }
 
 export function getExternalSourceEventType(source: GptCodeExternalSourceMetadata) {

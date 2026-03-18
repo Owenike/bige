@@ -205,7 +205,12 @@ $suiteMap = @{
     "$outDir\tests\unit\gpt-code-external-routing.test.js",
     "$outDir\tests\unit\gpt-code-external-trigger.test.js",
     "$outDir\tests\unit\gpt-code-external-automation-state.test.js",
-    "$outDir\tests\unit\gpt-code-external-dispatch-reliability.test.js"
+    "$outDir\tests\unit\gpt-code-external-dispatch-reliability.test.js",
+    "$outDir\tests\unit\gpt-code-external-replay-eligibility.test.js",
+    "$outDir\tests\unit\gpt-code-external-retry-policy.test.js",
+    "$outDir\tests\unit\gpt-code-external-recovery-path.test.js",
+    "$outDir\tests\unit\gpt-code-external-replay-guardrails.test.js",
+    "$outDir\tests\unit\gpt-code-external-recovery-observability.test.js"
   )
   "integration" = @(
     "$outDir\tests\integration\local-repo-executor.test.js",
@@ -749,8 +754,26 @@ $suiteMap = @{
   "gpt-code-external-dispatch-reliability" = @(
     "$outDir\tests\unit\gpt-code-external-dispatch-reliability.test.js"
   )
+  "gpt-code-external-replay-eligibility" = @(
+    "$outDir\tests\unit\gpt-code-external-replay-eligibility.test.js"
+  )
+  "gpt-code-external-retry-policy" = @(
+    "$outDir\tests\unit\gpt-code-external-retry-policy.test.js"
+  )
+  "gpt-code-external-recovery-path" = @(
+    "$outDir\tests\unit\gpt-code-external-recovery-path.test.js"
+  )
+  "gpt-code-external-replay-guardrails" = @(
+    "$outDir\tests\unit\gpt-code-external-replay-guardrails.test.js"
+  )
+  "gpt-code-external-recovery-observability" = @(
+    "$outDir\tests\unit\gpt-code-external-recovery-observability.test.js"
+  )
   "gpt-code-external-automation" = @(
     "$outDir\tests\e2e\gpt-code-external-automation.test.js"
+  )
+  "gpt-code-external-recovery" = @(
+    "$outDir\tests\e2e\gpt-code-external-recovery.test.js"
   )
   "gpt-code-external-coverage" = @(
     "$outDir\tests\e2e\gpt-code-external-coverage.test.js"
@@ -946,6 +969,11 @@ $suiteMap = @{
     "$outDir\tests\unit\gpt-code-external-trigger.test.js",
     "$outDir\tests\unit\gpt-code-external-automation-state.test.js",
     "$outDir\tests\unit\gpt-code-external-dispatch-reliability.test.js",
+    "$outDir\tests\unit\gpt-code-external-replay-eligibility.test.js",
+    "$outDir\tests\unit\gpt-code-external-retry-policy.test.js",
+    "$outDir\tests\unit\gpt-code-external-recovery-path.test.js",
+    "$outDir\tests\unit\gpt-code-external-replay-guardrails.test.js",
+    "$outDir\tests\unit\gpt-code-external-recovery-observability.test.js",
     "$outDir\tests\integration\local-repo-executor.test.js",
     "$outDir\tests\integration\live-smoke.test.js",
     "$outDir\tests\integration\live-acceptance.test.js",
@@ -959,6 +987,7 @@ $suiteMap = @{
     "$outDir\tests\e2e\gpt-code-report-transport.test.js",
     "$outDir\tests\e2e\gpt-code-report-auto-dispatch.test.js",
     "$outDir\tests\e2e\gpt-code-external-automation.test.js",
+    "$outDir\tests\e2e\gpt-code-external-recovery.test.js",
     "$outDir\tests\e2e\gpt-code-external-coverage.test.js",
     "$outDir\tests\e2e\mock-loop.test.js",
     "$outDir\tests\e2e\multi-iteration-loop.test.js"

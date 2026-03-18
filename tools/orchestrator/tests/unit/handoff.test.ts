@@ -151,6 +151,13 @@ test("buildPrDraftMetadata includes external automation handoff context when man
     recoverabilitySummary: "External lane exhausted its safe retries; operator review is required before any further retry.",
     operatorHandoffSummary:
       "External target dispatch exhausted after 2/2 attempts. Tried 2/2 attempt(s). live_smoke_target => status_report_target Safe retry remaining: false. Next: Review the dispatch history and fallback chain, then decide whether a safe manual retry is still possible.",
+    replayEligibility: "safe_to_replay",
+    replayBlockReason: null,
+    replayAttemptCount: 1,
+    lastReplayAction: "replay",
+    lastReplayOutcome: "manual_required",
+    recoveryHistorySummary: "recovery#1 replay -> manual_required at 2026-03-18T00:00:02.000Z",
+    operatorRecoveryRecommendation: "External lane can be replayed once under operator control; reuse the existing next instruction and re-check the routed target.",
     canRetryDispatch: false,
     dispatchExhausted: true,
     dispatchReliabilityOutcome: "manual_required",

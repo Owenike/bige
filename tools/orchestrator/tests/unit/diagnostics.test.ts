@@ -130,6 +130,8 @@ test("diagnostics render external automation observability summaries for operato
       {
         attemptCount: 1,
         retryCount: 0,
+        recoveryAction: "none",
+        recoveryAttemptCount: 0,
         targetLaneClassification: "github_live_smoke_comment_lane",
         targetDestination: "github://example/bige/issues/comments/61001",
         routingDecision: "live_smoke_target",
@@ -146,6 +148,8 @@ test("diagnostics render external automation observability summaries for operato
       {
         attemptCount: 2,
         retryCount: 1,
+        recoveryAction: "replay",
+        recoveryAttemptCount: 1,
         targetLaneClassification: "github_status_report_comment_lane",
         targetDestination: "github://example/bige/issues/comments/62002",
         routingDecision: "status_report_target",
@@ -169,6 +173,13 @@ test("diagnostics render external automation observability summaries for operato
     recoverabilitySummary: "External lane exhausted its safe retries; operator review is required before any further retry.",
     operatorHandoffSummary:
       "External target dispatch exhausted after 2/2 attempts. Tried 2/2 attempt(s). live_smoke_target => status_report_target Safe retry remaining: false. Next: Review the dispatch history and fallback chain, then decide whether a safe manual retry is still possible.",
+    replayEligibility: "safe_to_replay",
+    replayBlockReason: null,
+    replayAttemptCount: 1,
+    lastReplayAction: "replay",
+    lastReplayOutcome: "exhausted",
+    recoveryHistorySummary: "recovery#1 replay -> exhausted at 2026-03-18T00:00:02.000Z",
+    operatorRecoveryRecommendation: "External lane can be replayed once under operator control; reuse the existing next instruction and re-check the routed target.",
     canRetryDispatch: false,
     dispatchExhausted: true,
     dispatchReliabilityOutcome: "exhausted",
@@ -188,5 +199,5 @@ test("diagnostics render external automation observability summaries for operato
   assert.equal(rendered.includes("External automation:"), true);
   assert.equal(rendered.includes("External automation dispatch history:"), true);
   assert.equal(rendered.includes("External automation handoff:"), true);
-  assert.equal(summary.nextSuggestedAction.includes("dispatch history"), true);
+  assert.equal(summary.nextSuggestedAction.includes("can be replayed once under operator control"), true);
 });

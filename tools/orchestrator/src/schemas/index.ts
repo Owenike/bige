@@ -280,6 +280,24 @@ export const gptCodeTransportIntakeStatusSchema = z.enum(["not_received", "queue
 export const gptCodeTransportBridgeStatusSchema = z.enum(["not_run", "accepted", "needs_manual_review", "failed"]);
 export const gptCodeDispatchStatusSchema = z.enum(["not_queued", "queued", "dispatched", "manual_required", "failed"]);
 export const gptCodeDispatchOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed", "retryable", "exhausted"]);
+export const gptCodeReplayEligibilitySchema = z.enum([
+  "not_evaluated",
+  "safe_to_resume",
+  "safe_to_replay",
+  "manual_only",
+  "exhausted_permanently",
+  "blocked",
+]);
+export const gptCodeReplayActionSchema = z.enum(["none", "resume", "replay"]);
+export const gptCodeReplayOutcomeSchema = z.enum([
+  "not_run",
+  "success",
+  "manual_required",
+  "failed",
+  "retryable",
+  "exhausted",
+  "blocked",
+]);
 export const gptCodeSourceAdapterStatusSchema = z.enum(["not_received", "received", "linked", "manual_required", "failed"]);
 export const gptCodeTargetAdapterStatusSchema = z.enum(["not_attempted", "dispatched", "manual_required", "failed", "retryable", "exhausted"]);
 export const gptCodeAutomaticTriggerStatusSchema = z.enum(["not_triggered", "triggered", "manual_required", "failed"]);
@@ -324,6 +342,8 @@ export const gptCodeDispatchFailureClassSchema = z.enum([
 export const gptCodeDispatchAttemptRecordSchema = z.object({
   attemptCount: z.number().int().nonnegative(),
   retryCount: z.number().int().nonnegative().default(0),
+  recoveryAction: gptCodeReplayActionSchema.default("none"),
+  recoveryAttemptCount: z.number().int().nonnegative().default(0),
   targetLaneClassification: gptCodeTargetLaneClassificationSchema.nullable().default(null),
   targetDestination: z.string().nullable().default(null),
   routingDecision: gptCodeRoutingDecisionSchema.nullable().default(null),
@@ -440,6 +460,13 @@ export const gptCodeAutomationStateSchema = z.object({
   fallbackChainSummary: z.string().nullable().default(null),
   recoverabilitySummary: z.string().nullable().default(null),
   operatorHandoffSummary: z.string().nullable().default(null),
+  replayEligibility: gptCodeReplayEligibilitySchema.default("not_evaluated"),
+  replayBlockReason: z.string().nullable().default(null),
+  replayAttemptCount: z.number().int().nonnegative().default(0),
+  lastReplayAction: gptCodeReplayActionSchema.default("none"),
+  lastReplayOutcome: gptCodeReplayOutcomeSchema.default("not_run"),
+  recoveryHistorySummary: z.string().nullable().default(null),
+  operatorRecoveryRecommendation: z.string().nullable().default(null),
   canRetryDispatch: z.boolean().default(false),
   dispatchExhausted: z.boolean().default(false),
   dispatchReliabilityOutcome: gptCodeDispatchOutcomeSchema.default("not_run"),
@@ -3529,6 +3556,8 @@ const gptCodeDispatchAttemptRecordJsonSchema: JsonSchema = {
   required: [
     "attemptCount",
     "retryCount",
+    "recoveryAction",
+    "recoveryAttemptCount",
     "targetLaneClassification",
     "targetDestination",
     "routingDecision",
@@ -3545,6 +3574,8 @@ const gptCodeDispatchAttemptRecordJsonSchema: JsonSchema = {
   properties: {
     attemptCount: { type: "number" },
     retryCount: { type: "number" },
+    recoveryAction: { type: "string", enum: ["none", "resume", "replay"] },
+    recoveryAttemptCount: { type: "number" },
     targetLaneClassification: {
       type: "string",
       nullable: true,
@@ -4049,6 +4080,13 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     "fallbackChainSummary",
     "recoverabilitySummary",
     "operatorHandoffSummary",
+    "replayEligibility",
+    "replayBlockReason",
+    "replayAttemptCount",
+    "lastReplayAction",
+    "lastReplayOutcome",
+    "recoveryHistorySummary",
+    "operatorRecoveryRecommendation",
     "canRetryDispatch",
     "dispatchExhausted",
     "dispatchReliabilityOutcome",
@@ -4132,6 +4170,19 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     fallbackChainSummary: { type: "string", nullable: true },
     recoverabilitySummary: { type: "string", nullable: true },
     operatorHandoffSummary: { type: "string", nullable: true },
+    replayEligibility: {
+      type: "string",
+      enum: ["not_evaluated", "safe_to_resume", "safe_to_replay", "manual_only", "exhausted_permanently", "blocked"],
+    },
+    replayBlockReason: { type: "string", nullable: true },
+    replayAttemptCount: { type: "number" },
+    lastReplayAction: { type: "string", enum: ["none", "resume", "replay"] },
+    lastReplayOutcome: {
+      type: "string",
+      enum: ["not_run", "success", "manual_required", "failed", "retryable", "exhausted", "blocked"],
+    },
+    recoveryHistorySummary: { type: "string", nullable: true },
+    operatorRecoveryRecommendation: { type: "string", nullable: true },
     canRetryDispatch: { type: "boolean" },
     dispatchExhausted: { type: "boolean" },
     dispatchReliabilityOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable", "exhausted"] },

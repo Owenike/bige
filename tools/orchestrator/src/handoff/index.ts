@@ -28,6 +28,9 @@ function collectKnownRisks(state: OrchestratorState) {
   if (state.lastGptCodeAutomationState?.manualReviewReason) {
     risks.push(state.lastGptCodeAutomationState.manualReviewReason);
   }
+  if (state.lastGptCodeAutomationState?.replayBlockReason) {
+    risks.push(state.lastGptCodeAutomationState.replayBlockReason);
+  }
   return risks;
 }
 
@@ -47,6 +50,12 @@ function collectApprovalNotes(state: OrchestratorState) {
   }
   if (state.lastGptCodeAutomationState?.operatorHandoffSummary) {
     notes.push(`externalHandoff=${state.lastGptCodeAutomationState.operatorHandoffSummary}`);
+  }
+  if (state.lastGptCodeAutomationState?.recoveryHistorySummary) {
+    notes.push(`externalRecoveryHistory=${state.lastGptCodeAutomationState.recoveryHistorySummary}`);
+  }
+  if (state.lastGptCodeAutomationState?.operatorRecoveryRecommendation) {
+    notes.push(`externalRecoveryRecommendation=${state.lastGptCodeAutomationState.operatorRecoveryRecommendation}`);
   }
   if (state.stopReason) {
     notes.push(`stopReason=${state.stopReason}`);
@@ -86,6 +95,7 @@ export function buildPrDraftMetadata(params: {
       `Reviewer: ${collectReviewerSummary(params.state)}`,
       `Validation: ${collectValidationSummary(params.state).join(" | ") || "none"}`,
       `External automation: ${params.state.lastGptCodeAutomationState?.operatorHandoffSummary ?? "none"}`,
+      `External recovery: ${params.state.lastGptCodeAutomationState?.operatorRecoveryRecommendation ?? "none"}`,
     ].join("\n"),
     changeSummary: report?.summaryOfChanges ?? [],
     validationSummary: collectValidationSummary(params.state),
