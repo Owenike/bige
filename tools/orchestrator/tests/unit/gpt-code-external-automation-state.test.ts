@@ -81,6 +81,8 @@ test("external automation state records manual review when gating blocks auto di
   assert.equal(updated?.lastGptCodeAutomationState?.dispatchReliabilityOutcome, "manual_required");
   assert.equal(updated?.lastGptCodeAutomationState?.externalAutomationOutcome, "manual_required");
   assert.equal((updated?.lastGptCodeAutomationState?.manualReviewReason?.length ?? 0) > 0, true);
+  assert.equal(updated?.lastGptCodeAutomationState?.operatorHandoffSummary?.includes("Tried 0 targets."), true);
+  assert.equal(updated?.lastGptCodeAutomationState?.recoverabilitySummary?.includes("operator review"), true);
 });
 
 test("external automation state records live smoke routing facts for a pull request body lane", async () => {
@@ -155,4 +157,5 @@ test("external automation state records live smoke routing facts for a pull requ
   assert.equal(updated?.lastGptCodeAutomationState?.routingDecision, "manual_required");
   assert.equal(updated?.lastGptCodeAutomationState?.fallbackDecision, "manual_required");
   assert.equal(updated?.lastGptCodeAutomationState?.externalAutomationOutcome, "manual_required");
+  assert.equal(updated?.lastGptCodeAutomationState?.operatorHandoffSummary?.includes("Fallback chain not entered."), true);
 });

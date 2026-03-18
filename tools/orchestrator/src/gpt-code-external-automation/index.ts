@@ -19,8 +19,10 @@ import {
 } from "../gpt-code-report-transport";
 import { resolveGitHubThreadTarget } from "../comment-targeting";
 import {
+  gptCodeDispatchAttemptRecordSchema,
   gptCodeAutomationStateSchema,
   orchestratorStateSchema,
+  type GptCodeDispatchAttemptRecord,
   type GptCodeAutomationState,
   type OrchestratorState,
 } from "../schemas";
@@ -206,16 +208,32 @@ function classifyGitHubDispatchFailure(error: unknown) {
     };
   }
   if (
+    message.includes("rate limit") ||
+    message.includes("secondary rate")
+  ) {
+    return {
+      outcome: "retryable" as const,
+      failureClass: "rate_limited" as const,
+      retryEligible: true,
+    };
+  }
+  if (
     message.includes("timed out") ||
     message.includes("timeout") ||
     message.includes("econn") ||
     message.includes("connect") ||
-    message.includes("reset by peer") ||
+    message.includes("reset by peer")
+  ) {
+    return {
+      outcome: "retryable" as const,
+      failureClass: "network" as const,
+      retryEligible: true,
+    };
+  }
+  if (
     message.includes("502") ||
     message.includes("503") ||
-    message.includes("504") ||
-    message.includes("rate limit") ||
-    message.includes("secondary rate")
+    message.includes("504")
   ) {
     return {
       outcome: "retryable" as const,
@@ -260,6 +278,9 @@ function mapTargetOutcomeToStatus(outcome: GptCodeExternalTargetDispatch["outcom
   if (outcome === "success") {
     return "dispatched" as const;
   }
+  if (outcome === "exhausted") {
+    return "exhausted" as const;
+  }
   if (outcome === "manual_required") {
     return "manual_required" as const;
   }
@@ -269,14 +290,285 @@ function mapTargetOutcomeToStatus(outcome: GptCodeExternalTargetDispatch["outcom
   return "failed" as const;
 }
 
-function mapTargetOutcomeToRecommendedNextStep(outcome: GptCodeExternalTargetDispatch["outcome"]) {
-  if (outcome === "success") {
+function buildRouteTraceEntry(params: {
+  route: ExternalGitHubTargetRoute;
+  outcome: GptCodeExternalTargetDispatch["outcome"];
+  failureClass: GptCodeExternalTargetDispatch["failureClass"];
+}) {
+  return [
+    params.route.routingDecision,
+    params.route.targetLaneClassification,
+    params.route.targetDestination,
+    params.outcome,
+    params.failureClass ?? "ok",
+  ].join(" | ");
+}
+
+function classifyDispatchRecoverability(params: {
+  outcome: GptCodeExternalTargetDispatch["outcome"];
+  attemptCount: number;
+  maxAttempts: number;
+  retryEligible: boolean;
+}) {
+  const exhausted =
+    params.outcome === "exhausted" ||
+    (params.outcome === "retryable" && params.attemptCount >= params.maxAttempts);
+  const canRetry = params.retryEligible && params.outcome === "retryable" && params.attemptCount < params.maxAttempts;
+  const normalizedOutcome = exhausted ? "exhausted" : params.outcome;
+  return {
+    exhausted,
+    canRetry,
+    normalizedOutcome,
+  };
+}
+
+function deriveManualReviewReason(params: {
+  dispatch: GptCodeExternalTargetDispatch;
+  exhausted: boolean;
+}) {
+  if (params.dispatch.outcome === "success") {
+    return null;
+  }
+  if (params.exhausted) {
+    return `External target dispatch exhausted after ${params.dispatch.attemptCount}/${params.dispatch.maxAttempts} attempts.`;
+  }
+  if (params.dispatch.outcome === "manual_required") {
+    return "External target dispatch requires manual review before it can proceed safely.";
+  }
+  if (params.dispatch.outcome === "retryable") {
+    return `External target dispatch is retryable after attempt ${params.dispatch.attemptCount}/${params.dispatch.maxAttempts}.`;
+  }
+  if (params.dispatch.failureClass) {
+    return `External target dispatch failed with ${params.dispatch.failureClass}.`;
+  }
+  return "External target dispatch failed and needs operator review.";
+}
+
+function deriveRecommendedNextStep(params: {
+  dispatch: GptCodeExternalTargetDispatch;
+  exhausted: boolean;
+  canRetry: boolean;
+}) {
+  if (params.dispatch.outcome === "success") {
     return "Wait for the external target response or the next GPT CODE report.";
   }
-  if (outcome === "retryable") {
+  if (params.canRetry) {
     return "Retry the external target dispatch or inspect the target health before retrying.";
   }
+  if (params.exhausted) {
+    return "Review the dispatch history and fallback chain, then decide whether a safe manual retry is still possible.";
+  }
+  if (params.dispatch.outcome === "manual_required") {
+    return "Inspect the dispatch history and take over the external target handoff manually.";
+  }
   return "Review the external target dispatch outcome manually.";
+}
+
+function buildDispatchSummary(params: {
+  dispatch: GptCodeExternalTargetDispatch;
+  exhausted: boolean;
+}) {
+  const failureSuffix = params.dispatch.failureClass ? ` (${params.dispatch.failureClass})` : "";
+  const traceSuffix =
+    params.dispatch.routeTrace.length > 0 ? `; routeTrace=${params.dispatch.routeTrace.join(" => ")}` : "";
+  if (params.dispatch.outcome === "success") {
+    return `Attempt ${params.dispatch.attemptCount}/${params.dispatch.maxAttempts} delivered to ${params.dispatch.targetLaneClassification}.`;
+  }
+  if (params.exhausted) {
+    return `Attempt ${params.dispatch.attemptCount}/${params.dispatch.maxAttempts} exhausted after retryable failures${failureSuffix}${traceSuffix}`;
+  }
+  return `Attempt ${params.dispatch.attemptCount}/${params.dispatch.maxAttempts} ended as ${params.dispatch.outcome}${failureSuffix}${traceSuffix}`;
+}
+
+function buildFallbackSummary(routeTrace: string[]) {
+  if (routeTrace.length <= 1) {
+    return routeTrace[0] ?? "No fallback was needed.";
+  }
+  return `Fallback chain: ${routeTrace.join(" => ")}`;
+}
+
+function toDispatchAttemptRecord(dispatch: GptCodeExternalTargetDispatch) {
+  return gptCodeDispatchAttemptRecordSchema.parse({
+    attemptCount: dispatch.attemptCount,
+    retryCount: dispatch.retryCount,
+    targetLaneClassification: dispatch.targetLaneClassification,
+    targetDestination: dispatch.targetDestination,
+    routingDecision: dispatch.routingDecision,
+    fallbackDecision: dispatch.fallbackDecision,
+    outcome: dispatch.outcome,
+    retryEligible: dispatch.retryEligible,
+    failureClass: dispatch.failureClass,
+    externalReferenceId: dispatch.externalReferenceId,
+    externalUrl: dispatch.externalUrl,
+    dispatchedAt: dispatch.dispatchedAt,
+    routeTrace: dispatch.routeTrace,
+    deliverySummary: dispatch.deliverySummary,
+  });
+}
+
+function upsertDispatchAttemptHistory(params: {
+  current: GptCodeDispatchAttemptRecord[];
+  dispatch: GptCodeExternalTargetDispatch;
+}) {
+  const next = toDispatchAttemptRecord(params.dispatch);
+  const history = [...params.current.filter((entry) => entry.attemptCount !== next.attemptCount), next];
+  return history.sort((left, right) => left.attemptCount - right.attemptCount);
+}
+
+function summarizeDispatchHistory(history: GptCodeDispatchAttemptRecord[]) {
+  if (history.length === 0) {
+    return "No external target dispatch attempts recorded yet.";
+  }
+  return history
+    .map((entry) => `#${entry.attemptCount} ${entry.outcome} ${entry.targetLaneClassification ?? "none"} ${entry.failureClass ?? "ok"}`)
+    .join(" | ");
+}
+
+function summarizeRetryPolicy(params: {
+  maxAttempts: number;
+  currentAttemptCount: number;
+  retryCount: number;
+  canRetry: boolean;
+  exhausted: boolean;
+}) {
+  const remaining = Math.max(params.maxAttempts - params.currentAttemptCount, 0);
+  if (params.exhausted) {
+    return `Retry policy exhausted after ${params.currentAttemptCount}/${params.maxAttempts} attempts (${params.retryCount} retries).`;
+  }
+  if (params.canRetry) {
+    return `Retry policy allows another attempt; ${remaining} attempt(s) remain out of ${params.maxAttempts}.`;
+  }
+  return `Retry policy settled after ${params.currentAttemptCount}/${params.maxAttempts} attempts (${params.retryCount} retries).`;
+}
+
+function summarizeRecoverability(params: {
+  canRetry: boolean;
+  exhausted: boolean;
+  dispatch: GptCodeExternalTargetDispatch;
+}) {
+  if (params.dispatch.outcome === "success") {
+    return "External lane is recoverable and currently healthy; no operator retry is needed.";
+  }
+  if (params.canRetry) {
+    return "External lane is still recoverable; a safe retry remains available.";
+  }
+  if (params.exhausted) {
+    return "External lane exhausted its safe retries; operator review is required before any further retry.";
+  }
+  return "External lane is not auto-recoverable; operator review is required.";
+}
+
+function summarizeOperatorHandoff(params: {
+  dispatch: GptCodeExternalTargetDispatch;
+  canRetry: boolean;
+  exhausted: boolean;
+}) {
+  const reason = params.dispatch.manualReviewReason ?? deriveManualReviewReason({
+    dispatch: params.dispatch,
+    exhausted: params.exhausted,
+  });
+  const next = params.dispatch.recommendedNextStep ?? deriveRecommendedNextStep({
+    dispatch: params.dispatch,
+    exhausted: params.exhausted,
+    canRetry: params.canRetry,
+  });
+  return [
+    reason ?? "No manual review reason recorded.",
+    `Tried ${params.dispatch.attemptCount}/${params.dispatch.maxAttempts} attempt(s).`,
+    params.dispatch.routeTrace.length > 0 ? params.dispatch.routeTrace.join(" => ") : "No fallback chain recorded.",
+    `Safe retry remaining: ${params.canRetry}.`,
+    `Next: ${next}`,
+  ].join(" ");
+}
+
+function buildAutomationPatchFromDispatch(params: {
+  currentState: OrchestratorState;
+  dispatch: GptCodeExternalTargetDispatch;
+}) {
+  const currentAutomation = params.currentState.lastGptCodeAutomationState;
+  const { exhausted, canRetry, normalizedOutcome } = classifyDispatchRecoverability({
+    outcome: params.dispatch.outcome,
+    attemptCount: params.dispatch.attemptCount,
+    maxAttempts: params.dispatch.maxAttempts,
+    retryEligible: params.dispatch.retryEligible,
+  });
+  const normalizedDispatch = gptCodeExternalTargetDispatchSchema.parse({
+    ...params.dispatch,
+    outcome: normalizedOutcome,
+    retryEligible: canRetry,
+    exhausted,
+    manualReviewReason:
+      params.dispatch.manualReviewReason ??
+      deriveManualReviewReason({
+        dispatch: params.dispatch,
+        exhausted,
+      }),
+    recommendedNextStep:
+      params.dispatch.recommendedNextStep ??
+      deriveRecommendedNextStep({
+        dispatch: params.dispatch,
+        exhausted,
+        canRetry,
+      }),
+    deliverySummary:
+      params.dispatch.deliverySummary ??
+      buildDispatchSummary({
+        dispatch: params.dispatch,
+        exhausted,
+      }),
+  });
+  const dispatchAttemptHistory = upsertDispatchAttemptHistory({
+    current: currentAutomation?.dispatchAttemptHistory ?? [],
+    dispatch: normalizedDispatch,
+  });
+
+  return {
+    normalizedDispatch,
+    patch: {
+      targetAdapterStatus: mapTargetOutcomeToStatus(normalizedDispatch.outcome),
+      targetType: normalizedDispatch.targetType,
+      targetLaneClassification: normalizedDispatch.targetLaneClassification,
+      targetDestination: normalizedDispatch.targetDestination,
+      targetAttemptCount: normalizedDispatch.attemptCount,
+      targetRetryCount: normalizedDispatch.retryCount,
+      targetMaxAttempts: normalizedDispatch.maxAttempts,
+      routingDecision: normalizedDispatch.routingDecision,
+      fallbackDecision: normalizedDispatch.fallbackDecision,
+      dispatchCorrelationId: normalizedDispatch.correlationId,
+      targetExternalReferenceId: normalizedDispatch.externalReferenceId,
+      targetExternalUrl: normalizedDispatch.externalUrl,
+      targetDispatchArtifactPath: normalizedDispatch.dispatchArtifactPath,
+      lastTargetFailureClass: normalizedDispatch.failureClass,
+      dispatchAttemptHistory,
+      retryPolicySummary: summarizeRetryPolicy({
+        maxAttempts: normalizedDispatch.maxAttempts,
+        currentAttemptCount: normalizedDispatch.attemptCount,
+        retryCount: normalizedDispatch.retryCount,
+        canRetry,
+        exhausted,
+      }),
+      dispatchHistorySummary: summarizeDispatchHistory(dispatchAttemptHistory),
+      fallbackChainSummary: buildFallbackSummary(normalizedDispatch.routeTrace),
+      recoverabilitySummary: summarizeRecoverability({
+        canRetry,
+        exhausted,
+        dispatch: normalizedDispatch,
+      }),
+      operatorHandoffSummary: summarizeOperatorHandoff({
+        dispatch: normalizedDispatch,
+        canRetry,
+        exhausted,
+      }),
+      canRetryDispatch: canRetry,
+      dispatchExhausted: exhausted,
+      dispatchReliabilityOutcome: normalizedDispatch.outcome,
+      externalAutomationOutcome: normalizedDispatch.outcome,
+      lastAttemptedAt: normalizedDispatch.dispatchedAt,
+      lastDispatchedAt: normalizedDispatch.dispatchedAt,
+      recommendedNextStep: normalizedDispatch.recommendedNextStep,
+      manualReviewReason: normalizedDispatch.manualReviewReason,
+    } satisfies Partial<GptCodeAutomationState>,
+  };
 }
 
 function sourcePrefersStatusReportTarget(source: GptCodeExternalSourceMetadata) {
@@ -614,11 +906,80 @@ export interface GptCodeExternalTargetAdapter {
 async function writeTargetDispatchResult(params: {
   outputRoot: string;
   attemptCount: number;
-  result: Omit<GptCodeExternalTargetDispatch, "dispatchArtifactPath">;
+  result: Omit<
+    GptCodeExternalTargetDispatch,
+    "dispatchArtifactPath" | "routeTrace" | "deliverySummary" | "manualReviewReason" | "recommendedNextStep" | "exhausted"
+  > &
+    Partial<
+      Pick<
+        GptCodeExternalTargetDispatch,
+        "routeTrace" | "deliverySummary" | "manualReviewReason" | "recommendedNextStep" | "exhausted"
+      >
+    >;
 }) {
+  await mkdir(params.outputRoot, { recursive: true });
   const dispatchArtifactPath = path.join(params.outputRoot, `github-target-dispatch-attempt-${params.attemptCount}.json`);
+  const { exhausted, canRetry, normalizedOutcome } = classifyDispatchRecoverability({
+    outcome: params.result.outcome,
+    attemptCount: params.result.attemptCount,
+    maxAttempts: params.result.maxAttempts,
+    retryEligible: params.result.retryEligible,
+  });
   const result = gptCodeExternalTargetDispatchSchema.parse({
     ...params.result,
+    outcome: normalizedOutcome,
+    retryEligible: canRetry,
+    exhausted,
+    routeTrace: params.result.routeTrace ?? [],
+    manualReviewReason:
+      params.result.manualReviewReason ??
+      deriveManualReviewReason({
+        dispatch: {
+          ...params.result,
+          dispatchArtifactPath: null,
+          outcome: normalizedOutcome,
+          retryEligible: canRetry,
+          exhausted,
+          routeTrace: params.result.routeTrace ?? [],
+          deliverySummary: params.result.deliverySummary ?? null,
+          recommendedNextStep: params.result.recommendedNextStep ?? null,
+          manualReviewReason: null,
+        },
+        exhausted,
+      }),
+    recommendedNextStep:
+      params.result.recommendedNextStep ??
+      deriveRecommendedNextStep({
+        dispatch: {
+          ...params.result,
+          dispatchArtifactPath: null,
+          outcome: normalizedOutcome,
+          retryEligible: canRetry,
+          exhausted,
+          routeTrace: params.result.routeTrace ?? [],
+          deliverySummary: params.result.deliverySummary ?? null,
+          recommendedNextStep: null,
+          manualReviewReason: params.result.manualReviewReason ?? null,
+        },
+        exhausted,
+        canRetry,
+      }),
+    deliverySummary:
+      params.result.deliverySummary ??
+      buildDispatchSummary({
+        dispatch: {
+          ...params.result,
+          dispatchArtifactPath: null,
+          outcome: normalizedOutcome,
+          retryEligible: canRetry,
+          exhausted,
+          routeTrace: params.result.routeTrace ?? [],
+          deliverySummary: null,
+          recommendedNextStep: params.result.recommendedNextStep ?? null,
+          manualReviewReason: params.result.manualReviewReason ?? null,
+        },
+        exhausted,
+      }),
     dispatchArtifactPath,
   });
   await writeFile(dispatchArtifactPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
@@ -638,11 +999,20 @@ async function dispatchInstructionToGitHubRoute(params: {
   token: string | null;
   execImpl: ExecFileLike;
   now: string;
+  routeTrace?: string[];
 }) {
   const correlationId = buildInstructionCorrelationId(params.state.id);
   const body = withInstructionMarker(await readFile(params.nextInstructionPath, "utf8"), params.state.id);
   const bodyPayloadPath = path.join(params.outputRoot, `github-target-body-attempt-${params.attemptCount}.json`);
   await writeFile(bodyPayloadPath, `${JSON.stringify({ body }, null, 2)}\n`, "utf8");
+  const routeTrace = [
+    ...(params.routeTrace ?? []),
+    buildRouteTraceEntry({
+      route: params.route,
+      outcome: "manual_required",
+      failureClass: "auth",
+    }),
+  ];
 
   if (!params.enabled || !params.token) {
     return writeTargetDispatchResult({
@@ -664,6 +1034,7 @@ async function dispatchInstructionToGitHubRoute(params: {
         correlationId,
         externalReferenceId: null,
         externalUrl: null,
+        routeTrace,
         dispatchedAt: params.now,
       },
     });
@@ -728,6 +1099,14 @@ async function dispatchInstructionToGitHubRoute(params: {
         correlationId,
         externalReferenceId: String(responsePayload?.id ?? existingCommentId ?? ""),
         externalUrl: responsePayload?.html_url ?? existingUrl,
+        routeTrace: [
+          ...(params.routeTrace ?? []),
+          buildRouteTraceEntry({
+            route: params.route,
+            outcome: "success",
+            failureClass: null,
+          }),
+        ],
         dispatchedAt: params.now,
       },
     });
@@ -752,6 +1131,14 @@ async function dispatchInstructionToGitHubRoute(params: {
         correlationId,
         externalReferenceId: existingCommentId,
         externalUrl: existingUrl,
+        routeTrace: [
+          ...(params.routeTrace ?? []),
+          buildRouteTraceEntry({
+            route: params.route,
+            outcome: classified.outcome,
+            failureClass: classified.failureClass,
+          }),
+        ],
         dispatchedAt: params.now,
       },
     });
@@ -791,31 +1178,29 @@ export class GhCliGptCodeGitHubCommentTargetAdapter implements GptCodeExternalTa
     await mkdir(params.outputRoot, { recursive: true });
 
     if (!route) {
-      const dispatchArtifactPath = path.join(
-        params.outputRoot,
-        `github-target-dispatch-attempt-${attemptCount}.json`,
-      );
-      const result = gptCodeExternalTargetDispatchSchema.parse({
-        stateId: params.state.id,
-        targetType: this.kind,
-        targetLaneClassification: "repo_local_outbox_lane",
-        targetDestination: "github://missing-thread-target",
-        routingDecision: "manual_required",
+      return writeTargetDispatchResult({
+        outputRoot: params.outputRoot,
+        attemptCount,
+        result: {
+          stateId: params.state.id,
+          targetType: this.kind,
+          targetLaneClassification: "repo_local_outbox_lane",
+          targetDestination: "github://missing-thread-target",
+          routingDecision: "manual_required",
         fallbackDecision: "manual_required",
         attemptCount,
         retryCount,
         maxAttempts: this.maxAttempts,
         outcome: "manual_required",
         retryEligible: false,
-        failureClass: "routing",
-        correlationId,
-        externalReferenceId: null,
-        externalUrl: null,
-        dispatchArtifactPath,
-        dispatchedAt: now,
+          failureClass: "routing",
+          correlationId,
+          externalReferenceId: null,
+          externalUrl: null,
+          routeTrace: ["manual_required | repo_local_outbox_lane | github://missing-thread-target | manual_required | routing"],
+          dispatchedAt: now,
+        },
       });
-      await writeFile(dispatchArtifactPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
-      return result;
     }
     const execImpl: ExecFileLike = this.params.execFileImpl ?? defaultExecFileLike;
     const primaryDispatch = await dispatchInstructionToGitHubRoute({
@@ -843,7 +1228,7 @@ export class GhCliGptCodeGitHubCommentTargetAdapter implements GptCodeExternalTa
         failedRoute: route,
       });
       if (fallbackRoute) {
-        return dispatchInstructionToGitHubRoute({
+        const fallbackDispatch = await dispatchInstructionToGitHubRoute({
           route: fallbackRoute,
           state: params.state,
           nextInstructionPath: params.nextInstructionPath,
@@ -856,6 +1241,12 @@ export class GhCliGptCodeGitHubCommentTargetAdapter implements GptCodeExternalTa
           token: this.params.token,
           execImpl,
           now,
+          routeTrace: primaryDispatch.routeTrace,
+        });
+        return writeTargetDispatchResult({
+          outputRoot: params.outputRoot,
+          attemptCount,
+          result: (({ dispatchArtifactPath: _dispatchArtifactPath, ...rest }) => rest)(fallbackDispatch),
         });
       }
     }
@@ -942,8 +1333,17 @@ export async function runGptCodeExternalAutomationFromWebhook(params: {
       targetExternalUrl: null,
       targetDispatchArtifactPath: null,
       lastTargetFailureClass: null,
+      dispatchAttemptHistory: state.lastGptCodeAutomationState?.dispatchAttemptHistory ?? [],
+      retryPolicySummary: null,
+      dispatchHistorySummary: state.lastGptCodeAutomationState?.dispatchHistorySummary ?? null,
+      fallbackChainSummary: null,
+      recoverabilitySummary: null,
+      operatorHandoffSummary: null,
+      canRetryDispatch: false,
+      dispatchExhausted: false,
       dispatchReliabilityOutcome: "not_run",
       externalAutomationOutcome: "not_run",
+      lastReceivedAt: source.receivedAt,
       recommendedNextStep: "Run transport and external target dispatch for the received GPT CODE report.",
       manualReviewReason: null,
     },
@@ -987,6 +1387,13 @@ export async function runGptCodeExternalAutomationFromWebhook(params: {
         : transportResult.dispatchStatus === "manual_required"
           ? "manual_required"
           : "manual_required";
+    const manualReviewReason =
+      transportResult.dispatchStatus === "dispatched" && !params.externalTargetAdapter
+        ? "External target adapter is not configured."
+        : updatedState.lastGptCodeAutomationState?.manualReviewReason;
+    const recommendedNextStep =
+      updatedState.lastGptCodeAutomationState?.manualReviewReason ??
+      "Review the transport outcome manually before external dispatch.";
     updatedState = await saveStateWithAutomationPatch({
       state: updatedState,
       dependencies: params.dependencies,
@@ -996,15 +1403,22 @@ export async function runGptCodeExternalAutomationFromWebhook(params: {
         targetMaxAttempts,
         routingDecision: "manual_required",
         fallbackDecision: "manual_required",
+        retryPolicySummary: `Retry policy not entered because external dispatch never started; max configured attempts: ${targetMaxAttempts}.`,
+        fallbackChainSummary: "No external fallback chain ran because external dispatch never started.",
+        recoverabilitySummary: "External lane is blocked before dispatch; operator review is required.",
+        operatorHandoffSummary: [
+          manualReviewReason ?? "External dispatch did not start.",
+          "Tried 0 targets.",
+          "Fallback chain not entered.",
+          "Safe retry remaining: false.",
+          `Next: ${recommendedNextStep}`,
+        ].join(" "),
+        canRetryDispatch: false,
+        dispatchExhausted: false,
         dispatchReliabilityOutcome: outcome,
         externalAutomationOutcome: outcome,
-        manualReviewReason:
-          transportResult.dispatchStatus === "dispatched" && !params.externalTargetAdapter
-            ? "External target adapter is not configured."
-            : updatedState.lastGptCodeAutomationState?.manualReviewReason,
-        recommendedNextStep:
-          updatedState.lastGptCodeAutomationState?.manualReviewReason ??
-          "Review the transport outcome manually before external dispatch.",
+        manualReviewReason,
+        recommendedNextStep,
       },
     });
 
@@ -1038,30 +1452,14 @@ export async function runGptCodeExternalAutomationFromWebhook(params: {
   });
 
   while (targetDispatch.outcome === "retryable" && targetDispatch.attemptCount < targetDispatch.maxAttempts) {
+    const retryPatch = buildAutomationPatchFromDispatch({
+      currentState: updatedState,
+      dispatch: targetDispatch,
+    });
     updatedState = await saveStateWithAutomationPatch({
       state: updatedState,
       dependencies: params.dependencies,
-      patch: {
-        targetAdapterStatus: "retryable",
-        targetType: targetDispatch.targetType,
-        targetLaneClassification: targetDispatch.targetLaneClassification,
-        targetDestination: targetDispatch.targetDestination,
-        targetAttemptCount: targetDispatch.attemptCount,
-        targetRetryCount: targetDispatch.retryCount + 1,
-        targetMaxAttempts: targetDispatch.maxAttempts,
-        routingDecision: targetDispatch.routingDecision,
-        fallbackDecision: targetDispatch.fallbackDecision,
-        dispatchCorrelationId: targetDispatch.correlationId,
-        targetExternalReferenceId: targetDispatch.externalReferenceId,
-        targetExternalUrl: targetDispatch.externalUrl,
-        targetDispatchArtifactPath: targetDispatch.dispatchArtifactPath,
-        lastTargetFailureClass: targetDispatch.failureClass,
-        dispatchReliabilityOutcome: "retryable",
-        externalAutomationOutcome: "retryable",
-        lastDispatchedAt: targetDispatch.dispatchedAt,
-        recommendedNextStep: "Retrying the external target dispatch after a retryable failure.",
-        manualReviewReason: null,
-      },
+      patch: retryPatch.patch,
     });
 
     targetDispatch = await params.externalTargetAdapter.dispatchNextInstruction({
@@ -1078,35 +1476,32 @@ export async function runGptCodeExternalAutomationFromWebhook(params: {
     });
   }
 
+  if (targetDispatch.outcome === "retryable" && targetDispatch.attemptCount >= targetDispatch.maxAttempts) {
+    targetDispatch = await writeTargetDispatchResult({
+      outputRoot: targetRoot,
+      attemptCount: targetDispatch.attemptCount,
+      result: (({ dispatchArtifactPath: _dispatchArtifactPath, ...rest }) => ({
+        ...rest,
+        outcome: "exhausted",
+        retryEligible: false,
+      }))(targetDispatch),
+    });
+    updatedState = await persistTargetDispatchArtifact({
+      state: updatedState,
+      dependencies: params.dependencies,
+      targetDispatch,
+    });
+  }
+
+  const finalPatch = buildAutomationPatchFromDispatch({
+    currentState: updatedState,
+    dispatch: targetDispatch,
+  });
+
   updatedState = await saveStateWithAutomationPatch({
     state: updatedState,
     dependencies: params.dependencies,
-    patch: {
-      targetAdapterStatus: mapTargetOutcomeToStatus(targetDispatch.outcome),
-      targetType: targetDispatch.targetType,
-      targetLaneClassification: targetDispatch.targetLaneClassification,
-      targetDestination: targetDispatch.targetDestination,
-      targetAttemptCount: targetDispatch.attemptCount,
-      targetRetryCount: targetDispatch.retryCount,
-      targetMaxAttempts: targetDispatch.maxAttempts,
-      routingDecision: targetDispatch.routingDecision,
-      fallbackDecision: targetDispatch.fallbackDecision,
-      dispatchCorrelationId: targetDispatch.correlationId,
-      targetExternalReferenceId: targetDispatch.externalReferenceId,
-      targetExternalUrl: targetDispatch.externalUrl,
-      targetDispatchArtifactPath: targetDispatch.dispatchArtifactPath,
-      lastTargetFailureClass: targetDispatch.failureClass,
-      dispatchReliabilityOutcome: targetDispatch.outcome,
-      externalAutomationOutcome: targetDispatch.outcome,
-      lastDispatchedAt: targetDispatch.dispatchedAt,
-      recommendedNextStep: mapTargetOutcomeToRecommendedNextStep(targetDispatch.outcome),
-      manualReviewReason:
-        targetDispatch.outcome === "success"
-          ? null
-          : targetDispatch.outcome === "retryable"
-            ? "External target dispatch remained retryable after the available attempts."
-            : updatedState.lastGptCodeAutomationState?.manualReviewReason,
-    },
+    patch: finalPatch.patch,
   });
 
   return gptCodeExternalAutomationResultSchema.parse({
@@ -1115,8 +1510,8 @@ export async function runGptCodeExternalAutomationFromWebhook(params: {
     sourceStatus: "linked",
     automaticTriggerStatus: "triggered",
     transportDispatchStatus: transportResult.dispatchStatus,
-    targetDispatch,
-    outcome: targetDispatch.outcome,
+    targetDispatch: finalPatch.normalizedDispatch,
+    outcome: finalPatch.normalizedDispatch.outcome,
     generatedAt: params.receivedAt,
   });
 }

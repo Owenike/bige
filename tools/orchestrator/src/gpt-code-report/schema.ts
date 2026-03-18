@@ -285,12 +285,20 @@ export const gptCodeExternalTargetDispatchSchema = z.object({
   attemptCount: z.number().int().nonnegative(),
   retryCount: z.number().int().nonnegative().default(0),
   maxAttempts: z.number().int().positive().default(2),
-  outcome: z.enum(["success", "manual_required", "failed", "retryable"]),
+  outcome: z.enum(["success", "manual_required", "failed", "retryable", "exhausted"]),
   retryEligible: z.boolean().default(false),
-  failureClass: z.enum(["auth", "routing", "target_invalid", "transient", "unknown"]).nullable().default(null),
+  failureClass: z
+    .enum(["auth", "routing", "target_invalid", "rate_limited", "network", "transient", "unknown"])
+    .nullable()
+    .default(null),
   correlationId: z.string(),
   externalReferenceId: z.string().nullable().default(null),
   externalUrl: z.string().nullable().default(null),
+  routeTrace: z.array(z.string()).default([]),
+  deliverySummary: z.string().nullable().default(null),
+  manualReviewReason: z.string().nullable().default(null),
+  recommendedNextStep: z.string().nullable().default(null),
+  exhausted: z.boolean().default(false),
   dispatchArtifactPath: z.string().nullable().default(null),
   dispatchedAt: z.string(),
 });
@@ -302,7 +310,7 @@ export const gptCodeExternalAutomationResultSchema = z.object({
   automaticTriggerStatus: z.enum(["triggered", "manual_required", "failed"]),
   transportDispatchStatus: z.enum(["dispatched", "manual_required", "failed", "not_needed"]),
   targetDispatch: gptCodeExternalTargetDispatchSchema.nullable().default(null),
-  outcome: z.enum(["success", "manual_required", "failed", "retryable"]),
+  outcome: z.enum(["success", "manual_required", "failed", "retryable", "exhausted"]),
   generatedAt: z.string(),
 });
 

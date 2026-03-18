@@ -21,7 +21,14 @@ function collectReviewerSummary(state: OrchestratorState) {
 }
 
 function collectKnownRisks(state: OrchestratorState) {
-  return state.lastExecutionReport?.risks ?? [];
+  const risks = [...(state.lastExecutionReport?.risks ?? [])];
+  if (state.lastGptCodeAutomationState?.dispatchExhausted) {
+    risks.push("External automation dispatch exhausted the configured retries.");
+  }
+  if (state.lastGptCodeAutomationState?.manualReviewReason) {
+    risks.push(state.lastGptCodeAutomationState.manualReviewReason);
+  }
+  return risks;
 }
 
 function collectApprovalNotes(state: OrchestratorState) {
@@ -29,6 +36,18 @@ function collectApprovalNotes(state: OrchestratorState) {
   notes.push(`approvalStatus=${state.approvalStatus}`);
   notes.push(`patchStatus=${state.patchStatus}`);
   notes.push(`promotionStatus=${state.promotionStatus}`);
+  if (state.lastGptCodeAutomationState?.dispatchHistorySummary) {
+    notes.push(`externalDispatchHistory=${state.lastGptCodeAutomationState.dispatchHistorySummary}`);
+  }
+  if (state.lastGptCodeAutomationState?.fallbackChainSummary) {
+    notes.push(`externalFallback=${state.lastGptCodeAutomationState.fallbackChainSummary}`);
+  }
+  if (state.lastGptCodeAutomationState?.recoverabilitySummary) {
+    notes.push(`externalRecoverability=${state.lastGptCodeAutomationState.recoverabilitySummary}`);
+  }
+  if (state.lastGptCodeAutomationState?.operatorHandoffSummary) {
+    notes.push(`externalHandoff=${state.lastGptCodeAutomationState.operatorHandoffSummary}`);
+  }
   if (state.stopReason) {
     notes.push(`stopReason=${state.stopReason}`);
   }
@@ -66,6 +85,7 @@ export function buildPrDraftMetadata(params: {
       `Changed files: ${report?.changedFiles.join(", ") || "none"}`,
       `Reviewer: ${collectReviewerSummary(params.state)}`,
       `Validation: ${collectValidationSummary(params.state).join(" | ") || "none"}`,
+      `External automation: ${params.state.lastGptCodeAutomationState?.operatorHandoffSummary ?? "none"}`,
     ].join("\n"),
     changeSummary: report?.summaryOfChanges ?? [],
     validationSummary: collectValidationSummary(params.state),

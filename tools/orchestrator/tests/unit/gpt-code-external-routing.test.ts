@@ -91,6 +91,9 @@ test("external routing prefers the correlated status report target for body-base
   assert.equal(result.routingDecision, "state_thread_target");
   assert.equal(result.fallbackDecision, "status_report_target_fallback");
   assert.equal(result.externalReferenceId, "22222");
+  assert.equal(result.routeTrace.length, 2);
+  assert.equal(result.routeTrace[0]?.includes("status_report_target"), true);
+  assert.equal(result.routeTrace[1]?.includes("state_thread_target"), true);
 });
 
 test("external routing prefers the correlated live smoke target for pull request body sources and falls back to the status report target when it is stale", async () => {
@@ -184,4 +187,7 @@ test("external routing prefers the correlated live smoke target for pull request
   assert.equal(result.routingDecision, "status_report_target");
   assert.equal(result.fallbackDecision, "live_smoke_target_fallback");
   assert.equal(result.externalReferenceId, "62002");
+  assert.equal(result.routeTrace.length, 2);
+  assert.equal(result.routeTrace[0]?.includes("live_smoke_target"), true);
+  assert.equal(result.routeTrace[1]?.includes("status_report_target"), true);
 });

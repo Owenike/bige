@@ -279,11 +279,11 @@ export const supervisionStatusSchema = z.enum(["inactive", "healthy", "backing_o
 export const gptCodeTransportIntakeStatusSchema = z.enum(["not_received", "queued", "accepted", "manual_required", "failed"]);
 export const gptCodeTransportBridgeStatusSchema = z.enum(["not_run", "accepted", "needs_manual_review", "failed"]);
 export const gptCodeDispatchStatusSchema = z.enum(["not_queued", "queued", "dispatched", "manual_required", "failed"]);
-export const gptCodeDispatchOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed", "retryable"]);
+export const gptCodeDispatchOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed", "retryable", "exhausted"]);
 export const gptCodeSourceAdapterStatusSchema = z.enum(["not_received", "received", "linked", "manual_required", "failed"]);
-export const gptCodeTargetAdapterStatusSchema = z.enum(["not_attempted", "dispatched", "manual_required", "failed", "retryable"]);
+export const gptCodeTargetAdapterStatusSchema = z.enum(["not_attempted", "dispatched", "manual_required", "failed", "retryable", "exhausted"]);
 export const gptCodeAutomaticTriggerStatusSchema = z.enum(["not_triggered", "triggered", "manual_required", "failed"]);
-export const gptCodeExternalAutomationOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed", "retryable"]);
+export const gptCodeExternalAutomationOutcomeSchema = z.enum(["not_run", "success", "manual_required", "failed", "retryable", "exhausted"]);
 export const gptCodeSourceLaneClassificationSchema = z.enum([
   "github_issue_comment_lane",
   "github_pull_request_review_comment_lane",
@@ -316,9 +316,27 @@ export const gptCodeDispatchFailureClassSchema = z.enum([
   "auth",
   "routing",
   "target_invalid",
+  "rate_limited",
+  "network",
   "transient",
   "unknown",
 ]);
+export const gptCodeDispatchAttemptRecordSchema = z.object({
+  attemptCount: z.number().int().nonnegative(),
+  retryCount: z.number().int().nonnegative().default(0),
+  targetLaneClassification: gptCodeTargetLaneClassificationSchema.nullable().default(null),
+  targetDestination: z.string().nullable().default(null),
+  routingDecision: gptCodeRoutingDecisionSchema.nullable().default(null),
+  fallbackDecision: gptCodeFallbackDecisionSchema.nullable().default(null),
+  outcome: gptCodeDispatchOutcomeSchema,
+  retryEligible: z.boolean().default(false),
+  failureClass: gptCodeDispatchFailureClassSchema.nullable().default(null),
+  externalReferenceId: z.string().nullable().default(null),
+  externalUrl: z.string().nullable().default(null),
+  dispatchedAt: z.string(),
+  routeTrace: z.array(z.string()).default([]),
+  deliverySummary: z.string().nullable().default(null),
+});
 export const recoveryDecisionSchema = z.object({
   runId: z.string(),
   action: z.enum(["none", "requeued", "retained", "paused", "blocked", "cancelled"]),
@@ -416,6 +434,14 @@ export const gptCodeAutomationStateSchema = z.object({
   targetExternalUrl: z.string().nullable().default(null),
   targetDispatchArtifactPath: z.string().nullable().default(null),
   lastTargetFailureClass: gptCodeDispatchFailureClassSchema.nullable().default(null),
+  dispatchAttemptHistory: z.array(gptCodeDispatchAttemptRecordSchema).default([]),
+  retryPolicySummary: z.string().nullable().default(null),
+  dispatchHistorySummary: z.string().nullable().default(null),
+  fallbackChainSummary: z.string().nullable().default(null),
+  recoverabilitySummary: z.string().nullable().default(null),
+  operatorHandoffSummary: z.string().nullable().default(null),
+  canRetryDispatch: z.boolean().default(false),
+  dispatchExhausted: z.boolean().default(false),
   dispatchReliabilityOutcome: gptCodeDispatchOutcomeSchema.default("not_run"),
   externalAutomationOutcome: gptCodeExternalAutomationOutcomeSchema.default("not_run"),
   lastReceivedAt: z.string().nullable().default(null),
@@ -3489,11 +3515,72 @@ export type GptCodeSourceAdapterStatus = z.infer<typeof gptCodeSourceAdapterStat
 export type GptCodeTargetAdapterStatus = z.infer<typeof gptCodeTargetAdapterStatusSchema>;
 export type GptCodeAutomaticTriggerStatus = z.infer<typeof gptCodeAutomaticTriggerStatusSchema>;
 export type GptCodeExternalAutomationOutcome = z.infer<typeof gptCodeExternalAutomationOutcomeSchema>;
+export type GptCodeDispatchAttemptRecord = z.infer<typeof gptCodeDispatchAttemptRecordSchema>;
 export type GptCodeAutomationState = z.infer<typeof gptCodeAutomationStateSchema>;
 
 const stringArrayJsonSchema: JsonSchema = {
   type: "array",
   items: { type: "string" },
+};
+
+const gptCodeDispatchAttemptRecordJsonSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "attemptCount",
+    "retryCount",
+    "targetLaneClassification",
+    "targetDestination",
+    "routingDecision",
+    "fallbackDecision",
+    "outcome",
+    "retryEligible",
+    "failureClass",
+    "externalReferenceId",
+    "externalUrl",
+    "dispatchedAt",
+    "routeTrace",
+    "deliverySummary",
+  ],
+  properties: {
+    attemptCount: { type: "number" },
+    retryCount: { type: "number" },
+    targetLaneClassification: {
+      type: "string",
+      nullable: true,
+      enum: [
+        "github_issue_thread_comment_lane",
+        "github_pull_request_thread_comment_lane",
+        "github_live_smoke_comment_lane",
+        "github_status_report_comment_lane",
+        "github_source_thread_fallback_lane",
+        "repo_local_outbox_lane",
+      ],
+    },
+    targetDestination: { type: "string", nullable: true },
+    routingDecision: {
+      type: "string",
+      nullable: true,
+      enum: ["live_smoke_target", "status_report_target", "state_thread_target", "source_thread_fallback", "manual_required"],
+    },
+    fallbackDecision: {
+      type: "string",
+      nullable: true,
+      enum: ["not_needed", "live_smoke_target_fallback", "status_report_target_fallback", "source_thread_fallback", "manual_required"],
+    },
+    outcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable", "exhausted"] },
+    retryEligible: { type: "boolean" },
+    failureClass: {
+      type: "string",
+      nullable: true,
+      enum: ["auth", "routing", "target_invalid", "rate_limited", "network", "transient", "unknown"],
+    },
+    externalReferenceId: { type: "string", nullable: true },
+    externalUrl: { type: "string", nullable: true },
+    dispatchedAt: { type: "string" },
+    routeTrace: stringArrayJsonSchema,
+    deliverySummary: { type: "string", nullable: true },
+  },
 };
 
 const actorIdentityJsonSchema: JsonSchema = {
@@ -3956,6 +4043,14 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     "targetExternalUrl",
     "targetDispatchArtifactPath",
     "lastTargetFailureClass",
+    "dispatchAttemptHistory",
+    "retryPolicySummary",
+    "dispatchHistorySummary",
+    "fallbackChainSummary",
+    "recoverabilitySummary",
+    "operatorHandoffSummary",
+    "canRetryDispatch",
+    "dispatchExhausted",
     "dispatchReliabilityOutcome",
     "externalAutomationOutcome",
     "lastReceivedAt",
@@ -3987,14 +4082,14 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     bridgeStatus: { type: "string", enum: ["not_run", "accepted", "needs_manual_review", "failed"] },
     dispatchStatus: { type: "string", enum: ["not_queued", "queued", "dispatched", "manual_required", "failed"] },
     dispatchTarget: { type: "string", nullable: true },
-    dispatchOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable"] },
+    dispatchOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable", "exhausted"] },
     intakeArtifactPath: { type: "string", nullable: true },
     bridgeArtifactRoot: { type: "string", nullable: true },
     outputPayloadPath: { type: "string", nullable: true },
     nextInstructionPath: { type: "string", nullable: true },
     dispatchArtifactPath: { type: "string", nullable: true },
     automaticTriggerStatus: { type: "string", enum: ["not_triggered", "triggered", "manual_required", "failed"] },
-    targetAdapterStatus: { type: "string", enum: ["not_attempted", "dispatched", "manual_required", "failed", "retryable"] },
+    targetAdapterStatus: { type: "string", enum: ["not_attempted", "dispatched", "manual_required", "failed", "retryable", "exhausted"] },
     targetType: { type: "string", nullable: true },
     targetLaneClassification: {
       type: "string",
@@ -4029,10 +4124,18 @@ const gptCodeAutomationStateJsonSchema: JsonSchema = {
     lastTargetFailureClass: {
       type: "string",
       nullable: true,
-      enum: ["auth", "routing", "target_invalid", "transient", "unknown"],
+      enum: ["auth", "routing", "target_invalid", "rate_limited", "network", "transient", "unknown"],
     },
-    dispatchReliabilityOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable"] },
-    externalAutomationOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable"] },
+    dispatchAttemptHistory: { type: "array", items: gptCodeDispatchAttemptRecordJsonSchema },
+    retryPolicySummary: { type: "string", nullable: true },
+    dispatchHistorySummary: { type: "string", nullable: true },
+    fallbackChainSummary: { type: "string", nullable: true },
+    recoverabilitySummary: { type: "string", nullable: true },
+    operatorHandoffSummary: { type: "string", nullable: true },
+    canRetryDispatch: { type: "boolean" },
+    dispatchExhausted: { type: "boolean" },
+    dispatchReliabilityOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable", "exhausted"] },
+    externalAutomationOutcome: { type: "string", enum: ["not_run", "success", "manual_required", "failed", "retryable", "exhausted"] },
     lastReceivedAt: { type: "string", nullable: true },
     lastAttemptedAt: { type: "string", nullable: true },
     lastDispatchedAt: { type: "string", nullable: true },

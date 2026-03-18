@@ -83,6 +83,11 @@ test("external automation trigger can intake a GitHub report comment and auto-di
           correlationId: "orchestrator-next-instruction:external-trigger-state",
           externalReferenceId: "20001",
           externalUrl: "https://github.com/example/bige/issues/44#issuecomment-20001",
+          routeTrace: ["state_thread_target | github_issue_thread_comment_lane | github://example/bige/issues/44/comments | success | ok"],
+          deliverySummary: "Attempt 1/2 delivered to github_issue_thread_comment_lane.",
+          manualReviewReason: null,
+          recommendedNextStep: "Wait for the external target response or the next GPT CODE report.",
+          exhausted: false,
           dispatchArtifactPath: "C:/tmp/external-target-dispatch.json",
           dispatchedAt: "2026-03-18T00:00:01.000Z",
         };
