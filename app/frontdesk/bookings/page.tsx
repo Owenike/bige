@@ -832,6 +832,38 @@ export default function FrontdeskBookingsPage() {
     [zh],
   );
 
+  const loadSingleMemberResultSummary = useCallback(
+    async (memberId: string) => {
+      if (!memberId) return;
+      setMemberResultSummaries((prev) => ({
+        ...prev,
+        [memberId]: prev[memberId] ?? { loading: true, remainingSessions: 0, activeContractCount: 0, previewSessions: [] },
+      }));
+
+      try {
+        const [passesRes, redemptionsRes] = await Promise.all([
+          fetch(`/api/members/${encodeURIComponent(memberId)}/passes`, { cache: "no-store" }),
+          fetch(`/api/session-redemptions?memberId=${encodeURIComponent(memberId)}`, { cache: "no-store" }),
+        ]);
+        const passesPayload = await passesRes.json().catch(() => ({}));
+        const redemptionsPayload = await redemptionsRes.json().catch(() => ({}));
+        if (!passesRes.ok) throw new Error(passesPayload?.error || "load member passes failed");
+        const summary = buildMemberResultSummary(
+          (passesPayload.items || []) as PassItem[],
+          redemptionsRes.ok ? ((redemptionsPayload.items || []) as SessionRedemptionItem[]) : [],
+          serviceOptions[0]?.value || "",
+        );
+        setMemberResultSummaries((prev) => ({ ...prev, [memberId]: summary }));
+      } catch {
+        setMemberResultSummaries((prev) => ({
+          ...prev,
+          [memberId]: { loading: false, remainingSessions: 0, activeContractCount: 0, previewSessions: [] },
+        }));
+      }
+    },
+    [serviceOptions],
+  );
+
   const loadMemberResultSummaries = useCallback(
     async (members: MemberItem[]) => {
       const targets = members.slice(0, 8);
@@ -849,30 +881,11 @@ export default function FrontdeskBookingsPage() {
 
       await Promise.all(
         targets.map(async (member) => {
-          try {
-            const [passesRes, redemptionsRes] = await Promise.all([
-              fetch(`/api/members/${encodeURIComponent(member.id)}/passes`, { cache: "no-store" }),
-              fetch(`/api/session-redemptions?memberId=${encodeURIComponent(member.id)}`, { cache: "no-store" }),
-            ]);
-            const passesPayload = await passesRes.json().catch(() => ({}));
-            const redemptionsPayload = await redemptionsRes.json().catch(() => ({}));
-            if (!passesRes.ok) throw new Error(passesPayload?.error || "load member passes failed");
-            const summary = buildMemberResultSummary(
-              (passesPayload.items || []) as PassItem[],
-              redemptionsRes.ok ? ((redemptionsPayload.items || []) as SessionRedemptionItem[]) : [],
-              serviceOptions[0]?.value || "",
-            );
-            setMemberResultSummaries((prev) => ({ ...prev, [member.id]: summary }));
-          } catch {
-            setMemberResultSummaries((prev) => ({
-              ...prev,
-              [member.id]: { loading: false, remainingSessions: 0, activeContractCount: 0, previewSessions: [] },
-            }));
-          }
+          await loadSingleMemberResultSummary(member.id);
         }),
       );
     },
-    [serviceOptions],
+    [loadSingleMemberResultSummary],
   );
 
   const loadAll = useCallback(
@@ -1364,6 +1377,7 @@ export default function FrontdeskBookingsPage() {
       await loadBookingsByDate(dateKey);
       await loadAudit();
       if (selectedMember) await loadMemberContracts(selectedMember.id);
+      await loadSingleMemberResultSummary(draft.memberId);
       setDraft(null);
       setDraftError(null);
     } catch (err) {
@@ -2089,6 +2103,12 @@ export default function FrontdeskBookingsPage() {
             </div>
 
             <div className="fdBkModalGrid">
+              <div className="fdBkDraftSummary">
+                <span>{zh ? "會員" : "Member"}: {draft.memberName}</span>
+                <span>{zh ? "教練" : "Coach"}: {coaches.find((coach) => coach.id === draft.coachId)?.displayName || draft.coachId || "-"}</span>
+                <span>{zh ? "日期時間" : "Date & Time"}: {draft.startsLocal ? fmtDate(localDatetimeToIso(draft.startsLocal)) : "-"}</span>
+                <span>{zh ? "堂次 / 合約" : "Session / Contract"}: {draft.passId ? `#${draft.sessionNumber || "-"} / ${draft.passType || draft.passId}` : (zh ? "手動建立" : "Manual create")}</span>
+              </div>
               <label className="fdInventoryField"><span className="kvLabel">{zh ? "會員" : "Member"}</span><div className="input">{draft.memberName}</div></label>
               <label className="fdInventoryField"><span className="kvLabel">{zh ? "電話" : "Phone"}</span><div className="input">{draft.memberPhone || "-"}</div></label>
               <label className="fdInventoryField">
