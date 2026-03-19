@@ -5590,6 +5590,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   border: 1px solid #d4deeb;
   box-shadow: none;
   overflow: visible;
+  scroll-margin: 72px 18px 18px 104px;
 }
 .fdBkEvent.has-tooltip:hover::after{
   content: attr(data-tooltip);

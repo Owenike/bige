@@ -441,6 +441,7 @@ function DraggableBookingEvent(props: {
   disabled: boolean;
   className: string;
   highlighted?: boolean;
+  bookingId?: string;
   style: Record<string, string>;
   onClick: () => void;
   title: string;
@@ -458,6 +459,7 @@ function DraggableBookingEvent(props: {
       ref={setNodeRef}
       type="button"
       className={`${props.className} has-tooltip ${props.highlighted ? "is-recent-created" : ""} ${isDragging ? "is-dragging" : ""}`}
+      data-booking-id={props.bookingId || ""}
       data-tooltip={props.tooltip}
       style={{
         ...props.style,
@@ -574,6 +576,7 @@ export default function FrontdeskBookingsPage() {
   const calendarTimeScrollRef = useRef<HTMLDivElement | null>(null);
   const scrollSyncLockRef = useRef(false);
   const highlightTimeoutRef = useRef<number | null>(null);
+  const focusedBookingIdRef = useRef<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -967,6 +970,30 @@ export default function FrontdeskBookingsPage() {
         highlightTimeoutRef.current = null;
       }
     };
+  }, [highlightedBookingId]);
+
+  useEffect(() => {
+    if (!highlightedBookingId) {
+      focusedBookingIdRef.current = null;
+      return;
+    }
+    if (focusedBookingIdRef.current === highlightedBookingId) return;
+    const grid = calendarGridScrollRef.current;
+    if (!grid) return;
+    const target = grid.querySelector<HTMLElement>(`[data-booking-id="${highlightedBookingId}"]`);
+    if (!target) return;
+    focusedBookingIdRef.current = highlightedBookingId;
+    const gridRect = grid.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const outsideVertical = targetRect.top < gridRect.top + 56 || targetRect.bottom > gridRect.bottom - 24;
+    const outsideHorizontal = targetRect.left < gridRect.left + 112 || targetRect.right > gridRect.right - 24;
+    if (outsideVertical || outsideHorizontal) {
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "nearest",
+      });
+    }
   }, [highlightedBookingId]);
 
   const memberSearch = useCallback(
@@ -2084,6 +2111,7 @@ export default function FrontdeskBookingsPage() {
                             <DraggableBookingEvent
                               key={item.id}
                               id={`booking-${item.id}`}
+                              bookingId={item.id}
                               className={`fdBkEvent ${statusClassName(status)}`}
                               disabled={!isDraggable}
                               highlighted={item.id === highlightedBookingId}
