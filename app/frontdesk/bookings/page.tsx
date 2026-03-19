@@ -440,6 +440,7 @@ function DraggableBookingEvent(props: {
   payload: DragPayload;
   disabled: boolean;
   className: string;
+  highlighted?: boolean;
   style: Record<string, string>;
   onClick: () => void;
   title: string;
@@ -456,7 +457,7 @@ function DraggableBookingEvent(props: {
     <button
       ref={setNodeRef}
       type="button"
-      className={`${props.className} has-tooltip ${isDragging ? "is-dragging" : ""}`}
+      className={`${props.className} has-tooltip ${props.highlighted ? "is-recent-created" : ""} ${isDragging ? "is-dragging" : ""}`}
       data-tooltip={props.tooltip}
       style={{
         ...props.style,
@@ -549,6 +550,7 @@ export default function FrontdeskBookingsPage() {
   const [activeDragPayload, setActiveDragPayload] = useState<DragPayload | null>(null);
   const [draft, setDraft] = useState<BookingDraft | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
 
   const [statusBookingId, setStatusBookingId] = useState("");
   const [statusValue, setStatusValue] = useState("cancelled");
@@ -571,6 +573,7 @@ export default function FrontdeskBookingsPage() {
   const calendarGridScrollRef = useRef<HTMLDivElement | null>(null);
   const calendarTimeScrollRef = useRef<HTMLDivElement | null>(null);
   const scrollSyncLockRef = useRef(false);
+  const highlightTimeoutRef = useRef<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -950,6 +953,21 @@ export default function FrontdeskBookingsPage() {
     const timer = window.setInterval(() => setNowTick(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, [isTodayView]);
+
+  useEffect(() => {
+    if (!highlightedBookingId) return;
+    if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current);
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedBookingId(null);
+      highlightTimeoutRef.current = null;
+    }, 3200);
+    return () => {
+      if (highlightTimeoutRef.current) {
+        window.clearTimeout(highlightTimeoutRef.current);
+        highlightTimeoutRef.current = null;
+      }
+    };
+  }, [highlightedBookingId]);
 
   const memberSearch = useCallback(
     async (queryInput: string) => {
@@ -1428,6 +1446,7 @@ export default function FrontdeskBookingsPage() {
             ? `已建立預約：${draftSnapshot.memberName} / ${fmtDate(startsAt)} / ${coaches.find((coach) => coach.id === draftSnapshot.coachId)?.displayName || draftSnapshot.coachId}`
             : `Created booking for ${draftSnapshot.memberName} at ${fmtDate(startsAt)} with ${coaches.find((coach) => coach.id === draftSnapshot.coachId)?.displayName || draftSnapshot.coachId}.`,
         );
+        setHighlightedBookingId(created.id);
       }
 
       await loadBookingsByDate(dateKey);
@@ -2067,6 +2086,7 @@ export default function FrontdeskBookingsPage() {
                               id={`booking-${item.id}`}
                               className={`fdBkEvent ${statusClassName(status)}`}
                               disabled={!isDraggable}
+                              highlighted={item.id === highlightedBookingId}
                               style={{ top: `${top}px`, height: `${height}px` }}
                               onClick={() => {
                                 setStatusBookingId(item.id);

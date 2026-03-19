@@ -5149,6 +5149,10 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .fdBkEvent.is-dragging{
   box-shadow: 0 14px 24px rgba(22, 38, 66, .22);
 }
+.fdBkEvent.is-recent-created{
+  box-shadow: 0 0 0 2px rgba(23, 173, 124, .28), 0 0 0 6px rgba(23, 173, 124, .12);
+  animation: fdBkRecentCreatedPulse 3.2s ease-out forwards;
+}
 .fdBkEvent.is-booked{ background: #e7f6ff; border-color: #9ac8ed; color: #294b68; }
 .fdBkEvent.is-checkin{ background: #e9fff8; border-color: #8fd9c4; color: #21584d; }
 .fdBkEvent.is-completed{ background: #edf3ff; border-color: #c0d2f2; color: #40597b; }
@@ -5688,12 +5692,28 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     opacity: 1;
     pointer-events: auto;
   }
-  .fdBkWorkspace.is-sidebar-collapsed .fdBkSidebar{
-    width: min(90vw, 340px);
-    border: 1px solid #dbe4ef;
-    padding: 10px;
+.fdBkWorkspace.is-sidebar-collapsed .fdBkSidebar{
+  width: min(90vw, 340px);
+  border: 1px solid #dbe4ef;
+  padding: 10px;
+}
+.fdBkCalendarViewport{
+  max-height: calc(100dvh - 320px);
+}
+}
+
+@keyframes fdBkRecentCreatedPulse{
+  0%{
+    transform: scale(1);
+    filter: saturate(1);
   }
-  .fdBkCalendarViewport{
-    max-height: calc(100dvh - 320px);
+  20%{
+    transform: scale(1.01);
+    filter: saturate(1.08);
+  }
+  100%{
+    transform: scale(1);
+    filter: saturate(1);
+    box-shadow: none;
   }
 }
