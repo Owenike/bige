@@ -19,6 +19,29 @@ type MemberActivationRequestResponse = {
   error?: string;
 };
 
+function formatActivationDeliveryMessage(params: {
+  zh: boolean;
+  locale: string;
+  maskedEmail?: string;
+  expiresAt?: string;
+}) {
+  const emailHint = params.maskedEmail
+    ? params.zh
+      ? `啟用信已寄到 ${params.maskedEmail}`
+      : `Activation email sent to ${params.maskedEmail}`
+    : params.zh
+      ? "啟用信已寄出，請至綁定信箱收信。"
+      : "Activation email sent. Please check your email.";
+
+  if (!params.expiresAt) return emailHint;
+
+  const expiry = new Date(params.expiresAt);
+  if (Number.isNaN(expiry.getTime())) return emailHint;
+
+  const expiryHint = expiry.toLocaleString(params.locale === "en" ? "en-US" : "zh-TW");
+  return params.zh ? `${emailHint}（連結有效至 ${expiryHint}）` : `${emailHint} (link valid until ${expiryHint})`;
+}
+
 function roleHome(role: MeResponse["role"]) {
   switch (role) {
     case "platform_admin":
@@ -108,12 +131,14 @@ function LoginContent() {
       const payload = (await res.json().catch(() => null)) as MemberActivationRequestResponse | null;
       if (!res.ok) throw new Error(payload?.error || (zh ? "發送啟用信失敗" : "Failed to send activation email"));
 
-      const hint = payload?.maskedEmail
-        ? (zh ? `啟用信已寄到 ${payload.maskedEmail}` : `Activation email sent to ${payload.maskedEmail}`)
-        : zh
-          ? "啟用信已寄出，請至綁定信箱收信。"
-          : "Activation email sent. Please check your email.";
-      setActivationMessage(hint);
+      setActivationMessage(
+        formatActivationDeliveryMessage({
+          zh,
+          locale,
+          maskedEmail: payload?.maskedEmail,
+          expiresAt: payload?.expiresAt,
+        }),
+      );
     } catch (err) {
       setActivationError(err instanceof Error ? err.message : zh ? "發送啟用信失敗" : "Failed to send activation email");
     } finally {

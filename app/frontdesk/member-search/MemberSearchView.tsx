@@ -43,6 +43,12 @@ interface AllMemberEditForm {
   customRows: CustomFieldRow[];
 }
 
+interface MemberActivationRequestResponse {
+  maskedEmail?: string;
+  expiresAt?: string;
+  error?: string;
+}
+
 const MEMBER_PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 
 function normalizePhone(input: string) {
@@ -72,6 +78,23 @@ function normalizeMemberStatus(input: string | null | undefined) {
   if (["active", "expired", "frozen", "suspended", "blacklisted"].includes(value)) return value;
   if (value === "inactive") return "frozen";
   return "active";
+}
+
+function formatActivationDeliveryMessage(params: {
+  zh: boolean;
+  locale: string;
+  maskedEmail?: string;
+  expiresAt?: string;
+  sentLabel: string;
+}) {
+  const emailHint = params.maskedEmail ? `${params.sentLabel}: ${params.maskedEmail}` : params.sentLabel;
+  if (!params.expiresAt) return emailHint;
+
+  const expiry = new Date(params.expiresAt);
+  if (Number.isNaN(expiry.getTime())) return emailHint;
+
+  const expiryHint = expiry.toLocaleString(params.locale === "en" ? "en-US" : "zh-TW");
+  return params.zh ? `${emailHint}（連結有效至 ${expiryHint}）` : `${emailHint} (link valid until ${expiryHint})`;
 }
 
 function buildAllMemberEditForm(member: MemberItem): AllMemberEditForm {
@@ -722,7 +745,7 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: normalizedPhone }),
       });
-      const payload = await res.json().catch(() => ({}));
+      const payload = (await res.json().catch(() => ({}))) as MemberActivationRequestResponse;
       if (!res.ok) {
         throw new Error(payload?.error || t.sendActivationEmailFail);
       }
@@ -748,8 +771,15 @@ export function FrontdeskMemberSearchView({ embedded = false }: { embedded?: boo
             : item,
         ),
       );
-      setMessage(payload?.maskedEmail ? `${t.sendActivationEmailDone}: ${payload.maskedEmail}` : t.sendActivationEmailDone);
-      setAllMemberMessage(payload?.maskedEmail ? `${t.sendActivationEmailDone}: ${payload.maskedEmail}` : t.sendActivationEmailDone);
+      const successMessage = formatActivationDeliveryMessage({
+        zh,
+        locale,
+        maskedEmail: payload?.maskedEmail,
+        expiresAt: payload?.expiresAt,
+        sentLabel: t.sendActivationEmailDone,
+      });
+      setMessage(successMessage);
+      setAllMemberMessage(successMessage);
     } catch (err) {
       const msg = err instanceof Error ? err.message : t.sendActivationEmailFail;
       setAllMembersError(msg);
