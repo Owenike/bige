@@ -37,8 +37,11 @@ if ($missing.Count -gt 0) {
   throw "Missing env: $($missing -join ', ')"
 }
 
+if (-not $env:PHASE41_BASE_URL -and $env:NEXT_PUBLIC_APP_URL) {
+  $env:PHASE41_BASE_URL = $env:NEXT_PUBLIC_APP_URL
+}
 if (-not $env:PHASE41_BASE_URL) {
-  $env:PHASE41_BASE_URL = "https://bige-git-main-owens-projects-f18ecc5e.vercel.app"
+  throw "Missing PHASE41_BASE_URL or NEXT_PUBLIC_APP_URL. Refusing to default to an unrelated deployment."
 }
 
 if (-not $env:PHASE41_VERCEL_BYPASS_SECRET) {

@@ -87,7 +87,7 @@ async function main() {
     process.env.NEXT_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
   }
 
-  const baseUrl = normalizeBaseUrl(readArg('--base-url') || process.env.PHASE22_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://bige.vercel.app');
+  const baseUrl = normalizeBaseUrl(readArg('--base-url') || process.env.PHASE22_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || '');
   const bypassSecret = String(
     readArg('--bypass-secret') || process.env.PHASE22_VERCEL_BYPASS_SECRET || process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '',
   ).trim();

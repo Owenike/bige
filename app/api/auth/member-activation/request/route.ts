@@ -21,13 +21,17 @@ function tokenHash(raw: string) {
 }
 
 function resolveAppUrl(request: Request) {
-  const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
-  if (configured) return configured;
   try {
     return new URL(request.url).origin;
   } catch {
-    return "http://localhost:3000";
+    const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
+    return configured || "http://localhost:3000";
   }
+}
+
+function resolveCanonicalAppUrl(request: Request) {
+  const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
+  return configured || resolveAppUrl(request);
 }
 
 export async function POST(request: Request) {
@@ -157,7 +161,7 @@ export async function POST(request: Request) {
     .eq("id", member.id)
     .eq("tenant_id", member.tenant_id);
 
-  const appUrl = resolveAppUrl(request);
+  const appUrl = resolveCanonicalAppUrl(request);
   const activationLink = new URL("/member/activate", appUrl);
   activationLink.searchParams.set("token", rawToken);
 

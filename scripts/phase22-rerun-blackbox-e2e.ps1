@@ -37,8 +37,11 @@ if ($missing.Count -gt 0) {
   throw "Missing env: $($missing -join ', ')"
 }
 
+if (-not $env:PHASE22_BASE_URL -and $env:NEXT_PUBLIC_APP_URL) {
+  $env:PHASE22_BASE_URL = $env:NEXT_PUBLIC_APP_URL
+}
 if (-not $env:PHASE22_BASE_URL) {
-  $env:PHASE22_BASE_URL = "https://bige.vercel.app"
+  throw "Missing PHASE22_BASE_URL or NEXT_PUBLIC_APP_URL. Refusing to default to an unrelated deployment."
 }
 
 if (-not $env:PHASE22_VERCEL_BYPASS_SECRET -and $env:VERCEL_AUTOMATION_BYPASS_SECRET) {

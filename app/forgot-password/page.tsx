@@ -5,6 +5,15 @@ import { FormEvent, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useI18n } from "../i18n-provider";
 
+function resolveAppOrigin() {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin.replace(/\/+$/, "");
+  }
+
+  const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
+  return configured ? configured.replace(/\/+$/, "") : "http://localhost:3000";
+}
+
 export default function ForgotPasswordPage() {
   const { locale } = useI18n();
   const zh = locale !== "en";
@@ -34,10 +43,7 @@ export default function ForgotPasswordPage() {
         },
       });
 
-      const appUrl =
-        (typeof window !== "undefined" && window.location?.origin) ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        "https://bige-nu.vercel.app";
+      const appUrl = resolveAppOrigin();
 
       const { error: recoverError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${appUrl}/reset-password`,

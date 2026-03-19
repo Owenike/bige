@@ -40,8 +40,10 @@ if ($missing.Count -gt 0) {
 if (-not $env:PHASE42_ANALYTICS_BASE_URL) {
   if ($env:PHASE42_BASE_URL) {
     $env:PHASE42_ANALYTICS_BASE_URL = $env:PHASE42_BASE_URL
+  } elseif ($env:NEXT_PUBLIC_APP_URL) {
+    $env:PHASE42_ANALYTICS_BASE_URL = $env:NEXT_PUBLIC_APP_URL
   } else {
-    $env:PHASE42_ANALYTICS_BASE_URL = "https://bige-git-main-owens-projects-f18ecc5e.vercel.app"
+    throw "Missing PHASE42_ANALYTICS_BASE_URL or NEXT_PUBLIC_APP_URL. Refusing to default to an unrelated deployment."
   }
 }
 

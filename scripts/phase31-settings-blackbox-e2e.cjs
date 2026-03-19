@@ -113,7 +113,7 @@ async function main() {
       process.env.PHASE31_BASE_URL ||
       process.env.PHASE22_BASE_URL ||
       process.env.NEXT_PUBLIC_APP_URL ||
-      'https://bige.vercel.app',
+      '',
   );
   const bypassSecret = String(
     readArg('--bypass-secret') ||

@@ -110,7 +110,7 @@ async function main() {
     readArg('--base-url') ||
       process.env.PHASE41_BASE_URL ||
       process.env.NEXT_PUBLIC_APP_URL ||
-      'https://bige-git-main-owens-projects-f18ecc5e.vercel.app',
+      '',
   );
   const bypassSecret = String(
     readArg('--bypass-secret') ||

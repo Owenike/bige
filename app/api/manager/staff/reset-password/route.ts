@@ -11,6 +11,16 @@ function maskEmail(email: string) {
   return `${head}${"*".repeat(Math.max(2, name.length - 2))}@${domain}`;
 }
 
+function resolveCanonicalAppUrl(request: Request) {
+  const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
+  if (configured) return configured;
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    return "http://localhost:3000";
+  }
+}
+
 export async function POST(request: Request) {
   const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager"], request);
   if (!auth.ok) return auth.response;
@@ -51,7 +61,7 @@ export async function POST(request: Request) {
     return apiError(500, "INTERNAL_ERROR", userResult.error?.message || "User email not found");
   }
 
-  const redirectTo = `${new URL(request.url).origin}/reset-password`;
+  const redirectTo = `${resolveCanonicalAppUrl(request)}/reset-password`;
   const linkResult = await admin.auth.admin.generateLink({
     type: "recovery",
     email: userResult.data.user.email,
