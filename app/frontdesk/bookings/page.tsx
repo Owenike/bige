@@ -634,6 +634,11 @@ export default function FrontdeskBookingsPage() {
     return result;
   }, [blocksByCoach, bookingsByCoach, coachOptions, dateKey, zh]);
 
+  const hasAllDayEvents = useMemo(
+    () => coachOptions.some((coach) => (allDayByCoach[coach.id] || []).length > 0),
+    [allDayByCoach, coachOptions],
+  );
+
   const selectedMemberContracts = useMemo(() => {
     return memberPasses.map((pass) => {
       const total = parsePassTotal(pass.pass_type);
@@ -1763,20 +1768,18 @@ export default function FrontdeskBookingsPage() {
                   ))}
                 </div>
 
-                <div className="fdBkAllDayRow" style={{ gridTemplateColumns: `88px repeat(${Math.max(1, coachOptions.length)}, minmax(220px, 1fr))` }}>
-                  <div className="fdBkAllDayTimeLabel">{zh ? "全天" : "All-day"}</div>
-                  {coachOptions.map((coach) => (
-                    <div key={`allday-${coach.id}`} className="fdBkAllDayCell">
-                      {(allDayByCoach[coach.id] || []).length > 0 ? (
-                        (allDayByCoach[coach.id] || []).map((item) => (
+                {hasAllDayEvents ? (
+                  <div className="fdBkAllDayRow" style={{ gridTemplateColumns: `88px repeat(${Math.max(1, coachOptions.length)}, minmax(220px, 1fr))` }}>
+                    <div className="fdBkAllDayTimeLabel">{zh ? "全天" : "All-day"}</div>
+                    {coachOptions.map((coach) => (
+                      <div key={`allday-${coach.id}`} className="fdBkAllDayCell">
+                        {(allDayByCoach[coach.id] || []).map((item) => (
                           <span key={item.id} className={`fdBkAllDayChip ${item.type === "block" ? "is-block" : ""}`}>{item.label}</span>
-                        ))
-                      ) : (
-                        <span className="fdBkAllDayPlaceholder">{zh ? "無全天事件" : "No all-day events"}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
 
                 <div className="fdBkCalendarBody" style={{ gridTemplateColumns: `88px repeat(${Math.max(1, coachOptions.length)}, minmax(220px, 1fr))` }}>
                   <div className="fdBkTimeColumn" ref={calendarTimeScrollRef} onScroll={handleCalendarTimeScroll}>

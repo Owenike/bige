@@ -5433,6 +5433,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   min-height: 420px;
 }
 .fdBkCoachHeaderRow{
+  display: grid;
   position: sticky;
   top: 0;
   z-index: 14;
