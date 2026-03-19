@@ -4943,6 +4943,32 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   gap: 6px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.fdBkDraftAlert{
+  grid-column: 1 / -1;
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+.fdBkDraftAlert.is-ok{
+  border: 1px solid #cfe7d7;
+  background: #f5fbf6;
+  color: #215a31;
+}
+.fdBkDraftAlert.is-warning{
+  border: 1px solid #efd7ae;
+  background: #fff8ec;
+  color: #744e15;
+}
+.fdBkDraftAlert p{
+  margin: 0;
+}
+.fdBkDraftAlertList{
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
 .fdBkSessionPill{
   border: 1px solid #cddcf0;
   border-radius: 10px;

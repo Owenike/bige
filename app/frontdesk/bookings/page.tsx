@@ -118,6 +118,11 @@ interface MemberResultSummary {
   previewSessions: MemberSessionPreview[];
 }
 
+interface DraftConflictPreview {
+  blocking: boolean;
+  messages: string[];
+}
+
 type DraftMode = "sessionDrop" | "quickCreate" | "reschedule";
 
 interface BookingDraft {
@@ -365,6 +370,25 @@ function buildMemberResultSummary(
     remainingSessions,
     activeContractCount: passes.filter((pass) => Math.max(0, Number(pass.remaining || 0)) > 0).length,
     previewSessions,
+  };
+}
+
+function buildDraftConflictPreview(params: {
+  zh: boolean;
+  coachConflict: BookingItem | undefined;
+  memberConflict: BookingItem | undefined;
+  roomConflict: BookingItem | null | undefined;
+  coachBlocked: CoachBlockItem | undefined;
+}): DraftConflictPreview {
+  const messages: string[] = [];
+  if (params.coachConflict) messages.push(params.zh ? "提示：同教練同時段已有既有預約。" : "Heads-up: this coach already has an overlapping booking.");
+  if (params.coachBlocked) messages.push(params.zh ? "提示：該教練時段目前已封鎖。" : "Heads-up: this coach is blocked for the selected slot.");
+  if (params.memberConflict) messages.push(params.zh ? "提示：這位會員在相近時段已有預約。" : "Heads-up: this member already has an overlapping booking.");
+  if (params.roomConflict) messages.push(params.zh ? "提示：目前輸入的場地已被使用。" : "Heads-up: the selected room is already occupied.");
+
+  return {
+    blocking: messages.length > 0,
+    messages,
   };
 }
 
@@ -1077,14 +1101,14 @@ export default function FrontdeskBookingsPage() {
     openQuickCreateDraft(coachId, timeLabel);
   }
 
-  function detectConflicts(params: {
+  const detectConflicts = useCallback((params: {
     memberId: string;
     coachId: string;
     startsAt: string;
     endsAt: string;
     room: string;
     ignoreBookingId?: string | null;
-  }) {
+  }) => {
     const coachBlocked = coachBlocks.find((item) => {
       if (item.status !== "active") return false;
       if (item.coach_id !== params.coachId) return false;
@@ -1110,7 +1134,26 @@ export default function FrontdeskBookingsPage() {
         })
       : null;
     return { coachConflict, memberConflict, roomConflict, coachBlocked };
-  }
+  }, [coachBlocks, dayBookings]);
+
+  const draftConflictPreview = useMemo(() => {
+    if (!draft) return null;
+    const startsAt = localDatetimeToIso(draft.startsLocal);
+    const endsAt = localDatetimeToIso(addMinutesToLocalDate(draft.startsLocal, draft.durationMinutes));
+    if (!startsAt || !endsAt || !draft.memberId || !draft.coachId) return null;
+
+    return buildDraftConflictPreview({
+      zh,
+      ...detectConflicts({
+        memberId: draft.memberId,
+        coachId: draft.coachId,
+        startsAt,
+        endsAt,
+        room: draft.room.trim(),
+        ignoreBookingId: draft.mode === "reschedule" ? draft.sourceBookingId : null,
+      }),
+    });
+  }, [detectConflicts, draft, zh]);
 
   async function createBookingApi(input: {
     memberId: string;
@@ -1219,6 +1262,7 @@ export default function FrontdeskBookingsPage() {
 
   async function confirmDraft() {
     if (!draft) return;
+    const draftSnapshot = draft;
     setSaving(true);
     setDraftError(null);
     setMessage(null);
@@ -1292,7 +1336,11 @@ export default function FrontdeskBookingsPage() {
                 : `Your class has been rescheduled to ${fmtDate(startsAt)} with coach ${draft.coachId}.`,
             });
           }
-          setMessage(zh ? "預約已改期。" : "Booking rescheduled.");
+          setMessage(
+            zh
+              ? `已為 ${draftSnapshot.memberName} 更新預約：${fmtDate(startsAt)} / ${coaches.find((coach) => coach.id === draftSnapshot.coachId)?.displayName || draftSnapshot.coachId}`
+              : `Rescheduled ${draftSnapshot.memberName} to ${fmtDate(startsAt)} with ${coaches.find((coach) => coach.id === draftSnapshot.coachId)?.displayName || draftSnapshot.coachId}.`,
+          );
         } else {
           const created = await createBookingApi({
             memberId: draft.memberId,
@@ -1324,7 +1372,11 @@ export default function FrontdeskBookingsPage() {
             eventType: "upsert",
             payload: { source: "frontdesk_reschedule", startsAt, endsAt, coachId: draft.coachId },
           });
-          setMessage(zh ? "預約已改期（跨教練）。" : "Booking moved to another coach.");
+          setMessage(
+            zh
+              ? `已為 ${draftSnapshot.memberName} 改期到 ${fmtDate(startsAt)} / ${coaches.find((coach) => coach.id === draftSnapshot.coachId)?.displayName || draftSnapshot.coachId}`
+              : `Moved ${draftSnapshot.memberName} to ${fmtDate(startsAt)} with ${coaches.find((coach) => coach.id === draftSnapshot.coachId)?.displayName || draftSnapshot.coachId}.`,
+          );
         }
       } else {
         const created = await createBookingApi({
@@ -1371,7 +1423,11 @@ export default function FrontdeskBookingsPage() {
               : `Your booking is confirmed at ${fmtDate(startsAt)} with coach ${draft.coachId}.`,
           });
         }
-        setMessage(zh ? "預約建立成功。" : "Booking created.");
+        setMessage(
+          zh
+            ? `已建立預約：${draftSnapshot.memberName} / ${fmtDate(startsAt)} / ${coaches.find((coach) => coach.id === draftSnapshot.coachId)?.displayName || draftSnapshot.coachId}`
+            : `Created booking for ${draftSnapshot.memberName} at ${fmtDate(startsAt)} with ${coaches.find((coach) => coach.id === draftSnapshot.coachId)?.displayName || draftSnapshot.coachId}.`,
+        );
       }
 
       await loadBookingsByDate(dateKey);
@@ -1381,7 +1437,9 @@ export default function FrontdeskBookingsPage() {
       setDraft(null);
       setDraftError(null);
     } catch (err) {
-      setDraftError(err instanceof Error ? err.message : zh ? "預約處理失敗。" : "Booking action failed.");
+      const messageText = err instanceof Error ? err.message : zh ? "預約處理失敗。" : "Booking action failed.";
+      setDraftError(messageText);
+      setError(messageText);
     } finally {
       setSaving(false);
     }
@@ -2108,6 +2166,18 @@ export default function FrontdeskBookingsPage() {
                 <span>{zh ? "教練" : "Coach"}: {coaches.find((coach) => coach.id === draft.coachId)?.displayName || draft.coachId || "-"}</span>
                 <span>{zh ? "日期時間" : "Date & Time"}: {draft.startsLocal ? fmtDate(localDatetimeToIso(draft.startsLocal)) : "-"}</span>
                 <span>{zh ? "堂次 / 合約" : "Session / Contract"}: {draft.passId ? `#${draft.sessionNumber || "-"} / ${draft.passType || draft.passId}` : (zh ? "手動建立" : "Manual create")}</span>
+              </div>
+              <div className={`fdBkDraftAlert ${draftConflictPreview?.blocking ? "is-warning" : "is-ok"}`}>
+                <strong>{draftConflictPreview?.blocking ? (zh ? "建立前快速提示" : "Quick pre-check") : (zh ? "建立前檢查" : "Pre-check")}</strong>
+                {draftConflictPreview?.blocking ? (
+                  <ul className="fdBkDraftAlertList">
+                    {draftConflictPreview.messages.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>{zh ? "目前未發現同教練、同會員或同場地的明顯衝突。這是最小快速提示，不是完整規則引擎。" : "No obvious coach, member, or room overlap is currently detected. This is a lightweight pre-check, not a full rules engine."}</p>
+                )}
               </div>
               <label className="fdInventoryField"><span className="kvLabel">{zh ? "會員" : "Member"}</span><div className="input">{draft.memberName}</div></label>
               <label className="fdInventoryField"><span className="kvLabel">{zh ? "電話" : "Phone"}</span><div className="input">{draft.memberPhone || "-"}</div></label>
