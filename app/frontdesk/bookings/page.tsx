@@ -102,6 +102,22 @@ interface WaitlistItem {
   created_at: string;
 }
 
+interface MemberSessionPreview {
+  passId: string;
+  passType: string;
+  passTotal: number | null;
+  passRemaining: number;
+  sessionNumber: number;
+  serviceName: string;
+}
+
+interface MemberResultSummary {
+  loading: boolean;
+  remainingSessions: number;
+  activeContractCount: number;
+  previewSessions: MemberSessionPreview[];
+}
+
 type DraftMode = "sessionDrop" | "quickCreate" | "reschedule";
 
 interface BookingDraft {
@@ -305,6 +321,53 @@ function parseSessionNoFromNote(note: string | null) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function buildMemberResultSummary(
+  passes: PassItem[],
+  redemptions: SessionRedemptionItem[],
+  fallbackServiceName: string,
+): MemberResultSummary {
+  const previewSessions: MemberSessionPreview[] = [];
+  let remainingSessions = 0;
+
+  for (const pass of passes) {
+    const remaining = Math.max(0, Number(pass.remaining || 0));
+    remainingSessions += remaining;
+    if (remaining <= 0) continue;
+
+    const total = parsePassTotal(pass.pass_type);
+    const usedRows = redemptions
+      .filter((item) => item.pass_id === pass.id)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const usedSessionNumbers = new Set<number>();
+    usedRows.forEach((item, index) => {
+      const no = item.session_no || parseSessionNoFromNote(item.note) || index + 1;
+      if (no > 0) usedSessionNumbers.add(no);
+    });
+
+    const fallbackTotal = total ?? Math.max(remaining + usedSessionNumbers.size, remaining);
+    for (let no = 1; no <= fallbackTotal; no += 1) {
+      if (usedSessionNumbers.has(no)) continue;
+      previewSessions.push({
+        passId: pass.id,
+        passType: pass.pass_type,
+        passTotal: total,
+        passRemaining: remaining,
+        sessionNumber: no,
+        serviceName: fallbackServiceName,
+      });
+      if (previewSessions.length >= 3) break;
+    }
+    if (previewSessions.length >= 3) break;
+  }
+
+  return {
+    loading: false,
+    remainingSessions,
+    activeContractCount: passes.filter((pass) => Math.max(0, Number(pass.remaining || 0)) > 0).length,
+    previewSessions,
+  };
+}
+
 function decodeWaitlistInput(input: string) {
   const raw = input.trim();
   if (!raw) return null;
@@ -451,6 +514,7 @@ export default function FrontdeskBookingsPage() {
 
   const [memberQuery, setMemberQuery] = useState("");
   const [memberResults, setMemberResults] = useState<MemberItem[]>([]);
+  const [memberResultSummaries, setMemberResultSummaries] = useState<Record<string, MemberResultSummary>>({});
   const [memberMap, setMemberMap] = useState<Record<string, MemberItem>>({});
   const [selectedMember, setSelectedMember] = useState<MemberItem | null>(null);
   const [memberPasses, setMemberPasses] = useState<PassItem[]>([]);
@@ -768,6 +832,49 @@ export default function FrontdeskBookingsPage() {
     [zh],
   );
 
+  const loadMemberResultSummaries = useCallback(
+    async (members: MemberItem[]) => {
+      const targets = members.slice(0, 8);
+      if (targets.length === 0) return;
+
+      setMemberResultSummaries((prev) => {
+        const next = { ...prev };
+        for (const member of targets) {
+          if (!next[member.id]) {
+            next[member.id] = { loading: true, remainingSessions: 0, activeContractCount: 0, previewSessions: [] };
+          }
+        }
+        return next;
+      });
+
+      await Promise.all(
+        targets.map(async (member) => {
+          try {
+            const [passesRes, redemptionsRes] = await Promise.all([
+              fetch(`/api/members/${encodeURIComponent(member.id)}/passes`, { cache: "no-store" }),
+              fetch(`/api/session-redemptions?memberId=${encodeURIComponent(member.id)}`, { cache: "no-store" }),
+            ]);
+            const passesPayload = await passesRes.json().catch(() => ({}));
+            const redemptionsPayload = await redemptionsRes.json().catch(() => ({}));
+            if (!passesRes.ok) throw new Error(passesPayload?.error || "load member passes failed");
+            const summary = buildMemberResultSummary(
+              (passesPayload.items || []) as PassItem[],
+              redemptionsRes.ok ? ((redemptionsPayload.items || []) as SessionRedemptionItem[]) : [],
+              serviceOptions[0]?.value || "",
+            );
+            setMemberResultSummaries((prev) => ({ ...prev, [member.id]: summary }));
+          } catch {
+            setMemberResultSummaries((prev) => ({
+              ...prev,
+              [member.id]: { loading: false, remainingSessions: 0, activeContractCount: 0, previewSessions: [] },
+            }));
+          }
+        }),
+      );
+    },
+    [serviceOptions],
+  );
+
   const loadAll = useCallback(
     async (targetDate: string) => {
       setLoading(true);
@@ -835,6 +942,7 @@ export default function FrontdeskBookingsPage() {
           for (const member of next) map[member.id] = member;
           return map;
         });
+        void loadMemberResultSummaries(next);
         saveRecentQuery(query);
       } catch (err) {
         setError(err instanceof Error ? err.message : zh ? "會員搜尋失敗" : "Member search failed");
@@ -842,7 +950,7 @@ export default function FrontdeskBookingsPage() {
         setSearchingMember(false);
       }
     },
-    [saveRecentQuery, zh],
+    [loadMemberResultSummaries, saveRecentQuery, zh],
   );
 
   async function handleMemberSearchSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1553,22 +1661,63 @@ export default function FrontdeskBookingsPage() {
               ) : null}
               <div className="fdBkSearchResult">
                 {!searchingMember && memberQuery.trim() && memberResults.length === 0 ? <p className="fdGlassText">{zh ? "查無會員。" : "No member found."}</p> : null}
-                {memberResults.map((member) => (
-                  <button
-                    key={member.id}
-                    type="button"
-                    className={`fdBkMemberRow ${selectedMember?.id === member.id ? "is-active" : ""}`}
-                    onClick={() => {
-                      setSelectedMember(member);
-                      setMemberMap((prev) => ({ ...prev, [member.id]: member }));
-                      setStatusBookingId("");
-                      void loadMemberContracts(member.id);
-                    }}
-                  >
-                    <strong>{member.full_name || member.id}</strong>
-                    <span>{member.phone || "-"}</span>
-                  </button>
-                ))}
+                {memberResults.map((member) => {
+                  const summary = memberResultSummaries[member.id];
+                  return (
+                    <article key={member.id} className={`fdBkMemberResultCard ${selectedMember?.id === member.id ? "is-active" : ""}`}>
+                      <button
+                        type="button"
+                        className={`fdBkMemberRow ${selectedMember?.id === member.id ? "is-active" : ""}`}
+                        onClick={() => {
+                          setSelectedMember(member);
+                          setMemberMap((prev) => ({ ...prev, [member.id]: member }));
+                          setStatusBookingId("");
+                          void loadMemberContracts(member.id);
+                        }}
+                      >
+                        <strong>{member.full_name || member.id}</strong>
+                        <span>{member.phone || member.email || "-"}</span>
+                        <span>
+                          {summary?.loading
+                            ? (zh ? "剩餘課程載入中..." : "Loading sessions...")
+                            : `${zh ? "剩餘課程" : "Remaining"}: ${summary?.remainingSessions ?? 0}`}
+                        </span>
+                      </button>
+                      {summary?.previewSessions?.length ? (
+                        <div className="fdBkMemberDragGrid">
+                          {summary.previewSessions.map((session) => (
+                            <DraggableSessionPill
+                              key={`${member.id}-${session.passId}-${session.sessionNumber}`}
+                              id={`search-session-${member.id}-${session.passId}-${session.sessionNumber}`}
+                              disabled={false}
+                              used={false}
+                              label={`${member.full_name || member.id} · #${session.sessionNumber}`}
+                              helper={zh ? "拖到右側時段" : "Drag to a timeslot"}
+                              payload={{
+                                kind: "pass_session",
+                                memberId: member.id,
+                                memberName: member.full_name || member.id,
+                                memberPhone: member.phone || "",
+                                passId: session.passId,
+                                passType: session.passType,
+                                passTotal: session.passTotal,
+                                passRemaining: session.passRemaining,
+                                sessionNumber: session.sessionNumber,
+                                serviceName: session.serviceName,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      ) : summary && !summary.loading ? (
+                        <p className="fdGlassText fdBkMemberResultHint">
+                          {summary.activeContractCount > 0
+                            ? (zh ? "此會員目前沒有可拖拉的剩餘堂次。" : "No draggable sessions remain for this member.")
+                            : (zh ? "尚未找到可用課程合約。" : "No active contract found yet.")}
+                        </p>
+                      ) : null}
+                    </article>
+                  );
+                })}
               </div>
             </SidebarAccordion>
 

@@ -4885,6 +4885,26 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   border-color: #54c9b9;
   box-shadow: 0 0 0 2px rgba(84, 201, 185, .2);
 }
+.fdBkMemberResultCard{
+  border: 1px solid #dfe8f3;
+  border-radius: 12px;
+  background: #fff;
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+.fdBkMemberResultCard.is-active{
+  border-color: #54c9b9;
+  box-shadow: 0 0 0 2px rgba(84, 201, 185, .14);
+}
+.fdBkMemberDragGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.fdBkMemberResultHint{
+  margin: 0;
+}
 .fdBkMemberInfo{
   margin-top: 8px;
   display: grid;
@@ -5186,6 +5206,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 @media (max-width: 1100px){
   .fdBkLayout{ grid-template-columns: 1fr; }
   .fdBkSidebar{ position: static; max-height: none; }
+  .fdBkMemberDragGrid{ grid-template-columns: 1fr; }
 }
 @media (max-width: 900px){
   .fdBkHead{ flex-direction: column; }
