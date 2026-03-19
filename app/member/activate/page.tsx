@@ -10,6 +10,30 @@ type ConfirmResponse = {
   error?: string;
 };
 
+function getRecoveryMessage(params: { zh: boolean; error: string | null; tokenReady: boolean; done: boolean }) {
+  if (params.done) {
+    return params.zh
+      ? "已完成啟用後，請返回登入頁用電話與新密碼登入。"
+      : "After activation, return to login and sign in with your phone number and new password.";
+  }
+
+  if (params.error) {
+    return params.zh
+      ? "若連結已失效或無效，請回登入頁重新寄送啟用信；若仍失敗，請請櫃台協助確認會員 Email 與入口狀態。"
+      : "If the link is expired or invalid, return to login and send a new activation email. If it still fails, ask frontdesk to verify the member email and portal status.";
+  }
+
+  if (!params.tokenReady) {
+    return params.zh
+      ? "建議直接從啟用信開啟此頁；若手動貼上 Token，請確認內容完整且仍有效。"
+      : "Open this page from the activation email when possible. If you paste a token manually, make sure it is complete and still valid.";
+  }
+
+  return params.zh
+    ? "若啟用失敗，請返回登入頁重新寄送啟用信。"
+    : "If activation fails, return to login and request a new activation email.";
+}
+
 function ActivateContent() {
   const { locale } = useI18n();
   const zh = locale !== "en";
@@ -24,6 +48,10 @@ function ActivateContent() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const recoveryMessage = useMemo(
+    () => getRecoveryMessage({ zh, error, tokenReady: Boolean(tokenReady), done }),
+    [done, error, tokenReady, zh],
+  );
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -75,6 +103,10 @@ function ActivateContent() {
           {zh
             ? "此頁會將電話登入對應的會員帳號啟用。"
             : "This page activates your member account from phone-login email verification."}
+        </p>
+
+        <p className="sub" style={{ marginTop: 8 }}>
+          {recoveryMessage}
         </p>
 
         {error ? (
