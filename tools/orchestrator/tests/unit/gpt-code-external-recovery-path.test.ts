@@ -115,9 +115,10 @@ test("operator recovery can replay an exhausted GitHub lane once and persist the
   });
   const updated = await dependencies.storage.loadState(state.id);
 
-  assert.equal(result.replayEligibility, "safe_to_replay");
+  assert.equal(result.replayEligibility, "not_evaluated");
   assert.equal(result.resolvedAction, "replay");
   assert.equal(result.outcome, "success");
+  assert.equal(updated?.lastGptCodeAutomationState?.recoveryQueueClassification, "not_applicable");
   assert.equal(updated?.lastGptCodeAutomationState?.lastReplayAction, "replay");
   assert.equal(updated?.lastGptCodeAutomationState?.lastReplayOutcome, "success");
   assert.equal(updated?.lastGptCodeAutomationState?.replayAttemptCount, 1);

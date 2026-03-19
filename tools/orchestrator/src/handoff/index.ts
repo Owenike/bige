@@ -31,6 +31,9 @@ function collectKnownRisks(state: OrchestratorState) {
   if (state.lastGptCodeAutomationState?.replayBlockReason) {
     risks.push(state.lastGptCodeAutomationState.replayBlockReason);
   }
+  if (state.lastGptCodeAutomationState?.repeatedFailurePattern) {
+    risks.push(state.lastGptCodeAutomationState.repeatedFailurePattern);
+  }
   return risks;
 }
 
@@ -51,11 +54,20 @@ function collectApprovalNotes(state: OrchestratorState) {
   if (state.lastGptCodeAutomationState?.operatorHandoffSummary) {
     notes.push(`externalHandoff=${state.lastGptCodeAutomationState.operatorHandoffSummary}`);
   }
+  if (state.lastGptCodeAutomationState?.recoveryQueueClassification) {
+    notes.push(`externalRecoveryQueue=${state.lastGptCodeAutomationState.recoveryQueueClassification}`);
+  }
+  if (state.lastGptCodeAutomationState?.recoveryAuditSummary) {
+    notes.push(`externalRecoveryAudit=${state.lastGptCodeAutomationState.recoveryAuditSummary}`);
+  }
   if (state.lastGptCodeAutomationState?.recoveryHistorySummary) {
     notes.push(`externalRecoveryHistory=${state.lastGptCodeAutomationState.recoveryHistorySummary}`);
   }
   if (state.lastGptCodeAutomationState?.operatorRecoveryRecommendation) {
     notes.push(`externalRecoveryRecommendation=${state.lastGptCodeAutomationState.operatorRecoveryRecommendation}`);
+  }
+  if (state.lastGptCodeAutomationState?.operatorActionRecommendation) {
+    notes.push(`externalOperatorAction=${state.lastGptCodeAutomationState.operatorActionRecommendation}`);
   }
   if (state.stopReason) {
     notes.push(`stopReason=${state.stopReason}`);
@@ -95,7 +107,10 @@ export function buildPrDraftMetadata(params: {
       `Reviewer: ${collectReviewerSummary(params.state)}`,
       `Validation: ${collectValidationSummary(params.state).join(" | ") || "none"}`,
       `External automation: ${params.state.lastGptCodeAutomationState?.operatorHandoffSummary ?? "none"}`,
+      `External recovery queue: ${params.state.lastGptCodeAutomationState?.recoveryQueueClassification ?? "none"}`,
+      `External recovery audit: ${params.state.lastGptCodeAutomationState?.recoveryAuditSummary ?? "none"}`,
       `External recovery: ${params.state.lastGptCodeAutomationState?.operatorRecoveryRecommendation ?? "none"}`,
+      `External operator action: ${params.state.lastGptCodeAutomationState?.operatorActionRecommendation ?? "none"}`,
     ].join("\n"),
     changeSummary: report?.summaryOfChanges ?? [],
     validationSummary: collectValidationSummary(params.state),

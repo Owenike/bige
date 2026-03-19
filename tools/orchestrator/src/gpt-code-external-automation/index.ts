@@ -100,7 +100,7 @@ type ExternalGitHubTargetRoute = {
   isPullRequest: boolean;
 };
 
-type GptCodeRecoveryRequestedAction = "auto" | "resume" | "replay";
+type GptCodeRecoveryRequestedAction = "auto" | "inspect" | "resume" | "replay";
 type GptCodeRecoveryResolvedAction = "none" | "resume" | "replay";
 type GptCodeReplayEligibility =
   | "not_evaluated"
@@ -115,6 +115,15 @@ type GptCodeReplayOutcome =
   | "manual_required"
   | "failed"
   | "retryable"
+  | "exhausted"
+  | "blocked";
+
+type GptCodeRecoveryQueueClassification =
+  | "not_applicable"
+  | "resumable"
+  | "replayable"
+  | "retryable"
+  | "manual_required"
   | "exhausted"
   | "blocked";
 
@@ -143,12 +152,20 @@ async function defaultExecFileLike(file: string, args: readonly string[], option
 }
 
 function buildAutomationState(params: {
+  stateId: string;
   current: GptCodeAutomationState | null | undefined;
   patch: Partial<GptCodeAutomationState>;
 }) {
-  return gptCodeAutomationStateSchema.parse({
+  const merged = gptCodeAutomationStateSchema.parse({
     ...(params.current ?? {}),
     ...params.patch,
+  });
+  return gptCodeAutomationStateSchema.parse({
+    ...merged,
+    ...deriveRecoveryErgonomics({
+      stateId: params.stateId,
+      automation: merged,
+    }),
   });
 }
 
@@ -161,6 +178,7 @@ async function saveStateWithAutomationPatch(params: {
   const updated = orchestratorStateSchema.parse({
     ...params.state,
     lastGptCodeAutomationState: buildAutomationState({
+      stateId: params.state.id,
       current: params.state.lastGptCodeAutomationState,
       patch: params.patch,
     }),
@@ -544,6 +562,210 @@ function summarizeRecoveryHistory(params: {
   return `${params.currentSummary} | ${latest}`;
 }
 
+function classifyRecoveryQueueClassification(automation: GptCodeAutomationState): GptCodeRecoveryQueueClassification {
+  if (automation.replayEligibility === "safe_to_resume") {
+    return "resumable";
+  }
+  if (automation.replayEligibility === "safe_to_replay") {
+    return "replayable";
+  }
+  if (automation.dispatchOutcome === "retryable" || automation.dispatchReliabilityOutcome === "retryable" || automation.canRetryDispatch) {
+    return "retryable";
+  }
+  if (
+    automation.externalAutomationOutcome === "manual_required" ||
+    automation.dispatchOutcome === "manual_required" ||
+    automation.replayEligibility === "manual_only"
+  ) {
+    return "manual_required";
+  }
+  if (
+    automation.dispatchExhausted ||
+    automation.externalAutomationOutcome === "exhausted" ||
+    automation.dispatchOutcome === "exhausted" ||
+    automation.replayEligibility === "exhausted_permanently"
+  ) {
+    return "exhausted";
+  }
+  if (automation.replayEligibility === "blocked" || automation.dispatchOutcome === "failed" || automation.externalAutomationOutcome === "failed") {
+    return "blocked";
+  }
+  return "not_applicable";
+}
+
+function summarizeRecentRecoveryHistory(automation: GptCodeAutomationState) {
+  const structuredEntries = automation.dispatchAttemptHistory
+    .filter((attempt) => attempt.recoveryAction !== "none")
+    .map((attempt) => {
+      const target = attempt.targetLaneClassification ?? "unknown_target";
+      const failure = attempt.failureClass ?? "ok";
+      return `attempt#${attempt.attemptCount} ${attempt.recoveryAction} -> ${attempt.outcome} on ${target} (${failure})`;
+    });
+  const summaryEntries = (automation.recoveryHistorySummary ?? "")
+    .split(" | ")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  const combined = [...summaryEntries, ...structuredEntries];
+  return [...new Set(combined)].slice(-5);
+}
+
+function detectRepeatedFailurePattern(automation: GptCodeAutomationState) {
+  const failureBuckets = new Map<string, number>();
+  for (const attempt of automation.dispatchAttemptHistory) {
+    if (!attempt.failureClass) {
+      continue;
+    }
+    const key = `${attempt.failureClass}:${attempt.targetLaneClassification ?? "unknown_target"}`;
+    failureBuckets.set(key, (failureBuckets.get(key) ?? 0) + 1);
+  }
+  let repeatedKey: string | null = null;
+  let repeatedCount = 0;
+  for (const [key, count] of failureBuckets.entries()) {
+    if (count > repeatedCount) {
+      repeatedKey = key;
+      repeatedCount = count;
+    }
+  }
+  if (!repeatedKey || repeatedCount < 2) {
+    return null;
+  }
+  const [failureClass, lane] = repeatedKey.split(":");
+  return `Repeated ${failureClass} failures on ${lane} (${repeatedCount} attempts).`;
+}
+
+function buildReplayRecommendationSummary(params: {
+  automation: GptCodeAutomationState;
+  queueClassification: GptCodeRecoveryQueueClassification;
+}) {
+  const target = params.automation.targetLaneClassification ?? "unknown_target";
+  const fallback = params.automation.fallbackDecision ?? "not_needed";
+  if (params.automation.replayEligibility === "safe_to_replay") {
+    return `Recommended: replay once against ${target}; fallback=${fallback}.`;
+  }
+  if (params.automation.replayEligibility === "safe_to_resume") {
+    return "Not recommended: prefer resume while a safe retry path still exists.";
+  }
+  if (params.queueClassification === "manual_required") {
+    return `Blocked for replay: ${params.automation.replayBlockReason ?? params.automation.manualReviewReason ?? "manual review is required first."}`;
+  }
+  if (params.queueClassification === "exhausted") {
+    return "Not recommended: the lane is exhausted until the target/fallback health is reviewed.";
+  }
+  if (params.queueClassification === "blocked") {
+    return `Blocked: ${params.automation.replayBlockReason ?? "the current target/correlation no longer matches the recorded lane."}`;
+  }
+  return null;
+}
+
+function buildResumeRecommendationSummary(params: {
+  automation: GptCodeAutomationState;
+  queueClassification: GptCodeRecoveryQueueClassification;
+}) {
+  const target = params.automation.targetLaneClassification ?? "unknown_target";
+  if (params.automation.replayEligibility === "safe_to_resume") {
+    return `Recommended: resume against ${target} using the remaining retry budget.`;
+  }
+  if (params.automation.replayEligibility === "safe_to_replay") {
+    return "Not recommended: resume is no longer the safe path; only guarded replay remains available.";
+  }
+  if (params.queueClassification === "retryable") {
+    return "Conditionally available: resume may become safe after the recorded retryable target is revalidated.";
+  }
+  if (params.queueClassification === "manual_required") {
+    return `Blocked for resume: ${params.automation.manualReviewReason ?? params.automation.replayBlockReason ?? "manual review is required first."}`;
+  }
+  if (params.queueClassification === "exhausted") {
+    return "Not recommended: the lane exhausted its safe automatic retries.";
+  }
+  if (params.queueClassification === "blocked") {
+    return `Blocked: ${params.automation.replayBlockReason ?? "the current target/correlation no longer matches the recorded lane."}`;
+  }
+  return null;
+}
+
+function buildOperatorActionRecommendation(params: {
+  stateId: string;
+  automation: GptCodeAutomationState;
+  queueClassification: GptCodeRecoveryQueueClassification;
+}) {
+  if (params.automation.replayEligibility === "safe_to_resume") {
+    return `Run external:replay --state-id ${params.stateId} --action resume, then verify the updated dispatch summary.`;
+  }
+  if (params.automation.replayEligibility === "safe_to_replay") {
+    return `Run external:replay --state-id ${params.stateId} --action replay, then verify the routed target and updated recovery history.`;
+  }
+  if (params.queueClassification === "retryable") {
+    return `Inspect the target health and run external:replay --state-id ${params.stateId} --action inspect before any retry.`;
+  }
+  if (params.queueClassification === "manual_required") {
+    return `Manual review only: resolve the blocking reason, then re-check with external:replay --state-id ${params.stateId} --action inspect.`;
+  }
+  if (params.queueClassification === "exhausted") {
+    return "Do not replay yet; review the full dispatch and fallback history before any guarded manual action.";
+  }
+  if (params.queueClassification === "blocked") {
+    return "Resolve the correlation/target mismatch before attempting replay or resume.";
+  }
+  return params.automation.recommendedNextStep ?? "Wait for the next external automation event.";
+}
+
+function buildRecoveryAuditSummary(params: {
+  queueClassification: GptCodeRecoveryQueueClassification;
+  automation: GptCodeAutomationState;
+  repeatedFailurePattern: string | null;
+  operatorActionRecommendation: string;
+}) {
+  const parts = [
+    `queue=${params.queueClassification}`,
+    `replay=${params.automation.replayEligibility}/${params.automation.lastReplayAction}/${params.automation.lastReplayOutcome}#${params.automation.replayAttemptCount}`,
+    `dispatch=${params.automation.dispatchReliabilityOutcome}`,
+    `attempts=${params.automation.targetAttemptCount}/${params.automation.targetMaxAttempts}`,
+  ];
+  if (params.repeatedFailurePattern) {
+    parts.push(`pattern=${params.repeatedFailurePattern}`);
+  }
+  parts.push(`next=${params.operatorActionRecommendation}`);
+  return parts.join(" | ");
+}
+
+function deriveRecoveryErgonomics(params: {
+  stateId: string;
+  automation: GptCodeAutomationState;
+}) {
+  const queueClassification = classifyRecoveryQueueClassification(params.automation);
+  const replayRecommendation = buildReplayRecommendationSummary({
+    automation: params.automation,
+    queueClassification,
+  });
+  const resumeRecommendation = buildResumeRecommendationSummary({
+    automation: params.automation,
+    queueClassification,
+  });
+  const repeatedFailurePattern = detectRepeatedFailurePattern(params.automation);
+  const recentRecoveryHistory = summarizeRecentRecoveryHistory(params.automation);
+  const operatorActionRecommendation = buildOperatorActionRecommendation({
+    stateId: params.stateId,
+    automation: params.automation,
+    queueClassification,
+  });
+  const recoveryAuditSummary = buildRecoveryAuditSummary({
+    queueClassification,
+    automation: params.automation,
+    repeatedFailurePattern,
+    operatorActionRecommendation,
+  });
+
+  return {
+    recoveryQueueClassification: queueClassification,
+    replayRecommendation,
+    resumeRecommendation,
+    operatorActionRecommendation,
+    recentRecoveryHistory,
+    repeatedFailurePattern,
+    recoveryAuditSummary,
+  } satisfies Partial<GptCodeAutomationState>;
+}
+
 function buildAutomationPatchFromDispatch(params: {
   currentState: OrchestratorState;
   dispatch: GptCodeExternalTargetDispatch;
@@ -605,6 +827,7 @@ function buildAutomationPatchFromDispatch(params: {
   return {
     normalizedDispatch,
     patch: {
+      dispatchOutcome: normalizedDispatch.outcome,
       targetAdapterStatus: mapTargetOutcomeToStatus(normalizedDispatch.outcome),
       targetType: normalizedDispatch.targetType,
       targetLaneClassification: normalizedDispatch.targetLaneClassification,
@@ -639,8 +862,11 @@ function buildAutomationPatchFromDispatch(params: {
         canRetry,
         exhausted,
       }),
-      replayEligibility: params.replayEligibility ?? currentAutomation?.replayEligibility ?? "not_evaluated",
-      replayBlockReason: params.replayBlockReason ?? null,
+      replayEligibility:
+        normalizedDispatch.outcome === "success"
+          ? "not_evaluated"
+          : (params.replayEligibility ?? currentAutomation?.replayEligibility ?? "not_evaluated"),
+      replayBlockReason: normalizedDispatch.outcome === "success" ? null : (params.replayBlockReason ?? null),
       replayAttemptCount: params.replayAttemptCount ?? currentAutomation?.replayAttemptCount ?? 0,
       lastReplayAction: params.recoveryAction ?? currentAutomation?.lastReplayAction ?? "none",
       lastReplayOutcome:
@@ -1091,6 +1317,34 @@ async function persistRecoveryArtifact(params: {
   ]);
   await params.dependencies.storage.saveState(updated);
   return updated;
+}
+
+function buildExternalRecoveryResultPayload(params: {
+  state: OrchestratorState;
+  requestedAction: GptCodeRecoveryRequestedAction;
+  resolvedAction: GptCodeRecoveryResolvedAction;
+  outcome: GptCodeReplayOutcome;
+  targetDispatch: GptCodeExternalTargetDispatch | null;
+  generatedAt: string;
+}) {
+  const automation = params.state.lastGptCodeAutomationState;
+  return {
+    stateId: params.state.id,
+    requestedAction: params.requestedAction,
+    resolvedAction: params.resolvedAction,
+    replayEligibility: automation?.replayEligibility ?? "not_evaluated",
+    replayBlockReason: automation?.replayBlockReason ?? null,
+    recoveryQueueClassification: automation?.recoveryQueueClassification ?? "not_applicable",
+    replayRecommendation: automation?.replayRecommendation ?? null,
+    resumeRecommendation: automation?.resumeRecommendation ?? null,
+    operatorActionRecommendation: automation?.operatorActionRecommendation ?? null,
+    recentRecoveryHistory: automation?.recentRecoveryHistory ?? [],
+    repeatedFailurePattern: automation?.repeatedFailurePattern ?? null,
+    recoveryAuditSummary: automation?.recoveryAuditSummary ?? null,
+    targetDispatch: params.targetDispatch,
+    outcome: params.outcome,
+    generatedAt: params.generatedAt,
+  } satisfies Omit<GptCodeExternalRecoveryResult, "recoveryArtifactPath">;
 }
 
 export function extractGptCodeReportFromGitHubComment(params: {
@@ -1895,16 +2149,14 @@ export async function runGptCodeExternalAutomationRecovery(params: {
     });
     const result = await writeExternalRecoveryResult({
       outputRoot: recoveryRoot,
-      result: {
-        stateId: updatedState.id,
+      result: buildExternalRecoveryResultPayload({
+        state: updatedState,
         requestedAction,
         resolvedAction: decision.resolvedAction,
-        replayEligibility: decision.replayEligibility,
-        replayBlockReason: reason ?? decision.replayBlockReason,
-        targetDispatch: null,
         outcome,
+        targetDispatch: null,
         generatedAt: (params.dependencies.now ?? (() => new Date()))().toISOString(),
-      },
+      }),
     });
     updatedState = await persistRecoveryArtifact({
       state: updatedState,
@@ -1913,6 +2165,26 @@ export async function runGptCodeExternalAutomationRecovery(params: {
     });
     return result;
   };
+
+  if (requestedAction === "inspect") {
+    const result = await writeExternalRecoveryResult({
+      outputRoot: recoveryRoot,
+      result: buildExternalRecoveryResultPayload({
+        state: updatedState,
+        requestedAction,
+        resolvedAction: decision.resolvedAction,
+        outcome: "not_run",
+        targetDispatch: null,
+        generatedAt: (params.dependencies.now ?? (() => new Date()))().toISOString(),
+      }),
+    });
+    updatedState = await persistRecoveryArtifact({
+      state: updatedState,
+      dependencies: params.dependencies,
+      recoveryArtifactPath: result.recoveryArtifactPath,
+    });
+    return result;
+  }
 
   if (decision.resolvedAction === "none" || !decision.source) {
     return blockedResult(
@@ -1999,16 +2271,14 @@ export async function runGptCodeExternalAutomationRecovery(params: {
 
   const result = await writeExternalRecoveryResult({
     outputRoot: recoveryRoot,
-    result: {
-      stateId: updatedState.id,
+    result: buildExternalRecoveryResultPayload({
+      state: updatedState,
       requestedAction,
       resolvedAction: decision.resolvedAction,
-      replayEligibility: decision.replayEligibility,
-      replayBlockReason: null,
-      targetDispatch: finalPatch.normalizedDispatch,
       outcome: finalPatch.normalizedDispatch.outcome,
+      targetDispatch: finalPatch.normalizedDispatch,
       generatedAt: finalPatch.normalizedDispatch.dispatchedAt,
-    },
+    }),
   });
   updatedState = await persistRecoveryArtifact({
     state: updatedState,

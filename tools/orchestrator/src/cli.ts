@@ -2238,7 +2238,7 @@ async function main() {
   }
 
   if (command === "external:replay") {
-    const requestedAction = getOption(options, "action", "auto") as "auto" | "resume" | "replay";
+    const requestedAction = getOption(options, "action", "auto") as "auto" | "inspect" | "resume" | "replay";
     const result = await runGptCodeExternalAutomationRecovery({
       stateId,
       dependencies,
@@ -5609,6 +5609,7 @@ async function main() {
       "  node cli.js report:intake --state-id default --report path/to/gpt-code-report.md",
       "  node cli.js report:transport:submit --state-id default --stdin true --source cli",
       "  node cli.js report:transport:watch --state-id default",
+      "  node cli.js external:replay --state-id default --action inspect",
       "  node cli.js external:replay --state-id default --action auto",
       "  node cli.js resume --state-id default",
       "  node cli.js workspace:cleanup --state-id default --workspace-root .tmp/orchestrator-workspaces",

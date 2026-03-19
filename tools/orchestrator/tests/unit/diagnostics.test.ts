@@ -178,6 +178,18 @@ test("diagnostics render external automation observability summaries for operato
     replayAttemptCount: 1,
     lastReplayAction: "replay",
     lastReplayOutcome: "exhausted",
+    recoveryQueueClassification: "replayable",
+    replayRecommendation: "Recommended: replay once against github_status_report_comment_lane; fallback=live_smoke_target_fallback.",
+    resumeRecommendation: "Not recommended: resume is no longer the safe path; only guarded replay remains available.",
+    operatorActionRecommendation:
+      "Run external:replay --state-id diagnostics-external-automation-state --action replay, then verify the routed target and updated recovery history.",
+    recentRecoveryHistory: [
+      "decision auto -> safe_to_replay (retryable) at 2026-03-18T00:00:01.000Z",
+      "recovery#1 replay -> exhausted at 2026-03-18T00:00:02.000Z",
+    ],
+    repeatedFailurePattern: "Repeated network failures on github_status_report_comment_lane (2 attempts).",
+    recoveryAuditSummary:
+      "queue=replayable | replay=safe_to_replay/replay/exhausted#1 | dispatch=exhausted | attempts=2/2 | pattern=Repeated network failures on github_status_report_comment_lane (2 attempts). | next=Run external:replay --state-id diagnostics-external-automation-state --action replay, then verify the routed target and updated recovery history.",
     recoveryHistorySummary: "recovery#1 replay -> exhausted at 2026-03-18T00:00:02.000Z",
     operatorRecoveryRecommendation: "External lane can be replayed once under operator control; reuse the existing next instruction and re-check the routed target.",
     canRetryDispatch: false,
@@ -196,8 +208,12 @@ test("diagnostics render external automation observability summaries for operato
 
   assert.equal(summary.externalAutomation.targetAdapterStatus, "exhausted");
   assert.equal(summary.externalAutomation.dispatchExhausted, true);
+  assert.equal(summary.externalAutomation.recoveryQueueClassification, "replayable");
   assert.equal(rendered.includes("External automation:"), true);
   assert.equal(rendered.includes("External automation dispatch history:"), true);
   assert.equal(rendered.includes("External automation handoff:"), true);
-  assert.equal(summary.nextSuggestedAction.includes("can be replayed once under operator control"), true);
+  assert.equal(rendered.includes("External automation recovery audit:"), true);
+  assert.equal(rendered.includes("External automation replay recommendation:"), true);
+  assert.equal(rendered.includes("External automation operator action:"), true);
+  assert.equal(summary.nextSuggestedAction.includes("--action replay"), true);
 });

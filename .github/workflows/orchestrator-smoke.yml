@@ -251,8 +251,13 @@ jobs:
           npm run test:orchestrator:gpt-code-external-recovery-path
           npm run test:orchestrator:gpt-code-external-replay-guardrails
           npm run test:orchestrator:gpt-code-external-recovery-observability
+          npm run test:orchestrator:gpt-code-external-recovery-queue
+          npm run test:orchestrator:gpt-code-external-recovery-recommendation
+          npm run test:orchestrator:gpt-code-external-operator-recovery
+          npm run test:orchestrator:gpt-code-external-recovery-audit
           npm run test:orchestrator:gpt-code-external-automation
           npm run test:orchestrator:gpt-code-external-recovery
+          npm run test:orchestrator:gpt-code-external-recovery-ergonomics
           npm run test:orchestrator:gpt-code-external-coverage
           npm run test:orchestrator:mock-loop
           npm run test:orchestrator:loop

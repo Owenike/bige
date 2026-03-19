@@ -305,13 +305,20 @@ export const gptCodeExternalTargetDispatchSchema = z.object({
 
 export const gptCodeExternalRecoveryResultSchema = z.object({
   stateId: z.string(),
-  requestedAction: z.enum(["auto", "resume", "replay"]),
+  requestedAction: z.enum(["auto", "inspect", "resume", "replay"]),
   resolvedAction: z.enum(["none", "resume", "replay"]),
   replayEligibility: z.enum(["not_evaluated", "safe_to_resume", "safe_to_replay", "manual_only", "exhausted_permanently", "blocked"]),
   replayBlockReason: z.string().nullable().default(null),
+  recoveryQueueClassification: z.enum(["not_applicable", "resumable", "replayable", "retryable", "manual_required", "exhausted", "blocked"]),
+  replayRecommendation: z.string().nullable().default(null),
+  resumeRecommendation: z.string().nullable().default(null),
+  operatorActionRecommendation: z.string().nullable().default(null),
+  recentRecoveryHistory: z.array(z.string()).default([]),
+  repeatedFailurePattern: z.string().nullable().default(null),
+  recoveryAuditSummary: z.string().nullable().default(null),
   recoveryArtifactPath: z.string().nullable().default(null),
   targetDispatch: gptCodeExternalTargetDispatchSchema.nullable().default(null),
-  outcome: z.enum(["success", "manual_required", "failed", "retryable", "exhausted", "blocked"]),
+  outcome: z.enum(["not_run", "success", "manual_required", "failed", "retryable", "exhausted", "blocked"]),
   generatedAt: z.string(),
 });
 

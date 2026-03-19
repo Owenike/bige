@@ -5,6 +5,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createInitialState } from "../../src/orchestrator";
 import { GhCliGptCodeGitHubCommentTargetAdapter } from "../../src/gpt-code-external-automation";
+import { gptCodeAutomationStateSchema } from "../../src/schemas";
 
 test("external target adapter can route through source fallback when the state thread target is missing", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "gpt-code-external-target-"));
@@ -23,7 +24,7 @@ test("external target adapter can route through source fallback when the state t
       subtasks: ["external-target"],
       successCriteria: ["external target receives the next instruction"],
     }),
-    lastGptCodeAutomationState: {
+    lastGptCodeAutomationState: gptCodeAutomationStateSchema.parse({
       sourceAdapterStatus: "linked" as const,
       sourceType: "github_issue_comment",
       sourceLaneClassification: "github_issue_comment_lane" as const,
@@ -69,6 +70,13 @@ test("external target adapter can route through source fallback when the state t
       replayAttemptCount: 0,
       lastReplayAction: "none" as const,
       lastReplayOutcome: "not_run" as const,
+      recoveryQueueClassification: "not_applicable" as const,
+      replayRecommendation: null,
+      resumeRecommendation: null,
+      operatorActionRecommendation: null,
+      recentRecoveryHistory: [],
+      repeatedFailurePattern: null,
+      recoveryAuditSummary: null,
       recoveryHistorySummary: null,
       operatorRecoveryRecommendation: null,
       canRetryDispatch: false,
@@ -80,7 +88,7 @@ test("external target adapter can route through source fallback when the state t
       lastDispatchedAt: null,
       recommendedNextStep: null,
       manualReviewReason: null,
-    },
+    }),
   };
 
   const adapter = new GhCliGptCodeGitHubCommentTargetAdapter({
