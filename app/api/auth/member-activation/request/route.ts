@@ -22,16 +22,16 @@ function tokenHash(raw: string) {
 
 function resolveAppUrl(request: Request) {
   try {
-    return new URL(request.url).origin;
+    return new URL(request.url).origin.replace(/\/+$/, "");
   } catch {
     const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
-    return configured || "http://localhost:3000";
+    return configured ? configured.replace(/\/+$/, "") : "http://localhost:3000";
   }
 }
 
 function resolveCanonicalAppUrl(request: Request) {
   const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
-  return configured || resolveAppUrl(request);
+  return configured ? configured.replace(/\/+$/, "") : resolveAppUrl(request);
 }
 
 export async function POST(request: Request) {

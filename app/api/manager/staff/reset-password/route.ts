@@ -13,9 +13,9 @@ function maskEmail(email: string) {
 
 function resolveCanonicalAppUrl(request: Request) {
   const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
-  if (configured) return configured;
+  if (configured) return configured.replace(/\/+$/, "");
   try {
-    return new URL(request.url).origin;
+    return new URL(request.url).origin.replace(/\/+$/, "");
   } catch {
     return "http://localhost:3000";
   }

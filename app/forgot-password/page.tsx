@@ -6,12 +6,16 @@ import { createClient } from "@supabase/supabase-js";
 import { useI18n } from "../i18n-provider";
 
 function resolveAppOrigin() {
+  const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
+  if (configured) {
+    return configured.replace(/\/+$/, "");
+  }
+
   if (typeof window !== "undefined" && window.location?.origin) {
     return window.location.origin.replace(/\/+$/, "");
   }
 
-  const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
-  return configured ? configured.replace(/\/+$/, "") : "http://localhost:3000";
+  return "http://localhost:3000";
 }
 
 export default function ForgotPasswordPage() {
