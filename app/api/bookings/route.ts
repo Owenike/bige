@@ -627,11 +627,12 @@ export async function POST(request: Request) {
   }
 
   let commercials;
+  const bookingBranchId = auth.context.branchId ?? memberResult.data.store_id ?? null;
   try {
     commercials = await prepareBookingCommercials({
       supabase: auth.supabase,
       tenantId: auth.context.tenantId,
-      branchId: auth.context.branchId ?? memberResult.data.store_id ?? null,
+      branchId: bookingBranchId,
       memberId,
       serviceName,
       paymentMode,
@@ -647,10 +648,11 @@ export async function POST(request: Request) {
   const scheduleValidation = await validateBookingSchedule({
     supabase: auth.supabase,
     tenantId: auth.context.tenantId,
-    branchId: auth.context.branchId ?? memberResult.data.store_id ?? null,
+    branchId: bookingBranchId,
     memberId,
     coachId,
-    serviceName,
+    serviceCode: commercials.service.code,
+    serviceName: commercials.service.name,
     startsAt,
     endsAt,
   });
@@ -679,10 +681,10 @@ export async function POST(request: Request) {
     .from("bookings")
     .insert({
       tenant_id: auth.context.tenantId,
-      branch_id: auth.context.branchId ?? memberResult.data.store_id ?? null,
+      branch_id: bookingBranchId,
       member_id: memberId,
       coach_id: scheduleValidation.assignedCoachId,
-      service_name: serviceName,
+      service_name: commercials.service.name,
       starts_at: startsAt,
       ends_at: endsAt,
       note,
@@ -748,7 +750,7 @@ export async function POST(request: Request) {
     payload: {
       memberId,
       coachId,
-      serviceName,
+      serviceName: commercials.service.name,
       startsAt,
       endsAt,
       commercial: {

@@ -53,6 +53,11 @@ const REDEMPTION_ERROR_STATUS: Record<string, number> = {
   insufficient_remaining_sessions: 400,
 };
 
+function isUuid(value: string | null | undefined) {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function isMissingSchemaError(message: string | undefined, tableOrColumn: string) {
   if (!message) return false;
   const lower = message.toLowerCase();
@@ -163,17 +168,18 @@ export async function consumeSessionEntitlement(input: ConsumeSessionInput): Pro
     return { ok: false, status: 404, code: "ENTITLEMENT_NOT_FOUND", message: "Pass not found after redemption" };
   }
 
-  const contractId =
-    typeof passResult.data.member_plan_contract_id === "string"
-      ? passResult.data.member_plan_contract_id
-      : eligibility.candidate.contractId;
+  const persistedContractId = isUuid(passResult.data.member_plan_contract_id)
+    ? String(passResult.data.member_plan_contract_id)
+    : isUuid(eligibility.candidate.contractId)
+      ? String(eligibility.candidate.contractId)
+      : null;
 
-  if (contractId) {
+  if (persistedContractId) {
     const contractResult = await input.supabase
       .from("member_plan_contracts")
       .select("id, status, ends_at, remaining_uses, remaining_sessions")
       .eq("tenant_id", input.tenantId)
-      .eq("id", contractId)
+      .eq("id", persistedContractId)
       .maybeSingle();
     if (contractResult.error && !isMissingSchemaError(contractResult.error.message, "member_plan_contracts")) {
       return { ok: false, status: 500, code: "INTERNAL_ERROR", message: contractResult.error.message };
@@ -202,7 +208,7 @@ export async function consumeSessionEntitlement(input: ConsumeSessionInput): Pro
           updated_at: new Date().toISOString(),
         })
         .eq("tenant_id", input.tenantId)
-        .eq("id", contractId)
+        .eq("id", persistedContractId)
         .select("id, status, remaining_sessions, ends_at")
         .maybeSingle();
       if (contractUpdate.error) {
@@ -213,7 +219,7 @@ export async function consumeSessionEntitlement(input: ConsumeSessionInput): Pro
 
     const patchRedemption = await input.supabase
       .from("session_redemptions")
-      .update({ member_plan_contract_id: contractId })
+      .update({ member_plan_contract_id: persistedContractId })
       .eq("id", String(redemption.redemption_id || ""));
     if (patchRedemption.error && !isMissingSchemaError(patchRedemption.error.message, "member_plan_contract_id")) {
       return { ok: false, status: 500, code: "INTERNAL_ERROR", message: patchRedemption.error.message };
@@ -223,7 +229,7 @@ export async function consumeSessionEntitlement(input: ConsumeSessionInput): Pro
       tenant_id: input.tenantId,
       branch_id: input.branchId ?? null,
       member_id: input.memberId,
-      contract_id: contractId,
+      contract_id: persistedContractId,
       source_type: "redeem",
       delta_uses: 0,
       delta_sessions: -quantity,

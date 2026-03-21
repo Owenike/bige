@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useI18n } from "../../i18n-provider";
@@ -25,6 +26,19 @@ interface BookingItem {
   ends_at: string;
   status: string;
   note: string | null;
+}
+
+interface BookingApiItem {
+  id: string;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  branchId?: string | null;
+  therapistId?: string | null;
+  serviceName?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  status?: string | null;
+  noteExcerpt?: string | null;
 }
 
 interface ServiceItem {
@@ -88,18 +102,6 @@ interface CoachBlockItem {
   reason: string;
   note: string | null;
   status: string;
-}
-
-interface WaitlistItem {
-  id: string;
-  member_id: string | null;
-  contact_name: string;
-  contact_phone: string | null;
-  desired_date: string | null;
-  desired_time: string | null;
-  note: string | null;
-  status: string;
-  created_at: string;
 }
 
 interface MemberSessionPreview {
@@ -180,6 +182,22 @@ function fmtDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+function normalizeBookingApiItem(item: BookingApiItem | BookingItem): BookingItem {
+  if ("member_id" in item && "coach_id" in item && "service_name" in item && "starts_at" in item && "ends_at" in item) {
+    return item;
+  }
+  return {
+    id: item.id,
+    member_id: "",
+    coach_id: item.therapistId || null,
+    service_name: item.serviceName || "",
+    starts_at: item.startsAt || "",
+    ends_at: item.endsAt || "",
+    status: item.status || "booked",
+    note: item.noteExcerpt || null,
+  };
 }
 
 function toDateKey(date: Date) {
@@ -392,22 +410,6 @@ function buildDraftConflictPreview(params: {
   };
 }
 
-function decodeWaitlistInput(input: string) {
-  const raw = input.trim();
-  if (!raw) return null;
-  const chunks = raw.split(/[|,]/).map((value) => value.trim()).filter(Boolean);
-  if (chunks.length === 0) return null;
-  const [contactName, contactPhoneRaw, desiredTimeRaw, ...rest] = chunks;
-  const contactPhoneDigits = sanitizePhoneQuery(contactPhoneRaw || "");
-  const desiredTime = desiredTimeRaw && /^\d{2}:\d{2}$/.test(desiredTimeRaw) ? desiredTimeRaw : null;
-  return {
-    contactName: contactName || raw,
-    contactPhone: contactPhoneDigits || null,
-    desiredTime,
-    note: rest.join(" ").trim() || raw,
-  };
-}
-
 function DraggableSessionPill(props: {
   id: string;
   payload: DragPayload;
@@ -492,6 +494,8 @@ function DroppableSlotCell(props: {
     <div
       ref={setNodeRef}
       className={`fdBkSlotCell ${isOver ? "is-active-drop" : ""}`}
+      data-coach-id={props.coachId}
+      data-time-label={props.timeLabel}
       onClick={props.onClick}
       title={props.title}
     />
@@ -553,20 +557,6 @@ export default function FrontdeskBookingsPage() {
   const [draft, setDraft] = useState<BookingDraft | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
-
-  const [statusBookingId, setStatusBookingId] = useState("");
-  const [statusValue, setStatusValue] = useState("cancelled");
-  const [statusReason, setStatusReason] = useState("");
-
-  const [waitlistInput, setWaitlistInput] = useState("");
-  const [waitlist, setWaitlist] = useState<WaitlistItem[]>([]);
-
-  const [blockCoachId, setBlockCoachId] = useState("");
-  const [blockStartsLocal, setBlockStartsLocal] = useState("");
-  const [blockEndsLocal, setBlockEndsLocal] = useState("");
-  const [blockReason, setBlockReason] = useState("");
-  const [blockNote, setBlockNote] = useState("");
-  const [editingBlockId, setEditingBlockId] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [nowTick, setNowTick] = useState(Date.now());
@@ -599,7 +589,7 @@ export default function FrontdeskBookingsPage() {
   const serviceOptions = useMemo(
     () =>
       services.map((service) => ({
-        value: service.code,
+        value: service.name,
         label: zh ? `${service.name}（${service.durationMinutes} 分鐘）` : `${service.name} (${service.durationMinutes}m)`,
         durationMinutes: service.durationMinutes,
       })),
@@ -773,13 +763,6 @@ export default function FrontdeskBookingsPage() {
     });
   }, []);
 
-  const loadWaitlist = useCallback(async (targetDate: string) => {
-    const res = await fetch(`/api/frontdesk/booking-waitlist?date=${encodeURIComponent(targetDate)}&limit=20`, { cache: "no-store" });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) return;
-    setWaitlist((payload.items || []) as WaitlistItem[]);
-  }, []);
-
   const loadAudit = useCallback(async () => {
     const res = await fetch("/api/frontdesk/audit?action=booking_update&targetType=booking&limit=50", { cache: "no-store" });
     const payload = await res.json().catch(() => ({}));
@@ -821,7 +804,7 @@ export default function FrontdeskBookingsPage() {
       if (!res.ok) {
         throw new Error(payload?.error || (zh ? "載入預約失敗" : "Load bookings failed"));
       }
-      setItems((payload.items || []) as BookingItem[]);
+      setItems(((payload.items || []) as Array<BookingApiItem | BookingItem>).map(normalizeBookingApiItem));
     },
     [zh],
   );
@@ -923,14 +906,14 @@ export default function FrontdeskBookingsPage() {
       setLoading(true);
       setError(null);
       try {
-        await Promise.all([loadMasterData(), loadBookingsByDate(targetDate), loadCoachBlocksByDate(targetDate), loadAudit(), loadWaitlist(targetDate)]);
+        await Promise.all([loadMasterData(), loadBookingsByDate(targetDate), loadCoachBlocksByDate(targetDate), loadAudit()]);
       } catch (err) {
         setError(err instanceof Error ? err.message : zh ? "載入失敗" : "Load failed");
       } finally {
         setLoading(false);
       }
     },
-    [loadAudit, loadBookingsByDate, loadCoachBlocksByDate, loadMasterData, loadWaitlist, zh],
+    [loadAudit, loadBookingsByDate, loadCoachBlocksByDate, loadMasterData, zh],
   );
 
   useEffect(() => {
@@ -1491,61 +1474,6 @@ export default function FrontdeskBookingsPage() {
     }
   }
 
-  async function submitStatusUpdate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!statusBookingId || !statusReason.trim()) {
-      setError(zh ? "請選擇預約並填寫原因。" : "Select booking and provide reason.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const booking = items.find((item) => item.id === statusBookingId);
-      await patchBookingApi({
-        bookingId: statusBookingId,
-        status: statusValue,
-        note: statusValue === "cancelled" && booking ? `${stripRoomFromNote(booking.note)} [manual-cancelled]`.trim() : booking?.note || null,
-        reason: statusReason.trim(),
-      });
-      await queueBookingSync({
-        bookingId: statusBookingId,
-        eventType: statusValue === "cancelled" ? "cancel" : "upsert",
-        payload: { source: "frontdesk_status_update", status: statusValue },
-      });
-      setMessage(zh ? "預約狀態已更新。" : "Booking status updated.");
-      setStatusReason("");
-      await loadBookingsByDate(dateKey);
-      await loadAudit();
-      if (statusValue === "cancelled" && waitlist.length > 0) {
-        const nextCandidate = waitlist[0];
-        if (nextCandidate.contact_phone) {
-          await fetch("/api/notify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              channel: "sms",
-              target: sanitizePhoneQuery(nextCandidate.contact_phone),
-              message: zh ? "有候補時段釋出，請盡快與櫃檯確認。" : "A waitlist slot is now available, please confirm with frontdesk.",
-              memberId: nextCandidate.member_id,
-              templateKey: "frontdesk_waitlist_open_slot",
-            }),
-          }).catch(() => null);
-        }
-        await fetch(`/api/frontdesk/booking-waitlist/${encodeURIComponent(nextCandidate.id)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "notified", note: "auto_notified_by_cancel" }),
-        }).catch(() => null);
-        await loadWaitlist(dateKey);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : zh ? "更新失敗" : "Update failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function toggleCoachVisible(coachId: string) {
     setCoachVisible((prev) => ({ ...prev, [coachId]: !(prev[coachId] ?? true) }));
   }
@@ -1584,121 +1512,8 @@ export default function FrontdeskBookingsPage() {
     syncScrollTargets({ top: time.scrollTop });
   }
 
-  async function addWaitlistItem() {
-    const parsed = decodeWaitlistInput(waitlistInput);
-    if (!parsed) return;
-    const payload = {
-      memberId: selectedMember?.id || null,
-      contactName: selectedMember?.full_name || parsed.contactName,
-      contactPhone: selectedMember?.phone || parsed.contactPhone,
-      desiredDate: dateKey,
-      desiredTime: parsed.desiredTime,
-      note: parsed.note,
-    };
-    await fetch("/api/frontdesk/booking-waitlist", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).catch(() => null);
-    await loadWaitlist(dateKey);
-    setWaitlistInput("");
-  }
-
-  async function removeWaitlistItem(waitlistId: string) {
-    const target = waitlist.find((item) => item.id === waitlistId);
-    if (!target) return;
-    await fetch(`/api/frontdesk/booking-waitlist/${encodeURIComponent(target.id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "cancelled", note: "removed_from_frontdesk" }),
-    }).catch(() => null);
-    await loadWaitlist(dateKey);
-  }
-
-  async function submitCoachBlock(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!blockCoachId || !blockStartsLocal || !blockEndsLocal || !blockReason.trim()) {
-      setError(zh ? "請填寫完整封鎖欄位。" : "Please complete the block form.");
-      return;
-    }
-    const startsAt = localDatetimeToIso(blockStartsLocal);
-    const endsAt = localDatetimeToIso(blockEndsLocal);
-    if (!startsAt || !endsAt || new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
-      setError(zh ? "封鎖時間格式無效。" : "Invalid block time range.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/frontdesk/coach-blocks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          coachId: blockCoachId,
-          startsAt,
-          endsAt,
-          reason: blockReason.trim(),
-          note: blockNote.trim() || null,
-        }),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || (zh ? "建立封鎖失敗。" : "Create block failed."));
-      setBlockStartsLocal("");
-      setBlockEndsLocal("");
-      setBlockReason("");
-      setBlockNote("");
-      setEditingBlockId("");
-      await loadCoachBlocksByDate(dateKey);
-      setMessage(zh ? "封鎖時段已建立。" : "Blocked slot saved.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : zh ? "建立封鎖失敗。" : "Create block failed.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function clearCoachBlock() {
-    if (!blockCoachId || !blockStartsLocal || !blockEndsLocal) {
-      setBlockCoachId("");
-      setBlockStartsLocal("");
-      setBlockEndsLocal("");
-      setBlockReason("");
-      setBlockNote("");
-      setEditingBlockId("");
-      return;
-    }
-    const target = coachBlocks.find((item) => item.id === editingBlockId && item.status === "active");
-    if (!target) {
-      setBlockCoachId("");
-      setBlockStartsLocal("");
-      setBlockEndsLocal("");
-      setBlockReason("");
-      setBlockNote("");
-      setEditingBlockId("");
-      return;
-    }
-    setSaving(true);
-    try {
-      await fetch(`/api/frontdesk/coach-blocks/${encodeURIComponent(target.id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "cancelled", note: zh ? "前台取消封鎖" : "Cancelled by frontdesk" }),
-      }).catch(() => null);
-      await loadCoachBlocksByDate(dateKey);
-      setMessage(zh ? "封鎖時段已取消。" : "Blocked slot cancelled.");
-    } finally {
-      setSaving(false);
-      setBlockCoachId("");
-      setBlockStartsLocal("");
-      setBlockEndsLocal("");
-      setBlockReason("");
-      setBlockNote("");
-      setEditingBlockId("");
-    }
-  }
-
   return (
-    <main className="fdBkPage">
+    <main className="fdBkPage" data-frontdesk-bookings-page>
       <section className={`fdBkWorkspace ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileSidebarOpen ? "is-mobile-sidebar-open" : ""}`}>
         <header className="fdBkTopBar">
           <div className="fdBkTopLeft">
@@ -1752,9 +1567,66 @@ export default function FrontdeskBookingsPage() {
             <SidebarAccordion title={zh ? "建立入口" : "Quick Actions"} defaultOpen>
               <div className="fdBkQuickActionGrid">
                 <button type="button" className="fdBkGhostBtn" onClick={() => setSidebarCollapsed(false)}>{zh ? "新增預約" : "New booking"}</button>
-                <button type="button" className="fdBkGhostBtn" onClick={() => document.getElementById("booking-block-slot")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{zh ? "封鎖時段" : "Block slot"}</button>
-                <button type="button" className="fdBkGhostBtn" onClick={() => document.getElementById("booking-waitlist")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{zh ? "候補名單" : "Waitlist"}</button>
+                <button type="button" className="fdBkGhostBtn" onClick={() => document.getElementById("booking-audit-trail")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{zh ? "查看稽核" : "View audit"}</button>
               </div>
+            </SidebarAccordion>
+
+            <SidebarAccordion title={zh ? "作業台定位" : "Workspace Scope"} defaultOpen={false}>
+              <div data-frontdesk-bookings-scope>
+                <p className="fdGlassText">
+                  {zh
+                    ? "這是 frontdesk domain 的正式 booking workbench。它聚焦櫃檯排課：搜尋會員、查看剩餘課程、拖拉到教練時段、確認建立預約，以及建立後的即時接手。"
+                    : "This is the formal booking workbench for the frontdesk domain. It stays focused on desk scheduling: search members, review remaining sessions, drag onto coach timeslots, confirm bookings, and perform immediate handoff after save."}
+                </p>
+                <p className="fdGlassText" style={{ marginTop: 8 }}>
+                  {zh
+                    ? "若你要改的是教練主資料、排班/block 規則、服務/方案/套票規則、integrations、operations 或 notifications，請離開 frontdesk 改走 manager domain。"
+                    : "If the task is coach master data, scheduling/block rules, service/plan/package rules, integrations, operations, or notifications, leave frontdesk and use the manager domain instead."}
+                </p>
+              </div>
+            </SidebarAccordion>
+
+            <section className="fdGlassSubPanel" style={{ padding: 12 }} data-frontdesk-boundary>
+              <div className="kvLabel">{zh ? "櫃檯與後台邊界" : "Frontdesk vs Manager Boundary"}</div>
+              <div className="fdDataGrid" style={{ marginTop: 8 }} data-frontdesk-responsibility-index>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  <strong>{zh ? "這頁負責" : "Owns"}:</strong>{" "}
+                  {zh
+                    ? "排課查看、會員搜尋、剩餘課程確認、drag / drop 建立預約、draft / confirm、建立後接手。"
+                    : "Schedule view, member search, remaining-session checks, drag / drop booking creation, draft / confirm, and post-save handoff."}
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  <strong>{zh ? "改去哪裡" : "Go to manager for"}:</strong>{" "}
+                  {zh
+                    ? "教練主資料、排班 / block 規則、服務 / plans / packages、候補流程、operations、integrations、notifications。"
+                    : "Coach master data, scheduling / blocks, services / plans / packages, waitlist, operations, integrations, and notifications."}
+                </p>
+              </div>
+              <div className="fdBkQuickActionGrid" style={{ marginTop: 10 }} data-frontdesk-manager-links>
+                <Link className="fdBkGhostBtn" href="/manager">{zh ? "Manager Hub" : "Manager Hub"}</Link>
+                <Link className="fdBkGhostBtn" href="/manager/settings/operations">{zh ? "Operations / 政策" : "Operations / policy"}</Link>
+                <Link className="fdBkGhostBtn" href="/manager/notifications">{zh ? "Notifications" : "Notifications"}</Link>
+              </div>
+            </section>
+
+            <SidebarAccordion title={zh ? "角色分工" : "Role Matrix"} defaultOpen={false}>
+              <ul className="fdBkDraftAlertList">
+                <li>
+                  {zh
+                    ? "教練｜可看：全部排程、自己的接手資訊。可建立：不作為主要建立角色。可修改：優先只調整自己的預約。不能碰：服務、規則、帳號與權限設定。"
+                    : "Coach | View: full schedule and personal handoff context. Create: not the primary create role. Edit: primarily their own bookings. Not allowed: services, rules, account settings, or permissions."}
+                </li>
+                <li>
+                  {zh
+                    ? "櫃檯｜可看：全部教練排程、會員資料、剩餘課程。可建立：為全部教練建立預約。可修改：調整與接手前台預約。不能碰：任何設定型責任；那些已搬到 manager。"
+                    : "Frontdesk | View: all coach schedules, member data, and remaining sessions. Create: bookings across all coaches. Edit: frontdesk booking adjustments and handoff tasks. Not allowed: configuration responsibilities; those have moved to manager."}
+                </li>
+                <li>
+                  {zh
+                    ? "經理｜可看：全部排程、前台作業結果、稽核紀錄。可建立：必要時可代建預約。可修改：跨教練/跨館調度與例外處理。設定型任務仍應切到 manager 子頁，不在這裡做。"
+                    : "Manager | View: full schedule, frontdesk outcomes, and audit logs. Create: can create bookings when needed. Edit: cross-coach / cross-branch coordination and exception handling. Configuration work still belongs on manager pages, not here."}
+                </li>
+              </ul>
             </SidebarAccordion>
 
             <SidebarAccordion title={zh ? "迷你月曆" : "Mini Calendar"} defaultOpen>
@@ -1789,7 +1661,6 @@ export default function FrontdeskBookingsPage() {
                         onClick={() => {
                           setSelectedMember(member);
                           setMemberMap((prev) => ({ ...prev, [member.id]: member }));
-                          setStatusBookingId("");
                           void loadMemberContracts(member.id);
                         }}
                       >
@@ -1905,88 +1776,38 @@ export default function FrontdeskBookingsPage() {
               })}
             </SidebarAccordion>
 
-            <SidebarAccordion title={zh ? "狀態更新" : "Status Update"} defaultOpen={false}>
-              <form onSubmit={submitStatusUpdate} className="fdBkStatusForm">
-                <select className="input" value={statusBookingId} onChange={(event) => setStatusBookingId(event.target.value)} required>
-                  <option value="">{zh ? "選擇預約 ID" : "Select booking"}</option>
-                  {dayBookings.map((item) => (<option key={item.id} value={item.id}>{item.id.slice(0, 8)} / {item.member_id}</option>))}
-                </select>
-                <select className="input" value={statusValue} onChange={(event) => setStatusValue(event.target.value)}>
-                  <option value="booked">{statusLabel("booked", zh)}</option>
-                  <option value="checked_in">{statusLabel("checked_in", zh)}</option>
-                  <option value="completed">{statusLabel("completed", zh)}</option>
-                  <option value="no_show">{statusLabel("no_show", zh)}</option>
-                  <option value="cancelled">{statusLabel("cancelled", zh)}</option>
-                </select>
-                <input className="input" value={statusReason} onChange={(event) => setStatusReason(event.target.value)} placeholder={zh ? "更新原因（必填）" : "Reason (required)"} required />
-                <button type="submit" className="fdPillBtn" disabled={saving}>{saving ? (zh ? "更新中..." : "Updating...") : zh ? "套用狀態" : "Apply"}</button>
-              </form>
-            </SidebarAccordion>
-
-            <SidebarAccordion title={zh ? "封鎖時段（教練不可排）" : "Coach Blocked Slots"} defaultOpen={false} id="booking-block-slot">
-              <form onSubmit={submitCoachBlock} className="fdBkStatusForm">
-                <select className="input" value={blockCoachId} onChange={(event) => { setBlockCoachId(event.target.value); if (editingBlockId) setEditingBlockId(""); }} required>
-                  <option value="">{zh ? "選擇教練" : "Select coach"}</option>
-                  {coaches.map((coach) => (
-                    <option key={coach.id} value={coach.id}>{coach.displayName || coach.id}</option>
-                  ))}
-                </select>
-                <input
-                  type="datetime-local"
-                  className="input"
-                  value={blockStartsLocal}
-                  onChange={(event) => { setBlockStartsLocal(event.target.value); if (editingBlockId) setEditingBlockId(""); }}
-                  required
-                />
-                <input
-                  type="datetime-local"
-                  className="input"
-                  value={blockEndsLocal}
-                  onChange={(event) => { setBlockEndsLocal(event.target.value); if (editingBlockId) setEditingBlockId(""); }}
-                  required
-                />
-                <input
-                  className="input"
-                  value={blockReason}
-                  onChange={(event) => { setBlockReason(event.target.value); if (editingBlockId) setEditingBlockId(""); }}
-                  placeholder={zh ? "封鎖原因（必填）" : "Reason (required)"}
-                  required
-                />
-                <input
-                  className="input"
-                  value={blockNote}
-                  onChange={(event) => { setBlockNote(event.target.value); if (editingBlockId) setEditingBlockId(""); }}
-                  placeholder={zh ? "備註（選填）" : "Optional note"}
-                />
-                <div className="fdBkInline">
-                  <button type="submit" className="fdPillBtn">{zh ? "建立封鎖" : "Create block"}</button>
-                  <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => void clearCoachBlock()}>
-                    {zh ? "取消封鎖 / 清空" : "Cancel block / Reset"}
-                  </button>
-                </div>
-              </form>
-            </SidebarAccordion>
-
-            <SidebarAccordion title={zh ? "候補名單（P2）" : "Waitlist (P2)"} defaultOpen={false} id="booking-waitlist">
-              <div className="fdBkInline">
-                <input className="input" value={waitlistInput} onChange={(event) => setWaitlistInput(event.target.value)} placeholder={zh ? "姓名 / 電話 / 時段" : "Name / phone / time"} />
-                <button type="button" className="fdPillBtn" onClick={addWaitlistItem}>+</button>
-              </div>
-              <div className="fdBkWaitlist">
-                {waitlist.map((item) => (
-                  <div key={item.id} className="fdBkWaitRow">
-                    <span>{item.contact_name}{item.contact_phone ? ` / ${item.contact_phone}` : ""}{item.desired_time ? ` / ${item.desired_time}` : ""}</span>
-                    <button type="button" className="fdPillBtn fdPillBtnGhost" onClick={() => void removeWaitlistItem(item.id)}>{zh ? "移除" : "Remove"}</button>
-                  </div>
-                ))}
-                {waitlist.length === 0 ? <p className="fdGlassText">{zh ? "尚無候補資料。" : "No waitlist items."}</p> : null}
-              </div>
-            </SidebarAccordion>
-
-            <SidebarAccordion title={zh ? "Google Sync（P2 預留）" : "Google Sync (P2 Placeholder)"} defaultOpen={false}>
+            <SidebarAccordion title={zh ? "離開 frontdesk 的情境" : "When to leave frontdesk"} defaultOpen={false}>
               <p className="fdGlassText">
-                {zh ? "目前保留同步介面：後續可將教練行程同步至 Google Calendar，避免外務衝突。" : "Sync placeholder kept for future Google Calendar integration."}
+                {zh
+                  ? "如果需求不是立即排課，而是改規則、改主資料、改整合、改通知治理，就應離開這頁去 manager。"
+                  : "If the task is not immediate booking work but rule changes, master-data changes, integrations, or notification governance, leave this page and use manager instead."}
               </p>
+              <ul className="fdBkDraftAlertList">
+                <li>{zh ? "教練管理頁｜責任：教練主資料、帳號管理、啟用 / 停用。原因：這些會影響身份與人員生命週期，不應混在前台排課作業。"
+                  : "Coach admin page | Responsibilities: coach master data, account management, activation / deactivation. Why: identity and staff lifecycle management should not live inside frontdesk scheduling."}</li>
+                <li>{zh ? "排班 / block 設定頁｜責任：教練可排班規則、休假、封鎖時段。原因：這些是供給側規則來源，應先於前台排課被設定。"
+                  : "Scheduling / block settings page | Responsibilities: coach availability rules, leave, and blocked slots. Why: these are supply-side rules that should be configured before frontdesk scheduling."}</li>
+                <li>{zh ? "服務與課程規則頁｜責任：服務項目、堂次 / 扣課規則。原因：這些會影響付款、扣堂與建立預約的共用邏輯。"
+                  : "Service and entitlement rules page | Responsibilities: service catalog and session / deduction rules. Why: these drive shared payment, redemption, and booking logic."}</li>
+                <li>{zh ? "營運與權限頁｜責任：權限規則、跨教練 / 跨館規則、預設預約時間與營運規則。原因：這些屬於全域政策，不應由單一排課頁承擔。"
+                  : "Operations and permissions page | Responsibilities: permission rules, cross-coach / cross-branch rules, and default booking / operating rules. Why: these are global policies, not single-page frontdesk tasks."}</li>
+                <li>{zh ? "候補與整合頁｜責任：候補名單流程、Google Sync / 外部整合。原因：這些屬於延伸流程與外部系統，不應污染核心排課作業。"
+                  : "Waitlist and integrations page | Responsibilities: waitlist workflows and Google Sync / external integrations. Why: these are extended workflows and external-system concerns, not core scheduling operations."}</li>
+              </ul>
+            </SidebarAccordion>
+
+            <SidebarAccordion title={zh ? "前往 manager 的正式入口" : "Manager destinations"} defaultOpen={false}>
+              <p className="fdGlassText">
+                {zh
+                  ? "frontdesk 只做 booking operations。遇到設定型或管理型問題，直接從這裡離開。"
+                  : "Frontdesk only owns booking operations. Use these routes when the task turns into configuration or management work."}
+              </p>
+              <div className="fdBkQuickActionGrid" style={{ marginTop: 10 }}>
+                <Link className="fdBkGhostBtn" href="/manager">{zh ? "Manager Hub" : "Manager Hub"}</Link>
+                <Link className="fdBkGhostBtn" href="/manager/settings">{zh ? "Settings Hub" : "Settings Hub"}</Link>
+                <Link className="fdBkGhostBtn" href="/manager/integrations">{zh ? "Integrations" : "Integrations"}</Link>
+                <Link className="fdBkGhostBtn" href="/manager/notifications">{zh ? "Notifications" : "Notifications"}</Link>
+              </div>
             </SidebarAccordion>
           </aside>
 
@@ -2050,14 +1871,14 @@ export default function FrontdeskBookingsPage() {
 
                 <div className="fdBkCalendarBody" style={{ gridTemplateColumns: `88px repeat(${Math.max(1, coachOptions.length)}, minmax(220px, 1fr))` }}>
                   <div className="fdBkTimeColumn" ref={calendarTimeScrollRef} onScroll={handleCalendarTimeScroll}>
-                    {timeSlots.map((slot) => (<div key={slot} className="fdBkTimeSlotLabel">{slot}</div>))}
+                    {timeSlots.map((slot) => (<div key={slot} className="fdBkTimeSlotLabel" data-time-label={slot}>{slot}</div>))}
                   </div>
 
                   {coachOptions.map((coach) => {
                     const coachBookings = bookingsByCoach[coach.id] || [];
                     const coachBlockItems = blocksByCoach[coach.id] || [];
                     return (
-                      <div key={coach.id} className={`fdBkCoachColumn ${isTodayView ? "is-today" : ""}`}>
+                      <div key={coach.id} className={`fdBkCoachColumn ${isTodayView ? "is-today" : ""}`} data-coach-id={coach.id}>
                         {timeSlots.map((slot) => {
                           return (
                             <DroppableSlotCell
@@ -2078,24 +1899,15 @@ export default function FrontdeskBookingsPage() {
                           const height = Math.max(((endsMinute - startsMinute) / SLOT_MINUTE) * SLOT_HEIGHT - 2, 24);
                           if (startsMinute < DAY_START_MINUTE || startsMinute >= DAY_END_MINUTE) return null;
                           return (
-                            <button
+                            <div
                               key={block.id}
-                              type="button"
                               className="fdBkEvent is-blocked"
                               style={{ top: `${top}px`, height: `${height}px` }}
-                              onClick={() => {
-                                setEditingBlockId(block.id);
-                                setBlockCoachId(block.coach_id);
-                                setBlockStartsLocal(isoToLocalInputValue(block.starts_at));
-                                setBlockEndsLocal(isoToLocalInputValue(block.ends_at));
-                                setBlockReason(block.reason);
-                                setBlockNote(block.note || "");
-                              }}
                             >
                               <strong>{zh ? "封鎖時段" : "Blocked"}</strong>
                               <span>{toTimeLabel(startsMinute)}-{toTimeLabel(endsMinute)}</span>
                               <span>{block.reason}</span>
-                            </button>
+                            </div>
                           );
                         })}
                         {coachBookings.map((item) => {
@@ -2116,11 +1928,7 @@ export default function FrontdeskBookingsPage() {
                               disabled={!isDraggable}
                               highlighted={item.id === highlightedBookingId}
                               style={{ top: `${top}px`, height: `${height}px` }}
-                              onClick={() => {
-                                setStatusBookingId(item.id);
-                                setStatusReason("");
-                                setStatusValue(item.status);
-                              }}
+                              onClick={() => {}}
                               title={member?.full_name || item.member_id.slice(0, 6)}
                               subtitle={`${toTimeLabel(startsMinute)}-${toTimeLabel(endsMinute)}`}
                               statusText={statusLabel(status, zh)}
@@ -2160,7 +1968,7 @@ export default function FrontdeskBookingsPage() {
               </div>
             ) : null}
 
-            <div className="fdBkCard" style={{ marginTop: 12 }}>
+            <div className="fdBkCard" style={{ marginTop: 12 }} id="booking-audit-trail">
               <h3 className="sectionTitle" style={{ margin: 0 }}>{zh ? "稽核紀錄（booking_update）" : "Audit Trail (booking_update)"}</h3>
               <div className="fdBkAuditList">
                 {auditItems.map((item) => (

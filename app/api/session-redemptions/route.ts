@@ -178,7 +178,8 @@ export async function POST(request: Request) {
       memberId,
       quantity,
       sessionNo,
-      selectedContractId: consume.data.eligibility.candidate?.contractId ?? null,
+      selectedContractId:
+        typeof consume.data.contract?.id === "string" ? consume.data.contract.id : null,
       selectedPassId: consume.data.eligibility.candidate?.passId ?? null,
       eligibility: {
         eligible: consume.data.eligibility.eligible,
@@ -224,7 +225,8 @@ export async function POST(request: Request) {
       memberId,
       bookingId,
       sessionNo,
-      selectedContractId: consume.data.eligibility.candidate?.contractId ?? null,
+      selectedContractId:
+        typeof consume.data.contract?.id === "string" ? consume.data.contract.id : null,
       selectedPassId: consume.data.eligibility.candidate?.passId ?? null,
     },
   }).catch(() => null);

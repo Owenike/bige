@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Link from "next/link";
 import { FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../i18n-provider";
@@ -4043,6 +4044,37 @@ export default function FrontdeskPortalPage() {
       <section className="fdGlassBackdrop fdEnter">
         {error ? <div className="error">{error}</div> : null}
         {shiftActionError ? <div className="error" style={{ marginTop: error ? 10 : 0 }}>{shiftActionError}</div> : null}
+        <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-frontdesk-landing>
+          <h2 className="sectionTitle">{lang === "zh" ? "Frontdesk 入口" : "Frontdesk Entry"}</h2>
+          <p className="fdGlassText" style={{ marginTop: 8 }} data-frontdesk-boundary>
+            {lang === "zh"
+              ? "frontdesk domain 以現場作業為主。正式 booking workbench 是 /frontdesk/bookings；管理型、設定型與通知治理責任已搬到 manager domain，不在 frontdesk 處理。"
+              : "The frontdesk domain stays focused on live desk operations. The formal booking workbench is /frontdesk/bookings, while managerial, settings, and notification-governance responsibilities now belong to the manager domain rather than frontdesk."}
+          </p>
+          <div className="fdPillActions" style={{ marginTop: 10 }}>
+            <Link className="fdPillBtn fdPillBtnPrimary" href="/frontdesk/bookings" data-frontdesk-bookings-link>
+              {lang === "zh" ? "開啟排課作業台" : "Open Booking Workbench"}
+            </Link>
+            <Link className="fdPillBtn" href="/manager">
+              {lang === "zh" ? "前往 Manager Hub" : "Open Manager Hub"}
+            </Link>
+            <Link className="fdPillBtn" href="/manager/settings">
+              {lang === "zh" ? "前往 Settings Hub" : "Open Settings Hub"}
+            </Link>
+          </div>
+          <div className="fdDataGrid" style={{ marginTop: 10 }} data-frontdesk-responsibility-index>
+            <p className="sub" style={{ marginTop: 0 }}>
+              {lang === "zh"
+                ? "Frontdesk 負責：排課、會員查詢、入場、收銀與交班等現場即時作業。"
+                : "Frontdesk owns live booking operations, member lookup, check-in, cashier, and handover tasks."}
+            </p>
+            <p className="sub" style={{ marginTop: 0 }}>
+              {lang === "zh"
+                ? "不負責：教練主資料、排班/block 規則、服務/方案/套票規則、integrations、operations policy、notifications 管理。"
+                : "It does not own coach master data, scheduling/block rules, service/plan/package rules, integrations, operations policy, or notifications management."}
+            </p>
+          </div>
+        </section>
         {handoverReminderOpen ? (
           <div className="fdHandoverReminder">
             <div className="fdHandoverReminderText">

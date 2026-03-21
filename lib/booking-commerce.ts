@@ -245,11 +245,12 @@ export async function resolveServiceCommercials(params: {
     .from("services")
     .select("id, branch_id, code, name, price_amount, requires_deposit, deposit_calculation_type, deposit_value")
     .eq("tenant_id", params.tenantId)
-    .eq("name", params.serviceName)
-    .limit(10);
+    .limit(200);
 
   if (params.branchId) {
     query = query.or(`branch_id.eq.${params.branchId},branch_id.is.null`);
+  } else {
+    query = query.is("branch_id", null);
   }
 
   const result = await query;
@@ -257,7 +258,13 @@ export async function resolveServiceCommercials(params: {
     throw new BookingCommercialError(500, "INTERNAL_ERROR", result.error.message);
   }
 
-  const rows = (result.data || []) as ServiceRow[];
+  const requestedIdentifier = params.serviceName.trim().toLowerCase();
+  const rows = ((result.data || []) as ServiceRow[]).filter((item) => {
+    const name = item.name.trim().toLowerCase();
+    const code = item.code.trim().toLowerCase();
+    return name === requestedIdentifier || code === requestedIdentifier;
+  });
+
   const row = rows.find((item) => item.branch_id === params.branchId) || rows.find((item) => item.branch_id === null) || rows[0];
   if (!row) {
     throw new BookingCommercialError(404, "FORBIDDEN", "Service not found for booking payment calculation.");
