@@ -81,6 +81,10 @@ type BookingApiAuth = {
   context: BookingApiContext;
 };
 
+function isBookingTherapistRole(value: unknown): value is (typeof BOOKING_THERAPIST_ROLES)[number] {
+  return typeof value === "string" && BOOKING_THERAPIST_ROLES.includes(value as (typeof BOOKING_THERAPIST_ROLES)[number]);
+}
+
 function parseRoomFromNote(note: string | null) {
   if (!note) return "";
   const match = note.match(/\[room:([^\]]+)\]/i);
@@ -361,7 +365,6 @@ export async function GET(request: Request) {
       .select("id, display_name, branch_id, role")
       .eq("tenant_id", auth.context.tenantId)
       .eq("is_active", true)
-      .in("role", [...BOOKING_THERAPIST_ROLES])
       .order("created_at", { ascending: true }),
     entryPassIds.length
       ? auth.supabase
@@ -528,6 +531,7 @@ export async function GET(request: Request) {
     }));
 
   const filterTherapists = ((filterTherapistResult.data || []) as StaffRow[])
+    .filter((item) => isBookingTherapistRole(item.role))
     .filter((item) => auth.context.role !== "coach" || item.id === auth.context.userId)
     .filter((item) => !auth.context.branchId || !item.branch_id || item.branch_id === auth.context.branchId)
     .map((item) => ({
