@@ -91,7 +91,7 @@ export default function NotificationConfigIntegrityDashboard(props: Notification
   const viewModel = useMemo(() => (payload ? buildConfigIntegrityViewModel(payload) : null), [payload]);
 
   return (
-    <main className="fdGlassScene">
+    <main className="fdGlassScene" data-notifications-config-integrity-page>
       <section className="fdGlassBackdrop">
         <section className="hero" style={{ paddingTop: 0 }}>
           <div className="fdGlassPanel">
@@ -104,6 +104,16 @@ export default function NotificationConfigIntegrityDashboard(props: Notification
               <Link className="fdPillBtn" href={props.mode === "platform" ? "/platform-admin" : "/manager"}>
                 Back
               </Link>
+              {props.mode === "manager" ? (
+                <>
+                  <Link className="fdPillBtn" href="/manager/notifications">
+                    Notifications
+                  </Link>
+                  <Link className="fdPillBtn" href="/manager/notifications/readiness">
+                    Readiness
+                  </Link>
+                </>
+              ) : null}
               <button type="button" className="fdPillBtn" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading}>
                 Refresh
               </button>
@@ -112,7 +122,7 @@ export default function NotificationConfigIntegrityDashboard(props: Notification
         </section>
         <NotificationGovernanceNav mode={props.mode} />
 
-        <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+        <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-config-integrity-filters>
           <h2 className="sectionTitle">Filters</h2>
           <div className="fdThreeCol" style={{ gap: 10, marginTop: 8 }}>
             {props.mode === "platform" ? (
@@ -149,29 +159,29 @@ export default function NotificationConfigIntegrityDashboard(props: Notification
         ) : null}
 
         {error ? (
-          <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+          <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-config-integrity-error>
             <div className="error">{error}</div>
           </section>
         ) : null}
 
         {loading ? (
-          <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+          <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-config-integrity-loading>
             <p className="fdGlassText">Loading config integrity...</p>
           </section>
         ) : null}
 
         {!loading && payload && viewModel ? (
           <>
-            <section className="fdInventorySummary" style={{ marginBottom: 14 }}>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
+            <section className="fdInventorySummary" style={{ marginBottom: 14 }} data-notifications-config-integrity-summary>
+              <div className="fdGlassSubPanel fdInventorySummaryItem" data-notifications-config-integrity-tenant>
                 <div className="kvLabel">Tenant</div>
                 <strong className="fdInventorySummaryValue">{payload.tenantId}</strong>
               </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
+              <div className="fdGlassSubPanel fdInventorySummaryItem" data-notifications-config-integrity-score>
                 <div className="kvLabel">Health Score</div>
                 <strong className="fdInventorySummaryValue">{viewModel.score}</strong>
               </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
+              <div className="fdGlassSubPanel fdInventorySummaryItem" data-notifications-config-integrity-status>
                 <div className="kvLabel">Health Status</div>
                 <strong className="fdInventorySummaryValue">
                   <span className="fdPillBtn" style={getNotificationGovernanceToneStyle(viewModel.tone)}>
@@ -179,32 +189,32 @@ export default function NotificationConfigIntegrityDashboard(props: Notification
                   </span>
                 </strong>
               </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
+              <div className="fdGlassSubPanel fdInventorySummaryItem" data-notifications-config-integrity-template-coverage>
                 <div className="kvLabel">Template Coverage</div>
                 <strong className="fdInventorySummaryValue">
                   {payload.integrity.summary.coveredTemplatePairs}/{payload.integrity.summary.expectedTemplatePairs}
                 </strong>
               </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
+              <div className="fdGlassSubPanel fdInventorySummaryItem" data-notifications-config-integrity-template-completeness>
                 <div className="kvLabel">Template Completeness</div>
                 <strong className="fdInventorySummaryValue">{viewModel.templateCompleteness}%</strong>
               </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
+              <div className="fdGlassSubPanel fdInventorySummaryItem" data-notifications-config-integrity-preference-completeness>
                 <div className="kvLabel">Preference Completeness</div>
                 <strong className="fdInventorySummaryValue">{viewModel.preferenceCompleteness}%</strong>
               </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
+              <div className="fdGlassSubPanel fdInventorySummaryItem" data-notifications-config-integrity-total-missing>
                 <div className="kvLabel">Total Missing Items</div>
                 <strong className="fdInventorySummaryValue">{viewModel.totalMissing}</strong>
               </div>
-              <div className="fdGlassSubPanel fdInventorySummaryItem">
+              <div className="fdGlassSubPanel fdInventorySummaryItem" data-notifications-config-integrity-warning-count>
                 <div className="kvLabel">Warnings</div>
                 <strong className="fdInventorySummaryValue">{payload.integrity.warnings.length}</strong>
               </div>
             </section>
 
             <section className="fdTwoCol" style={{ marginBottom: 14 }}>
-              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-config-integrity-preferences>
                 <h2 className="sectionTitle">Missing Role/Event Preferences</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
                   Missing: {payload.integrity.missingItems.missingRoleEventPairs.length}
@@ -221,7 +231,7 @@ export default function NotificationConfigIntegrityDashboard(props: Notification
                 </div>
               </section>
 
-              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-config-integrity-templates>
                 <h2 className="sectionTitle">Missing Event/Channel Templates</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
                   Missing: {payload.integrity.missingItems.missingTemplatePairs.length}
@@ -239,7 +249,7 @@ export default function NotificationConfigIntegrityDashboard(props: Notification
               </section>
             </section>
 
-            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-config-integrity-enabled-without-template>
               <h2 className="sectionTitle">Enabled Channels Without Template</h2>
               <div className="fdDataGrid" style={{ marginTop: 8 }}>
                 {payload.integrity.missingItems.enabledChannelsWithoutTemplate.map((item) => (
@@ -253,7 +263,7 @@ export default function NotificationConfigIntegrityDashboard(props: Notification
               </div>
             </section>
 
-            <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-config-integrity-warnings>
               <h2 className="sectionTitle">Warnings</h2>
               <div className="fdDataGrid" style={{ marginTop: 8 }}>
                 {payload.integrity.warnings.map((warning) => (
@@ -262,6 +272,36 @@ export default function NotificationConfigIntegrityDashboard(props: Notification
                   </p>
                 ))}
                 {payload.integrity.warnings.length === 0 ? <p className="fdGlassText">No warnings.</p> : null}
+              </div>
+            </section>
+
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-config-integrity-boundaries>
+              <h2 className="sectionTitle">Responsibility boundaries</h2>
+              <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  This page owns config integrity, template completeness, role/event preference completeness, and enabled-channel template gaps.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Readiness and blocking reasons stay in the readiness page. Retry and remediation execution stay in the retry workbench.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  This page is read-only. It reports missing coverage and warnings, but does not edit provider credentials or runtime policy.
+                </p>
+              </div>
+            </section>
+
+            <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-config-integrity-out-of-scope>
+              <h2 className="sectionTitle">Out of scope</h2>
+              <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  No provider credential editor, OAuth flow, webhook secret management, or auth / activation changes.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  No retry / remediation execution, no audit trace explorer, and no integrations catalog maintenance.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  No frontdesk booking, scheduling, services, plans, packages, or operations settings maintenance.
+                </p>
               </div>
             </section>
           </>

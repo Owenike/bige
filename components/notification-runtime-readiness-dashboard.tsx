@@ -132,9 +132,17 @@ export default function NotificationRuntimeReadinessDashboard(props: Notificatio
   }
 
   const viewModel = useMemo(() => (payload ? buildRuntimeReadinessViewModel(payload) : null), [payload]);
+  const runtimeBlockedCount = payload
+    ? payload.report.readiness.missingPreferences.length +
+      payload.report.readiness.missingTemplates.length +
+      payload.report.readiness.unavailableChannels.length
+    : 0;
+  const mismatchCount = payload
+    ? payload.report.readiness.fallbacks.length + payload.report.warnings.length
+    : 0;
 
   return (
-    <main className="fdGlassScene">
+    <main className="fdGlassScene" data-notifications-runtime-readiness-page>
       <section className="fdGlassBackdrop">
         <section className="hero" style={{ paddingTop: 0 }}>
           <div className="fdGlassPanel">
@@ -142,12 +150,21 @@ export default function NotificationRuntimeReadinessDashboard(props: Notificatio
             <h1 className="h1" style={{ marginTop: 10, fontSize: 34 }}>
               Notification Runtime Readiness
             </h1>
-            <p className="fdGlassText">Read-only readiness report. This page never sends notifications.</p>
+            <p className="fdGlassText">
+              Read-only live-constraint report. This page explains runtime blocked states, live-vs-fixture differences,
+              and effective sendability impact. It never dispatches notifications.
+            </p>
             <div className="actions" style={{ marginTop: 10 }}>
               <Link className="fdPillBtn" href={props.mode === "platform" ? "/platform-admin" : "/manager"}>
                 Back
               </Link>
-              <button type="button" className="fdPillBtn" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading}>
+              <button
+                type="button"
+                className="fdPillBtn"
+                data-notifications-runtime-readiness-refresh
+                onClick={() => setRefreshKey((value) => value + 1)}
+                disabled={loading}
+              >
                 Refresh
               </button>
             </div>
@@ -155,7 +172,7 @@ export default function NotificationRuntimeReadinessDashboard(props: Notificatio
         </section>
         <NotificationGovernanceNav mode={props.mode} />
 
-        <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+        <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-runtime-readiness-filters>
           <h2 className="sectionTitle">Filters</h2>
           <div className="fdThreeCol" style={{ gap: 10, marginTop: 8 }}>
             {props.mode === "platform" ? (
@@ -235,22 +252,22 @@ export default function NotificationRuntimeReadinessDashboard(props: Notificatio
 
         {error ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-            <div className="error">{error}</div>
+            <div className="error" data-notifications-runtime-readiness-error>{error}</div>
           </section>
         ) : null}
 
         {loading ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-            <p className="fdGlassText">Loading runtime readiness...</p>
+            <p className="fdGlassText" data-notifications-runtime-readiness-loading>Loading runtime readiness...</p>
           </section>
         ) : null}
 
         {!loading && payload && viewModel ? (
           <>
-            <section className="fdInventorySummary" style={{ marginBottom: 14 }}>
+            <section className="fdInventorySummary" style={{ marginBottom: 14 }} data-notifications-runtime-readiness-summary>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
                 <div className="kvLabel">Readiness</div>
-                <strong className="fdInventorySummaryValue">
+                <strong className="fdInventorySummaryValue" data-notifications-runtime-readiness-ready>
                   <span className="fdPillBtn" style={getNotificationGovernanceToneStyle(viewModel.tone)}>
                     {viewModel.ready ? "ready" : "not ready"}
                   </span>
@@ -258,30 +275,78 @@ export default function NotificationRuntimeReadinessDashboard(props: Notificatio
               </div>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
                 <div className="kvLabel">Source</div>
-                <strong className="fdInventorySummaryValue">
+                <strong className="fdInventorySummaryValue" data-notifications-runtime-readiness-source>
                   {viewModel.source}
                   {viewModel.scenarioId ? ` (${viewModel.scenarioId})` : ""}
                 </strong>
               </div>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
-                <div className="kvLabel">Missing</div>
-                <strong className="fdInventorySummaryValue">{viewModel.missingCount}</strong>
+                <div className="kvLabel">Runtime blocked</div>
+                <strong className="fdInventorySummaryValue" data-notifications-runtime-readiness-blocked>
+                  {runtimeBlockedCount}
+                </strong>
               </div>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
                 <div className="kvLabel">Fallbacks</div>
-                <strong className="fdInventorySummaryValue">{viewModel.fallbackCount}</strong>
+                <strong className="fdInventorySummaryValue" data-notifications-runtime-readiness-fallbacks>
+                  {viewModel.fallbackCount}
+                </strong>
+              </div>
+              <div className="fdGlassSubPanel fdInventorySummaryItem">
+                <div className="kvLabel">Mismatch signals</div>
+                <strong className="fdInventorySummaryValue" data-notifications-runtime-readiness-mismatch>
+                  {mismatchCount}
+                </strong>
               </div>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
                 <div className="kvLabel">Warnings</div>
-                <strong className="fdInventorySummaryValue">{viewModel.warningCount}</strong>
+                <strong className="fdInventorySummaryValue" data-notifications-runtime-readiness-warnings>
+                  {viewModel.warningCount}
+                </strong>
               </div>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
                 <div className="kvLabel">Skipped</div>
-                <strong className="fdInventorySummaryValue">{viewModel.skippedCount}</strong>
+                <strong className="fdInventorySummaryValue" data-notifications-runtime-readiness-skipped>
+                  {viewModel.skippedCount}
+                </strong>
               </div>
             </section>
 
-            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-runtime-readiness-difference>
+              <h2 className="sectionTitle">Readiness vs Preflight vs Runtime Readiness</h2>
+              <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  <strong>/manager/notifications/readiness</strong>: static channel configuration gaps, coverage gaps, and blocking hints.
+                  It answers whether a channel looks configured and what gaps exist.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  <strong>/manager/notifications-preflight</strong>: event-specific pre-dispatch resolution using current rules.
+                  It answers how preference + template + planning resolve before send.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  <strong>runtime-readiness</strong>: live runtime constraints and fixture-vs-live mismatch signals.
+                  It answers whether effective runtime sendability is blocked by live dependencies, missing runtime inputs, or fallback-only states.
+                </p>
+              </div>
+            </section>
+
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-runtime-readiness-live-vs-fixture>
+              <h2 className="sectionTitle">Live vs Fixture</h2>
+              <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  <strong>Current source:</strong> {payload.source}
+                  {payload.scenarioId ? ` (${payload.scenarioId})` : ""}
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  <strong>Live mode</strong> uses tenant data and runtime validator outputs, so blocked reasons reflect current live dependencies and actual runtime constraints.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  <strong>Fixture mode</strong> is a controlled scenario for mismatch inspection; it helps compare modeled outcomes against live behavior without editing live configuration.
+                </p>
+              </div>
+            </section>
+
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-runtime-readiness-preference>
               <h2 className="sectionTitle">Preference Resolution</h2>
               <p className="sub" style={{ marginTop: 0 }}>
                 enabled: {String(payload.report.preference.enabled)} | source: {payload.report.preference.source}
@@ -311,7 +376,7 @@ export default function NotificationRuntimeReadinessDashboard(props: Notificatio
               </details>
             </section>
 
-            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-runtime-readiness-templates>
               <h2 className="sectionTitle">Template Resolution</h2>
               <div className="fdDataGrid" style={{ marginTop: 8 }}>
                 {payload.report.templates.map((item) => (
@@ -338,7 +403,7 @@ export default function NotificationRuntimeReadinessDashboard(props: Notificatio
             </section>
 
             <section className="fdTwoCol" style={{ marginBottom: 14 }}>
-              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-runtime-readiness-planning>
                 <h2 className="sectionTitle">Delivery Planning Draft</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
                   ready: {String(payload.report.deliveryPlanning.ready)} | planned channels:{" "}
@@ -367,8 +432,8 @@ export default function NotificationRuntimeReadinessDashboard(props: Notificatio
                 </details>
               </section>
 
-              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <h2 className="sectionTitle">Readiness Summary</h2>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-runtime-readiness-live-constraints>
+                <h2 className="sectionTitle">Live Constraints</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
                   missing preferences: {payload.report.readiness.missingPreferences.length}
                 </p>
@@ -395,7 +460,7 @@ export default function NotificationRuntimeReadinessDashboard(props: Notificatio
             </section>
 
             <section className="fdTwoCol">
-              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-runtime-readiness-missing>
                 <h2 className="sectionTitle">Missing / Unavailable</h2>
                 <div className="fdDataGrid" style={{ marginTop: 8 }}>
                   {payload.report.readiness.missingPreferences.map((item) => (
@@ -420,8 +485,8 @@ export default function NotificationRuntimeReadinessDashboard(props: Notificatio
                   ) : null}
                 </div>
               </section>
-              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <h2 className="sectionTitle">Fallbacks / Warnings</h2>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-runtime-readiness-fallback-warning-panel>
+                <h2 className="sectionTitle">Fixture / Live mismatch signals</h2>
                 <div className="fdDataGrid" style={{ marginTop: 8 }}>
                   {payload.report.readiness.fallbacks.map((item) => (
                     <p key={`${item.channel}:${item.strategy}`} className="sub" style={{ marginTop: 0 }}>
@@ -445,6 +510,36 @@ export default function NotificationRuntimeReadinessDashboard(props: Notificatio
                   event input: {summarizeMetadataObject(payload.report.eventInput, 180)}
                 </p>
               </section>
+            </section>
+
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginTop: 14 }} data-notifications-runtime-readiness-boundaries>
+              <h2 className="sectionTitle">Responsibility boundaries</h2>
+              <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  This page owns live constraints, runtime blocked reasons, fixture-vs-live mismatch signals, and effective runtime sendability impact.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Static readiness gaps stay in `/manager/notifications/readiness`. Pre-dispatch resolution stays in `/manager/notifications-preflight`.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  This page does not execute retry, edit templates/preferences, or manage integrations and provider credentials.
+                </p>
+              </div>
+            </section>
+
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginTop: 14 }} data-notifications-runtime-readiness-out-of-scope>
+              <h2 className="sectionTitle">Out of scope</h2>
+              <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  No provider credential editor, OAuth flow, webhook platform, queue / worker control, or auth / activation work.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  No retry workbench, audit history explorer, readiness maintenance, preflight planning editor, or config-integrity summary management.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  No frontdesk booking, scheduling, services, plans, packages, or other master-data maintenance.
+                </p>
+              </div>
             </section>
           </>
         ) : null}

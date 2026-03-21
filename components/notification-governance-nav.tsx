@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getNotificationGovernanceNavItems, type NotificationGovernanceMode } from "../lib/notification-governance-navigation";
+import ManagerNotificationsDomainNav from "./manager-notifications-domain-nav";
 
 type NotificationGovernanceNavProps = {
   mode: NotificationGovernanceMode;
@@ -10,6 +11,11 @@ type NotificationGovernanceNavProps = {
 
 export default function NotificationGovernanceNav(props: NotificationGovernanceNavProps) {
   const pathname = usePathname();
+
+  if (props.mode === "manager") {
+    return <ManagerNotificationsDomainNav />;
+  }
+
   const items = getNotificationGovernanceNavItems(props.mode);
 
   return (

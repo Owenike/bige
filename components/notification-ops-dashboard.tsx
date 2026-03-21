@@ -18,11 +18,86 @@ import {
   getNotificationGovernanceToneStyle,
   resolveNotificationGovernanceTone,
 } from "../lib/notification-governance-view-model";
+import { fetchApiJson } from "../lib/notification-productization-ui";
 import NotificationGovernanceNav from "./notification-governance-nav";
 
 type NotificationOpsDashboardProps = {
   mode: OpsDashboardMode;
 };
+
+type OpsRoutePayload = {
+  tenantId: string | null;
+  summary: {
+    jobRuns: number;
+    deliveryRows: number;
+    failed: number;
+    deadLetter: number;
+    retrying: number;
+    sent: number;
+    skipped: number;
+    pending?: number;
+    byStatus: Record<string, number>;
+    byChannel: Record<string, number>;
+    external: {
+      total: number;
+      sent: number;
+      failed: number;
+      deadLetter: number;
+      retrying: number;
+      skipped: number;
+      pending: number;
+      channelNotConfigured: number;
+      byStatus: Record<string, number>;
+      byChannel: Record<string, number>;
+      providerErrors: Record<string, number>;
+    };
+  };
+  runs: Array<{
+    id: string;
+    job_type?: string;
+    trigger_mode?: string;
+    status: string;
+    started_at?: string | null;
+    finished_at?: string | null;
+    affected_count?: number | null;
+    error_count?: number | null;
+    error_summary?: string | null;
+    created_at?: string | null;
+  }>;
+  failedDeliveries: Array<{
+    id: string;
+    channel: string | null;
+    error_code: string | null;
+    error_message: string | null;
+    created_at: string;
+  }>;
+  retryingDeliveries: Array<{
+    id: string;
+    channel: string | null;
+    next_retry_at: string | null;
+    created_at: string;
+  }>;
+};
+
+type OpsActionResult =
+  | {
+      action: "run_sweep";
+      notificationGenerated?: number;
+      opportunityInserted?: number;
+    }
+  | {
+      action: "retry_deliveries";
+      summary?: {
+        processed: number;
+        sent: number;
+        failed: number;
+        skipped: number;
+        retrying: number;
+        deadLetter: number;
+      };
+    };
+
+type ManagerOpsAction = "run_sweep" | "retry_deliveries";
 
 function toDateTime(value: string | null) {
   if (!value) return "-";
@@ -48,6 +123,16 @@ function safeNumberInput(value: string, fallback: number, min: number, max: numb
   return Math.min(max, Math.max(min, Math.floor(parsed)));
 }
 
+function toSortedEntries(record: Record<string, number>, take = 8) {
+  return Object.entries(record || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, take);
+}
+
+function getOpsRouteBase(mode: OpsDashboardMode) {
+  return mode === "platform" ? "/api/platform/notifications/ops" : "/api/manager/notifications/ops";
+}
+
 export default function NotificationOpsDashboard(props: NotificationOpsDashboardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -55,8 +140,11 @@ export default function NotificationOpsDashboard(props: NotificationOpsDashboard
 
   const query = useMemo(() => parseOpsDashboardQuery(searchParams, props.mode), [searchParams, props.mode]);
   const [bundle, setBundle] = useState<OpsDashboardBundle | null>(null);
+  const [opsRoute, setOpsRoute] = useState<OpsRoutePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busyAction, setBusyAction] = useState<ManagerOpsAction | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [tenantIdInput, setTenantIdInput] = useState(query.tenantId || "");
@@ -73,22 +161,38 @@ export default function NotificationOpsDashboard(props: NotificationOpsDashboard
     let active = true;
     setLoading(true);
     setError(null);
-    void fetchOpsDashboardBundle({
-      mode: props.mode,
-      query: {
-        tenantId: query.tenantId,
-        limit: query.limit,
-        staleAfterMinutes: query.staleAfterMinutes,
-        status: query.status,
-      },
-    }).then((result) => {
+    void Promise.all([
+      fetchOpsDashboardBundle({
+        mode: props.mode,
+        query: {
+          tenantId: query.tenantId,
+          limit: query.limit,
+          staleAfterMinutes: query.staleAfterMinutes,
+          status: query.status,
+        },
+      }),
+      fetchApiJson<OpsRoutePayload>(
+        `${getOpsRouteBase(props.mode)}?${new URLSearchParams(
+          props.mode === "platform" && query.tenantId
+            ? { tenantId: query.tenantId, limit: String(Math.min(query.limit, 200)) }
+            : { limit: String(Math.min(query.limit, props.mode === "platform" ? 200 : 80)) },
+        ).toString()}`,
+        { cache: "no-store" },
+      ),
+    ]).then(([bundleResult, opsResult]) => {
       if (!active) return;
-      if (!result.ok) {
-        setError(result.message);
+      if (!bundleResult.ok) {
+        setError(bundleResult.message);
         setLoading(false);
         return;
       }
-      setBundle(result.bundle);
+      if (!opsResult.ok) {
+        setError(opsResult.message);
+        setLoading(false);
+        return;
+      }
+      setBundle(bundleResult.bundle);
+      setOpsRoute(opsResult.data);
       setLoading(false);
     });
     return () => {
@@ -132,23 +236,70 @@ export default function NotificationOpsDashboard(props: NotificationOpsDashboard
     });
   }
 
+  async function runManagerAction(action: ManagerOpsAction) {
+    if (props.mode !== "manager") return;
+    setBusyAction(action);
+    setError(null);
+    setMessage(null);
+    const result = await fetchApiJson<OpsActionResult>("/api/manager/notifications/ops", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(
+        action === "retry_deliveries"
+          ? {
+              action,
+              limit: 120,
+            }
+          : { action },
+      ),
+    });
+    if (!result.ok) {
+      setError(result.message);
+      setBusyAction(null);
+      return;
+    }
+    if (action === "run_sweep") {
+      const payload = result.data as Extract<OpsActionResult, { action: "run_sweep" }>;
+      setMessage(
+        `Sweep completed: notifications ${payload.notificationGenerated || 0}, opportunities ${payload.opportunityInserted || 0}.`,
+      );
+    } else {
+      const payload = result.data as Extract<OpsActionResult, { action: "retry_deliveries" }>;
+      setMessage(
+        `Retry batch completed: processed ${payload.summary?.processed || 0}, sent ${payload.summary?.sent || 0}, failed ${payload.summary?.failed || 0}.`,
+      );
+    }
+    setRefreshKey((current) => current + 1);
+    setBusyAction(null);
+  }
+
   return (
-    <main className="fdGlassScene">
+    <main className="fdGlassScene" data-notifications-ops-page>
       <section className="fdGlassBackdrop">
         <section className="hero" style={{ paddingTop: 0 }}>
           <div className="fdGlassPanel">
             <div className="fdEyebrow">{props.mode === "platform" ? "PLATFORM OPS" : "TENANT OPS"}</div>
             <h1 className="h1" style={{ marginTop: 10, fontSize: 34 }}>
-              Notification Reliability Dashboard
+              Notification Ops / Scheduled Health
             </h1>
             <p className="fdGlassText">
-              Read-only dashboard from notifications ops summary/health/coverage APIs.
+              This page owns recent runs, scheduled health, external delivery summary, and manager-level batch ops.
+              It does not own row-level retry, notification history, readiness diagnostics, or template/preference
+              maintenance.
             </p>
             <div className="actions" style={{ marginTop: 10 }}>
               <Link className="fdPillBtn" href={props.mode === "platform" ? "/platform-admin" : "/manager"}>
                 Back
               </Link>
-              <button type="button" className="fdPillBtn" onClick={() => setRefreshKey((current) => current + 1)} disabled={loading}>
+              <button
+                type="button"
+                className="fdPillBtn"
+                onClick={() => setRefreshKey((current) => current + 1)}
+                disabled={loading}
+                data-notifications-ops-refresh
+              >
                 Refresh
               </button>
             </div>
@@ -156,7 +307,7 @@ export default function NotificationOpsDashboard(props: NotificationOpsDashboard
         </section>
         <NotificationGovernanceNav mode={props.mode} />
 
-        <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+        <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-ops-filters>
           <h2 className="sectionTitle">Filters</h2>
           <div className="fdThreeCol" style={{ gap: 10, marginTop: 8 }}>
             {props.mode === "platform" ? (
@@ -200,8 +351,14 @@ export default function NotificationOpsDashboard(props: NotificationOpsDashboard
         </section>
 
         {error ? (
-          <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+          <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-ops-error>
             <div className="error">{error}</div>
+          </section>
+        ) : null}
+
+        {message ? (
+          <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-ops-message>
+            <div className="sub" style={{ marginTop: 0, color: "#0f5132" }}>{message}</div>
           </section>
         ) : null}
 
@@ -217,9 +374,45 @@ export default function NotificationOpsDashboard(props: NotificationOpsDashboard
           </section>
         ) : null}
 
-        {viewModel && bundle ? (
+        {viewModel && bundle && opsRoute ? (
           <>
-            <section className="fdInventorySummary" style={{ marginBottom: 14 }}>
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-ops-differences>
+              <h2 className="sectionTitle">Responsibility split</h2>
+              <div className="fdThreeCol" style={{ gap: 12, marginTop: 8 }}>
+                <section className="fdGlassSubPanel" style={{ padding: 12 }}>
+                  <div className="kvLabel">/manager/notifications</div>
+                  <p className="sub" style={{ marginTop: 8 }}>
+                    Owns overview + notification workbench landing. It summarizes delivery health, readiness, coverage,
+                    and top-level workbench entry points.
+                  </p>
+                  <p className="sub" style={{ marginTop: 8 }}>
+                    It does not own scheduled health detail, recent run analysis, or manager-level batch sweep history.
+                  </p>
+                </section>
+                <section className="fdGlassSubPanel" style={{ padding: 12 }}>
+                  <div className="kvLabel">/manager/notification-retry</div>
+                  <p className="sub" style={{ marginTop: 8 }}>
+                    Owns failed / retrying deliveries, single retry, and remediation queue decisions.
+                  </p>
+                  <p className="sub" style={{ marginTop: 8 }}>
+                    It does not own scheduled health summary or external delivery run reporting. Batch retry here stays
+                    subordinate to row-level remediation.
+                  </p>
+                </section>
+                <section className="fdGlassSubPanel" style={{ padding: 12 }}>
+                  <div className="kvLabel">/manager/notifications-ops</div>
+                  <p className="sub" style={{ marginTop: 8 }}>
+                    Owns recent runs, scheduled health, external delivery summary, and manager-level batch ops such as
+                    sweep and retry batch execution.
+                  </p>
+                  <p className="sub" style={{ marginTop: 8 }}>
+                    It does not own row-level retry, remediation queue, or the integrations catalog.
+                  </p>
+                </section>
+              </div>
+            </section>
+
+            <section className="fdInventorySummary" style={{ marginBottom: 14 }} data-notifications-ops-summary>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
                 <div className="kvLabel">Scope</div>
                 <strong className="fdInventorySummaryValue">{viewModel.scopeLabel}</strong>
@@ -274,7 +467,7 @@ export default function NotificationOpsDashboard(props: NotificationOpsDashboard
               </section>
             ) : null}
 
-            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-ops-scheduled-health>
               <h2 className="sectionTitle">Scheduled Health</h2>
               <div className="actions" style={{ marginTop: 8 }}>
                 <span
@@ -312,44 +505,94 @@ export default function NotificationOpsDashboard(props: NotificationOpsDashboard
 
             <section className="fdTwoCol" style={{ marginBottom: 14 }}>
               <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <h2 className="sectionTitle">Template Coverage</h2>
+                <h2 className="sectionTitle">Manager-level ops actions</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
-                  Coverage: {viewModel.coverage.templatePercent}% ({bundle.coverage.templateCoverage.coveredCombinations}/
-                  {bundle.coverage.templateCoverage.expectedCombinations})
+                  Batch actions here are ops-layer only. Row-level retry stays in `/manager/notification-retry`.
+                </p>
+                {props.mode === "manager" ? (
+                  <div className="actions" style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="fdPillBtn fdPillBtnPrimary"
+                      onClick={() => void runManagerAction("run_sweep")}
+                      disabled={busyAction !== null}
+                      data-notifications-ops-run-sweep
+                    >
+                      {busyAction === "run_sweep" ? "Running..." : "Run sweep"}
+                    </button>
+                    <button
+                      type="button"
+                      className="fdPillBtn"
+                      onClick={() => void runManagerAction("retry_deliveries")}
+                      disabled={busyAction !== null}
+                      data-notifications-ops-retry-batch
+                    >
+                      {busyAction === "retry_deliveries" ? "Retrying..." : "Retry failed batch"}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="fdGlassText" style={{ marginTop: 8 }}>
+                    Platform view remains read-only. Manager-level batch actions are not exposed here.
+                  </p>
+                )}
+              </section>
+
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-ops-external-summary>
+                <h2 className="sectionTitle">External Delivery Summary</h2>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  External total: {opsRoute.summary.external.total} | sent: {opsRoute.summary.external.sent} | failed:{" "}
+                  {opsRoute.summary.external.failed}
                 </p>
                 <p className="sub" style={{ marginTop: 0 }}>
-                  Missing combinations: {bundle.coverage.templateCoverage.missingCombinations}
+                  Retrying: {opsRoute.summary.external.retrying} | pending: {opsRoute.summary.external.pending} | channel not configured:{" "}
+                  {opsRoute.summary.external.channelNotConfigured}
                 </p>
                 <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                  {viewModel.coverage.missingTemplates.map((item) => (
-                    <p key={`${item.eventType}:${item.channel}`} className="sub" style={{ marginTop: 0 }}>
-                      {item.eventType} / {item.channel}
+                  {toSortedEntries(opsRoute.summary.external.byChannel).map(([channel, count]) => (
+                    <p key={channel} className="sub" style={{ marginTop: 0 }}>
+                      {channel}: {count}
                     </p>
                   ))}
-                  {viewModel.coverage.missingTemplates.length === 0 ? (
-                    <p className="fdGlassText">No missing template combinations.</p>
+                  {toSortedEntries(opsRoute.summary.external.byChannel).length === 0 ? (
+                    <p className="fdGlassText">No external delivery samples.</p>
                   ) : null}
+                </div>
+              </section>
+            </section>
+
+            <section className="fdTwoCol" style={{ marginBottom: 14 }}>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-ops-recent-runs>
+                <h2 className="sectionTitle">Recent Runs / Sweep History</h2>
+                <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                  {opsRoute.runs.slice(0, 8).map((run) => (
+                    <p key={run.id} className="sub" style={{ marginTop: 0 }}>
+                      {(run.job_type || "job").replaceAll("_", " ")} / {formatStatusLabel(run.status)} / started{" "}
+                      {toDateTime(run.started_at || run.created_at || null)} / affected {run.affected_count || 0} / errors{" "}
+                      {run.error_count || 0}
+                    </p>
+                  ))}
+                  {opsRoute.runs.length === 0 ? <p className="fdGlassText">No recent runs found.</p> : null}
                 </div>
               </section>
 
               <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <h2 className="sectionTitle">Preference Coverage</h2>
+                <h2 className="sectionTitle">External Failure Signals</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
-                  Coverage: {viewModel.coverage.preferencePercent}% (
-                  {bundle.coverage.preferenceCoverage.configuredRoleEventPairs}/
-                  {bundle.coverage.preferenceCoverage.expectedRoleEventPairs})
-                </p>
-                <p className="sub" style={{ marginTop: 0 }}>
-                  Missing role/event pairs: {bundle.coverage.preferenceCoverage.missingRoleEventPairs}
+                  Failed rows: {opsRoute.failedDeliveries.length} | retrying rows: {opsRoute.retryingDeliveries.length}
                 </p>
                 <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                  {viewModel.coverage.missingPreferences.map((item) => (
-                    <p key={`${item.role}:${item.eventType}`} className="sub" style={{ marginTop: 0 }}>
-                      {item.role} / {item.eventType}
+                  {opsRoute.failedDeliveries.slice(0, 4).map((item) => (
+                    <p key={item.id} className="sub" style={{ marginTop: 0 }}>
+                      failed / {item.channel || "unknown"} / {item.error_code || "runtime_error"} / {toDateTime(item.created_at)}
                     </p>
                   ))}
-                  {viewModel.coverage.missingPreferences.length === 0 ? (
-                    <p className="fdGlassText">No missing preference pairs.</p>
+                  {opsRoute.retryingDeliveries.slice(0, 4).map((item) => (
+                    <p key={item.id} className="sub" style={{ marginTop: 0 }}>
+                      retrying / {item.channel || "unknown"} / next retry {toDateTime(item.next_retry_at)} 
+                    </p>
+                  ))}
+                  {opsRoute.failedDeliveries.length === 0 && opsRoute.retryingDeliveries.length === 0 ? (
+                    <p className="fdGlassText">No failed or retrying samples in this snapshot.</p>
                   ) : null}
                 </div>
               </section>
@@ -357,51 +600,69 @@ export default function NotificationOpsDashboard(props: NotificationOpsDashboard
 
             <section className="fdTwoCol">
               <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <h2 className="sectionTitle">Retry Operations</h2>
+                <h2 className="sectionTitle">Scheduled / Batch Status Mix</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
-                  Execute runs: {viewModel.retry.executeRuns} | Dry-run actions: {bundle.coverage.retryOperations.dryRunActions} |
-                  Execute actions: {bundle.coverage.retryOperations.executeActions}
-                </p>
-                <p className="sub" style={{ marginTop: 0 }}>
-                  Focused status `{query.status}` count: {viewModel.retry.focusedStatusCount}
+                  Job runs: {opsRoute.summary.jobRuns} | delivery rows: {opsRoute.summary.deliveryRows}
                 </p>
                 <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                  {viewModel.retry.executeByStatus.map(([status, count]) => (
+                  {toSortedEntries(opsRoute.summary.byStatus, 8).map(([status, count]) => (
                     <p key={status} className="sub" style={{ marginTop: 0 }}>
-                      execute status {status}: {count}
+                      {status}: {count}
                     </p>
                   ))}
-                  {viewModel.retry.executeByStatus.length === 0 ? (
-                    <p className="fdGlassText">No retry execute status data.</p>
+                  {toSortedEntries(opsRoute.summary.byStatus, 8).length === 0 ? (
+                    <p className="fdGlassText">No status distribution available.</p>
                   ) : null}
                 </div>
               </section>
 
               <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-                <h2 className="sectionTitle">Failures Overview</h2>
-                <p className="sub" style={{ marginTop: 0 }}>Blocked reasons:</p>
+                <h2 className="sectionTitle">Provider / Blocking Signals</h2>
+                <p className="sub" style={{ marginTop: 0 }}>Provider error codes:</p>
                 <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                  {viewModel.retry.blockedReasons.map(([reason, count]) => (
-                    <p key={reason} className="sub" style={{ marginTop: 0 }}>
-                      {reason}: {count}
-                    </p>
-                  ))}
-                  {viewModel.retry.blockedReasons.length === 0 ? (
-                    <p className="fdGlassText">No blocked reason samples.</p>
-                  ) : null}
-                </div>
-                <p className="sub" style={{ marginTop: 8 }}>Provider error codes:</p>
-                <div className="fdDataGrid" style={{ marginTop: 8 }}>
-                  {viewModel.retry.providerErrors.map(([code, count]) => (
+                  {toSortedEntries(opsRoute.summary.external.providerErrors).map(([code, count]) => (
                     <p key={code} className="sub" style={{ marginTop: 0 }}>
                       {code}: {count}
                     </p>
                   ))}
-                  {viewModel.retry.providerErrors.length === 0 ? (
+                  {toSortedEntries(opsRoute.summary.external.providerErrors).length === 0 ? (
                     <p className="fdGlassText">No provider error samples.</p>
                   ) : null}
                 </div>
               </section>
+            </section>
+
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginTop: 14 }} data-notifications-ops-boundaries>
+              <h2 className="sectionTitle">Responsibility boundaries</h2>
+              <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  This page owns scheduled health, recent runs, external delivery summary, and manager-level batch ops.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Notifications overview remains the landing page for cross-domain summary and workbench entry.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Notification retry remains responsible for row-level retry and remediation queue work.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Integrations keeps the integration catalog and external boundary overview, not recent ops run analysis.
+                </p>
+              </div>
+            </section>
+
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginTop: 14 }} data-notifications-ops-out-of-scope>
+              <h2 className="sectionTitle">Out of scope for this page</h2>
+              <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Auth, activation, provider credentials, OAuth, webhook setup, and queue / worker control center.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Row-level retry decisions, remediation queue orchestration, and notification history / audit detail.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Template, preference, readiness, preflight, or runtime-readiness maintenance pages.
+                </p>
+              </div>
             </section>
           </>
         ) : null}

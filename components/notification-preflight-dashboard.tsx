@@ -125,9 +125,37 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
   }
 
   const viewModel = useMemo(() => (payload ? buildPreflightViewModel(payload) : null), [payload]);
+  const decisionSummary = useMemo(() => {
+    if (!payload) {
+      return {
+        sendableCount: 0,
+        blockedCount: 0,
+        skippedCount: 0,
+        degradedCount: 0,
+      };
+    }
+
+    const sendableCount = payload.preflight.deliveryPlanning.ready
+      ? payload.preflight.deliveryPlanning.plannedRecipientsCount
+      : 0;
+    const blockedCount =
+      payload.preflight.coverage.missingForSelectedEvent.length +
+      (payload.preflight.preference.enabled ? 0 : 1);
+    const skippedCount = payload.preflight.deliveryPlanning.skippedReasons.length;
+    const degradedCount = payload.preflight.templates.resolutions.filter(
+      (item) => item.found && item.strategy !== "tenant_locale",
+    ).length;
+
+    return {
+      sendableCount,
+      blockedCount,
+      skippedCount,
+      degradedCount,
+    };
+  }, [payload]);
 
   return (
-    <main className="fdGlassScene">
+    <main className="fdGlassScene" data-notifications-preflight-page>
       <section className="fdGlassBackdrop">
         <section className="hero" style={{ paddingTop: 0 }}>
           <div className="fdGlassPanel">
@@ -135,12 +163,21 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
             <h1 className="h1" style={{ marginTop: 10, fontSize: 34 }}>
               Notification Runtime Preflight
             </h1>
-            <p className="fdGlassText">Read-only simulation report. This page never sends notifications.</p>
+            <p className="fdGlassText">
+              Read-only sendability and resolution report. This page explains template / preference / readiness impact,
+              but never dispatches notifications.
+            </p>
             <div className="actions" style={{ marginTop: 10 }}>
               <Link className="fdPillBtn" href={props.mode === "platform" ? "/platform-admin" : "/manager"}>
                 Back
               </Link>
-              <button type="button" className="fdPillBtn" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading}>
+              <button
+                type="button"
+                className="fdPillBtn"
+                data-notifications-preflight-refresh
+                onClick={() => setRefreshKey((value) => value + 1)}
+                disabled={loading}
+              >
                 Refresh
               </button>
             </div>
@@ -148,7 +185,7 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
         </section>
         <NotificationGovernanceNav mode={props.mode} />
 
-        <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+        <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-preflight-filters>
           <h2 className="sectionTitle">Filters</h2>
           <div className="fdThreeCol" style={{ gap: 10, marginTop: 8 }}>
             {props.mode === "platform" ? (
@@ -221,38 +258,64 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
 
         {error ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-            <div className="error">{error}</div>
+            <div className="error" data-notifications-preflight-error>{error}</div>
           </section>
         ) : null}
 
         {loading ? (
           <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
-            <p className="fdGlassText">Loading preflight report...</p>
+            <p className="fdGlassText" data-notifications-preflight-loading>Loading preflight report...</p>
           </section>
         ) : null}
 
         {!loading && payload && viewModel ? (
           <>
-            <section className="fdInventorySummary" style={{ marginBottom: 14 }}>
+            <section className="fdInventorySummary" style={{ marginBottom: 14 }} data-notifications-preflight-summary>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
-                <div className="kvLabel">Ready</div>
-                <strong className="fdInventorySummaryValue">{String(payload.preflight.deliveryPlanning.ready)}</strong>
+                <div className="kvLabel">Sendable</div>
+                <strong className="fdInventorySummaryValue" data-notifications-preflight-sendable>
+                  {decisionSummary.sendableCount}
+                </strong>
               </div>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
-                <div className="kvLabel">Selected Channels</div>
-                <strong className="fdInventorySummaryValue">{viewModel.selectedChannels.join(", ") || "-"}</strong>
+                <div className="kvLabel">Blocked</div>
+                <strong className="fdInventorySummaryValue" data-notifications-preflight-blocked>
+                  {decisionSummary.blockedCount}
+                </strong>
               </div>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
                 <div className="kvLabel">Skipped</div>
-                <strong className="fdInventorySummaryValue">{viewModel.skippedCount}</strong>
+                <strong className="fdInventorySummaryValue" data-notifications-preflight-skipped>
+                  {decisionSummary.skippedCount}
+                </strong>
+              </div>
+              <div className="fdGlassSubPanel fdInventorySummaryItem">
+                <div className="kvLabel">Degraded</div>
+                <strong className="fdInventorySummaryValue" data-notifications-preflight-degraded>
+                  {decisionSummary.degradedCount}
+                </strong>
+              </div>
+              <div className="fdGlassSubPanel fdInventorySummaryItem">
+                <div className="kvLabel">Ready</div>
+                <strong className="fdInventorySummaryValue" data-notifications-preflight-ready>
+                  {String(payload.preflight.deliveryPlanning.ready)}
+                </strong>
+              </div>
+              <div className="fdGlassSubPanel fdInventorySummaryItem">
+                <div className="kvLabel">Selected Channels</div>
+                <strong className="fdInventorySummaryValue" data-notifications-preflight-selected-channels>
+                  {viewModel.selectedChannels.join(", ") || "-"}
+                </strong>
               </div>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
                 <div className="kvLabel">Warnings</div>
-                <strong className="fdInventorySummaryValue">{viewModel.warningCount}</strong>
+                <strong className="fdInventorySummaryValue" data-notifications-preflight-warnings>
+                  {viewModel.warningCount}
+                </strong>
               </div>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
                 <div className="kvLabel">Fallback/Missing</div>
-                <strong className="fdInventorySummaryValue">
+                <strong className="fdInventorySummaryValue" data-notifications-preflight-fallback-missing>
                   {
                     payload.preflight.templates.resolutions.filter((item) => item.found && item.strategy !== "tenant_locale").length
                   }
@@ -262,7 +325,7 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
               </div>
               <div className="fdGlassSubPanel fdInventorySummaryItem">
                 <div className="kvLabel">Coverage Status</div>
-                <strong className="fdInventorySummaryValue">
+                <strong className="fdInventorySummaryValue" data-notifications-preflight-coverage-status>
                   <span className="fdPillBtn" style={getNotificationGovernanceToneStyle(viewModel.coverageTone)}>
                     {formatStatusLabel(payload.preflight.coverage.integrityHealthStatus)}
                   </span>
@@ -270,7 +333,7 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
               </div>
             </section>
 
-            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }}>
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-notifications-preflight-preference>
               <h2 className="sectionTitle">Preference Resolution</h2>
               <p className="sub" style={{ marginTop: 0 }}>
                 source: {payload.preflight.preference.source} | enabled: {String(payload.preflight.preference.enabled)}
@@ -291,7 +354,7 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
             </section>
 
             <section className="fdTwoCol" style={{ marginBottom: 14 }}>
-              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-preflight-template-resolution>
                 <h2 className="sectionTitle">Template Resolution</h2>
                 <div className="fdDataGrid" style={{ marginTop: 8 }}>
                   {payload.preflight.templates.resolutions.map((item) => (
@@ -303,7 +366,7 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
                 </div>
               </section>
 
-              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-preflight-planning>
                 <h2 className="sectionTitle">Delivery Planning Draft</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
                   ready: {String(payload.preflight.deliveryPlanning.ready)} | planned channels:{" "}
@@ -326,7 +389,7 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
             </section>
 
             <section className="fdTwoCol" style={{ marginBottom: 14 }}>
-              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-preflight-missing-coverage>
                 <h2 className="sectionTitle">Missing Coverage</h2>
                 <p className="sub" style={{ marginTop: 0 }}>
                   integrity score: {payload.preflight.coverage.integrityScore} | status:{" "}
@@ -353,7 +416,7 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
                 </div>
               </section>
 
-              <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+              <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-preflight-skipped-warnings>
                 <h2 className="sectionTitle">Skipped Reasons / Warnings</h2>
                 <div className="fdDataGrid" style={{ marginTop: 8 }}>
                   {payload.preflight.deliveryPlanning.skippedReasons.map((item) => (
@@ -376,7 +439,7 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
               </section>
             </section>
 
-            <section className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <section className="fdGlassSubPanel" style={{ padding: 14 }} data-notifications-preflight-content-skeleton>
               <h2 className="sectionTitle">Content Skeleton</h2>
               <p className="sub" style={{ marginTop: 0 }}>
                 {summarizeMetadataObject(payload.preflight.deliveryPlanning.contentSkeleton, 220)}
@@ -387,6 +450,37 @@ export default function NotificationPreflightDashboard(props: NotificationPrefli
                   {JSON.stringify(payload.preflight.deliveryPlanning.contentSkeleton, null, 2)}
                 </pre>
               </details>
+            </section>
+
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginTop: 14 }} data-notifications-preflight-boundaries>
+              <h2 className="sectionTitle">Responsibility boundaries</h2>
+              <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  This page owns pre-dispatch resolution, sendability, and blocked / skipped / degraded explanations.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Preferences stay in `/manager/notifications-preferences`, templates stay in `/manager/notifications/templates`,
+                  and readiness gaps stay in `/manager/notifications/readiness`.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Retry, audit, integrations, and operations remain outside this page. This page never dispatches notifications.
+                </p>
+              </div>
+            </section>
+
+            <section className="fdGlassSubPanel" style={{ padding: 14, marginTop: 14 }} data-notifications-preflight-out-of-scope>
+              <h2 className="sectionTitle">Out of scope</h2>
+              <div className="fdDataGrid" style={{ marginTop: 8 }}>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  No provider credential editor, OAuth flow, webhook platform, queue / worker control, or auth / activation work.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  No retry execution, no audit history explorer, no readiness maintenance, and no template or preference editing on this page.
+                </p>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  No frontdesk booking, scheduling, services, plans, packages, or other master-data maintenance.
+                </p>
+              </div>
             </section>
           </>
         ) : null}
