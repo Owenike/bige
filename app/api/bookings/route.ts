@@ -10,7 +10,7 @@ import {
   reservePackageForBooking,
 } from "../../../lib/booking-commerce";
 import { scheduleBookingNotifications, summarizeBookingNotifications } from "../../../lib/booking-notifications";
-import { CANONICAL_COACH_DB_ROLE, mapBookingConflictError, validateBookingSchedule } from "../../../lib/therapist-scheduling";
+import { BOOKING_THERAPIST_ROLES, mapBookingConflictError, validateBookingSchedule } from "../../../lib/therapist-scheduling";
 import type { BookingOverviewItem, BookingOverviewResponse, BookingPaymentStatus } from "../../../types/booking-management";
 
 type BookingRow = {
@@ -361,7 +361,7 @@ export async function GET(request: Request) {
       .select("id, display_name, branch_id, role")
       .eq("tenant_id", auth.context.tenantId)
       .eq("is_active", true)
-      .eq("role", CANONICAL_COACH_DB_ROLE)
+      .in("role", [...BOOKING_THERAPIST_ROLES])
       .order("created_at", { ascending: true }),
     entryPassIds.length
       ? auth.supabase

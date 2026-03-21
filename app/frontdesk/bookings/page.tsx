@@ -173,7 +173,7 @@ type DragPayload =
 type SlotDropData = { coachId: string; timeLabel: string };
 
 const DAY_START_MINUTE = 6 * 60;
-const DAY_END_MINUTE = 23 * 60;
+const DAY_END_MINUTE = 24 * 60;
 const SLOT_MINUTE = 30;
 const SLOT_HEIGHT = 34;
 const ACTIVE_BOOKING_STATUSES = ["booked", "checked_in"] as const;
@@ -1814,7 +1814,7 @@ export default function FrontdeskBookingsPage() {
           <section className="fdBkMain">
             <div className="fdBkMainSticky">
               <div>
-                <h2 className="sectionTitle" style={{ margin: 0 }}>{zh ? "日排程（06:00 - 23:00）" : "Daily Schedule (06:00 - 23:00)"}</h2>
+                <h2 className="sectionTitle" style={{ margin: 0 }}>{zh ? "日排程（06:00 - 23:30）" : "Daily Schedule (06:00 - 23:30)"}</h2>
                 <p className="fdGlassText" style={{ marginTop: 4 }}>{isTodayView ? (zh ? "今天 · 資源日視圖" : "Today · Resource Day View") : dateKey}</p>
               </div>
               <div className="fdBkInline">

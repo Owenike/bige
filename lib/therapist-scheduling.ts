@@ -190,6 +190,7 @@ export type SchedulingValidationResult =
 
 export const OCCUPYING_BOOKING_STATUSES = ["pending", "confirmed", "booked", "checked_in"] as const;
 export const CANONICAL_COACH_DB_ROLE = "coach" as const;
+export const BOOKING_THERAPIST_ROLES = [CANONICAL_COACH_DB_ROLE, "therapist"] as const;
 
 function isMissingSchemaObject(message: string | undefined, target: string) {
   if (!message) return false;
@@ -452,7 +453,7 @@ export async function resolveBranchTherapists(params: {
     .from("profiles")
     .select("id, display_name, branch_id, role, is_active")
     .eq("tenant_id", params.tenantId)
-    .eq("role", CANONICAL_COACH_DB_ROLE)
+    .in("role", [...BOOKING_THERAPIST_ROLES])
     .order("created_at", { ascending: true });
   if (profileResult.error) throw new Error(profileResult.error.message);
 
