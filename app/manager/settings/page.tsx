@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ManagerDomainNav from "../../../components/manager-domain-nav";
 import styles from "./settings.module.css";
 
 export default function ManagerSettingsHomePage() {
@@ -8,20 +9,24 @@ export default function ManagerSettingsHomePage() {
     <main className="fdGlassScene">
       <section className="fdGlassBackdrop">
         <section className={styles.page}>
-          <article className={`fdGlassPanel ${styles.heroCard}`}>
-            <div className={styles.heroEyebrow}>Storefront foundations</div>
+          <article className={`fdGlassPanel ${styles.heroCard}`} data-manager-settings-page>
+            <div className={styles.heroEyebrow}>System policy and cross-page governance</div>
             <h1 className={styles.heroTitle}>Manager Settings</h1>
-            <p className={styles.heroBody}>
-              Phase 1 anchors the sports massage storefront on top of the existing tenant, branch, booking, audit, and notification
-              architecture. Brand content and booking rules are editable per tenant or per branch without replacing existing manager,
-              frontdesk, or booking flows.
+            <p className={styles.heroBody} data-manager-settings-boundary>
+              This is the formal settings landing page for manager-facing global policy and system entry points. Operations
+              owns cross-page operating defaults, integrations owns external boundary visibility, and notifications remains a
+              dedicated manager subdomain. Business master-data pages stay under the main manager domain instead of being mixed
+              into settings.
             </p>
             <div className={styles.actionRow}>
-              <Link className="fdPillBtn fdPillBtnPrimary" href="/manager/settings/brand">
-                Brand content
+              <Link className="fdPillBtn fdPillBtnPrimary" href="/manager/settings/operations">
+                Operations & Permissions
               </Link>
-              <Link className="fdPillBtn" href="/manager/settings/booking">
-                Booking rules
+              <Link className="fdPillBtn" href="/manager/integrations">
+                Integrations
+              </Link>
+              <Link className="fdPillBtn" href="/manager/notifications">
+                Notifications domain
               </Link>
               <Link className="fdPillBtn" href="/manager">
                 Back to manager
@@ -29,26 +34,36 @@ export default function ManagerSettingsHomePage() {
             </div>
           </article>
 
+          <ManagerDomainNav section="system" showIndex />
+
           <section className={styles.linkCardGrid}>
             <article className={`fdGlassSubPanel ${styles.linkCard}`}>
-              <h2 className={styles.panelTitle}>What Phase 1 adds</h2>
+              <h2 className={styles.panelTitle}>What settings owns</h2>
               <p className={styles.panelText}>
-                `storefront_brand_contents`, `store_booking_settings`, brand asset metadata, booking status logs, and additive booking /
-                service fields for deposit and storefront-ready content.
+                Cross-page policy, operations defaults, integrations entry points, and notifications system routing belong
+                here. These are system-level decisions, not day-to-day frontdesk actions.
               </p>
             </article>
             <article className={`fdGlassSubPanel ${styles.linkCard}`}>
-              <h2 className={styles.panelTitle}>What stays intact</h2>
+              <h2 className={styles.panelTitle}>What stays in business pages</h2>
               <p className={styles.panelText}>
-                Existing `tenant_id`, `branch_id`, `members`, `bookings`, `coach_slots`, `coach_blocks`, feature flags, notifications,
-                and manager pages are extended rather than replaced.
+                Therapists, coach slots, services, plans, packages, and booking waitlist keep their own dedicated manager
+                pages. Settings should not absorb those business CRUD responsibilities.
               </p>
             </article>
             <article className={`fdGlassSubPanel ${styles.linkCard}`}>
-              <h2 className={styles.panelTitle}>How later phases connect</h2>
+              <h2 className={styles.panelTitle}>Notifications as a system subdomain</h2>
               <p className={styles.panelText}>
-                Phase 2 can read the public storefront payload immediately. Phase 3 can reuse the same manager endpoints for richer text,
-                upload, and preview workflows.
+                Notifications now has its own manager-facing domain. Use settings as the system landing to reach it, then use
+                the notifications landing page to choose retry, audit, readiness, templates, preferences, preflight,
+                runtime-readiness, or ops.
+              </p>
+            </article>
+            <article className={`fdGlassSubPanel ${styles.linkCard}`}>
+              <h2 className={styles.panelTitle}>Why not frontdesk</h2>
+              <p className={styles.panelText}>
+                Setup-type responsibility has been moved out of frontdesk. Frontdesk stays focused on booking execution and
+                day-of-operation flow, not long-lived system policy.
               </p>
             </article>
           </section>

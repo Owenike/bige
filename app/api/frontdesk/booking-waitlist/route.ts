@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 
   let query = auth.supabase
     .from("booking_waitlist")
-    .select("id, member_id, contact_name, contact_phone, desired_date, desired_time, note, status, created_at")
+    .select("id, branch_id, member_id, linked_booking_id, contact_name, contact_phone, desired_date, desired_time, note, status, created_at")
     .eq("tenant_id", auth.context.tenantId)
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -55,7 +55,9 @@ export async function GET(request: Request) {
 
   const items = (data || []) as Array<{
     id: string;
+    branch_id: string | null;
     member_id: string | null;
+    linked_booking_id: string | null;
     contact_name: string | null;
     contact_phone: string | null;
     desired_date: string | null;
@@ -89,7 +91,9 @@ export async function GET(request: Request) {
   return apiSuccess({
     items: items.map((item) => ({
       id: item.id,
+      branchId: item.branch_id,
       memberId: item.member_id,
+      linkedBookingId: item.linked_booking_id,
       contactName: item.contact_name,
       contactPhone: item.contact_phone,
       desiredDate: item.desired_date,
@@ -158,7 +162,7 @@ export async function POST(request: Request) {
       status: "pending",
       created_by: auth.context.userId,
     })
-    .select("id, member_id, contact_name, contact_phone, desired_date, desired_time, note, status, created_at")
+    .select("id, branch_id, member_id, linked_booking_id, contact_name, contact_phone, desired_date, desired_time, note, status, created_at")
     .maybeSingle();
   if (insert.error) {
     if (isMissingWaitlistTable(insert.error.message)) {
@@ -188,15 +192,24 @@ export async function POST(request: Request) {
               eligible: eligibility.eligible,
               reasonCode: eligibility.reasonCode,
               selectedContractId: eligibility.candidate?.contractId ?? null,
-            }
+        }
           : null,
       },
-    })
-    .catch(() => null);
+    });
 
   return apiSuccess({
     item: {
-      ...(insert.data || {}),
+      id: insert.data?.id || null,
+      branchId: insert.data?.branch_id || null,
+      memberId: insert.data?.member_id || null,
+      linkedBookingId: insert.data?.linked_booking_id || null,
+      contactName: insert.data?.contact_name || null,
+      contactPhone: insert.data?.contact_phone || null,
+      desiredDate: insert.data?.desired_date || null,
+      desiredTime: insert.data?.desired_time || null,
+      note: insert.data?.note || null,
+      status: insert.data?.status || null,
+      createdAt: insert.data?.created_at || null,
       eligibility,
     },
   });

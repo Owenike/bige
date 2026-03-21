@@ -93,7 +93,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .maybeSingle();
   if (updated.error) return NextResponse.json({ error: updated.error.message }, { status: 500 });
 
-  await auth.supabase.from("audit_logs").insert({
+  void (await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
     actor_id: auth.context.userId,
     action: "coach_block_update",
@@ -104,7 +104,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       previous: existing.data,
       next: updatePayload,
     },
-  }).catch(() => null);
+  }));
 
   return NextResponse.json({ item: updated.data });
 }

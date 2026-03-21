@@ -52,7 +52,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 500 });
   if (!result.data) return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
 
-  await auth.supabase.from("audit_logs").insert({
+  void (await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
     actor_id: auth.context.userId,
     action: "therapist_schedule_update",
@@ -60,7 +60,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     target_id: id,
     reason: "manager_update",
     payload: updates,
-  }).catch(() => null);
+  }));
 
   return NextResponse.json({ item: result.data });
 }

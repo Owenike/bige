@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useI18n } from "../i18n-provider";
 import Link from "next/link";
+import ManagerDomainNav from "../../components/manager-domain-nav";
 
 type ApiErrorPayload = {
   error?: { code?: string; message?: string } | string;
@@ -441,6 +442,34 @@ export default function ManagerDashboardPage() {
             </p>
           </div>
         </section>
+
+        <section className="fdGlassSubPanel" style={{ padding: 14, marginBottom: 14 }} data-manager-landing-boundary>
+          <h2 className="sectionTitle">{zh ? "\u5f8c\u53f0\u7db2\u57df\u5165\u53e3" : "Manager Domain Landing"}</h2>
+          <p className="fdGlassText" style={{ marginTop: 8 }}>
+            {zh
+              ? "\u9019\u88e1\u662f manager-facing domain \u7684\u6b63\u5f0f landing page\u3002\u696d\u52d9\u4e3b\u8cc7\u6599\u3001\u6392\u73ed\u8207\u5019\u88dc\u6d41\u7a0b\u4ecd\u5728 manager \u5b50\u9801\uff1b\u5168\u57df\u8a2d\u5b9a\u3001integrations \u8207 notifications \u5df2\u79fb\u51fa frontdesk\uff0c\u4e0d\u518d\u7531\u524d\u53f0\u627f\u64d4\u8a2d\u5b9a\u578b\u8cac\u4efb\u3002"
+              : "This is the formal landing page for the manager-facing domain. Business master data, staffing, and waitlist workflows stay in manager subpages, while global settings, integrations, and notifications have been moved out of frontdesk so setup responsibilities do not live in the day-of-booking UI."}
+          </p>
+          <div className="fdDataGrid" style={{ marginTop: 10 }}>
+            <p className="sub" style={{ marginTop: 0 }}>
+              {zh
+                ? "\u696d\u52d9\u9801\u9762\u8ca0\u8cac\uff1a\u6559\u7df4/\u5e2b\u5085\u4e3b\u8cc7\u6599\u3001\u6392\u73ed\u8207 block\u3001\u670d\u52d9\u3001plans\u3001packages\u3001\u5019\u88dc\u6d41\u7a0b\u3002"
+                : "Business pages own coach/staff master data, scheduling and blocks, services, plans, packages, and waitlist workflows."}
+            </p>
+            <p className="sub" style={{ marginTop: 0 }}>
+              {zh
+                ? "\u7cfb\u7d71\u9801\u9762\u8ca0\u8cac\uff1a settings\u3001operations\u3001integrations\uff0c\u4ee5\u53ca notifications \u5b50\u7db2\u57df\u7684\u6b63\u5f0f\u5165\u53e3\u3002"
+                : "System pages own settings, operations policy, integrations, and the notifications subdomain entry points."}
+            </p>
+            <p className="sub" style={{ marginTop: 0 }}>
+              {zh
+                ? "\u5982\u679c\u4e0d\u78ba\u5b9a\u8a72\u53bb\u54ea\u4e00\u9801\uff0c\u8acb\u5148\u7531\u9019\u88e1\u9078\u64c7\u5b50\u57df\uff0c\u800c\u4e0d\u662f\u56de frontdesk \u627e\u8a2d\u5b9a\u3002"
+                : "If users are unsure where to go next, they should choose a subdomain from here rather than looking for setup controls in frontdesk."}
+            </p>
+          </div>
+        </section>
+
+        <ManagerDomainNav showIndex />
 
         {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
         {message ? <div className="sub" style={{ marginBottom: 12, color: "var(--brand)" }}>{message}</div> : null}

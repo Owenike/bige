@@ -55,7 +55,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .update(updatePayload)
     .eq("tenant_id", auth.context.tenantId)
     .eq("id", id)
-    .select("id, member_id, contact_name, contact_phone, desired_date, desired_time, note, status, created_at")
+    .select("id, branch_id, member_id, linked_booking_id, contact_name, contact_phone, desired_date, desired_time, note, status, created_at")
     .maybeSingle();
   if (updated.error) return NextResponse.json({ error: updated.error.message }, { status: 500 });
   if (!updated.data) return NextResponse.json({ error: "Waitlist item not found" }, { status: 404 });
@@ -68,7 +68,23 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     target_id: id,
     reason: note,
     payload: updatePayload,
-  }).catch(() => null);
+  });
 
-  return NextResponse.json({ item: updated.data });
+  return NextResponse.json({
+    item: updated.data
+      ? {
+          id: updated.data.id,
+          branchId: updated.data.branch_id,
+          memberId: updated.data.member_id,
+          linkedBookingId: updated.data.linked_booking_id,
+          contactName: updated.data.contact_name,
+          contactPhone: updated.data.contact_phone,
+          desiredDate: updated.data.desired_date,
+          desiredTime: updated.data.desired_time,
+          note: updated.data.note,
+          status: updated.data.status,
+          createdAt: updated.data.created_at,
+        }
+      : null,
+  });
 }

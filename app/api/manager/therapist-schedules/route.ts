@@ -76,7 +76,7 @@ export async function POST(request: Request) {
 
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 500 });
 
-  await auth.supabase.from("audit_logs").insert({
+  void (await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
     actor_id: auth.context.userId,
     action: "therapist_schedule_create",
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       effectiveUntil,
       note,
     },
-  }).catch(() => null);
+  }));
 
   return NextResponse.json({ item: result.data }, { status: 201 });
 }

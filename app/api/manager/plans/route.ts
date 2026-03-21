@@ -10,6 +10,7 @@ import {
 type PlanRow = {
   id: string;
   tenant_id: string;
+  branch_id: string | null;
   code: string;
   name: string;
   description: string | null;
@@ -17,6 +18,7 @@ type PlanRow = {
   fulfillment_kind: PlanFulfillmentKind;
   default_duration_days: number | null;
   default_quantity: number | null;
+  service_scope: string[] | null;
   allow_auto_renew: boolean;
   is_active: boolean;
   metadata: Record<string, unknown>;
@@ -30,10 +32,18 @@ function normalizeText(value: unknown) {
   return trimmed || null;
 }
 
+function normalizeServiceScope(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? item.trim().toLowerCase() : ""))
+    .filter(Boolean);
+}
+
 function toPlanItem(row: PlanRow) {
   return {
     id: row.id,
     tenantId: row.tenant_id,
+    branchId: row.branch_id,
     code: row.code,
     name: row.name,
     description: row.description,
@@ -41,6 +51,7 @@ function toPlanItem(row: PlanRow) {
     fulfillmentKind: row.fulfillment_kind,
     defaultDurationDays: row.default_duration_days,
     defaultQuantity: row.default_quantity,
+    serviceScope: row.service_scope || [],
     allowAutoRenew: row.allow_auto_renew,
     isActive: row.is_active,
     metadata: row.metadata || {},
@@ -70,7 +81,7 @@ export async function GET(request: Request) {
   const result = await scoped.auth.supabase
     .from("member_plan_catalog")
     .select(
-      "id, tenant_id, code, name, description, plan_type, fulfillment_kind, default_duration_days, default_quantity, allow_auto_renew, is_active, metadata, created_at, updated_at",
+      "id, tenant_id, branch_id, code, name, description, plan_type, fulfillment_kind, default_duration_days, default_quantity, service_scope, allow_auto_renew, is_active, metadata, created_at, updated_at",
     )
     .eq("tenant_id", scoped.tenantId)
     .order("updated_at", { ascending: false })
@@ -129,6 +140,7 @@ export async function POST(request: Request) {
   const fulfillmentKind = normalizeFulfillmentKind(body?.fulfillmentKind ?? "none");
   const defaultDurationDays = body?.defaultDurationDays === null ? null : Number(body?.defaultDurationDays ?? null);
   const defaultQuantity = body?.defaultQuantity === null ? null : Number(body?.defaultQuantity ?? null);
+  const serviceScope = normalizeServiceScope(body?.serviceScope);
   const allowAutoRenew = body?.allowAutoRenew === true;
   const isActive = body?.isActive === false ? false : true;
 
@@ -157,6 +169,7 @@ export async function POST(request: Request) {
         fulfillment_kind: fulfillmentKind,
         default_duration_days: defaultDurationDays,
         default_quantity: defaultQuantity,
+        service_scope: serviceScope,
         allow_auto_renew: allowAutoRenew,
         is_active: isActive,
         updated_by: scoped.auth.context.userId,
@@ -166,7 +179,7 @@ export async function POST(request: Request) {
       { onConflict: "tenant_id,code" },
     )
     .select(
-      "id, tenant_id, code, name, description, plan_type, fulfillment_kind, default_duration_days, default_quantity, allow_auto_renew, is_active, metadata, created_at, updated_at",
+      "id, tenant_id, branch_id, code, name, description, plan_type, fulfillment_kind, default_duration_days, default_quantity, service_scope, allow_auto_renew, is_active, metadata, created_at, updated_at",
     )
     .maybeSingle();
 
@@ -187,6 +200,7 @@ export async function POST(request: Request) {
       fulfillmentKind,
       defaultDurationDays,
       defaultQuantity,
+      serviceScope,
       allowAutoRenew,
       isActive,
     },
@@ -212,7 +226,7 @@ export async function PATCH(request: Request) {
   let query = scoped.auth.supabase
     .from("member_plan_catalog")
     .select(
-      "id, tenant_id, code, name, description, plan_type, fulfillment_kind, default_duration_days, default_quantity, allow_auto_renew, is_active, metadata, created_at, updated_at",
+      "id, tenant_id, branch_id, code, name, description, plan_type, fulfillment_kind, default_duration_days, default_quantity, service_scope, allow_auto_renew, is_active, metadata, created_at, updated_at",
     )
     .eq("tenant_id", scoped.tenantId)
     .limit(1);
@@ -259,6 +273,9 @@ export async function PATCH(request: Request) {
       updates.default_quantity = value;
     }
   }
+  if ("serviceScope" in (body || {})) {
+    updates.service_scope = normalizeServiceScope(body?.serviceScope);
+  }
   if ("allowAutoRenew" in (body || {})) updates.allow_auto_renew = body?.allowAutoRenew === true;
   if ("isActive" in (body || {})) updates.is_active = body?.isActive === true;
 
@@ -268,7 +285,7 @@ export async function PATCH(request: Request) {
     .eq("tenant_id", scoped.tenantId)
     .eq("id", existing.data.id)
     .select(
-      "id, tenant_id, code, name, description, plan_type, fulfillment_kind, default_duration_days, default_quantity, allow_auto_renew, is_active, metadata, created_at, updated_at",
+      "id, tenant_id, branch_id, code, name, description, plan_type, fulfillment_kind, default_duration_days, default_quantity, service_scope, allow_auto_renew, is_active, metadata, created_at, updated_at",
     )
     .maybeSingle();
   if (updateResult.error || !updateResult.data) {
@@ -289,4 +306,3 @@ export async function PATCH(request: Request) {
     item: toPlanItem(updateResult.data as PlanRow),
   });
 }
-

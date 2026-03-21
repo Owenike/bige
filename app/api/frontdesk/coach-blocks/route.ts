@@ -139,7 +139,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: insert.error.message }, { status: 500 });
   }
 
-  await auth.supabase.from("audit_logs").insert({
+  void (await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
     actor_id: auth.context.userId,
     action: "coach_block_create",
@@ -154,7 +154,7 @@ export async function POST(request: Request) {
       note,
       blockType,
     },
-  }).catch(() => null);
+  }));
 
   return NextResponse.json({ item: insert.data }, { status: 201 });
 }

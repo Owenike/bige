@@ -279,7 +279,7 @@ export async function PATCH(request: Request) {
     }
   }
 
-  await auth.supabase.from("audit_logs").insert({
+  const auditInsert = await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
     actor_id: auth.context.userId,
     action: "therapist_update",
@@ -291,7 +291,8 @@ export async function PATCH(request: Request) {
       branchIds: uniqueBranchIds,
       isActive,
     },
-  }).catch(() => null);
+  });
+  void auditInsert;
 
   return NextResponse.json({ ok: true });
 }

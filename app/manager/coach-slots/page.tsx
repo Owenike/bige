@@ -1,164 +1,278 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../i18n-provider";
+import type { TherapistBlockItem, TherapistManagementPayload, TherapistRecurringSchedule, TherapistSummary } from "../../../types/therapist-scheduling";
 
-interface CoachItem {
-  id: string;
-  displayName: string | null;
-  branchId: string | null;
-}
+const DAY_OPTIONS = [
+  { value: 0, labelEn: "Sunday", labelZh: "週日" },
+  { value: 1, labelEn: "Monday", labelZh: "週一" },
+  { value: 2, labelEn: "Tuesday", labelZh: "週二" },
+  { value: 3, labelEn: "Wednesday", labelZh: "週三" },
+  { value: 4, labelEn: "Thursday", labelZh: "週四" },
+  { value: 5, labelEn: "Friday", labelZh: "週五" },
+  { value: 6, labelEn: "Saturday", labelZh: "週六" },
+];
 
-interface BranchItem {
-  id: string;
-  name: string;
-}
+const EMPTY_THERAPISTS: TherapistSummary[] = [];
+const EMPTY_SCHEDULES: TherapistRecurringSchedule[] = [];
+const EMPTY_BLOCKS: TherapistBlockItem[] = [];
 
-interface SlotItem {
-  id: string;
-  coach_id: string;
-  branch_id: string | null;
-  starts_at: string;
-  ends_at: string;
-  status: string;
-  note: string | null;
+function toDateInputValue(input: Date) {
+  return input.toISOString().slice(0, 10);
 }
 
 function toDatetimeLocalValue(input: Date) {
-  const value = new Date(input.getTime() - input.getTimezoneOffset() * 60 * 1000);
-  return value.toISOString().slice(0, 16);
+  const next = new Date(input.getTime() - input.getTimezoneOffset() * 60 * 1000);
+  return next.toISOString().slice(0, 16);
 }
 
 function localDatetimeToIso(value: string) {
   return value ? new Date(value).toISOString() : "";
 }
 
+function statusBadgeStyle(active: boolean) {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "4px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 700,
+    color: active ? "#155e75" : "#7c2d12",
+    background: active ? "rgba(34,197,94,0.16)" : "rgba(251,146,60,0.18)",
+  } as const;
+}
+
+async function parseJsonSafe(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+function dayLabel(dayOfWeek: number, zh: boolean) {
+  const found = DAY_OPTIONS.find((item) => item.value === dayOfWeek);
+  if (!found) return String(dayOfWeek);
+  return zh ? found.labelZh : found.labelEn;
+}
+
+function scheduleStatusLabel(isActive: boolean, zh: boolean) {
+  if (zh) return isActive ? "啟用中" : "已停用";
+  return isActive ? "Active" : "Inactive";
+}
+
+function blockStatusLabel(status: string, zh: boolean) {
+  if (!zh) return status;
+  if (status === "active") return "啟用中";
+  if (status === "cancelled") return "已取消";
+  return status;
+}
+
+function blockTypeLabel(blockType: TherapistBlockItem["blockType"], zh: boolean) {
+  if (!zh) return blockType;
+  if (blockType === "time_off") return "休假";
+  if (blockType === "offsite") return "外出";
+  if (blockType === "other") return "其他";
+  return "封鎖";
+}
+
 export default function ManagerCoachSlotsPage() {
   const { locale } = useI18n();
   const zh = locale !== "en";
+  const [payload, setPayload] = useState<TherapistManagementPayload | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [selectedCoachId, setSelectedCoachId] = useState("");
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [savingBlock, setSavingBlock] = useState(false);
+  const [workingId, setWorkingId] = useState<string | null>(null);
 
-  const [coaches, setCoaches] = useState<CoachItem[]>([]);
-  const [branches, setBranches] = useState<BranchItem[]>([]);
-  const [items, setItems] = useState<SlotItem[]>([]);
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const laterTomorrow = new Date(tomorrow.getTime() + 60 * 60 * 1000);
 
-  const now = new Date();
-  const [coachId, setCoachId] = useState("");
-  const [branchId, setBranchId] = useState("");
-  const [startsLocal, setStartsLocal] = useState(toDatetimeLocalValue(new Date(now.getTime() + 60 * 60 * 1000)));
-  const [endsLocal, setEndsLocal] = useState(toDatetimeLocalValue(new Date(now.getTime() + 2 * 60 * 60 * 1000)));
-  const [note, setNote] = useState("");
-  const [actionReasonById, setActionReasonById] = useState<Record<string, string>>({});
+  const [scheduleBranchId, setScheduleBranchId] = useState("");
+  const [scheduleDayOfWeek, setScheduleDayOfWeek] = useState(tomorrow.getDay());
+  const [scheduleStartTime, setScheduleStartTime] = useState("09:00");
+  const [scheduleEndTime, setScheduleEndTime] = useState("17:00");
+  const [scheduleTimezone, setScheduleTimezone] = useState("Asia/Taipei");
+  const [scheduleEffectiveFrom, setScheduleEffectiveFrom] = useState(toDateInputValue(tomorrow));
+  const [scheduleEffectiveUntil, setScheduleEffectiveUntil] = useState("");
+  const [scheduleNote, setScheduleNote] = useState("");
 
-  function slotStatusLabel(status: string) {
-    if (!zh) return status;
-    if (status === "active") return "\u555f\u7528\u4e2d";
-    if (status === "cancelled") return "\u5df2\u53d6\u6d88";
-    if (status === "completed") return "\u5df2\u5b8c\u6210";
-    return status;
-  }
+  const [blockBranchId, setBlockBranchId] = useState("");
+  const [blockStartsLocal, setBlockStartsLocal] = useState(toDatetimeLocalValue(tomorrow));
+  const [blockEndsLocal, setBlockEndsLocal] = useState(toDatetimeLocalValue(laterTomorrow));
+  const [blockReason, setBlockReason] = useState("manager_unavailable");
+  const [blockType, setBlockType] = useState<TherapistBlockItem["blockType"]>("blocked");
+  const [blockNote, setBlockNote] = useState("");
 
-  const coachMap = useMemo(() => new Map(coaches.map((c) => [c.id, c])), [coaches]);
-  const branchMap = useMemo(() => new Map(branches.map((b) => [b.id, b])), [branches]);
+  const branches = payload?.branches || [];
+  const coaches = payload?.therapists || EMPTY_THERAPISTS;
 
-  async function loadRefs() {
-    setError(null);
-    const [coachRes, branchRes] = await Promise.all([fetch("/api/coaches"), fetch("/api/manager/branches?activeOnly=1")]);
-    const coachPayload = await coachRes.json();
-    const branchPayload = await branchRes.json();
+  const selectedCoach = useMemo(
+    () => coaches.find((item) => item.id === selectedCoachId) || coaches[0] || null,
+    [coaches, selectedCoachId],
+  );
 
-    if (!coachRes.ok) {
-      setError(coachPayload?.error || (zh ? "\u8f09\u5165\u6559\u7df4\u5931\u6557" : "Load coaches failed"));
-      return;
-    }
-    if (!branchRes.ok) {
-      setError(branchPayload?.error || (zh ? "\u8f09\u5165\u5206\u9928\u5931\u6557" : "Load branches failed"));
-      return;
-    }
+  const schedules = useMemo(
+    () => (payload?.schedules || EMPTY_SCHEDULES).filter((item) => item.coachId === selectedCoach?.id),
+    [payload?.schedules, selectedCoach?.id],
+  );
+  const blocks = useMemo(
+    () =>
+      (payload?.blocks || EMPTY_BLOCKS)
+        .filter((item) => item.coachId === selectedCoach?.id)
+        .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime()),
+    [payload?.blocks, selectedCoach?.id],
+  );
 
-    const coachItems = (coachPayload.items || []) as CoachItem[];
-    const branchItems = (branchPayload.items || []).map((b: any) => ({ id: String(b.id), name: String(b.name) })) as BranchItem[];
-    setCoaches(coachItems);
-    setBranches(branchItems);
-    if (!coachId) setCoachId(coachItems[0]?.id || "");
-    if (!branchId) setBranchId(branchItems[0]?.id || "");
-  }
-
-  async function loadSlots() {
+  async function load() {
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams();
-    if (coachId) params.set("coachId", coachId);
-    const res = await fetch(`/api/manager/coach-slots?${params.toString()}`);
-    const payload = await res.json();
-    if (!res.ok) {
-      setError(payload?.error || (zh ? "\u8f09\u5165\u6642\u6bb5\u5931\u6557" : "Load slots failed"));
+    try {
+      const response = await fetch("/api/manager/therapists", { cache: "no-store" });
+      const next = (await parseJsonSafe(response)) as TherapistManagementPayload & { error?: string };
+      if (!response.ok) throw new Error(next.error || "Failed to load coach availability");
+      setPayload(next);
+      setSelectedCoachId((current) => current || next.therapists[0]?.id || "");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to load coach availability");
+    } finally {
       setLoading(false);
-      return;
     }
-    setItems((payload.items || []) as SlotItem[]);
-    setLoading(false);
   }
 
   useEffect(() => {
-    void loadRefs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void load();
   }, []);
 
   useEffect(() => {
-    void loadSlots();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coachId]);
+    if (!selectedCoach) return;
+    const nextBranchId = selectedCoach.primaryBranchId || selectedCoach.branchIds[0] || "";
+    setScheduleBranchId(nextBranchId);
+    setBlockBranchId(nextBranchId);
+  }, [selectedCoach]);
 
-  async function createSlot(event: FormEvent) {
-    event.preventDefault();
-    setSaving(true);
+  async function createSchedule() {
+    if (!selectedCoach) return;
+    setSavingSchedule(true);
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch("/api/manager/coach-slots", {
+      const response = await fetch("/api/manager/therapist-schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          coachId,
-          branchId: branchId || null,
-          startsAt: localDatetimeToIso(startsLocal),
-          endsAt: localDatetimeToIso(endsLocal),
-          note: note || null,
+          coachId: selectedCoach.id,
+          branchId: scheduleBranchId || null,
+          dayOfWeek: scheduleDayOfWeek,
+          startTime: scheduleStartTime,
+          endTime: scheduleEndTime,
+          timezone: scheduleTimezone,
+          effectiveFrom: scheduleEffectiveFrom || null,
+          effectiveUntil: scheduleEffectiveUntil || null,
+          note: scheduleNote || null,
         }),
       });
-      const payload = await res.json();
-      if (!res.ok) {
-        setError(payload?.error || (zh ? "\u5efa\u7acb\u6642\u6bb5\u5931\u6557" : "Create slot failed"));
-        return;
-      }
-      setMessage(`${zh ? "\u5df2\u5efa\u7acb\u6642\u6bb5" : "Created slot"}: ${payload.slot?.id || ""}`);
-      setNote("");
-      await loadSlots();
+      const next = await parseJsonSafe(response);
+      if (!response.ok) throw new Error(String(next?.error || "Failed to create recurring availability"));
+      setMessage(zh ? "已建立固定可排時段。" : "Recurring availability created.");
+      setScheduleNote("");
+      await load();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to create recurring availability");
     } finally {
-      setSaving(false);
+      setSavingSchedule(false);
     }
   }
 
-  async function updateSlot(id: string, action: "cancel" | "activate", reason: string) {
+  async function toggleSchedule(item: TherapistRecurringSchedule) {
+    setWorkingId(item.id);
     setError(null);
     setMessage(null);
-    const res = await fetch(`/api/manager/coach-slots/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, reason }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setError(payload?.error || (zh ? "\u66f4\u65b0\u6642\u6bb5\u5931\u6557" : "Update slot failed"));
-      return;
+    try {
+      const response = await fetch(`/api/manager/therapist-schedules/${encodeURIComponent(item.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isActive: !item.isActive,
+        }),
+      });
+      const next = await parseJsonSafe(response);
+      if (!response.ok) throw new Error(String(next?.error || "Failed to update recurring availability"));
+      setMessage(zh ? "已更新固定可排時段。" : "Recurring availability updated.");
+      await load();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to update recurring availability");
+    } finally {
+      setWorkingId(null);
     }
-    setMessage(`${zh ? "\u5df2\u66f4\u65b0\u6642\u6bb5" : "Updated slot"}: ${id} -> ${payload.slot?.status || ""}`);
-    setActionReasonById((prev) => ({ ...prev, [id]: "" }));
-    await loadSlots();
+  }
+
+  async function createBlock() {
+    if (!selectedCoach) return;
+    setSavingBlock(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/frontdesk/coach-blocks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coachId: selectedCoach.id,
+          branchId: blockBranchId || null,
+          startsAt: localDatetimeToIso(blockStartsLocal),
+          endsAt: localDatetimeToIso(blockEndsLocal),
+          reason: blockReason,
+          note: blockNote || null,
+          blockType,
+        }),
+      });
+      const next = await parseJsonSafe(response);
+      if (!response.ok) throw new Error(String(next?.error || "Failed to create blocked time"));
+      setMessage(zh ? "已建立不可排時段。" : "Blocked time created.");
+      setBlockNote("");
+      await load();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to create blocked time");
+    } finally {
+      setSavingBlock(false);
+    }
+  }
+
+  async function toggleBlock(item: TherapistBlockItem) {
+    setWorkingId(item.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const nextStatus = item.status === "active" ? "cancelled" : "active";
+      const response = await fetch(`/api/frontdesk/coach-blocks/${encodeURIComponent(item.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: nextStatus,
+          reason: nextStatus === "cancelled" ? "manager_cancel" : "manager_reactivate",
+        }),
+      });
+      const next = await parseJsonSafe(response);
+      if (!response.ok) throw new Error(String(next?.error || "Failed to update blocked time"));
+      setMessage(zh ? "已更新不可排時段。" : "Blocked time updated.");
+      await load();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to update blocked time");
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
+  function coachTitle(item: TherapistSummary | null) {
+    return item?.displayName || item?.id.slice(0, 8) || (zh ? "選擇教練" : "Select coach");
   }
 
   return (
@@ -166,98 +280,290 @@ export default function ManagerCoachSlotsPage() {
       <section className="fdGlassBackdrop">
         <section className="hero" style={{ paddingTop: 0 }}>
           <div className="fdGlassPanel">
-            <div className="fdEyebrow">{zh ? "\u6559\u7df4\u6392\u7a0b" : "COACH SCHEDULE"}</div>
+            <div className="fdEyebrow">{zh ? "排班 / 不可排管理" : "AVAILABILITY / BLOCKS"}</div>
             <h1 className="h1" style={{ marginTop: 10, fontSize: 36 }}>
-              {zh ? "\u6559\u7df4\u6642\u6bb5" : "Coach Slots"}
+              {zh ? "教練供給側可用性規則" : "Coach Availability Rules"}
             </h1>
             <p className="fdGlassText">
               {zh
-                ? "\u5efa\u7acb\u8207\u7ba1\u7406\u6559\u7df4\u53ef\u9810\u7d04\u6642\u6bb5\uff0c\u652f\u63f4\u5206\u9928\u7bc4\u570d\u8207\u72c0\u614b\u5207\u63db\u3002"
-                : "Create and manage coach availability windows with branch scope and status transitions."}
+                ? "這一頁只負責管理教練固定可排時段與不可排例外時段。教練主資料、服務規則、營運權限與前台排課流程都不在這裡維護。"
+                : "This page only manages recurring coach availability and blocked time exceptions. Coach master data, service rules, operations policy, and frontdesk booking flows stay elsewhere."}
             </p>
+            <div className="actions" style={{ marginTop: 14 }}>
+              <Link className="fdPillBtn" href="/manager">
+                {zh ? "回後台首頁" : "Back to dashboard"}
+              </Link>
+              <Link className="fdPillBtn" href="/manager/therapists">
+                {zh ? "教練主資料" : "Coach master data"}
+              </Link>
+              <Link className="fdPillBtn" href="/manager/services">
+                {zh ? "服務項目" : "Services"}
+              </Link>
+              <Link className="fdPillBtn" href="/manager/settings/operations">
+                {zh ? "營運 / 權限" : "Operations & permissions"}
+              </Link>
+            </div>
           </div>
         </section>
 
-        <p className="sub" style={{ marginBottom: 12 }}>
-          <a href="/manager">{zh ? "\u56de\u5100\u8868\u677f" : "Back to dashboard"}</a>
-        </p>
+        {message ? (
+          <div className="sub" style={{ marginBottom: 12, color: "var(--brand)" }} data-coach-slots-message>
+            {message}
+          </div>
+        ) : null}
+        {error ? (
+          <div className="error" style={{ marginBottom: 12 }}>
+            {error}
+          </div>
+        ) : null}
 
-        {error ? <div className="error" style={{ marginBottom: 12 }}>{error}</div> : null}
-        {message ? <div className="sub" style={{ marginBottom: 12, color: "var(--brand)" }}>{message}</div> : null}
-
-        <section className="fdTwoCol">
-          <form onSubmit={createSlot} className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{zh ? "\u5efa\u7acb\u6642\u6bb5" : "Create Slot"}</h2>
-            <div style={{ display: "grid", gap: 8 }}>
-              <select value={coachId} onChange={(e) => setCoachId(e.target.value)} className="input" required>
-                <option value="">{zh ? "\u9078\u64c7\u6559\u7df4" : "Select coach"}</option>
-                {coaches.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.displayName || c.id.slice(0, 8)}
-                  </option>
-                ))}
-              </select>
-              <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="input">
-                <option value="">{zh ? "\uff08\u7121\u5206\u9928\uff09" : "(No branch)"}</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-              <input type="datetime-local" value={startsLocal} onChange={(e) => setStartsLocal(e.target.value)} className="input" required />
-              <input type="datetime-local" value={endsLocal} onChange={(e) => setEndsLocal(e.target.value)} className="input" required />
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={zh ? "\u5099\u8a3b\uff08\u9078\u586b\uff09" : "note (optional)"} className="input" />
-            </div>
-            <div className="actions" style={{ marginTop: 10 }}>
-              <button type="submit" className="fdPillBtn fdPillBtnPrimary" disabled={saving}>
-                {saving ? (zh ? "\u5efa\u7acb\u4e2d..." : "Creating...") : zh ? "\u5efa\u7acb" : "Create"}
-              </button>
-              <button type="button" className="fdPillBtn" onClick={() => void loadSlots()} disabled={loading}>
-                {loading ? (zh ? "\u8f09\u5165\u4e2d..." : "Reloading...") : zh ? "\u91cd\u65b0\u8f09\u5165" : "Reload"}
-              </button>
-            </div>
-          </form>
-
-          <section className="fdGlassSubPanel" style={{ padding: 14 }}>
-            <h2 className="sectionTitle">{zh ? "\u6642\u6bb5\u6e05\u55ae" : "Slot List"}</h2>
-            <div className="fdActionGrid">
-              {items.map((s) => {
-                const reason = (actionReasonById[s.id] || "").trim();
+        <section className="fdTwoCol" style={{ alignItems: "start" }}>
+          <aside className="fdGlassSubPanel" style={{ padding: 14 }}>
+            <h2 className="sectionTitle">{zh ? "教練清單" : "Coaches"}</h2>
+            <p className="fdGlassText" style={{ marginBottom: 12 }}>
+              {zh
+                ? "先選教練，再查看或更新該教練的固定可排時段與不可排例外。"
+                : "Select a coach first, then review and update recurring availability and blocked-time exceptions."}
+            </p>
+            <div style={{ display: "grid", gap: 10 }}>
+              {coaches.map((coach) => {
+                const active = selectedCoach?.id === coach.id;
                 return (
-                  <article key={s.id} className="fdGlassSubPanel fdActionCard" style={{ padding: 12 }}>
-                    <h3 className="fdActionTitle" style={{ fontSize: 18 }}>
-                      {coachMap.get(s.coach_id)?.displayName || s.coach_id.slice(0, 8)}
-                    </h3>
-                    <p className="sub" style={{ marginTop: 8 }}>
-                      {zh ? "\u5206\u9928" : "branch"}: {s.branch_id ? branchMap.get(s.branch_id)?.name || s.branch_id.slice(0, 8) : "-"}
-                    </p>
-                    <p className="sub" style={{ marginTop: 2 }}>
-                      {new Date(s.starts_at).toLocaleString()} - {new Date(s.ends_at).toLocaleString()}
-                    </p>
-                    <p className="sub" style={{ marginTop: 2 }}>{zh ? "\u72c0\u614b" : "status"}: {slotStatusLabel(s.status)}</p>
-                    <p className="sub" style={{ marginTop: 2 }}>{zh ? "ID" : "id"}: {s.id}</p>
-                    <input
-                      value={actionReasonById[s.id] || ""}
-                      onChange={(e) => setActionReasonById((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                      placeholder={zh ? "\u539f\u56e0\uff08\u5fc5\u586b\uff09" : "reason (required)"}
-                      className="input"
-                      style={{ marginTop: 8 }}
-                    />
-                    <button
-                      type="button"
-                      className="fdPillBtn"
-                      style={{ marginTop: 8 }}
-                      disabled={!reason}
-                      onClick={() => void updateSlot(s.id, s.status === "active" ? "cancel" : "activate", reason)}
-                    >
-                      {s.status === "active" ? (zh ? "\u53d6\u6d88" : "Cancel") : zh ? "\u555f\u7528" : "Activate"}
-                    </button>
-                  </article>
+                  <button
+                    key={coach.id}
+                    type="button"
+                    data-coach-slot-coach={coach.id}
+                    onClick={() => setSelectedCoachId(coach.id)}
+                    style={{
+                      textAlign: "left",
+                      borderRadius: 18,
+                      border: active ? "1px solid rgba(23,94,120,0.45)" : "1px solid rgba(15,23,42,0.08)",
+                      background: active ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.72)",
+                      padding: 12,
+                      boxShadow: active ? "0 18px 40px rgba(23,94,120,0.16)" : "0 10px 24px rgba(15,23,42,0.08)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                      <strong>{coach.displayName || coach.id.slice(0, 8)}</strong>
+                      <span style={statusBadgeStyle(coach.isActive)}>{coach.isActive ? "Active" : "Inactive"}</span>
+                    </div>
+                    <div className="sub" style={{ marginTop: 6 }}>
+                      {zh ? "主分館" : "Primary branch"}: {coach.primaryBranchName || (zh ? "未設定" : "Not set")}
+                    </div>
+                    <div className="sub" style={{ marginTop: 4 }}>
+                      {zh ? "分館覆蓋" : "Branch coverage"}: {coach.branchLinks.length}
+                    </div>
+                  </button>
                 );
               })}
-              {items.length === 0 ? <p className="fdGlassText">{zh ? "\u627e\u4e0d\u5230\u6642\u6bb5\u3002" : "No slots found."}</p> : null}
+              {!loading && coaches.length === 0 ? <p className="fdGlassText">{zh ? "找不到教練。" : "No coaches found."}</p> : null}
+              {loading ? <p className="fdGlassText">{zh ? "載入中..." : "Loading..."}</p> : null}
             </div>
+          </aside>
+
+          <section style={{ display: "grid", gap: 16 }}>
+            <section className="fdGlassSubPanel" style={{ padding: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start", flexWrap: "wrap" }}>
+                <div>
+                  <h2 className="sectionTitle">{coachTitle(selectedCoach)}</h2>
+                  <p className="fdGlassText">
+                    {zh
+                      ? "這裡只維護供給側可用性規則：固定每週可排時段，以及不可排 / 休假 / 封鎖例外。"
+                      : "This page only maintains supply-side availability rules: recurring weekly slots and blocked-time exceptions."}
+                  </p>
+                </div>
+                <div className="sub">
+                  {zh ? "主分館" : "Primary branch"}: {selectedCoach?.primaryBranchName || (zh ? "未設定" : "Not set")}
+                </div>
+              </div>
+            </section>
+
+            <section className="fdTwoCol" style={{ alignItems: "start" }}>
+              <article className="fdGlassSubPanel" style={{ padding: 16 }}>
+                <h2 className="sectionTitle">{zh ? "固定可排時段" : "Recurring availability"}</h2>
+                <p className="fdGlassText" style={{ marginBottom: 12 }}>
+                  {zh
+                    ? "維護每週固定可排的時段。這些規則屬於供給側設定，不屬於教練主資料。"
+                    : "Maintain weekly recurring availability windows. These rules belong to supply-side scheduling, not coach master data."}
+                </p>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <select data-schedule-branch className="input" value={scheduleBranchId} onChange={(event) => setScheduleBranchId(event.target.value)}>
+                    <option value="">{zh ? "（無分館）" : "(No branch)"}</option>
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select data-schedule-day className="input" value={scheduleDayOfWeek} onChange={(event) => setScheduleDayOfWeek(Number(event.target.value))}>
+                    {DAY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {zh ? option.labelZh : option.labelEn}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+                    <input data-schedule-start className="input" type="time" value={scheduleStartTime} onChange={(event) => setScheduleStartTime(event.target.value)} />
+                    <input data-schedule-end className="input" type="time" value={scheduleEndTime} onChange={(event) => setScheduleEndTime(event.target.value)} />
+                  </div>
+                  <input data-schedule-timezone className="input" value={scheduleTimezone} onChange={(event) => setScheduleTimezone(event.target.value)} />
+                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+                    <input data-schedule-effective-from className="input" type="date" value={scheduleEffectiveFrom} onChange={(event) => setScheduleEffectiveFrom(event.target.value)} />
+                    <input data-schedule-effective-until className="input" type="date" value={scheduleEffectiveUntil} onChange={(event) => setScheduleEffectiveUntil(event.target.value)} />
+                  </div>
+                  <input
+                    data-schedule-note
+                    className="input"
+                    value={scheduleNote}
+                    onChange={(event) => setScheduleNote(event.target.value)}
+                    placeholder={zh ? "備註（例如：平日固定班）" : "Note (for example: weekday recurring slot)"}
+                  />
+                </div>
+                <div className="actions" style={{ marginTop: 12 }}>
+                  <button data-create-schedule type="button" className="fdPillBtn fdPillBtnPrimary" disabled={!selectedCoach || savingSchedule} onClick={() => void createSchedule()}>
+                    {savingSchedule ? (zh ? "建立中..." : "Creating...") : zh ? "建立固定時段" : "Create recurring slot"}
+                  </button>
+                </div>
+
+                <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+                  {schedules.map((item) => {
+                    const branchName = branches.find((branch) => branch.id === item.branchId)?.name || item.branchId || "-";
+                    return (
+                      <article key={item.id} className="fdGlassSubPanel" data-schedule-id={item.id} style={{ padding: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                          <strong>{dayLabel(item.dayOfWeek, zh)} · {item.startTime.slice(0, 5)} - {item.endTime.slice(0, 5)}</strong>
+                          <span style={statusBadgeStyle(item.isActive)}>{scheduleStatusLabel(item.isActive, zh)}</span>
+                        </div>
+                        <div className="sub" style={{ marginTop: 6 }}>{zh ? "分館" : "Branch"}: {branchName}</div>
+                        <div className="sub" style={{ marginTop: 4 }}>{zh ? "時區" : "Timezone"}: {item.timezone}</div>
+                        <div className="sub" style={{ marginTop: 4 }}>
+                          {zh ? "生效區間" : "Effective range"}: {item.effectiveFrom || "-"} ~ {item.effectiveUntil || "-"}
+                        </div>
+                        <div className="sub" style={{ marginTop: 4 }}>{zh ? "備註" : "Note"}: {item.note || "-"}</div>
+                          <button
+                            data-schedule-toggle={item.id}
+                            type="button"
+                          className="fdPillBtn"
+                          style={{ marginTop: 10 }}
+                          disabled={workingId === item.id}
+                          onClick={() => void toggleSchedule(item)}
+                        >
+                          {workingId === item.id
+                            ? zh ? "更新中..." : "Updating..."
+                            : item.isActive
+                              ? zh ? "停用時段" : "Deactivate"
+                              : zh ? "重新啟用" : "Activate"}
+                        </button>
+                      </article>
+                    );
+                  })}
+                  {!loading && schedules.length === 0 ? (
+                    <p className="fdGlassText">{zh ? "這位教練目前沒有固定可排時段。" : "No recurring availability for this coach yet."}</p>
+                  ) : null}
+                </div>
+              </article>
+
+              <article className="fdGlassSubPanel" style={{ padding: 16 }}>
+                <h2 className="sectionTitle">{zh ? "不可排 / 例外時段" : "Blocked time / exceptions"}</h2>
+                <p className="fdGlassText" style={{ marginBottom: 12 }}>
+                  {zh
+                    ? "維護休假、封鎖、外出等例外不可排時段。這些資料直接影響前台是否能排進某個時間。"
+                    : "Maintain time-off, blocked, or offsite exceptions. These records directly affect whether frontdesk can book a time range."}
+                </p>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <select data-block-branch className="input" value={blockBranchId} onChange={(event) => setBlockBranchId(event.target.value)}>
+                    <option value="">{zh ? "（無分館）" : "(No branch)"}</option>
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+                    <input data-block-start className="input" type="datetime-local" value={blockStartsLocal} onChange={(event) => setBlockStartsLocal(event.target.value)} />
+                    <input data-block-end className="input" type="datetime-local" value={blockEndsLocal} onChange={(event) => setBlockEndsLocal(event.target.value)} />
+                  </div>
+                  <input data-block-reason className="input" value={blockReason} onChange={(event) => setBlockReason(event.target.value)} placeholder={zh ? "原因（必填）" : "Reason (required)"} />
+                  <select data-block-type className="input" value={blockType} onChange={(event) => setBlockType(event.target.value as TherapistBlockItem["blockType"])}>
+                    <option value="blocked">{zh ? "封鎖" : "blocked"}</option>
+                    <option value="time_off">{zh ? "休假" : "time_off"}</option>
+                    <option value="offsite">{zh ? "外出" : "offsite"}</option>
+                    <option value="other">{zh ? "其他" : "other"}</option>
+                  </select>
+                  <input
+                    data-block-note
+                    className="input"
+                    value={blockNote}
+                    onChange={(event) => setBlockNote(event.target.value)}
+                    placeholder={zh ? "備註（例如：臨時請假）" : "Note (for example: temporary leave)"}
+                  />
+                </div>
+                <div className="actions" style={{ marginTop: 12 }}>
+                  <button data-create-block type="button" className="fdPillBtn fdPillBtnPrimary" disabled={!selectedCoach || savingBlock} onClick={() => void createBlock()}>
+                    {savingBlock ? (zh ? "建立中..." : "Creating...") : zh ? "建立不可排時段" : "Create blocked time"}
+                  </button>
+                </div>
+
+                <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+                  {blocks.map((item) => {
+                    const branchName = branches.find((branch) => branch.id === item.branchId)?.name || item.branchId || "-";
+                    const active = item.status === "active";
+                    return (
+                      <article key={item.id} className="fdGlassSubPanel" data-block-id={item.id} style={{ padding: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                          <strong>{new Date(item.startsAt).toLocaleString()} - {new Date(item.endsAt).toLocaleString()}</strong>
+                          <span style={statusBadgeStyle(active)}>{blockStatusLabel(item.status, zh)}</span>
+                        </div>
+                        <div className="sub" style={{ marginTop: 6 }}>{zh ? "類型" : "Type"}: {blockTypeLabel(item.blockType, zh)}</div>
+                        <div className="sub" style={{ marginTop: 4 }}>{zh ? "分館" : "Branch"}: {branchName}</div>
+                        <div className="sub" style={{ marginTop: 4 }}>{zh ? "原因" : "Reason"}: {item.reason}</div>
+                        <div className="sub" style={{ marginTop: 4 }}>{zh ? "備註" : "Note"}: {item.note || "-"}</div>
+                        <button
+                          data-block-toggle={item.id}
+                          type="button"
+                          className="fdPillBtn"
+                          style={{ marginTop: 10 }}
+                          disabled={workingId === item.id}
+                          onClick={() => void toggleBlock(item)}
+                        >
+                          {workingId === item.id
+                            ? zh ? "更新中..." : "Updating..."
+                            : active
+                              ? zh ? "取消不可排" : "Cancel block"
+                              : zh ? "重新啟用" : "Reactivate"}
+                        </button>
+                      </article>
+                    );
+                  })}
+                  {!loading && blocks.length === 0 ? (
+                    <p className="fdGlassText">{zh ? "這位教練目前沒有不可排例外時段。" : "No blocked time entries for this coach yet."}</p>
+                  ) : null}
+                </div>
+              </article>
+            </section>
+
+            <section className="fdGlassSubPanel" style={{ padding: 16 }}>
+              <h2 className="sectionTitle">{zh ? "這頁不負責的事項" : "Out of scope for this page"}</h2>
+              <p className="fdGlassText">
+                {zh
+                  ? "這頁不維護教練主資料、服務項目、堂次 / 扣課規則、權限政策、候補名單、外部整合，也不承擔前台排課建立流程。"
+                  : "This page does not maintain coach master data, services, entitlement rules, permission policy, waitlists, external integrations, or the frontdesk booking flow."}
+              </p>
+              <div className="actions" style={{ marginTop: 12 }}>
+                <Link className="fdPillBtn" href="/manager/therapists">
+                  {zh ? "教練主資料" : "Coach master data"}
+                </Link>
+                <Link className="fdPillBtn" href="/manager/services">
+                  {zh ? "服務項目" : "Services"}
+                </Link>
+                <Link className="fdPillBtn" href="/manager/plans">
+                  {zh ? "堂次 / 規則" : "Plan rules"}
+                </Link>
+                <Link className="fdPillBtn" href="/manager/settings/operations">
+                  {zh ? "營運 / 權限" : "Operations & permissions"}
+                </Link>
+              </div>
+            </section>
           </section>
         </section>
       </section>
