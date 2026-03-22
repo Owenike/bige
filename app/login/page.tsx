@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Suspense, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "../i18n-provider";
@@ -269,6 +269,19 @@ function LoginContent() {
     loginIntent === "platform";
   const frontdeskFocused = loginIntent === "frontdesk_entry" || loginIntent === "frontdesk_bookings";
   const memberDeemphasized = staffFocused;
+  const [memberSectionExpanded, setMemberSectionExpanded] = useState(!frontdeskFocused);
+  const [activationSectionExpanded, setActivationSectionExpanded] = useState(!frontdeskFocused);
+
+  useEffect(() => {
+    if (frontdeskFocused) {
+      setMemberSectionExpanded(false);
+      setActivationSectionExpanded(false);
+      return;
+    }
+
+    setMemberSectionExpanded(true);
+    setActivationSectionExpanded(true);
+  }, [frontdeskFocused]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -510,49 +523,71 @@ function LoginContent() {
                 {intentContent.memberDescription}
               </p>
 
-              {memberLoginError ? (
+              {frontdeskFocused && !memberSectionExpanded ? (
+                <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+                  <div className="sub" style={{ opacity: 0.84 }}>
+                    {zh
+                      ? "這是次要入口。若你不是櫃檯工作人員，才需要使用會員登入。"
+                      : "This is a secondary entry. Use it only if you are signing in as a member rather than staff."}
+                  </div>
+                  <div className="actions">
+                    <button type="button" className="btn" onClick={() => setMemberSectionExpanded(true)}>
+                      {zh ? "展開會員登入" : "Open Member Login"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {memberSectionExpanded && memberLoginError ? (
                 <div className="error" style={{ marginTop: 12 }}>
                   {memberLoginError}
                 </div>
               ) : null}
 
-              <form onSubmit={submitPhoneLogin} style={{ marginTop: 12 }}>
-                <label className="field">
-                  <span className="kvLabel" style={{ textTransform: "none" }}>
-                    {zh ? "手機號碼" : "Phone"}
-                  </span>
-                  <input
-                    className="input"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder={zh ? "09xxxxxxxx" : "Phone number"}
-                    type="tel"
-                    autoComplete="tel"
-                    required
-                  />
-                </label>
+              {memberSectionExpanded ? (
+                <form onSubmit={submitPhoneLogin} style={{ marginTop: 12 }}>
+                  <label className="field">
+                    <span className="kvLabel" style={{ textTransform: "none" }}>
+                      {zh ? "手機號碼" : "Phone"}
+                    </span>
+                    <input
+                      className="input"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder={zh ? "09xxxxxxxx" : "Phone number"}
+                      type="tel"
+                      autoComplete="tel"
+                      required
+                    />
+                  </label>
 
-                <label className="field">
-                  <span className="kvLabel" style={{ textTransform: "none" }}>
-                    {zh ? "密碼" : "Password"}
-                  </span>
-                  <input
-                    className="input"
-                    value={memberPassword}
-                    onChange={(e) => setMemberPassword(e.target.value)}
-                    placeholder="********"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                  />
-                </label>
+                  <label className="field">
+                    <span className="kvLabel" style={{ textTransform: "none" }}>
+                      {zh ? "密碼" : "Password"}
+                    </span>
+                    <input
+                      className="input"
+                      value={memberPassword}
+                      onChange={(e) => setMemberPassword(e.target.value)}
+                      placeholder="********"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                    />
+                  </label>
 
-                <div className="actions" style={{ marginTop: 14 }}>
-                  <button type="submit" disabled={memberLoginBusy} className={`btn ${memberLoginBusy ? "" : "btnPrimary"}`}>
-                    {memberLoginBusy ? (zh ? "登入中..." : "Signing in...") : zh ? "會員登入" : "Phone Login"}
-                  </button>
-                </div>
-              </form>
+                  <div className="actions" style={{ marginTop: 14 }}>
+                    <button type="submit" disabled={memberLoginBusy} className={`btn ${memberLoginBusy ? "" : "btnPrimary"}`}>
+                      {memberLoginBusy ? (zh ? "登入中..." : "Signing in...") : zh ? "會員登入" : "Phone Login"}
+                    </button>
+                    {frontdeskFocused ? (
+                      <button type="button" className="btn" onClick={() => setMemberSectionExpanded(false)}>
+                        {zh ? "收合" : "Collapse"}
+                      </button>
+                    ) : null}
+                  </div>
+                </form>
+              ) : null}
             </section>
 
             <section
@@ -579,47 +614,71 @@ function LoginContent() {
                 {intentContent.activationDescription}
               </p>
 
-              {activationError ? (
+              {frontdeskFocused && !activationSectionExpanded ? (
+                <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+                  <div className="sub" style={{ opacity: 0.84 }}>
+                    {zh
+                      ? "這是輔助入口，僅在會員尚未啟用時使用。"
+                      : "This is a support entry, only needed when a member account has not been activated yet."}
+                  </div>
+                  <div className="actions">
+                    <button type="button" className="btn" onClick={() => setActivationSectionExpanded(true)}>
+                      {zh ? "展開啟用入口" : "Open Activation"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {activationSectionExpanded && activationError ? (
                 <div className="error" style={{ marginTop: 12 }}>
                   {activationError}
                 </div>
               ) : null}
 
-              {activationMessage ? (
+              {activationSectionExpanded && activationMessage ? (
                 <div className="ok" style={{ marginTop: 12 }}>
                   {activationMessage}
                 </div>
               ) : null}
 
-              <form onSubmit={submitPhoneActivation} style={{ marginTop: 12 }}>
-                <label className="field">
-                  <span className="kvLabel" style={{ textTransform: "none" }}>
-                    {zh ? "手機號碼" : "Phone"}
-                  </span>
-                  <input
-                    className="input"
-                    value={activationPhone}
-                    onChange={(e) => setActivationPhone(e.target.value)}
-                    placeholder={zh ? "09xxxxxxxx" : "Phone number"}
-                    type="tel"
-                    autoComplete="tel"
-                    required
-                  />
-                </label>
+              {activationSectionExpanded ? (
+                <>
+                  <form onSubmit={submitPhoneActivation} style={{ marginTop: 12 }}>
+                    <label className="field">
+                      <span className="kvLabel" style={{ textTransform: "none" }}>
+                        {zh ? "手機號碼" : "Phone"}
+                      </span>
+                      <input
+                        className="input"
+                        value={activationPhone}
+                        onChange={(e) => setActivationPhone(e.target.value)}
+                        placeholder={zh ? "09xxxxxxxx" : "Phone number"}
+                        type="tel"
+                        autoComplete="tel"
+                        required
+                      />
+                    </label>
 
-                <div className="actions" style={{ marginTop: 14 }}>
-                  <button type="submit" disabled={activationBusy} className={`btn ${activationBusy ? "" : "btnPrimary"}`}>
-                    {activationBusy ? (zh ? "寄送中..." : "Sending...") : zh ? "寄送啟用信" : "Send Activation Email"}
-                  </button>
-                  <Link className="btn" href="/member/activate">
-                    {zh ? "開啟啟用頁" : "Open Activation Page"}
-                  </Link>
-                </div>
-              </form>
+                    <div className="actions" style={{ marginTop: 14 }}>
+                      <button type="submit" disabled={activationBusy} className={`btn ${activationBusy ? "" : "btnPrimary"}`}>
+                        {activationBusy ? (zh ? "寄送中..." : "Sending...") : zh ? "寄送啟用信" : "Send Activation Email"}
+                      </button>
+                      <Link className="btn" href="/member/activate">
+                        {zh ? "開啟啟用頁" : "Open Activation Page"}
+                      </Link>
+                      {frontdeskFocused ? (
+                        <button type="button" className="btn" onClick={() => setActivationSectionExpanded(false)}>
+                          {zh ? "收合" : "Collapse"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </form>
 
-              <div className="sub" style={{ marginTop: 10, opacity: 0.8 }}>
-                {zh ? "若沒有收到 Email，請請櫃檯確認會員 Email 資料是否正確。" : "If no email arrives, ask frontdesk to verify the member email record."}
-              </div>
+                  <div className="sub" style={{ marginTop: 10, opacity: 0.8 }}>
+                    {zh ? "若沒有收到 Email，請請櫃檯確認會員 Email 資料是否正確。" : "If no email arrives, ask frontdesk to verify the member email record."}
+                  </div>
+                </>
+              ) : null}
             </section>
           </div>
         </div>
