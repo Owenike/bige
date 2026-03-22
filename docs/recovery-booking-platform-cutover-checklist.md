@@ -1,8 +1,8 @@
-# recovery-booking-platform Cutover Checklist
+# Archived recovery-booking-platform Cutover Checklist
 
-This workspace has been separated locally from the legacy BIGE project and should now be finished against a new GitHub, Vercel, and Supabase stack.
+This document is historical only. The active workspace is currently aligned back to the BIGE repo and BIGE Vercel project, so do not treat this checklist as the current project identity.
 
-## Current local state
+## Recorded local state during the abandoned cutover attempt
 
 - Package name is `recovery-booking-platform`.
 - Git remote still points to `https://github.com/Owenike/bige.git`; remote cutover is still pending.
