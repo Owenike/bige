@@ -34,8 +34,11 @@ type IntentContent = {
   subtitle: string;
   returnLabel: string | null;
   staffDescription: string;
+  staffEmphasisLabel: string | null;
   memberDescription: string;
+  memberSecondaryLabel: string | null;
   activationDescription: string;
+  activationSecondaryLabel: string | null;
 };
 
 function formatActivationDeliveryMessage(params: {
@@ -106,12 +109,15 @@ function getIntentContent(intent: LoginIntent, zh: boolean): IntentContent {
         staffDescription: zh
           ? "櫃檯、管理、教練與平台帳號都使用 Email + 密碼登入。這個 intent 會帶你回到櫃檯入口頁。"
           : "Frontdesk, manager, coach, and platform accounts all use email + password sign-in. This intent returns you to the frontdesk entry page.",
+        staffEmphasisLabel: zh ? "主要流程" : "Primary Path",
         memberDescription: zh
-          ? "會員登入區仍可使用，但櫃檯入口通常由員工帳號進入。"
+          ? "若你是會員，請改用下方會員登入；櫃檯入口通常由員工帳號進入。"
           : "The member section remains available, but the frontdesk entry normally uses a staff account.",
+        memberSecondaryLabel: zh ? "次要入口" : "Secondary Path",
         activationDescription: zh
           ? "若會員尚未啟用，請在這裡寄送啟用信；櫃檯入口登入本身仍使用員工帳號。"
           : "Use this section only to activate member accounts. Frontdesk entry sign-in itself still uses a staff account.",
+        activationSecondaryLabel: zh ? "輔助入口" : "Support Path",
       };
     case "frontdesk_bookings":
       return {
@@ -124,12 +130,15 @@ function getIntentContent(intent: LoginIntent, zh: boolean): IntentContent {
         staffDescription: zh
           ? "這是櫃檯排班工作台登入。櫃檯、管理、教練與平台帳號都使用 Email + 密碼登入。"
           : "This sign-in is for the frontdesk booking board. Frontdesk, manager, coach, and platform accounts all use email + password sign-in.",
+        staffEmphasisLabel: zh ? "主要流程" : "Primary Path",
         memberDescription: zh
-          ? "會員登入區保留在共用登入頁，但排班工作台本身不是會員入口。"
+          ? "若你是會員，請改用下方會員登入；排班工作台本身不是會員入口。"
           : "The member section remains on the shared login page, but the booking board itself is not a member entry point.",
+        memberSecondaryLabel: zh ? "次要入口" : "Secondary Path",
         activationDescription: zh
           ? "會員啟用入口保留在同一頁，但進入排班工作台請使用員工帳號。"
           : "Member activation stays on the same page, but the booking board should be accessed with a staff account.",
+        activationSecondaryLabel: zh ? "輔助入口" : "Support Path",
       };
     case "manager":
       return {
@@ -142,12 +151,15 @@ function getIntentContent(intent: LoginIntent, zh: boolean): IntentContent {
         staffDescription: zh
           ? "管理、主管、櫃檯、教練與平台帳號都使用 Email + 密碼登入；此 intent 主要服務後台角色。"
           : "Manager, supervisor, frontdesk, coach, and platform accounts all use email + password sign-in; this intent mainly serves staff roles.",
+        staffEmphasisLabel: zh ? "主要流程" : "Primary Path",
         memberDescription: zh
           ? "會員登入區保留在共用登入頁，但管理後台不是會員入口。"
           : "The member section remains on the shared login page, but the manager console is not a member entry point.",
+        memberSecondaryLabel: zh ? "次要入口" : "Secondary Path",
         activationDescription: zh
           ? "會員啟用入口保留在同一頁；若你要進入管理後台，請使用員工帳號。"
           : "Member activation stays on the same page; use a staff account if you are entering the manager console.",
+        activationSecondaryLabel: zh ? "輔助入口" : "Support Path",
       };
     case "coach":
       return {
@@ -160,12 +172,15 @@ function getIntentContent(intent: LoginIntent, zh: boolean): IntentContent {
         staffDescription: zh
           ? "教練與平台帳號使用 Email + 密碼登入；這個 intent 會帶你回到教練工作台。"
           : "Coach and platform accounts use email + password sign-in; this intent returns you to the coach workspace.",
+        staffEmphasisLabel: zh ? "主要流程" : "Primary Path",
         memberDescription: zh
           ? "會員登入區保留在共用登入頁，但教練工作台不是會員入口。"
           : "The member section remains on the shared login page, but the coach workspace is not a member entry point.",
+        memberSecondaryLabel: zh ? "次要入口" : "Secondary Path",
         activationDescription: zh
           ? "會員啟用入口保留在同一頁；若你要進入教練工作台，請使用教練帳號。"
           : "Member activation stays on the same page; use a coach account if you are entering the coach workspace.",
+        activationSecondaryLabel: zh ? "輔助入口" : "Support Path",
       };
     case "platform":
       return {
@@ -178,12 +193,15 @@ function getIntentContent(intent: LoginIntent, zh: boolean): IntentContent {
         staffDescription: zh
           ? "平台管理帳號使用 Email + 密碼登入；這個 intent 會帶你回到平台管理台。"
           : "Platform admin accounts use email + password sign-in; this intent returns you to the platform admin console.",
+        staffEmphasisLabel: zh ? "主要流程" : "Primary Path",
         memberDescription: zh
           ? "會員登入區保留在共用登入頁，但平台管理台不是會員入口。"
           : "The member section remains on the shared login page, but the platform admin console is not a member entry point.",
+        memberSecondaryLabel: zh ? "次要入口" : "Secondary Path",
         activationDescription: zh
           ? "會員啟用入口保留在同一頁；若你要進入平台管理台，請使用平台管理帳號。"
           : "Member activation stays on the same page; use a platform admin account if you are entering the platform console.",
+        activationSecondaryLabel: zh ? "輔助入口" : "Support Path",
       };
     case "member":
       return {
@@ -196,12 +214,15 @@ function getIntentContent(intent: LoginIntent, zh: boolean): IntentContent {
         staffDescription: zh
           ? "員工 / 後台登入區仍可使用，但會員入口通常使用手機 + 密碼登入。"
           : "The staff section remains available, but the member portal normally uses phone + password sign-in.",
+        staffEmphasisLabel: null,
         memberDescription: zh
           ? "會員請使用手機 + 密碼登入；若帳號尚未啟用，請使用會員啟用入口。"
           : "Members should use phone + password sign-in. If the account is not activated yet, use the member activation section.",
+        memberSecondaryLabel: null,
         activationDescription: zh
           ? "會員啟用入口會先寄送啟用信，再到啟用頁設定密碼。"
           : "Member activation sends an activation email first, then the password is set on the activation page.",
+        activationSecondaryLabel: null,
       };
     default:
       return {
@@ -214,12 +235,15 @@ function getIntentContent(intent: LoginIntent, zh: boolean): IntentContent {
         staffDescription: zh
           ? "櫃檯 / 教練 / 管理 / 平台角色都使用 Email + 密碼登入。"
           : "Frontdesk, coach, manager, and platform roles all use email + password sign-in.",
+        staffEmphasisLabel: null,
         memberDescription: zh
           ? "會員使用手機 + 密碼登入；若帳號尚未啟用，請使用會員啟用入口。"
           : "Members use phone + password sign-in. If the account is not activated yet, use member activation.",
+        memberSecondaryLabel: null,
         activationDescription: zh
           ? "會員啟用入口會寄送啟用信，再到啟用頁設定密碼。"
           : "Member activation sends an activation email first, then the password is set on the activation page.",
+        activationSecondaryLabel: null,
       };
   }
 }
@@ -243,6 +267,7 @@ function LoginContent() {
     loginIntent === "manager" ||
     loginIntent === "coach" ||
     loginIntent === "platform";
+  const frontdeskFocused = loginIntent === "frontdesk_entry" || loginIntent === "frontdesk_bookings";
   const memberDeemphasized = staffFocused;
 
   const [email, setEmail] = useState("");
@@ -375,13 +400,26 @@ function LoginContent() {
           ) : null}
         </section>
 
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+        <div style={{ display: "grid", gap: 12 }}>
           <section
             id="staff-login"
             className="card formCard"
-            style={staffFocused ? { borderColor: "rgba(37, 99, 235, 0.35)", boxShadow: "0 0 0 1px rgba(37, 99, 235, 0.15)" } : undefined}
+            style={
+              staffFocused
+                ? {
+                    borderColor: "rgba(37, 99, 235, 0.45)",
+                    boxShadow: "0 0 0 1px rgba(37, 99, 235, 0.18)",
+                    background: frontdeskFocused
+                      ? "linear-gradient(180deg, rgba(37, 99, 235, 0.07), rgba(255,255,255,0.98))"
+                      : "linear-gradient(180deg, rgba(37, 99, 235, 0.04), rgba(255,255,255,0.98))",
+                  }
+                : undefined
+            }
           >
-            <div className="kvLabel">{zh ? "員工 / 後台登入" : "Staff / Backoffice"}</div>
+            <div className="kvLabel">
+              {zh ? "員工 / 後台登入" : "Staff / Backoffice"}
+              {intentContent.staffEmphasisLabel ? ` · ${intentContent.staffEmphasisLabel}` : ""}
+            </div>
             <h2 className="sectionTitle" style={{ marginTop: 10 }}>
               {zh ? "Email + 密碼登入" : "Email + Password Sign In"}
             </h2>
@@ -441,119 +479,149 @@ function LoginContent() {
             </form>
           </section>
 
-          <section
-            id="member-login"
-            className="card formCard"
-            style={memberDeemphasized ? { opacity: 0.78, borderColor: "rgba(148, 163, 184, 0.32)" } : undefined}
+          <div
+            style={{
+              display: "grid",
+              gap: 12,
+              gridTemplateColumns: frontdeskFocused ? "repeat(auto-fit, minmax(280px, 1fr))" : "repeat(auto-fit, minmax(280px, 1fr))",
+            }}
           >
-            <div className="kvLabel">{zh ? "會員登入" : "Member Login"}</div>
-            <h2 className="sectionTitle" style={{ marginTop: 10 }}>
-              {zh ? "手機 + 密碼登入" : "Phone + Password Sign In"}
-            </h2>
-            <p className="sub" style={{ marginTop: 8 }}>
-              {intentContent.memberDescription}
-            </p>
-
-            {memberLoginError ? (
-              <div className="error" style={{ marginTop: 12 }}>
-                {memberLoginError}
+            <section
+              id="member-login"
+              className="card formCard"
+              style={
+                memberDeemphasized
+                  ? {
+                      opacity: 0.7,
+                      borderColor: "rgba(148, 163, 184, 0.24)",
+                      background: "rgba(248, 250, 252, 0.72)",
+                    }
+                  : undefined
+              }
+            >
+              <div className="kvLabel">
+                {zh ? "會員登入" : "Member Login"}
+                {intentContent.memberSecondaryLabel ? ` · ${intentContent.memberSecondaryLabel}` : ""}
               </div>
-            ) : null}
+              <h2 className="sectionTitle" style={{ marginTop: 10, fontSize: memberDeemphasized ? "1.2rem" : undefined }}>
+                {zh ? "手機 + 密碼登入" : "Phone + Password Sign In"}
+              </h2>
+              <p className="sub" style={{ marginTop: 8 }}>
+                {intentContent.memberDescription}
+              </p>
 
-            <form onSubmit={submitPhoneLogin} style={{ marginTop: 12 }}>
-              <label className="field">
-                <span className="kvLabel" style={{ textTransform: "none" }}>
-                  {zh ? "手機號碼" : "Phone"}
-                </span>
-                <input
-                  className="input"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder={zh ? "09xxxxxxxx" : "Phone number"}
-                  type="tel"
-                  autoComplete="tel"
-                  required
-                />
-              </label>
+              {memberLoginError ? (
+                <div className="error" style={{ marginTop: 12 }}>
+                  {memberLoginError}
+                </div>
+              ) : null}
 
-              <label className="field">
-                <span className="kvLabel" style={{ textTransform: "none" }}>
-                  {zh ? "密碼" : "Password"}
-                </span>
-                <input
-                  className="input"
-                  value={memberPassword}
-                  onChange={(e) => setMemberPassword(e.target.value)}
-                  placeholder="********"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                />
-              </label>
+              <form onSubmit={submitPhoneLogin} style={{ marginTop: 12 }}>
+                <label className="field">
+                  <span className="kvLabel" style={{ textTransform: "none" }}>
+                    {zh ? "手機號碼" : "Phone"}
+                  </span>
+                  <input
+                    className="input"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder={zh ? "09xxxxxxxx" : "Phone number"}
+                    type="tel"
+                    autoComplete="tel"
+                    required
+                  />
+                </label>
 
-              <div className="actions" style={{ marginTop: 14 }}>
-                <button type="submit" disabled={memberLoginBusy} className={`btn ${memberLoginBusy ? "" : "btnPrimary"}`}>
-                  {memberLoginBusy ? (zh ? "登入中..." : "Signing in...") : zh ? "會員登入" : "Phone Login"}
-                </button>
+                <label className="field">
+                  <span className="kvLabel" style={{ textTransform: "none" }}>
+                    {zh ? "密碼" : "Password"}
+                  </span>
+                  <input
+                    className="input"
+                    value={memberPassword}
+                    onChange={(e) => setMemberPassword(e.target.value)}
+                    placeholder="********"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                  />
+                </label>
+
+                <div className="actions" style={{ marginTop: 14 }}>
+                  <button type="submit" disabled={memberLoginBusy} className={`btn ${memberLoginBusy ? "" : "btnPrimary"}`}>
+                    {memberLoginBusy ? (zh ? "登入中..." : "Signing in...") : zh ? "會員登入" : "Phone Login"}
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section
+              id="member-activation"
+              className="card formCard"
+              style={
+                memberDeemphasized
+                  ? {
+                      opacity: 0.58,
+                      borderColor: "rgba(148, 163, 184, 0.18)",
+                      background: "rgba(248, 250, 252, 0.55)",
+                    }
+                  : undefined
+              }
+            >
+              <div className="kvLabel">
+                {zh ? "會員啟用入口" : "Member Activation"}
+                {intentContent.activationSecondaryLabel ? ` · ${intentContent.activationSecondaryLabel}` : ""}
               </div>
-            </form>
-          </section>
+              <h2 className="sectionTitle" style={{ marginTop: 10, fontSize: memberDeemphasized ? "1.1rem" : undefined }}>
+                {zh ? "寄送啟用信 / 設定密碼" : "Send Activation Email / Set Password"}
+              </h2>
+              <p className="sub" style={{ marginTop: 8 }}>
+                {intentContent.activationDescription}
+              </p>
 
-          <section
-            id="member-activation"
-            className="card formCard"
-            style={memberDeemphasized ? { opacity: 0.82, borderColor: "rgba(148, 163, 184, 0.32)" } : undefined}
-          >
-            <div className="kvLabel">{zh ? "會員啟用入口" : "Member Activation"}</div>
-            <h2 className="sectionTitle" style={{ marginTop: 10 }}>
-              {zh ? "寄送啟用信 / 設定密碼" : "Send Activation Email / Set Password"}
-            </h2>
-            <p className="sub" style={{ marginTop: 8 }}>
-              {intentContent.activationDescription}
-            </p>
+              {activationError ? (
+                <div className="error" style={{ marginTop: 12 }}>
+                  {activationError}
+                </div>
+              ) : null}
 
-            {activationError ? (
-              <div className="error" style={{ marginTop: 12 }}>
-                {activationError}
+              {activationMessage ? (
+                <div className="ok" style={{ marginTop: 12 }}>
+                  {activationMessage}
+                </div>
+              ) : null}
+
+              <form onSubmit={submitPhoneActivation} style={{ marginTop: 12 }}>
+                <label className="field">
+                  <span className="kvLabel" style={{ textTransform: "none" }}>
+                    {zh ? "手機號碼" : "Phone"}
+                  </span>
+                  <input
+                    className="input"
+                    value={activationPhone}
+                    onChange={(e) => setActivationPhone(e.target.value)}
+                    placeholder={zh ? "09xxxxxxxx" : "Phone number"}
+                    type="tel"
+                    autoComplete="tel"
+                    required
+                  />
+                </label>
+
+                <div className="actions" style={{ marginTop: 14 }}>
+                  <button type="submit" disabled={activationBusy} className={`btn ${activationBusy ? "" : "btnPrimary"}`}>
+                    {activationBusy ? (zh ? "寄送中..." : "Sending...") : zh ? "寄送啟用信" : "Send Activation Email"}
+                  </button>
+                  <Link className="btn" href="/member/activate">
+                    {zh ? "開啟啟用頁" : "Open Activation Page"}
+                  </Link>
+                </div>
+              </form>
+
+              <div className="sub" style={{ marginTop: 10, opacity: 0.8 }}>
+                {zh ? "若沒有收到 Email，請請櫃檯確認會員 Email 資料是否正確。" : "If no email arrives, ask frontdesk to verify the member email record."}
               </div>
-            ) : null}
-
-            {activationMessage ? (
-              <div className="ok" style={{ marginTop: 12 }}>
-                {activationMessage}
-              </div>
-            ) : null}
-
-            <form onSubmit={submitPhoneActivation} style={{ marginTop: 12 }}>
-              <label className="field">
-                <span className="kvLabel" style={{ textTransform: "none" }}>
-                  {zh ? "手機號碼" : "Phone"}
-                </span>
-                <input
-                  className="input"
-                  value={activationPhone}
-                  onChange={(e) => setActivationPhone(e.target.value)}
-                  placeholder={zh ? "09xxxxxxxx" : "Phone number"}
-                  type="tel"
-                  autoComplete="tel"
-                  required
-                />
-              </label>
-
-              <div className="actions" style={{ marginTop: 14 }}>
-                <button type="submit" disabled={activationBusy} className={`btn ${activationBusy ? "" : "btnPrimary"}`}>
-                  {activationBusy ? (zh ? "寄送中..." : "Sending...") : zh ? "寄送啟用信" : "Send Activation Email"}
-                </button>
-                <Link className="btn" href="/member/activate">
-                  {zh ? "開啟啟用頁" : "Open Activation Page"}
-                </Link>
-              </div>
-            </form>
-
-            <div className="sub" style={{ marginTop: 10, opacity: 0.8 }}>
-              {zh ? "若沒有收到 Email，請請櫃檯確認會員 Email 資料是否正確。" : "If no email arrives, ask frontdesk to verify the member email record."}
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
       </div>
     </main>
