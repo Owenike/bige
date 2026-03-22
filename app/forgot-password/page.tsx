@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
 
     try {
       if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error(zh ? "缺少 Supabase 環境變數。" : "Missing Supabase environment variables.");
+        throw new Error(zh ? "缺少 Supabase 環境設定。" : "Missing Supabase environment variables.");
       }
 
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -55,7 +55,9 @@ export default function ForgotPasswordPage() {
 
       if (recoverError) throw recoverError;
       setMessage(
-        zh ? "已寄出重設密碼連結，請到信箱收信。" : "Password reset link sent. Please check your inbox.",
+        zh
+          ? "重設密碼連結已寄出。這是共用 Email recovery 入口，適用於員工與會員帳號。"
+          : "Password reset link sent. This shared email recovery flow can be used by both staff and member accounts.",
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : zh ? "送出失敗" : "Request failed");
@@ -67,14 +69,14 @@ export default function ForgotPasswordPage() {
   return (
     <main className="container">
       <div className="card formCard" style={{ maxWidth: 560, margin: "0 auto" }}>
-        <div className="kvLabel">{zh ? "會員區" : "MEMBER"}</div>
+        <div className="kvLabel">{zh ? "共用帳號復原" : "Shared Account Recovery"}</div>
         <h1 className="sectionTitle" style={{ marginTop: 10 }}>
-          {zh ? "忘記密碼" : "Forgot Password"}
+          {zh ? "忘記密碼 / 寄送重設信" : "Forgot Password / Send Reset Link"}
         </h1>
         <p style={{ opacity: 0.85, marginTop: 8 }}>
           {zh
-            ? "輸入你的 Email，我們會寄送重設密碼連結。"
-            : "Enter your email and we will send a reset-password link."}
+            ? "這是共用的 Email-based recovery 入口，不只會員可用。請輸入帳號 Email，我們會寄送重設密碼連結。"
+            : "This is a shared email-based recovery page, not member-only. Enter the account email and we will send a password reset link."}
         </p>
 
         {message ? <div style={{ marginTop: 12, color: "#2b7a6b", fontWeight: 600 }}>{message}</div> : null}
@@ -87,7 +89,7 @@ export default function ForgotPasswordPage() {
         <form onSubmit={submit} style={{ marginTop: 12 }}>
           <label className="field">
             <span className="kvLabel" style={{ textTransform: "none" }}>
-              {zh ? "登入信箱" : "Email"}
+              {zh ? "Email" : "Email"}
             </span>
             <input
               className="input"
@@ -102,10 +104,10 @@ export default function ForgotPasswordPage() {
 
           <div className="actions" style={{ marginTop: 14 }}>
             <button type="submit" className={`btn ${busy ? "" : "btnPrimary"}`} disabled={busy}>
-              {busy ? (zh ? "送出中..." : "Submitting...") : zh ? "送出重設連結" : "Send Reset Link"}
+              {busy ? (zh ? "送出中..." : "Submitting...") : zh ? "寄送重設連結" : "Send Reset Link"}
             </button>
             <Link href="/login" className="btn">
-              {zh ? "回登入" : "Back to Login"}
+              {zh ? "返回登入" : "Back to Login"}
             </Link>
           </div>
         </form>

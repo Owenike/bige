@@ -26,7 +26,7 @@ export default function ResetPasswordPage() {
       if (!supabaseUrl || !supabaseAnonKey) {
         if (!cancelled) {
           setState("invalid");
-          setMessage(zh ? "缺少 Supabase 環境變數。" : "Missing Supabase environment variables.");
+          setMessage(zh ? "缺少 Supabase 環境設定。" : "Missing Supabase environment variables.");
         }
         return;
       }
@@ -98,7 +98,11 @@ export default function ResetPasswordPage() {
 
       if (cancelled) return;
       setState("ready");
-      setMessage(zh ? "請輸入新密碼。" : "Please enter your new password.");
+      setMessage(
+        zh
+          ? "這是共用 Email-based recovery/reset 頁面，適用於員工與會員帳號。請輸入新密碼。"
+          : "This is a shared email-based recovery/reset page for both staff and member accounts. Please enter your new password.",
+      );
     }
 
     void bootstrap();
@@ -112,7 +116,7 @@ export default function ResetPasswordPage() {
     if (!client) return;
 
     if (password.length < 8) {
-      setMessage(zh ? "密碼長度至少需要 8 碼。" : "Password must be at least 8 characters.");
+      setMessage(zh ? "密碼至少需要 8 個字元。" : "Password must be at least 8 characters.");
       return;
     }
     if (password !== confirmPassword) {
@@ -131,16 +135,21 @@ export default function ResetPasswordPage() {
     }
 
     setState("done");
-    setMessage(zh ? "密碼已更新，請重新登入。" : "Password updated. Please sign in again.");
+    setMessage(zh ? "密碼已更新完成。請返回登入頁重新登入。" : "Password updated. Please return to the login page and sign in again.");
   }
 
   return (
     <main className="container" style={{ maxWidth: 560, margin: "0 auto", padding: 16 }}>
       <div className="card formCard">
-        <div className="kvLabel">{zh ? "會員區" : "MEMBER"}</div>
+        <div className="kvLabel">{zh ? "共用帳號復原" : "Shared Account Recovery"}</div>
         <h1 className="sectionTitle" style={{ marginTop: 10 }}>
           {zh ? "重設密碼" : "Reset Password"}
         </h1>
+        <p style={{ opacity: 0.85, marginTop: 8 }}>
+          {zh
+            ? "這個頁面不只會員可用；凡是透過 Email recovery 收到連結的帳號，都會在這裡完成重設。"
+            : "This page is not member-only. Any account that receives an email recovery link completes password reset here."}
+        </p>
         <p style={{ opacity: 0.85, marginTop: 8 }}>{message}</p>
 
         {(state === "ready" || state === "submitting") && (
@@ -184,7 +193,7 @@ export default function ResetPasswordPage() {
                 {state === "submitting" ? (zh ? "更新中..." : "Updating...") : zh ? "更新密碼" : "Update Password"}
               </button>
               <Link href="/login" className="btn">
-                {zh ? "回登入" : "Back to Login"}
+                {zh ? "返回登入" : "Back to Login"}
               </Link>
             </div>
           </form>

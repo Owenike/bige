@@ -5,7 +5,7 @@ import { evaluateTenantAccess, type TenantStatus, type TenantSubscriptionSnapsho
 
 const REQUEST_ID_HEADER = "x-request-id";
 
-type RouteScope = "platform_admin" | "manager" | "frontdesk" | "member" | null;
+type RouteScope = "platform_admin" | "manager" | "frontdesk" | "coach" | "member" | null;
 
 type SessionContext = {
   userId: string;
@@ -21,6 +21,7 @@ function normalizePathScope(pathname: string): RouteScope {
   if (pathname === "/platform-admin" || pathname.startsWith("/platform-admin/")) return "platform_admin";
   if (pathname === "/manager" || pathname.startsWith("/manager/")) return "manager";
   if (pathname === "/frontdesk" || pathname.startsWith("/frontdesk/")) return "frontdesk";
+  if (pathname === "/coach" || pathname.startsWith("/coach/")) return "coach";
   if (pathname === "/member" || pathname.startsWith("/member/")) return "member";
   return null;
 }
@@ -45,6 +46,7 @@ function isRouteAllowed(scope: RouteScope, role: string) {
       roleSet.has("frontdesk")
     );
   }
+  if (scope === "coach") return roleSet.has("platform_admin") || roleSet.has("coach");
   if (scope === "member") return roleSet.has("member") || roleSet.has("platform_admin");
   return true;
 }
