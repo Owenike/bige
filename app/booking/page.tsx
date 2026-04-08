@@ -251,11 +251,8 @@ export default function BookingPage() {
       .then((payload) => {
         if (!active) return;
         setAvailability(payload);
-        const matchedQueryService = queryServiceCode ? payload.services.find((item) => item.code === queryServiceCode) || null : null;
-        const currentServiceStillValid = selectedServiceCode ? payload.services.some((item) => item.code === selectedServiceCode) : false;
-        const autoSelectedService = payload.services.length === 1 ? payload.services[0] : null;
-        const nextServiceCode = currentServiceStillValid ? selectedServiceCode : matchedQueryService?.code || autoSelectedService?.code || null;
-        if (nextServiceCode !== selectedServiceCode) setSelectedServiceCode(nextServiceCode);
+        if (!selectedServiceCode && payload.services[0]) setSelectedServiceCode(payload.services[0].code);
+        if (selectedServiceCode && !payload.services.some((item) => item.code === selectedServiceCode)) setSelectedServiceCode(payload.services[0]?.code ?? null);
         if (selectedCoachId !== "any" && !payload.coaches.some((item) => item.id === selectedCoachId)) setSelectedCoachId("any");
         const nextDate = selectedDate && payload.availableDates.includes(selectedDate) ? selectedDate : payload.availableDates[0] || null;
         if (nextDate !== selectedDate) setSelectedDate(nextDate);
@@ -270,7 +267,7 @@ export default function BookingPage() {
     return () => {
       active = false;
     };
-  }, [deferredBranchId, deferredCoachId, deferredDate, deferredServiceCode, queryBranchCode, queryServiceCode, refreshKey, selectedCoachId, selectedDate, selectedServiceCode, selectedSlotStart]);
+  }, [deferredBranchId, deferredCoachId, deferredServiceCode, deferredDate, queryBranchCode, refreshKey, selectedCoachId, selectedDate, selectedServiceCode, selectedSlotStart]);
 
   useEffect(() => {
     const branch = storefront?.branches.find((item) => item.id === selectedBranchId) || storefront?.branch;
@@ -319,13 +316,7 @@ export default function BookingPage() {
   const selectedBranch = branches.find((item) => item.id === selectedBranchId) || availability?.branch || storefront?.branch || null;
   const services = availability?.services || storefront?.services || [];
   const coaches = availability?.coaches || [];
-  const matchedQueryService = queryServiceCode ? services.find((item) => item.code === queryServiceCode) || null : null;
-  const autoSelectedService = services.length === 1 ? services[0] : null;
-  const selectedService = services.find((item) => item.code === selectedServiceCode) || autoSelectedService || null;
-  const shouldShowServiceSelectionStep = services.length > 1 && !matchedQueryService;
-  const stepOrder = shouldShowServiceSelectionStep
-    ? { branch: 1, coach: 2, service: 3, date: 4, time: 5, payment: 6, contact: 7, confirm: 8 }
-    : { branch: 1, coach: 2, date: 3, time: 4, payment: 5, contact: 6, confirm: 7 };
+  const selectedService = services.find((item) => item.code === selectedServiceCode) || services[0] || null;
   const selectedCoach = selectedCoachId === "any" ? null : coaches.find((item) => item.id === selectedCoachId) || null;
   const selectedSlot = availability?.slots.find((item) => item.startsAt === selectedSlotStart) || null;
   const availablePackages: BookingPackageOption[] = (packagesEnabled ? entitlements?.contracts || [] : [])
@@ -426,10 +417,6 @@ export default function BookingPage() {
 
   function continueBookingFlow() {
     setPageError(null);
-    if (!selectedBranch) {
-      scrollTo("branch-step");
-      return;
-    }
     if (!selectedService) {
       setPageError("Please choose a service before continuing to date and time.");
       scrollTo("services");
@@ -682,12 +669,10 @@ export default function BookingPage() {
   function bookingSteps(withSummary: boolean) {
     return (
       <div className={styles.stepList}>
-        <BookingStepCard id="branch-step" title={`Step ${stepOrder.branch}. Choose branch`} description="Select the studio location you want the storefront and booking availability to load from." status={selectedBranch ? "Complete" : "Required"}>{branchCards()}</BookingStepCard>
-        <BookingStepCard id="coach-step" title={`Step ${stepOrder.coach}. Choose therapist`} description="Pick a preferred therapist or stay flexible and browse all valid times." status={selectedCoachId ? "Complete" : "Required"}>{coachCards()}</BookingStepCard>
-        {shouldShowServiceSelectionStep ? (
-          <BookingStepCard id="services" title={`Step ${stepOrder.service}. Choose service`} description="Session pricing, duration, and deposit indicators come directly from the live storefront payload." status={selectedService ? "Complete" : "Required"}>{serviceCards()}</BookingStepCard>
-        ) : null}
-        <BookingStepCard id="date-step" title={`Step ${stepOrder.date}. Choose date`} description="The premium calendar uses the real booking window, min advance time, and disabled dates from the availability endpoint." status={selectedDate ? "Complete" : "Required"}>
+        <BookingStepCard title="Step 1. Choose branch" description="Select the studio location you want the storefront and booking availability to load from." status={selectedBranch ? "Complete" : "Required"}>{branchCards()}</BookingStepCard>
+        <BookingStepCard title="Step 2. Choose therapist" description="Pick a preferred therapist or stay flexible and browse all valid times." status={selectedCoachId ? "Complete" : "Required"}>{coachCards()}</BookingStepCard>
+        <BookingStepCard id="services" title="Step 3. Choose service" description="Session pricing, duration, and deposit indicators come directly from the live storefront payload." status={selectedService ? "Complete" : "Required"}>{serviceCards()}</BookingStepCard>
+        <BookingStepCard id="date-step" title="Step 4. Choose date" description="The premium calendar uses the real booking window, min advance time, and disabled dates from the availability endpoint." status={selectedDate ? "Complete" : "Required"}>
           <div className={styles.calendarWrap}>
             <PremiumCalendar
               selectedDate={selectedDate}
@@ -703,12 +688,12 @@ export default function BookingPage() {
             />
           </div>
         </BookingStepCard>
-        <BookingStepCard id="time-step" title={`Step ${stepOrder.time}. Choose time`} description="Only valid time slots from the existing scheduling engine are shown here." status={selectedSlot ? "Complete" : "Required"}>
+        <BookingStepCard id="time-step" title="Step 5. Choose time" description="Only valid time slots from the existing scheduling engine are shown here." status={selectedSlot ? "Complete" : "Required"}>
           <TimeSlotGrid slots={availability?.slots || []} selectedSlotStart={selectedSlotStart} onSelectSlot={(slot: PublicBookingTimeSlot) => setSelectedSlotStart(slot.startsAt)} />
         </BookingStepCard>
-        <BookingStepCard title={`Step ${stepOrder.payment}. Choose payment`} description="Book as a single paid session or, when the branch capability allows it, reserve 1 session from an active package without changing the scheduling flow." status={selectedPaymentMode === "package" ? (selectedPackage ? "Complete" : "Required") : "Complete"}>{paymentCards()}</BookingStepCard>
-        <BookingStepCard title={`Step ${stepOrder.contact}. Contact details`} description="We keep the original member booking flow, so these fields also sync back to the existing member profile." status={form.name.trim() && form.phone.trim() ? "Complete" : "Required"}>{detailFields()}</BookingStepCard>
-        <BookingStepCard id="booking" title={`Step ${stepOrder.confirm}. Confirm booking`} description="Review the booking summary, package reserve note, and deposit notice before sending the original booking request." status={selectedSlot && form.name.trim() && form.phone.trim() ? "Ready" : "Review"}>
+        <BookingStepCard title="Step 6. Choose payment" description="Book as a single paid session or, when the branch capability allows it, reserve 1 session from an active package without changing the scheduling flow." status={selectedPaymentMode === "package" ? (selectedPackage ? "Complete" : "Required") : "Complete"}>{paymentCards()}</BookingStepCard>
+        <BookingStepCard title="Step 7. Contact details" description="We keep the original member booking flow, so these fields also sync back to the existing member profile." status={form.name.trim() && form.phone.trim() ? "Complete" : "Required"}>{detailFields()}</BookingStepCard>
+        <BookingStepCard id="booking" title="Step 8. Confirm booking" description="Review the booking summary, package reserve note, and deposit notice before sending the original booking request." status={selectedSlot && form.name.trim() && form.phone.trim() ? "Ready" : "Review"}>
           {withSummary ? (
             <BookingSummaryCard
               totalLabel={money(selectedService?.priceAmount || 0)}
@@ -742,7 +727,7 @@ export default function BookingPage() {
       <div className={styles.shell}>
         <div className={styles.desktopOnly}>
           <BookingHeader brandName={brand.brandName} branchName={selectedBranch?.name || null} navItems={navItems} ctaLabel={brand.ctaPrimaryLabel} onPrimaryClick={continueBookingFlow} />
-          <BookingHero brandName={brand.brandName} title={brand.heroTitle} subtitle={brand.heroSubtitle} heroImageUrl={desktopImage} primaryLabel={brand.ctaPrimaryLabel} secondaryLabel={brand.ctaSecondaryLabel} onPrimaryClick={continueBookingFlow} onSecondaryClick={() => scrollTo(shouldShowServiceSelectionStep ? "services" : "branch-step")} meta={heroMeta} />
+          <BookingHero brandName={brand.brandName} title={brand.heroTitle} subtitle={brand.heroSubtitle} heroImageUrl={desktopImage} primaryLabel={brand.ctaPrimaryLabel} secondaryLabel={brand.ctaSecondaryLabel} onPrimaryClick={continueBookingFlow} onSecondaryClick={() => scrollTo("services")} meta={heroMeta} />
           <section className={styles.sectionGrid}>
             <div className={styles.contentColumn}>
               {pageError ? <div className={`${styles.message} ${styles.isError}`}>{pageError}</div> : null}
@@ -767,6 +752,7 @@ export default function BookingPage() {
               {!member && memberLoaded ? <div className={styles.inlineNotice}><p className={styles.emptyText}>Browse the brand page freely. Final booking submission still uses the existing member booking API, so sign in is required before confirmation.</p></div> : null}
               {authScopeMismatch ? <div className={styles.inlineNotice}><p className={styles.emptyText}>Your member account belongs to another branch. This UI keeps the original branch-scoped booking logic unchanged, so please switch back before submitting.</p></div> : null}
               {brand.aboutSectionEnabled ? <section className={styles.contentCard} id="about"><p className={styles.sectionEyebrow}>About</p><h2 className={styles.sectionTitle}>{brand.introTitle}</h2><p className={styles.sectionCopy}>{brand.introBody}</p></section> : null}
+              <section className={styles.contentCard}><p className={styles.sectionEyebrow}>Services</p><h2 className={styles.stepTitle}>{brand.servicesSectionTitle}</h2><p className={styles.sectionCopy}>{brand.servicesSectionSubtitle}</p>{serviceCards()}</section>
               {brand.teamSectionEnabled ? <section className={styles.contentCard}><p className={styles.sectionEyebrow}>Team</p><h2 className={styles.stepTitle}>Recommended therapists</h2><div className={styles.choiceGrid}>{coaches.slice(0, 4).map((coach) => <button key={coach.id} type="button" className={styles.choiceCard} onClick={() => { setSelectedCoachId(coach.id); scrollTo("booking"); }}><div className={styles.choiceTopLine}><div><h4 className={styles.choiceTitle}>{coach.displayName || "Therapist"}</h4><p className={styles.choiceDescription}>Available through the live booking rail.</p></div></div></button>)}</div></section> : null}
               <BookingNoticeCard title={brand.bookingNoticeTitle} body={brand.bookingNoticeBody} reminders={noticeItems} />
               {brand.contactSectionEnabled ? <ContactInfoCard title={brand.contactTitle} body={brand.contactBody} address={brand.contactAddress || selectedBranch?.address || ""} phone={brand.contactPhone} email={brand.contactEmail} line={brand.contactLine} hours={brand.businessHours} /> : null}
@@ -781,7 +767,7 @@ export default function BookingPage() {
         <div className={styles.mobileOnly}>
           <section className={styles.mobileShell}>
             <BookingHeader brandName={brand.brandName} branchName={selectedBranch?.name || null} navItems={navItems.slice(0, 3)} ctaLabel={brand.ctaPrimaryLabel} onPrimaryClick={continueBookingFlow} />
-            <BookingHero brandName={brand.brandName} title={brand.heroTitle} subtitle={brand.heroSubtitle} heroImageUrl={mobileImage} primaryLabel={brand.ctaPrimaryLabel} secondaryLabel={brand.ctaSecondaryLabel} onPrimaryClick={continueBookingFlow} onSecondaryClick={() => scrollTo(shouldShowServiceSelectionStep ? "services" : "branch-step")} meta={heroMeta} mobile />
+            <BookingHero brandName={brand.brandName} title={brand.heroTitle} subtitle={brand.heroSubtitle} heroImageUrl={mobileImage} primaryLabel={brand.ctaPrimaryLabel} secondaryLabel={brand.ctaSecondaryLabel} onPrimaryClick={continueBookingFlow} onSecondaryClick={() => scrollTo("services")} meta={heroMeta} mobile />
             <div className={styles.mobileStack}>
               {pageError ? <div className={`${styles.message} ${styles.isError}`}>{pageError}</div> : null}
               {pageSuccess ? <div className={`${styles.message} ${styles.isSuccess}`}>{pageSuccess}</div> : null}
@@ -798,6 +784,7 @@ export default function BookingPage() {
                 </div>
               ) : null}
               {brand.aboutSectionEnabled ? <section className={styles.contentCard}><p className={styles.sectionEyebrow}>About</p><h2 className={styles.stepTitle}>{brand.introTitle}</h2><p className={styles.sectionCopy}>{brand.introBody}</p></section> : null}
+              <section className={styles.contentCard}><p className={styles.sectionEyebrow}>Services</p><h2 className={styles.stepTitle}>{brand.servicesSectionTitle}</h2><p className={styles.sectionCopy}>{brand.servicesSectionSubtitle}</p><div className={styles.mobileServiceStrip}>{serviceCards()}</div></section>
               <div className={styles.mobileStepGroup}>{bookingSteps(false)}</div>
               <BookingNoticeCard title={brand.bookingNoticeTitle} body={brand.bookingNoticeBody} reminders={noticeItems} />
               {brand.contactSectionEnabled ? <ContactInfoCard title={brand.contactTitle} body={brand.contactBody} address={brand.contactAddress || selectedBranch?.address || ""} phone={brand.contactPhone} email={brand.contactEmail} line={brand.contactLine} hours={brand.businessHours} /> : null}
