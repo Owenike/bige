@@ -145,6 +145,15 @@ Completed in this round for Showcase S2 layout hover behavior:
 - Mobile and non-hover environments do not apply the hover layout resizing
 - The original S2 background image variables are still kept as fallback
 
+Completed in this round for Showcase S2 layout smoothing:
+
+- Fixed the S2 hover layout so each card fully stretches to fill its grid cell without leaving black gaps
+- S2 videos still do not scale; they now use a `640ms` fade in and fade out only
+- Mouse leave now removes the active state first, then pauses and resets the video after the fade-out delay
+- The active / inactive grid ratio is now tuned to `1.12 / 0.88`
+- Non-active cards now dim to `0.9` brightness instead of becoming overly dark
+- Mobile and non-hover environments still do not apply the hover grid animation
+
 ## Images found in `public/` that are not currently used on homepage
 
 These files exist in `public/` but were not found in active homepage references:

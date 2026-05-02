@@ -9,6 +9,7 @@ type HomeHoverVideoProps = {
 
 export function HomeHoverVideo({ src, label }: HomeHoverVideoProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const resetTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -56,7 +57,20 @@ export function HomeHoverVideo({ src, label }: HomeHoverVideoProps) {
       }
     };
 
+    const clearResetTimer = () => {
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
+      }
+    };
+
+    const pauseAndReset = () => {
+      video.pause();
+      resetToStart();
+    };
+
     const handleMouseEnter = () => {
+      clearResetTimer();
       card.classList.add("homeLuxuryMediaVideoCardActive");
 
       if (grid instanceof HTMLElement) {
@@ -76,20 +90,24 @@ export function HomeHoverVideo({ src, label }: HomeHoverVideoProps) {
 
     const handleMouseLeave = () => {
       removeActiveClass();
-      video.pause();
-      resetToStart();
+      clearResetTimer();
+      resetTimerRef.current = window.setTimeout(() => {
+        pauseAndReset();
+        resetTimerRef.current = null;
+      }, 640);
     };
 
     card.addEventListener("mouseenter", handleMouseEnter);
     card.addEventListener("mouseleave", handleMouseLeave);
-    handleMouseLeave();
+    pauseAndReset();
+    removeActiveClass();
 
     return () => {
       card.removeEventListener("mouseenter", handleMouseEnter);
       card.removeEventListener("mouseleave", handleMouseLeave);
-      video.pause();
-      resetToStart();
+      clearResetTimer();
       removeActiveClass();
+      pauseAndReset();
     };
   }, []);
 
