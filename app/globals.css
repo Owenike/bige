@@ -782,6 +782,22 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   object-fit: cover;
   pointer-events: none;
   z-index: 0;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.homeLuxuryMediaVideoCard{
+  position: relative;
+  overflow: hidden;
+  transform: translateZ(0);
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-position .16s linear;
+  will-change: transform;
+}
+.homeLuxuryMediaVideoCard[data-video-active="true"] .homeLuxuryMediaVideo{
+  opacity: 1;
 }
 .homeLuxuryGridOverlay{
   position: relative;
@@ -871,8 +887,25 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   font-weight: 520;
   line-height: 1.08;
 }
-.homeLuxuryPorscheCard:hover .homeLuxuryPorscheMedia{
-  transform: scale(1.02);
+@media (hover: hover) and (pointer: fine) {
+  .homeLuxuryPorscheCard:hover .homeLuxuryMediaVideoCard{
+    transform: scale(1.025);
+    z-index: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .homeLuxuryMediaVideoCard{
+    transition: none;
+  }
+
+  .homeLuxuryMediaVideo{
+    transition: none;
+  }
+
+  .homeLuxuryPorscheCard:hover .homeLuxuryMediaVideoCard{
+    transform: none;
+  }
 }
 .homeLuxuryMediaS2A{ background-image: var(--home-image-card-s2-a); }
 .homeLuxuryMediaS2B{ background-image: var(--home-image-card-s2-b); }

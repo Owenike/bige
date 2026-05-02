@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { HomeHoverVideo } from "@/components/home-hover-video";
 import { getLocaleFromCookies, getT } from "../lib/i18n-server";
 import HomeScrollEffects from "./home-scroll-effects";
 
@@ -10,26 +11,18 @@ type GridItem = {
   mediaClass: string;
   cta: string;
   videoSrc?: string;
+  videoLabel?: string;
 };
 
 function PorscheCard({ item }: { item: GridItem }) {
   return (
     <article className="homeLuxuryPorscheCard" data-reveal-item data-parallax-card>
       <a className="homeLuxuryPorscheLink" href={item.href} aria-label={item.title}>
-        <div className={`homeLuxuryGridMedia homeLuxuryPorscheMedia ${item.mediaClass}`}>
+        <div
+          className={`homeLuxuryGridMedia homeLuxuryPorscheMedia${item.videoSrc ? " homeLuxuryMediaVideoCard" : ""} ${item.mediaClass}`}
+        >
           {item.videoSrc ? (
-            <video
-              className="homeLuxuryMediaVideo"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="metadata"
-              aria-hidden="true"
-              tabIndex={-1}
-            >
-              <source src={item.videoSrc} type="video/mp4" />
-            </video>
+            <HomeHoverVideo src={item.videoSrc} label={item.videoLabel ?? item.title} />
           ) : null}
           <div className="homeLuxuryPorscheOverlay">
             <p className="homeLuxuryPorscheBadge">{item.badge}</p>
@@ -85,6 +78,7 @@ export default async function Home() {
       mediaClass: "homeLuxuryMediaS2A",
       cta: "Open",
       videoSrc: "/home-videos/card-pilates-showcase.mp4",
+      videoLabel: "器械皮拉提斯影片背景",
     },
     {
       badge: "增肌減脂",
@@ -94,6 +88,7 @@ export default async function Home() {
       mediaClass: "homeLuxuryMediaS2B",
       cta: "Open",
       videoSrc: "/home-videos/card-weight-training-showcase.mp4",
+      videoLabel: "重量訓練影片背景",
     },
     {
       badge: "燃脂紓壓",
@@ -103,6 +98,7 @@ export default async function Home() {
       mediaClass: "homeLuxuryMediaS2C",
       cta: "Open",
       videoSrc: "/home-videos/card-boxing-showcase.mp4",
+      videoLabel: "拳擊訓練影片背景",
     },
     {
       badge: "疲勞釋放",
@@ -112,6 +108,7 @@ export default async function Home() {
       mediaClass: "homeLuxuryMediaS2D",
       cta: "Open",
       videoSrc: "/home-videos/card-massage-showcase.mp4",
+      videoLabel: "運動按摩影片背景",
     },
   ];
 

@@ -120,6 +120,15 @@ Completed in this round for Showcase S2 videos:
 - The original S2 background image variables are still kept as fallback
 - Other homepage images or videos not listed above still keep their previous sources
 
+Completed in this round for Showcase S2 hover interaction:
+
+- Showcase S2 background videos now play on hover instead of autoplaying on page load
+- Hovering a Showcase S2 card plays only that card's video
+- Leaving a Showcase S2 card pauses the video and resets it to the beginning
+- Hovering a Showcase S2 card now applies a small scale-up effect
+- Mobile and non-hover environments do not force the hover scale behavior
+- The original S2 background image variables are still kept as fallback
+
 ## Images found in `public/` that are not currently used on homepage
 
 These files exist in `public/` but were not found in active homepage references:
