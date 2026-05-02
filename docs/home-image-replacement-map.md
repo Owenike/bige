@@ -3,7 +3,7 @@
 This document covers the homepage route `/` only.
 
 - Project: `bige`
-- Scope in this round: homepage logo and homepage background images
+- Scope in this round: homepage logo, homepage background images, and homepage showcase background videos
 - Explicitly out of scope: `/booking` Supabase Storage storefront images and their upload flow
 
 ## Current homepage image overview
@@ -14,10 +14,10 @@ This document covers the homepage route `/` only.
 | Hero main visual | `/home-images/hero-main.jpg` | `app/globals.css` `.homeLuxuryHeroImage` via `--home-image-hero-main` | Yes | Yes | `16:9` to `21:9` | `2200x1400` | `hero-main.jpg` |
 | Full-width background section A | `/home-images/section-body-awareness.jpg` | `app/globals.css` `.homeLuxurySectionImageA` via `--home-image-section-a` | Yes | Yes | `16:9` | `2200x1400` | `section-body-awareness.jpg` |
 | Full-width background section B | External Unsplash URL | `app/globals.css` `.homeLuxurySectionImageB` via `--home-image-section-b` | Yes | Yes | `16:9` | `2200x1400` | `section-platform-message.webp` |
-| Showcase card S2A | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS2A` + `app/globals.css` `--home-image-card-s2-a` | Yes | Yes | `16:10` | `1600x1000` | `card-pilates-showcase.webp` |
-| Showcase card S2B | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS2B` + `app/globals.css` `--home-image-card-s2-b` | Yes | Yes | `16:10` | `1600x1000` | `card-weight-training-showcase.webp` |
-| Showcase card S2C | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS2C` + `app/globals.css` `--home-image-card-s2-c` | Yes | Yes | `16:10` | `1600x1000` | `card-boxing-showcase.webp` |
-| Showcase card S2D | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS2D` + `app/globals.css` `--home-image-card-s2-d` | Yes | Yes | `16:10` | `1600x1000` | `card-massage-showcase.webp` |
+| Showcase card S2A | `/home-videos/card-pilates-showcase.mp4` with fallback image variable `--home-image-card-s2-a` | `app/page.tsx` `homeLuxuryMediaS2A` + `app/globals.css` `--home-image-card-s2-a` | Yes | Yes | `16:10` | `1600x1000` | `card-pilates-showcase.mp4` |
+| Showcase card S2B | `/home-videos/card-weight-training-showcase.mp4` with fallback image variable `--home-image-card-s2-b` | `app/page.tsx` `homeLuxuryMediaS2B` + `app/globals.css` `--home-image-card-s2-b` | Yes | Yes | `16:10` | `1600x1000` | `card-weight-training-showcase.mp4` |
+| Showcase card S2C | `/home-videos/card-boxing-showcase.mp4` with fallback image variable `--home-image-card-s2-c` | `app/page.tsx` `homeLuxuryMediaS2C` + `app/globals.css` `--home-image-card-s2-c` | Yes | Yes | `16:10` | `1600x1000` | `card-boxing-showcase.mp4` |
+| Showcase card S2D | `/home-videos/card-massage-showcase.mp4` with fallback image variable `--home-image-card-s2-d` | `app/page.tsx` `homeLuxuryMediaS2D` + `app/globals.css` `--home-image-card-s2-d` | Yes | Yes | `16:10` | `1600x1000` | `card-massage-showcase.mp4` |
 | Training card S4A | `/Senior.png` | `app/page.tsx` `homeLuxuryMediaS4A` + `app/globals.css` `--home-image-card-s4-a` | Yes | Yes | `4:5` | `1600x2000` | `card-senior-training.png` |
 | Training card S4B | `/Cardio.png` | `app/page.tsx` `homeLuxuryMediaS4B` + `app/globals.css` `--home-image-card-s4-b` | Yes | Yes | `4:5` | `1600x2000` | `card-cardio-training.png` |
 | Training card S4C | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS4C` + `app/globals.css` `--home-image-card-s4-c` | Yes | Yes | `4:5` | `1600x2000` | `card-core-training.webp` |
@@ -110,6 +110,15 @@ Completed in this round for Choices S6:
 - `card-assessment.jpg` now replaces Choices S6D "Assessment"
 - These 4 active Choices replacements use `JPG`, not `WEBP`
 - Other homepage images not listed above still keep their previous sources
+
+Completed in this round for Showcase S2 videos:
+
+- `card-pilates-showcase.mp4` now replaces Showcase S2A "器械皮拉提斯" as the background video
+- `card-weight-training-showcase.mp4` now replaces Showcase S2B "重量訓練" as the background video
+- `card-boxing-showcase.mp4` now replaces Showcase S2C "拳擊訓練" as the background video
+- `card-massage-showcase.mp4` now replaces Showcase S2D "運動按摩" as the background video
+- The original S2 background image variables are still kept as fallback
+- Other homepage images or videos not listed above still keep their previous sources
 
 ## Images found in `public/` that are not currently used on homepage
 

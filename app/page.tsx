@@ -9,6 +9,7 @@ type GridItem = {
   href: string;
   mediaClass: string;
   cta: string;
+  videoSrc?: string;
 };
 
 function PorscheCard({ item }: { item: GridItem }) {
@@ -16,6 +17,20 @@ function PorscheCard({ item }: { item: GridItem }) {
     <article className="homeLuxuryPorscheCard" data-reveal-item data-parallax-card>
       <a className="homeLuxuryPorscheLink" href={item.href} aria-label={item.title}>
         <div className={`homeLuxuryGridMedia homeLuxuryPorscheMedia ${item.mediaClass}`}>
+          {item.videoSrc ? (
+            <video
+              className="homeLuxuryMediaVideo"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              aria-hidden="true"
+              tabIndex={-1}
+            >
+              <source src={item.videoSrc} type="video/mp4" />
+            </video>
+          ) : null}
           <div className="homeLuxuryPorscheOverlay">
             <p className="homeLuxuryPorscheBadge">{item.badge}</p>
             <h3>{item.title}</h3>
@@ -69,6 +84,7 @@ export default async function Home() {
       href: "/member",
       mediaClass: "homeLuxuryMediaS2A",
       cta: "Open",
+      videoSrc: "/home-videos/card-pilates-showcase.mp4",
     },
     {
       badge: "增肌減脂",
@@ -77,6 +93,7 @@ export default async function Home() {
       href: "/frontdesk",
       mediaClass: "homeLuxuryMediaS2B",
       cta: "Open",
+      videoSrc: "/home-videos/card-weight-training-showcase.mp4",
     },
     {
       badge: "燃脂紓壓",
@@ -85,6 +102,7 @@ export default async function Home() {
       href: "/coach",
       mediaClass: "homeLuxuryMediaS2C",
       cta: "Open",
+      videoSrc: "/home-videos/card-boxing-showcase.mp4",
     },
     {
       badge: "疲勞釋放",
@@ -93,6 +111,7 @@ export default async function Home() {
       href: "/manager",
       mediaClass: "homeLuxuryMediaS2D",
       cta: "Open",
+      videoSrc: "/home-videos/card-massage-showcase.mp4",
     },
   ];
 
