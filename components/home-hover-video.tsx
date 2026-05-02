@@ -21,8 +21,31 @@ export function HomeHoverVideo({ src, label }: HomeHoverVideoProps) {
       return;
     }
 
+    const grid = card.closest(".homeLuxuryShowcaseVideoGrid");
+
+    const getActiveCardValue = (): "s2a" | "s2b" | "s2c" | "s2d" | null => {
+      if (card.classList.contains("homeLuxuryMediaS2A")) {
+        return "s2a";
+      }
+      if (card.classList.contains("homeLuxuryMediaS2B")) {
+        return "s2b";
+      }
+      if (card.classList.contains("homeLuxuryMediaS2C")) {
+        return "s2c";
+      }
+      if (card.classList.contains("homeLuxuryMediaS2D")) {
+        return "s2d";
+      }
+      return null;
+    };
+
     const removeActiveClass = () => {
       card.classList.remove("homeLuxuryMediaVideoCardActive");
+
+      if (grid instanceof HTMLElement) {
+        grid.classList.remove("homeLuxuryShowcaseVideoGridActive");
+        grid.removeAttribute("data-active-card");
+      }
     };
 
     const resetToStart = () => {
@@ -35,15 +58,26 @@ export function HomeHoverVideo({ src, label }: HomeHoverVideoProps) {
 
     const handleMouseEnter = () => {
       card.classList.add("homeLuxuryMediaVideoCardActive");
+
+      if (grid instanceof HTMLElement) {
+        const activeCard = getActiveCardValue();
+        grid.classList.add("homeLuxuryShowcaseVideoGridActive");
+        if (activeCard) {
+          grid.setAttribute("data-active-card", activeCard);
+        } else {
+          grid.removeAttribute("data-active-card");
+        }
+      }
+
       void video.play().catch(() => {
         // Ignore autoplay restrictions; the fallback image remains visible.
       });
     };
 
     const handleMouseLeave = () => {
+      removeActiveClass();
       video.pause();
       resetToStart();
-      removeActiveClass();
     };
 
     card.addEventListener("mouseenter", handleMouseEnter);

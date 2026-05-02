@@ -137,6 +137,14 @@ Completed in this round for Showcase S2 hover polish:
 - Mobile and non-hover environments still avoid forced hover scale behavior
 - The original S2 background image variables are still kept as fallback
 
+Completed in this round for Showcase S2 layout hover behavior:
+
+- Showcase S2 hover behavior now enlarges the active card's layout area while the other three cards shrink slightly
+- The video itself no longer scales; it only fades in while playing
+- The S2 shared container now uses an active state plus `data-active-card` to adjust grid column and row proportions
+- Mobile and non-hover environments do not apply the hover layout resizing
+- The original S2 background image variables are still kept as fallback
+
 ## Images found in `public/` that are not currently used on homepage
 
 These files exist in `public/` but were not found in active homepage references:

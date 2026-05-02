@@ -783,20 +783,22 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   pointer-events: none;
   z-index: 0;
   opacity: 0;
-  transform: scale(1.01);
+  transform: none;
   transition:
-    opacity 360ms ease,
-    transform 520ms ease;
+    opacity 520ms ease;
 }
 .homeLuxuryMediaVideoCard{
   position: relative;
   overflow: hidden;
-  transform: translateZ(0) scale(1);
+  transform: none;
   transition:
-    transform 260ms ease,
     box-shadow 260ms ease,
-    border-color 260ms ease;
-  will-change: transform;
+    border-color 260ms ease,
+    filter 260ms ease;
+}
+.homeLuxuryMediaVideoCard.homeLuxuryMediaVideoCardActive .homeLuxuryMediaVideo{
+  opacity: 1;
+  transform: none;
 }
 .homeLuxuryGridOverlay{
   position: relative;
@@ -886,34 +888,49 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   font-weight: 520;
   line-height: 1.08;
 }
+.homeLuxuryShowcaseVideoGrid{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  transition:
+    grid-template-columns 320ms ease,
+    grid-template-rows 320ms ease;
+}
 @media (hover: hover) and (pointer: fine) {
-  .homeLuxuryMediaVideoCard:hover,
-  .homeLuxuryMediaVideoCard.homeLuxuryMediaVideoCardActive{
-    transform: translateZ(0) scale(1.035);
-    z-index: 2;
+  .homeLuxuryShowcaseVideoGrid.homeLuxuryShowcaseVideoGridActive[data-active-card="s2a"] {
+    grid-template-columns: 1.08fr 0.92fr;
+    grid-template-rows: 1.08fr 0.92fr;
   }
 
-  .homeLuxuryMediaVideoCard:hover .homeLuxuryMediaVideo,
-  .homeLuxuryMediaVideoCard.homeLuxuryMediaVideoCardActive .homeLuxuryMediaVideo{
-    opacity: 1;
-    transform: scale(1.045);
+  .homeLuxuryShowcaseVideoGrid.homeLuxuryShowcaseVideoGridActive[data-active-card="s2b"] {
+    grid-template-columns: 0.92fr 1.08fr;
+    grid-template-rows: 1.08fr 0.92fr;
+  }
+
+  .homeLuxuryShowcaseVideoGrid.homeLuxuryShowcaseVideoGridActive[data-active-card="s2c"] {
+    grid-template-columns: 1.08fr 0.92fr;
+    grid-template-rows: 0.92fr 1.08fr;
+  }
+
+  .homeLuxuryShowcaseVideoGrid.homeLuxuryShowcaseVideoGridActive[data-active-card="s2d"] {
+    grid-template-columns: 0.92fr 1.08fr;
+    grid-template-rows: 0.92fr 1.08fr;
+  }
+
+  .homeLuxuryShowcaseVideoGrid.homeLuxuryShowcaseVideoGridActive .homeLuxuryMediaVideoCard {
+    filter: brightness(0.84);
+  }
+
+  .homeLuxuryShowcaseVideoGrid.homeLuxuryShowcaseVideoGridActive .homeLuxuryMediaVideoCard.homeLuxuryMediaVideoCardActive {
+    filter: brightness(1);
+    z-index: 2;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .homeLuxuryShowcaseVideoGrid,
   .homeLuxuryMediaVideo,
   .homeLuxuryMediaVideoCard{
     transition: none;
-  }
-
-  .homeLuxuryMediaVideoCard:hover,
-  .homeLuxuryMediaVideoCard.homeLuxuryMediaVideoCardActive{
-    transform: translateZ(0) scale(1);
-  }
-
-  .homeLuxuryMediaVideoCard:hover .homeLuxuryMediaVideo,
-  .homeLuxuryMediaVideoCard.homeLuxuryMediaVideoCardActive .homeLuxuryMediaVideo{
-    transform: scale(1.01);
   }
 }
 .homeLuxuryMediaS2A{ background-image: var(--home-image-card-s2-a); }

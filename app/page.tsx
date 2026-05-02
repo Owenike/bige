@@ -274,7 +274,7 @@ export default async function Home() {
               <Image src="/LOGO.jpg" alt="" width={128} height={128} className="homeLuxuryCircleLogoImage" />
             </span>
           </div>
-          <div className="homeLuxuryGridShowcase" data-swipe-track="showcase">
+          <div className="homeLuxuryGridShowcase homeLuxuryShowcaseVideoGrid" data-swipe-track="showcase">
             {sectionTwoItems.map((item) => (
               <PorscheCard key={`${item.title}-${item.href}`} item={item} />
             ))}
