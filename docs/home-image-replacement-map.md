@@ -11,8 +11,8 @@ This document covers the homepage route `/` only.
 | Homepage section | Current image source | Reference file / class | Live on homepage | Replace next round | Recommended ratio | Recommended minimum size | Recommended new filename |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Brand logo | `/LOGO.jpg` | `app/page.tsx` `Image src="/LOGO.jpg"` | Yes | Yes | `1:1` | `1024x1024` | `logo-main.jpg` |
-| Hero main visual | External Unsplash URL | `app/globals.css` `.homeLuxuryHeroImage` via `--home-image-hero-main` | Yes | Yes | `16:9` to `21:9` | `2200x1400` | `hero-main.webp` |
-| Full-width background section A | External Unsplash URL | `app/globals.css` `.homeLuxurySectionImageA` via `--home-image-section-a` | Yes | Yes | `16:9` | `2200x1400` | `section-body-awareness.webp` |
+| Hero main visual | `/home-images/hero-main.jpg` | `app/globals.css` `.homeLuxuryHeroImage` via `--home-image-hero-main` | Yes | Yes | `16:9` to `21:9` | `2200x1400` | `hero-main.jpg` |
+| Full-width background section A | `/home-images/section-body-awareness.jpg` | `app/globals.css` `.homeLuxurySectionImageA` via `--home-image-section-a` | Yes | Yes | `16:9` | `2200x1400` | `section-body-awareness.jpg` |
 | Full-width background section B | External Unsplash URL | `app/globals.css` `.homeLuxurySectionImageB` via `--home-image-section-b` | Yes | Yes | `16:9` | `2200x1400` | `section-platform-message.webp` |
 | Showcase card S2A | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS2A` + `app/globals.css` `--home-image-card-s2-a` | Yes | Yes | `16:10` | `1600x1000` | `card-pilates-showcase.webp` |
 | Showcase card S2B | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS2B` + `app/globals.css` `--home-image-card-s2-b` | Yes | Yes | `16:10` | `1600x1000` | `card-weight-training-showcase.webp` |
@@ -62,7 +62,7 @@ If new homepage assets are provided in a future round, place them here:
 
 - `public/home-images/`
 
-Before the formal homepage image replacement round, place the approved new images in `public/home-images/` and name them according to `public/home-images/README.md`. In the next round, update the `--home-image-*` variables in `app/globals.css` and the logo path in `app/page.tsx`.
+Before the formal homepage image replacement round, place the approved new images in `public/home-images/` and name them according to `public/home-images/README.md`. This round has already switched the homepage hero visual to `hero-main.jpg` and the body awareness background to `section-body-awareness.jpg`. A future round can continue updating the remaining `--home-image-*` variables and the logo path in `app/page.tsx`.
 
 Suggested file set:
 
@@ -86,7 +86,21 @@ Suggested file set:
 - `public/home-images/card-book-now.webp`
 - `public/home-images/card-map-guide.webp`
 
-This folder was not created in this round because no confirmed new assets were found.
+This folder is now in use for homepage JPG assets.
+
+## Replacement progress in this round
+
+Completed in this round:
+
+- `hero-main.jpg` now replaces the homepage hero main visual
+- `section-body-awareness.jpg` now replaces the homepage "Body Awareness" full-width background
+- Both active replacements use `JPG`, not `WEBP`
+
+Still unchanged:
+
+- All other homepage images still use their previous sources
+- Logo is still `/LOGO.jpg`
+- `/booking` storefront brand images are still out of scope
 
 ## Images found in `public/` that are not currently used on homepage
 

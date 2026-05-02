@@ -49,8 +49,8 @@ Homepage CTA `S8` cards:
 ## Recommended ratios and sizes
 
 - `logo-main.jpg`: `1:1`
-- `hero-main.webp`: `16:9` to `21:9`, recommended width `2200px` or above
-- `section-body-awareness.webp`: `16:9`, recommended width `2200px` or above
+- `hero-main.webp` or `hero-main.jpg`: `16:9` to `21:9`, recommended width `2200px` or above
+- `section-body-awareness.webp` or `section-body-awareness.jpg`: `16:9`, recommended width `2200px` or above
 - `section-platform-message.webp`: `16:9`, recommended width `2200px` or above
 - `S2` cards: `16:10`
 - `S4` / `S6` / `S8` cards: `4:5`
@@ -60,3 +60,7 @@ Homepage CTA `S8` cards:
 - Keep the approved file extension when the source asset is not WEBP or JPG unless the replacement plan explicitly says otherwise.
 - The next implementation round should only update homepage image references after these files are in place.
 - The next implementation round should update `app/globals.css` `--home-image-*` variables and `app/page.tsx` logo path.
+- Hero main visual currently uses: `hero-main.jpg`
+- Body awareness full-width background currently uses: `section-body-awareness.jpg`
+- If the provided file is `JPG`, use the `JPG` path directly and do not rename the reference to `WEBP`.
+- Only use a `.webp` filename when the asset has actually been converted to `WEBP`.

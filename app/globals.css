@@ -22,8 +22,8 @@
   --container: 1100px;
 
   /* Homepage image replacement entrypoints */
-  --home-image-hero-main: url("https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=2200&q=80");
-  --home-image-section-a: url("https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=2200&q=80");
+  --home-image-hero-main: url("/home-images/hero-main.jpg");
+  --home-image-section-a: url("/home-images/section-body-awareness.jpg");
   --home-image-section-b: url("https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=2200&q=80");
   --home-image-section-c: url("https://images.unsplash.com/photo-1599058917212-d750089bc07e?auto=format&fit=crop&w=2200&q=80");
   --home-image-card-s2-a: url("https://images.unsplash.com/photo-1550345332-09e3ac987658?auto=format&fit=crop&w=1300&q=80");
