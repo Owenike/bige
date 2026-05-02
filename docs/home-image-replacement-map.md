@@ -173,6 +173,14 @@ Completed in this round for Showcase S2 fallback cover images:
 - The S2 height and hover enlarge / shrink ratio remain unchanged
 - Other homepage images or videos not listed above still keep their previous sources
 
+Completed in this round for Showcase S2 mobile layout:
+
+- Showcase S2 now stacks as single-column horizontal cards on mobile instead of a near-portrait carousel treatment
+- Mobile S2 cards keep using the fallback / cover images
+- Mobile S2 hides the MP4 layer to avoid hoverless interaction issues
+- Desktop S2 still keeps the 2x2 hover video interaction
+- Mobile S2 card height now uses an adaptive clamp with large rounded corners and bottom-aligned overlay text
+
 ## Images found in `public/` that are not currently used on homepage
 
 These files exist in `public/` but were not found in active homepage references:

@@ -1124,6 +1124,76 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     display: inline-flex;
   }
 }
+@media (max-width: 767px){
+  .homeLuxuryShowcaseVideoGrid{
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    gap: 22px;
+    height: auto;
+    padding: 0 18px;
+    overflow: visible;
+    overscroll-behavior-x: auto;
+    scroll-snap-type: none;
+    scroll-padding-left: 0;
+  }
+
+  .homeLuxuryShowcaseVideoGrid > .homeLuxuryPorscheCard{
+    scroll-snap-align: none;
+    transform: none;
+    opacity: 1;
+    filter: none;
+  }
+
+  .homeLuxuryShowcaseVideoGrid > .homeLuxuryPorscheCard.is-swipe-active{
+    transform: none;
+    opacity: 1;
+    filter: none;
+  }
+
+  .homeLuxuryShowcaseVideoGrid .homeLuxuryMediaVideoCard{
+    width: 100%;
+    height: clamp(220px, 58vw, 280px);
+    min-width: 0;
+    min-height: 220px;
+    aspect-ratio: auto;
+    border-radius: 28px;
+    overflow: hidden;
+  }
+
+  .homeLuxuryShowcaseVideoGrid .homeLuxuryPorscheCard,
+  .homeLuxuryShowcaseVideoGrid .homeLuxuryPorscheLink,
+  .homeLuxuryShowcaseVideoGrid .homeLuxuryPorscheMedia{
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    aspect-ratio: auto;
+    border-radius: 28px;
+    overflow: hidden;
+  }
+
+  .homeLuxuryShowcaseVideoGrid .homeLuxuryMediaVideo{
+    display: none;
+  }
+
+  .homeLuxuryShowcaseVideoGrid .homeLuxuryPorscheOverlay{
+    padding: 24px;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .homeLuxuryShowcaseVideoGrid .homeLuxuryPorscheOverlay h3{
+    font-size: clamp(24px, 7vw, 34px);
+  }
+
+  .homeLuxuryShowcaseVideoGrid .homeLuxuryPorscheMedia::before{
+    background:
+      linear-gradient(180deg, rgba(5,8,14,.06) 18%, rgba(5,8,14,.24) 48%, rgba(5,8,14,.82) 100%);
+  }
+}
 @media (prefers-reduced-motion: reduce){
   [data-reveal] .homeLuxurySectionTitle,
   [data-reveal] [data-reveal-item]{
