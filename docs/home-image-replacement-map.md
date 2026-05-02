@@ -22,10 +22,10 @@ This document covers the homepage route `/` only.
 | Training card S4B | `/Cardio.png` | `app/page.tsx` `homeLuxuryMediaS4B` + `app/globals.css` `--home-image-card-s4-b` | Yes | Yes | `4:5` | `1600x2000` | `card-cardio-training.png` |
 | Training card S4C | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS4C` + `app/globals.css` `--home-image-card-s4-c` | Yes | Yes | `4:5` | `1600x2000` | `card-core-training.webp` |
 | Training card S4D | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS4D` + `app/globals.css` `--home-image-card-s4-d` | Yes | Yes | `4:5` | `1600x2000` | `card-functional-training.webp` |
-| Choices card S6A | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS6A` + `app/globals.css` `--home-image-card-s6-a` | Yes | Yes | `4:5` | `1600x2000` | `card-single-pass.webp` |
-| Choices card S6B | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS6B` + `app/globals.css` `--home-image-card-s6-b` | Yes | Yes | `4:5` | `1600x2000` | `card-membership.webp` |
-| Choices card S6C | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS6C` + `app/globals.css` `--home-image-card-s6-c` | Yes | Yes | `4:5` | `1600x2000` | `card-coaching.webp` |
-| Choices card S6D | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS6D` + `app/globals.css` `--home-image-card-s6-d` | Yes | Yes | `4:5` | `1600x2000` | `card-assessment.webp` |
+| Choices card S6A | `/home-images/card-single-pass.jpg` | `app/page.tsx` `homeLuxuryMediaS6A` + `app/globals.css` `--home-image-card-s6-a` | Yes | Yes | `4:5` | `1600x2000` | `card-single-pass.jpg` |
+| Choices card S6B | `/home-images/card-membership.jpg` | `app/page.tsx` `homeLuxuryMediaS6B` + `app/globals.css` `--home-image-card-s6-b` | Yes | Yes | `4:5` | `1600x2000` | `card-membership.jpg` |
+| Choices card S6C | `/home-images/card-coaching.jpg` | `app/page.tsx` `homeLuxuryMediaS6C` + `app/globals.css` `--home-image-card-s6-c` | Yes | Yes | `4:5` | `1600x2000` | `card-coaching.jpg` |
+| Choices card S6D | `/home-images/card-assessment.jpg` | `app/page.tsx` `homeLuxuryMediaS6D` + `app/globals.css` `--home-image-card-s6-d` | Yes | Yes | `4:5` | `1600x2000` | `card-assessment.jpg` |
 | CTA card S8A | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS8A` + `app/globals.css` `--home-image-card-s8-a` | Yes | Yes | `4:5` | `1600x2000` | `card-contact.webp` |
 | CTA card S8B | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS8B` + `app/globals.css` `--home-image-card-s8-b` | Yes | Yes | `4:5` | `1600x2000` | `card-book-now.webp` |
 | CTA card S8C | External Unsplash URL | `app/page.tsx` `homeLuxuryMediaS8C` + `app/globals.css` `--home-image-card-s8-c` | Yes | Yes | `4:5` | `1600x2000` | `card-map-guide.webp` |
@@ -98,9 +98,18 @@ Completed in this round:
 
 Still unchanged:
 
-- All other homepage images still use their previous sources
+- All other homepage images still use their previous sources, except the Choices S6 cards updated below
 - Logo is still `/LOGO.jpg`
 - `/booking` storefront brand images are still out of scope
+
+Completed in this round for Choices S6:
+
+- `card-single-pass.jpg` now replaces Choices S6A "Single Pass"
+- `card-membership.jpg` now replaces Choices S6B "Membership"
+- `card-coaching.jpg` now replaces Choices S6C "Coaching"
+- `card-assessment.jpg` now replaces Choices S6D "Assessment"
+- These 4 active Choices replacements use `JPG`, not `WEBP`
+- Other homepage images not listed above still keep their previous sources
 
 ## Images found in `public/` that are not currently used on homepage
 

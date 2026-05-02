@@ -34,10 +34,10 @@
   --home-image-card-s4-b: url("/Cardio.png");
   --home-image-card-s4-c: url("https://images.unsplash.com/photo-1549445069-d1125f7a129c?auto=format&fit=crop&w=1600&q=80");
   --home-image-card-s4-d: url("https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&w=1600&q=80");
-  --home-image-card-s6-a: url("https://images.unsplash.com/photo-1594737625785-a6cbdabd333c?auto=format&fit=crop&w=1300&q=80");
-  --home-image-card-s6-b: url("https://images.unsplash.com/photo-1579758629938-03607ccdbaba?auto=format&fit=crop&w=1300&q=80");
-  --home-image-card-s6-c: url("https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1300&q=80");
-  --home-image-card-s6-d: url("https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1300&q=80");
+  --home-image-card-s6-a: url("/home-images/card-single-pass.jpg");
+  --home-image-card-s6-b: url("/home-images/card-membership.jpg");
+  --home-image-card-s6-c: url("/home-images/card-coaching.jpg");
+  --home-image-card-s6-d: url("/home-images/card-assessment.jpg");
   --home-image-card-s8-a: url("https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1300&q=80");
   --home-image-card-s8-b: url("https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&w=1300&q=80");
   --home-image-card-s8-c: url("https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1300&q=80");

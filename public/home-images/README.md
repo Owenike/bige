@@ -62,5 +62,9 @@ Homepage CTA `S8` cards:
 - The next implementation round should update `app/globals.css` `--home-image-*` variables and `app/page.tsx` logo path.
 - Hero main visual currently uses: `hero-main.jpg`
 - Body awareness full-width background currently uses: `section-body-awareness.jpg`
+- Choices S6A "Single Pass" currently uses: `card-single-pass.jpg`
+- Choices S6B "Membership" currently uses: `card-membership.jpg`
+- Choices S6C "Coaching" currently uses: `card-coaching.jpg`
+- Choices S6D "Assessment" currently uses: `card-assessment.jpg`
 - If the provided file is `JPG`, use the `JPG` path directly and do not rename the reference to `WEBP`.
 - Only use a `.webp` filename when the asset has actually been converted to `WEBP`.
