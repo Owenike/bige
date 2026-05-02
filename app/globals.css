@@ -20,6 +20,27 @@
   --shadow-2: 0 8px 18px rgba(129,145,172,.16);
 
   --container: 1100px;
+
+  /* Homepage image replacement entrypoints */
+  --home-image-hero-main: url("https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=2200&q=80");
+  --home-image-section-a: url("https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=2200&q=80");
+  --home-image-section-b: url("https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=2200&q=80");
+  --home-image-section-c: url("https://images.unsplash.com/photo-1599058917212-d750089bc07e?auto=format&fit=crop&w=2200&q=80");
+  --home-image-card-s2-a: url("https://images.unsplash.com/photo-1550345332-09e3ac987658?auto=format&fit=crop&w=1300&q=80");
+  --home-image-card-s2-b: url("https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=1300&q=80");
+  --home-image-card-s2-c: url("https://images.unsplash.com/photo-1518310383802-640c2de311b2?auto=format&fit=crop&w=1300&q=80");
+  --home-image-card-s2-d: url("https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1300&q=80");
+  --home-image-card-s4-a: url("/Senior.png");
+  --home-image-card-s4-b: url("/Cardio.png");
+  --home-image-card-s4-c: url("https://images.unsplash.com/photo-1549445069-d1125f7a129c?auto=format&fit=crop&w=1600&q=80");
+  --home-image-card-s4-d: url("https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&w=1600&q=80");
+  --home-image-card-s6-a: url("https://images.unsplash.com/photo-1594737625785-a6cbdabd333c?auto=format&fit=crop&w=1300&q=80");
+  --home-image-card-s6-b: url("https://images.unsplash.com/photo-1579758629938-03607ccdbaba?auto=format&fit=crop&w=1300&q=80");
+  --home-image-card-s6-c: url("https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1300&q=80");
+  --home-image-card-s6-d: url("https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1300&q=80");
+  --home-image-card-s8-a: url("https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1300&q=80");
+  --home-image-card-s8-b: url("https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&w=1300&q=80");
+  --home-image-card-s8-c: url("https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1300&q=80");
 }
 
 *{ box-sizing: border-box; }
@@ -363,28 +384,28 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .homeLuxuryHeroImage{
   background-image:
     linear-gradient(115deg, rgba(11,14,20,.52), rgba(11,14,20,.28) 40%, rgba(11,14,20,.56)),
-    url("https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=2200&q=80");
+    var(--home-image-hero-main);
   background-size: cover;
   background-position: center;
 }
 .homeLuxurySectionImageA{
   background-image:
     linear-gradient(130deg, rgba(8,10,14,.46), rgba(8,10,14,.32)),
-    url("https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=2200&q=80");
+    var(--home-image-section-a);
   background-size: cover;
   background-position: center;
 }
 .homeLuxurySectionImageB{
   background-image:
     linear-gradient(125deg, rgba(10,13,18,.50), rgba(10,13,18,.34)),
-    url("https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=2200&q=80");
+    var(--home-image-section-b);
   background-size: cover;
   background-position: center;
 }
 .homeLuxurySectionImageC{
   background-image:
     linear-gradient(120deg, rgba(10,13,18,.52), rgba(10,13,18,.34)),
-    url("https://images.unsplash.com/photo-1599058917212-d750089bc07e?auto=format&fit=crop&w=2200&q=80");
+    var(--home-image-section-c);
   background-size: cover;
   background-position: center;
 }
@@ -843,21 +864,21 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .homeLuxuryPorscheCard:hover .homeLuxuryPorscheMedia{
   transform: scale(1.02);
 }
-.homeLuxuryMediaS2A{ background-image: url("https://images.unsplash.com/photo-1550345332-09e3ac987658?auto=format&fit=crop&w=1300&q=80"); }
-.homeLuxuryMediaS2B{ background-image: url("https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=1300&q=80"); }
-.homeLuxuryMediaS2C{ background-image: url("https://images.unsplash.com/photo-1518310383802-640c2de311b2?auto=format&fit=crop&w=1300&q=80"); }
-.homeLuxuryMediaS2D{ background-image: url("https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1300&q=80"); }
-.homeLuxuryMediaS4A{ background-image: url("/Senior.png"); }
-.homeLuxuryMediaS4B{ background-image: url("/Cardio.png"); }
-.homeLuxuryMediaS4C{ background-image: url("https://images.unsplash.com/photo-1549445069-d1125f7a129c?auto=format&fit=crop&w=1600&q=80"); }
-.homeLuxuryMediaS4D{ background-image: url("https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&w=1600&q=80"); }
-.homeLuxuryMediaS6A{ background-image: url("https://images.unsplash.com/photo-1594737625785-a6cbdabd333c?auto=format&fit=crop&w=1300&q=80"); }
-.homeLuxuryMediaS6B{ background-image: url("https://images.unsplash.com/photo-1579758629938-03607ccdbaba?auto=format&fit=crop&w=1300&q=80"); }
-.homeLuxuryMediaS6C{ background-image: url("https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1300&q=80"); }
-.homeLuxuryMediaS6D{ background-image: url("https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1300&q=80"); }
-.homeLuxuryMediaS8A{ background-image: url("https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1300&q=80"); }
-.homeLuxuryMediaS8B{ background-image: url("https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&w=1300&q=80"); }
-.homeLuxuryMediaS8C{ background-image: url("https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1300&q=80"); }
+.homeLuxuryMediaS2A{ background-image: var(--home-image-card-s2-a); }
+.homeLuxuryMediaS2B{ background-image: var(--home-image-card-s2-b); }
+.homeLuxuryMediaS2C{ background-image: var(--home-image-card-s2-c); }
+.homeLuxuryMediaS2D{ background-image: var(--home-image-card-s2-d); }
+.homeLuxuryMediaS4A{ background-image: var(--home-image-card-s4-a); }
+.homeLuxuryMediaS4B{ background-image: var(--home-image-card-s4-b); }
+.homeLuxuryMediaS4C{ background-image: var(--home-image-card-s4-c); }
+.homeLuxuryMediaS4D{ background-image: var(--home-image-card-s4-d); }
+.homeLuxuryMediaS6A{ background-image: var(--home-image-card-s6-a); }
+.homeLuxuryMediaS6B{ background-image: var(--home-image-card-s6-b); }
+.homeLuxuryMediaS6C{ background-image: var(--home-image-card-s6-c); }
+.homeLuxuryMediaS6D{ background-image: var(--home-image-card-s6-d); }
+.homeLuxuryMediaS8A{ background-image: var(--home-image-card-s8-a); }
+.homeLuxuryMediaS8B{ background-image: var(--home-image-card-s8-b); }
+.homeLuxuryMediaS8C{ background-image: var(--home-image-card-s8-c); }
 @media (max-width: 1180px){
   .homeLuxuryGridFour{
     grid-template-columns: repeat(2, minmax(0, 1fr));
