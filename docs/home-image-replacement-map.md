@@ -129,6 +129,14 @@ Completed in this round for Showcase S2 hover interaction:
 - Mobile and non-hover environments do not force the hover scale behavior
 - The original S2 background image variables are still kept as fallback
 
+Completed in this round for Showcase S2 hover polish:
+
+- Showcase S2 hover-play videos now fade in and fade out more smoothly
+- Hover scale now uses both CSS hover and the `homeLuxuryMediaVideoCardActive` class for more reliable activation
+- Leaving the card still pauses the video and resets it to the beginning
+- Mobile and non-hover environments still avoid forced hover scale behavior
+- The original S2 background image variables are still kept as fallback
+
 ## Images found in `public/` that are not currently used on homepage
 
 These files exist in `public/` but were not found in active homepage references:

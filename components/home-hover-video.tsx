@@ -21,44 +21,41 @@ export function HomeHoverVideo({ src, label }: HomeHoverVideoProps) {
       return;
     }
 
-    const resetVideo = () => {
-      video.pause();
-      card.removeAttribute("data-video-active");
+    const removeActiveClass = () => {
+      card.classList.remove("homeLuxuryMediaVideoCardActive");
+    };
 
+    const resetToStart = () => {
       try {
         video.currentTime = 0;
       } catch {
-        const restoreToStart = () => {
-          try {
-            video.currentTime = 0;
-          } catch {
-            // Ignore media reset issues and leave the fallback image in place.
-          }
-        };
-
-        video.addEventListener("loadedmetadata", restoreToStart, { once: true });
+        // Ignore media reset issues and leave the fallback image in place.
       }
     };
 
     const handleMouseEnter = () => {
-      card.setAttribute("data-video-active", "true");
+      card.classList.add("homeLuxuryMediaVideoCardActive");
       void video.play().catch(() => {
         // Ignore autoplay restrictions; the fallback image remains visible.
       });
     };
 
     const handleMouseLeave = () => {
-      resetVideo();
+      video.pause();
+      resetToStart();
+      removeActiveClass();
     };
 
     card.addEventListener("mouseenter", handleMouseEnter);
     card.addEventListener("mouseleave", handleMouseLeave);
-    resetVideo();
+    handleMouseLeave();
 
     return () => {
       card.removeEventListener("mouseenter", handleMouseEnter);
       card.removeEventListener("mouseleave", handleMouseLeave);
-      resetVideo();
+      video.pause();
+      resetToStart();
+      removeActiveClass();
     };
   }, []);
 

@@ -783,21 +783,20 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   pointer-events: none;
   z-index: 0;
   opacity: 0;
-  transition: opacity 180ms ease;
+  transform: scale(1.01);
+  transition:
+    opacity 360ms ease,
+    transform 520ms ease;
 }
 .homeLuxuryMediaVideoCard{
   position: relative;
   overflow: hidden;
-  transform: translateZ(0);
+  transform: translateZ(0) scale(1);
   transition:
-    transform 220ms ease,
-    box-shadow 220ms ease,
-    border-color 220ms ease,
-    background-position .16s linear;
+    transform 260ms ease,
+    box-shadow 260ms ease,
+    border-color 260ms ease;
   will-change: transform;
-}
-.homeLuxuryMediaVideoCard[data-video-active="true"] .homeLuxuryMediaVideo{
-  opacity: 1;
 }
 .homeLuxuryGridOverlay{
   position: relative;
@@ -888,23 +887,33 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   line-height: 1.08;
 }
 @media (hover: hover) and (pointer: fine) {
-  .homeLuxuryPorscheCard:hover .homeLuxuryMediaVideoCard{
-    transform: scale(1.025);
+  .homeLuxuryMediaVideoCard:hover,
+  .homeLuxuryMediaVideoCard.homeLuxuryMediaVideoCardActive{
+    transform: translateZ(0) scale(1.035);
     z-index: 2;
+  }
+
+  .homeLuxuryMediaVideoCard:hover .homeLuxuryMediaVideo,
+  .homeLuxuryMediaVideoCard.homeLuxuryMediaVideoCardActive .homeLuxuryMediaVideo{
+    opacity: 1;
+    transform: scale(1.045);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .homeLuxuryMediaVideo,
   .homeLuxuryMediaVideoCard{
     transition: none;
   }
 
-  .homeLuxuryMediaVideo{
-    transition: none;
+  .homeLuxuryMediaVideoCard:hover,
+  .homeLuxuryMediaVideoCard.homeLuxuryMediaVideoCardActive{
+    transform: translateZ(0) scale(1);
   }
 
-  .homeLuxuryPorscheCard:hover .homeLuxuryMediaVideoCard{
-    transform: none;
+  .homeLuxuryMediaVideoCard:hover .homeLuxuryMediaVideo,
+  .homeLuxuryMediaVideoCard.homeLuxuryMediaVideoCardActive .homeLuxuryMediaVideo{
+    transform: scale(1.01);
   }
 }
 .homeLuxuryMediaS2A{ background-image: var(--home-image-card-s2-a); }
