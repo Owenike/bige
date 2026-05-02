@@ -928,7 +928,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
     align-items: stretch;
-    height: clamp(560px, 78vh, 860px);
+    height: clamp(680px, 88vh, 980px);
     transition:
       grid-template-columns 720ms cubic-bezier(0.22, 1, 0.36, 1),
       grid-template-rows 720ms cubic-bezier(0.22, 1, 0.36, 1);

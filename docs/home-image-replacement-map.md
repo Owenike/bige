@@ -154,6 +154,14 @@ Completed in this round for Showcase S2 layout smoothing:
 - Non-active cards now dim to `0.9` brightness instead of becoming overly dark
 - Mobile and non-hover environments still do not apply the hover grid animation
 
+Completed in this round for Showcase S2 size restoration:
+
+- The desktop S2 showcase video grid height was increased to `clamp(680px, 88vh, 980px)`
+- This restores a larger overall 2x2 showcase footprint closer to the original visual scale
+- The hover enlarge / shrink ratio remains `1.12 / 0.88`
+- Video playback and `640ms` fade timing remain unchanged
+- Mobile and non-hover environments still do not apply the hover grid animation
+
 ## Images found in `public/` that are not currently used on homepage
 
 These files exist in `public/` but were not found in active homepage references:
