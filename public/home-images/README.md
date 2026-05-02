@@ -1,0 +1,62 @@
+# Homepage Image Placement Guide
+
+Place approved homepage replacement images in this folder before the formal image replacement round.
+
+Project scope:
+
+- Route `/` homepage only
+- Do not use this folder for `/booking` storefront images
+
+## File naming rules
+
+Homepage logo:
+
+- `logo-main.jpg`
+
+Homepage full-width images:
+
+- `hero-main.webp`
+- `section-body-awareness.webp`
+- `section-platform-message.webp`
+
+Homepage showcase `S2` cards:
+
+- `card-pilates-showcase.webp`
+- `card-weight-training-showcase.webp`
+- `card-boxing-showcase.webp`
+- `card-massage-showcase.webp`
+
+Homepage training `S4` cards:
+
+- `card-senior-training.png`
+- `card-cardio-training.png`
+- `card-core-training.webp`
+- `card-functional-training.webp`
+
+Homepage choices `S6` cards:
+
+- `card-single-pass.webp`
+- `card-membership.webp`
+- `card-coaching.webp`
+- `card-assessment.webp`
+
+Homepage CTA `S8` cards:
+
+- `card-contact.webp`
+- `card-book-now.webp`
+- `card-map-guide.webp`
+
+## Recommended ratios and sizes
+
+- `logo-main.jpg`: `1:1`
+- `hero-main.webp`: `16:9` to `21:9`, recommended width `2200px` or above
+- `section-body-awareness.webp`: `16:9`, recommended width `2200px` or above
+- `section-platform-message.webp`: `16:9`, recommended width `2200px` or above
+- `S2` cards: `16:10`
+- `S4` / `S6` / `S8` cards: `4:5`
+
+## Notes for the next round
+
+- Keep the approved file extension when the source asset is not WEBP or JPG unless the replacement plan explicitly says otherwise.
+- The next implementation round should only update homepage image references after these files are in place.
+- The next implementation round should update `app/globals.css` `--home-image-*` variables and `app/page.tsx` logo path.

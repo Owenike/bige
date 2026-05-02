@@ -62,6 +62,8 @@ If new homepage assets are provided in a future round, place them here:
 
 - `public/home-images/`
 
+Before the formal homepage image replacement round, place the approved new images in `public/home-images/` and name them according to `public/home-images/README.md`. In the next round, update the `--home-image-*` variables in `app/globals.css` and the logo path in `app/page.tsx`.
+
 Suggested file set:
 
 - `public/home-images/logo-main.jpg`
