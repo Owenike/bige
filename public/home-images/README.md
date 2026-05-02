@@ -62,9 +62,16 @@ Homepage CTA `S8` cards:
 - The next implementation round should update `app/globals.css` `--home-image-*` variables and `app/page.tsx` logo path.
 - Hero main visual currently uses: `hero-main.jpg`
 - Body awareness full-width background currently uses: `section-body-awareness.jpg`
+- Showcase S2A "Pilates" cover currently uses: `card-pilates-showcase-cover.jpg`
+- Showcase S2B "Weight Training" cover currently uses: `card-weight-training-showcase-cover.jpg`
+- Showcase S2C "Boxing" cover currently uses: `card-boxing-showcase-cover.jpg`
+- Showcase S2D "Massage" cover currently uses: `card-massage-showcase-cover.jpg`
 - Choices S6A "Single Pass" currently uses: `card-single-pass.jpg`
 - Choices S6B "Membership" currently uses: `card-membership.jpg`
 - Choices S6C "Coaching" currently uses: `card-coaching.jpg`
 - Choices S6D "Assessment" currently uses: `card-assessment.jpg`
+- The four `S2` cover images are the fallback / cover images shown before each MP4 starts playing.
+- Recommended ratio for `S2` cover images: `16:10`
+- Recommended size for `S2` cover images: `1600x1000` or `2400x1500`
 - If the provided file is `JPG`, use the `JPG` path directly and do not rename the reference to `WEBP`.
 - Only use a `.webp` filename when the asset has actually been converted to `WEBP`.

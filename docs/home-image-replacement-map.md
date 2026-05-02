@@ -162,6 +162,17 @@ Completed in this round for Showcase S2 size restoration:
 - Video playback and `640ms` fade timing remain unchanged
 - Mobile and non-hover environments still do not apply the hover grid animation
 
+Completed in this round for Showcase S2 fallback cover images:
+
+- `card-pilates-showcase-cover.jpg` now replaces the Showcase S2A fallback / cover image
+- `card-weight-training-showcase-cover.jpg` now replaces the Showcase S2B fallback / cover image
+- `card-boxing-showcase-cover.jpg` now replaces the Showcase S2C fallback / cover image
+- `card-massage-showcase-cover.jpg` now replaces the Showcase S2D fallback / cover image
+- These 4 active fallback covers use `JPG`, not `WEBP`
+- The S2 MP4 hover playback logic remains unchanged
+- The S2 height and hover enlarge / shrink ratio remain unchanged
+- Other homepage images or videos not listed above still keep their previous sources
+
 ## Images found in `public/` that are not currently used on homepage
 
 These files exist in `public/` but were not found in active homepage references:
