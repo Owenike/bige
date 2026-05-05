@@ -195,6 +195,14 @@ Completed in this round for the Pilates training title line break:
 - The third card description remains unchanged
 - This round only adjusted text line breaking and did not modify images, videos, layout, or feature logic
 
+Completed in this round for training section image replacement:
+
+- `card-weight-training.png` now replaces the first "Training Programs" card image
+- `card-boxing-training.png` now replaces the second "Training Programs" card image
+- `card-pilates-core.png` now replaces the third "Training Programs" card image
+- `card-functional-training.png` now replaces the fourth "Training Programs" card image
+- This round changed image sources only and did not modify text, videos, layout, or feature logic
+
 ## Images found in `public/` that are not currently used on homepage
 
 These files exist in `public/` but were not found in active homepage references:

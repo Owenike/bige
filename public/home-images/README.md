@@ -66,6 +66,10 @@ Homepage CTA `S8` cards:
 - Showcase S2B "Weight Training" cover currently uses: `card-weight-training-showcase-cover.jpg`
 - Showcase S2C "Boxing" cover currently uses: `card-boxing-showcase-cover.jpg`
 - Showcase S2D "Massage" cover currently uses: `card-massage-showcase-cover.jpg`
+- Training S4A "Weight Training" currently uses: `card-weight-training.png`
+- Training S4B "Boxing Conditioning Training" currently uses: `card-boxing-training.png`
+- Training S4C "Pilates Core Training" currently uses: `card-pilates-core.png`
+- Training S4D "Functional Adjustment" currently uses: `card-functional-training.png`
 - Choices S6A "Single Pass" currently uses: `card-single-pass.jpg`
 - Choices S6B "Membership" currently uses: `card-membership.jpg`
 - Choices S6C "Coaching" currently uses: `card-coaching.jpg`
@@ -73,5 +77,7 @@ Homepage CTA `S8` cards:
 - The four `S2` cover images are the fallback / cover images shown before each MP4 starts playing.
 - Recommended ratio for `S2` cover images: `16:10`
 - Recommended size for `S2` cover images: `1600x1000` or `2400x1500`
+- Recommended ratio for `S4` training images: `4:5`
+- Recommended size for `S4` training images: `1600x2000`
 - If the provided file is `JPG`, use the `JPG` path directly and do not rename the reference to `WEBP`.
 - Only use a `.webp` filename when the asset has actually been converted to `WEBP`.
