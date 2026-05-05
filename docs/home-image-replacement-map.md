@@ -181,6 +181,14 @@ Completed in this round for Showcase S2 mobile layout:
 - Desktop S2 still keeps the 2x2 hover video interaction
 - Mobile S2 card height now uses an adaptive clamp with large rounded corners and bottom-aligned overlay text
 
+Completed in this round for training card copy updates:
+
+- The first "Training Programs" card changed from "銀髮族訓練" to "重量訓練"
+- The second card changed from "心肺體能訓練" to "拳擊體能訓練"
+- The third card changed from "核心訓練" to "器械皮拉提斯核心訓練"
+- The first three card descriptions were updated to better match BigE gym services
+- This round changed text only and did not modify images, videos, layout, or feature logic
+
 ## Images found in `public/` that are not currently used on homepage
 
 These files exist in `public/` but were not found in active homepage references:

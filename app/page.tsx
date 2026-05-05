@@ -114,31 +114,31 @@ export default async function Home() {
 
   const sectionFourItems: GridItem[] = [
     {
-      badge: "Senior",
-      title: isEn ? "Senior Fitness Training" : "銀髮族訓練",
+      badge: "WEIGHT",
+      title: isEn ? "Weight Training" : "重量訓練",
       description: isEn
-        ? "Low-impact mobility and balance practice to improve daily stability and confident movement."
-        : "低衝擊的活動度與平衡訓練，幫助提升日常穩定與行動自信。",
+        ? "Build strength, improve movement quality, and support better posture with focused one-on-one coaching."
+        : "透過一對一教練指導，建立正確動作品質，提升肌力、體態與日常活動能力。",
       href: "/login",
       mediaClass: "homeLuxuryMediaS4A",
       cta: "Go",
     },
     {
-      badge: "Cardio",
-      title: isEn ? "Cardio Conditioning Training" : "心肺體能訓練",
+      badge: "BOXING",
+      title: isEn ? "Boxing Conditioning Training" : "拳擊體能訓練",
       description: isEn
-        ? "Rhythm-based aerobic intervals to raise endurance, circulation efficiency, and sustained energy."
-        : "透過節奏有氧與間歇訓練，提升心肺耐力、循環效率與持續體能。",
+        ? "Combine boxing drills, agile footwork, and cardio intervals to improve fat burning, coordination, and explosive power."
+        : "結合拳擊動作、敏捷反應與心肺訓練，提升燃脂效率、協調性與全身爆發力。",
       href: "/member/entry-qr",
       mediaClass: "homeLuxuryMediaS4B",
       cta: "Open",
     },
     {
-      badge: "Core",
-      title: isEn ? "Core Training" : "核心訓練",
+      badge: "PILATES",
+      title: isEn ? "Pilates Core Training" : "器械皮拉提斯核心訓練",
       description: isEn
-        ? "Build trunk control and core strength to support posture quality and stable force output."
-        : "強化軀幹控制與核心穩定，改善姿勢品質與發力表現。",
+        ? "Use Pilates equipment to improve core stability, body control, posture, and movement quality."
+        : "運用器械皮拉提斯建立核心穩定與身體控制，改善姿勢、線條與動作品質。",
       href: "/frontdesk/checkin",
       mediaClass: "homeLuxuryMediaS4C",
       cta: "Open",
