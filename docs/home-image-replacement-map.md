@@ -189,6 +189,12 @@ Completed in this round for training card copy updates:
 - The first three card descriptions were updated to better match BigE gym services
 - This round changed text only and did not modify images, videos, layout, or feature logic
 
+Completed in this round for the Pilates training title line break:
+
+- The third "Training Programs" card title is now forced to render as two lines: "器械皮拉提斯" / "核心訓練"
+- The third card description remains unchanged
+- This round only adjusted text line breaking and did not modify images, videos, layout, or feature logic
+
 ## Images found in `public/` that are not currently used on homepage
 
 These files exist in `public/` but were not found in active homepage references:

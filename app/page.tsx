@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { ReactNode } from "react";
 import { HomeHoverVideo } from "@/components/home-hover-video";
 import { getLocaleFromCookies, getT } from "../lib/i18n-server";
 import HomeScrollEffects from "./home-scroll-effects";
@@ -12,6 +13,7 @@ type GridItem = {
   cta: string;
   videoSrc?: string;
   videoLabel?: string;
+  titleDisplay?: ReactNode;
 };
 
 function PorscheCard({ item }: { item: GridItem }) {
@@ -26,7 +28,7 @@ function PorscheCard({ item }: { item: GridItem }) {
           ) : null}
           <div className="homeLuxuryPorscheOverlay">
             <p className="homeLuxuryPorscheBadge">{item.badge}</p>
-            <h3>{item.title}</h3>
+            <h3>{item.titleDisplay ?? item.title}</h3>
           </div>
         </div>
       </a>
@@ -39,7 +41,7 @@ function GridCard({ item, clickable = false }: { item: GridItem; clickable?: boo
     <div className={`homeLuxuryGridMedia ${item.mediaClass}`}>
       <div className="homeLuxuryGridOverlay">
         <p className="homeLuxuryGridBadge">{item.badge}</p>
-        <h3>{item.title}</h3>
+        <h3>{item.titleDisplay ?? item.title}</h3>
         <p>{item.description}</p>
       </div>
     </div>
@@ -136,6 +138,7 @@ export default async function Home() {
     {
       badge: "PILATES",
       title: isEn ? "Pilates Core Training" : "器械皮拉提斯核心訓練",
+      titleDisplay: isEn ? "Pilates Core Training" : <><span>器械皮拉提斯</span><br /><span>核心訓練</span></>,
       description: isEn
         ? "Use Pilates equipment to improve core stability, body control, posture, and movement quality."
         : "運用器械皮拉提斯建立核心穩定與身體控制，改善姿勢、線條與動作品質。",
