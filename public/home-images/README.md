@@ -74,10 +74,16 @@ Homepage CTA `S8` cards:
 - Choices S6B "Membership" currently uses: `card-membership.jpg`
 - Choices S6C "Coaching" currently uses: `card-coaching.jpg`
 - Choices S6D "Assessment" currently uses: `card-assessment.jpg`
+- CTA S8A "Contact Us" currently uses: `card-contact.png`
+- CTA S8B "Book Now" currently uses: `card-book-now.png`
+- CTA S8C "Map Guide" currently uses: `card-map-guide.png`
 - The four `S2` cover images are the fallback / cover images shown before each MP4 starts playing.
 - Recommended ratio for `S2` cover images: `16:10`
 - Recommended size for `S2` cover images: `1600x1000` or `2400x1500`
 - Recommended ratio for `S4` training images: `4:5`
 - Recommended size for `S4` training images: `1600x2000`
+- Recommended ratio for `S8` CTA images: `4:5`
+- Recommended size for `S8` CTA images: `1600x2000` or `2000x2500`
 - If the provided file is `JPG`, use the `JPG` path directly and do not rename the reference to `WEBP`.
 - Only use a `.webp` filename when the asset has actually been converted to `WEBP`.
+- File extensions must match the real asset format instead of being renamed by filename only.

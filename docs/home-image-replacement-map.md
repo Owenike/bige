@@ -273,3 +273,10 @@ Result:
 - "Pilates Core Training" now uses `background-size: 113%` with focal point near `52% 46%`
 - "Functional Adjustment" remains unchanged this round
 - This round only adjusted S4 image framing in `app/globals.css`; no text, layout, hover logic, or video behavior was changed
+
+## CTA image replacements
+
+- `card-contact.png` now replaces the homepage CTA "Contact Us" image
+- `card-book-now.png` now replaces the homepage CTA "Book Now" image
+- `card-map-guide.png` now replaces the homepage CTA "Map Guide" image
+- This round only updated CTA image sources; no CTA copy, links, layout, or logic changed
