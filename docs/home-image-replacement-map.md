@@ -265,3 +265,11 @@ Result:
 5. Run `npm run typecheck`
 6. Run `npm run build`
 7. Verify desktop and mobile cropping on the live-style homepage sections
+
+## Training card framing adjustments
+
+- "Weight Training" now uses a tighter crop with `background-size: 121%` and focal point near `50% 47%`
+- "Boxing Conditioning Training" now uses `background-size: 117%` with focal point near `54% 43%`
+- "Pilates Core Training" now uses `background-size: 113%` with focal point near `52% 46%`
+- "Functional Adjustment" remains unchanged this round
+- This round only adjusted S4 image framing in `app/globals.css`; no text, layout, hover logic, or video behavior was changed

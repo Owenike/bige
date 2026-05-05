@@ -979,6 +979,21 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .homeLuxuryMediaS4B{ background-image: var(--home-image-card-s4-b); }
 .homeLuxuryMediaS4C{ background-image: var(--home-image-card-s4-c); }
 .homeLuxuryMediaS4D{ background-image: var(--home-image-card-s4-d); }
+.homeLuxuryGridFour .homeLuxuryGridMedia.homeLuxuryMediaS4A{
+  background-size: 121%;
+  --home-bg-x: 50%;
+  --home-bg-y: 47%;
+}
+.homeLuxuryGridFour .homeLuxuryGridMedia.homeLuxuryMediaS4B{
+  background-size: 117%;
+  --home-bg-x: 54%;
+  --home-bg-y: 43%;
+}
+.homeLuxuryGridFour .homeLuxuryGridMedia.homeLuxuryMediaS4C{
+  background-size: 113%;
+  --home-bg-x: 52%;
+  --home-bg-y: 46%;
+}
 .homeLuxuryMediaS6A{ background-image: var(--home-image-card-s6-a); }
 .homeLuxuryMediaS6B{ background-image: var(--home-image-card-s6-b); }
 .homeLuxuryMediaS6C{ background-image: var(--home-image-card-s6-c); }
