@@ -291,3 +291,15 @@ Result:
 - Phase 2 recommendation: create an API and storage flow for trial bookings
 - Phase 3 recommendation: connect ACPay based on `paymentMethod`
 - Phase 4 recommendation: connect LINE notifications after booking and payment flow are stable
+
+## Trial booking phase 2
+
+- Added the `trial_bookings` SQL draft for manual execution
+- Added `/api/trial-booking/create`
+- `/trial-booking` now submits to the API instead of only using client-side success state
+- Supported payment mapping:
+  - `cash_on_site` -> `pending_cash`
+  - `online_payment` -> `pending_payment`
+- ACPay is still not connected in this phase
+- LINE notification is still not connected in this phase
+- Next step recommendation: run the SQL draft manually in Supabase and verify write access

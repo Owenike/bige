@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type TrialService =
   | "weight_training"
-  | "boxing_conditioning"
+  | "boxing_fitness"
   | "pilates"
   | "sports_massage";
 
@@ -20,6 +20,7 @@ type PreferredTime =
   | "other";
 
 type PaymentMethod = "cash_on_site" | "online_payment";
+type PaymentStatus = "pending_cash" | "pending_payment";
 
 type TrialBookingFormData = {
   name: string;
@@ -33,9 +34,16 @@ type TrialBookingFormData = {
 
 type TrialBookingErrors = Partial<Record<keyof TrialBookingFormData, string>>;
 
+type TrialBookingSuccess = {
+  id: string;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  bookingStatus: "new";
+};
+
 const serviceOptions: Array<{ value: TrialService; label: string }> = [
   { value: "weight_training", label: "重量訓練" },
-  { value: "boxing_conditioning", label: "拳擊體能訓練" },
+  { value: "boxing_fitness", label: "拳擊體能訓練" },
   { value: "pilates", label: "器械皮拉提斯" },
   { value: "sports_massage", label: "運動按摩" },
 ];
@@ -89,11 +97,26 @@ function getPaymentMethodLabel(value: PaymentMethod | "") {
   return paymentMethodOptions.find((option) => option.value === value)?.label ?? "-";
 }
 
+function getPaymentStatusText(value: PaymentStatus) {
+  if (value === "pending_cash") {
+    return "當天付現，待專人確認時段";
+  }
+  return "線上付款待開放，待專人確認付款安排";
+}
+
 export default function TrialBookingPage() {
   const [formData, setFormData] = useState<TrialBookingFormData>(initialFormData);
   const [errors, setErrors] = useState<TrialBookingErrors>({});
   const [submitError, setSubmitError] = useState("");
-  const [submittedData, setSubmittedData] = useState<TrialBookingFormData | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittedBooking, setSubmittedBooking] = useState<TrialBookingSuccess | null>(null);
+
+  const successMessage = useMemo(() => {
+    if (!submittedBooking) return "";
+    return submittedBooking.paymentMethod === "cash_on_site"
+      ? "我們已收到您的首次體驗預約需求。付款方式為「當天付現」，後續將由專人協助確認可預約時段。"
+      : "我們已收到您的首次體驗預約需求。您選擇的是「線上付款」，線上付款功能目前建置中，後續將由專人協助確認付款與預約安排。";
+  }, [submittedBooking]);
 
   function updateField<K extends keyof TrialBookingFormData>(field: K, value: TrialBookingFormData[K]) {
     setFormData((current) => ({ ...current, [field]: value }));
@@ -118,8 +141,9 @@ export default function TrialBookingPage() {
     return nextErrors;
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
 
     const nextErrors = validate(formData);
     if (Object.keys(nextErrors).length > 0) {
@@ -130,23 +154,56 @@ export default function TrialBookingPage() {
 
     setErrors({});
     setSubmitError("");
-    setSubmittedData(formData);
+    setIsSubmitting(true);
 
-    // 第二階段可將資料送到 /api/trial-booking/create
-    // 第三階段可依 paymentMethod 決定是否導向 ACPay
+    try {
+      const response = await fetch("/api/trial-booking/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          phone: formData.phone,
+          lineName: formData.lineName,
+          service: formData.service,
+          preferredTime: formData.preferredTime,
+          paymentMethod: formData.paymentMethod,
+          note: formData.note,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            booking?: TrialBookingSuccess;
+            error?: string;
+          }
+        | null;
+
+      if (!response.ok || !payload?.ok || !payload.booking) {
+        setSubmitError(payload?.error || "目前無法送出預約資料，請稍後再試。");
+        return;
+      }
+
+      setSubmittedBooking(payload.booking);
+
+      // 第二階段已改為送到 /api/trial-booking/create
+      // 第三階段可依 paymentMethod 決定是否導向 ACPay
+    } catch {
+      setSubmitError("送出失敗，請確認網路連線後再試一次。");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function handleReset() {
     setFormData(initialFormData);
     setErrors({});
     setSubmitError("");
-    setSubmittedData(null);
+    setSubmittedBooking(null);
+    setIsSubmitting(false);
   }
-
-  const successMessage =
-    submittedData?.paymentMethod === "cash_on_site"
-      ? "我們已收到您的首次體驗預約需求。付款方式為「當天付現」，後續將由專人協助確認可預約時段。"
-      : "我們已收到您的首次體驗預約需求。您選擇的是「線上付款」，線上付款功能目前建置中，後續將由專人協助確認付款與預約安排。";
 
   return (
     <main className="trialBookingPage">
@@ -160,7 +217,7 @@ export default function TrialBookingPage() {
         </div>
 
         <div className="trialBookingCard">
-          {submittedData ? (
+          {submittedBooking ? (
             <section className="trialBookingSuccessCard" aria-live="polite">
               <p className="trialBookingSuccessBadge">預約成功</p>
               <h2>預約資料已送出</h2>
@@ -168,24 +225,32 @@ export default function TrialBookingPage() {
 
               <dl className="trialBookingSummary">
                 <div>
+                  <dt>預約編號</dt>
+                  <dd>{submittedBooking.id}</dd>
+                </div>
+                <div>
                   <dt>姓名</dt>
-                  <dd>{submittedData.name}</dd>
+                  <dd>{formData.name}</dd>
                 </div>
                 <div>
                   <dt>電話</dt>
-                  <dd>{submittedData.phone}</dd>
+                  <dd>{formData.phone}</dd>
                 </div>
                 <div>
                   <dt>體驗項目</dt>
-                  <dd>{getServiceLabel(submittedData.service)}</dd>
+                  <dd>{getServiceLabel(formData.service)}</dd>
                 </div>
                 <div>
                   <dt>方便時段</dt>
-                  <dd>{getPreferredTimeLabel(submittedData.preferredTime)}</dd>
+                  <dd>{getPreferredTimeLabel(formData.preferredTime)}</dd>
                 </div>
                 <div>
                   <dt>付款方式</dt>
-                  <dd>{getPaymentMethodLabel(submittedData.paymentMethod)}</dd>
+                  <dd>{getPaymentMethodLabel(submittedBooking.paymentMethod)}</dd>
+                </div>
+                <div>
+                  <dt>付款狀態</dt>
+                  <dd>{getPaymentStatusText(submittedBooking.paymentStatus)}</dd>
                 </div>
               </dl>
 
@@ -209,6 +274,7 @@ export default function TrialBookingPage() {
                   onChange={(event) => updateField("name", event.target.value)}
                   placeholder="請輸入您的姓名"
                   autoComplete="name"
+                  maxLength={50}
                 />
                 {errors.name ? <p className="trialBookingFieldError">{errors.name}</p> : null}
               </div>
@@ -223,6 +289,7 @@ export default function TrialBookingPage() {
                   placeholder="請輸入可聯絡電話"
                   autoComplete="tel"
                   inputMode="tel"
+                  maxLength={30}
                 />
                 {errors.phone ? <p className="trialBookingFieldError">{errors.phone}</p> : null}
               </div>
@@ -235,6 +302,7 @@ export default function TrialBookingPage() {
                   value={formData.lineName}
                   onChange={(event) => updateField("lineName", event.target.value)}
                   placeholder="方便我們辨識您的 LINE 名稱"
+                  maxLength={80}
                 />
               </div>
 
@@ -306,13 +374,14 @@ export default function TrialBookingPage() {
                   onChange={(event) => updateField("note", event.target.value)}
                   placeholder="例如想體驗的日期、運動經驗、特殊需求等"
                   rows={5}
+                  maxLength={500}
                 />
               </div>
 
               {submitError ? <div className="trialBookingError">{submitError}</div> : null}
 
-              <button className="trialBookingSubmit" type="submit">
-                送出預約資料
+              <button className="trialBookingSubmit" type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "送出中..." : "送出預約資料"}
               </button>
             </form>
           )}
