@@ -5931,3 +5931,264 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     box-shadow: none;
   }
 }
+
+.trialBookingPage{
+  min-height: 100vh;
+  padding: clamp(32px, 5vw, 56px) 18px 72px;
+  background:
+    radial-gradient(920px 420px at 8% -4%, rgba(92, 165, 236, .18), transparent 62%),
+    radial-gradient(740px 380px at 92% 4%, rgba(221, 197, 123, .14), transparent 64%),
+    linear-gradient(180deg, #08111c 0%, #0d1724 42%, #111d2b 100%);
+}
+.trialBookingShell{
+  width: min(100%, 960px);
+  margin: 0 auto;
+  display: grid;
+  gap: 22px;
+}
+.trialBookingIntro{
+  display: grid;
+  gap: 10px;
+  color: #eef4ff;
+}
+.trialBookingEyebrow{
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: rgba(196, 215, 242, .72);
+}
+.trialBookingTitle{
+  margin: 0;
+  font-size: clamp(34px, 5vw, 56px);
+  line-height: 1.06;
+  font-weight: 600;
+}
+.trialBookingLead{
+  margin: 0;
+  max-width: 680px;
+  color: rgba(228, 236, 249, .8);
+  line-height: 1.7;
+  font-size: 15px;
+}
+.trialBookingCard{
+  border-radius: 30px;
+  border: 1px solid rgba(188, 204, 227, .16);
+  background:
+    linear-gradient(180deg, rgba(11, 18, 29, .9), rgba(14, 23, 35, .96));
+  box-shadow: 0 26px 56px rgba(3, 10, 20, .34);
+  padding: clamp(22px, 4vw, 34px);
+  backdrop-filter: blur(14px);
+}
+.trialBookingForm{
+  display: grid;
+  gap: 18px;
+}
+.trialBookingField,
+.trialBookingFieldset{
+  display: grid;
+  gap: 10px;
+}
+.trialBookingFieldset{
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.trialBookingLabel,
+.trialBookingLegend{
+  margin: 0;
+  color: #f4f8ff;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: .02em;
+}
+.trialBookingInput{
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(186, 202, 227, .18);
+  background: rgba(244, 248, 255, .05);
+  color: #f5f8fd;
+  padding: 14px 16px;
+  outline: none;
+  transition:
+    border-color .2s ease,
+    box-shadow .2s ease,
+    background-color .2s ease;
+}
+.trialBookingInput::placeholder{
+  color: rgba(208, 218, 236, .46);
+}
+.trialBookingInput:focus{
+  border-color: rgba(151, 198, 247, .76);
+  box-shadow: 0 0 0 4px rgba(105, 171, 236, .14);
+  background: rgba(244, 248, 255, .08);
+}
+.trialBookingSelect{
+  appearance: none;
+}
+.trialBookingTextarea{
+  min-height: 132px;
+  resize: vertical;
+}
+.trialBookingRadioGroup{
+  display: grid;
+  gap: 12px;
+}
+.trialBookingRadioCard{
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(186, 202, 227, .16);
+  background: rgba(245, 249, 255, .04);
+  color: #f5f8fd;
+  cursor: pointer;
+  transition:
+    border-color .2s ease,
+    transform .2s ease,
+    background-color .2s ease,
+    box-shadow .2s ease;
+}
+.trialBookingRadioCard:hover{
+  transform: translateY(-1px);
+  border-color: rgba(167, 203, 241, .3);
+  background: rgba(245, 249, 255, .06);
+}
+.trialBookingRadioCard.is-selected{
+  border-color: rgba(129, 186, 244, .62);
+  background: rgba(104, 162, 224, .14);
+  box-shadow: 0 10px 26px rgba(8, 18, 32, .24);
+}
+.trialBookingRadioCard input{
+  margin: 0;
+  accent-color: #97c6f7;
+}
+.trialBookingRadioTitle{
+  font-size: 16px;
+  font-weight: 600;
+}
+.trialBookingRadioDescription{
+  color: rgba(221, 230, 244, .76);
+  line-height: 1.65;
+  font-size: 14px;
+}
+.trialBookingFieldError,
+.trialBookingError{
+  margin: 0;
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: rgba(163, 44, 44, .16);
+  border: 1px solid rgba(216, 101, 101, .26);
+  color: #ffd4d4;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.trialBookingSubmit,
+.trialBookingBtn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: .02em;
+  cursor: pointer;
+  transition:
+    transform .2s ease,
+    box-shadow .2s ease,
+    background-color .2s ease,
+    border-color .2s ease;
+}
+.trialBookingSubmit,
+.trialBookingBtnPrimary{
+  background: linear-gradient(135deg, #f7fbff 0%, #cde3ff 100%);
+  color: #10263d;
+  box-shadow: 0 12px 26px rgba(18, 38, 61, .18);
+}
+.trialBookingSubmit:hover,
+.trialBookingBtnPrimary:hover,
+.trialBookingBtnSecondary:hover{
+  transform: translateY(-1px);
+}
+.trialBookingBtnSecondary{
+  background: rgba(244, 248, 255, .06);
+  border-color: rgba(188, 204, 227, .18);
+  color: #edf4ff;
+}
+.trialBookingSuccessCard{
+  display: grid;
+  gap: 18px;
+  color: #f4f8ff;
+}
+.trialBookingSuccessBadge{
+  margin: 0;
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid rgba(154, 213, 170, .28);
+  background: rgba(88, 160, 108, .16);
+  color: #dff6e4;
+  padding: 6px 12px;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.trialBookingSuccessCard h2{
+  margin: 0;
+  font-size: clamp(28px, 4vw, 38px);
+  line-height: 1.12;
+}
+.trialBookingSuccessText{
+  margin: 0;
+  color: rgba(225, 234, 247, .82);
+  line-height: 1.75;
+}
+.trialBookingSummary{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+.trialBookingSummary div{
+  border-radius: 18px;
+  border: 1px solid rgba(188, 204, 227, .12);
+  background: rgba(245, 249, 255, .04);
+  padding: 14px 16px;
+}
+.trialBookingSummary dt{
+  color: rgba(190, 204, 226, .72);
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.trialBookingSummary dd{
+  margin: 0;
+  color: #f7fbff;
+  line-height: 1.6;
+}
+.trialBookingActions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+@media (max-width: 767px){
+  .trialBookingPage{
+    padding: 24px 14px 54px;
+  }
+  .trialBookingCard{
+    border-radius: 24px;
+    padding: 20px 16px;
+  }
+  .trialBookingSummary{
+    grid-template-columns: 1fr;
+  }
+  .trialBookingSubmit,
+  .trialBookingBtn{
+    width: 100%;
+  }
+}

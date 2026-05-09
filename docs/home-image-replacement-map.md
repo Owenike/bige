@@ -280,3 +280,14 @@ Result:
 - `card-book-now.png` now replaces the homepage CTA "Book Now" image
 - `card-map-guide.png` now replaces the homepage CTA "Map Guide" image
 - This round only updated CTA image sources; no CTA copy, links, layout, or logic changed
+
+## Trial booking phase 1
+
+- Added `/trial-booking` as the first-time trial booking form page
+- The homepage CTA "Book Now" now points to `/trial-booking`
+- This phase includes payment method options for `當天付現` and `線上付款`
+- ACPay is not connected in this phase
+- LINE notification is not connected in this phase
+- Phase 2 recommendation: create an API and storage flow for trial bookings
+- Phase 3 recommendation: connect ACPay based on `paymentMethod`
+- Phase 4 recommendation: connect LINE notifications after booking and payment flow are stable

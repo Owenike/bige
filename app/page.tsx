@@ -218,7 +218,7 @@ export default async function Home() {
       description: isEn
         ? "Book your visit or trial class in minutes and secure your preferred time."
         : "線上快速完成預約，提前鎖定你想要的訓練時段。",
-      href: "/member/bookings",
+      href: "/trial-booking",
       mediaClass: "homeLuxuryMediaS8B",
       cta: "Open",
     },
