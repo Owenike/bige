@@ -29,7 +29,9 @@ Update on 2026-05-10: Auth/profile readiness was checked read-only. xtac current
 
 Update on 2026-05-10: An auth/profile bootstrap plan was added at `docs/xtac-auth-profile-bootstrap-plan.md`. The blocker is not resolved yet; xtac still needs at least one active `platform_admin` or `manager` / manager-equivalent profile before the trial booking admin can be used after Production cutover.
 
-Update on 2026-05-10: The intended platform admin email was checked in masked form (`b***@g***.com`). An Auth user exists and has an active profile, but the profile role is currently `frontdesk`, not `platform_admin` or `manager`. The admin/profile blocker remains unresolved until that role is intentionally changed or a separate admin account/profile is created.
+Update on 2026-05-10: The intended platform admin email was checked in masked form (`b***@g***.com`). At that time the Auth user existed and had an active `frontdesk` profile, which prompted the account split correction recorded below.
+
+Update on 2026-05-10: xtac role bootstrap was corrected for the two intended accounts. The masked platform admin account `b***69@g***.com` now has an active `platform_admin` profile. The masked frontdesk account `b***90@g***.com` was invited and has an active `frontdesk` profile; its email confirmation remains pending until the invite is accepted.
 
 ## Resource Summary
 
@@ -38,7 +40,7 @@ Update on 2026-05-10: The intended platform admin email was checked in masked fo
 | Tables | 72 | 36 | 72 | 0 missing |
 | Storage buckets | 1 | 1 | 1 | 0 missing |
 | RPC functions | 7 | 4 | 6 verified | 1 missing |
-| Auth users | 1 user detected | critical for admin/member/manager | present but insufficient | admin/manager/member roles missing |
+| Auth users | 2 users detected after bootstrap | critical for admin/member/manager | platform admin and frontdesk present | manager/member roles still missing |
 
 ## Tables Check
 
@@ -185,8 +187,8 @@ Related table counts:
 
 Risk:
 
-- No `platform_admin`, `manager`, or `member` profile was detected in xtac during this check.
-- The masked platform admin candidate currently maps to an active `frontdesk` profile, so changing it may affect frontdesk access unless a separate admin account is used.
+- `platform_admin` and `frontdesk` profiles now exist in xtac after the bootstrap correction.
+- Manager and member/customer profiles are still missing.
 - `/admin/trial-bookings` requires an allowed admin/manager role, so Production admin access may be blocked after cutover unless the correct auth user and profile rows exist.
 - Member and manager portals may not function correctly without matching Supabase Auth users, `profiles`, `members`, tenant scope, and role data.
 - Frontdesk has one active profile, but this alone does not make the whole production role model ready.
@@ -209,7 +211,7 @@ Implication:
 
 | Blocker | Reason | How to fix |
 |---|---|---|
-| Missing admin/manager/member auth/profile coverage | Only 1 user/profile detected, role `frontdesk`; the masked platform admin candidate exists but is also this frontdesk profile. No `platform_admin`, `manager`, manager-equivalent, `member`, or `customer` roles detected | Decide whether to convert the existing frontdesk profile to `platform_admin` or create a separate admin Auth user/profile; then create or migrate required manager/member profiles |
+| Missing manager/member auth/profile coverage | Platform admin and frontdesk are now present, but no `manager`, manager-equivalent, `member`, or `customer` roles were verified | Create or migrate required manager/member profiles, then test role-specific login flows |
 | Missing RPC function | `manage_booking_package_usage` is referenced by runtime code but was not present in xtac REST OpenAPI metadata | Add or migrate `manage_booking_package_usage` before full cutover if booking/package flow is used |
 | Production data parity not proven | Tables exist, but several critical tables are empty or sparse | Decide whether xtac is a fresh-start production DB or migrate/seed required production data before cutover |
 
@@ -225,7 +227,7 @@ Resolved blocker:
 If the goal is a full Production cutover:
 
 1. Add or migrate the missing `manage_booking_package_usage` RPC if booking/package flow is required for production.
-2. Add or migrate required Auth users and `profiles` for `platform_admin`, `manager`, `member`, and operational staff.
+2. Add or migrate required Auth users and `profiles` for `manager`, `member`, and remaining operational staff.
    Use `docs/xtac-auth-profile-bootstrap-plan.md` as the manual planning checklist before creating or changing any users/profiles.
 3. Verify tenant, branch, services, plans, products, storefront settings, booking settings, notification templates, and payment-related seed data.
 4. Re-run this readiness report.

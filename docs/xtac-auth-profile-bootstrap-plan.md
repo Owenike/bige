@@ -49,6 +49,15 @@ Result: this is situation B. The Auth user exists and has an active profile, but
 
 Do not change the role until confirming whether this account must continue to serve the frontdesk flow.
 
+Follow-up on 2026-05-10: the intended account split was corrected in xtac.
+
+| Account purpose | Masked email | Auth user | Profile | Role | Active | Notes |
+|---|---|---|---|---|---|---|
+| Platform admin | `b***69@g***.com` | exists | exists | `platform_admin` | yes | Can satisfy the `/admin/trial-bookings` `platform_admin` guard |
+| Frontdesk | `b***90@g***.com` | invited | exists | `frontdesk` | yes | Invite created the Auth user; email confirmation is pending until the invite is accepted |
+
+The previous role mismatch was resolved by changing only the intended platform admin profile from `frontdesk` to `platform_admin` and creating a separate frontdesk Auth user/profile. No other users or profiles were intentionally modified.
+
 ## `profiles` Column Structure
 
 Source: Supabase REST OpenAPI metadata for xtac. The `Required by REST metadata` column indicates fields listed in the OpenAPI `required` array. The `Nullable` and `Default` values are reported by metadata and should still be verified in Supabase Dashboard before manual inserts.
@@ -229,8 +238,7 @@ insert into public.profiles (
 
 ## Next Steps
 
-1. Decide whether the existing masked account should be converted from `frontdesk` to `platform_admin`, or whether a separate platform admin account should be created.
-2. If converting the existing profile, confirm that losing the current `frontdesk` role is acceptable.
-3. If keeping frontdesk access, create or invite a separate platform admin Auth user, then add a matching active `platform_admin` profile.
-4. Repeat for at least one manager and one member/customer test account if those features are included in the cutover.
-5. Re-run the readiness report after bootstrap.
+1. Test login for the platform admin account and confirm `/admin/trial-bookings` can load.
+2. Have the frontdesk user accept the invite, then test frontdesk login and branch-scoped flows.
+3. Create at least one manager and one member/customer test account if those features are included in the cutover.
+4. Re-run the readiness report after manager/member bootstrap.

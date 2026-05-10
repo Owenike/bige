@@ -14,6 +14,8 @@ For xtac specifically, `/admin/trial-bookings` needs at least one active `platfo
 
 If xtac does not yet have an eligible admin profile, use `docs/xtac-auth-profile-bootstrap-plan.md` to plan the required Auth user and `profiles` row. At minimum, the target project needs a working `platform_admin` or `manager` / manager-equivalent account before `/admin/trial-bookings` can be operated after cutover.
 
+xtac now has a masked `platform_admin` account (`b***69@g***.com`) that can satisfy the trial bookings admin role guard. The separate masked `frontdesk` account (`b***90@g***.com`) remains a frontdesk role and is not an allowed trial bookings admin role.
+
 ## API
 
 Route: `/api/admin/trial-bookings`
