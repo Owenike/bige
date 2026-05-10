@@ -33,6 +33,8 @@ Update on 2026-05-10: The intended platform admin email was checked in masked fo
 
 Update on 2026-05-10: xtac role bootstrap was corrected for the two intended accounts. The masked platform admin account `b***69@g***.com` now has an active `platform_admin` profile. The masked frontdesk account `b***90@g***.com` was invited and has an active `frontdesk` profile; its email confirmation remains pending until the invite is accepted.
 
+Update on 2026-05-11: Platform admin profile readiness was rechecked read-only. The masked platform admin account still has an active `platform_admin` profile with tenant, branch, and display-name fields present. Unauthenticated admin API and status-update API calls returned `401`. Full platform admin login could not be completed from Code App because no password or email-link session was available.
+
 ## Resource Summary
 
 | Resource type | Scanned count | Critical count | Exists in xtac | Missing / unverified |
@@ -189,6 +191,7 @@ Risk:
 
 - `platform_admin` and `frontdesk` profiles now exist in xtac after the bootstrap correction.
 - Manager and member/customer profiles are still missing.
+- Platform admin login still needs an actual credential or approved email-link/reset flow before Production cutover.
 - `/admin/trial-bookings` requires an allowed admin/manager role, so Production admin access may be blocked after cutover unless the correct auth user and profile rows exist.
 - Member and manager portals may not function correctly without matching Supabase Auth users, `profiles`, `members`, tenant scope, and role data.
 - Frontdesk has one active profile, but this alone does not make the whole production role model ready.

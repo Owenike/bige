@@ -16,6 +16,14 @@ If xtac does not yet have an eligible admin profile, use `docs/xtac-auth-profile
 
 xtac now has a masked `platform_admin` account (`b***69@g***.com`) that can satisfy the trial bookings admin role guard. The separate masked `frontdesk` account (`b***90@g***.com`) remains a frontdesk role and is not an allowed trial bookings admin role.
 
+Login readiness check on 2026-05-11:
+
+- The masked platform admin account still has an active `platform_admin` profile in xtac.
+- Unauthenticated `GET /api/admin/trial-bookings` returns `401` and does not return booking data.
+- Unauthenticated `PATCH /api/admin/trial-bookings/:id/status` returns `401`.
+- The unauthenticated admin page renders without a server-side data leak and shows login-related content.
+- Full platform admin login was not completed in Code App because no password or email-link session was available. Do not trigger reset/magic-link flows without explicit approval.
+
 ## API
 
 Route: `/api/admin/trial-bookings`
