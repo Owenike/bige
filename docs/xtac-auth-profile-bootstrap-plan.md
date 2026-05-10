@@ -52,7 +52,7 @@ Code inspection summary:
 
 - `profiles.id` is the user id field and is matched to `auth.users.id`.
 - `profiles.role` is normalized by `lib/auth-context.ts`.
-- `profiles.is_active` must be truthy unless `TEMP_DISABLE_ROLE_GUARD` is changed; it is currently `false`.
+- `profiles.is_active` must be truthy because `TEMP_DISABLE_ROLE_GUARD` is currently `false`.
 - `tenant_id` is required by `requireProfile` for all roles except `platform_admin`.
 - `branch_id` is required by `requireProfile` for the `frontdesk` role.
 - `platform_admin` can pass role checks without tenant scope in the current code.
