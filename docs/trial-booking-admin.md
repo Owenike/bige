@@ -8,6 +8,8 @@ The page reads from `trial_bookings` through `/api/admin/trial-bookings` and sho
 
 The page and API are protected with the existing `requireProfile` guard. Allowed roles are `platform_admin` and `manager`; the existing manager-equivalent role handling also covers supervisor, branch manager, store owner, and store manager profiles.
 
+Before Vercel Production is switched to xtac, confirm the required admin users, `profiles` rows, and role values also exist in the xtac Supabase project.
+
 ## API
 
 Route: `/api/admin/trial-bookings`

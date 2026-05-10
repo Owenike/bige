@@ -306,3 +306,4 @@ Result:
 - The first-time trial booking flow now has a read-only admin view at `/admin/trial-bookings`
 - `/admin/trial-bookings` now uses the existing admin/manager permission guard.
 - `/admin/trial-bookings` now lets managers update first-time trial booking status.
+- Production Supabase cutover planning is documented in `docs/vercel-production-supabase-xtac-cutover.md`.

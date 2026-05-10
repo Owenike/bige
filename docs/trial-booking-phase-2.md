@@ -80,6 +80,7 @@
 2. Verify `/api/trial-booking/create` writes to the target project.
 3. Use `/admin/trial-bookings` to review incoming submissions.
 4. Confirm admin login protection and allowed roles before production exposure.
-5. Add status change audit logs.
-6. Connect ACPay payment handling.
-7. Add LINE notifications after the booking and payment flow is stable.
+5. Follow `docs/vercel-production-supabase-xtac-cutover.md` before switching Vercel Production env to xtac.
+6. Add status change audit logs.
+7. Connect ACPay payment handling.
+8. Add LINE notifications after the booking and payment flow is stable.
