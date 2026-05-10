@@ -6400,6 +6400,42 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   background: rgba(59, 119, 184, .16);
   color: #dceeff;
 }
+.trialAdminStatusControl{
+  display: grid;
+  gap: 8px;
+  min-width: 150px;
+}
+.trialAdminStatusSelect{
+  width: 100%;
+  min-height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(190, 207, 231, .16);
+  background: rgba(244, 248, 255, .07);
+  color: #f6f9ff;
+  padding: 0 10px;
+  outline: none;
+}
+.trialAdminStatusSelect:disabled{
+  cursor: wait;
+  opacity: .68;
+}
+.trialAdminStatusSelect option{
+  color: #0f1b2a;
+}
+.trialAdminInlineMessage{
+  color: rgba(214, 226, 244, .72);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.trialAdminInlineMessage.is-success{
+  color: #d9f8e5;
+}
+.trialAdminInlineMessage.is-error{
+  color: #ffd9d9;
+}
+.trialAdminRowUpdating{
+  opacity: .76;
+}
 .trialAdminMobileList{
   display: none;
 }

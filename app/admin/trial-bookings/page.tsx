@@ -29,6 +29,16 @@ type TrialBookingResponse = {
 
 type TrialAdminAccessState = "checking" | "allowed" | "unauthorized" | "forbidden";
 
+type TrialBookingStatusUpdateResponse = {
+  ok?: boolean;
+  booking?: {
+    id: string;
+    booking_status: BookingStatus;
+    updated_at: string;
+  };
+  error?: string;
+};
+
 const serviceLabels: Record<string, string> = {
   weight_training: "重量訓練",
   boxing_fitness: "拳擊體能訓練",
@@ -67,6 +77,14 @@ const bookingStatusLabels: Record<BookingStatus, string> = {
   cancelled: "已取消",
 };
 
+const bookingStatusOptions: Array<{ value: BookingStatus; label: string }> = [
+  { value: "new", label: "新預約" },
+  { value: "contacted", label: "已聯繫" },
+  { value: "scheduled", label: "已安排" },
+  { value: "completed", label: "已完成" },
+  { value: "cancelled", label: "已取消" },
+];
+
 function formatDateTime(value: string) {
   if (!value) return "-";
   const date = new Date(value);
@@ -95,6 +113,8 @@ export default function TrialBookingsAdminPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [accessState, setAccessState] = useState<TrialAdminAccessState>("checking");
+  const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
+  const [rowMessages, setRowMessages] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -145,6 +165,93 @@ export default function TrialBookingsAdminPage() {
   useEffect(() => {
     void loadBookings();
   }, [loadBookings]);
+
+  async function updateBookingStatus(bookingId: string, nextStatus: BookingStatus) {
+    const current = bookings.find((booking) => booking.id === bookingId);
+    if (!current || current.booking_status === nextStatus || updatingBookingId) return;
+
+    setUpdatingBookingId(bookingId);
+    setRowMessages((messages) => ({
+      ...messages,
+      [bookingId]: { type: "success", text: "更新中..." },
+    }));
+
+    try {
+      const response = await fetch(`/api/admin/trial-bookings/${bookingId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingStatus: nextStatus }),
+      });
+      const payload = (await response.json().catch(() => null)) as TrialBookingStatusUpdateResponse | null;
+
+      if (!response.ok || !payload?.ok || !payload.booking) {
+        setRowMessages((messages) => ({
+          ...messages,
+          [bookingId]: {
+            type: "error",
+            text: payload?.error || "更新預約狀態失敗。",
+          },
+        }));
+        return;
+      }
+
+      const updatedBooking = payload.booking;
+      setBookings((currentBookings) =>
+        currentBookings.map((booking) =>
+          booking.id === bookingId
+            ? {
+                ...booking,
+                booking_status: updatedBooking.booking_status,
+              }
+            : booking,
+        ),
+      );
+      setRowMessages((messages) => ({
+        ...messages,
+        [bookingId]: { type: "success", text: "已更新" },
+      }));
+    } catch {
+      setRowMessages((messages) => ({
+        ...messages,
+        [bookingId]: { type: "error", text: "更新預約狀態時發生錯誤。" },
+      }));
+    } finally {
+      setUpdatingBookingId(null);
+    }
+  }
+
+  function renderStatusControl(booking: TrialBookingRow) {
+    const isUpdating = updatingBookingId === booking.id;
+    const message = rowMessages[booking.id];
+
+    return (
+      <div className={`trialAdminStatusControl${isUpdating ? " trialAdminRowUpdating" : ""}`}>
+        <select
+          className="trialAdminStatusSelect"
+          value={booking.booking_status}
+          disabled={isUpdating}
+          onChange={(event) => {
+            void updateBookingStatus(booking.id, event.target.value as BookingStatus);
+          }}
+          aria-label={`${booking.name || "booking"} 預約狀態`}
+        >
+          {bookingStatusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <span className={`trialAdminBadge is-${booking.booking_status}`}>
+          {labelOrFallback(bookingStatusLabels, booking.booking_status)}
+        </span>
+        {message ? (
+          <span className={`trialAdminInlineMessage is-${message.type}`} role={message.type === "error" ? "alert" : "status"}>
+            {message.text}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <main className="trialAdminPage">
@@ -259,9 +366,7 @@ export default function TrialBookingsAdminPage() {
                         </span>
                       </td>
                       <td>
-                        <span className={`trialAdminBadge is-${booking.booking_status}`}>
-                          {labelOrFallback(bookingStatusLabels, booking.booking_status)}
-                        </span>
+                        {renderStatusControl(booking)}
                       </td>
                       <td>{booking.note || "-"}</td>
                     </tr>
@@ -278,9 +383,7 @@ export default function TrialBookingsAdminPage() {
                       <strong>{booking.name || "-"}</strong>
                       <span>{formatDateTime(booking.created_at)}</span>
                     </div>
-                    <span className={`trialAdminBadge is-${booking.booking_status}`}>
-                      {labelOrFallback(bookingStatusLabels, booking.booking_status)}
-                    </span>
+                    {renderStatusControl(booking)}
                   </div>
                   <dl>
                     <div>

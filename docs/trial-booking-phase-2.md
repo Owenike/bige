@@ -7,8 +7,9 @@
 - Updated `/trial-booking` so the form submits to the API.
 - The API maps `paymentMethod` to an initial `payment_status`.
 - The API returns a booking id after a successful insert.
-- Added a simple read-only admin page at `/admin/trial-bookings`.
+- Added an admin page at `/admin/trial-bookings`.
 - Hardened the trial booking admin view and API with the existing profile role guard.
+- Added admin-side `booking_status` updates for trial bookings.
 
 ## `trial_bookings` Fields
 
@@ -56,7 +57,7 @@
 
 - Page: `/admin/trial-bookings`
 - API: `/api/admin/trial-bookings`
-- Current scope: read-only list, search, and filters.
+- Current scope: list, search, filters, and `booking_status` updates.
 - Access is limited to `platform_admin` and `manager` roles through the existing auth guard.
 - Supported filters:
   - `paymentMethod`
@@ -64,20 +65,21 @@
   - `bookingStatus`
   - `q` for name, phone, and LINE name search
 - The admin view lists the latest 100 records by `created_at desc`.
+- `payment_status` remains reserved for ACPay or a dedicated payment flow and is not editable in this admin view.
 
 ## Current Limits
 
 - ACPay is not connected yet.
 - LINE notification is not connected yet.
-- Admin status updates are not supported yet.
 - Export and delete actions are not supported yet.
+- Status change audit logs are not implemented yet.
 
 ## Next Steps
 
 1. Confirm the target Supabase project has `trial_bookings`.
 2. Verify `/api/trial-booking/create` writes to the target project.
 3. Use `/admin/trial-bookings` to review incoming submissions.
-4. Add admin login protection before production exposure.
-5. Add booking status updates.
+4. Confirm admin login protection and allowed roles before production exposure.
+5. Add status change audit logs.
 6. Connect ACPay payment handling.
 7. Add LINE notifications after the booking and payment flow is stable.

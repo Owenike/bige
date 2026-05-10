@@ -44,6 +44,49 @@ Auth failures:
 - `401`: `{ "ok": false, "error": "Unauthorized" }`
 - `403`: `{ "ok": false, "error": "Forbidden" }`
 
+Route: `/api/admin/trial-bookings/:id/status`
+
+Method: `PATCH`
+
+Body:
+
+```json
+{
+  "bookingStatus": "contacted"
+}
+```
+
+Allowed `bookingStatus` values:
+
+- `new`
+- `contacted`
+- `scheduled`
+- `completed`
+- `cancelled`
+
+This route only updates `booking_status`. It does not accept or update `payment_status`.
+
+Success response:
+
+```json
+{
+  "ok": true,
+  "booking": {
+    "id": "...",
+    "booking_status": "contacted",
+    "updated_at": "..."
+  }
+}
+```
+
+Error responses:
+
+- `400`: invalid id or invalid `bookingStatus`
+- `401`: unauthenticated
+- `403`: authenticated but not allowed
+- `404`: booking not found
+- `500`: server or Supabase error
+
 ## Field Labels
 
 ### service
@@ -86,8 +129,10 @@ Auth failures:
 
 ## Current Limits
 
-- Status editing is not supported yet.
+- The admin page supports updating `booking_status` only.
+- `payment_status` cannot be edited manually from this admin page.
 - Deleting bookings is not supported yet.
 - Exporting bookings is not supported yet.
 - ACPay is not connected yet.
 - LINE notification is not connected yet.
+- Status change audit logs are not implemented yet.
