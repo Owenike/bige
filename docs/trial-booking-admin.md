@@ -12,6 +12,8 @@ Before Vercel Production is switched to xtac, confirm the required admin users, 
 
 For xtac specifically, `/admin/trial-bookings` needs at least one active `platform_admin`, `manager`, or manager-equivalent profile (`supervisor`, `branch_manager`, `store_owner`, or `store_manager`). If the admin page is inaccessible after a Supabase cutover, first check Supabase Auth users and `profiles.role` in the target project.
 
+If xtac does not yet have an eligible admin profile, use `docs/xtac-auth-profile-bootstrap-plan.md` to plan the required Auth user and `profiles` row. At minimum, the target project needs a working `platform_admin` or `manager` / manager-equivalent account before `/admin/trial-bookings` can be operated after cutover.
+
 ## API
 
 Route: `/api/admin/trial-bookings`

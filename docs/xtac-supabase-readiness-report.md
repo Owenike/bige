@@ -27,6 +27,8 @@ Update on 2026-05-10: RPC metadata was checked through the Supabase REST OpenAPI
 
 Update on 2026-05-10: Auth/profile readiness was checked read-only. xtac currently has 1 Auth user and 1 active `profiles` row with role `frontdesk`. No `platform_admin`, `manager`, manager-equivalent, `member`, or `customer` profile was detected.
 
+Update on 2026-05-10: An auth/profile bootstrap plan was added at `docs/xtac-auth-profile-bootstrap-plan.md`. The blocker is not resolved yet; xtac still needs at least one active `platform_admin` or `manager` / manager-equivalent profile before the trial booking admin can be used after Production cutover.
+
 ## Resource Summary
 
 | Resource type | Scanned count | Critical count | Exists in xtac | Missing / unverified |
@@ -221,6 +223,7 @@ If the goal is a full Production cutover:
 
 1. Add or migrate the missing `manage_booking_package_usage` RPC if booking/package flow is required for production.
 2. Add or migrate required Auth users and `profiles` for `platform_admin`, `manager`, `member`, and operational staff.
+   Use `docs/xtac-auth-profile-bootstrap-plan.md` as the manual planning checklist before creating or changing any users/profiles.
 3. Verify tenant, branch, services, plans, products, storefront settings, booking settings, notification templates, and payment-related seed data.
 4. Re-run this readiness report.
 5. Only then switch Vercel Production env to xtac and redeploy.
