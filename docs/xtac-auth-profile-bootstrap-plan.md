@@ -26,6 +26,29 @@ Read-only checks were performed against xtac using the local `.env.local` Supaba
 | `members` rows | 5 | Member rows exist, but no member/customer profile was found |
 | `store_booking_settings` | not exposed through REST count | Verify manually if booking/storefront settings are needed |
 
+## Platform Admin Email Readiness Check
+
+Read-only check date: 2026-05-10
+
+Target email was checked in masked form only: `b***@g***.com`.
+
+| Check | Result | Notes |
+|---|---|---|
+| Auth user exists | yes | User id exists, but the id is not recorded here |
+| Email confirmed | yes | `email_confirmed_at` exists |
+| Last sign-in | yes | `last_sign_in_at` exists |
+| Auth user created at | 2026-02-12T12:18:06.715694Z | Non-sensitive timestamp only |
+| Matching profile exists | yes | Queried by Auth user id |
+| Current profile role | `frontdesk` | Not currently eligible for `/admin/trial-bookings` |
+| Profile active | yes | `is_active = true` |
+| Tenant scope | present | `tenant_id` exists |
+| Branch scope | present | `branch_id` exists |
+| Display name | present | Value not recorded |
+
+Result: this is situation B. The Auth user exists and has an active profile, but the profile role is `frontdesk`, not `platform_admin`, `manager`, or a manager-equivalent role. The next step is to decide whether to carefully change this existing profile role to `platform_admin`, or keep it as frontdesk and create a separate platform admin Auth user/profile.
+
+Do not change the role until confirming whether this account must continue to serve the frontdesk flow.
+
 ## `profiles` Column Structure
 
 Source: Supabase REST OpenAPI metadata for xtac. The `Required by REST metadata` column indicates fields listed in the OpenAPI `required` array. The `Nullable` and `Default` values are reported by metadata and should still be verified in Supabase Dashboard before manual inserts.
@@ -206,9 +229,8 @@ insert into public.profiles (
 
 ## Next Steps
 
-1. Provide the email that should become the first xtac `platform_admin`.
-2. Check whether that masked email already exists in xtac Auth users.
-3. If it exists, create or fix the matching `profiles` row.
-4. If it does not exist, choose Dashboard invite/manual creation or a later safe bootstrap script/API.
-5. Repeat for at least one manager and one member/customer test account if those features are included in the cutover.
-6. Re-run the readiness report after bootstrap.
+1. Decide whether the existing masked account should be converted from `frontdesk` to `platform_admin`, or whether a separate platform admin account should be created.
+2. If converting the existing profile, confirm that losing the current `frontdesk` role is acceptable.
+3. If keeping frontdesk access, create or invite a separate platform admin Auth user, then add a matching active `platform_admin` profile.
+4. Repeat for at least one manager and one member/customer test account if those features are included in the cutover.
+5. Re-run the readiness report after bootstrap.

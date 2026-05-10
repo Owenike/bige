@@ -42,6 +42,7 @@ This checklist is for preparation and manual production cutover only. Do not use
 - xtac has the required `profiles` rows and role values for manager, member, admin, frontdesk, and platform admin flows.
 - xtac must have at least one active `platform_admin`, `manager`, or manager-equivalent profile before `/admin/trial-bookings` can be used after Production cutover. The current readiness check found only one active `frontdesk` profile.
 - Before Production cutover, follow `docs/xtac-auth-profile-bootstrap-plan.md` to create or migrate the minimum `platform_admin`, `manager`, and member/customer Auth/profile data. Without a `platform_admin` or `manager` / manager-equivalent profile, Production should not be switched to xtac.
+- The masked platform admin candidate (`b***@g***.com`) exists in xtac Auth and has an active profile, but the profile role is currently `frontdesk`. Before cutover, either intentionally convert that profile to `platform_admin` or create a separate platform admin account/profile.
 - xtac has manager, member, admin, booking, storefront, payment, cron, and notification related data and schema.
 - Vercel Production `NEXT_PUBLIC_SUPABASE_ANON_KEY` belongs to xtac.
 - Vercel Production `SUPABASE_SERVICE_ROLE_KEY` belongs to xtac.
