@@ -76,6 +76,7 @@
 - Full Production Supabase cutover is not ready until `docs/xtac-supabase-readiness-report.md` blockers are resolved.
 - xtac storage readiness has started; the `storefront-assets` bucket has been handled.
 - xtac RPC readiness has completed a read-only metadata check; see `docs/xtac-supabase-readiness-report.md`.
+- xtac auth/profile readiness has been checked read-only; admin/manager/member roles are still not ready for full cutover.
 
 ## Next Steps
 

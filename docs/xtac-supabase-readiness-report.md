@@ -25,6 +25,8 @@ Update on 2026-05-10: `storefront-assets` was created in xtac and verified with 
 
 Update on 2026-05-10: RPC metadata was checked through the Supabase REST OpenAPI schema without calling any RPC functions. Six of seven runtime RPC functions are present. `manage_booking_package_usage` is missing.
 
+Update on 2026-05-10: Auth/profile readiness was checked read-only. xtac currently has 1 Auth user and 1 active `profiles` row with role `frontdesk`. No `platform_admin`, `manager`, manager-equivalent, `member`, or `customer` profile was detected.
+
 ## Resource Summary
 
 | Resource type | Scanned count | Critical count | Exists in xtac | Missing / unverified |
@@ -151,13 +153,38 @@ This verifies that the function is exposed through the public PostgREST RPC path
 - `profiles` table exists.
 - Detected `profiles` count: 1.
 - Detected profile roles: `frontdesk: 1`.
+- Active profile roles: `frontdesk: 1`.
+- Auth user metadata did not expose a reliable role value; application role readiness must be determined from `profiles.role`.
 - No full email addresses or personal data were recorded in this report.
+
+Role readiness:
+
+| Role / area | Count | Readiness | Impact | Action needed |
+|---|---:|---|---|---|
+| `platform_admin` | 0 | not ready | Platform admin pages and platform-scoped operations | Create or migrate an active Auth user and `profiles` row with `platform_admin` |
+| `manager` | 0 | not ready | Manager dashboard, staff, booking/admin operations | Create or migrate active manager or manager-equivalent profiles |
+| manager-equivalent roles | 0 | not ready | `supervisor`, `branch_manager`, `store_owner`, `store_manager` also satisfy manager guards | Create or migrate at least one active manager-equivalent profile if this is the intended admin role |
+| `member` / `customer` | 0 | not ready | Member portal, member bookings, member notifications | Create or migrate member/customer profiles linked to Auth users and member rows |
+| `frontdesk` | 1 | ready for frontdesk only | Frontdesk flows may have a usable role; branch/tenant scope was present in this check | Still test frontdesk login and branch-scoped features |
+| `/admin/trial-bookings` access | 0 eligible profiles | not ready | Trial booking admin requires `platform_admin` or `manager` guard; manager-equivalent roles also work through `requireProfile` | Add/migrate `platform_admin`, `manager`, or manager-equivalent active profile before Production admin use |
+
+Related table counts:
+
+| Table | Count | Readiness note |
+|---|---:|---|
+| `tenants` | 2 | Exists, but production tenant parity still needs confirmation |
+| `branches` | 2 | Exists, but branch mapping for staff/member flows still needs confirmation |
+| `tenant_subscriptions` | 2 | Exists, but current active subscription state should be verified |
+| `store_booking_settings` | count unavailable | Exists, but settings completeness should be verified |
+| `members` | 5 | Exists, but no member/customer profiles were detected |
+| `profiles` | 1 | Insufficient for production roles |
 
 Risk:
 
 - No `platform_admin`, `manager`, or `member` profile was detected in xtac during this check.
 - `/admin/trial-bookings` requires an allowed admin/manager role, so Production admin access may be blocked after cutover unless the correct auth user and profile rows exist.
 - Member and manager portals may not function correctly without matching Supabase Auth users, `profiles`, `members`, tenant scope, and role data.
+- Frontdesk has one active profile, but this alone does not make the whole production role model ready.
 
 ## Auth / Service Role Usage
 
@@ -177,7 +204,7 @@ Implication:
 
 | Blocker | Reason | How to fix |
 |---|---|---|
-| Missing admin/manager/member auth/profile coverage | Only 1 user/profile detected, role `frontdesk`; admin/manager/member roles not detected | Create or migrate required Supabase Auth users and `profiles` rows with correct roles, tenant, branch, and active flags |
+| Missing admin/manager/member auth/profile coverage | Only 1 user/profile detected, role `frontdesk`; no `platform_admin`, `manager`, manager-equivalent, `member`, or `customer` roles detected | Create or migrate required Supabase Auth users and `profiles` rows with correct roles, tenant, branch, and active flags |
 | Missing RPC function | `manage_booking_package_usage` is referenced by runtime code but was not present in xtac REST OpenAPI metadata | Add or migrate `manage_booking_package_usage` before full cutover if booking/package flow is used |
 | Production data parity not proven | Tables exist, but several critical tables are empty or sparse | Decide whether xtac is a fresh-start production DB or migrate/seed required production data before cutover |
 

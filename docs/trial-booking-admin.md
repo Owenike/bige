@@ -10,6 +10,8 @@ The page and API are protected with the existing `requireProfile` guard. Allowed
 
 Before Vercel Production is switched to xtac, confirm the required admin users, `profiles` rows, and role values also exist in the xtac Supabase project.
 
+For xtac specifically, `/admin/trial-bookings` needs at least one active `platform_admin`, `manager`, or manager-equivalent profile (`supervisor`, `branch_manager`, `store_owner`, or `store_manager`). If the admin page is inaccessible after a Supabase cutover, first check Supabase Auth users and `profiles.role` in the target project.
+
 ## API
 
 Route: `/api/admin/trial-bookings`

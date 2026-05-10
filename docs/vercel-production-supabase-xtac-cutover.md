@@ -40,6 +40,7 @@ This checklist is for preparation and manual production cutover only. Do not use
 - xtac RPC readiness has been checked in `docs/xtac-supabase-readiness-report.md`. Six of seven runtime RPC functions exist; `manage_booking_package_usage` is missing. Do not full-cutover if the booking/package flow needs this RPC.
 - xtac has the required Supabase Auth users.
 - xtac has the required `profiles` rows and role values for manager, member, admin, frontdesk, and platform admin flows.
+- xtac must have at least one active `platform_admin`, `manager`, or manager-equivalent profile before `/admin/trial-bookings` can be used after Production cutover. The current readiness check found only one active `frontdesk` profile.
 - xtac has manager, member, admin, booking, storefront, payment, cron, and notification related data and schema.
 - Vercel Production `NEXT_PUBLIC_SUPABASE_ANON_KEY` belongs to xtac.
 - Vercel Production `SUPABASE_SERVICE_ROLE_KEY` belongs to xtac.
@@ -112,6 +113,7 @@ Do not mix njuy keys with the xtac URL. Do not update only the URL while leaving
 ## Recommended Strategy
 
 - Do not cut the whole Production site to xtac until xtac schema, storage, auth users, profiles, and required business data are verified.
+- If the immediate goal is only `/trial-booking`, avoid a full Supabase env cutover unless admin access to `/admin/trial-bookings` is also available in xtac.
 - If the cutover must happen before full parity is proven, schedule it during a low-traffic window.
 - Keep the previous njuy env values available as rollback material.
 - Redeploy immediately after env changes.
