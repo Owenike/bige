@@ -8,6 +8,7 @@
 - The API maps `paymentMethod` to an initial `payment_status`.
 - The API returns a booking id after a successful insert.
 - Added a simple read-only admin page at `/admin/trial-bookings`.
+- Hardened the trial booking admin view and API with the existing profile role guard.
 
 ## `trial_bookings` Fields
 
@@ -56,6 +57,7 @@
 - Page: `/admin/trial-bookings`
 - API: `/api/admin/trial-bookings`
 - Current scope: read-only list, search, and filters.
+- Access is limited to `platform_admin` and `manager` roles through the existing auth guard.
 - Supported filters:
   - `paymentMethod`
   - `paymentStatus`
@@ -67,7 +69,6 @@
 
 - ACPay is not connected yet.
 - LINE notification is not connected yet.
-- Admin login protection has not been hardened yet.
 - Admin status updates are not supported yet.
 - Export and delete actions are not supported yet.
 

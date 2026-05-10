@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type PaymentMethod = "cash_on_site" | "online_payment";
 type PaymentStatus = "pending_cash" | "pending_payment" | "paid" | "failed" | "cancelled";
@@ -25,6 +26,8 @@ type TrialBookingResponse = {
   bookings?: TrialBookingRow[];
   error?: string;
 };
+
+type TrialAdminAccessState = "checking" | "allowed" | "unauthorized" | "forbidden";
 
 const serviceLabels: Record<string, string> = {
   weight_training: "重量訓練",
@@ -83,6 +86,7 @@ function labelOrFallback(labels: Record<string, string>, value: string | null | 
 }
 
 export default function TrialBookingsAdminPage() {
+  const router = useRouter();
   const [bookings, setBookings] = useState<TrialBookingRow[]>([]);
   const [search, setSearch] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -90,6 +94,7 @@ export default function TrialBookingsAdminPage() {
   const [bookingStatus, setBookingStatus] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [accessState, setAccessState] = useState<TrialAdminAccessState>("checking");
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -112,11 +117,22 @@ export default function TrialBookingsAdminPage() {
       const payload = (await response.json().catch(() => null)) as TrialBookingResponse | null;
 
       if (!response.ok || !payload?.ok) {
-        setError(payload?.error || "無法讀取首次體驗預約資料。");
+        if (response.status === 401) {
+          setAccessState("unauthorized");
+          setError("請先登入後再查看首次體驗預約。");
+          router.replace("/login?redirect=/admin/trial-bookings");
+        } else if (response.status === 403) {
+          setAccessState("forbidden");
+          setError("此頁面僅限管理者查看。");
+        } else {
+          setAccessState("allowed");
+          setError(payload?.error || "無法讀取首次體驗預約資料。");
+        }
         setBookings([]);
         return;
       }
 
+      setAccessState("allowed");
       setBookings(payload.bookings || []);
     } catch {
       setError("讀取資料時發生錯誤，請稍後再試。");
@@ -124,7 +140,7 @@ export default function TrialBookingsAdminPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [queryString]);
+  }, [queryString, router]);
 
   useEffect(() => {
     void loadBookings();
@@ -188,7 +204,24 @@ export default function TrialBookingsAdminPage() {
 
         {error ? <div className="trialAdminError">{error}</div> : null}
 
-        {isLoading ? (
+        {accessState === "unauthorized" ? (
+          <section className="trialAdminAuthNotice">
+            <h2>請先登入</h2>
+            <p>請先登入後再查看首次體驗預約。</p>
+            <a className="trialAdminLoginHint" href="/login?redirect=/admin/trial-bookings">
+              前往登入
+            </a>
+          </section>
+        ) : null}
+
+        {accessState === "forbidden" ? (
+          <section className="trialAdminAuthNotice trialAdminForbidden">
+            <h2>無權限</h2>
+            <p>此頁面僅限管理者查看。</p>
+          </section>
+        ) : null}
+
+        {accessState === "unauthorized" || accessState === "forbidden" ? null : isLoading ? (
           <div className="trialAdminEmpty">正在讀取首次體驗預約資料。</div>
         ) : !error && bookings.length === 0 ? (
           <div className="trialAdminEmpty">目前沒有符合條件的首次體驗預約。</div>

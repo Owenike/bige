@@ -6,6 +6,8 @@
 
 The page reads from `trial_bookings` through `/api/admin/trial-bookings` and shows the latest 100 records sorted by `created_at desc`.
 
+The page and API are protected with the existing `requireProfile` guard. Allowed roles are `platform_admin` and `manager`; the existing manager-equivalent role handling also covers supervisor, branch manager, store owner, and store manager profiles.
+
 ## API
 
 Route: `/api/admin/trial-bookings`
@@ -36,6 +38,11 @@ Failure response:
   "error": "..."
 }
 ```
+
+Auth failures:
+
+- `401`: `{ "ok": false, "error": "Unauthorized" }`
+- `403`: `{ "ok": false, "error": "Forbidden" }`
 
 ## Field Labels
 
@@ -79,7 +86,6 @@ Failure response:
 
 ## Current Limits
 
-- Login protection has not been hardened yet.
 - Status editing is not supported yet.
 - Deleting bookings is not supported yet.
 - Exporting bookings is not supported yet.

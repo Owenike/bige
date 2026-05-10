@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireProfile } from "../../../../lib/auth-context";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 const paymentMethods = new Set(["cash_on_site", "online_payment"]);
@@ -31,6 +32,17 @@ function escapeIlikeValue(value: string) {
 
 export async function GET(request: Request) {
   try {
+    const auth = await requireProfile(["platform_admin", "manager"], request);
+    if (!auth.ok) {
+      if (auth.response.status === 401) {
+        return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+      }
+      if (auth.response.status === 403) {
+        return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+      }
+      return NextResponse.json({ ok: false, error: "Unable to verify access" }, { status: auth.response.status || 500 });
+    }
+
     const url = new URL(request.url);
     const searchParams = url.searchParams;
     const paymentMethod = readEnumParam(searchParams, "paymentMethod", paymentMethods);

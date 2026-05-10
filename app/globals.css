@@ -6299,6 +6299,38 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   background: rgba(124, 33, 33, .18);
   color: #ffdada;
 }
+.trialAdminAuthNotice{
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(190, 207, 231, .14);
+  border-radius: 20px;
+  background: rgba(9, 18, 30, .78);
+  padding: 22px;
+}
+.trialAdminAuthNotice h2{
+  margin: 0;
+  color: #f6f9ff;
+  font-size: 22px;
+}
+.trialAdminAuthNotice p{
+  margin: 0;
+  color: rgba(226, 236, 250, .78);
+  line-height: 1.65;
+}
+.trialAdminForbidden{
+  border-color: rgba(226, 116, 116, .26);
+  background: rgba(100, 30, 30, .18);
+}
+.trialAdminLoginHint{
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid rgba(199, 217, 239, .2);
+  background: rgba(244, 248, 255, .08);
+  color: #f4f8ff;
+  padding: 10px 14px;
+  text-decoration: none;
+  font-weight: 650;
+}
 .trialAdminTableWrap{
   overflow-x: auto;
   border: 1px solid rgba(190, 207, 231, .12);
