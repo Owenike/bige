@@ -18,10 +18,12 @@ Production cutover is still blocked because:
 
 - xtac Auth/profile data is not production-ready: only 1 auth user/profile was detected, and the only detected profile role is `frontdesk`;
 - no `platform_admin`, `manager`, or `member` profile data was found;
-- 7 runtime RPC functions are used by the code, and their existence was not verified because this check did not execute SQL or call RPC functions;
+- 7 runtime RPC functions are used by the code; 6 exist in xtac metadata, but `manage_booking_package_usage` is missing;
 - several business-critical tables exist but have no production data, so schema exists does not mean the full site will behave like production.
 
 Update on 2026-05-10: `storefront-assets` was created in xtac and verified with `public: true`, `file_size_limit: 5242880`, and allowed MIME types `image/jpeg`, `image/png`, and `image/webp`.
+
+Update on 2026-05-10: RPC metadata was checked through the Supabase REST OpenAPI schema without calling any RPC functions. Six of seven runtime RPC functions are present. `manage_booking_package_usage` is missing.
 
 ## Resource Summary
 
@@ -29,7 +31,7 @@ Update on 2026-05-10: `storefront-assets` was created in xtac and verified with 
 |---|---:|---:|---:|---:|
 | Tables | 72 | 36 | 72 | 0 missing |
 | Storage buckets | 1 | 1 | 1 | 0 missing |
-| RPC functions | 7 | 4 | 0 verified | 7 unverified |
+| RPC functions | 7 | 4 | 6 verified | 1 missing |
 | Auth users | 1 user detected | critical for admin/member/manager | present but insufficient | admin/manager/member roles missing |
 
 ## Tables Check
@@ -128,17 +130,19 @@ Verified settings on 2026-05-10:
 
 ## RPC Functions Check
 
-The code uses the following RPC functions. They were not called because some RPCs may mutate data or have side effects, and this report avoids SQL execution.
+Read-only method: Supabase REST OpenAPI metadata from `/rest/v1/`. No RPC functions were called, and no SQL DDL or data mutation was performed.
 
-| Function | Code usage | Exists in xtac | Risk | Action needed |
-|---|---|---:|---|---|
-| `member_modify_booking` | `app/api/member/bookings/[id]/route.ts` | not verified | Member booking changes may fail | Verify via SQL/pg_proc or a safe controlled staging test |
-| `verify_entry_scan` | `app/api/entry/verify/route.ts` | not verified | QR/entry flow may fail | Verify function exists before cutover |
-| `rebuild_notification_daily_rollups` | `lib/notification-rollup.ts` | not verified | Notification rollup jobs may fail | Verify function exists before cron/ops use |
-| `refresh_notification_daily_rollups_incremental` | `lib/notification-rollup.ts` | not verified | Notification rollup jobs may fail | Verify function exists before cron/ops use |
-| `manage_booking_package_usage` | `lib/booking-commerce.ts` | not verified | Booking/package usage accounting may fail | Verify function exists before booking/package use |
-| `redeem_session` | `lib/entitlement-consumption.ts` | not verified | Session redemption may fail | Verify function exists before frontdesk/member entry use |
-| `refund_payment` | `lib/high-risk-actions.ts` | not verified | Refund workflow may fail | Verify function exists before payment/refund use |
+This verifies that the function is exposed through the public PostgREST RPC path. It does not prove the function's runtime behavior or business-flow correctness.
+
+| Function | Code usage | Exists in xtac | Schema / metadata | Risk | Action needed |
+|---|---|---:|---|---|---|
+| `member_modify_booking` | `app/api/member/bookings/[id]/route.ts` | yes | `public`, POST `/rpc/member_modify_booking`, body `args` object | Member booking changes still need functional testing | Test member booking modification after auth/data readiness |
+| `verify_entry_scan` | `app/api/entry/verify/route.ts` | yes | `public`, POST `/rpc/verify_entry_scan`, body `args` object | QR/entry flow still needs functional testing | Test entry scan after auth/member/pass data readiness |
+| `rebuild_notification_daily_rollups` | `lib/notification-rollup.ts` | yes | `public`, POST `/rpc/rebuild_notification_daily_rollups`, body `args` object | Notification rollup rebuild still needs controlled testing | Test notification rollup jobs after notification seed data exists |
+| `refresh_notification_daily_rollups_incremental` | `lib/notification-rollup.ts` | yes | `public`, POST `/rpc/refresh_notification_daily_rollups_incremental`, body `args` object | Notification rollup incremental refresh still needs controlled testing | Test notification rollup jobs after notification seed data exists |
+| `manage_booking_package_usage` | `lib/booking-commerce.ts` | no | Not present in REST OpenAPI metadata | Booking/package usage accounting may fail | Add or migrate the missing function before full cutover if booking/package flow is used |
+| `redeem_session` | `lib/entitlement-consumption.ts` | yes | `public`, POST `/rpc/redeem_session`, body `args` object | Session redemption still needs functional testing | Test redemption after member/pass data readiness |
+| `refund_payment` | `lib/high-risk-actions.ts` | yes | `public`, POST `/rpc/refund_payment`, body `args` object | Refund workflow still needs functional testing | Test refund workflow only in controlled payment testing |
 
 ## Auth / Profiles Check
 
@@ -174,7 +178,7 @@ Implication:
 | Blocker | Reason | How to fix |
 |---|---|---|
 | Missing admin/manager/member auth/profile coverage | Only 1 user/profile detected, role `frontdesk`; admin/manager/member roles not detected | Create or migrate required Supabase Auth users and `profiles` rows with correct roles, tenant, branch, and active flags |
-| RPC functions unverified | 7 runtime RPCs are referenced; 4 are critical; this report did not call RPCs or run SQL | Verify RPC existence through Supabase Dashboard SQL editor or controlled read-only catalog check |
+| Missing RPC function | `manage_booking_package_usage` is referenced by runtime code but was not present in xtac REST OpenAPI metadata | Add or migrate `manage_booking_package_usage` before full cutover if booking/package flow is used |
 | Production data parity not proven | Tables exist, but several critical tables are empty or sparse | Decide whether xtac is a fresh-start production DB or migrate/seed required production data before cutover |
 
 Resolved blocker:
@@ -182,12 +186,13 @@ Resolved blocker:
 | Resolved blocker | Result |
 |---|---|
 | Missing `storefront-assets` bucket | Resolved on 2026-05-10. Bucket exists in xtac with public access, 5MB limit, and JPG/PNG/WEBP MIME restrictions. |
+| RPC metadata unverified | Resolved on 2026-05-10. Metadata check completed without calling RPC functions; 6 of 7 runtime RPC functions exist. |
 
 ## Safe Next Steps
 
 If the goal is a full Production cutover:
 
-1. Verify all 7 RPC functions exist in xtac.
+1. Add or migrate the missing `manage_booking_package_usage` RPC if booking/package flow is required for production.
 2. Add or migrate required Auth users and `profiles` for `platform_admin`, `manager`, `member`, and operational staff.
 3. Verify tenant, branch, services, plans, products, storefront settings, booking settings, notification templates, and payment-related seed data.
 4. Re-run this readiness report.
