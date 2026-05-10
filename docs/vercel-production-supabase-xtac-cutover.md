@@ -32,6 +32,9 @@ This checklist is for preparation and manual production cutover only. Do not use
 
 ## Must Confirm Before Cutover
 
+- Detailed readiness findings are documented in `docs/xtac-supabase-readiness-report.md`.
+- Do not switch Vercel Production env to xtac unless the readiness report shows critical resources are ready.
+- If critical resources are missing, first complete the needed schema, storage, auth, and seed-data work in xtac.
 - xtac has every production table required by the rest of the site, not only `trial_bookings`.
 - xtac has the `storefront-assets` storage bucket if storefront media upload or rendering depends on it.
 - xtac has the required Supabase Auth users.

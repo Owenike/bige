@@ -1,0 +1,189 @@
+# xtac Supabase Readiness Report
+
+Date: 2026-05-10
+
+Target project ref: `xtacrcqosjobaqxvibvi`
+
+Target project URL: `https://xtacrcqosjobaqxvibvi.supabase.co`
+
+Local env status: `.env.local` points `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_URL` to xtac. Secrets were only checked for presence and were not printed.
+
+## Conclusion
+
+xtac is not ready for a full Vercel Production cutover yet.
+
+The code scan found 72 Supabase table references and all 72 responded to read-only existence/count checks through the xtac service role. This is good schema coverage for tables, including `trial_bookings`.
+
+Production cutover is still blocked because:
+
+- the required `storefront-assets` storage bucket is missing;
+- xtac Auth/profile data is not production-ready: only 1 auth user/profile was detected, and the only detected profile role is `frontdesk`;
+- no `platform_admin`, `manager`, or `member` profile data was found;
+- 7 runtime RPC functions are used by the code, and their existence was not verified because this check did not execute SQL or call RPC functions;
+- several business-critical tables exist but have no production data, so schema exists does not mean the full site will behave like production.
+
+## Resource Summary
+
+| Resource type | Scanned count | Critical count | Exists in xtac | Missing / unverified |
+|---|---:|---:|---:|---:|
+| Tables | 72 | 36 | 72 | 0 missing |
+| Storage buckets | 1 | 1 | 0 | 1 missing |
+| RPC functions | 7 | 4 | 0 verified | 7 unverified |
+| Auth users | 1 user detected | critical for admin/member/manager | present but insufficient | admin/manager/member roles missing |
+
+## Tables Check
+
+Read-only method: `.select("*", { count: "exact", head: true })`.
+
+All scanned table references responded without a missing-table error. Counts are approximate current row counts from xtac where PostgREST returned a count.
+
+| Table | Required level | Code usage | Exists in xtac | Count | Risk | Action needed |
+|---|---|---|---:|---:|---|---|
+| `profiles` | critical | auth, role guard, staff, admin | yes | 1 | Only `frontdesk` role detected | Add/verify production admin, manager, member, and platform admin profiles |
+| `tenants` | critical | tenant scoping, platform admin, billing | yes | 2 | Tenant data may not match production | Verify production tenant rows |
+| `tenant_subscriptions` | critical | tenant access guard, billing | yes | 2 | Subscription state affects access | Verify active/current subscriptions |
+| `branches` | critical | booking, manager, frontdesk | yes | 2 | Branch scope affects staff/frontdesk | Verify production branch data |
+| `services` | critical | booking and manager services | yes | 1 | Booking needs correct service catalog | Verify complete production services |
+| `members` | critical | login, member portal, bookings | yes | 5 | Auth/member linkage may be incomplete | Verify member records and auth_user_id links |
+| `bookings` | critical | booking, manager, member, payments | yes | 0 | No booking data | Verify acceptable for cutover or migrate production bookings |
+| `orders` | critical | payments, POS, reports | yes | 1 | Sparse order data | Verify/migrate production order data |
+| `payments` | critical | payments, refunds, reports | yes | 2 | Sparse payment data | Verify/migrate production payment data |
+| `trial_bookings` | critical | public trial booking and admin | yes | 0 | Ready structurally; currently no rows | OK for fresh submissions after cutover |
+| `audit_logs` | critical | auth/manager/platform audit | yes | 6 | Sparse audit history | Verify retention/migration needs |
+| `entry_passes` | critical | member entry, entitlements | yes | 0 | Member entry may fail without passes | Verify/migrate passes |
+| `checkins` | critical | entry and progress | yes | 5 | Sparse check-in history | Verify if history is needed |
+| `session_redemptions` | critical | entitlement use | yes | 0 | Redemption history absent | Verify/migrate if needed |
+| `member_plan_catalog` | critical | manager/member plans | yes | 3 | Plan catalog present but must be verified | Confirm active plans/prices |
+| `member_plan_contracts` | critical | member entitlements | yes | 0 | Members may have no active contracts | Verify/migrate contracts |
+| `member_plan_ledger` | critical | plan adjustments/history | yes | 0 | Ledger history absent | Verify/migrate if needed |
+| `member_device_sessions` | critical | member login session tracking | yes | 0 | Expected to grow after login | No blocker if fresh sessions are acceptable |
+| `member_activation_tokens` | critical | member activation | yes | 0 | Expected empty unless activations pending | No blocker if no pending tokens |
+| `member_identities` | critical | notifications/member identity | yes | 0 | Notifications may lack recipients | Verify/migrate identities |
+| `member_notification_reads` | critical | member notifications | yes | 0 | Read state absent | Verify if needed |
+| `member_progress_entries` | critical | progress tracking | yes | 0 | Progress history absent | Verify/migrate if needed |
+| `member_progress_events` | critical | progress events | yes | 0 | Progress event history absent | Verify/migrate if needed |
+| `notification_templates` | critical | notification runtime | yes | 0 | Notification rendering may fail or fallback | Seed/verify templates before enabling notifications |
+| `notification_role_preferences` | critical | notification routing | yes | 0 | Preferences missing | Seed/verify preferences |
+| `notification_user_preferences` | critical | user notification preferences | yes | 0 | Preferences missing | Verify acceptable defaults |
+| `notification_logs` | critical | notification audit/history | yes | 0 | History absent | Verify if needed |
+| `notification_deliveries` | critical | notification delivery queue | yes | 0 | No delivery history | Verify runtime seed/config |
+| `notification_delivery_events` | critical | notification analytics | yes | 0 | No analytics events | Verify if needed |
+| `notification_delivery_daily_rollups` | critical | notification analytics | yes | 0 | Rollup data absent | Verify/rebuild after data exists |
+| `notification_delivery_anomaly_daily_rollups` | critical | notification anomaly analytics | yes | 0 | Rollup data absent | Verify/rebuild after data exists |
+| `notification_admin_audit_logs` | critical | notification admin audit | yes | 0 | Audit history absent | Verify if needed |
+| `notification_alert_workflows` | critical | notification ops | yes | 0 | Alert workflow config absent | Seed/verify if ops pages are used |
+| `notification_job_runs` | critical | cron/jobs/notifications | yes | 34 | Job history exists | Verify job config and current state |
+| `notification_job_execution_locks` | critical | cron/job locking | yes | 0 | Expected empty unless jobs running | No blocker if jobs initialize correctly |
+| `storefront_brand_contents` | important | storefront manager config | yes | count unavailable | Storefront content may be missing | Verify storefront data |
+| `storefront_brand_assets` | important | storefront image metadata | yes | count unavailable | Bucket missing blocks upload/storage | Create/verify bucket before upload use |
+| `products` | important | POS/member purchase | yes | 3 | Product catalog present but sparse | Verify catalog |
+| `order_items` | important | orders/inventory | yes | 0 | No order item history | Verify/migrate if needed |
+| `payment_webhooks` | important | payment observability | yes | 0 | No webhook history | Verify payment callback setup later |
+| `feature_flags` | important | platform flags | yes | 0 | Defaults may differ | Verify desired flags |
+| `operation_idempotency_keys` | important | idempotent operations | yes | 0 | Expected empty | No blocker |
+| `booking_waitlist` | important | waitlist | yes | 0 | No waitlist data | Verify if feature is used |
+| `booking_sync_jobs` | important | booking sync | yes | 0 | No sync jobs | Verify if feature is used |
+| `booking_status_logs` | important | booking audit | yes | count unavailable | History may be absent | Verify if needed |
+| `booking_package_logs` | important | package booking usage | yes | count unavailable | History may be absent | Verify if needed |
+| `coach_slots` | important | coach availability | yes | 0 | Availability missing | Seed/verify if scheduler is used |
+| `coach_blocks` | important | blocked time | yes | 0 | No blocks | Verify if needed |
+| `coach_recurring_schedules` | important | therapist scheduling | yes | count unavailable | Recurring schedule data may be missing | Verify schedules |
+| `coach_branch_links` | important | coach/branch scope | yes | count unavailable | Coach branch mapping may be incomplete | Verify mappings |
+| `crm_leads` | important | CRM | yes | 0 | CRM data absent | Verify if CRM is used |
+| `crm_lead_followups` | important | CRM followups | yes | 0 | CRM followups absent | Verify if CRM is used |
+| `crm_opportunities` | important | CRM opportunities | yes | 0 | CRM opportunity data absent | Verify if used |
+| `crm_opportunity_logs` | important | CRM audit | yes | 0 | Logs absent | Verify if needed |
+| `cron_probe_runs` | important | cron health | yes | 15 | Cron probe history exists | Verify Production cron after cutover |
+| `daily_settlements` | important | settlement cron | yes | 0 | No settlements | Verify if POS/payment is live |
+| `frontdesk_shifts` | important | frontdesk shift | yes | 14 | Shift data exists | Verify current open/closed state |
+| `frontdesk_shift_items` | important | handover/shift items | yes | 0 | No shift item data | Verify if used |
+| `frontdesk_locker_rentals` | important | lockers | yes | 2 | Some data exists | Verify if feature is used |
+| `frontdesk_product_inventory` | important | inventory | yes | 0 | Inventory missing | Seed/verify before POS inventory use |
+| `frontdesk_product_inventory_moves` | important | inventory audit | yes | 0 | History absent | Verify if needed |
+| `high_risk_action_requests` | important | approval workflows | yes | 0 | No pending approvals | No blocker if expected |
+| `in_app_notifications` | important | in-app notifications | yes | 0 | No notifications | Verify if used |
+| `subscriptions` | important | member subscriptions | yes | 0 | No member subscription data | Verify/migrate if member portal is used |
+| `store_booking_settings` | important | booking/storefront settings | yes | count unavailable | Settings may be incomplete | Verify settings |
+| `saas_plans` | important | platform billing plans | yes | 3 | Plans exist | Verify plan contents |
+| `schema_migrations` | important | migration tracking | yes | count unavailable | Confirms migration table exists | Compare migrations if needed |
+| `pg_indexes` | important | consistency checks | yes | count unavailable | Catalog access responded | No action |
+| `tenant_delivery_channel_settings` | optional | scripts/e2e | yes | 0 | Test/support table | No production blocker unless used |
+| `tenant_job_settings` | optional | scripts/e2e | yes | 0 | Test/support table | No production blocker unless used |
+| `tenant_notification_settings` | optional | scripts/e2e | yes | 0 | Test/support table | No production blocker unless used |
+
+## Storage Buckets Check
+
+Read-only method: `storage.listBuckets()`.
+
+| Bucket | Code usage | Exists in xtac | Risk | Action needed |
+|---|---|---:|---|---|
+| `storefront-assets` | `lib/storage/storefront-assets.ts`, manager storefront upload | no | Storefront upload and stored brand asset rendering can fail or self-create behavior may differ from desired production policy | Create/verify bucket manually with public access, file size, MIME type, and policy expectations before cutover |
+
+## RPC Functions Check
+
+The code uses the following RPC functions. They were not called because some RPCs may mutate data or have side effects, and this report avoids SQL execution.
+
+| Function | Code usage | Exists in xtac | Risk | Action needed |
+|---|---|---:|---|---|
+| `member_modify_booking` | `app/api/member/bookings/[id]/route.ts` | not verified | Member booking changes may fail | Verify via SQL/pg_proc or a safe controlled staging test |
+| `verify_entry_scan` | `app/api/entry/verify/route.ts` | not verified | QR/entry flow may fail | Verify function exists before cutover |
+| `rebuild_notification_daily_rollups` | `lib/notification-rollup.ts` | not verified | Notification rollup jobs may fail | Verify function exists before cron/ops use |
+| `refresh_notification_daily_rollups_incremental` | `lib/notification-rollup.ts` | not verified | Notification rollup jobs may fail | Verify function exists before cron/ops use |
+| `manage_booking_package_usage` | `lib/booking-commerce.ts` | not verified | Booking/package usage accounting may fail | Verify function exists before booking/package use |
+| `redeem_session` | `lib/entitlement-consumption.ts` | not verified | Session redemption may fail | Verify function exists before frontdesk/member entry use |
+| `refund_payment` | `lib/high-risk-actions.ts` | not verified | Refund workflow may fail | Verify function exists before payment/refund use |
+
+## Auth / Profiles Check
+
+- `auth.admin.listUsers` succeeded.
+- Detected auth user count estimate: 1.
+- `profiles` table exists.
+- Detected `profiles` count: 1.
+- Detected profile roles: `frontdesk: 1`.
+- No full email addresses or personal data were recorded in this report.
+
+Risk:
+
+- No `platform_admin`, `manager`, or `member` profile was detected in xtac during this check.
+- `/admin/trial-bookings` requires an allowed admin/manager role, so Production admin access may be blocked after cutover unless the correct auth user and profile rows exist.
+- Member and manager portals may not function correctly without matching Supabase Auth users, `profiles`, `members`, tenant scope, and role data.
+
+## Auth / Service Role Usage
+
+Runtime code uses:
+
+- `createSupabaseServerClient` for cookie/session based auth.
+- `createSupabaseAdminClient` for service-role operations.
+- `auth.admin` for user creation, user updates, password reset flows, staff/member activation, coach/user listing, and admin platform user operations.
+
+Implication:
+
+- Production `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` must both belong to xtac.
+- The service role key must remain server-only in Vercel Production env.
+- Auth users and profile rows must be migrated or recreated before switching the whole site.
+
+## Cutover Blockers
+
+| Blocker | Reason | How to fix |
+|---|---|---|
+| Missing `storefront-assets` bucket | Storefront upload/storage flow depends on this bucket | Create and configure the bucket in xtac before Production cutover |
+| Missing admin/manager/member auth/profile coverage | Only 1 user/profile detected, role `frontdesk`; admin/manager/member roles not detected | Create or migrate required Supabase Auth users and `profiles` rows with correct roles, tenant, branch, and active flags |
+| RPC functions unverified | 7 runtime RPCs are referenced; 4 are critical; this report did not call RPCs or run SQL | Verify RPC existence through Supabase Dashboard SQL editor or controlled read-only catalog check |
+| Production data parity not proven | Tables exist, but several critical tables are empty or sparse | Decide whether xtac is a fresh-start production DB or migrate/seed required production data before cutover |
+
+## Safe Next Steps
+
+If the goal is a full Production cutover:
+
+1. Create/verify `storefront-assets`.
+2. Verify all 7 RPC functions exist in xtac.
+3. Add or migrate required Auth users and `profiles` for `platform_admin`, `manager`, `member`, and operational staff.
+4. Verify tenant, branch, services, plans, products, storefront settings, booking settings, notification templates, and payment-related seed data.
+5. Re-run this readiness report.
+6. Only then switch Vercel Production env to xtac and redeploy.
+
+If the goal is only trial booking first:
+
+1. Keep full Production Supabase on njuy for now.
+2. Consider a narrowly scoped architecture for `/trial-booking` only if dual-project operation is acceptable.
+3. Avoid switching the entire Vercel Production Supabase env until the blockers above are resolved.
