@@ -16,18 +16,19 @@ The code scan found 72 Supabase table references and all 72 responded to read-on
 
 Production cutover is still blocked because:
 
-- the required `storefront-assets` storage bucket is missing;
 - xtac Auth/profile data is not production-ready: only 1 auth user/profile was detected, and the only detected profile role is `frontdesk`;
 - no `platform_admin`, `manager`, or `member` profile data was found;
 - 7 runtime RPC functions are used by the code, and their existence was not verified because this check did not execute SQL or call RPC functions;
 - several business-critical tables exist but have no production data, so schema exists does not mean the full site will behave like production.
+
+Update on 2026-05-10: `storefront-assets` was created in xtac and verified with `public: true`, `file_size_limit: 5242880`, and allowed MIME types `image/jpeg`, `image/png`, and `image/webp`.
 
 ## Resource Summary
 
 | Resource type | Scanned count | Critical count | Exists in xtac | Missing / unverified |
 |---|---:|---:|---:|---:|
 | Tables | 72 | 36 | 72 | 0 missing |
-| Storage buckets | 1 | 1 | 0 | 1 missing |
+| Storage buckets | 1 | 1 | 1 | 0 missing |
 | RPC functions | 7 | 4 | 0 verified | 7 unverified |
 | Auth users | 1 user detected | critical for admin/member/manager | present but insufficient | admin/manager/member roles missing |
 
@@ -117,7 +118,13 @@ Read-only method: `storage.listBuckets()`.
 
 | Bucket | Code usage | Exists in xtac | Risk | Action needed |
 |---|---|---:|---|---|
-| `storefront-assets` | `lib/storage/storefront-assets.ts`, manager storefront upload | no | Storefront upload and stored brand asset rendering can fail or self-create behavior may differ from desired production policy | Create/verify bucket manually with public access, file size, MIME type, and policy expectations before cutover |
+| `storefront-assets` | `lib/storage/storefront-assets.ts`, manager storefront upload | yes | Bucket exists and settings match code expectations | No action needed for bucket existence; still verify storefront data and auth before cutover |
+
+Verified settings on 2026-05-10:
+
+- `public`: `true`
+- `file_size_limit`: `5242880`
+- `allowed_mime_types`: `image/jpeg`, `image/png`, `image/webp`
 
 ## RPC Functions Check
 
@@ -166,21 +173,25 @@ Implication:
 
 | Blocker | Reason | How to fix |
 |---|---|---|
-| Missing `storefront-assets` bucket | Storefront upload/storage flow depends on this bucket | Create and configure the bucket in xtac before Production cutover |
 | Missing admin/manager/member auth/profile coverage | Only 1 user/profile detected, role `frontdesk`; admin/manager/member roles not detected | Create or migrate required Supabase Auth users and `profiles` rows with correct roles, tenant, branch, and active flags |
 | RPC functions unverified | 7 runtime RPCs are referenced; 4 are critical; this report did not call RPCs or run SQL | Verify RPC existence through Supabase Dashboard SQL editor or controlled read-only catalog check |
 | Production data parity not proven | Tables exist, but several critical tables are empty or sparse | Decide whether xtac is a fresh-start production DB or migrate/seed required production data before cutover |
+
+Resolved blocker:
+
+| Resolved blocker | Result |
+|---|---|
+| Missing `storefront-assets` bucket | Resolved on 2026-05-10. Bucket exists in xtac with public access, 5MB limit, and JPG/PNG/WEBP MIME restrictions. |
 
 ## Safe Next Steps
 
 If the goal is a full Production cutover:
 
-1. Create/verify `storefront-assets`.
-2. Verify all 7 RPC functions exist in xtac.
-3. Add or migrate required Auth users and `profiles` for `platform_admin`, `manager`, `member`, and operational staff.
-4. Verify tenant, branch, services, plans, products, storefront settings, booking settings, notification templates, and payment-related seed data.
-5. Re-run this readiness report.
-6. Only then switch Vercel Production env to xtac and redeploy.
+1. Verify all 7 RPC functions exist in xtac.
+2. Add or migrate required Auth users and `profiles` for `platform_admin`, `manager`, `member`, and operational staff.
+3. Verify tenant, branch, services, plans, products, storefront settings, booking settings, notification templates, and payment-related seed data.
+4. Re-run this readiness report.
+5. Only then switch Vercel Production env to xtac and redeploy.
 
 If the goal is only trial booking first:
 

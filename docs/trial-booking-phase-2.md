@@ -74,6 +74,7 @@
 - Export and delete actions are not supported yet.
 - Status change audit logs are not implemented yet.
 - Full Production Supabase cutover is not ready until `docs/xtac-supabase-readiness-report.md` blockers are resolved.
+- xtac storage readiness has started; the `storefront-assets` bucket has been handled.
 
 ## Next Steps
 

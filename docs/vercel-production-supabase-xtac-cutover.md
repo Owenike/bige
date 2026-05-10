@@ -36,7 +36,7 @@ This checklist is for preparation and manual production cutover only. Do not use
 - Do not switch Vercel Production env to xtac unless the readiness report shows critical resources are ready.
 - If critical resources are missing, first complete the needed schema, storage, auth, and seed-data work in xtac.
 - xtac has every production table required by the rest of the site, not only `trial_bookings`.
-- xtac has the `storefront-assets` storage bucket if storefront media upload or rendering depends on it.
+- xtac has the `storefront-assets` storage bucket if storefront media upload or rendering depends on it. This bucket was created and verified on 2026-05-10 with public access, 5MB file size limit, and JPG/PNG/WEBP MIME restrictions.
 - xtac has the required Supabase Auth users.
 - xtac has the required `profiles` rows and role values for manager, member, admin, frontdesk, and platform admin flows.
 - xtac has manager, member, admin, booking, storefront, payment, cron, and notification related data and schema.
