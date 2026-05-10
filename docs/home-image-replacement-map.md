@@ -303,3 +303,4 @@ Result:
 - ACPay is still not connected in this phase
 - LINE notification is still not connected in this phase
 - Next step recommendation: run the SQL draft manually in Supabase and verify write access
+- The first-time trial booking flow now has a read-only admin view at `/admin/trial-bookings`

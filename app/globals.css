@@ -6192,3 +6192,259 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     width: 100%;
   }
 }
+
+.trialAdminPage{
+  min-height: 100vh;
+  padding: 42px 20px 72px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(64, 118, 175, .18), transparent 32%),
+    linear-gradient(180deg, #07101b 0%, #0c1522 48%, #07101b 100%);
+  color: #eef5ff;
+}
+.trialAdminShell{
+  width: min(1280px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 22px;
+}
+.trialAdminHeader{
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid rgba(190, 207, 231, .14);
+  background: rgba(9, 18, 30, .72);
+  border-radius: 22px;
+  padding: clamp(20px, 4vw, 32px);
+  box-shadow: 0 24px 54px rgba(1, 7, 16, .28);
+}
+.trialAdminHeader h1{
+  margin: 0;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.12;
+  font-weight: 650;
+}
+.trialAdminHeader p{
+  margin: 10px 0 0;
+  color: rgba(222, 233, 248, .76);
+  line-height: 1.65;
+}
+.trialAdminEyebrow{
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: rgba(174, 205, 243, .72);
+}
+.trialAdminButton{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(199, 217, 239, .2);
+  background: rgba(244, 248, 255, .08);
+  color: #f4f8ff;
+  padding: 0 18px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.trialAdminButton:disabled{
+  cursor: not-allowed;
+  opacity: .62;
+}
+.trialAdminFilters{
+  display: grid;
+  grid-template-columns: minmax(240px, 1.4fr) repeat(3, minmax(170px, 1fr));
+  gap: 14px;
+  border: 1px solid rgba(190, 207, 231, .12);
+  background: rgba(11, 20, 33, .76);
+  border-radius: 20px;
+  padding: 16px;
+}
+.trialAdminField{
+  display: grid;
+  gap: 8px;
+}
+.trialAdminField span{
+  color: rgba(218, 230, 248, .72);
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.trialAdminField input,
+.trialAdminField select{
+  width: 100%;
+  min-height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(190, 207, 231, .16);
+  background: rgba(244, 248, 255, .06);
+  color: #f6f9ff;
+  padding: 0 13px;
+  outline: none;
+}
+.trialAdminField option{
+  color: #0f1b2a;
+}
+.trialAdminError,
+.trialAdminEmpty{
+  border-radius: 18px;
+  border: 1px solid rgba(190, 207, 231, .14);
+  background: rgba(11, 20, 33, .74);
+  padding: 20px;
+  color: rgba(232, 240, 252, .82);
+}
+.trialAdminError{
+  border-color: rgba(217, 110, 110, .28);
+  background: rgba(124, 33, 33, .18);
+  color: #ffdada;
+}
+.trialAdminTableWrap{
+  overflow-x: auto;
+  border: 1px solid rgba(190, 207, 231, .12);
+  border-radius: 20px;
+  background: rgba(8, 16, 28, .76);
+  box-shadow: 0 20px 46px rgba(2, 8, 17, .24);
+}
+.trialAdminTable{
+  width: 100%;
+  min-width: 1060px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.trialAdminTable th,
+.trialAdminTable td{
+  padding: 14px 12px;
+  border-bottom: 1px solid rgba(190, 207, 231, .09);
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.55;
+}
+.trialAdminTable th{
+  color: rgba(198, 216, 239, .7);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.trialAdminTable td{
+  color: rgba(242, 247, 255, .88);
+}
+.trialAdminBadge{
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border-radius: 999px;
+  border: 1px solid rgba(190, 207, 231, .14);
+  background: rgba(244, 248, 255, .07);
+  color: #edf5ff;
+  padding: 5px 9px;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.trialAdminBadge.is-new,
+.trialAdminBadge.is-pending_cash,
+.trialAdminBadge.is-pending_payment{
+  border-color: rgba(241, 195, 117, .28);
+  background: rgba(190, 130, 47, .16);
+  color: #ffe8bd;
+}
+.trialAdminBadge.is-paid,
+.trialAdminBadge.is-completed,
+.trialAdminBadge.is-scheduled{
+  border-color: rgba(123, 211, 158, .28);
+  background: rgba(60, 143, 94, .16);
+  color: #d9f8e5;
+}
+.trialAdminBadge.is-failed,
+.trialAdminBadge.is-cancelled{
+  border-color: rgba(226, 116, 116, .3);
+  background: rgba(156, 48, 48, .18);
+  color: #ffd9d9;
+}
+.trialAdminBadge.is-contacted{
+  border-color: rgba(133, 188, 240, .28);
+  background: rgba(59, 119, 184, .16);
+  color: #dceeff;
+}
+.trialAdminMobileList{
+  display: none;
+}
+.trialAdminMobileCard{
+  border: 1px solid rgba(190, 207, 231, .12);
+  border-radius: 18px;
+  background: rgba(9, 18, 30, .76);
+  padding: 16px;
+}
+.trialAdminMobileCardHeader{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.trialAdminMobileCardHeader div{
+  display: grid;
+  gap: 5px;
+}
+.trialAdminMobileCardHeader strong{
+  color: #f6f9ff;
+  font-size: 17px;
+}
+.trialAdminMobileCardHeader span{
+  color: rgba(214, 226, 244, .72);
+  font-size: 12px;
+}
+.trialAdminMobileCard dl{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.trialAdminMobileCard dt{
+  margin-bottom: 4px;
+  color: rgba(196, 213, 237, .68);
+  font-size: 12px;
+}
+.trialAdminMobileCard dd{
+  margin: 0;
+  color: rgba(244, 248, 255, .9);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.trialAdminMobileNote{
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px){
+  .trialAdminHeader{
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .trialAdminButton{
+    width: 100%;
+  }
+  .trialAdminFilters{
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 720px){
+  .trialAdminPage{
+    padding: 24px 14px 54px;
+  }
+  .trialAdminFilters{
+    grid-template-columns: 1fr;
+  }
+  .trialAdminTableWrap{
+    display: none;
+  }
+  .trialAdminMobileList{
+    display: grid;
+    gap: 14px;
+  }
+}
+@media (max-width: 440px){
+  .trialAdminMobileCard dl{
+    grid-template-columns: 1fr;
+  }
+}
