@@ -24,6 +24,14 @@ Login readiness check on 2026-05-11:
 - The unauthenticated admin page renders without a server-side data leak and shows login-related content.
 - Full platform admin login was not completed in Code App because no password or email-link session was available. Do not trigger reset/magic-link flows without explicit approval.
 
+Follow-up check on 2026-05-11 after the platform admin password was set:
+
+- The masked platform admin account still has an active `platform_admin` profile in xtac.
+- Unauthenticated `GET /api/admin/trial-bookings` still returns `401`.
+- Unauthenticated `PATCH /api/admin/trial-bookings/:id/status` still returns `401`.
+- The unauthenticated page still renders login-related content without returning booking data.
+- Code App still could not complete the actual platform admin login because no password or browser session was provided to the agent. The next check should be done after the user logs in locally or provides an approved session-based test path.
+
 ## API
 
 Route: `/api/admin/trial-bookings`
