@@ -32,6 +32,12 @@ Follow-up check on 2026-05-11 after the platform admin password was set:
 - The unauthenticated page still renders login-related content without returning booking data.
 - Code App still could not complete the actual platform admin login because no password or browser session was provided to the agent. The next check should be done after the user logs in locally or provides an approved session-based test path.
 
+Password reset support:
+
+- Admin/staff users can use Supabase password recovery links that redirect to `/reset-password`.
+- `/reset-password` supports the Supabase recovery session and then sends users back to `/login` after the password is updated.
+- If a manager/admin has no password yet, send password recovery from Supabase Dashboard, then complete the new password on `/reset-password`.
+
 ## API
 
 Route: `/api/admin/trial-bookings`

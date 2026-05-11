@@ -227,6 +227,17 @@ insert into public.profiles (
 - If member features are part of the cutover, member/customer Auth users, profiles, and member data linkage exist.
 - If frontdesk features are part of the cutover, the existing frontdesk user can log in and has valid tenant/branch scope.
 
+## Password Recovery / Reset Page
+
+The site now has a shared `/reset-password` page for Supabase password recovery links.
+
+- The page uses the public Supabase browser client only.
+- It supports recovery links that return with `code`, `token_hash`, or hash session tokens.
+- It never uses the service role key.
+- It lets staff/admin users set a new password and then return to `/login`.
+
+For the platform admin account, send the password recovery email from Supabase Dashboard or an approved admin flow. The recovery link should redirect to `/reset-password`.
+
 ## Risks
 
 - A manually inserted profile without a matching xtac Auth user will not allow login.

@@ -6516,3 +6516,112 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     grid-template-columns: 1fr;
   }
 }
+
+.resetPasswordPage{
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 48px 16px;
+  background:
+    linear-gradient(180deg, rgba(5, 10, 18, .94), rgba(12, 20, 31, .98)),
+    radial-gradient(circle at 50% 0%, rgba(210, 174, 95, .18), transparent 42%);
+}
+.resetPasswordCard{
+  width: min(100%, 560px);
+  border: 1px solid rgba(218, 196, 142, .18);
+  border-radius: 8px;
+  background: rgba(11, 18, 29, .92);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .34);
+  color: #f6f2e8;
+  padding: clamp(24px, 5vw, 42px);
+}
+.resetPasswordCard .sectionTitle{
+  margin-top: 10px;
+  color: #fff7e6;
+}
+.resetPasswordCard .sub{
+  margin-top: 10px;
+  color: rgba(246, 242, 232, .72);
+}
+.resetPasswordForm{
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+.resetPasswordField{
+  display: grid;
+  gap: 8px;
+  color: rgba(246, 242, 232, .82);
+  font-size: 14px;
+  font-weight: 700;
+}
+.resetPasswordInput{
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid rgba(218, 196, 142, .24);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+  color: #fff;
+  font: inherit;
+  padding: 0 14px;
+  outline: none;
+}
+.resetPasswordInput:focus{
+  border-color: rgba(224, 194, 124, .72);
+  box-shadow: 0 0 0 3px rgba(224, 194, 124, .14);
+}
+.resetPasswordButton{
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(224, 194, 124, .62);
+  border-radius: 8px;
+  background: #d8b76f;
+  color: #111827;
+  cursor: pointer;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0 18px;
+  text-decoration: none;
+}
+.resetPasswordButton:disabled{
+  cursor: wait;
+  opacity: .58;
+}
+.resetPasswordMessage{
+  margin-top: 18px;
+  border: 1px solid rgba(190, 207, 231, .14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+  color: rgba(246, 242, 232, .82);
+  line-height: 1.6;
+  padding: 12px 14px;
+}
+.resetPasswordError{
+  border-color: rgba(248, 113, 113, .3);
+  background: rgba(127, 29, 29, .18);
+  color: #ffe4e6;
+}
+.resetPasswordSuccess{
+  border-color: rgba(74, 222, 128, .26);
+  background: rgba(20, 83, 45, .18);
+  color: #dcfce7;
+}
+@media (max-width: 520px){
+  .resetPasswordPage{
+    align-items: stretch;
+    padding: 20px 12px;
+  }
+  .resetPasswordCard{
+    align-self: center;
+  }
+  .resetPasswordCard .actions{
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .resetPasswordButton,
+  .resetPasswordCard .btn{
+    width: 100%;
+  }
+}

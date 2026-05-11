@@ -46,6 +46,7 @@ This checklist is for preparation and manual production cutover only. Do not use
 - xtac now has a masked `platform_admin` account (`b***69@g***.com`) and a separate masked `frontdesk` account (`b***90@g***.com`). Before cutover, still test platform admin login, `/admin/trial-bookings`, and frontdesk login; the frontdesk invite must be accepted before frontdesk login is considered ready.
 - As of 2026-05-11, unauthenticated admin API checks return `401`, and the platform admin profile is present and active. Full platform admin login still requires an actual password/session or an explicitly approved email-link/reset flow before Production cutover.
 - After the platform admin password was set, Code App still did not complete a credentialed login because no password or local browser session was provided to the agent. Before Production cutover, complete a real browser login test for the masked platform admin account and confirm `/admin/trial-bookings` plus `/api/admin/trial-bookings` return the authorized view/data.
+- Supabase Auth redirect URLs must include `/reset-password` for local and Production before relying on Dashboard password recovery.
 - xtac has manager, member, admin, booking, storefront, payment, cron, and notification related data and schema.
 - Vercel Production `NEXT_PUBLIC_SUPABASE_ANON_KEY` belongs to xtac.
 - Vercel Production `SUPABASE_SERVICE_ROLE_KEY` belongs to xtac.
@@ -76,6 +77,20 @@ Do not mix njuy keys with the xtac URL. Do not update only the URL while leaving
 6. Save the env changes.
 7. Redeploy Production.
 8. After the deployment is live, run the post-cutover test checklist below.
+
+## Supabase Auth URL Configuration
+
+Before testing password recovery or cutting Production to xtac, confirm Supabase Dashboard settings:
+
+`Authentication > URL Configuration`
+
+Required entries:
+
+- Site URL for the target environment.
+- Redirect URL: `http://localhost:3000/reset-password`
+- Redirect URL: `https://www.olinextech.com/reset-password`
+
+If local development runs on a different port, add that local `/reset-password` URL as well.
 
 ## Post-Cutover Test Checklist
 
