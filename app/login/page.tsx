@@ -21,9 +21,14 @@ type MemberActivationRequestResponse = {
   error?: string;
 };
 
-type LoginIntent = "shared" | "frontdesk_entry" | "frontdesk_bookings" | "manager" | "coach" | "platform" | "member";
-
 type LoginPanel = "staff" | "member" | "activation";
+
+type LoginEntryCopy = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  badge?: string;
+};
 
 function formatActivationDeliveryMessage(params: {
   zh: boolean;
@@ -69,36 +74,6 @@ function roleHome(role: Role) {
   }
 }
 
-function resolveLoginIntent(redirectTo: string | null): LoginIntent {
-  if (!redirectTo) return "shared";
-  if (redirectTo === "/frontdesk/bookings" || redirectTo.startsWith("/frontdesk/bookings/")) return "frontdesk_bookings";
-  if (redirectTo === "/frontdesk" || redirectTo.startsWith("/frontdesk/")) return "frontdesk_entry";
-  if (redirectTo === "/manager" || redirectTo.startsWith("/manager/")) return "manager";
-  if (redirectTo === "/coach" || redirectTo.startsWith("/coach/")) return "coach";
-  if (redirectTo === "/platform-admin" || redirectTo.startsWith("/platform-admin/")) return "platform";
-  if (redirectTo === "/member" || redirectTo.startsWith("/member/")) return "member";
-  return "shared";
-}
-
-function resolveReturnLabel(intent: LoginIntent, zh: boolean) {
-  switch (intent) {
-    case "frontdesk_entry":
-      return zh ? "登入後將返回櫃檯入口。" : "After sign-in you will return to the frontdesk entry page.";
-    case "frontdesk_bookings":
-      return zh ? "登入後將返回櫃檯排班作業台。" : "After sign-in you will return to the booking board.";
-    case "manager":
-      return zh ? "登入後將返回管理後台。" : "After sign-in you will return to the manager console.";
-    case "coach":
-      return zh ? "登入後將返回教練工作台。" : "After sign-in you will return to the coach workspace.";
-    case "platform":
-      return zh ? "登入後將返回平台管理後台。" : "After sign-in you will return to the platform admin console.";
-    case "member":
-      return zh ? "登入後將返回會員中心。" : "After sign-in you will return to the member portal.";
-    default:
-      return null;
-  }
-}
-
 function resolveLoginPanel(tab: string | null): LoginPanel {
   if (tab === "member" || tab === "activation" || tab === "staff") return tab;
   return "staff";
@@ -114,6 +89,58 @@ function isSafeReturnTo(value: string | null): value is string {
     !lowerValue.includes("http://") &&
     !lowerValue.includes("https://")
   );
+}
+
+function resolveLoginEntryCopy(panel: LoginPanel, returnTo: string | null, zh: boolean): LoginEntryCopy {
+  if (panel === "member") {
+    return {
+      eyebrow: zh ? "會員登入入口" : "Member Login Entry",
+      title: zh ? "會員登入" : "Member Sign In",
+      description: zh
+        ? "會員請使用手機號碼與密碼登入，查看個人資料與相關服務。"
+        : "Members should sign in with phone number and password to view profile and service details.",
+    };
+  }
+
+  if (panel === "activation") {
+    return {
+      eyebrow: zh ? "會員啟用入口" : "Member Activation Entry",
+      title: zh ? "首次啟用會員帳號" : "Activate Member Account",
+      description: zh
+        ? "尚未設定密碼的會員，請先輸入手機號碼寄送啟用信。"
+        : "Members who have not set a password should enter a phone number to receive an activation email.",
+    };
+  }
+
+  if (returnTo === "/admin/trial-bookings") {
+    return {
+      eyebrow: zh ? "管理後台入口" : "Admin Entry",
+      title: zh ? "首次體驗預約管理登入" : "Trial Booking Admin Sign In",
+      description: zh
+        ? "登入後會前往首次體驗預約管理頁，查看預約名單、付款狀態與預約狀態。"
+        : "After sign-in you will open the trial booking admin page to review bookings, payment status, and booking status.",
+      badge: zh ? "登入後前往：首次體驗預約管理" : "After sign-in: Trial Booking Admin",
+    };
+  }
+
+  if (returnTo === "/platform-admin") {
+    return {
+      eyebrow: zh ? "平台管理入口" : "Platform Admin Entry",
+      title: zh ? "平台管理登入" : "Platform Admin Sign In",
+      description: zh
+        ? "登入後會前往租戶與帳號控制台，管理平台設定、租戶與功能開關。"
+        : "After sign-in you will open the tenant and account console for platform settings, tenants, and feature flags.",
+      badge: zh ? "登入後前往：平台管理" : "After sign-in: Platform Admin",
+    };
+  }
+
+  return {
+    eyebrow: zh ? "共用登入入口" : "Shared Login Hub",
+    title: zh ? "登入與帳號存取" : "Sign In and Account Access",
+    description: zh
+      ? "請依身分選擇登入方式。員工、教練、櫃檯與管理角色可使用 Email 登入。"
+      : "Choose the sign-in path for your role. Staff, coaches, frontdesk, and management roles can sign in with email.",
+  };
 }
 
 function LoginContent() {
@@ -135,13 +162,13 @@ function LoginContent() {
     return null;
   }, [searchParams]);
   const selectedPanel = useMemo(() => resolveLoginPanel(searchParams.get("tab")), [searchParams]);
-  const loginIntent = useMemo(() => resolveLoginIntent(returnTo), [returnTo]);
-  const returnLabel = useMemo(() => resolveReturnLabel(loginIntent, zh), [loginIntent, zh]);
   const [activePanel, setActivePanel] = useState<LoginPanel>(() => selectedPanel);
 
   useEffect(() => {
     setActivePanel(selectedPanel);
   }, [selectedPanel]);
+
+  const entryCopy = useMemo(() => resolveLoginEntryCopy(activePanel, returnTo, zh), [activePanel, returnTo, zh]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -247,21 +274,23 @@ function LoginContent() {
     <main className="container" style={{ paddingTop: 28, paddingBottom: 48 }}>
       <section className="card formCard" style={{ display: "grid", gap: 16, maxWidth: 640, margin: "0 auto" }}>
         <div style={{ display: "grid", gap: 8 }}>
-          <div className="kvLabel">{zh ? "共用登入入口" : "Shared Login Hub"}</div>
-          <h1 className="sectionTitle">{zh ? "登入與帳號存取" : "Sign In and Account Access"}</h1>
+          <div className="kvLabel">{entryCopy.eyebrow}</div>
+          <h1 className="sectionTitle">{entryCopy.title}</h1>
           <p className="sub">
-            {zh
-              ? "請依身分選擇登入方式。每次只會顯示一個表單，避免誤用入口。"
-              : "Choose the sign-in path for your role. Only one form is shown at a time."}
+            {entryCopy.description}
           </p>
-          {returnLabel ? (
-            <div className="sub" style={{ opacity: 0.82 }}>
-              {returnLabel}
-            </div>
-          ) : null}
-          {returnTo ? (
-            <div className="sub" style={{ opacity: 0.68 }}>
-              {`Return path: ${returnTo}`}
+          {entryCopy.badge ? (
+            <div
+              className="pill"
+              style={{
+                width: "fit-content",
+                maxWidth: "100%",
+                color: "var(--ink)",
+                fontSize: 13,
+                fontWeight: 700,
+              }}
+            >
+              {entryCopy.badge}
             </div>
           ) : null}
         </div>
