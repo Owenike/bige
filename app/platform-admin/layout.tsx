@@ -5,7 +5,7 @@ import { requireProfile } from "../../lib/auth-context";
 export default async function PlatformAdminLayout(props: { children: ReactNode }) {
   const auth = await requireProfile(["platform_admin"]);
   if (!auth.ok) {
-    redirect(auth.response.status === 401 ? "/login?next=/platform-admin" : "/");
+    redirect(auth.response.status === 401 ? "/login?tab=staff&returnTo=/platform-admin" : "/");
   }
 
   return <>{props.children}</>;

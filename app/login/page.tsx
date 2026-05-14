@@ -99,8 +99,21 @@ function resolveReturnLabel(intent: LoginIntent, zh: boolean) {
   }
 }
 
-function intentDefaultPanel(intent: LoginIntent): LoginPanel {
-  return intent === "member" ? "member" : "staff";
+function resolveLoginPanel(tab: string | null): LoginPanel {
+  if (tab === "member" || tab === "activation" || tab === "staff") return tab;
+  return "staff";
+}
+
+function isSafeReturnTo(value: string | null): value is string {
+  if (!value) return false;
+  const lowerValue = value.toLowerCase();
+  return (
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.includes("\\") &&
+    !lowerValue.includes("http://") &&
+    !lowerValue.includes("https://")
+  );
 }
 
 function LoginContent() {
@@ -109,18 +122,26 @@ function LoginContent() {
   const { t, locale } = useI18n();
   const zh = locale !== "en";
 
-  const redirectTo = useMemo(() => {
-    const value = searchParams.get("redirect");
-    if (!value || !value.startsWith("/")) return null;
-    return value;
+  const returnTo = useMemo(() => {
+    const requestedReturnTo = searchParams.get("returnTo");
+    if (isSafeReturnTo(requestedReturnTo)) return requestedReturnTo;
+
+    const legacyRedirect = searchParams.get("redirect");
+    if (isSafeReturnTo(legacyRedirect)) return legacyRedirect;
+
+    const legacyNext = searchParams.get("next");
+    if (isSafeReturnTo(legacyNext)) return legacyNext;
+
+    return null;
   }, [searchParams]);
-  const loginIntent = useMemo(() => resolveLoginIntent(redirectTo), [redirectTo]);
+  const selectedPanel = useMemo(() => resolveLoginPanel(searchParams.get("tab")), [searchParams]);
+  const loginIntent = useMemo(() => resolveLoginIntent(returnTo), [returnTo]);
   const returnLabel = useMemo(() => resolveReturnLabel(loginIntent, zh), [loginIntent, zh]);
-  const [activePanel, setActivePanel] = useState<LoginPanel>(() => intentDefaultPanel(loginIntent));
+  const [activePanel, setActivePanel] = useState<LoginPanel>(() => selectedPanel);
 
   useEffect(() => {
-    setActivePanel(intentDefaultPanel(loginIntent));
-  }, [loginIntent]);
+    setActivePanel(selectedPanel);
+  }, [selectedPanel]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -155,7 +176,7 @@ function LoginContent() {
       const mePayload = (await meRes.json().catch(() => null)) as MeResponse | null;
       if (!meRes.ok || !mePayload?.role) throw new Error((mePayload as { error?: string } | null)?.error || "Profile not ready");
 
-      router.replace(redirectTo || roleHome(mePayload.role));
+      router.replace(returnTo || roleHome(mePayload.role));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -182,7 +203,7 @@ function LoginContent() {
       const mePayload = (await meRes.json().catch(() => null)) as MeResponse | null;
       if (!meRes.ok || !mePayload?.role) throw new Error((mePayload as { error?: string } | null)?.error || "Profile not ready");
 
-      router.replace(redirectTo || roleHome(mePayload.role));
+      router.replace(returnTo || roleHome(mePayload.role));
     } catch (err) {
       setMemberLoginError(err instanceof Error ? err.message : zh ? "會員登入失敗" : "Phone login failed");
     } finally {
@@ -238,9 +259,9 @@ function LoginContent() {
               {returnLabel}
             </div>
           ) : null}
-          {redirectTo ? (
+          {returnTo ? (
             <div className="sub" style={{ opacity: 0.68 }}>
-              {`Redirect path: ${redirectTo}`}
+              {`Return path: ${returnTo}`}
             </div>
           ) : null}
         </div>

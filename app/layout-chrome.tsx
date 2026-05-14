@@ -36,22 +36,22 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
               <div className="brandTag">{t("brand.tagline")}</div>
             </div>
             <nav className="navLinks">
-              <a className="pill" href="/login">
+              <a className="pill" href="/login?tab=staff">
                 {t("nav.login")}
               </a>
-              <a className="pill" href="/member">
+              <a className="pill" href="/login?tab=member">
                 {t("nav.member")}
               </a>
-              <a className="pill" href="/coach">
+              <a className="pill" href="/login?tab=staff">
                 {t("nav.coach")}
               </a>
-              <a className="pill" href="/frontdesk">
+              <a className="pill" href="/login?tab=staff">
                 {t("nav.frontdesk")}
               </a>
-              <a className="pill" href="/manager">
+              <a className="pill" href="/login?tab=staff&returnTo=/admin/trial-bookings">
                 {t("nav.manager")}
               </a>
-              <a className="pill" href="/platform-admin">
+              <a className="pill" href="/login?tab=staff&returnTo=/platform-admin">
                 {t("nav.platform")}
               </a>
               <LangSwitch />

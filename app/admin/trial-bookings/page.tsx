@@ -142,7 +142,7 @@ export default function TrialBookingsAdminPage() {
         if (response.status === 401) {
           setAccessState("unauthorized");
           setError("請先登入後再查看首次體驗預約。");
-          router.replace("/login?redirect=/admin/trial-bookings");
+          router.replace("/login?tab=staff&returnTo=/admin/trial-bookings");
         } else if (response.status === 403) {
           setAccessState("forbidden");
           setError("此頁面僅限管理者查看。");
@@ -349,7 +349,7 @@ export default function TrialBookingsAdminPage() {
           <section className="trialAdminAuthNotice">
             <h2>請先登入</h2>
             <p>請先登入後再查看首次體驗預約。</p>
-            <a className="trialAdminLoginHint" href="/login?redirect=/admin/trial-bookings">
+            <a className="trialAdminLoginHint" href="/login?tab=staff&returnTo=/admin/trial-bookings">
               前往登入
             </a>
           </section>
