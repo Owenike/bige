@@ -170,6 +170,24 @@ If the email still does not arrive:
 - Avoid repeatedly sending password recovery emails in a short window, because rate limits can mask the real delivery issue.
 - If using port `465` fails, test `587` in Supabase SMTP settings.
 
+## No Supabase Auth Log Triage
+
+If the browser shows a success message but Supabase Auth Logs do not show a new `/recover` request and Resend Logs remain empty, pause SMTP and DNS changes. That symptom usually means the production browser did not reach the expected Supabase Auth project.
+
+Check these items before changing SMTP again:
+
+1. Confirm the deployed site is running the latest `main` commit.
+2. Confirm Vercel Production env has `NEXT_PUBLIC_SUPABASE_URL` pointing at the intended Supabase project.
+3. Confirm Vercel Production env has `NEXT_PUBLIC_SUPABASE_ANON_KEY` from the same Supabase project as the URL.
+4. Confirm `NEXT_PUBLIC_APP_URL`, if set, matches the active production origin or is intentionally unset so the page uses `window.location.origin`.
+5. Confirm `/forgot-password` is loaded from `https://www.olinextech.com/forgot-password`, not an old preview deployment.
+6. Open browser DevTools Network tab, submit the form, and confirm there is an Auth request to the intended Supabase host.
+7. If the Network tab shows no Supabase request, check whether the deployed JavaScript bundle is stale or blocked by a browser extension / CSP / runtime error.
+8. If the Network tab shows a request to the wrong Supabase host, fix Vercel Production public env and redeploy.
+9. If the Network tab shows a request to the correct Supabase host but Supabase Auth Logs still do not show `/recover`, compare the Supabase project ref in the host with the project currently open in Supabase Dashboard.
+
+Do not paste public anon keys, service role keys, SMTP passwords, Resend API keys, session tokens, or recovery tokens into issue notes or docs while doing this check.
+
 ## Do Not Put These In This File
 
 - SMTP Password
