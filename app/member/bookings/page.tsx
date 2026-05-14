@@ -40,6 +40,36 @@ type CreateBookingFormState = {
   note: string;
 };
 
+function getApiErrorMessage(payload: unknown, status: number, fallback: string, zh: boolean) {
+  const body = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>) : {};
+  const nestedError = typeof body.error === "object" && body.error !== null ? (body.error as Record<string, unknown>) : null;
+  const code =
+    (typeof body.code === "string" && body.code) ||
+    (nestedError && typeof nestedError.code === "string" ? nestedError.code : "");
+  const rawMessage =
+    (nestedError && typeof nestedError.message === "string" ? nestedError.message : "") ||
+    (typeof body.message === "string" ? body.message : "") ||
+    (typeof body.errorMessage === "string" ? body.errorMessage : "") ||
+    (typeof body.legacyError === "string" ? body.legacyError : "") ||
+    (typeof body.error === "string" ? body.error : "");
+
+  if (status === 401 || code === "UNAUTHORIZED") {
+    return zh ? "請先以會員帳號登入後再查看預約。" : "Please sign in with a member account to view bookings.";
+  }
+
+  if (status === 403 && (code === "FORBIDDEN" || rawMessage === "Forbidden")) {
+    return zh
+      ? "目前登入帳號不是會員帳號，無法查看會員預約。請切換會員帳號或聯絡櫃台確認帳號權限。"
+      : "The current account is not a member account. Please switch accounts or contact frontdesk to confirm access.";
+  }
+
+  if (status === 404 && code === "ENTITLEMENT_NOT_FOUND") {
+    return zh ? "找不到會員資料，請聯絡櫃台確認帳號。" : "Member profile was not found. Please contact frontdesk to confirm the account.";
+  }
+
+  return rawMessage || fallback;
+}
+
 function canModifyByTime(startsAtIso: string) {
   const starts = new Date(startsAtIso).getTime();
   if (Number.isNaN(starts)) return false;
@@ -201,11 +231,7 @@ export default function MemberBookingsPage() {
         const res = await fetch(`/api/member/bookings${qs}`, { cache: "no-store" });
         const json: unknown = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const msg =
-            typeof json === "object" && json && "error" in json && typeof (json as { error?: unknown }).error === "string"
-              ? (json as { error: string }).error
-              : t.loadFail;
-          throw new Error(msg);
+          throw new Error(getApiErrorMessage(json, res.status, t.loadFail, zh));
         }
         const parsed = ListSchema.safeParse(json);
         if (!parsed.success) throw new Error(t.invalidResponse);
@@ -238,7 +264,7 @@ export default function MemberBookingsPage() {
         setLoading(false);
       }
     },
-    [t.invalidResponse, t.loadFail],
+    [t.invalidResponse, t.loadFail, zh],
   );
 
   useEffect(() => {
@@ -265,11 +291,7 @@ export default function MemberBookingsPage() {
     });
     const json: unknown = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const msg =
-        typeof json === "object" && json && "error" in json && typeof (json as { error?: unknown }).error === "string"
-          ? (json as { error: string }).error
-          : t.updateFail;
-      throw new Error(msg);
+      throw new Error(getApiErrorMessage(json, res.status, t.updateFail, zh));
     }
   }
 
@@ -343,7 +365,7 @@ export default function MemberBookingsPage() {
         }),
       });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || t.updateFail);
+      if (!res.ok) throw new Error(getApiErrorMessage(payload, res.status, t.updateFail, zh));
 
       setCreateMessage(t.createSuccess);
       setCreateForm({ serviceName: "", coachId: "", startsLocal: "", endsLocal: "", note: "" });
