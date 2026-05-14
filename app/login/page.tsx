@@ -161,7 +161,11 @@ function LoginContent() {
 
     return null;
   }, [searchParams]);
-  const selectedPanel = useMemo(() => resolveLoginPanel(searchParams.get("tab")), [searchParams]);
+  const isFocusedBackofficeEntry = returnTo === "/admin/trial-bookings" || returnTo === "/platform-admin";
+  const selectedPanel = useMemo(
+    () => (isFocusedBackofficeEntry ? "staff" : resolveLoginPanel(searchParams.get("tab"))),
+    [isFocusedBackofficeEntry, searchParams],
+  );
   const [activePanel, setActivePanel] = useState<LoginPanel>(() => selectedPanel);
 
   useEffect(() => {
@@ -313,24 +317,28 @@ function LoginContent() {
           >
             {zh ? "員工 / 後台" : "Staff"}
           </button>
-          <button
-            aria-selected={activePanel === "member"}
-            className={`btn ${activePanel === "member" ? "btnPrimary" : ""}`}
-            onClick={() => setActivePanel("member")}
-            role="tab"
-            type="button"
-          >
-            {zh ? "會員登入" : "Member"}
-          </button>
-          <button
-            aria-selected={activePanel === "activation"}
-            className={`btn ${activePanel === "activation" ? "btnPrimary" : ""}`}
-            onClick={() => setActivePanel("activation")}
-            role="tab"
-            type="button"
-          >
-            {zh ? "首次啟用" : "Activation"}
-          </button>
+          {!isFocusedBackofficeEntry ? (
+            <>
+              <button
+                aria-selected={activePanel === "member"}
+                className={`btn ${activePanel === "member" ? "btnPrimary" : ""}`}
+                onClick={() => setActivePanel("member")}
+                role="tab"
+                type="button"
+              >
+                {zh ? "會員登入" : "Member"}
+              </button>
+              <button
+                aria-selected={activePanel === "activation"}
+                className={`btn ${activePanel === "activation" ? "btnPrimary" : ""}`}
+                onClick={() => setActivePanel("activation")}
+                role="tab"
+                type="button"
+              >
+                {zh ? "首次啟用" : "Activation"}
+              </button>
+            </>
+          ) : null}
         </div>
 
         {activePanel === "staff" ? (
