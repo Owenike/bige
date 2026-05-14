@@ -115,6 +115,8 @@ export default function TrialBookingsAdminPage() {
   const [accessState, setAccessState] = useState<TrialAdminAccessState>("checking");
   const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
   const [rowMessages, setRowMessages] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -165,6 +167,28 @@ export default function TrialBookingsAdminPage() {
   useEffect(() => {
     void loadBookings();
   }, [loadBookings]);
+
+  async function handleLogout() {
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+    setLogoutError("");
+
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("登出失敗，請稍後再試。");
+      }
+
+      router.replace("/login");
+    } catch (err) {
+      setLogoutError(err instanceof Error ? err.message : "登出失敗，請稍後再試。");
+      setIsLoggingOut(false);
+    }
+  }
 
   async function updateBookingStatus(bookingId: string, nextStatus: BookingStatus) {
     const current = bookings.find((booking) => booking.id === bookingId);
@@ -265,7 +289,17 @@ export default function TrialBookingsAdminPage() {
           <button className="trialAdminButton" type="button" onClick={loadBookings} disabled={isLoading}>
             {isLoading ? "讀取中" : "重新整理"}
           </button>
+          <button
+            className="trialAdminButton trialAdminButtonDanger"
+            type="button"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+          >
+            {isLoggingOut ? "登出中..." : "登出"}
+          </button>
         </header>
+
+        {logoutError ? <div className="trialAdminError">{logoutError}</div> : null}
 
         <section className="trialAdminFilters" aria-label="首次體驗預約篩選">
           <label className="trialAdminField">
