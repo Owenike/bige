@@ -1,7 +1,7 @@
 import { apiError, apiSuccess } from "../../../../lib/auth-context";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 
-const GENDER_OPTIONS = new Set(["女性", "男性", "不方便透露"]);
+const GENDER_OPTIONS = new Set(["男性", "女性"]);
 const DAY_TYPE_OPTIONS = new Set(["平日", "假日", "都可以"]);
 const TIME_SLOT_OPTIONS = new Set(["下午", "晚上", "都可以"]);
 
@@ -21,9 +21,10 @@ function normalizeDate(value: unknown) {
 }
 
 function publicBookingError(message: string) {
-  if (message === "customer_name_required") return "請輸入姓名";
+  if (message === "customer_name_required") return "請填寫姓名";
   if (message === "customer_gender_required") return "請選擇性別";
-  if (message === "customer_phone_required") return "請輸入手機號碼";
+  if (message === "customer_phone_required") return "請填寫手機號碼";
+  if (message === "customer_birthdate_required") return "請選擇出生年月日";
   if (message === "preferred_day_type_required") return "請選擇可預約日期";
   if (message === "preferred_time_slot_required") return "請選擇可預約時段";
   if (message === "invalid_birthdate") return "出生年月日格式不正確";
@@ -41,10 +42,11 @@ export async function POST(request: Request) {
   const preferredTimeSlot = text(body?.preferredTimeSlot);
   const note = nullableText(body?.note);
 
-  if (!contactName) return apiError(400, "FORBIDDEN", "請輸入姓名");
+  if (!contactName) return apiError(400, "FORBIDDEN", "請填寫姓名");
   if (!GENDER_OPTIONS.has(gender)) return apiError(400, "FORBIDDEN", "請選擇性別");
-  if (!contactPhone) return apiError(400, "FORBIDDEN", "請輸入手機號碼");
+  if (!contactPhone) return apiError(400, "FORBIDDEN", "請填寫手機號碼");
   if (birthdate === "") return apiError(400, "FORBIDDEN", "出生年月日格式不正確");
+  if (!birthdate) return apiError(400, "FORBIDDEN", "請選擇出生年月日");
   if (!DAY_TYPE_OPTIONS.has(preferredDayType)) return apiError(400, "FORBIDDEN", "請選擇可預約日期");
   if (!TIME_SLOT_OPTIONS.has(preferredTimeSlot)) return apiError(400, "FORBIDDEN", "請選擇可預約時段");
 

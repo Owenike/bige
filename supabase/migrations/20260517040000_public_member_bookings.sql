@@ -36,11 +36,14 @@ begin
   if p_customer_name is null then
     raise exception 'customer_name_required';
   end if;
-  if p_customer_gender is null or p_customer_gender not in ('女性', '男性', '不方便透露') then
+  if p_customer_gender is null or p_customer_gender not in ('男性', '女性') then
     raise exception 'customer_gender_required';
   end if;
   if p_customer_phone is null then
     raise exception 'customer_phone_required';
+  end if;
+  if p_customer_birthdate is null then
+    raise exception 'customer_birthdate_required';
   end if;
   if p_preferred_day_type is null or p_preferred_day_type not in ('平日', '假日', '都可以') then
     raise exception 'preferred_day_type_required';
@@ -66,7 +69,7 @@ begin
     '姓名：' || p_customer_name,
     '性別：' || p_customer_gender,
     '手機號碼：' || p_customer_phone,
-    '出生年月日：' || coalesce(p_customer_birthdate::text, '未填寫'),
+    '出生年月日：' || p_customer_birthdate::text,
     '可預約日期：' || p_preferred_day_type,
     '可預約時段：' || p_preferred_time_slot,
     case when p_note is not null then '備註：' || p_note else null end

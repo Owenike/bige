@@ -66,15 +66,15 @@ export default function MemberBookingsPage() {
         submitting: "送出中...",
         success: "已送出預約需求，我們會再與你聯繫確認時間。",
         fail: "預約需求送出失敗，請稍後再試，或直接聯繫櫃台協助。",
-        requireName: "請輸入姓名",
+        requireName: "請填寫姓名",
         requireGender: "請選擇性別",
-        requirePhone: "請輸入手機號碼",
+        requirePhone: "請填寫手機號碼",
+        requireBirthdate: "請選擇出生年月日",
         requireDay: "請選擇可預約日期",
         requireTime: "請選擇可預約時段",
         genders: [
-          { value: "女性", label: "女性" },
           { value: "男性", label: "男性" },
-          { value: "不方便透露", label: "不方便透露" },
+          { value: "女性", label: "女性" },
         ],
         dayTypes: [
           { value: "平日", label: "平日" },
@@ -111,12 +111,12 @@ export default function MemberBookingsPage() {
         requireName: "Please enter your name.",
         requireGender: "Please select gender.",
         requirePhone: "Please enter your mobile phone.",
+        requireBirthdate: "Please select birthdate.",
         requireDay: "Please select preferred days.",
         requireTime: "Please select preferred time.",
         genders: [
-          { value: "女性", label: "Female" },
           { value: "男性", label: "Male" },
-          { value: "不方便透露", label: "Prefer not to say" },
+          { value: "女性", label: "Female" },
         ],
         dayTypes: [
           { value: "平日", label: "Weekdays" },
@@ -142,6 +142,7 @@ export default function MemberBookingsPage() {
       if (!form.contactName.trim()) throw new Error(t.requireName);
       if (!form.gender) throw new Error(t.requireGender);
       if (!form.contactPhone.trim()) throw new Error(t.requirePhone);
+      if (!form.birthdate) throw new Error(t.requireBirthdate);
       if (!form.preferredDayType) throw new Error(t.requireDay);
       if (!form.preferredTimeSlot) throw new Error(t.requireTime);
 
