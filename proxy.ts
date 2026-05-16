@@ -22,6 +22,7 @@ function normalizePathScope(pathname: string): RouteScope {
   if (pathname === "/manager" || pathname.startsWith("/manager/")) return "manager";
   if (pathname === "/frontdesk" || pathname.startsWith("/frontdesk/")) return "frontdesk";
   if (pathname === "/coach" || pathname.startsWith("/coach/")) return "coach";
+  if (pathname === "/member/bookings") return null;
   if (pathname === "/member" || pathname.startsWith("/member/")) return "member";
   return null;
 }
