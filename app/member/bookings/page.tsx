@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useI18n } from "../../i18n-provider";
-import { MemberTabs } from "../_components/MemberTabs";
 
 const CANCEL_OR_RESCHEDULE_LOCK_MINUTES = 120;
 
@@ -138,9 +137,6 @@ export default function MemberBookingsPage() {
         ? {
             title: "我的預約",
             desc: `可依狀態篩選，並可取消或改期（需填原因；距離開始 ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} 分鐘內不可修改）。`,
-            backMember: "返回會員首頁",
-            profile: "個人資料",
-            reload: "重新載入",
             createTitle: "新增預約",
             createService: "課程/服務名稱",
             createCoach: "教練 ID（可選）",
@@ -180,9 +176,6 @@ export default function MemberBookingsPage() {
         : {
             title: "My Bookings",
             desc: `Filter by status and cancel/reschedule (reason required; cannot modify within ${CANCEL_OR_RESCHEDULE_LOCK_MINUTES} minutes before start).`,
-            backMember: "Back to Member",
-            profile: "Profile",
-            reload: "Reload",
             createTitle: "Create Booking",
             createService: "Service Name",
             createCoach: "Coach ID (optional)",
@@ -386,19 +379,6 @@ export default function MemberBookingsPage() {
             {t.title}
           </h1>
           <p className="sub">{t.desc}</p>
-          <MemberTabs />
-
-          <div className="actions" style={{ marginTop: 10 }}>
-            <a className="btn" href="/member">
-              {t.backMember}
-            </a>
-            <a className="btn" href="/member/profile">
-              {t.profile}
-            </a>
-            <button className="btn btnPrimary" type="button" onClick={() => void fetchList(status)} disabled={loading}>
-              {t.reload}
-            </button>
-          </div>
 
           <div className="card" style={{ marginTop: 12, padding: 12 }}>
             <div className="kvLabel">{t.createTitle}</div>
