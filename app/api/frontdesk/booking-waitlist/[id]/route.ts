@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireOpenShift, requireProfile } from "../../../../../lib/auth-context";
 
-const ALLOWED_STATUS = new Set(["pending", "notified", "booked", "cancelled"]);
+const ALLOWED_STATUS = new Set(["pending", "notified", "contacted", "booked", "cancelled"]);
 
 function normalizeDate(value: unknown) {
   if (typeof value !== "string") return null;

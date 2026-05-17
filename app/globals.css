@@ -6271,6 +6271,28 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   border-radius: 20px;
   padding: 16px;
 }
+.trialAdminSection{
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid rgba(190, 207, 231, .12);
+  padding-top: 22px;
+}
+.trialAdminSectionHeader{
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+.trialAdminSectionHeader h2{
+  margin: 0;
+  font-size: clamp(22px, 3vw, 30px);
+}
+.trialAdminSectionHeader p{
+  max-width: 760px;
+  margin: 8px 0 0;
+  color: rgba(222, 233, 248, .76);
+  line-height: 1.65;
+}
 .trialAdminField{
   display: grid;
   gap: 8px;
@@ -6371,6 +6393,14 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .trialAdminTable td{
   color: rgba(242, 247, 255, .88);
 }
+.trialAdminNoteText{
+  max-width: 480px;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  color: inherit;
+}
 .trialAdminBadge{
   display: inline-flex;
   align-items: center;
@@ -6385,6 +6415,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   white-space: nowrap;
 }
 .trialAdminBadge.is-new,
+.trialAdminBadge.is-pending,
 .trialAdminBadge.is-pending_cash,
 .trialAdminBadge.is-pending_payment{
   border-color: rgba(241, 195, 117, .28);
@@ -6393,7 +6424,8 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .trialAdminBadge.is-paid,
 .trialAdminBadge.is-completed,
-.trialAdminBadge.is-scheduled{
+.trialAdminBadge.is-scheduled,
+.trialAdminBadge.is-booked{
   border-color: rgba(123, 211, 158, .28);
   background: rgba(60, 143, 94, .16);
   color: #d9f8e5;
@@ -6503,6 +6535,10 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
   .trialAdminFilters{
     grid-template-columns: 1fr 1fr;
+  }
+  .trialAdminSectionHeader{
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 @media (max-width: 720px){

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 type PaymentMethod = "cash_on_site" | "online_payment";
 type PaymentStatus = "pending_cash" | "pending_payment" | "paid" | "failed" | "cancelled";
 type BookingStatus = "new" | "contacted" | "scheduled" | "completed" | "cancelled";
+type WaitlistStatus = "pending" | "contacted" | "booked" | "cancelled";
 
 type TrialBookingRow = {
   id: string;
@@ -37,6 +38,23 @@ type TrialBookingStatusUpdateResponse = {
     updated_at: string;
   };
   error?: string;
+};
+
+type BookingWaitlistRow = {
+  id: string;
+  createdAt: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  note: string | null;
+  status: WaitlistStatus;
+};
+
+type BookingWaitlistResponse = {
+  ok?: boolean;
+  items?: BookingWaitlistRow[];
+  item?: BookingWaitlistRow;
+  error?: string;
+  message?: string;
 };
 
 const serviceLabels: Record<string, string> = {
@@ -85,6 +103,20 @@ const bookingStatusOptions: Array<{ value: BookingStatus; label: string }> = [
   { value: "cancelled", label: "已取消" },
 ];
 
+const waitlistStatusLabels: Record<WaitlistStatus, string> = {
+  pending: "待聯繫",
+  contacted: "已聯繫",
+  booked: "已預約",
+  cancelled: "已取消",
+};
+
+const waitlistStatusOptions: Array<{ value: WaitlistStatus; label: string }> = [
+  { value: "pending", label: "待聯繫" },
+  { value: "contacted", label: "已聯繫" },
+  { value: "booked", label: "已預約" },
+  { value: "cancelled", label: "已取消" },
+];
+
 function formatDateTime(value: string) {
   if (!value) return "-";
   const date = new Date(value);
@@ -106,6 +138,7 @@ function labelOrFallback(labels: Record<string, string>, value: string | null | 
 export default function TrialBookingsAdminPage() {
   const router = useRouter();
   const [bookings, setBookings] = useState<TrialBookingRow[]>([]);
+  const [waitlistItems, setWaitlistItems] = useState<BookingWaitlistRow[]>([]);
   const [search, setSearch] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
@@ -114,7 +147,11 @@ export default function TrialBookingsAdminPage() {
   const [error, setError] = useState("");
   const [accessState, setAccessState] = useState<TrialAdminAccessState>("checking");
   const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
+  const [isWaitlistLoading, setIsWaitlistLoading] = useState(true);
+  const [waitlistError, setWaitlistError] = useState("");
+  const [updatingWaitlistId, setUpdatingWaitlistId] = useState<string | null>(null);
   const [rowMessages, setRowMessages] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
+  const [waitlistRowMessages, setWaitlistRowMessages] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
 
@@ -164,9 +201,33 @@ export default function TrialBookingsAdminPage() {
     }
   }, [queryString, router]);
 
+  const loadWaitlist = useCallback(async () => {
+    setIsWaitlistLoading(true);
+    setWaitlistError("");
+
+    try {
+      const response = await fetch("/api/admin/booking-waitlist", { cache: "no-store" });
+      const payload = (await response.json().catch(() => null)) as BookingWaitlistResponse | null;
+
+      if (!response.ok || !payload?.ok) {
+        setWaitlistError(payload?.message || payload?.error || "無法讀取公開預約需求。");
+        setWaitlistItems([]);
+        return;
+      }
+
+      setWaitlistItems(payload.items || []);
+    } catch {
+      setWaitlistError("讀取公開預約需求時發生錯誤，請稍後再試。");
+      setWaitlistItems([]);
+    } finally {
+      setIsWaitlistLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadBookings();
-  }, [loadBookings]);
+    void loadWaitlist();
+  }, [loadBookings, loadWaitlist]);
 
   async function handleLogout() {
     if (isLoggingOut) return;
@@ -244,6 +305,50 @@ export default function TrialBookingsAdminPage() {
     }
   }
 
+  async function updateWaitlistStatus(itemId: string, nextStatus: WaitlistStatus) {
+    const current = waitlistItems.find((item) => item.id === itemId);
+    if (!current || current.status === nextStatus || updatingWaitlistId) return;
+
+    setUpdatingWaitlistId(itemId);
+    setWaitlistRowMessages((messages) => ({
+      ...messages,
+      [itemId]: { type: "success", text: "更新中..." },
+    }));
+
+    try {
+      const response = await fetch("/api/admin/booking-waitlist", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: itemId, status: nextStatus }),
+      });
+      const payload = (await response.json().catch(() => null)) as BookingWaitlistResponse | null;
+
+      if (!response.ok || !payload?.ok || !payload.item) {
+        setWaitlistRowMessages((messages) => ({
+          ...messages,
+          [itemId]: {
+            type: "error",
+            text: payload?.message || payload?.error || "更新公開預約需求狀態失敗。",
+          },
+        }));
+        return;
+      }
+
+      setWaitlistItems((items) => items.map((item) => (item.id === itemId ? { ...item, status: payload.item!.status } : item)));
+      setWaitlistRowMessages((messages) => ({
+        ...messages,
+        [itemId]: { type: "success", text: "已更新" },
+      }));
+    } catch {
+      setWaitlistRowMessages((messages) => ({
+        ...messages,
+        [itemId]: { type: "error", text: "更新公開預約需求狀態時發生錯誤。" },
+      }));
+    } finally {
+      setUpdatingWaitlistId(null);
+    }
+  }
+
   function renderStatusControl(booking: TrialBookingRow) {
     const isUpdating = updatingBookingId === booking.id;
     const message = rowMessages[booking.id];
@@ -277,6 +382,37 @@ export default function TrialBookingsAdminPage() {
     );
   }
 
+  function renderWaitlistStatusControl(item: BookingWaitlistRow) {
+    const isUpdating = updatingWaitlistId === item.id;
+    const message = waitlistRowMessages[item.id];
+
+    return (
+      <div className={`trialAdminStatusControl${isUpdating ? " trialAdminRowUpdating" : ""}`}>
+        <select
+          className="trialAdminStatusSelect"
+          value={item.status}
+          disabled={isUpdating}
+          onChange={(event) => {
+            void updateWaitlistStatus(item.id, event.target.value as WaitlistStatus);
+          }}
+          aria-label={`${item.contactName || "booking request"} 預約需求狀態`}
+        >
+          {waitlistStatusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <span className={`trialAdminBadge is-${item.status}`}>{labelOrFallback(waitlistStatusLabels, item.status)}</span>
+        {message ? (
+          <span className={`trialAdminInlineMessage is-${message.type}`} role={message.type === "error" ? "alert" : "status"}>
+            {message.text}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <main className="trialAdminPage">
       <section className="trialAdminShell">
@@ -286,8 +422,16 @@ export default function TrialBookingsAdminPage() {
             <h1>首次體驗預約管理</h1>
             <p>查看官網首次體驗預約進件與付款狀態。</p>
           </div>
-          <button className="trialAdminButton" type="button" onClick={loadBookings} disabled={isLoading}>
-            {isLoading ? "讀取中" : "重新整理"}
+          <button
+            className="trialAdminButton"
+            type="button"
+            onClick={() => {
+              void loadBookings();
+              void loadWaitlist();
+            }}
+            disabled={isLoading || isWaitlistLoading}
+          >
+            {isLoading || isWaitlistLoading ? "讀取中" : "重新整理"}
           </button>
           <button
             className="trialAdminButton trialAdminButtonDanger"
@@ -454,6 +598,83 @@ export default function TrialBookingsAdminPage() {
             </div>
           </>
         ) : null}
+
+        {accessState === "unauthorized" || accessState === "forbidden" ? null : (
+          <section className="trialAdminSection">
+            <div className="trialAdminSectionHeader">
+              <div>
+                <h2>公開預約需求</h2>
+                <p>顯示未登入訪客送出的預約需求，請由櫃台或管理人員主動聯繫確認實際時間。</p>
+              </div>
+              <button className="trialAdminButton" type="button" onClick={loadWaitlist} disabled={isWaitlistLoading}>
+                {isWaitlistLoading ? "讀取中" : "重新整理需求"}
+              </button>
+            </div>
+
+            {waitlistError ? <div className="trialAdminError">{waitlistError}</div> : null}
+
+            {isWaitlistLoading ? (
+              <div className="trialAdminEmpty">正在讀取公開預約需求。</div>
+            ) : !waitlistError && waitlistItems.length === 0 ? (
+              <div className="trialAdminEmpty">目前沒有公開預約需求。</div>
+            ) : !waitlistError ? (
+              <>
+                <div className="trialAdminTableWrap">
+                  <table className="trialAdminTable">
+                    <thead>
+                      <tr>
+                        <th>送出時間</th>
+                        <th>姓名</th>
+                        <th>手機</th>
+                        <th>狀態</th>
+                        <th>備註</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {waitlistItems.map((item) => (
+                        <tr key={item.id}>
+                          <td>{formatDateTime(item.createdAt)}</td>
+                          <td>{item.contactName || "-"}</td>
+                          <td>{item.contactPhone || "-"}</td>
+                          <td>{renderWaitlistStatusControl(item)}</td>
+                          <td>
+                            <pre className="trialAdminNoteText">{item.note || "-"}</pre>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="trialAdminMobileList">
+                  {waitlistItems.map((item) => (
+                    <article className="trialAdminMobileCard" key={item.id}>
+                      <div className="trialAdminMobileCardHeader">
+                        <div>
+                          <strong>{item.contactName || "-"}</strong>
+                          <span>{formatDateTime(item.createdAt)}</span>
+                        </div>
+                        {renderWaitlistStatusControl(item)}
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>手機</dt>
+                          <dd>{item.contactPhone || "-"}</dd>
+                        </div>
+                        <div className="trialAdminMobileNote">
+                          <dt>備註</dt>
+                          <dd>
+                            <pre className="trialAdminNoteText">{item.note || "-"}</pre>
+                          </dd>
+                        </div>
+                      </dl>
+                    </article>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </section>
+        )}
       </section>
     </main>
   );
