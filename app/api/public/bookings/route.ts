@@ -1,4 +1,5 @@
 import { apiError, apiSuccess } from "../../../../lib/auth-context";
+import { sendLineBookingNotification } from "../../../../lib/line-push";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 
 const GENDER_OPTIONS = new Set(["男性", "女性"]);
@@ -72,5 +73,15 @@ export async function POST(request: Request) {
   }
 
   const requestItem = Array.isArray(data) ? data[0] : data;
+  await sendLineBookingNotification({
+    customerName: contactName,
+    customerGender: gender,
+    customerPhone: contactPhone,
+    customerBirthdate: birthdate,
+    preferredDayType,
+    preferredTimeSlot,
+    note,
+  });
+
   return apiSuccess({ request: requestItem });
 }
