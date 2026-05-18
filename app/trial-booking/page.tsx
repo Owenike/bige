@@ -82,6 +82,10 @@ const initialFormData: TrialBookingFormData = {
   note: "",
 };
 
+const BIGE_HOME_URL = "/";
+const BIGE_LINE_URL = "https://lin.ee/0GWm0oZ";
+const BIGE_MAP_URL = "https://www.google.com/maps/search/?api=1&query=%E5%B7%A8%E6%8C%BA%E5%81%A5%E8%BA%AB%E9%A4%A8";
+
 function getServiceLabel(value: TrialService | "") {
   return serviceOptions.find((option) => option.value === value)?.label ?? "-";
 }
@@ -202,17 +206,17 @@ export default function TrialBookingPage() {
   return (
     <main className="trialBookingPage">
       <header className="trialBookingHeader">
-        <Link className="trialBookingBrand" href="/" aria-label="BIGE home">
+        <Link className="trialBookingBrand" href={BIGE_HOME_URL} aria-label="BIGE home">
           <span>BIGE</span>
           <small>仁武質感健身體驗</small>
         </Link>
         <nav className="trialBookingNav" aria-label="BigE trial booking navigation">
-          <Link href="/">課程介紹</Link>
+          <Link href={BIGE_HOME_URL}>課程介紹</Link>
           <a href="#trial-booking-form">立即預約</a>
-          <a href="https://lin.ee/0GWm0oZ" target="_blank" rel="noreferrer">
+          <a href={BIGE_LINE_URL} target="_blank" rel="noreferrer">
             LINE 諮詢
           </a>
-          <a href="https://maps.google.com/?q=BigE%20Fitness" target="_blank" rel="noreferrer">
+          <a href={BIGE_MAP_URL} target="_blank" rel="noreferrer">
             地圖
           </a>
           <LangSwitch />
@@ -267,7 +271,7 @@ export default function TrialBookingPage() {
               </dl>
 
               <div className="trialBookingActions">
-                <Link className="trialBookingBtn trialBookingBtnPrimary" href="/">
+                <Link className="trialBookingBtn trialBookingBtnPrimary" href={BIGE_HOME_URL}>
                   回到首頁
                 </Link>
                 <button className="trialBookingBtn trialBookingBtnSecondary" type="button" onClick={handleReset}>
