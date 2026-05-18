@@ -17,6 +17,7 @@ export type LineBookingNotificationResult = {
 };
 
 const LINE_PUSH_ENDPOINT = "https://api.line.me/v2/bot/message/push";
+const RESPONSE_BODY_LOG_LIMIT = 300;
 
 function formatTaipeiDateTime(value: Date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -31,6 +32,29 @@ function formatTaipeiDateTime(value: Date) {
 
   const get = (type: string) => parts.find((part) => part.type === type)?.value || "";
   return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
+}
+
+function hasWhitespaceEdge(value: string) {
+  return value.length > 0 && value !== value.trim();
+}
+
+function targetPrefix(value: string) {
+  return value.trim().slice(0, 1) || "unknown";
+}
+
+function buildDiagnostics(rawToken: string, rawTarget: string) {
+  const token = rawToken.trim();
+  const target = rawTarget.trim();
+
+  return {
+    hasToken: token.length > 0,
+    tokenLength: token.length,
+    tokenHasBearerPrefix: token.toLowerCase().startsWith("bearer "),
+    tokenHasWhitespaceEdge: hasWhitespaceEdge(rawToken),
+    hasTarget: target.length > 0,
+    targetPrefix: targetPrefix(rawTarget),
+    targetLength: target.length,
+  };
 }
 
 function buildBookingNotificationText(input: LineBookingNotificationInput) {
@@ -53,13 +77,21 @@ function buildBookingNotificationText(input: LineBookingNotificationInput) {
 export async function sendLineBookingNotification(
   input: LineBookingNotificationInput,
 ): Promise<LineBookingNotificationResult> {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN || "";
-  const to = process.env.LINE_BOOKING_NOTIFY_TO || "";
+  const rawToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || "";
+  const rawTarget = process.env.LINE_BOOKING_NOTIFY_TO || "";
+  const token = rawToken.trim();
+  const to = rawTarget.trim();
+  const diagnostics = buildDiagnostics(rawToken, rawTarget);
 
   if (!token || !to) {
-    console.info("LINE booking notification skipped: missing env");
+    console.info("LINE booking notification skipped: missing env", {
+      hasToken: diagnostics.hasToken,
+      hasTarget: diagnostics.hasTarget,
+    });
     return { ok: true, skipped: true, error: "missing_env" };
   }
+
+  console.info("LINE booking notification attempting", diagnostics);
 
   try {
     const response = await fetch(LINE_PUSH_ENDPOINT, {
@@ -80,10 +112,16 @@ export async function sendLineBookingNotification(
     });
 
     if (!response.ok) {
-      console.warn("LINE booking notification failed", { status: response.status });
+      const responseBody = (await response.text()).slice(0, RESPONSE_BODY_LOG_LIMIT);
+      console.warn("LINE booking notification failed", {
+        status: response.status,
+        statusText: response.statusText,
+        responseBody,
+      });
       return { ok: false, status: response.status, error: "line_push_failed" };
     }
 
+    console.info("LINE booking notification sent", { status: response.status });
     return { ok: true, status: response.status };
   } catch (error) {
     console.warn("LINE booking notification failed", {
