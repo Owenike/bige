@@ -3,12 +3,9 @@
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
+import LangSwitch from "../lang-switch";
 
-type TrialService =
-  | "weight_training"
-  | "boxing_fitness"
-  | "pilates"
-  | "sports_massage";
+type TrialService = "weight_training" | "boxing_fitness" | "pilates" | "sports_massage";
 
 type PreferredTime =
   | "weekday_morning"
@@ -41,11 +38,11 @@ type TrialBookingSuccess = {
   bookingStatus: "new";
 };
 
-const serviceOptions: Array<{ value: TrialService; label: string }> = [
-  { value: "weight_training", label: "重量訓練" },
-  { value: "boxing_fitness", label: "拳擊體能訓練" },
-  { value: "pilates", label: "器械皮拉提斯" },
-  { value: "sports_massage", label: "運動按摩" },
+const serviceOptions: Array<{ value: TrialService; label: string; description: string }> = [
+  { value: "weight_training", label: "重量訓練", description: "建立肌力、體態與動作品質" },
+  { value: "pilates", label: "器械皮拉提斯", description: "核心控制、線條雕塑與姿勢調整" },
+  { value: "boxing_fitness", label: "拳擊體能訓練", description: "燃脂、反應、心肺與壓力釋放" },
+  { value: "sports_massage", label: "運動按摩", description: "疲勞釋放、身體放鬆與恢復" },
 ];
 
 const preferredTimeOptions: Array<{ value: PreferredTime; label: string }> = [
@@ -55,7 +52,7 @@ const preferredTimeOptions: Array<{ value: PreferredTime; label: string }> = [
   { value: "weekend_morning", label: "假日上午" },
   { value: "weekend_afternoon", label: "假日下午" },
   { value: "weekend_evening", label: "假日晚上" },
-  { value: "other", label: "其他，請於備註說明" },
+  { value: "other", label: "其他時段" },
 ];
 
 const paymentMethodOptions: Array<{
@@ -65,13 +62,13 @@ const paymentMethodOptions: Array<{
 }> = [
   {
     value: "cash_on_site",
-    label: "當天付現",
+    label: "現場付款",
     description: "送出預約後，由專人協助確認時段，體驗當天現場付款。",
   },
   {
     value: "online_payment",
     label: "線上付款",
-    description: "線上付款功能即將開放，本階段會先保留您的預約需求。",
+    description: "線上付款功能目前建置中，後續將由專人協助確認付款與預約安排。",
   },
 ];
 
@@ -99,9 +96,9 @@ function getPaymentMethodLabel(value: PaymentMethod | "") {
 
 function getPaymentStatusText(value: PaymentStatus) {
   if (value === "pending_cash") {
-    return "當天付現，待專人確認時段";
+    return "現場付款，待 BigE 團隊確認體驗時段。";
   }
-  return "線上付款待開放，待專人確認付款安排";
+  return "線上付款待確認，BigE 團隊將協助完成付款與預約安排。";
 }
 
 export default function TrialBookingPage() {
@@ -114,7 +111,7 @@ export default function TrialBookingPage() {
   const successMessage = useMemo(() => {
     if (!submittedBooking) return "";
     return submittedBooking.paymentMethod === "cash_on_site"
-      ? "我們已收到您的首次體驗預約需求。付款方式為「當天付現」，後續將由專人協助確認可預約時段。"
+      ? "我們已收到您的首次體驗預約需求。付款方式為「現場付款」，後續將由專人協助確認可預約時段。"
       : "我們已收到您的首次體驗預約需求。您選擇的是「線上付款」，線上付款功能目前建置中，後續將由專人協助確認付款與預約安排。";
   }, [submittedBooking]);
 
@@ -132,8 +129,8 @@ export default function TrialBookingPage() {
   function validate(data: TrialBookingFormData) {
     const nextErrors: TrialBookingErrors = {};
 
-    if (!data.name.trim()) nextErrors.name = "請輸入姓名";
-    if (!data.phone.trim()) nextErrors.phone = "請輸入可聯絡電話";
+    if (!data.name.trim()) nextErrors.name = "請填寫姓名";
+    if (!data.phone.trim()) nextErrors.phone = "請填寫電話";
     if (!data.service) nextErrors.service = "請選擇想體驗項目";
     if (!data.preferredTime) nextErrors.preferredTime = "請選擇方便預約時段";
     if (!data.paymentMethod) nextErrors.paymentMethod = "請選擇付款方式";
@@ -148,7 +145,7 @@ export default function TrialBookingPage() {
     const nextErrors = validate(formData);
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      setSubmitError("請先完成必填欄位，再送出預約資料。");
+      setSubmitError("請確認必填欄位已完成，再送出預約。");
       return;
     }
 
@@ -182,16 +179,13 @@ export default function TrialBookingPage() {
         | null;
 
       if (!response.ok || !payload?.ok || !payload.booking) {
-        setSubmitError(payload?.error || "目前無法送出預約資料，請稍後再試。");
+        setSubmitError(payload?.error || "建立首次體驗預約失敗，請稍後再試。");
         return;
       }
 
       setSubmittedBooking(payload.booking);
-
-      // 第二階段已改為送到 /api/trial-booking/create
-      // 第三階段可依 paymentMethod 決定是否導向 ACPay
     } catch {
-      setSubmitError("送出失敗，請確認網路連線後再試一次。");
+      setSubmitError("預約送出失敗，請稍後再試或直接聯繫 BigE 團隊。");
     } finally {
       setIsSubmitting(false);
     }
@@ -207,16 +201,34 @@ export default function TrialBookingPage() {
 
   return (
     <main className="trialBookingPage">
+      <header className="trialBookingHeader">
+        <Link className="trialBookingBrand" href="/" aria-label="BIGE home">
+          <span>BIGE</span>
+          <small>仁武質感健身體驗</small>
+        </Link>
+        <nav className="trialBookingNav" aria-label="BigE trial booking navigation">
+          <Link href="/#courses">課程介紹</Link>
+          <a href="#trial-booking-form">立即預約</a>
+          <a href="https://lin.ee/0GWm0oZ" target="_blank" rel="noreferrer">
+            LINE 諮詢
+          </a>
+          <a href="https://maps.google.com/?q=BigE%20Fitness" target="_blank" rel="noreferrer">
+            地圖
+          </a>
+          <LangSwitch />
+        </nav>
+      </header>
+
       <section className="trialBookingShell">
         <div className="trialBookingIntro">
           <p className="trialBookingEyebrow">BIGE TRIAL</p>
-          <h1 className="trialBookingTitle">BigE 首次體驗預約</h1>
+          <h1 className="trialBookingTitle">開始你的第一次 BigE 體驗</h1>
           <p className="trialBookingLead">
-            填寫資料後，將由專人協助確認體驗項目與可預約時段。
+            選擇你想體驗的訓練項目，我們將由專人協助安排最適合的時段與教練。
           </p>
         </div>
 
-        <div className="trialBookingCard">
+        <div className="trialBookingCard" id="trial-booking-form">
           {submittedBooking ? (
             <section className="trialBookingSuccessCard" aria-live="polite">
               <p className="trialBookingSuccessBadge">預約成功</p>
@@ -256,132 +268,168 @@ export default function TrialBookingPage() {
 
               <div className="trialBookingActions">
                 <Link className="trialBookingBtn trialBookingBtnPrimary" href="/">
-                  返回首頁
+                  回到首頁
                 </Link>
                 <button className="trialBookingBtn trialBookingBtnSecondary" type="button" onClick={handleReset}>
-                  重新填寫
+                  再填一筆
                 </button>
               </div>
             </section>
           ) : (
             <form className="trialBookingForm" onSubmit={handleSubmit} noValidate>
-              <div className="trialBookingField">
-                <label className="trialBookingLabel" htmlFor="trial-name">姓名</label>
-                <input
-                  id="trial-name"
-                  className="trialBookingInput"
-                  value={formData.name}
-                  onChange={(event) => updateField("name", event.target.value)}
-                  placeholder="請輸入您的姓名"
-                  autoComplete="name"
-                  maxLength={50}
-                />
-                {errors.name ? <p className="trialBookingFieldError">{errors.name}</p> : null}
-              </div>
-
-              <div className="trialBookingField">
-                <label className="trialBookingLabel" htmlFor="trial-phone">電話</label>
-                <input
-                  id="trial-phone"
-                  className="trialBookingInput"
-                  value={formData.phone}
-                  onChange={(event) => updateField("phone", event.target.value)}
-                  placeholder="請輸入可聯絡電話"
-                  autoComplete="tel"
-                  inputMode="tel"
-                  maxLength={30}
-                />
-                {errors.phone ? <p className="trialBookingFieldError">{errors.phone}</p> : null}
-              </div>
-
-              <div className="trialBookingField">
-                <label className="trialBookingLabel" htmlFor="trial-line-name">LINE 名稱</label>
-                <input
-                  id="trial-line-name"
-                  className="trialBookingInput"
-                  value={formData.lineName}
-                  onChange={(event) => updateField("lineName", event.target.value)}
-                  placeholder="方便我們辨識您的 LINE 名稱"
-                  maxLength={80}
-                />
-              </div>
-
-              <div className="trialBookingField">
-                <label className="trialBookingLabel" htmlFor="trial-service">想體驗項目</label>
-                <select
-                  id="trial-service"
-                  className="trialBookingInput trialBookingSelect"
-                  value={formData.service}
-                  onChange={(event) => updateField("service", event.target.value as TrialService | "")}
-                >
-                  <option value="">請選擇體驗項目</option>
+              <section className="trialBookingStep" aria-labelledby="trial-service-heading">
+                <div className="trialBookingStepHead">
+                  <span>01</span>
+                  <div>
+                    <h2 id="trial-service-heading">選擇體驗項目</h2>
+                    <p>先選擇你想開始的方向，BigE 團隊會協助安排適合教練。</p>
+                  </div>
+                </div>
+                <div className="trialBookingServiceGrid">
                   {serviceOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                {errors.service ? <p className="trialBookingFieldError">{errors.service}</p> : null}
-              </div>
-
-              <div className="trialBookingField">
-                <label className="trialBookingLabel" htmlFor="trial-preferred-time">方便預約時段</label>
-                <select
-                  id="trial-preferred-time"
-                  className="trialBookingInput trialBookingSelect"
-                  value={formData.preferredTime}
-                  onChange={(event) => updateField("preferredTime", event.target.value as PreferredTime | "")}
-                >
-                  <option value="">請選擇方便預約時段</option>
-                  {preferredTimeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                {errors.preferredTime ? <p className="trialBookingFieldError">{errors.preferredTime}</p> : null}
-              </div>
-
-              <fieldset className="trialBookingFieldset">
-                <legend className="trialBookingLegend">付款方式</legend>
-                <div className="trialBookingRadioGroup">
-                  {paymentMethodOptions.map((option) => (
-                    <label
+                    <button
                       key={option.value}
-                      className={`trialBookingRadioCard${formData.paymentMethod === option.value ? " is-selected" : ""}`}
+                      type="button"
+                      className={`trialBookingServiceCard${formData.service === option.value ? " is-selected" : ""}`}
+                      onClick={() => updateField("service", option.value)}
+                      aria-pressed={formData.service === option.value}
                     >
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value={option.value}
-                        checked={formData.paymentMethod === option.value}
-                        onChange={(event) => updateField("paymentMethod", event.target.value as PaymentMethod)}
-                      />
-                      <span className="trialBookingRadioTitle">{option.label}</span>
-                      <span className="trialBookingRadioDescription">{option.description}</span>
-                    </label>
+                      <span className="trialBookingServiceTitle">{option.label}</span>
+                      <span className="trialBookingServiceDescription">{option.description}</span>
+                      <span className="trialBookingSelectedText">
+                        {formData.service === option.value ? "已選擇" : "選擇"}
+                      </span>
+                    </button>
                   ))}
                 </div>
-                {errors.paymentMethod ? <p className="trialBookingFieldError">{errors.paymentMethod}</p> : null}
-              </fieldset>
+                {errors.service ? <p className="trialBookingFieldError">{errors.service}</p> : null}
+              </section>
 
-              <div className="trialBookingField">
-                <label className="trialBookingLabel" htmlFor="trial-note">備註</label>
-                <textarea
-                  id="trial-note"
-                  className="trialBookingInput trialBookingTextarea"
-                  value={formData.note}
-                  onChange={(event) => updateField("note", event.target.value)}
-                  placeholder="例如想體驗的日期、運動經驗、特殊需求等"
-                  rows={5}
-                  maxLength={500}
-                />
-              </div>
+              <section className="trialBookingStep" aria-labelledby="trial-time-heading">
+                <div className="trialBookingStepHead">
+                  <span>02</span>
+                  <div>
+                    <h2 id="trial-time-heading">選擇方便時段</h2>
+                    <p>不需要先挑精準時間，我們會再與你確認實際安排。</p>
+                  </div>
+                </div>
+                <div className="trialBookingChipGroup" role="group" aria-label="方便預約時段">
+                  {preferredTimeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`trialBookingChip${formData.preferredTime === option.value ? " is-selected" : ""}`}
+                      onClick={() => updateField("preferredTime", option.value)}
+                      aria-pressed={formData.preferredTime === option.value}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                {errors.preferredTime ? <p className="trialBookingFieldError">{errors.preferredTime}</p> : null}
+              </section>
+
+              <section className="trialBookingStep" aria-labelledby="trial-contact-heading">
+                <div className="trialBookingStepHead">
+                  <span>03</span>
+                  <div>
+                    <h2 id="trial-contact-heading">留下聯絡方式</h2>
+                    <p>我們會用你留下的資訊聯繫確認課程與時段。</p>
+                  </div>
+                </div>
+                <div className="trialBookingContactGrid">
+                  <div className="trialBookingField">
+                    <label className="trialBookingLabel" htmlFor="trial-name">姓名</label>
+                    <input
+                      id="trial-name"
+                      className="trialBookingInput"
+                      value={formData.name}
+                      onChange={(event) => updateField("name", event.target.value)}
+                      placeholder="請輸入姓名"
+                      autoComplete="name"
+                      maxLength={50}
+                    />
+                    {errors.name ? <p className="trialBookingFieldError">{errors.name}</p> : null}
+                  </div>
+
+                  <div className="trialBookingField">
+                    <label className="trialBookingLabel" htmlFor="trial-phone">電話</label>
+                    <input
+                      id="trial-phone"
+                      className="trialBookingInput"
+                      value={formData.phone}
+                      onChange={(event) => updateField("phone", event.target.value)}
+                      placeholder="請輸入手機號碼"
+                      autoComplete="tel"
+                      inputMode="tel"
+                      maxLength={30}
+                    />
+                    {errors.phone ? <p className="trialBookingFieldError">{errors.phone}</p> : null}
+                  </div>
+
+                  <div className="trialBookingField">
+                    <label className="trialBookingLabel" htmlFor="trial-line-name">LINE 名稱</label>
+                    <input
+                      id="trial-line-name"
+                      className="trialBookingInput"
+                      value={formData.lineName}
+                      onChange={(event) => updateField("lineName", event.target.value)}
+                      placeholder="方便我們確認時使用"
+                      maxLength={80}
+                    />
+                  </div>
+
+                  <div className="trialBookingField trialBookingFieldWide">
+                    <label className="trialBookingLabel" htmlFor="trial-note">備註</label>
+                    <textarea
+                      id="trial-note"
+                      className="trialBookingInput trialBookingTextarea"
+                      value={formData.note}
+                      onChange={(event) => updateField("note", event.target.value)}
+                      placeholder="例如想體驗的日期、運動經驗、特殊需求等"
+                      rows={5}
+                      maxLength={500}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section className="trialBookingStep" aria-labelledby="trial-confirm-heading">
+                <div className="trialBookingStepHead">
+                  <span>04</span>
+                  <div>
+                    <h2 id="trial-confirm-heading">確認並送出</h2>
+                    <p>體驗費用可於現場確認後付款，實際安排將由 BigE 團隊與您聯繫確認。</p>
+                  </div>
+                </div>
+                <fieldset className="trialBookingFieldset">
+                  <legend className="trialBookingLegend">付款方式</legend>
+                  <div className="trialBookingRadioGroup">
+                    {paymentMethodOptions.map((option) => (
+                      <label
+                        key={option.value}
+                        className={`trialBookingRadioCard${formData.paymentMethod === option.value ? " is-selected" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value={option.value}
+                          checked={formData.paymentMethod === option.value}
+                          onChange={(event) => updateField("paymentMethod", event.target.value as PaymentMethod)}
+                        />
+                        <span className="trialBookingRadioTitle">{option.label}</span>
+                        <span className="trialBookingRadioDescription">{option.description}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {errors.paymentMethod ? <p className="trialBookingFieldError">{errors.paymentMethod}</p> : null}
+                </fieldset>
+              </section>
 
               {submitError ? <div className="trialBookingError">{submitError}</div> : null}
 
               <button className="trialBookingSubmit" type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "送出中..." : "送出預約資料"}
+                {isSubmitting ? "送出中..." : "送出首次體驗預約"}
               </button>
             </form>
           )}
