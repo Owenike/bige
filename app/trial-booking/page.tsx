@@ -207,7 +207,7 @@ export default function TrialBookingPage() {
           <small>仁武質感健身體驗</small>
         </Link>
         <nav className="trialBookingNav" aria-label="BigE trial booking navigation">
-          <Link href="/#courses">課程介紹</Link>
+          <Link href="/">課程介紹</Link>
           <a href="#trial-booking-form">立即預約</a>
           <a href="https://lin.ee/0GWm0oZ" target="_blank" rel="noreferrer">
             LINE 諮詢

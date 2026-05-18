@@ -63,7 +63,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
 
       {children}
 
-      {!isEmbedded && !isPublicBookingRoute ? (
+      {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute ? (
         <footer className="footer">
           <div className="footerInner">
             <div>c {new Date().getFullYear()} BIGE</div>
