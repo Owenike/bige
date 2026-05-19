@@ -6079,7 +6079,6 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   gap: 12px;
 }
 .trialBookingServiceCard{
-  min-height: 172px;
   display: grid;
   gap: 12px;
   align-content: start;
@@ -6090,6 +6089,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   color: #fff;
   padding: 20px;
   cursor: pointer;
+  overflow: hidden;
   transition:
     transform .2s ease,
     border-color .2s ease,
@@ -6106,6 +6106,24 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   background: #fff;
   color: #050505;
   box-shadow: 0 18px 46px rgba(255, 255, 255, .12);
+}
+.trialBookingServiceImage{
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .08);
+}
+.trialBookingServiceImage img{
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.trialBookingServiceCopy{
+  display: grid;
+  gap: 12px;
 }
 .trialBookingServiceTitle{
   font-size: 18px;

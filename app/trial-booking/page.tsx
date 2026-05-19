@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
@@ -35,10 +36,34 @@ type TrialBookingSuccess = {
   bookingStatus: "new";
 };
 
-const serviceOptions: Array<{ value: TrialService; label: string; description: string }> = [
-  { value: "weight_training", label: "重量訓練", description: "建立肌力、體態與動作品質" },
-  { value: "pilates", label: "器械皮拉提斯", description: "核心控制、線條雕塑與姿勢調整" },
-  { value: "sports_massage", label: "運動按摩", description: "疲勞釋放、身體放鬆與恢復" },
+const serviceOptions: Array<{
+  value: TrialService;
+  label: string;
+  description: string;
+  imageSrc: string;
+  imageAlt: string;
+}> = [
+  {
+    value: "weight_training",
+    label: "重量訓練",
+    description: "建立肌力、體態與動作品質",
+    imageSrc: "/home-images/bige-weight-training-chest-press.png",
+    imageAlt: "BigE 重量訓練胸推器械",
+  },
+  {
+    value: "pilates",
+    label: "器械皮拉提斯",
+    description: "核心控制、線條雕塑與姿勢調整",
+    imageSrc: "/home-images/bige-reformer-pilates.png",
+    imageAlt: "BigE 器械皮拉提斯",
+  },
+  {
+    value: "sports_massage",
+    label: "運動按摩",
+    description: "疲勞釋放、身體放鬆與恢復",
+    imageSrc: "/home-images/bige-sports-massage-recovery.png",
+    imageAlt: "BigE 運動按摩恢復",
+  },
 ];
 
 const preferredTimeOptions: Array<{ value: PreferredTime; label: string }> = [
@@ -291,10 +316,15 @@ export default function TrialBookingPage() {
                       onClick={() => updateField("service", option.value)}
                       aria-pressed={formData.service === option.value}
                     >
-                      <span className="trialBookingServiceTitle">{option.label}</span>
-                      <span className="trialBookingServiceDescription">{option.description}</span>
-                      <span className="trialBookingSelectedText">
-                        {formData.service === option.value ? "已選擇" : "選擇"}
+                      <span className="trialBookingServiceImage">
+                        <Image src={option.imageSrc} alt={option.imageAlt} width={640} height={400} />
+                      </span>
+                      <span className="trialBookingServiceCopy">
+                        <span className="trialBookingServiceTitle">{option.label}</span>
+                        <span className="trialBookingServiceDescription">{option.description}</span>
+                        <span className="trialBookingSelectedText">
+                          {formData.service === option.value ? "已選擇" : "選擇"}
+                        </span>
                       </span>
                     </button>
                   ))}
