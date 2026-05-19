@@ -5,16 +5,13 @@ import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 import LangSwitch from "../lang-switch";
 
-type TrialService = "weight_training" | "boxing_fitness" | "pilates" | "sports_massage";
+type TrialService = "weight_training" | "pilates" | "sports_massage";
 
 type PreferredTime =
-  | "weekday_morning"
   | "weekday_afternoon"
   | "weekday_evening"
-  | "weekend_morning"
   | "weekend_afternoon"
-  | "weekend_evening"
-  | "other";
+  | "weekend_evening";
 
 type PaymentMethod = "cash_on_site" | "online_payment";
 type PaymentStatus = "pending_cash" | "pending_payment";
@@ -41,18 +38,14 @@ type TrialBookingSuccess = {
 const serviceOptions: Array<{ value: TrialService; label: string; description: string }> = [
   { value: "weight_training", label: "重量訓練", description: "建立肌力、體態與動作品質" },
   { value: "pilates", label: "器械皮拉提斯", description: "核心控制、線條雕塑與姿勢調整" },
-  { value: "boxing_fitness", label: "拳擊體能訓練", description: "燃脂、反應、心肺與壓力釋放" },
   { value: "sports_massage", label: "運動按摩", description: "疲勞釋放、身體放鬆與恢復" },
 ];
 
 const preferredTimeOptions: Array<{ value: PreferredTime; label: string }> = [
-  { value: "weekday_morning", label: "平日上午" },
   { value: "weekday_afternoon", label: "平日下午" },
   { value: "weekday_evening", label: "平日晚上" },
-  { value: "weekend_morning", label: "假日上午" },
   { value: "weekend_afternoon", label: "假日下午" },
   { value: "weekend_evening", label: "假日晚上" },
-  { value: "other", label: "其他時段" },
 ];
 
 const paymentMethodOptions: Array<{
@@ -166,7 +159,7 @@ export default function TrialBookingPage() {
         body: JSON.stringify({
           name: formData.name,
           phone: formData.phone,
-          lineName: formData.lineName,
+          lineName: "",
           service: formData.service,
           preferredTime: formData.preferredTime,
           paymentMethod: formData.paymentMethod,
@@ -369,18 +362,6 @@ export default function TrialBookingPage() {
                       maxLength={30}
                     />
                     {errors.phone ? <p className="trialBookingFieldError">{errors.phone}</p> : null}
-                  </div>
-
-                  <div className="trialBookingField">
-                    <label className="trialBookingLabel" htmlFor="trial-line-name">LINE 名稱</label>
-                    <input
-                      id="trial-line-name"
-                      className="trialBookingInput"
-                      value={formData.lineName}
-                      onChange={(event) => updateField("lineName", event.target.value)}
-                      placeholder="方便我們確認時使用"
-                      maxLength={80}
-                    />
                   </div>
 
                   <div className="trialBookingField trialBookingFieldWide">
