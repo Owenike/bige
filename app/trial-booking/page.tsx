@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
-import LangSwitch from "../lang-switch";
 
 type TrialService = "weight_training" | "pilates" | "sports_massage";
 
@@ -101,7 +100,6 @@ const initialFormData: TrialBookingFormData = {
 
 const BIGE_HOME_URL = "/";
 const BIGE_LINE_URL = "https://lin.ee/0GWm0oZ";
-const BIGE_MAP_URL = "https://www.google.com/maps/search/?api=1&query=%E5%B7%A8%E6%8C%BA%E5%81%A5%E8%BA%AB%E9%A4%A8";
 
 function getServiceLabel(value: TrialService | "") {
   return serviceOptions.find((option) => option.value === value)?.label ?? "-";
@@ -229,14 +227,9 @@ export default function TrialBookingPage() {
         </Link>
         <nav className="trialBookingNav" aria-label="BigE trial booking navigation">
           <Link href={BIGE_HOME_URL}>課程介紹</Link>
-          <a href="#trial-booking-form">立即預約</a>
           <a href={BIGE_LINE_URL} target="_blank" rel="noreferrer">
             LINE 諮詢
           </a>
-          <a href={BIGE_MAP_URL} target="_blank" rel="noreferrer">
-            地圖
-          </a>
-          <LangSwitch />
         </nav>
       </header>
 
