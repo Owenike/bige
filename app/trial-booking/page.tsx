@@ -258,10 +258,6 @@ export default function TrialBookingPage() {
 
               <dl className="trialBookingSummary">
                 <div>
-                  <dt>預約編號</dt>
-                  <dd>{submittedBooking.id}</dd>
-                </div>
-                <div>
                   <dt>姓名</dt>
                   <dd>{formData.name}</dd>
                 </div>
