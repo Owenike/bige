@@ -40,27 +40,31 @@ const serviceOptions: Array<{
   value: TrialService;
   label: string;
   description: string;
+  price: string;
   imageSrc: string;
   imageAlt: string;
 }> = [
   {
     value: "weight_training",
     label: "重量訓練",
-    description: "建立肌力、體態與動作品質",
+    description: "建立肌力、體態與動作品質，適合想改善身形、增加肌力或重新開始訓練的人。",
+    price: "首次體驗 NT$880",
     imageSrc: "/home-images/bige-weight-training-chest-press.png",
     imageAlt: "BigE 重量訓練胸推器械",
   },
   {
     value: "pilates",
     label: "器械皮拉提斯",
-    description: "核心控制、線條雕塑與姿勢調整",
+    description: "透過器械輔助建立核心控制、線條雕塑與姿勢調整，適合想提升體態與身體覺察的人。",
+    price: "首次體驗 NT$880",
     imageSrc: "/home-images/bige-reformer-pilates.png",
     imageAlt: "BigE 器械皮拉提斯",
   },
   {
     value: "sports_massage",
     label: "運動按摩",
-    description: "疲勞釋放、身體放鬆與恢復",
+    description: "針對疲勞緊繃與身體放鬆需求，協助釋放壓力、恢復狀態與提升活動舒適度。",
+    price: "首次體驗 NT$1,500",
     imageSrc: "/home-images/bige-sports-massage-recovery.png",
     imageAlt: "BigE 運動按摩恢復",
   },
@@ -83,11 +87,6 @@ const paymentMethodOptions: Array<{
     label: "現場付款",
     description: "送出預約後，由專人協助確認時段，體驗當天現場付款。",
   },
-  {
-    value: "online_payment",
-    label: "線上付款",
-    description: "線上付款功能目前建置中，後續將由專人協助確認付款與預約安排。",
-  },
 ];
 
 const initialFormData: TrialBookingFormData = {
@@ -96,7 +95,7 @@ const initialFormData: TrialBookingFormData = {
   lineName: "",
   service: "",
   preferredTime: "",
-  paymentMethod: "",
+  paymentMethod: "cash_on_site",
   note: "",
 };
 
@@ -246,7 +245,7 @@ export default function TrialBookingPage() {
           <p className="trialBookingEyebrow">BIGE TRIAL</p>
           <h1 className="trialBookingTitle">開始你的第一次 BigE 體驗</h1>
           <p className="trialBookingLead">
-            選擇你想體驗的訓練項目，我們將由專人協助安排最適合的時段與教練。
+            選擇想體驗的項目與方便時段，BigE 團隊將協助安排適合的教練，帶你從第一次體驗開始建立身體改變。
           </p>
         </div>
 
@@ -304,7 +303,7 @@ export default function TrialBookingPage() {
                   <span>01</span>
                   <div>
                     <h2 id="trial-service-heading">選擇體驗項目</h2>
-                    <p>先選擇你想開始的方向，BigE 團隊會協助安排適合教練。</p>
+                    <p>先選擇你想開始的方向，我們會依照你的目標與需求，協助安排合適的體驗內容。</p>
                   </div>
                 </div>
                 <div className="trialBookingServiceGrid">
@@ -322,6 +321,7 @@ export default function TrialBookingPage() {
                       <span className="trialBookingServiceCopy">
                         <span className="trialBookingServiceTitle">{option.label}</span>
                         <span className="trialBookingServiceDescription">{option.description}</span>
+                        <span className="trialBookingServicePrice">{option.price}</span>
                         <span className="trialBookingSelectedText">
                           {formData.service === option.value ? "已選擇" : "選擇"}
                         </span>
@@ -337,7 +337,7 @@ export default function TrialBookingPage() {
                   <span>02</span>
                   <div>
                     <h2 id="trial-time-heading">選擇方便時段</h2>
-                    <p>不需要先挑精準時間，我們會再與你確認實際安排。</p>
+                    <p>先選擇你方便聯繫與安排的時段，實際課程時間將由專人再與你確認。</p>
                   </div>
                 </div>
                 <div className="trialBookingChipGroup" role="group" aria-label="方便預約時段">
@@ -361,7 +361,7 @@ export default function TrialBookingPage() {
                   <span>03</span>
                   <div>
                     <h2 id="trial-contact-heading">留下聯絡方式</h2>
-                    <p>我們會用你留下的資訊聯繫確認課程與時段。</p>
+                    <p>留下基本聯絡資訊後，BigE 團隊將協助確認體驗項目、時段與付款方式。</p>
                   </div>
                 </div>
                 <div className="trialBookingContactGrid">
@@ -414,7 +414,7 @@ export default function TrialBookingPage() {
                   <span>04</span>
                   <div>
                     <h2 id="trial-confirm-heading">確認並送出</h2>
-                    <p>體驗費用可於現場確認後付款，實際安排將由 BigE 團隊與您聯繫確認。</p>
+                    <p>首次體驗費用：重量訓練與器械皮拉提斯為 NT$880，運動按摩為 NT$1,500。送出後，BigE 團隊將與你確認實際體驗時段與付款方式。</p>
                   </div>
                 </div>
                 <fieldset className="trialBookingFieldset">

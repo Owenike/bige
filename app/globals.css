@@ -6137,6 +6137,22 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .trialBookingServiceCard.is-selected .trialBookingServiceDescription{
   color: rgba(0, 0, 0, .66);
 }
+.trialBookingServicePrice{
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(255, 255, 255, .08);
+  color: rgba(255, 255, 255, .88);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+.trialBookingServiceCard.is-selected .trialBookingServicePrice{
+  border-color: rgba(0, 0, 0, .18);
+  background: rgba(0, 0, 0, .06);
+  color: #050505;
+}
 .trialBookingSelectedText{
   align-self: end;
   width: fit-content;
