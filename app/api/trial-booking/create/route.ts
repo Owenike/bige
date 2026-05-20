@@ -103,13 +103,12 @@ export async function POST(request: Request) {
   }
 
   console.info("[trial-booking] created booking", {
-    bookingId: insertResult.data.id,
+    hasBookingId: Boolean(insertResult.data.id),
     paymentMethod: insertResult.data.payment_method,
     paymentStatus: insertResult.data.payment_status,
   });
 
   const lineResult = await sendLineTrialBookingNotification({
-    bookingId: insertResult.data.id,
     name: parsed.data.name,
     phone: parsed.data.phone,
     lineName: parsed.data.lineName,

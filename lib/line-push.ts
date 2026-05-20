@@ -10,7 +10,6 @@ export type LineBookingNotificationInput = {
 };
 
 export type LineTrialBookingNotificationInput = {
-  bookingId: string;
   name: string;
   phone: string;
   lineName?: string | null;
@@ -104,7 +103,6 @@ function buildTrialBookingNotificationText(input: LineTrialBookingNotificationIn
     `方便時段：${input.preferredTime}`,
     `付款方式：${input.paymentMethod}`,
     `備註：${input.note?.trim() || "無"}`,
-    `內部編號：${input.bookingId}`,
     `送出時間：${formatTaipeiDateTime(input.submittedAt || new Date())}`,
     "",
     "請協助聯繫確認實際體驗時段。",
