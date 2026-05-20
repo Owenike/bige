@@ -7,10 +7,8 @@ export default function HomeScrollEffects() {
     const fadeSection = document.querySelector<HTMLElement>("[data-scroll-fade='dark-to-light']");
     const revealSections = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
     const parallaxMedia = Array.from(document.querySelectorAll<HTMLElement>("[data-parallax-card] .homeLuxuryGridMedia"));
-    const lineFab = document.querySelector<HTMLElement>(".homeLuxuryLineFab");
 
     let rafId = 0;
-    let lastScrollY = window.scrollY;
     const cleanupFns: Array<() => void> = [];
 
     const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -36,18 +34,6 @@ export default function HomeScrollEffects() {
         const shift = clamp(-centerOffset * 18, -14, 14);
         media.style.setProperty("--home-parallax", `${shift.toFixed(2)}px`);
       }
-    };
-
-    const updateLineFab = () => {
-      if (!lineFab) return;
-      const y = window.scrollY;
-      const delta = y - lastScrollY;
-      if (y < 120 || delta < -2) {
-        lineFab.classList.remove("homeLineFabHidden");
-      } else if (delta > 3) {
-        lineFab.classList.add("homeLineFabHidden");
-      }
-      lastScrollY = y;
     };
 
     const setupRevealObserver = () => {
@@ -136,7 +122,6 @@ export default function HomeScrollEffects() {
     const runFrame = () => {
       updateFade();
       updateParallax();
-      updateLineFab();
     };
 
     const requestFrame = () => {
@@ -164,7 +149,6 @@ export default function HomeScrollEffects() {
         fadeSection.classList.remove("is-theme-dark");
       }
       parallaxMedia.forEach((media) => media.style.removeProperty("--home-parallax"));
-      if (lineFab) lineFab.classList.remove("homeLineFabHidden");
       cleanupFns.forEach((fn) => fn());
     };
   }, []);

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
+import { FloatingLineButton } from "@/components/floating-line-button";
 import { HomeHoverVideo } from "@/components/home-hover-video";
 import { getLocaleFromCookies, getT } from "../lib/i18n-server";
 import HomeScrollEffects from "./home-scroll-effects";
@@ -360,15 +361,7 @@ export default async function Home() {
           </div>
         </div>
       </section>
-      <a
-        className="homeLuxuryLineFab"
-        href="https://lin.ee/0GWm0oZ"
-        target="_blank"
-        rel="noreferrer"
-        aria-label={isEn ? "Open LINE" : "開啟 LINE"}
-      >
-        LINE
-      </a>
+      <FloatingLineButton href="https://lin.ee/0GWm0oZ" ariaLabel={isEn ? "Open LINE" : "開啟 LINE"} />
     </main>
   );
 }
