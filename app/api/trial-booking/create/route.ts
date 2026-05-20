@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { sendLineTrialBookingNotification } from "../../../../lib/line-push";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 const serviceValues = ["weight_training", "boxing_fitness", "pilates", "sports_massage"] as const;
@@ -26,6 +27,30 @@ const trialBookingSchema = z.object({
 
 function jsonError(status: number, error: string) {
   return NextResponse.json({ ok: false, error }, { status });
+}
+
+function serviceLabel(value: (typeof serviceValues)[number]) {
+  if (value === "weight_training") return "重量訓練";
+  if (value === "boxing_fitness") return "拳擊體能訓練";
+  if (value === "pilates") return "器械皮拉提斯";
+  return "運動按摩";
+}
+
+function preferredTimeLabel(value: (typeof preferredTimeValues)[number]) {
+  const labels: Record<(typeof preferredTimeValues)[number], string> = {
+    weekday_morning: "平日上午",
+    weekday_afternoon: "平日下午",
+    weekday_evening: "平日晚上",
+    weekend_morning: "假日上午",
+    weekend_afternoon: "假日下午",
+    weekend_evening: "假日晚上",
+    other: "其他時段",
+  };
+  return labels[value];
+}
+
+function paymentMethodLabel(value: (typeof paymentMethodValues)[number]) {
+  return value === "cash_on_site" ? "現場付款" : "線上付款";
 }
 
 export async function POST(request: Request) {
@@ -75,6 +100,31 @@ export async function POST(request: Request) {
 
   if (!insertResult.data) {
     return jsonError(500, "建立首次體驗預約失敗。");
+  }
+
+  console.info("[trial-booking] created booking", {
+    bookingId: insertResult.data.id,
+    paymentMethod: insertResult.data.payment_method,
+    paymentStatus: insertResult.data.payment_status,
+  });
+
+  const lineResult = await sendLineTrialBookingNotification({
+    bookingId: insertResult.data.id,
+    name: parsed.data.name,
+    phone: parsed.data.phone,
+    lineName: parsed.data.lineName,
+    service: serviceLabel(parsed.data.service),
+    preferredTime: preferredTimeLabel(parsed.data.preferredTime),
+    paymentMethod: paymentMethodLabel(parsed.data.paymentMethod),
+    note: parsed.data.note,
+  });
+
+  if (!lineResult.ok) {
+    console.warn("[trial-booking] line notification did not complete", {
+      status: lineResult.status,
+      error: lineResult.error,
+      skipped: lineResult.skipped,
+    });
   }
 
   return NextResponse.json({

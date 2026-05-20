@@ -9,6 +9,18 @@ export type LineBookingNotificationInput = {
   submittedAt?: Date;
 };
 
+export type LineTrialBookingNotificationInput = {
+  bookingId: string;
+  name: string;
+  phone: string;
+  lineName?: string | null;
+  service: string;
+  preferredTime: string;
+  paymentMethod: string;
+  note?: string | null;
+  submittedAt?: Date;
+};
+
 export type LineBookingNotificationResult = {
   ok: boolean;
   skipped?: boolean;
@@ -74,8 +86,36 @@ function buildBookingNotificationText(input: LineBookingNotificationInput) {
   ].join("\n");
 }
 
-export async function sendLineBookingNotification(
-  input: LineBookingNotificationInput,
+function buildTrialBookingNotificationText(input: LineTrialBookingNotificationInput) {
+  const lines = [
+    "BigE 新首次體驗預約",
+    "",
+    `姓名：${input.name}`,
+    `電話：${input.phone}`,
+  ];
+
+  const lineName = input.lineName?.trim();
+  if (lineName) {
+    lines.push(`LINE 名稱：${lineName}`);
+  }
+
+  lines.push(
+    `體驗項目：${input.service}`,
+    `方便時段：${input.preferredTime}`,
+    `付款方式：${input.paymentMethod}`,
+    `備註：${input.note?.trim() || "無"}`,
+    `內部編號：${input.bookingId}`,
+    `送出時間：${formatTaipeiDateTime(input.submittedAt || new Date())}`,
+    "",
+    "請協助聯繫確認實際體驗時段。",
+  );
+
+  return lines.join("\n");
+}
+
+async function pushLineTextMessage(
+  logPrefix: string,
+  text: string,
 ): Promise<LineBookingNotificationResult> {
   const rawToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || "";
   const rawTarget = process.env.LINE_BOOKING_NOTIFY_TO || "";
@@ -84,14 +124,15 @@ export async function sendLineBookingNotification(
   const diagnostics = buildDiagnostics(rawToken, rawTarget);
 
   if (!token || !to) {
-    console.info("LINE booking notification skipped: missing env", {
+    console.info(`${logPrefix} line push skipped: missing env`, {
       hasToken: diagnostics.hasToken,
       hasTarget: diagnostics.hasTarget,
     });
     return { ok: true, skipped: true, error: "missing_env" };
   }
 
-  console.info("LINE booking notification attempting", diagnostics);
+  console.info(`${logPrefix} line push start`);
+  console.info(`${logPrefix} line push config`, diagnostics);
 
   try {
     const response = await fetch(LINE_PUSH_ENDPOINT, {
@@ -105,7 +146,7 @@ export async function sendLineBookingNotification(
         messages: [
           {
             type: "text",
-            text: buildBookingNotificationText(input),
+            text,
           },
         ],
       }),
@@ -113,20 +154,33 @@ export async function sendLineBookingNotification(
 
     if (!response.ok) {
       const responseBody = (await response.text()).slice(0, RESPONSE_BODY_LOG_LIMIT);
-      console.warn("LINE booking notification failed", {
+      console.warn(`${logPrefix} line push result`, {
         status: response.status,
+        ok: false,
         statusText: response.statusText,
-        responseBody,
+        responseBodyPreview: responseBody,
       });
       return { ok: false, status: response.status, error: "line_push_failed" };
     }
 
-    console.info("LINE booking notification sent", { status: response.status });
+    console.info(`${logPrefix} line push result`, { status: response.status, ok: true });
     return { ok: true, status: response.status };
   } catch (error) {
-    console.warn("LINE booking notification failed", {
+    console.warn(`${logPrefix} line push failed`, {
       error: error instanceof Error ? error.message : "unknown_error",
     });
     return { ok: false, error: error instanceof Error ? error.message : "unknown_error" };
   }
+}
+
+export async function sendLineBookingNotification(
+  input: LineBookingNotificationInput,
+): Promise<LineBookingNotificationResult> {
+  return pushLineTextMessage("[public-booking]", buildBookingNotificationText(input));
+}
+
+export async function sendLineTrialBookingNotification(
+  input: LineTrialBookingNotificationInput,
+): Promise<LineBookingNotificationResult> {
+  return pushLineTextMessage("[trial-booking]", buildTrialBookingNotificationText(input));
 }
