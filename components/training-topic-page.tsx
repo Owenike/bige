@@ -8,6 +8,12 @@ export type TrainingTopicCard = {
   icon: TrainingIconName;
 };
 
+type TrainingTopicLink = {
+  title: string;
+  href: string;
+  eyebrow: string;
+};
+
 type TrainingIconName =
   | "activity"
   | "dumbbell"
@@ -38,6 +44,10 @@ type TrainingTopicPageProps = {
   mobileImagePosition?: string;
   introTitle: string;
   intro: string;
+  priceLabel: string;
+  priceDescription: string;
+  flowSteps: TrainingTopicCard[];
+  relatedTopics: TrainingTopicLink[];
   features: TrainingTopicCard[];
   audiences: TrainingTopicCard[];
 };
@@ -52,6 +62,10 @@ export function TrainingTopicPage({
   mobileImagePosition,
   introTitle,
   intro,
+  priceLabel,
+  priceDescription,
+  flowSteps,
+  relatedTopics,
   features,
   audiences,
 }: TrainingTopicPageProps) {
@@ -71,6 +85,10 @@ export function TrainingTopicPage({
           <p className="trainingTopicEyebrow">{eyebrow}</p>
           <h1>{title}</h1>
           <p className="trainingTopicLead">{subtitle}</p>
+          <div className="trainingTopicHeroPrice">
+            <span>{priceLabel}</span>
+            <p>{priceDescription}</p>
+          </div>
           <div className="trainingTopicActions">
             <Link href="/trial-booking" className="trainingTopicButton trainingTopicButtonPrimary">
               預約首次體驗
@@ -128,9 +146,49 @@ export function TrainingTopicPage({
         </div>
       </section>
 
+      <section className="trainingTopicPanel">
+        <div className="trainingTopicSectionHeader">
+          <p className="trainingTopicSectionKicker">FIRST EXPERIENCE</p>
+          <h2>第一次體驗流程</h2>
+          <p className="trainingTopicSectionLead">
+            不用擔心自己是否有經驗，BigE 團隊會依照你的狀態安排適合的開始方式。
+          </p>
+        </div>
+        <div className="trainingTopicFlowGrid">
+          {flowSteps.map((step, index) => (
+            <article className="trainingTopicFlowCard" key={step.title}>
+              <div className="trainingTopicFlowIndex">{String(index + 1).padStart(2, "0")}</div>
+              <TrainingCardIcon name={step.icon} />
+              <h3>{step.title}</h3>
+              <p>{step.description}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="trainingTopicPanel trainingTopicRelated">
+        <div className="trainingTopicSectionHeader">
+          <p className="trainingTopicSectionKicker">EXPLORE MORE</p>
+          <h2>也可以了解其他訓練方式</h2>
+          <p className="trainingTopicSectionLead">
+            如果你還不確定適合哪一種方式，可以先比較不同項目，再選擇最想體驗的方向。
+          </p>
+        </div>
+        <div className="trainingTopicRelatedGrid">
+          {relatedTopics.map((topic) => (
+            <Link href={topic.href} className="trainingTopicRelatedCard" key={topic.href}>
+              <span>{topic.eyebrow}</span>
+              <strong>{topic.title}</strong>
+              <em>了解更多</em>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       <section className="trainingTopicFinalCta">
-        <p>想開始體驗？</p>
+        <p>{priceLabel}</p>
         <h2>讓 BigE 團隊協助你找到適合自己的第一堂課。</h2>
+        <p className="trainingTopicFinalNote">{priceDescription}</p>
         <div className="trainingTopicActions trainingTopicActionsCenter">
           <Link href="/trial-booking" className="trainingTopicButton trainingTopicButtonPrimary">
             預約首次體驗

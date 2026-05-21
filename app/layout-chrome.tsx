@@ -73,14 +73,8 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
       {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute ? (
         <footer className="footer">
           <div className="footerInner">
-            <div>c {new Date().getFullYear()} BIGE</div>
-            <div className="footerTagline">
-              本網站及自動化系統由
-              <a className="footerBigeBtn" href="https://lin.ee/0GWm0oZ" target="_blank" rel="noreferrer">
-                BIGE
-              </a>
-              團隊維護與管理
-            </div>
+            <div>© {new Date().getFullYear()} 巨挺健身館 BigE. 保留所有權利。</div>
+            <div className="footerTagline">仁武質感健身體驗｜重量訓練、拳擊體能、器械皮拉提斯與功能性調整</div>
           </div>
         </footer>
       ) : null}

@@ -19,6 +19,35 @@ export default function FunctionalAdjustmentPage() {
       mobileImagePosition="center 40%"
       introTitle="從身體使用習慣開始重新整理"
       intro="功能性調整會從動作模式、緊繃感與身體使用習慣開始觀察，搭配放鬆、活動度與基礎修正訓練，協助你找回更順暢的身體狀態。這不是醫療治療，而是幫助你更了解自己的身體使用方式。"
+      priceLabel="首次體驗 NT$1,500"
+      priceDescription="功能性調整首次體驗 NT$1,500，協助你從放鬆、活動度與動作品質找回更順暢的身體狀態。"
+      flowSteps={[
+        {
+          title: "了解身體狀態與緊繃感",
+          description: "教練會先了解你的日常習慣、訓練經驗與目前身體狀態，確認適合的調整方向。",
+          icon: "user",
+        },
+        {
+          title: "觀察動作模式與活動限制",
+          description: "透過簡單動作觀察，找出目前身體使用上比較需要整理的環節。",
+          icon: "scan",
+        },
+        {
+          title: "進行放鬆與活動度調整",
+          description: "依照身體狀態安排放鬆、活動度與基礎修正內容，讓你實際感受調整方式。",
+          icon: "waves",
+        },
+        {
+          title: "說明後續自我照顧與訓練建議",
+          description: "體驗結束後，教練會依照你的狀態提供後續自我照顧與訓練方向。",
+          icon: "heart",
+        },
+      ]}
+      relatedTopics={[
+        { title: "重量訓練", href: "/training/weight-training", eyebrow: "WEIGHT TRAINING" },
+        { title: "器械皮拉提斯", href: "/training/pilates", eyebrow: "REFORMER PILATES" },
+        { title: "拳擊體能訓練", href: "/training/boxing", eyebrow: "BOXING FITNESS" },
+      ]}
       features={[
         {
           title: "觀察動作模式",

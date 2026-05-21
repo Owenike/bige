@@ -19,6 +19,35 @@ export default function BoxingPage() {
       mobileImagePosition="center 36%"
       introTitle="讓訓練有節奏，也有挑戰感"
       intro="拳擊體能訓練結合拳擊動作、步伐、反應與心肺訓練，讓運動不只是重複器械動作，而是更有節奏與挑戰感。透過教練指導，你可以在安全範圍內提升協調性、敏捷度與全身爆發力。"
+      priceLabel="首次體驗 NT$880"
+      priceDescription="拳擊體能訓練首次體驗 NT$880，從基本動作與節奏開始，帶你安全進入訓練狀態。"
+      flowSteps={[
+        {
+          title: "了解目標與身體狀態",
+          description: "教練會先了解你的訓練目標、運動經驗與目前身體狀態，確認適合的體驗方向。",
+          icon: "user",
+        },
+        {
+          title: "基礎動作與需求觀察",
+          description: "透過簡單動作或身體狀態觀察，找出目前最適合你的訓練起點。",
+          icon: "scan",
+        },
+        {
+          title: "進行體驗內容",
+          description: "依照拳擊體能訓練安排體驗內容，讓你實際感受 BigE 的教練引導與訓練方式。",
+          icon: "target",
+        },
+        {
+          title: "說明後續建議",
+          description: "體驗結束後，教練會依照你的狀態提供後續訓練方向與建議。",
+          icon: "sparkles",
+        },
+      ]}
+      relatedTopics={[
+        { title: "重量訓練", href: "/training/weight-training", eyebrow: "WEIGHT TRAINING" },
+        { title: "器械皮拉提斯", href: "/training/pilates", eyebrow: "REFORMER PILATES" },
+        { title: "功能性調整", href: "/training/functional-adjustment", eyebrow: "FUNCTIONAL ADJUSTMENT" },
+      ]}
       features={[
         {
           title: "建立拳擊基本動作",

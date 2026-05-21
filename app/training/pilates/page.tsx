@@ -19,6 +19,35 @@ export default function PilatesPage() {
       mobileImagePosition="center 42%"
       introTitle="用更精準的方式感受身體控制"
       intro="器械皮拉提斯透過器械輔助與阻力控制，幫助你更精準感受核心、姿勢與身體排列。BigE 會依照你的能力安排動作，讓訓練同時兼具穩定、控制與線條感。"
+      priceLabel="首次體驗 NT$880"
+      priceDescription="器械皮拉提斯首次體驗 NT$880，透過器械輔助建立核心控制與身體覺察。"
+      flowSteps={[
+        {
+          title: "了解目標與身體狀態",
+          description: "教練會先了解你的訓練目標、運動經驗與目前身體狀態，確認適合的體驗方向。",
+          icon: "user",
+        },
+        {
+          title: "基礎動作與需求觀察",
+          description: "透過簡單動作或身體狀態觀察，找出目前最適合你的訓練起點。",
+          icon: "scan",
+        },
+        {
+          title: "進行體驗內容",
+          description: "依照器械皮拉提斯安排體驗內容，讓你實際感受 BigE 的教練引導與訓練方式。",
+          icon: "focus",
+        },
+        {
+          title: "說明後續建議",
+          description: "體驗結束後，教練會依照你的狀態提供後續訓練方向與建議。",
+          icon: "sparkles",
+        },
+      ]}
+      relatedTopics={[
+        { title: "重量訓練", href: "/training/weight-training", eyebrow: "WEIGHT TRAINING" },
+        { title: "拳擊體能訓練", href: "/training/boxing", eyebrow: "BOXING FITNESS" },
+        { title: "功能性調整", href: "/training/functional-adjustment", eyebrow: "FUNCTIONAL ADJUSTMENT" },
+      ]}
       features={[
         {
           title: "建立核心穩定",

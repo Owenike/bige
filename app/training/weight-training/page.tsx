@@ -19,6 +19,35 @@ export default function WeightTrainingPage() {
       mobileImagePosition="center 34%"
       introTitle="先建立能長久進步的動作基礎"
       intro="BigE 的重量訓練不是一開始就追求大重量，而是先建立正確動作品質。教練會依照你的身體狀況、訓練經驗與目標，安排適合的動作與強度，幫助你安全地提升肌力、體態與日常活動能力。"
+      priceLabel="首次體驗 NT$880"
+      priceDescription="重量訓練首次體驗 NT$880，由教練協助安排適合你的第一堂課。"
+      flowSteps={[
+        {
+          title: "了解目標與身體狀態",
+          description: "教練會先了解你的訓練目標、運動經驗與目前身體狀態，確認適合的體驗方向。",
+          icon: "user",
+        },
+        {
+          title: "基礎動作與需求觀察",
+          description: "透過簡單動作或身體狀態觀察，找出目前最適合你的訓練起點。",
+          icon: "scan",
+        },
+        {
+          title: "進行體驗內容",
+          description: "依照重量訓練項目安排體驗內容，讓你實際感受 BigE 的教練引導與訓練方式。",
+          icon: "dumbbell",
+        },
+        {
+          title: "說明後續建議",
+          description: "體驗結束後，教練會依照你的狀態提供後續訓練方向與建議。",
+          icon: "target",
+        },
+      ]}
+      relatedTopics={[
+        { title: "器械皮拉提斯", href: "/training/pilates", eyebrow: "REFORMER PILATES" },
+        { title: "拳擊體能訓練", href: "/training/boxing", eyebrow: "BOXING FITNESS" },
+        { title: "功能性調整", href: "/training/functional-adjustment", eyebrow: "FUNCTIONAL ADJUSTMENT" },
+      ]}
       features={[
         {
           title: "建立正確動作品質",
