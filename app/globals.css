@@ -554,6 +554,201 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   opacity: 0;
   pointer-events: none;
 }
+
+/* Training topic detail pages */
+.trainingTopicPage{
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  background: #05070a;
+  color: #f5f7fb;
+  overflow-x: hidden;
+}
+.trainingTopicHero{
+  position: relative;
+  min-height: min(760px, 92svh);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  isolation: isolate;
+}
+.trainingTopicHeroMedia{
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+.trainingTopicHeroImage{
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(.78) brightness(.72);
+}
+.trainingTopicHeroShade{
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(5,7,10,.20) 0%, rgba(5,7,10,.44) 48%, rgba(5,7,10,.96) 100%),
+    linear-gradient(90deg, rgba(5,7,10,.88), rgba(5,7,10,.18) 58%, rgba(5,7,10,.62));
+}
+.trainingTopicHeroInner{
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: clamp(88px, 14vw, 140px) 0 clamp(44px, 8vw, 76px);
+}
+.trainingTopicEyebrow,
+.trainingTopicSectionKicker{
+  margin: 0 0 12px;
+  color: rgba(231, 236, 247, .70);
+  font-size: 12px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.trainingTopicHero h1{
+  margin: 0;
+  max-width: 760px;
+  color: #fff;
+  font-size: clamp(48px, 8vw, 92px);
+  font-weight: 520;
+  line-height: .96;
+  letter-spacing: 0;
+}
+.trainingTopicLead{
+  max-width: 720px;
+  margin: 22px 0 0;
+  color: rgba(243, 246, 251, .82);
+  font-size: clamp(17px, 2vw, 22px);
+  line-height: 1.72;
+}
+.trainingTopicActions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+.trainingTopicButton{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 14px;
+  transition: transform .22s ease, border-color .22s ease, background-color .22s ease, color .22s ease;
+}
+.trainingTopicButton:hover{
+  text-decoration: none;
+  transform: translateY(-2px);
+}
+.trainingTopicButtonPrimary{
+  border: 1px solid #fff;
+  background: #fff;
+  color: #05070a;
+}
+.trainingTopicButtonGhost{
+  border: 1px solid rgba(255,255,255,.28);
+  color: #f6f8fb;
+}
+.trainingTopicIntro,
+.trainingTopicPanel,
+.trainingTopicFinalCta{
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+}
+.trainingTopicIntro{
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  gap: clamp(28px, 5vw, 72px);
+  padding: clamp(56px, 9vw, 96px) 0;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+.trainingTopicIntro h2,
+.trainingTopicSectionHeader h2,
+.trainingTopicFinalCta h2{
+  margin: 0;
+  font-size: clamp(28px, 4.2vw, 52px);
+  font-weight: 520;
+  line-height: 1.08;
+}
+.trainingTopicIntro > p{
+  margin: 0;
+  color: rgba(232, 237, 247, .76);
+  font-size: clamp(16px, 1.8vw, 19px);
+  line-height: 1.9;
+}
+.trainingTopicPanel{
+  padding: clamp(48px, 8vw, 84px) 0 0;
+}
+.trainingTopicSectionHeader{
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+.trainingTopicGrid{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.trainingTopicCard{
+  min-height: 180px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 16px;
+  background: rgba(255,255,255,.055);
+  padding: 18px;
+}
+.trainingTopicCard span{
+  display: inline-flex;
+  margin-bottom: 32px;
+  color: rgba(255,255,255,.56);
+  font-size: 18px;
+}
+.trainingTopicCard p{
+  margin: 0;
+  color: rgba(245,247,251,.86);
+  line-height: 1.7;
+}
+.trainingTopicPanelSoft .trainingTopicCard{
+  background: rgba(255,255,255,.035);
+}
+.trainingTopicFinalCta{
+  margin-top: clamp(56px, 9vw, 96px);
+  padding: clamp(44px, 7vw, 72px) 0 clamp(56px, 9vw, 96px);
+  border-top: 1px solid rgba(255,255,255,.10);
+  text-align: center;
+}
+.trainingTopicFinalCta p{
+  margin: 0 0 12px;
+  color: rgba(232,237,247,.68);
+}
+.trainingTopicFinalCta .trainingTopicButton{
+  margin-top: 24px;
+}
+
+@media (max-width: 900px){
+  .trainingTopicHero{
+    min-height: 86svh;
+  }
+  .trainingTopicHeroShade{
+    background:
+      linear-gradient(180deg, rgba(5,7,10,.24) 0%, rgba(5,7,10,.44) 44%, rgba(5,7,10,.98) 100%);
+  }
+  .trainingTopicIntro{
+    grid-template-columns: 1fr;
+  }
+  .trainingTopicSectionHeader{
+    display: block;
+  }
+  .trainingTopicGrid{
+    grid-template-columns: 1fr;
+  }
+  .trainingTopicCard{
+    min-height: auto;
+  }
+  .trainingTopicCard span{
+    margin-bottom: 18px;
+  }
+}
 .homeLuxuryGridSection{
   background: #f4f2ef;
   padding: clamp(44px, 6vw, 76px) clamp(16px, 4vw, 56px);
