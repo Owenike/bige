@@ -26,7 +26,7 @@ function PorscheCard({ item, mobileReveal = false }: { item: GridItem; mobileRev
       data-parallax-card
       data-mobile-service-card={mobileReveal ? "" : undefined}
     >
-      <a className="homeLuxuryPorscheLink" href={item.href} aria-label={item.title}>
+      <div className="homeLuxuryPorscheLink">
         <div
           className={`homeLuxuryGridMedia homeLuxuryPorscheMedia${item.videoSrc ? " homeLuxuryMediaVideoCard" : ""} ${item.mediaClass}`}
         >
@@ -38,7 +38,7 @@ function PorscheCard({ item, mobileReveal = false }: { item: GridItem; mobileRev
             <h3>{item.titleDisplay ?? item.title}</h3>
           </div>
         </div>
-      </a>
+      </div>
     </article>
   );
 }
