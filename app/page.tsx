@@ -74,10 +74,7 @@ export default async function Home() {
   const isEn = locale === "en";
   const heroTitleLines = t("home.hero_title").split("\n");
   const heroSubText = t("home.hero_sub");
-  const zhHeroSubItems = ["器械皮拉提斯", "重量訓練", "樂齡訓練", "拳擊體能訓練", "核心燃脂訓練"];
-  const heroSubItems = isEn ? heroSubText.trim().split(/\s+/) : zhHeroSubItems;
-  const heroSubDisplayText = isEn ? heroSubText : zhHeroSubItems.join(" ");
-  const useZhHeroSubGrid = !isEn;
+  const heroSubDisplayText = heroSubText;
 
   const sectionTwoItems: GridItem[] = [
     {
@@ -254,23 +251,14 @@ export default async function Home() {
         <div className="homeLuxuryOverlayContent">
           <p className="homeLuxuryEyebrow">BIGE</p>
           <h1 className="homeLuxuryHeroTitle">
-            {heroTitleLines[0] || t("home.hero_title")}
-            <br />{heroTitleLines[1] || ""}
+            {heroTitleLines.map((line, index) => (
+              <span key={`${line}-${index}`}>
+                {index > 0 ? <br /> : null}
+                {line}
+              </span>
+            ))}
           </h1>
-          {useZhHeroSubGrid ? (
-            <p className="homeLuxuryHeroSub homeLuxuryHeroSubZh" aria-label={heroSubDisplayText}>
-              {heroSubItems.map((item, index) => (
-                <span
-                  key={`${item}-${index}`}
-                  className="homeLuxuryHeroSubItem"
-                >
-                  {item}
-                </span>
-              ))}
-            </p>
-          ) : (
-            <p className="homeLuxuryHeroSub">{heroSubDisplayText}</p>
-          )}
+          <p className="homeLuxuryHeroSub">{heroSubDisplayText}</p>
         </div>
       </section>
 
