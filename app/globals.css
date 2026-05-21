@@ -1634,6 +1634,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .homeLuxuryFullImageSection{
     min-height: 78vh;
   }
+  .homeLuxurySectionImageA{
+    background-position: 72% center;
+  }
+  .homeLuxurySectionImageA .homeLuxuryOverlayContent{
+    padding-bottom: max(56px, calc(env(safe-area-inset-bottom) + 56px));
+  }
   .homeLuxuryHero.homeLuxuryFullImageSection{
     min-height: 100svh;
     background-position: 58% center;
