@@ -7,6 +7,10 @@ export default function HomeScrollEffects() {
     const fadeSection = document.querySelector<HTMLElement>("[data-scroll-fade='dark-to-light']");
     const revealSections = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
     const parallaxMedia = Array.from(document.querySelectorAll<HTMLElement>("[data-parallax-card] .homeLuxuryGridMedia"));
+    const mobileServiceSection = document.querySelector<HTMLElement>("[data-mobile-service-section]");
+    const mobileServiceCards = Array.from(document.querySelectorAll<HTMLElement>("[data-mobile-service-card]"));
+    const mobileServices = window.matchMedia("(max-width: 780px)");
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
     let rafId = 0;
     const cleanupFns: Array<() => void> = [];
@@ -34,6 +38,25 @@ export default function HomeScrollEffects() {
         const shift = clamp(-centerOffset * 18, -14, 14);
         media.style.setProperty("--home-parallax", `${shift.toFixed(2)}px`);
       }
+    };
+
+    const updateMobileServiceReveal = () => {
+      if (!mobileServiceSection || mobileServiceCards.length === 0) return;
+
+      if (!mobileServices.matches || reducedMotion.matches) {
+        mobileServiceCards.forEach((card) => card.classList.add("is-mobile-service-visible"));
+        return;
+      }
+
+      const vh = Math.max(1, window.innerHeight);
+      const rect = mobileServiceSection.getBoundingClientRect();
+      const revealStart = vh * 0.72;
+      const stepDistance = vh * 0.38;
+      const visibleCount = clamp(Math.floor((revealStart - rect.top) / stepDistance) + 1, 0, mobileServiceCards.length);
+
+      mobileServiceCards.forEach((card, index) => {
+        if (index < visibleCount) card.classList.add("is-mobile-service-visible");
+      });
     };
 
     const setupRevealObserver = () => {
@@ -66,6 +89,8 @@ export default function HomeScrollEffects() {
     const setupSwipeDots = () => {
       const tracks = Array.from(document.querySelectorAll<HTMLElement>("[data-swipe-track]"));
       for (const track of tracks) {
+        if (mobileServices.matches && track.hasAttribute("data-mobile-service-track")) continue;
+
         const id = track.dataset.swipeTrack;
         if (!id) continue;
 
@@ -119,9 +144,18 @@ export default function HomeScrollEffects() {
       }
     };
 
+    const setupMobileServiceReveal = () => {
+      if (mobileServiceCards.length === 0) return;
+      updateMobileServiceReveal();
+      cleanupFns.push(() => {
+        mobileServiceCards.forEach((card) => card.classList.remove("is-mobile-service-visible"));
+      });
+    };
+
     const runFrame = () => {
       updateFade();
       updateParallax();
+      updateMobileServiceReveal();
     };
 
     const requestFrame = () => {
@@ -134,6 +168,7 @@ export default function HomeScrollEffects() {
 
     setupRevealObserver();
     setupSwipeDots();
+    setupMobileServiceReveal();
     runFrame();
 
     window.addEventListener("scroll", requestFrame, { passive: true });

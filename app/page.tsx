@@ -17,9 +17,14 @@ type GridItem = {
   titleDisplay?: ReactNode;
 };
 
-function PorscheCard({ item }: { item: GridItem }) {
+function PorscheCard({ item, mobileReveal = false }: { item: GridItem; mobileReveal?: boolean }) {
   return (
-    <article className="homeLuxuryPorscheCard" data-reveal-item data-parallax-card>
+    <article
+      className="homeLuxuryPorscheCard"
+      data-reveal-item
+      data-parallax-card
+      data-mobile-service-card={mobileReveal ? "" : undefined}
+    >
       <a className="homeLuxuryPorscheLink" href={item.href} aria-label={item.title}>
         <div
           className={`homeLuxuryGridMedia homeLuxuryPorscheMedia${item.videoSrc ? " homeLuxuryMediaVideoCard" : ""} ${item.mediaClass}`}
@@ -263,7 +268,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="homeLuxuryGridSection homeLuxuryGridSectionPorsche" data-reveal>
+      <section className="homeLuxuryGridSection homeLuxuryGridSectionPorsche" data-reveal data-mobile-service-section>
         <div className="homeLuxuryGridInner">
           <div className="homeLuxurySectionTitleWithLogo">
             <h2 className="homeLuxurySectionTitle homeLuxurySectionTitlePorsche homeLuxurySectionTitleInline">
@@ -275,9 +280,13 @@ export default async function Home() {
               <Image src="/LOGO.jpg" alt="" width={128} height={128} className="homeLuxuryCircleLogoImage" />
             </span>
           </div>
-          <div className="homeLuxuryGridShowcase homeLuxuryShowcaseVideoGrid" data-swipe-track="showcase">
+          <div
+            className="homeLuxuryGridShowcase homeLuxuryShowcaseVideoGrid"
+            data-swipe-track="showcase"
+            data-mobile-service-track
+          >
             {sectionTwoItems.map((item) => (
-              <PorscheCard key={`${item.title}-${item.href}`} item={item} />
+              <PorscheCard key={`${item.title}-${item.href}`} item={item} mobileReveal />
             ))}
           </div>
           <div className="homeSwipeDots" data-swipe-dots="showcase" aria-hidden />
