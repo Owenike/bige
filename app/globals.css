@@ -946,8 +946,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 
 @media (max-width: 900px){
   .trainingTopicHero{
-    min-height: auto;
-    align-items: flex-end;
+    min-height: 100svh;
+    align-items: center;
   }
   .trainingTopicHeroImage{
     object-position: var(--training-hero-mobile-position);
@@ -959,7 +959,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   }
   .trainingTopicHeroInner{
     width: min(100% - 28px, 680px);
-    padding: 68px 0 calc(40px + env(safe-area-inset-bottom));
+    padding: clamp(72px, 10svh, 104px) 0 calc(72px + env(safe-area-inset-bottom));
+    transform: translateY(4svh);
   }
   .trainingTopicEyebrow,
   .trainingTopicSectionKicker{
@@ -1004,7 +1005,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   }
   .trainingTopicIntro{
     grid-template-columns: 1fr;
-    padding-top: 44px;
+    padding-top: 56px;
   }
   .trainingTopicSectionHeader{
     display: flex;
