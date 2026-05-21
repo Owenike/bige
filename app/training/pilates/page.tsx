@@ -23,36 +23,44 @@ export default function PilatesPage() {
         {
           title: "建立核心穩定",
           description: "在器械支撐與阻力中學會控制呼吸、骨盆與軀幹，讓力量更集中。",
+          icon: "focus",
         },
         {
           title: "改善身體覺察",
           description: "透過細緻動作練習，理解身體排列與代償習慣，提升動作品質。",
+          icon: "eye",
         },
         {
           title: "低衝擊且可調整",
           description: "器械提供輔助與阻力變化，讓不同能力的人都能找到合適強度。",
+          icon: "sliders",
         },
         {
           title: "提升線條與活動度",
           description: "在穩定控制中延展身體，幫助建立更俐落的線條與活動舒適度。",
+          icon: "waves",
         },
       ]}
       audiences={[
         {
           title: "想改善體態的人",
           description: "適合想讓站姿、坐姿與身體線條更穩定、更有覺察的人。",
+          icon: "user",
         },
         {
           title: "核心無力或久坐緊繃的人",
           description: "從低衝擊動作開始，慢慢找回核心參與與身體支撐感。",
+          icon: "focus",
         },
         {
           title: "想用低衝擊方式訓練的人",
           description: "不需要高強度跳躍，也能透過精準控制建立訓練效果。",
+          icon: "sliders",
         },
         {
           title: "想提升身體線條與控制感的人",
           description: "透過器械輔助與教練引導，讓每個動作更細膩、更有目的。",
+          icon: "sparkles",
         },
       ]}
     />

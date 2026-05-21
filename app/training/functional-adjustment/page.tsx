@@ -23,36 +23,44 @@ export default function FunctionalAdjustmentPage() {
         {
           title: "觀察動作模式",
           description: "從走、蹲、轉身與基礎發力方式開始，找出身體容易卡住的環節。",
+          icon: "scan",
         },
         {
           title: "搭配放鬆與活動度調整",
           description: "依照身體狀態安排放鬆與活動度練習，讓後續訓練更順暢。",
+          icon: "waves",
         },
         {
           title: "改善動作品質",
           description: "透過基礎修正訓練，協助你用更穩定、更有效率的方式完成動作。",
+          icon: "activity",
         },
         {
           title: "提升活動舒適度",
           description: "讓日常活動與訓練前後的身體感受更清楚，也更容易持續調整。",
+          icon: "sparkles",
         },
       ]}
       audiences={[
         {
           title: "久坐或身體容易緊繃的人",
           description: "適合想從日常習慣開始整理身體狀態，降低長時間固定姿勢的不適感。",
+          icon: "user",
         },
         {
           title: "訓練時容易卡關的人",
           description: "透過動作觀察找出限制，讓重量訓練或其他課程更容易銜接。",
+          icon: "target",
         },
         {
           title: "想改善動作品質的人",
           description: "從控制、穩定與活動範圍著手，讓身體使用方式更有意識。",
+          icon: "scan",
         },
         {
           title: "想提升活動舒適度的人",
           description: "適合想讓日常活動更順、更放鬆，也更了解自身狀態的人。",
+          icon: "heart",
         },
       ]}
     />
