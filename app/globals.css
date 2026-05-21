@@ -683,6 +683,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .trainingTopicPanel{
   padding: clamp(48px, 8vw, 84px) 0 0;
 }
+.trainingTopicPanel .trainingTopicSectionKicker{
+  color: rgba(255,255,255,.60);
+}
 .trainingTopicSectionHeader{
   display: flex;
   align-items: end;
@@ -697,7 +700,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .trainingTopicCard{
   min-height: 238px;
-  border: 1px solid rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.15);
   border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.035)),
@@ -708,7 +711,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .trainingTopicCard:hover{
   transform: translateY(-3px);
-  border-color: rgba(255,255,255,.22);
+  border-color: rgba(255,255,255,.30);
   box-shadow: 0 22px 64px rgba(0,0,0,.28);
 }
 .trainingTopicCardTop{
@@ -721,7 +724,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .trainingTopicCardIcon{
   width: 36px;
   height: 36px;
-  color: rgba(255,255,255,.82);
+  color: rgba(255,255,255,.86);
   filter: drop-shadow(0 8px 20px rgba(255,255,255,.08));
   transition: color .24s ease, transform .24s ease;
 }
@@ -735,22 +738,22 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   justify-content: center;
   min-width: 42px;
   height: 26px;
-  border: 1px solid rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.16);
   border-radius: 999px;
-  color: rgba(255,255,255,.62);
+  color: rgba(255,255,255,.68);
   font-size: 11px;
   letter-spacing: .12em;
 }
 .trainingTopicCard h3{
   margin: 0 0 12px;
-  color: #fff;
+  color: rgba(255,255,255,.94);
   font-size: clamp(18px, 1.8vw, 22px);
   font-weight: 520;
   line-height: 1.25;
 }
 .trainingTopicCard p{
   margin: 0;
-  color: rgba(229,235,245,.76);
+  color: rgba(244,247,252,.72);
   font-size: 15px;
   line-height: 1.78;
 }
