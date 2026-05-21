@@ -44,7 +44,10 @@ export default function HomeScrollEffects() {
       if (!mobileServiceSection || mobileServiceCards.length === 0) return;
 
       if (!mobileServices.matches || reducedMotion.matches) {
-        mobileServiceCards.forEach((card) => card.classList.add("is-mobile-service-visible"));
+        mobileServiceCards.forEach((card) => {
+          card.classList.add("is-mobile-service-visible");
+          card.classList.remove("is-mobile-service-active");
+        });
         return;
       }
 
@@ -53,9 +56,11 @@ export default function HomeScrollEffects() {
       const revealStart = vh * 0.72;
       const stepDistance = vh * 0.38;
       const visibleCount = clamp(Math.floor((revealStart - rect.top) / stepDistance) + 1, 0, mobileServiceCards.length);
+      const activeIndex = visibleCount > 0 ? visibleCount - 1 : -1;
 
       mobileServiceCards.forEach((card, index) => {
         if (index < visibleCount) card.classList.add("is-mobile-service-visible");
+        card.classList.toggle("is-mobile-service-active", index === activeIndex);
       });
     };
 
@@ -148,7 +153,10 @@ export default function HomeScrollEffects() {
       if (mobileServiceCards.length === 0) return;
       updateMobileServiceReveal();
       cleanupFns.push(() => {
-        mobileServiceCards.forEach((card) => card.classList.remove("is-mobile-service-visible"));
+        mobileServiceCards.forEach((card) => {
+          card.classList.remove("is-mobile-service-visible");
+          card.classList.remove("is-mobile-service-active");
+        });
       });
     };
 

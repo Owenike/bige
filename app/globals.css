@@ -1248,7 +1248,18 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   }
 
   .homeLuxuryShowcaseVideoGrid .homeLuxuryMediaVideo{
-    display: none;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track] > .homeLuxuryPorscheCard.is-mobile-service-active .homeLuxuryMediaVideo{
+    opacity: 1;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track] > .homeLuxuryPorscheCard.is-mobile-service-active .homeLuxuryMediaVideoCard{
+    filter: none;
   }
 
   .homeLuxuryShowcaseVideoGrid .homeLuxuryPorscheOverlay{
@@ -1272,6 +1283,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
       transform: none;
       filter: none;
       transition: none;
+    }
+
+    .homeLuxuryShowcaseVideoGrid .homeLuxuryMediaVideo{
+      display: none;
+      opacity: 0;
     }
   }
 }
