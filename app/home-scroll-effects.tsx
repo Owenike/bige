@@ -47,20 +47,23 @@ export default function HomeScrollEffects() {
         mobileServiceCards.forEach((card) => {
           card.classList.add("is-mobile-service-visible");
           card.classList.remove("is-mobile-service-active");
+          card.classList.remove("is-mobile-service-before");
+          card.classList.remove("is-mobile-service-after");
         });
         return;
       }
 
       const vh = Math.max(1, window.innerHeight);
       const rect = mobileServiceSection.getBoundingClientRect();
-      const revealStart = vh * 0.72;
-      const stepDistance = vh * 0.38;
-      const visibleCount = clamp(Math.floor((revealStart - rect.top) / stepDistance) + 1, 0, mobileServiceCards.length);
-      const activeIndex = visibleCount > 0 ? visibleCount - 1 : -1;
+      const travel = Math.max(1, rect.height - vh);
+      const progress = clamp(-rect.top / travel, 0, 0.999);
+      const activeIndex = clamp(Math.floor(progress * mobileServiceCards.length), 0, mobileServiceCards.length - 1);
 
       mobileServiceCards.forEach((card, index) => {
-        if (index < visibleCount) card.classList.add("is-mobile-service-visible");
+        card.classList.toggle("is-mobile-service-visible", index <= activeIndex);
         card.classList.toggle("is-mobile-service-active", index === activeIndex);
+        card.classList.toggle("is-mobile-service-before", index < activeIndex);
+        card.classList.toggle("is-mobile-service-after", index > activeIndex);
       });
     };
 
@@ -156,6 +159,8 @@ export default function HomeScrollEffects() {
         mobileServiceCards.forEach((card) => {
           card.classList.remove("is-mobile-service-visible");
           card.classList.remove("is-mobile-service-active");
+          card.classList.remove("is-mobile-service-before");
+          card.classList.remove("is-mobile-service-after");
         });
       });
     };

@@ -1291,6 +1291,162 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     }
   }
 }
+@media (max-width: 780px){
+  .homeLuxuryGridSectionPorsche[data-mobile-service-section]{
+    min-height: 470svh;
+    padding: 0;
+    background: #05070a;
+  }
+
+  .homeLuxuryGridSectionPorsche[data-mobile-service-section] > .homeLuxuryGridInner{
+    position: sticky;
+    top: 0;
+    min-height: 100svh;
+    max-width: none;
+    padding:
+      max(30px, env(safe-area-inset-top))
+      0
+      max(30px, calc(env(safe-area-inset-bottom) + 28px));
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: clamp(18px, 5svh, 34px);
+    overflow: hidden;
+  }
+
+  .homeLuxuryGridSectionPorsche[data-mobile-service-section] .homeLuxurySectionTitleWithLogo{
+    margin: 0;
+    padding: 0 18px;
+    flex: 0 0 auto;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryGridShowcase[data-mobile-service-track],
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track]{
+    position: relative;
+    display: block;
+    width: 100%;
+    height: clamp(420px, 68svh, 660px);
+    min-height: 420px;
+    padding: 0;
+    overflow: visible;
+    perspective: 1100px;
+    isolation: isolate;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryGridShowcase[data-mobile-service-track] > .homeLuxuryPorscheCard,
+  .homeLuxuryGridSectionPorsche.is-visible .homeLuxuryGridShowcase[data-mobile-service-track] > .homeLuxuryPorscheCard,
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track] > .homeLuxuryPorscheCard,
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track] > .homeLuxuryPorscheCard.is-swipe-active{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: min(91vw, 520px);
+    height: clamp(380px, 62svh, 560px);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate3d(-50%, calc(-50% + 112px), 0) scale(.78) rotateX(-5deg);
+    transform-origin: center center;
+    filter: saturate(.7) brightness(.58);
+    z-index: 1;
+    transition:
+      opacity 420ms ease,
+      transform 560ms cubic-bezier(.18,.72,.18,1),
+      filter 420ms ease,
+      box-shadow 420ms ease;
+    will-change: transform, opacity, filter;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryGridShowcase[data-mobile-service-track] > .homeLuxuryPorscheCard.is-mobile-service-before,
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track] > .homeLuxuryPorscheCard.is-mobile-service-before{
+    opacity: .2;
+    transform: translate3d(-50%, calc(-50% - 96px), 0) scale(.74) rotateX(4deg);
+    filter: saturate(.56) brightness(.5);
+    z-index: 1;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryGridShowcase[data-mobile-service-track] > .homeLuxuryPorscheCard.is-mobile-service-after,
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track] > .homeLuxuryPorscheCard.is-mobile-service-after{
+    opacity: 0;
+    transform: translate3d(-50%, calc(-50% + 120px), 0) scale(.8) rotateX(-5deg);
+    filter: saturate(.66) brightness(.58);
+    z-index: 1;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryGridShowcase[data-mobile-service-track] > .homeLuxuryPorscheCard.is-mobile-service-active,
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track] > .homeLuxuryPorscheCard.is-mobile-service-active,
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track] > .homeLuxuryPorscheCard.is-mobile-service-active.is-swipe-active{
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate3d(-50%, -50%, 0) scale(1) rotateX(0deg);
+    filter: none;
+    z-index: 4;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryGridShowcase[data-mobile-service-track] > .homeLuxuryPorscheCard.is-mobile-service-active .homeLuxuryMediaVideoCard,
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track] > .homeLuxuryPorscheCard.is-mobile-service-active .homeLuxuryMediaVideoCard{
+    box-shadow:
+      0 30px 80px rgba(0, 0, 0, .54),
+      0 0 0 1px rgba(255, 255, 255, .16);
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid .homeLuxuryMediaVideoCard{
+    height: 100%;
+    min-height: 0;
+    border-radius: 30px;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid .homeLuxuryPorscheCard,
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid .homeLuxuryPorscheLink,
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid .homeLuxuryPorscheMedia{
+    height: 100%;
+    border-radius: 30px;
+  }
+}
+
+@media (max-width: 780px) and (prefers-reduced-motion: reduce){
+  .homeLuxuryGridSectionPorsche[data-mobile-service-section]{
+    min-height: 0;
+    padding: clamp(44px, 8vw, 70px) 16px;
+  }
+
+  .homeLuxuryGridSectionPorsche[data-mobile-service-section] > .homeLuxuryGridInner{
+    position: relative;
+    top: auto;
+    min-height: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryGridShowcase[data-mobile-service-track],
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track]{
+    display: grid;
+    height: auto;
+    min-height: 0;
+    gap: 18px;
+    perspective: none;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryGridShowcase[data-mobile-service-track] > .homeLuxuryPorscheCard,
+  .homeLuxuryGridSectionPorsche.is-visible .homeLuxuryGridShowcase[data-mobile-service-track] > .homeLuxuryPorscheCard,
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track] > .homeLuxuryPorscheCard,
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid[data-mobile-service-track] > .homeLuxuryPorscheCard.is-swipe-active{
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    height: auto;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+
+  .homeLuxuryGridSectionPorsche .homeLuxuryShowcaseVideoGrid .homeLuxuryMediaVideoCard{
+    height: clamp(220px, 58vw, 280px);
+    min-height: 220px;
+  }
+}
 @media (prefers-reduced-motion: reduce){
   [data-reveal] .homeLuxurySectionTitle,
   [data-reveal] [data-reveal-item]{
