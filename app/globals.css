@@ -663,6 +663,17 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   letter-spacing: .01em;
   font-size: clamp(28px, 3.9vw, 52px);
 }
+.homeLuxurySectionSubtitle{
+  max-width: 620px;
+  margin: clamp(-18px, -1.8vw, -10px) auto clamp(22px, 3.2vw, 36px);
+  text-align: center;
+  color: rgba(32, 39, 50, .68);
+  font-size: clamp(14px, 1.4vw, 17px);
+  line-height: 1.75;
+}
+.homeLuxuryGridSectionFadeFromDark.is-theme-dark .homeLuxurySectionSubtitle{
+  color: rgba(230, 236, 247, .72);
+}
 .homeLuxurySectionTitleText{
   position: relative;
   display: inline-block;
@@ -835,6 +846,19 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   line-height: 1.64;
   font-size: 14px;
 }
+.homeLuxuryGridCardCta{
+  width: fit-content;
+  margin-top: 4px;
+  border-bottom: 1px solid rgba(246, 248, 251, .54);
+  color: rgba(246, 248, 251, .92);
+  font-size: 13px;
+  letter-spacing: .04em;
+  line-height: 1.55;
+  transition:
+    transform .22s ease,
+    border-color .22s ease,
+    color .22s ease;
+}
 .homeLuxuryGridCardLink{
   display: block;
   color: inherit;
@@ -845,6 +869,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .homeLuxuryGridCard:hover .homeLuxuryGridMedia{
   transform: scale(1.02);
+}
+.homeLuxuryGridCard:hover .homeLuxuryGridCardCta,
+.homeLuxuryGridCard:focus-within .homeLuxuryGridCardCta{
+  transform: translateX(4px);
+  border-color: rgba(255, 255, 255, .86);
+  color: #fff;
 }
 .homeLuxuryPorscheCard{
   border-radius: 12px;

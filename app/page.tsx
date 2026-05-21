@@ -15,6 +15,7 @@ type GridItem = {
   videoSrc?: string;
   videoLabel?: string;
   titleDisplay?: ReactNode;
+  clickHint?: string;
 };
 
 function PorscheCard({ item, mobileReveal = false }: { item: GridItem; mobileReveal?: boolean }) {
@@ -49,6 +50,7 @@ function GridCard({ item, clickable = false }: { item: GridItem; clickable?: boo
         <p className="homeLuxuryGridBadge">{item.badge}</p>
         <h3>{item.titleDisplay ?? item.title}</h3>
         <p>{item.description}</p>
+        {item.clickHint ? <span className="homeLuxuryGridCardCta">{item.clickHint}</span> : null}
       </div>
     </div>
   );
@@ -127,9 +129,10 @@ export default async function Home() {
       description: isEn
         ? "Build strength, improve movement quality, and support better posture with focused one-on-one coaching."
         : "透過一對一教練指導，建立正確動作品質，提升肌力、體態與日常活動能力。",
-      href: "/login",
+      href: "/training/weight-training",
       mediaClass: "homeLuxuryMediaS4A",
       cta: "Go",
+      clickHint: isEn ? "Learn more ->" : "了解更多 →",
     },
     {
       badge: "BOXING",
@@ -137,9 +140,10 @@ export default async function Home() {
       description: isEn
         ? "Combine boxing drills, agile footwork, and cardio intervals to improve fat burning, coordination, and explosive power."
         : "結合拳擊動作、敏捷反應與心肺訓練，提升燃脂效率、協調性與全身爆發力。",
-      href: "/member/entry-qr",
+      href: "/training/boxing",
       mediaClass: "homeLuxuryMediaS4B",
       cta: "Open",
+      clickHint: isEn ? "Learn more ->" : "了解更多 →",
     },
     {
       badge: "PILATES",
@@ -148,9 +152,10 @@ export default async function Home() {
       description: isEn
         ? "Use Pilates equipment to improve core stability, body control, posture, and movement quality."
         : "運用器械皮拉提斯建立核心穩定與身體控制，改善姿勢、線條與動作品質。",
-      href: "/frontdesk/checkin",
+      href: "/training/pilates",
       mediaClass: "homeLuxuryMediaS4C",
       cta: "Open",
+      clickHint: isEn ? "Learn more ->" : "了解更多 →",
     },
     {
       badge: "Functional",
@@ -158,9 +163,10 @@ export default async function Home() {
       description: isEn
         ? "Targeted movement correction to release fatigue patterns and restore efficient mechanics."
         : "針對動作代償與疲勞模式進行調整，恢復更有效率的身體機制。",
-      href: "/platform-admin",
+      href: "/training/functional-adjustment",
       mediaClass: "homeLuxuryMediaS4D",
       cta: "Open",
+      clickHint: isEn ? "Learn more ->" : "了解更多 →",
     },
   ];
 
@@ -317,11 +323,16 @@ export default async function Home() {
       >
         <div className="homeLuxuryGridInner homeLuxuryPinFrame">
           <h2 className="homeLuxurySectionTitle">
-            <span className="homeLuxurySectionTitleText">{isEn ? "Training Programs" : "全方位訓練"}</span>
+            <span className="homeLuxurySectionTitleText">{isEn ? "Explore Training Programs" : "\u4e86\u89e3\u5168\u65b9\u4f4d\u8a13\u7df4"}</span>
           </h2>
+          <p className="homeLuxurySectionSubtitle">
+            {isEn
+              ? "Choose a program to see the training focus, ideal fit, and first-experience options."
+              : "\u9ede\u9078\u9805\u76ee\uff0c\u67e5\u770b\u8a13\u7df4\u5167\u5bb9\u3001\u9069\u5408\u5c0d\u8c61\u8207\u9996\u6b21\u9ad4\u9a57\u65b9\u5f0f\u3002"}
+          </p>
           <div className="homeLuxuryGridFour" data-swipe-track="training">
             {sectionFourItems.map((item) => (
-              <GridCard key={`${item.title}-${item.href}`} item={item} />
+              <GridCard key={`${item.title}-${item.href}`} item={item} clickable />
             ))}
           </div>
           <div className="homeSwipeDots" data-swipe-dots="training" aria-hidden />
