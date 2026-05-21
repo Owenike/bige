@@ -1,5 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { CSSProperties } from "react";
+
+export type TrainingTopicCard = {
+  title: string;
+  description: string;
+};
 
 type TrainingTopicPageProps = {
   eyebrow: string;
@@ -7,10 +13,12 @@ type TrainingTopicPageProps = {
   subtitle: string;
   imageSrc: string;
   imageAlt: string;
+  imagePosition?: string;
+  mobileImagePosition?: string;
   introTitle: string;
   intro: string;
-  features: string[];
-  audiences: string[];
+  features: TrainingTopicCard[];
+  audiences: TrainingTopicCard[];
 };
 
 export function TrainingTopicPage({
@@ -19,14 +27,21 @@ export function TrainingTopicPage({
   subtitle,
   imageSrc,
   imageAlt,
+  imagePosition = "center 42%",
+  mobileImagePosition,
   introTitle,
   intro,
   features,
   audiences,
 }: TrainingTopicPageProps) {
+  const heroStyle = {
+    "--training-hero-position": imagePosition,
+    "--training-hero-mobile-position": mobileImagePosition ?? imagePosition,
+  } as CSSProperties;
+
   return (
     <main className="trainingTopicPage">
-      <section className="trainingTopicHero">
+      <section className="trainingTopicHero" style={heroStyle}>
         <div className="trainingTopicHeroMedia" aria-hidden>
           <Image src={imageSrc} alt="" fill priority sizes="100vw" className="trainingTopicHeroImage" />
           <div className="trainingTopicHeroShade" />
@@ -60,10 +75,11 @@ export function TrainingTopicPage({
           <h2>服務特色</h2>
         </div>
         <div className="trainingTopicGrid">
-          {features.map((feature) => (
-            <article className="trainingTopicCard" key={feature}>
-              <span aria-hidden>+</span>
-              <p>{feature}</p>
+          {features.map((feature, index) => (
+            <article className="trainingTopicCard" key={feature.title}>
+              <span aria-hidden>{String(index + 1).padStart(2, "0")}</span>
+              <h3>{feature.title}</h3>
+              <p>{feature.description}</p>
             </article>
           ))}
         </div>
@@ -76,9 +92,10 @@ export function TrainingTopicPage({
         </div>
         <div className="trainingTopicGrid">
           {audiences.map((audience) => (
-            <article className="trainingTopicCard" key={audience}>
-              <span aria-hidden>•</span>
-              <p>{audience}</p>
+            <article className="trainingTopicCard" key={audience.title}>
+              <span aria-hidden>FOR</span>
+              <h3>{audience.title}</h3>
+              <p>{audience.description}</p>
             </article>
           ))}
         </div>
@@ -86,10 +103,15 @@ export function TrainingTopicPage({
 
       <section className="trainingTopicFinalCta">
         <p>想開始體驗？</p>
-        <h2>讓 BigE 團隊協助你安排第一次訓練。</h2>
-        <Link href="/trial-booking" className="trainingTopicButton trainingTopicButtonPrimary">
-          預約首次體驗
-        </Link>
+        <h2>讓 BigE 團隊協助你找到適合自己的第一堂課。</h2>
+        <div className="trainingTopicActions trainingTopicActionsCenter">
+          <Link href="/trial-booking" className="trainingTopicButton trainingTopicButtonPrimary">
+            預約首次體驗
+          </Link>
+          <Link href="/" className="trainingTopicButton trainingTopicButtonGhost">
+            回到首頁
+          </Link>
+        </div>
       </section>
     </main>
   );

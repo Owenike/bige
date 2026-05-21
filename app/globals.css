@@ -566,11 +566,13 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .trainingTopicHero{
   position: relative;
-  min-height: min(760px, 92svh);
+  min-height: min(820px, 94svh);
   display: flex;
   align-items: flex-end;
   overflow: hidden;
   isolation: isolate;
+  --training-hero-position: center 42%;
+  --training-hero-mobile-position: var(--training-hero-position);
 }
 .trainingTopicHeroMedia{
   position: absolute;
@@ -579,7 +581,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .trainingTopicHeroImage{
   object-fit: cover;
-  object-position: center;
+  object-position: var(--training-hero-position);
   filter: saturate(.78) brightness(.72);
 }
 .trainingTopicHeroShade{
@@ -623,6 +625,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 30px;
+}
+.trainingTopicActionsCenter{
+  justify-content: center;
 }
 .trainingTopicButton{
   display: inline-flex;
@@ -691,25 +696,45 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 14px;
 }
 .trainingTopicCard{
-  min-height: 180px;
+  min-height: 238px;
   border: 1px solid rgba(255,255,255,.12);
-  border-radius: 16px;
-  background: rgba(255,255,255,.055);
-  padding: 18px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.035)),
+    rgba(255,255,255,.045);
+  padding: 22px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.18);
 }
 .trainingTopicCard span{
   display: inline-flex;
-  margin-bottom: 32px;
-  color: rgba(255,255,255,.56);
-  font-size: 18px;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 26px;
+  margin-bottom: 36px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 999px;
+  color: rgba(255,255,255,.62);
+  font-size: 11px;
+  letter-spacing: .12em;
+}
+.trainingTopicCard h3{
+  margin: 0 0 12px;
+  color: #fff;
+  font-size: clamp(18px, 1.8vw, 22px);
+  font-weight: 520;
+  line-height: 1.25;
 }
 .trainingTopicCard p{
   margin: 0;
-  color: rgba(245,247,251,.86);
-  line-height: 1.7;
+  color: rgba(229,235,245,.76);
+  font-size: 15px;
+  line-height: 1.78;
 }
 .trainingTopicPanelSoft .trainingTopicCard{
-  background: rgba(255,255,255,.035);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.052), rgba(255,255,255,.026)),
+    rgba(255,255,255,.025);
 }
 .trainingTopicFinalCta{
   margin-top: clamp(56px, 9vw, 96px);
@@ -727,11 +752,15 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 
 @media (max-width: 900px){
   .trainingTopicHero{
-    min-height: 86svh;
+    min-height: 90svh;
+  }
+  .trainingTopicHeroImage{
+    object-position: var(--training-hero-mobile-position);
   }
   .trainingTopicHeroShade{
     background:
-      linear-gradient(180deg, rgba(5,7,10,.24) 0%, rgba(5,7,10,.44) 44%, rgba(5,7,10,.98) 100%);
+      linear-gradient(180deg, rgba(5,7,10,.18) 0%, rgba(5,7,10,.46) 46%, rgba(5,7,10,.98) 100%),
+      linear-gradient(90deg, rgba(5,7,10,.62), rgba(5,7,10,.18) 56%, rgba(5,7,10,.42));
   }
   .trainingTopicIntro{
     grid-template-columns: 1fr;
@@ -744,9 +773,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   }
   .trainingTopicCard{
     min-height: auto;
+    padding: 20px;
   }
   .trainingTopicCard span{
-    margin-bottom: 18px;
+    margin-bottom: 22px;
   }
 }
 .homeLuxuryGridSection{
