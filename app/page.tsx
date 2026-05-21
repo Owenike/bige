@@ -269,6 +269,13 @@ export default async function Home() {
       </section>
 
       <section className="homeLuxuryGridSection homeLuxuryGridSectionPorsche" data-reveal data-mobile-service-section>
+        <div className="homeLuxuryMobileServiceBackdrop" aria-hidden>
+          <span className="homeLuxuryMobileServiceBackdropLayer homeLuxuryMobileServiceBackdropS2A" />
+          <span className="homeLuxuryMobileServiceBackdropLayer homeLuxuryMobileServiceBackdropS2B" />
+          <span className="homeLuxuryMobileServiceBackdropLayer homeLuxuryMobileServiceBackdropS2C" />
+          <span className="homeLuxuryMobileServiceBackdropLayer homeLuxuryMobileServiceBackdropS2D" />
+          <span className="homeLuxuryMobileServiceBackdropShade" />
+        </div>
         <div className="homeLuxuryGridInner">
           <div className="homeLuxurySectionTitleWithLogo">
             <h2 className="homeLuxurySectionTitle homeLuxurySectionTitlePorsche homeLuxurySectionTitleInline">

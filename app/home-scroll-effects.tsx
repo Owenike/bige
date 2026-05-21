@@ -16,6 +16,7 @@ export default function HomeScrollEffects() {
     const cleanupFns: Array<() => void> = [];
 
     const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+    const mobileServiceActiveKeys = ["s2a", "s2b", "s2c", "s2d"] as const;
 
     const updateFade = () => {
       if (!fadeSection) return;
@@ -43,13 +44,14 @@ export default function HomeScrollEffects() {
     const updateMobileServiceReveal = () => {
       if (!mobileServiceSection || mobileServiceCards.length === 0) return;
 
-      if (!mobileServices.matches || reducedMotion.matches) {
+      if (!mobileServices.matches) {
         mobileServiceCards.forEach((card) => {
           card.classList.add("is-mobile-service-visible");
           card.classList.remove("is-mobile-service-active");
           card.classList.remove("is-mobile-service-before");
           card.classList.remove("is-mobile-service-after");
         });
+        delete mobileServiceSection.dataset.mobileServiceActive;
         return;
       }
 
@@ -58,6 +60,18 @@ export default function HomeScrollEffects() {
       const travel = Math.max(1, rect.height - vh);
       const progress = clamp(-rect.top / travel, 0, 0.999);
       const activeIndex = clamp(Math.floor(progress * mobileServiceCards.length), 0, mobileServiceCards.length - 1);
+      const activeKey = mobileServiceActiveKeys[activeIndex] ?? mobileServiceActiveKeys[0];
+      mobileServiceSection.dataset.mobileServiceActive = activeKey;
+
+      if (reducedMotion.matches) {
+        mobileServiceCards.forEach((card, index) => {
+          card.classList.add("is-mobile-service-visible");
+          card.classList.toggle("is-mobile-service-active", index === activeIndex);
+          card.classList.remove("is-mobile-service-before");
+          card.classList.remove("is-mobile-service-after");
+        });
+        return;
+      }
 
       mobileServiceCards.forEach((card, index) => {
         card.classList.toggle("is-mobile-service-visible", index <= activeIndex);
@@ -162,6 +176,9 @@ export default function HomeScrollEffects() {
           card.classList.remove("is-mobile-service-before");
           card.classList.remove("is-mobile-service-after");
         });
+        if (mobileServiceSection) {
+          delete mobileServiceSection.dataset.mobileServiceActive;
+        }
       });
     };
 
