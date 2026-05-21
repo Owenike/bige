@@ -73,8 +73,8 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
       {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute ? (
         <footer className="footer">
           <div className="footerInner">
-            <div>© {new Date().getFullYear()} 巨挺健身館 BigE. 保留所有權利。</div>
-            <div className="footerTagline">仁武質感健身體驗｜重量訓練、拳擊體能、器械皮拉提斯與功能性調整</div>
+            <div>© {new Date().getFullYear()} BigE Fitness. All rights reserved.</div>
+            <div className="footerTagline">巨挺健身館 BigE｜高雄仁武區健身房・器械皮拉提斯・重量訓練・運動按摩</div>
           </div>
         </footer>
       ) : null}

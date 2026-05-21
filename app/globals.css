@@ -2060,8 +2060,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .footer{
   margin-top: auto;
-  border-top: 1px solid var(--line);
-  background: rgba(243,248,255,.58);
+  border-top: 1px solid rgba(255,255,255,.10);
+  background: #05070a;
+  color: rgba(255,255,255,.62);
 }
 .shellWorkspace:not(.shellEmbedded) .footer{
   border-top: 0 !important;
@@ -2076,18 +2077,32 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .footerInner{
   display:flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  color: var(--muted);
-  font-size: 13px;
-  padding: 16px 22px;
+  gap: 24px;
+  color: rgba(255,255,255,.62);
+  font-size: 12px;
+  letter-spacing: .02em;
+  line-height: 1.7;
+  padding: 16px 24px;
 }
 .footerTagline{
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  max-width: 760px;
+  color: rgba(255,255,255,.56);
+  text-align: right;
+}
+@media (max-width: 780px){
+  .footerInner{
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    padding: 18px 18px 20px;
+    text-align: center;
+  }
+  .footerTagline{
+    max-width: 100%;
+    text-align: center;
+  }
 }
 .footerBigeBtn{
   display: inline-flex;
