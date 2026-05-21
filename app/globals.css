@@ -23,7 +23,7 @@
 
   /* Homepage image replacement entrypoints */
   --home-image-hero-main: url("/home-images/hero-main.jpg");
-  --home-image-section-a: url("/home-images/section-body-awareness.jpg");
+  --home-image-section-a: url("/home-images/section-body-awareness.png");
   --home-image-section-b: url("https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=2200&q=80");
   --home-image-section-c: url("https://images.unsplash.com/photo-1599058917212-d750089bc07e?auto=format&fit=crop&w=2200&q=80");
   --home-image-card-s2-a: url("/home-images/card-pilates-showcase-cover.jpg");
