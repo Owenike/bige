@@ -52,6 +52,7 @@ export default function HomeScrollEffects() {
           card.classList.remove("is-mobile-service-after");
         });
         delete mobileServiceSection.dataset.mobileServiceActive;
+        delete mobileServiceSection.dataset.mobileServiceTheme;
         return;
       }
 
@@ -61,7 +62,8 @@ export default function HomeScrollEffects() {
       const progress = clamp(-rect.top / travel, 0, 0.999);
       const activeIndex = clamp(Math.floor(progress * mobileServiceCards.length), 0, mobileServiceCards.length - 1);
       const activeKey = mobileServiceActiveKeys[activeIndex] ?? mobileServiceActiveKeys[0];
-      mobileServiceSection.dataset.mobileServiceActive = activeKey;
+      mobileServiceSection.dataset.mobileServiceActive = String(activeIndex);
+      mobileServiceSection.dataset.mobileServiceTheme = activeKey;
 
       if (reducedMotion.matches) {
         mobileServiceCards.forEach((card, index) => {
@@ -178,6 +180,7 @@ export default function HomeScrollEffects() {
         });
         if (mobileServiceSection) {
           delete mobileServiceSection.dataset.mobileServiceActive;
+          delete mobileServiceSection.dataset.mobileServiceTheme;
         }
       });
     };
