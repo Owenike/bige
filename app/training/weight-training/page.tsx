@@ -17,6 +17,7 @@ export default function WeightTrainingPage() {
       imageAlt="BigE 重量訓練"
       imagePosition="center 36%"
       mobileImagePosition="center 34%"
+      heroClassName="trainingTopicHeroMobileLower"
       introTitle="先建立能長久進步的動作基礎"
       intro="BigE 的重量訓練不是一開始就追求大重量，而是先建立正確動作品質。教練會依照你的身體狀況、訓練經驗與目標，安排適合的動作與強度，幫助你安全地提升肌力、體態與日常活動能力。"
       priceLabel="首次體驗 NT$880"

@@ -42,6 +42,7 @@ type TrainingTopicPageProps = {
   imageAlt: string;
   imagePosition?: string;
   mobileImagePosition?: string;
+  heroClassName?: string;
   introTitle: string;
   intro: string;
   priceLabel: string;
@@ -60,6 +61,7 @@ export function TrainingTopicPage({
   imageAlt,
   imagePosition = "center 42%",
   mobileImagePosition,
+  heroClassName,
   introTitle,
   intro,
   priceLabel,
@@ -76,7 +78,7 @@ export function TrainingTopicPage({
 
   return (
     <main className="trainingTopicPage">
-      <section className="trainingTopicHero" style={heroStyle}>
+      <section className={["trainingTopicHero", heroClassName].filter(Boolean).join(" ")} style={heroStyle}>
         <div className="trainingTopicHeroMedia" aria-hidden>
           <Image src={imageSrc} alt="" fill priority sizes="100vw" className="trainingTopicHeroImage" />
           <div className="trainingTopicHeroShade" />

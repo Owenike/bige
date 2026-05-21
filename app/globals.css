@@ -962,6 +962,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     padding: clamp(72px, 10svh, 104px) 0 calc(72px + env(safe-area-inset-bottom));
     transform: translateY(4svh);
   }
+  .trainingTopicHeroMobileLower .trainingTopicHeroInner{
+    transform: translateY(6.5svh);
+  }
   .trainingTopicEyebrow,
   .trainingTopicSectionKicker{
     margin-bottom: 8px;
