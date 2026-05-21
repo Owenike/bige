@@ -390,7 +390,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .homeLuxurySectionImageA{
   background-image:
-    linear-gradient(130deg, rgba(8,10,14,.46), rgba(8,10,14,.32)),
+    linear-gradient(130deg, rgba(8,10,14,.26), rgba(8,10,14,.14)),
     var(--home-image-section-a);
   background-size: cover;
   background-position: center;
@@ -430,6 +430,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   background:
     linear-gradient(180deg, rgba(11,14,20,.10) 0%, rgba(11,14,20,.48) 58%, rgba(11,14,20,.76) 100%),
     radial-gradient(60% 42% at 50% 22%, rgba(135,149,174,.26), rgba(11,14,20,0) 72%);
+}
+.homeLuxurySectionImageA .homeLuxuryFullShade{
+  background:
+    linear-gradient(180deg, rgba(11,14,20,.04) 0%, rgba(11,14,20,.26) 62%, rgba(11,14,20,.54) 100%),
+    radial-gradient(58% 42% at 50% 24%, rgba(185,194,209,.14), rgba(11,14,20,0) 76%);
 }
 .homeLuxuryOverlayContent{
   position: relative;
