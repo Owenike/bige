@@ -342,8 +342,13 @@ export default async function Home() {
       <section className="homeLuxuryGridSection" data-reveal>
         <div className="homeLuxuryGridInner">
           <h2 className="homeLuxurySectionTitle">
-            <span className="homeLuxurySectionTitleText">{isEn ? "More Choices, Less Pressure" : "多元選擇 輕鬆無負擔"}</span>
+            <span className="homeLuxurySectionTitleText">{isEn ? "Start in a Way That Fits You" : "用適合你的方式開始"}</span>
           </h2>
+          <p className="homeLuxurySectionSubtitle">
+            {isEn
+              ? "Whether you want a single visit, steady training, or coaching to find your direction, BigE gives you flexible ways to begin."
+              : "不論你想單次體驗、穩定訓練，或由教練陪你建立方向，BigE 都能提供彈性的開始方式。"}
+          </p>
           <div className="homeLuxuryGridFour" data-swipe-track="choices">
             {sectionSixItems.map((item) => (
               <GridCard key={`${item.title}-${item.href}`} item={item} />
