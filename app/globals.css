@@ -457,7 +457,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .homeLuxuryHeroTitle{
   margin: 0;
-  max-width: min(100%, 1120px);
+  max-width: min(100%, 920px);
   font-weight: 550;
   line-height: 1.06;
   letter-spacing: .01em;
@@ -472,7 +472,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .homeLuxuryHeroSub{
   margin: 0;
-  max-width: min(100%, 68ch);
+  max-width: min(100%, 62ch);
   width: fit-content;
   align-self: flex-start;
   color: rgba(238,242,248,.86);
