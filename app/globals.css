@@ -946,7 +946,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 
 @media (max-width: 900px){
   .trainingTopicHero{
-    min-height: 90svh;
+    min-height: auto;
+    align-items: flex-end;
   }
   .trainingTopicHeroImage{
     object-position: var(--training-hero-mobile-position);
@@ -956,8 +957,54 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
       linear-gradient(180deg, rgba(5,7,10,.18) 0%, rgba(5,7,10,.46) 46%, rgba(5,7,10,.98) 100%),
       linear-gradient(90deg, rgba(5,7,10,.62), rgba(5,7,10,.18) 56%, rgba(5,7,10,.42));
   }
+  .trainingTopicHeroInner{
+    width: min(100% - 28px, 680px);
+    padding: 68px 0 calc(40px + env(safe-area-inset-bottom));
+  }
+  .trainingTopicEyebrow,
+  .trainingTopicSectionKicker{
+    margin-bottom: 8px;
+    font-size: 10px;
+    letter-spacing: .16em;
+  }
+  .trainingTopicHero h1{
+    max-width: 620px;
+    font-size: clamp(46px, 12vw, 64px);
+    line-height: 1;
+  }
+  .trainingTopicLead{
+    max-width: 620px;
+    margin-top: 16px;
+    font-size: clamp(17px, 4.5vw, 19px);
+    line-height: 1.58;
+  }
+  .trainingTopicHeroPrice{
+    width: 100%;
+    max-width: 620px;
+    gap: 5px;
+    margin-top: 18px;
+    padding: 10px 13px;
+    border-radius: 15px;
+  }
+  .trainingTopicHeroPrice span{
+    font-size: 12px;
+  }
+  .trainingTopicHeroPrice p{
+    font-size: 13px;
+    line-height: 1.48;
+  }
+  .trainingTopicActions{
+    gap: 9px;
+    margin-top: 20px;
+  }
+  .trainingTopicButton{
+    min-height: 42px;
+    padding: 0 15px;
+    font-size: 13px;
+  }
   .trainingTopicIntro{
     grid-template-columns: 1fr;
+    padding-top: 44px;
   }
   .trainingTopicSectionHeader{
     display: flex;
