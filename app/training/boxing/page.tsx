@@ -23,23 +23,23 @@ export default function BoxingPage() {
       priceDescription="拳擊體能訓練首次體驗 NT$880，從基本動作與節奏開始，帶你安全進入訓練狀態。"
       flowSteps={[
         {
-          title: "了解目標與身體狀態",
-          description: "教練會先了解你的訓練目標、運動經驗與目前身體狀態，確認適合的體驗方向。",
+          title: "了解目標",
+          description: "教練會先了解你的目標、經驗與目前狀態。",
           icon: "user",
         },
         {
-          title: "基礎動作與需求觀察",
-          description: "透過簡單動作或身體狀態觀察，找出目前最適合你的訓練起點。",
+          title: "狀態觀察",
+          description: "透過簡單動作觀察，找到適合的開始方式。",
           icon: "scan",
         },
         {
-          title: "進行體驗內容",
-          description: "依照拳擊體能訓練安排體驗內容，讓你實際感受 BigE 的教練引導與訓練方式。",
+          title: "體驗訓練",
+          description: "實際感受 BigE 的教練引導與訓練節奏。",
           icon: "target",
         },
         {
           title: "說明後續建議",
-          description: "體驗結束後，教練會依照你的狀態提供後續訓練方向與建議。",
+          description: "體驗後提供適合你的訓練方向與安排建議。",
           icon: "sparkles",
         },
       ]}
@@ -51,44 +51,44 @@ export default function BoxingPage() {
       features={[
         {
           title: "建立拳擊基本動作",
-          description: "從站姿、步伐、出拳與防守開始，逐步掌握節奏與身體協調。",
+          description: "從站姿、步伐與出拳開始，掌握節奏與協調。",
           icon: "target",
         },
         {
           title: "提升心肺與反應能力",
-          description: "透過間歇式訓練與反應練習，讓體能、敏捷度與專注力同步提升。",
+          description: "用間歇訓練與反應練習，提升體能與敏捷度。",
           icon: "zap",
         },
         {
           title: "高效率流汗與燃脂",
-          description: "拳擊動作結合全身發力，讓短時間訓練也能有明確的運動感。",
+          description: "拳擊結合全身發力，短時間也能有明確運動感。",
           icon: "flame",
         },
         {
           title: "釋放壓力與建立節奏感",
-          description: "用擊打、移動與呼吸找回節奏，讓訓練過程更有投入感。",
+          description: "用擊打、移動與呼吸找回節奏，讓訓練更投入。",
           icon: "wind",
         },
       ]}
       audiences={[
         {
           title: "想大量流汗的人",
-          description: "適合想用更有動感的方式提高運動量，享受訓練後的暢快感。",
+          description: "用更有動感的方式提高運動量，享受流汗感。",
           icon: "activity",
         },
         {
           title: "想提升體能與敏捷度的人",
-          description: "透過步伐與反應訓練，建立更靈活的身體控制能力。",
+          description: "透過步伐與反應訓練，建立靈活控制力。",
           icon: "zap",
         },
         {
           title: "想用拳擊釋放壓力的人",
-          description: "在安全指導下透過擊打節奏轉換壓力，讓運動更有情緒出口。",
+          description: "在安全指導下用擊打節奏轉換壓力。",
           icon: "heart",
         },
         {
           title: "覺得一般訓練太無聊的人",
-          description: "用更有互動感的課程形式，讓每一次訓練都有新鮮感與挑戰。",
+          description: "用互動感更強的課程，讓訓練更有挑戰。",
           icon: "sparkles",
         },
       ]}

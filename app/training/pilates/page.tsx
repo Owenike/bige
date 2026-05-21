@@ -23,23 +23,23 @@ export default function PilatesPage() {
       priceDescription="器械皮拉提斯首次體驗 NT$880，透過器械輔助建立核心控制與身體覺察。"
       flowSteps={[
         {
-          title: "了解目標與身體狀態",
-          description: "教練會先了解你的訓練目標、運動經驗與目前身體狀態，確認適合的體驗方向。",
+          title: "了解目標",
+          description: "教練會先了解你的目標、經驗與目前狀態。",
           icon: "user",
         },
         {
-          title: "基礎動作與需求觀察",
-          description: "透過簡單動作或身體狀態觀察，找出目前最適合你的訓練起點。",
+          title: "狀態觀察",
+          description: "透過簡單動作觀察，找到適合的開始方式。",
           icon: "scan",
         },
         {
-          title: "進行體驗內容",
-          description: "依照器械皮拉提斯安排體驗內容，讓你實際感受 BigE 的教練引導與訓練方式。",
+          title: "體驗訓練",
+          description: "實際感受 BigE 的教練引導與訓練節奏。",
           icon: "focus",
         },
         {
           title: "說明後續建議",
-          description: "體驗結束後，教練會依照你的狀態提供後續訓練方向與建議。",
+          description: "體驗後提供適合你的訓練方向與安排建議。",
           icon: "sparkles",
         },
       ]}
@@ -51,44 +51,44 @@ export default function PilatesPage() {
       features={[
         {
           title: "建立核心穩定",
-          description: "在器械支撐與阻力中學會控制呼吸、骨盆與軀幹，讓力量更集中。",
+          description: "在器械支撐中練習呼吸、骨盆與軀幹控制。",
           icon: "focus",
         },
         {
           title: "改善身體覺察",
-          description: "透過細緻動作練習，理解身體排列與代償習慣，提升動作品質。",
+          description: "透過細緻動作，提升排列感與身體覺察。",
           icon: "eye",
         },
         {
           title: "低衝擊且可調整",
-          description: "器械提供輔助與阻力變化，讓不同能力的人都能找到合適強度。",
+          description: "器械可調整輔助與阻力，找到適合自己的強度。",
           icon: "sliders",
         },
         {
           title: "提升線條與活動度",
-          description: "在穩定控制中延展身體，幫助建立更俐落的線條與活動舒適度。",
+          description: "在穩定控制中延展身體，建立線條與活動度。",
           icon: "waves",
         },
       ]}
       audiences={[
         {
           title: "想改善體態的人",
-          description: "適合想讓站姿、坐姿與身體線條更穩定、更有覺察的人。",
+          description: "讓站姿、坐姿與身體線條更穩定有感。",
           icon: "user",
         },
         {
           title: "核心無力或久坐緊繃的人",
-          description: "從低衝擊動作開始，慢慢找回核心參與與身體支撐感。",
+          description: "從低衝擊動作開始，找回核心參與感。",
           icon: "focus",
         },
         {
           title: "想用低衝擊方式訓練的人",
-          description: "不需要高強度跳躍，也能透過精準控制建立訓練效果。",
+          description: "不需高強度跳躍，也能透過控制建立訓練感。",
           icon: "sliders",
         },
         {
           title: "想提升身體線條與控制感的人",
-          description: "透過器械輔助與教練引導，讓每個動作更細膩、更有目的。",
+          description: "透過器械與教練引導，讓動作更細膩有目的。",
           icon: "sparkles",
         },
       ]}

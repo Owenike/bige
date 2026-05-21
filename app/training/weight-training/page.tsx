@@ -23,23 +23,23 @@ export default function WeightTrainingPage() {
       priceDescription="重量訓練首次體驗 NT$880，由教練協助安排適合你的第一堂課。"
       flowSteps={[
         {
-          title: "了解目標與身體狀態",
-          description: "教練會先了解你的訓練目標、運動經驗與目前身體狀態，確認適合的體驗方向。",
+          title: "了解目標",
+          description: "教練會先了解你的目標、經驗與目前狀態。",
           icon: "user",
         },
         {
-          title: "基礎動作與需求觀察",
-          description: "透過簡單動作或身體狀態觀察，找出目前最適合你的訓練起點。",
+          title: "狀態觀察",
+          description: "透過簡單動作觀察，找到適合的開始方式。",
           icon: "scan",
         },
         {
-          title: "進行體驗內容",
-          description: "依照重量訓練項目安排體驗內容，讓你實際感受 BigE 的教練引導與訓練方式。",
+          title: "體驗訓練",
+          description: "實際感受 BigE 的教練引導與訓練節奏。",
           icon: "dumbbell",
         },
         {
           title: "說明後續建議",
-          description: "體驗結束後，教練會依照你的狀態提供後續訓練方向與建議。",
+          description: "體驗後提供適合你的訓練方向與安排建議。",
           icon: "target",
         },
       ]}
@@ -51,44 +51,44 @@ export default function WeightTrainingPage() {
       features={[
         {
           title: "建立正確動作品質",
-          description: "從深蹲、推、拉與髖關節動作開始，讓每一次訓練都更穩定且有效率。",
+          description: "從深蹲、推、拉開始，讓訓練更穩定有效率。",
           icon: "dumbbell",
         },
         {
           title: "依能力安排強度",
-          description: "教練會依照你的經驗、體能與目標調整訓練內容，不需要一開始就追求大重量。",
+          description: "依照你的經驗與體能安排強度，從適合的重量開始進步。",
           icon: "gauge",
         },
         {
           title: "提升肌力與體態控制",
-          description: "透過循序漸進的訓練，建立肌力、肌耐力與身體控制感。",
+          description: "循序建立肌力、肌耐力與身體控制感。",
           icon: "trending",
         },
         {
           title: "適合初學與重新開始",
-          description: "不論是第一次接觸重訓，或想重新建立運動習慣，都能找到適合自己的起點。",
+          description: "第一次接觸或重新開始，都能找到合適起點。",
           icon: "rotate",
         },
       ]}
       audiences={[
         {
           title: "想增肌減脂的人",
-          description: "透過重量訓練提升肌肉量與日常消耗，讓體態改變更有方向。",
+          description: "用重量訓練提升肌肉量，讓體態改變更有方向。",
           icon: "target",
         },
         {
           title: "久坐與體態不佳的人",
-          description: "從基礎動作與控制能力開始，重新建立身體使用方式。",
+          description: "從基礎動作開始，重新建立身體使用方式。",
           icon: "user",
         },
         {
           title: "想學會正確重訓動作的人",
-          description: "由教練帶你理解動作細節，降低盲目模仿造成的挫折感。",
+          description: "由教練帶你理解動作細節，少走模仿摸索的路。",
           icon: "focus",
         },
         {
           title: "想提升日常體能的人",
-          description: "讓上下樓、搬重物與日常活動更有力，也讓運動習慣更容易持續。",
+          description: "讓日常活動更有力，也讓運動習慣更容易持續。",
           icon: "activity",
         },
       ]}

@@ -23,23 +23,23 @@ export default function FunctionalAdjustmentPage() {
       priceDescription="功能性調整首次體驗 NT$1,500，協助你從放鬆、活動度與動作品質找回更順暢的身體狀態。"
       flowSteps={[
         {
-          title: "了解身體狀態與緊繃感",
-          description: "教練會先了解你的日常習慣、訓練經驗與目前身體狀態，確認適合的調整方向。",
+          title: "了解狀態",
+          description: "先了解你的日常習慣、訓練經驗與目前狀態。",
           icon: "user",
         },
         {
-          title: "觀察動作模式與活動限制",
-          description: "透過簡單動作觀察，找出目前身體使用上比較需要整理的環節。",
+          title: "動作觀察",
+          description: "透過簡單動作，找出目前需要整理的環節。",
           icon: "scan",
         },
         {
-          title: "進行放鬆與活動度調整",
-          description: "依照身體狀態安排放鬆、活動度與基礎修正內容，讓你實際感受調整方式。",
+          title: "放鬆與活動度調整",
+          description: "安排放鬆、活動度與基礎修正內容。",
           icon: "waves",
         },
         {
-          title: "說明後續自我照顧與訓練建議",
-          description: "體驗結束後，教練會依照你的狀態提供後續自我照顧與訓練方向。",
+          title: "後續自我照顧建議",
+          description: "依照你的狀態提供後續自我照顧與訓練方向。",
           icon: "heart",
         },
       ]}
@@ -51,44 +51,44 @@ export default function FunctionalAdjustmentPage() {
       features={[
         {
           title: "觀察動作模式",
-          description: "從走、蹲、轉身與基礎發力方式開始，找出身體容易卡住的環節。",
+          description: "從走、蹲、轉身開始，找出身體容易卡住的環節。",
           icon: "scan",
         },
         {
           title: "搭配放鬆與活動度調整",
-          description: "依照身體狀態安排放鬆與活動度練習，讓後續訓練更順暢。",
+          description: "依照狀態安排放鬆與活動度練習，讓訓練更順。",
           icon: "waves",
         },
         {
           title: "改善動作品質",
-          description: "透過基礎修正訓練，協助你用更穩定、更有效率的方式完成動作。",
+          description: "透過基礎修正，建立更穩定有效率的動作方式。",
           icon: "activity",
         },
         {
           title: "提升活動舒適度",
-          description: "讓日常活動與訓練前後的身體感受更清楚，也更容易持續調整。",
+          description: "讓日常活動與訓練前後的身體感受更清楚。",
           icon: "sparkles",
         },
       ]}
       audiences={[
         {
           title: "久坐或身體容易緊繃的人",
-          description: "適合想從日常習慣開始整理身體狀態，降低長時間固定姿勢的不適感。",
+          description: "從日常習慣開始整理身體狀態，找回輕鬆感。",
           icon: "user",
         },
         {
           title: "訓練時容易卡關的人",
-          description: "透過動作觀察找出限制，讓重量訓練或其他課程更容易銜接。",
+          description: "透過動作觀察找出限制，讓訓練銜接更順。",
           icon: "target",
         },
         {
           title: "想改善動作品質的人",
-          description: "從控制、穩定與活動範圍著手，讓身體使用方式更有意識。",
+          description: "從控制、穩定與活動範圍著手，改善使用方式。",
           icon: "scan",
         },
         {
           title: "想提升活動舒適度的人",
-          description: "適合想讓日常活動更順、更放鬆，也更了解自身狀態的人。",
+          description: "讓日常活動更順，也更了解自己的身體狀態。",
           icon: "heart",
         },
       ]}
