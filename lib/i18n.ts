@@ -16,7 +16,7 @@ export const messages = {
     "footer.tagline": "沉穩、乾淨、卡片式介面",
     "home.quick_links": "快速連結",
     "home.baseline": "基準",
-    "home.hero_title": "巨挺健身館 BigE\n仁武質感健身房",
+    "home.hero_title": "巨挺健身館 BigE",
     "home.hero_sub": "高雄仁武區一對一重量訓練、器械皮拉提斯、樂齡訓練、拳擊體能與運動按摩，陪你改善體態、建立運動習慣。",
     "home.cta_login": "前往登入",
     "home.member_dynamic_qr": "會員動態 QR",
