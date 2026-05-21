@@ -330,7 +330,7 @@ export default async function Home() {
       <section className="homeLuxuryFullVideoSection">
         <iframe
           className="homeLuxuryYouTubeEmbed"
-          src="https://www.youtube-nocookie.com/embed/V33I8IozKgc?autoplay=1&mute=1&loop=1&playlist=V33I8IozKgc&controls=0&rel=0&playsinline=1&modestbranding=1"
+          src="https://www.youtube-nocookie.com/embed/9NHEvByM5tk?autoplay=1&mute=1&loop=1&playlist=9NHEvByM5tk&controls=0&rel=0&playsinline=1&modestbranding=1"
           title="Homepage showcase video"
           allow="autoplay; encrypted-media; picture-in-picture"
           referrerPolicy="strict-origin-when-cross-origin"
