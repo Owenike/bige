@@ -15,13 +15,16 @@ function jsonError(status: number, error: string) {
 }
 
 function getConfig() {
+  const acpayEnv = process.env.ACPAY_ENV?.trim() || "";
   const merchantNo = process.env.ACPAY_MERCHANT_NO?.trim() || "";
   const secretKey = process.env.ACPAY_SECRET_KEY?.trim() || "";
   const apiRoot = process.env.ACPAY_API_ROOT?.trim() || "";
+  const apiRoot2 = process.env.ACPAY_API_ROOT2?.trim() || "";
   const appBaseUrl = (process.env.APP_BASE_URL?.trim() || "").replace(/\/+$/, "");
-  const envAmount = Number(process.env.ACPAY_TRIAL_AMOUNT || 880);
+  const trialAmount = process.env.ACPAY_TRIAL_AMOUNT?.trim() || "";
+  const envAmount = Number(trialAmount || 880);
 
-  return { merchantNo, secretKey, apiRoot, appBaseUrl, envAmount };
+  return { acpayEnv, merchantNo, secretKey, apiRoot, apiRoot2, appBaseUrl, trialAmount, envAmount };
 }
 
 function normalizeAmount(input: unknown, fallback: number) {
@@ -36,10 +39,16 @@ export async function POST(request: Request) {
 
   if (!config.merchantNo || !config.secretKey || !config.apiRoot || !config.appBaseUrl) {
     console.warn("[acpay] create payment skipped: missing env", {
+      hasAcpayEnv: Boolean(config.acpayEnv),
       hasMerchantNo: Boolean(config.merchantNo),
       hasSecretKey: Boolean(config.secretKey),
+      secretKeyLength: config.secretKey.length,
       hasApiRoot: Boolean(config.apiRoot),
+      hasApiRoot2: Boolean(config.apiRoot2),
       hasAppBaseUrl: Boolean(config.appBaseUrl),
+      hasTrialAmount: Boolean(config.trialAmount),
+      apiRoot: config.apiRoot || null,
+      appBaseUrl: config.appBaseUrl || null,
     });
     return jsonError(503, "線上付款設定尚未完成，請稍後再試或改用現場付款。");
   }
