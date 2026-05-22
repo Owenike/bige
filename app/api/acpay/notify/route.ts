@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseAcpayXml, verifyAcpaySign } from "../../../../lib/acpay";
+import { recordAcpayChecklist } from "../../../../lib/acpay-checklist";
 
 function textResponse(text: string, status = 200) {
   return new NextResponse(text, {
@@ -43,10 +44,21 @@ export async function POST(request: Request) {
 
   // TODO: ACpay may send duplicate notifications. Persist out_trade_no and
   // update payment state idempotently before treating the payment as settled.
+  recordAcpayChecklist({
+    notifyRawXml: rawBody,
+    notifyParsedPayload: parsed,
+    outTradeNo: parsed.out_trade_no,
+    transactionId: parsed.transaction_id,
+  });
   console.info("[acpay] notify accepted", {
     outTradeNo: parsed.out_trade_no,
     totalFee: parsed.total_fee,
     hasTransactionId: Boolean(parsed.transaction_id),
+  });
+  console.info("[acpay] notify xml for checklist", {
+    outTradeNo: parsed.out_trade_no,
+    rawXml: rawBody,
+    parsedPayload: parsed,
   });
 
   return textResponse("SUCCESS");

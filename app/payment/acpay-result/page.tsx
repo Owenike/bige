@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { recordAcpayChecklist } from "../../../lib/acpay-checklist";
 
 type AcpayResultPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -19,6 +20,20 @@ export default async function AcpayResultPage({ searchParams }: AcpayResultPageP
   const outTradeNo = readParam(params, "out_trade_no");
   const isSuccess = resultCode === "0" && payResult === "0";
   const isPending = !resultCode && !payResult;
+  const callbackQuery = Object.fromEntries(
+    Object.entries(params).map(([key, value]) => [key, Array.isArray(value) ? value[0] || "" : value || ""]),
+  );
+
+  recordAcpayChecklist({
+    callbackQuery,
+    outTradeNo,
+    transactionId,
+  });
+  console.info("[acpay] callback query for checklist", {
+    outTradeNo: outTradeNo || null,
+    hasTransactionId: Boolean(transactionId),
+    callbackQuery,
+  });
 
   return (
     <main className="acpayResultPage">

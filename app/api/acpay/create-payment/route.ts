@@ -7,24 +7,13 @@ import {
   parseAcpayXml,
   type AcpayParams,
 } from "../../../../lib/acpay";
+import { recordAcpayChecklist } from "../../../../lib/acpay-checklist";
+import { getAcpayConfigSummary, getAcpayServerConfig } from "../../../../lib/acpay-server";
 
 const ALLOWED_AMOUNTS = new Set([880, 1500]);
 
 function jsonError(status: number, error: string) {
   return NextResponse.json({ ok: false, error }, { status });
-}
-
-function getConfig() {
-  const acpayEnv = process.env.ACPAY_ENV?.trim() || "";
-  const merchantNo = process.env.ACPAY_MERCHANT_NO?.trim() || "";
-  const secretKey = process.env.ACPAY_SECRET_KEY?.trim() || "";
-  const apiRoot = process.env.ACPAY_API_ROOT?.trim() || "";
-  const apiRoot2 = process.env.ACPAY_API_ROOT2?.trim() || "";
-  const appBaseUrl = (process.env.APP_BASE_URL?.trim() || "").replace(/\/+$/, "");
-  const trialAmount = process.env.ACPAY_TRIAL_AMOUNT?.trim() || "";
-  const envAmount = Number(trialAmount || 880);
-
-  return { acpayEnv, merchantNo, secretKey, apiRoot, apiRoot2, appBaseUrl, trialAmount, envAmount };
 }
 
 function normalizeAmount(input: unknown, fallback: number) {
@@ -35,21 +24,10 @@ function normalizeAmount(input: unknown, fallback: number) {
 }
 
 export async function POST(request: Request) {
-  const config = getConfig();
+  const config = getAcpayServerConfig();
 
   if (!config.merchantNo || !config.secretKey || !config.apiRoot || !config.appBaseUrl) {
-    console.warn("[acpay] create payment skipped: missing env", {
-      hasAcpayEnv: Boolean(config.acpayEnv),
-      hasMerchantNo: Boolean(config.merchantNo),
-      hasSecretKey: Boolean(config.secretKey),
-      secretKeyLength: config.secretKey.length,
-      hasApiRoot: Boolean(config.apiRoot),
-      hasApiRoot2: Boolean(config.apiRoot2),
-      hasAppBaseUrl: Boolean(config.appBaseUrl),
-      hasTrialAmount: Boolean(config.trialAmount),
-      apiRoot: config.apiRoot || null,
-      appBaseUrl: config.appBaseUrl || null,
-    });
+    console.warn("[acpay] create payment skipped: missing env", getAcpayConfigSummary(config));
     return jsonError(503, "線上付款設定尚未完成，請稍後再試或改用現場付款。");
   }
 
@@ -82,6 +60,14 @@ export async function POST(request: Request) {
 
   params.sign = createAcpaySign(params, config.secretKey);
   const requestXml = buildAcpayXml(params);
+  recordAcpayChecklist({
+    authorizationRequestXml: requestXml,
+    outTradeNo,
+  });
+  console.info("[acpay] authorization request xml for checklist", {
+    outTradeNo,
+    requestXml,
+  });
 
   try {
     const response = await fetch(config.apiRoot, {
@@ -93,6 +79,17 @@ export async function POST(request: Request) {
     });
     const responseText = await response.text();
     const parsed = parseAcpayXml(responseText);
+    recordAcpayChecklist({
+      authorizationRequestXml: requestXml,
+      authorizationResponseXml: responseText,
+      codeUrl: parsed.code_url,
+      outTradeNo,
+    });
+    console.info("[acpay] authorization response xml for checklist", {
+      outTradeNo,
+      responseXml: responseText,
+      hasCodeUrl: Boolean(parsed.code_url),
+    });
 
     if (parsed.status === "0" && parsed.result_code === "0" && parsed.code_url) {
       return NextResponse.json({ ok: true, codeUrl: parsed.code_url, outTradeNo });
