@@ -1382,6 +1382,34 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .homeLuxuryGridCardFrame{
   display: block;
 }
+.homeLuxuryGridSectionLast .homeLuxuryGridCardTonePrimary{
+  border-color: rgba(255, 255, 255, .28);
+  box-shadow: 0 24px 44px rgba(0, 0, 0, .26);
+}
+.homeLuxuryGridSectionLast .homeLuxuryGridCardTonePrimary .homeLuxuryGridMedia::before{
+  background:
+    linear-gradient(180deg, rgba(246,248,251,.04) 0%, rgba(8,12,18,.26) 48%, rgba(8,12,18,.90) 100%),
+    linear-gradient(135deg, rgba(214,184,116,.36), rgba(214,184,116,0) 46%);
+}
+.homeLuxuryGridSectionLast .homeLuxuryGridCardTonePrimary .homeLuxuryGridBadge,
+.homeLuxuryGridSectionLast .homeLuxuryGridCardTonePrimary .homeLuxuryGridCardCta{
+  color: #fff;
+  border-color: rgba(255, 255, 255, .78);
+}
+.homeLuxuryGridSectionLast .homeLuxuryGridCardToneSecondary{
+  border-color: rgba(255, 255, 255, .18);
+}
+.homeLuxuryGridSectionLast .homeLuxuryGridCardToneTertiary{
+  border-color: rgba(255, 255, 255, .12);
+  box-shadow: 0 10px 20px rgba(16, 22, 34, .12);
+}
+.homeLuxuryGridSectionLast .homeLuxuryGridCardToneTertiary .homeLuxuryGridMedia::before{
+  background:
+    linear-gradient(180deg, rgba(10,14,22,.20) 18%, rgba(10,14,22,.46) 56%, rgba(10,14,22,.88) 100%);
+}
+.homeLuxuryGridSectionLast .homeLuxuryGridCardToneTertiary .homeLuxuryGridOverlay{
+  opacity: .9;
+}
 .homeLuxuryGridCard:hover .homeLuxuryGridMedia{
   transform: scale(1.02);
 }

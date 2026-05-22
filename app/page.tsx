@@ -16,6 +16,7 @@ type GridItem = {
   videoLabel?: string;
   titleDisplay?: ReactNode;
   clickHint?: string;
+  ctaTone?: "primary" | "secondary" | "tertiary";
 };
 
 function PorscheCard({ item, mobileReveal = false }: { item: GridItem; mobileReveal?: boolean }) {
@@ -56,7 +57,11 @@ function GridCard({ item, clickable = false }: { item: GridItem; clickable?: boo
   );
 
   return (
-    <article className="homeLuxuryGridCard" data-reveal-item data-parallax-card>
+    <article
+      className={`homeLuxuryGridCard${item.ctaTone ? ` homeLuxuryGridCardTone${item.ctaTone[0].toUpperCase()}${item.ctaTone.slice(1)}` : ""}`}
+      data-reveal-item
+      data-parallax-card
+    >
       {clickable ? (
         <a className="homeLuxuryGridCardLink" href={item.href} aria-label={item.title}>
           {cardContent}
@@ -99,13 +104,13 @@ export default async function Home() {
     },
     {
       badge: "燃脂紓壓",
-      title: "拳擊訓練",
+      title: "拳擊體能訓練",
       description: t("home.calm_ui_desc"),
       href: "/coach",
       mediaClass: "homeLuxuryMediaS2C",
       cta: "Open",
       videoSrc: "/home-videos/card-boxing-showcase.mp4",
-      videoLabel: "拳擊訓練影片背景",
+      videoLabel: "拳擊體能訓練影片背景",
     },
     {
       badge: "疲勞釋放",
@@ -144,8 +149,7 @@ export default async function Home() {
     },
     {
       badge: "PILATES",
-      title: isEn ? "Pilates Core Training" : "器械皮拉提斯核心訓練",
-      titleDisplay: isEn ? "Pilates Core Training" : <><span>器械皮拉提斯</span><br /><span>核心訓練</span></>,
+      title: isEn ? "Reformer Pilates" : "器械皮拉提斯",
       description: isEn
         ? "Use Pilates equipment to improve core stability, body control, posture, and movement quality."
         : "運用器械皮拉提斯建立核心穩定與身體控制，改善姿勢、線條與動作品質。",
@@ -156,10 +160,10 @@ export default async function Home() {
     },
     {
       badge: "Functional",
-      title: isEn ? "Functional Adjustment" : "功能性調整",
+      title: isEn ? "Sports Massage & Functional Adjustment" : "運動按摩與功能性調整",
       description: isEn
-        ? "Targeted movement correction to release fatigue patterns and restore efficient mechanics."
-        : "針對動作代償與疲勞模式進行調整，恢復更有效率的身體機制。",
+        ? "Blend recovery massage, mobility work, and functional adjustment to help the body move more comfortably."
+        : "結合運動按摩、放鬆與活動度調整，協助身體回到更順暢的使用狀態。",
       href: "/training/functional-adjustment",
       mediaClass: "homeLuxuryMediaS4D",
       cta: "Open",
@@ -212,34 +216,37 @@ export default async function Home() {
 
   const sectionEightItems: GridItem[] = [
     {
-      badge: "Contact Us",
-      title: isEn ? "Contact Us" : "聯繫我們",
+      badge: "Book Trial",
+      title: isEn ? "Book a Trial Session" : "立即預約首次體驗",
       description: isEn
-        ? "Message us anytime and we will help you choose the right plan and schedule."
-        : "歡迎隨時聯繫我們，將由專人協助你挑選最適合的方案與時段。",
-      href: "https://lin.ee/0GWm0oZ",
-      mediaClass: "homeLuxuryMediaS8A",
-      cta: "Open",
-    },
-    {
-      badge: "Book Now",
-      title: isEn ? "Book Now" : "立即預約",
-      description: isEn
-        ? "Book your visit or trial class in minutes and secure your preferred time."
-        : "線上快速完成預約，提前鎖定你想要的訓練時段。",
+        ? "Choose your preferred program and time, then let the BigE team arrange the first experience with you."
+        : "選擇想體驗的項目與方便時段，讓 BigE 團隊協助安排你的第一堂課。",
       href: "/trial-booking",
       mediaClass: "homeLuxuryMediaS8B",
       cta: "Open",
+      ctaTone: "primary",
     },
     {
-      badge: "Map Guide",
-      title: isEn ? "Map Guide" : "地圖導覽",
+      badge: "LINE",
+      title: isEn ? "LINE Consultation" : "LINE 諮詢",
+      description: isEn
+        ? "Message us anytime and we will help you choose the right plan and schedule."
+        : "還不確定適合哪一種訓練？用 LINE 讓專人協助你判斷方向。",
+      href: "https://lin.ee/0GWm0oZ",
+      mediaClass: "homeLuxuryMediaS8A",
+      cta: "Open",
+      ctaTone: "secondary",
+    },
+    {
+      badge: "Map",
+      title: isEn ? "View Map" : "查看地圖",
       description: isEn
         ? "Open map directions and navigate to the gym with the fastest route."
         : "一鍵查看地圖路線，快速找到場館位置與交通方式。",
       href: "https://www.google.com/maps/search/?api=1&query=%E5%B7%A8%E6%8C%BA%E5%81%A5%E8%BA%AB%E9%A4%A8",
       mediaClass: "homeLuxuryMediaS8C",
       cta: "Open",
+      ctaTone: "tertiary",
     },
   ];
 

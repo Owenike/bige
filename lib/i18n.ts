@@ -17,7 +17,7 @@ export const messages = {
     "home.quick_links": "快速連結",
     "home.baseline": "基準",
     "home.hero_title": "巨挺健身館 BigE",
-    "home.hero_sub": "高雄仁武區一對一重量訓練、器械皮拉提斯、樂齡訓練、拳擊體能與運動按摩，陪你改善體態、建立運動習慣。",
+    "home.hero_sub": "高雄仁武區一對一重量訓練、器械皮拉提斯、拳擊體能、樂齡訓練與運動按摩／功能性調整，陪你改善體態、建立運動習慣。",
     "home.cta_login": "前往登入",
     "home.member_dynamic_qr": "會員動態 QR",
     "home.frontdesk_checkin": "櫃檯報到",
