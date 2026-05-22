@@ -1,13 +1,12 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type FloatingLineButtonProps = {
-  href: string;
-  ariaLabel: string;
-};
+const LINE_URL = "https://lin.ee/0GWm0oZ";
 
-export function FloatingLineButton({ href, ariaLabel }: FloatingLineButtonProps) {
+export function FloatingActionButtons() {
   const [isHidden, setIsHidden] = useState(false);
 
   useEffect(() => {
@@ -47,14 +46,26 @@ export function FloatingLineButton({ href, ariaLabel }: FloatingLineButtonProps)
   }, []);
 
   return (
-    <a
-      className={`homeLuxuryLineFab${isHidden ? " homeLineFabHidden" : ""}`}
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      aria-label={ariaLabel}
-    >
-      LINE
-    </a>
+    <nav className={`homeLuxuryFloatingActions${isHidden ? " homeLineFabHidden" : ""}`} aria-label="BigE 快捷操作">
+      <Link className="homeLuxuryFloatingAction homeLuxuryFloatingHome" href="/" aria-label="返回首頁">
+        <Image src="/LOGO.jpg" alt="" width={64} height={64} className="homeLuxuryFloatingLogo" />
+      </Link>
+      <Link
+        className="homeLuxuryFloatingAction homeLuxuryFloatingBooking"
+        href="/trial-booking"
+        aria-label="立即預約首次體驗"
+      >
+        立即預約
+      </Link>
+      <a
+        className="homeLuxuryFloatingAction homeLuxuryFloatingLine"
+        href={LINE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="LINE 諮詢"
+      >
+        LINE
+      </a>
+    </nav>
   );
 }

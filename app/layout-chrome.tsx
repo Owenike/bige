@@ -2,6 +2,7 @@
 
 import React from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { FloatingActionButtons } from "@/components/floating-line-button";
 import LangSwitch from "./lang-switch";
 import { useI18n } from "./i18n-provider";
 
@@ -69,6 +70,8 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
       ) : null}
 
       {children}
+
+      {!isEmbedded ? <FloatingActionButtons /> : null}
 
       {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute ? (
         <footer className="footer">

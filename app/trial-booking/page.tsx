@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
-import { FloatingLineButton } from "@/components/floating-line-button";
 
 type TrialService = "weight_training" | "pilates" | "sports_massage";
 
@@ -440,7 +439,6 @@ export default function TrialBookingPage() {
           )}
         </div>
       </section>
-      <FloatingLineButton href={BIGE_LINE_URL} ariaLabel="開啟 LINE 諮詢" />
     </main>
   );
 }
