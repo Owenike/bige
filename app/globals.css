@@ -7360,6 +7360,40 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   border-color: rgba(255, 255, 255, .18);
   color: #fff;
 }
+.trialBookingAcpayBox{
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+.trialBookingAcpayButton{
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid rgba(214, 184, 116, .48);
+  border-radius: 999px;
+  background: rgba(214, 184, 116, .12);
+  color: rgba(255, 255, 255, .92);
+  font-weight: 900;
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: transform .2s ease, border-color .2s ease, background-color .2s ease, opacity .2s ease;
+}
+.trialBookingAcpayButton:hover{
+  transform: translateY(-1px);
+  border-color: rgba(214, 184, 116, .86);
+  background: rgba(214, 184, 116, .2);
+}
+.trialBookingAcpayButton:disabled{
+  opacity: .58;
+  cursor: not-allowed;
+  transform: none;
+}
+.trialBookingAcpayHint{
+  margin: 0;
+  color: rgba(255, 255, 255, .52);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
 .trialBookingSuccessCard{
   display: grid;
   gap: 18px;
@@ -7416,6 +7450,89 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   flex-wrap: wrap;
   gap: 12px;
 }
+.acpayResultPage{
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: clamp(32px, 6vw, 72px) 18px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(214, 184, 116, .14), transparent 34%),
+    linear-gradient(135deg, #05070a, #11151d 52%, #05070a);
+  color: #fff;
+}
+.acpayResultCard{
+  width: min(720px, 100%);
+  border-radius: 34px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .065);
+  box-shadow: 0 36px 90px rgba(0, 0, 0, .42);
+  padding: clamp(26px, 5vw, 52px);
+  backdrop-filter: blur(18px);
+}
+.acpayResultEyebrow{
+  margin: 0 0 14px;
+  color: #d6b874;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .24em;
+}
+.acpayResultCard h1{
+  margin: 0;
+  font-size: clamp(36px, 8vw, 72px);
+  line-height: 1;
+}
+.acpayResultLead{
+  margin: 18px 0 0;
+  color: rgba(255, 255, 255, .72);
+  line-height: 1.8;
+}
+.acpayResultSummary{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 28px 0 0;
+}
+.acpayResultSummary div{
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(0, 0, 0, .2);
+  padding: 16px;
+}
+.acpayResultSummary dt{
+  color: rgba(255, 255, 255, .48);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.acpayResultSummary dd{
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, .9);
+  word-break: break-word;
+}
+.acpayResultActions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+.acpayResultBtn{
+  min-height: 50px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 22px;
+  text-decoration: none;
+  font-weight: 900;
+}
+.acpayResultBtnPrimary{
+  background: #fff;
+  color: #05070a;
+}
+.acpayResultBtnSecondary{
+  border: 1px solid rgba(255, 255, 255, .18);
+  color: rgba(255, 255, 255, .86);
+}
 @media (max-width: 900px){
   .trialBookingHeader{
     align-items: flex-start;
@@ -7458,8 +7575,12 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     flex: 1 1 calc(50% - 10px);
   }
   .trialBookingSubmit,
-  .trialBookingBtn{
+  .trialBookingBtn,
+  .acpayResultBtn{
     width: 100%;
+  }
+  .acpayResultSummary{
+    grid-template-columns: 1fr;
   }
 }
 

@@ -125,6 +125,8 @@ export default function TrialBookingPage() {
   const [errors, setErrors] = useState<TrialBookingErrors>({});
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [acpayLoading, setAcpayLoading] = useState(false);
+  const [acpayError, setAcpayError] = useState("");
   const [submittedBooking, setSubmittedBooking] = useState<TrialBookingSuccess | null>(null);
 
   const successMessage = useMemo(() => {
@@ -210,12 +212,50 @@ export default function TrialBookingPage() {
     }
   }
 
+  async function handleAcpayPayment() {
+    if (acpayLoading) return;
+
+    setAcpayError("");
+    setAcpayLoading(true);
+
+    try {
+      const amount = formData.service === "sports_massage" ? 1500 : 880;
+      const response = await fetch("/api/acpay/create-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ amount }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            codeUrl?: string;
+            error?: string;
+          }
+        | null;
+
+      if (!response.ok || !payload?.ok || !payload.codeUrl) {
+        setAcpayError(payload?.error || "線上付款連結建立失敗，請稍後再試。");
+        return;
+      }
+
+      window.location.href = payload.codeUrl;
+    } catch {
+      setAcpayError("目前無法建立付款連結，請稍後再試或改用現場付款。");
+    } finally {
+      setAcpayLoading(false);
+    }
+  }
+
   function handleReset() {
     setFormData(initialFormData);
     setErrors({});
     setSubmitError("");
+    setAcpayError("");
     setSubmittedBooking(null);
     setIsSubmitting(false);
+    setAcpayLoading(false);
   }
 
   return (
@@ -435,6 +475,20 @@ export default function TrialBookingPage() {
               <button className="trialBookingSubmit" type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "送出中..." : "送出首次體驗預約"}
               </button>
+              <div className="trialBookingAcpayBox">
+                <button
+                  className="trialBookingAcpayButton"
+                  type="button"
+                  onClick={handleAcpayPayment}
+                  disabled={acpayLoading}
+                >
+                  {acpayLoading ? "正在建立付款連結..." : "線上付款預約體驗"}
+                </button>
+                <p className="trialBookingAcpayHint">
+                  將開啟 ACpay 測試付款頁；付款結果仍以系統通知確認為準。
+                </p>
+                {acpayError ? <div className="trialBookingError">{acpayError}</div> : null}
+              </div>
             </form>
           )}
         </div>
