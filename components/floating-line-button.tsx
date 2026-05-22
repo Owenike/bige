@@ -55,7 +55,8 @@ export function FloatingActionButtons() {
         href="/trial-booking"
         aria-label="立即預約首次體驗"
       >
-        立即預約
+        <span>立即</span>
+        <span>預約</span>
       </Link>
       <a
         className="homeLuxuryFloatingAction homeLuxuryFloatingLine"
