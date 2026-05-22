@@ -9,6 +9,7 @@ const TEST_CAPTURE_DEFAULTS = {
   totalFee: "880",
   settleFee: "880",
 };
+const ACPAY_REQUEST_TIMEOUT_MS = 25_000;
 
 type CaptureRequestBody = {
   outTradeNo?: string;
@@ -32,9 +33,13 @@ export async function POST(request: Request) {
     return jsonError(403, "ACpay test capture is only available when ACPAY_ENV=test.");
   }
 
+  const receivedTokenLength = request.headers.get("x-acpay-test-token")?.trim().length || 0;
+
   if (!isAuthorizedAcpayTestRequest(request, config.testActionToken)) {
     console.warn("[acpay] capture rejected: invalid test token", {
       hasTestActionToken: Boolean(config.testActionToken),
+      receivedTokenLength,
+      expectedTokenLength: config.testActionToken.length,
     });
     return jsonError(401, "Unauthorized ACpay test action.");
   }
@@ -65,6 +70,8 @@ export async function POST(request: Request) {
 
   params.sign = createAcpaySign(params, config.secretKey);
   const requestXml = buildAcpayXml(params);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ACPAY_REQUEST_TIMEOUT_MS);
 
   try {
     const response = await fetch(`${config.apiRoot2}/Capture`, {
@@ -73,6 +80,7 @@ export async function POST(request: Request) {
         "Content-Type": "application/xml; charset=UTF-8",
       },
       body: requestXml,
+      signal: controller.signal,
     });
     const responseXml = await response.text();
     const parsed = parseAcpayXml(responseXml);
@@ -105,9 +113,16 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      console.warn("[acpay] capture request timeout", { outTradeNo, transactionId });
+      return jsonError(504, "ACpay capture request timeout.");
+    }
+
     console.warn("[acpay] capture request failed", {
       message: error instanceof Error ? error.message : "unknown_error",
     });
     return jsonError(502, "ACpay capture request failed.");
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

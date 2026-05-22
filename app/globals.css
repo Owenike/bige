@@ -7533,6 +7533,169 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   border: 1px solid rgba(255, 255, 255, .18);
   color: rgba(255, 255, 255, .86);
 }
+
+.acpayTestPage{
+  min-height: 100svh;
+  padding: clamp(28px, 5vw, 72px) 18px;
+  background:
+    radial-gradient(circle at 22% 0%, rgba(214, 184, 116, .16), transparent 30%),
+    linear-gradient(135deg, #05070a, #10151d 55%, #05070a);
+  color: #fff;
+}
+.acpayTestHero,
+.acpayTestTool,
+.acpayTestBlocked{
+  width: min(980px, 100%);
+  margin: 0 auto;
+}
+.acpayTestHero{
+  margin-bottom: 22px;
+}
+.acpayTestHero p{
+  margin: 0 0 12px;
+  color: #d6b874;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .24em;
+}
+.acpayTestHero h1{
+  margin: 0;
+  font-size: clamp(42px, 7vw, 76px);
+  line-height: 1;
+}
+.acpayTestHero div{
+  display: grid;
+  gap: 6px;
+  max-width: 720px;
+  margin-top: 18px;
+  color: rgba(255, 255, 255, .72);
+  line-height: 1.8;
+}
+.acpayTestTool,
+.acpayTestBlocked{
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .065);
+  box-shadow: 0 32px 80px rgba(0, 0, 0, .35);
+  padding: clamp(22px, 4vw, 42px);
+  backdrop-filter: blur(18px);
+}
+.acpayTestNotice{
+  display: grid;
+  gap: 6px;
+  margin-bottom: 22px;
+  border-radius: 20px;
+  border: 1px solid rgba(214, 184, 116, .22);
+  background: rgba(214, 184, 116, .08);
+  padding: 16px;
+}
+.acpayTestNotice strong{
+  color: rgba(255, 255, 255, .94);
+}
+.acpayTestNotice span{
+  color: rgba(255, 255, 255, .7);
+  line-height: 1.65;
+}
+.acpayTestGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.acpayTestField{
+  display: grid;
+  gap: 8px;
+}
+.acpayTestFieldWide{
+  grid-column: 1 / -1;
+}
+.acpayTestField span{
+  color: rgba(255, 255, 255, .72);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+.acpayTestField small{
+  color: rgba(255, 255, 255, .48);
+}
+.acpayTestField input{
+  width: 100%;
+  min-height: 48px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(0, 0, 0, .24);
+  color: rgba(255, 255, 255, .9);
+  padding: 0 14px;
+  outline: none;
+}
+.acpayTestField input:focus{
+  border-color: rgba(214, 184, 116, .52);
+  box-shadow: 0 0 0 3px rgba(214, 184, 116, .12);
+}
+.acpayTestActions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+.acpayTestActions button{
+  min-height: 50px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 22px;
+  cursor: pointer;
+  font-weight: 900;
+}
+.acpayTestActions button:first-child{
+  background: #fff;
+  color: #05070a;
+}
+.acpayTestActions button:last-child{
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(255, 255, 255, .08);
+  color: rgba(255, 255, 255, .88);
+}
+.acpayTestActions button:disabled{
+  cursor: not-allowed;
+  opacity: .52;
+}
+.acpayTestError{
+  margin: 18px 0 0;
+  color: #ffb4b4;
+}
+.acpayTestResult{
+  margin-top: 24px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(0, 0, 0, .26);
+  overflow: hidden;
+}
+.acpayTestResult > div{
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+}
+.acpayTestResult span{
+  color: #d6b874;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+.acpayTestResult strong{
+  color: rgba(255, 255, 255, .9);
+}
+.acpayTestResult pre{
+  max-height: 460px;
+  margin: 0;
+  overflow: auto;
+  padding: 16px;
+  color: rgba(255, 255, 255, .78);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 @media (max-width: 900px){
   .trialBookingHeader{
     align-items: flex-start;
@@ -7581,6 +7744,15 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
   .acpayResultSummary{
     grid-template-columns: 1fr;
+  }
+  .acpayTestGrid{
+    grid-template-columns: 1fr;
+  }
+  .acpayTestActions button{
+    width: 100%;
+  }
+  .acpayTestResult > div{
+    display: grid;
   }
 }
 
