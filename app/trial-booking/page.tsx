@@ -101,6 +101,7 @@ const initialFormData: TrialBookingFormData = {
 };
 
 const BIGE_HOME_URL = "/";
+const BIGE_COURSE_URL = "/training/pilates";
 const BIGE_LINE_URL = "https://lin.ee/0GWm0oZ";
 
 function getServiceLabel(value: TrialService | "") {
@@ -268,7 +269,7 @@ export default function TrialBookingPage() {
           <small>仁武質感健身體驗</small>
         </Link>
         <nav className="trialBookingNav" aria-label="BigE trial booking navigation">
-          <Link href={BIGE_HOME_URL}>課程介紹</Link>
+          <Link href={BIGE_COURSE_URL}>課程介紹</Link>
           <a href={BIGE_LINE_URL} target="_blank" rel="noreferrer">
             LINE 諮詢
           </a>
