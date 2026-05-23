@@ -35,6 +35,8 @@ type TrialBookingSuccess = {
   bookingStatus: "new";
 };
 
+const isAcpayTrialPaymentEnabled = process.env.NEXT_PUBLIC_ACPAY_TRIAL_PAYMENT_ENABLED === "true";
+
 const serviceOptions: Array<{
   value: TrialService;
   label: string;
@@ -475,20 +477,22 @@ export default function TrialBookingPage() {
               <button className="trialBookingSubmit" type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "送出中..." : "送出首次體驗預約"}
               </button>
-              <div className="trialBookingAcpayBox">
-                <button
-                  className="trialBookingAcpayButton"
-                  type="button"
-                  onClick={handleAcpayPayment}
-                  disabled={acpayLoading}
-                >
-                  {acpayLoading ? "正在建立付款連結..." : "線上付款預約體驗"}
-                </button>
-                <p className="trialBookingAcpayHint">
-                  將開啟 ACpay 測試付款頁；付款結果仍以系統通知確認為準。
-                </p>
-                {acpayError ? <div className="trialBookingError">{acpayError}</div> : null}
-              </div>
+              {isAcpayTrialPaymentEnabled ? (
+                <div className="trialBookingAcpayBox">
+                  <button
+                    className="trialBookingAcpayButton"
+                    type="button"
+                    onClick={handleAcpayPayment}
+                    disabled={acpayLoading}
+                  >
+                    {acpayLoading ? "正在建立付款連結..." : "線上付款預約體驗"}
+                  </button>
+                  <p className="trialBookingAcpayHint">
+                    將開啟 ACpay 測試付款頁；付款結果仍以系統通知確認為準。
+                  </p>
+                  {acpayError ? <div className="trialBookingError">{acpayError}</div> : null}
+                </div>
+              ) : null}
             </form>
           )}
         </div>
