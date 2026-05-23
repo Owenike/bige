@@ -5,7 +5,7 @@ export default function AcpayTestPage() {
 
   return (
     <main className="acpayTestPage">
-      <section className="acpayTestHero">
+      <section className="acpayTestHero acpayTestCard">
         <p>ACPAY TEST ONLY</p>
         <h1>ACpay 測試工具</h1>
         <div>
@@ -17,7 +17,7 @@ export default function AcpayTestPage() {
       {isTestEnv ? (
         <AcpayTestClient />
       ) : (
-        <section className="acpayTestBlocked">此測試工具僅允許在 ACpay test 環境使用。</section>
+        <section className="acpayTestBlocked acpayTestCard">此測試工具僅允許在 ACpay test 環境使用。</section>
       )}
     </main>
   );
