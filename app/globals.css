@@ -1811,6 +1811,18 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .homeLuxuryGridThree .homeLuxuryGridMedia{
     aspect-ratio: 16 / 9;
   }
+  .homeLuxuryGridThree .homeLuxuryGridMedia.homeLuxuryMediaS8B{
+    --home-bg-x: 50%;
+    --home-bg-y: 38%;
+  }
+  .homeLuxuryGridThree .homeLuxuryGridMedia.homeLuxuryMediaS8A{
+    --home-bg-x: 50%;
+    --home-bg-y: 42%;
+  }
+  .homeLuxuryGridThree .homeLuxuryGridMedia.homeLuxuryMediaS8C{
+    --home-bg-x: 50%;
+    --home-bg-y: 45%;
+  }
   .homeLuxuryGridFour .homeLuxuryGridMedia{
     aspect-ratio: 4 / 5;
     background-size: cover;
