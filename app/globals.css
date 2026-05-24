@@ -549,6 +549,52 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   gap: 9px;
   transition: transform .24s ease, opacity .24s ease, filter .18s ease;
 }
+.homeLuxuryFloatingMenuItems{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  transform-origin: center bottom;
+  animation: homeLuxuryFloatingMenuOpen .22s ease-out both;
+}
+.homeLuxuryFloatingMenuButton{
+  width: 78px;
+  min-height: 52px;
+  border: 1px solid rgba(214,184,116,.46);
+  border-radius: 999px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 8px 12px;
+  background: linear-gradient(145deg, #fff8df, #d9bd78);
+  color: #111;
+  box-shadow: 0 16px 34px rgba(0,0,0,.32), 0 8px 22px rgba(214,184,116,.18), inset 0 1px 0 rgba(255,255,255,.72);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.16;
+  letter-spacing: .03em;
+  text-align: center;
+  animation: homeLuxuryFloatingMenuPulse 2.8s ease-in-out infinite;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+.homeLuxuryFloatingMenuButton:hover,
+.homeLuxuryFloatingMenuButton:focus-visible{
+  border-color: rgba(214,184,116,.72);
+  box-shadow: 0 18px 38px rgba(0,0,0,.36), 0 10px 26px rgba(214,184,116,.22), inset 0 1px 0 rgba(255,255,255,.78);
+  filter: brightness(1.03);
+  outline: none;
+}
+.homeLuxuryFloatingMenuButton:focus-visible{
+  outline: 2px solid rgba(255,255,255,.86);
+  outline-offset: 3px;
+}
+.homeLuxuryFloatingMenuButton[aria-expanded="true"]{
+  animation: none;
+}
 .homeLuxuryFloatingAction{
   width: 58px;
   height: 58px;
@@ -664,12 +710,39 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   opacity: 0;
   pointer-events: none;
 }
+@keyframes homeLuxuryFloatingMenuOpen{
+  from{
+    opacity: 0;
+    transform: translateY(8px) scale(.96);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes homeLuxuryFloatingMenuPulse{
+  0%, 100%{
+    transform: translateY(0) scale(1);
+  }
+  50%{
+    transform: translateY(-2px) scale(1.02);
+  }
+}
 
 @media (max-width: 780px){
   .homeLuxuryFloatingActions{
     right: 12px;
     bottom: max(16px, calc(env(safe-area-inset-bottom) + 16px));
     gap: 8px;
+  }
+  .homeLuxuryFloatingMenuItems{
+    gap: 8px;
+  }
+  .homeLuxuryFloatingMenuButton{
+    width: 72px;
+    min-height: 50px;
+    padding: 7px 10px;
+    font-size: 12px;
   }
   .homeLuxuryFloatingAction{
     width: 54px;
@@ -2330,7 +2403,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     transition: none !important;
   }
   .homeLuxuryFloatingActions,
-  .homeLuxuryFloatingAction{
+  .homeLuxuryFloatingAction,
+  .homeLuxuryFloatingMenuButton,
+  .homeLuxuryFloatingMenuItems{
+    animation: none !important;
     transition: none !important;
   }
 }
