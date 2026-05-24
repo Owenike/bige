@@ -43,6 +43,9 @@
   --home-image-card-s8-a: url("/home-images/card-contact.png");
   --home-image-card-s8-b: url("/home-images/card-book-now.png");
   --home-image-card-s8-c: url("/home-images/card-map-guide.png");
+  --home-image-card-s8-a-mobile: url("/home-images/card-contact-mobile.png");
+  --home-image-card-s8-b-mobile: url("/home-images/card-book-now-mobile.png");
+  --home-image-card-s8-c-mobile: url("/home-images/card-map-guide-mobile.png");
 }
 
 *{ box-sizing: border-box; }
@@ -1812,16 +1815,19 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     aspect-ratio: 16 / 9;
   }
   .homeLuxuryGridThree .homeLuxuryGridMedia.homeLuxuryMediaS8B{
+    background-image: var(--home-image-card-s8-b-mobile);
     --home-bg-x: 50%;
-    --home-bg-y: 38%;
+    --home-bg-y: 50%;
   }
   .homeLuxuryGridThree .homeLuxuryGridMedia.homeLuxuryMediaS8A{
+    background-image: var(--home-image-card-s8-a-mobile);
     --home-bg-x: 50%;
-    --home-bg-y: 42%;
+    --home-bg-y: 50%;
   }
   .homeLuxuryGridThree .homeLuxuryGridMedia.homeLuxuryMediaS8C{
+    background-image: var(--home-image-card-s8-c-mobile);
     --home-bg-x: 50%;
-    --home-bg-y: 45%;
+    --home-bg-y: 50%;
   }
   .homeLuxuryGridFour .homeLuxuryGridMedia{
     aspect-ratio: 4 / 5;
