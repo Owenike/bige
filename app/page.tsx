@@ -1,8 +1,84 @@
 import Image from "next/image";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { HomeHoverVideo } from "@/components/home-hover-video";
 import { getLocaleFromCookies, getT } from "../lib/i18n-server";
 import HomeScrollEffects from "./home-scroll-effects";
+
+const siteUrl = "https://bigefitness.com";
+const homeSeoTitle = "巨挺健身館 BigE Fitness｜高雄仁武健身房・器械皮拉提斯・私人教練・運動按摩";
+const homeSeoDescription =
+  "巨挺健身館 BigE Fitness 位於高雄仁武區，提供一對一私人教練、重量訓練、Reformer 器械皮拉提斯、拳擊體能、樂齡訓練、運動按摩與功能性調整。新手友善、免綁約，適合想改善體態、增肌減脂、建立運動習慣的你。";
+const homeOgImage = "/home-images/home-hero-main.png";
+
+export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
+  title: homeSeoTitle,
+  description: homeSeoDescription,
+  keywords: [
+    "高雄仁武健身房",
+    "仁武區健身房",
+    "仁武私人教練",
+    "仁武器械皮拉提斯",
+    "仁武運動按摩",
+    "重量訓練",
+    "Reformer 器械皮拉提斯",
+    "拳擊體能",
+    "樂齡訓練",
+    "運動按摩",
+    "功能性調整",
+  ],
+  alternates: {
+    canonical: siteUrl,
+  },
+  openGraph: {
+    title: homeSeoTitle,
+    description: homeSeoDescription,
+    url: siteUrl,
+    siteName: "巨挺健身館 BigE Fitness",
+    type: "website",
+    locale: "zh_TW",
+    images: [
+      {
+        url: homeOgImage,
+        alt: "巨挺健身館 BigE Fitness 高雄仁武健身房",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: homeSeoTitle,
+    description: homeSeoDescription,
+    images: [homeOgImage],
+  },
+};
+
+const homeJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "HealthClub",
+  name: "巨挺健身館 BigE Fitness",
+  alternateName: "BigE Fitness",
+  url: siteUrl,
+  description: homeSeoDescription,
+  image: `${siteUrl}${homeOgImage}`,
+  address: {
+    "@type": "PostalAddress",
+    addressCountry: "TW",
+    addressRegion: "高雄市",
+    addressLocality: "仁武區",
+    streetAddress: "八德北路728號",
+  },
+  openingHoursSpecification: [
+    {
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+      opens: "10:00",
+      closes: "22:00",
+    },
+  ],
+  areaServed: "高雄仁武區",
+  serviceType: ["重量訓練", "器械皮拉提斯", "拳擊體能", "樂齡訓練", "運動按摩", "功能性調整", "INBODY 測量"],
+};
 
 type GridItem = {
   badge: string;
@@ -251,6 +327,7 @@ export default async function Home() {
 
   return (
     <main className="homeLuxury">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }} />
       <HomeScrollEffects />
       <section className="homeLuxuryHero homeLuxuryFullImageSection homeLuxuryHeroImage">
         <div className="homeLuxuryFullShade" />
