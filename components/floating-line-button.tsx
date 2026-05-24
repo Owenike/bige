@@ -49,7 +49,7 @@ export function FloatingActionButtons() {
     <nav className={`homeLuxuryFloatingActions${isHidden ? " homeLineFabHidden" : ""}`} aria-label="BigE 快捷操作">
       <Link className="homeLuxuryFloatingAction homeLuxuryFloatingHome" href="/" aria-label="返回首頁">
         <Image
-          src="/LOGO-transparent.png"
+          src="/LOGO-transparent-floating.png"
           alt=""
           width={561}
           height={1019}
