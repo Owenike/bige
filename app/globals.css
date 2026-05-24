@@ -546,12 +546,12 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 9px;
   transition: transform .24s ease, opacity .24s ease, filter .18s ease;
 }
 .homeLuxuryFloatingAction{
-  width: 56px;
-  height: 56px;
+  width: 58px;
+  height: 58px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
@@ -563,9 +563,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   box-shadow: 0 16px 34px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.12);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: .04em;
+  line-height: 1.18;
   transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease, filter .18s ease;
 }
 .homeLuxuryFloatingAction:hover,
@@ -621,33 +622,38 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .homeLuxuryFloatingBooking{
   flex-direction: column;
-  gap: 1px;
-  background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(214,184,116,.9));
-  color: #080a0d;
-  border-color: rgba(255,255,255,.5);
-  box-shadow: 0 18px 38px rgba(0,0,0,.34), 0 0 28px rgba(214,184,116,.16);
-  font-size: 12px;
-  line-height: 1.05;
+  gap: 2px;
+  background: linear-gradient(145deg, #fff7d8, #d7b76a);
+  color: #111111;
+  border-color: rgba(255,255,255,.72);
+  box-shadow: 0 18px 38px rgba(0,0,0,.34), 0 10px 28px rgba(214,184,116,.18), inset 0 1px 0 rgba(255,255,255,.76);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.18;
   letter-spacing: .02em;
 }
 .homeLuxuryFloatingFaq{
-  width: 60px;
-  height: 60px;
+  width: 58px;
+  height: 58px;
   flex-direction: column;
-  gap: 1px;
-  background: linear-gradient(145deg, rgba(252,249,238,.96), rgba(214,184,116,.78));
-  color: #141414;
-  border-color: rgba(214,184,116,.42);
-  box-shadow: 0 14px 30px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.76);
-  font-size: 12px;
-  font-weight: 780;
-  line-height: 1.05;
+  gap: 2px;
+  background: linear-gradient(145deg, #f7f1e3, #e8ddc4);
+  color: #1d1d1d;
+  border-color: rgba(198,166,92,.32);
+  box-shadow: 0 12px 26px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.72);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.18;
   letter-spacing: .04em;
 }
 .homeLuxuryFloatingLine{
-  background: linear-gradient(135deg, #06c755, #04a94a);
+  background: linear-gradient(145deg, #08b84f, #008f3a);
   color: #fff;
-  border-color: rgba(255,255,255,.2);
+  border-color: rgba(255,255,255,.18);
+  box-shadow: 0 16px 34px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.16);
+  font-size: 13px;
+  font-weight: 780;
+  letter-spacing: .02em;
 }
 .homeLuxuryFloatingLine:hover,
 .homeLuxuryFloatingLine:focus-visible{
@@ -663,20 +669,20 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   .homeLuxuryFloatingActions{
     right: 12px;
     bottom: max(16px, calc(env(safe-area-inset-bottom) + 16px));
-    gap: 6px;
+    gap: 8px;
   }
   .homeLuxuryFloatingAction{
-    width: 52px;
-    height: 52px;
-    font-size: 10px;
+    width: 54px;
+    height: 54px;
+    font-size: 13px;
   }
   .homeLuxuryFloatingBooking{
-    font-size: 11px;
+    font-size: 13px;
   }
   .homeLuxuryFloatingFaq{
-    width: 52px;
-    height: 52px;
-    font-size: 11px;
+    width: 54px;
+    height: 54px;
+    font-size: 13px;
   }
   .homeLuxuryFloatingHome{
     width: 60px;
