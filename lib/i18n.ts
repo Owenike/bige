@@ -16,7 +16,7 @@ export const messages = {
     "footer.tagline": "沉穩、乾淨、卡片式介面",
     "home.quick_links": "快速連結",
     "home.baseline": "基準",
-    "home.hero_title": "巨挺健身館 BigE Fitness｜高雄仁武區健身房",
+    "home.hero_title": "巨挺健身館",
     "home.hero_sub": "巨挺健身館 BigE Fitness 位於高雄仁武區，提供一對一私人教練、重量訓練、Reformer 器械皮拉提斯、拳擊體能、樂齡訓練、運動按摩與功能性調整。新手友善、免綁約，適合想改善體態、增肌減脂、建立運動習慣的你。",
     "home.cta_login": "前往登入",
     "home.member_dynamic_qr": "會員動態 QR",
