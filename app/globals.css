@@ -630,6 +630,20 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   line-height: 1.05;
   letter-spacing: .02em;
 }
+.homeLuxuryFloatingFaq{
+  width: 60px;
+  height: 60px;
+  flex-direction: column;
+  gap: 1px;
+  background: linear-gradient(145deg, rgba(252,249,238,.96), rgba(214,184,116,.78));
+  color: #141414;
+  border-color: rgba(214,184,116,.42);
+  box-shadow: 0 14px 30px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.76);
+  font-size: 12px;
+  font-weight: 780;
+  line-height: 1.05;
+  letter-spacing: .04em;
+}
 .homeLuxuryFloatingLine{
   background: linear-gradient(135deg, #06c755, #04a94a);
   color: #fff;
@@ -657,6 +671,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     font-size: 10px;
   }
   .homeLuxuryFloatingBooking{
+    font-size: 11px;
+  }
+  .homeLuxuryFloatingFaq{
+    width: 52px;
+    height: 52px;
     font-size: 11px;
   }
   .homeLuxuryFloatingHome{
@@ -2309,6 +2328,184 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     transition: none !important;
   }
 }
+.faqPage{
+  min-height: 100svh;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(214,184,116,.16), transparent 32%),
+    linear-gradient(180deg, #05070a 0%, #0a0d12 48%, #05070a 100%);
+  color: #f7f4ec;
+}
+.faqHeroSection{
+  padding: clamp(84px, 12vw, 138px) 20px clamp(34px, 6vw, 72px);
+}
+.faqHeroInner,
+.faqListInner,
+.faqCtaSection{
+  width: min(1080px, calc(100% - 32px));
+  margin: 0 auto;
+}
+.faqHeroInner{
+  display: grid;
+  gap: 16px;
+}
+.faqEyebrow{
+  margin: 0;
+  color: #d6b874;
+  font-size: 12px;
+  font-weight: 780;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+.faqHeroInner h1{
+  margin: 0;
+  color: #fffaf0;
+  font-size: clamp(54px, 9vw, 110px);
+  font-weight: 620;
+  line-height: .95;
+  letter-spacing: 0;
+}
+.faqHeroLead{
+  max-width: 620px;
+  margin: 0;
+  color: rgba(255,255,255,.72);
+  font-size: clamp(18px, 2vw, 24px);
+  line-height: 1.65;
+}
+.faqListSection{
+  padding: 0 0 clamp(54px, 8vw, 98px);
+}
+.faqListInner{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.faqCard{
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 20px;
+  min-height: 190px;
+  padding: clamp(22px, 3vw, 30px);
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.085), rgba(255,255,255,.025)),
+    rgba(8,10,14,.72);
+  box-shadow: 0 24px 60px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.faqCardMeta{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: rgba(214,184,116,.86);
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.faqCardMeta span:first-child{
+  color: rgba(255,255,255,.36);
+  font-size: 18px;
+  letter-spacing: .08em;
+}
+.faqCardContent h2{
+  margin: 0 0 12px;
+  color: rgba(255,255,255,.94);
+  font-size: clamp(20px, 2vw, 25px);
+  line-height: 1.35;
+  font-weight: 680;
+  letter-spacing: 0;
+}
+.faqCardContent p{
+  margin: 0;
+  color: rgba(255,255,255,.68);
+  font-size: 15px;
+  line-height: 1.85;
+}
+.faqCtaSection{
+  padding: 0 0 clamp(74px, 9vw, 118px);
+}
+.faqCtaCard{
+  padding: clamp(28px, 5vw, 56px);
+  border: 1px solid rgba(214,184,116,.28);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 16% 18%, rgba(214,184,116,.22), transparent 34%),
+    linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.035));
+  box-shadow: 0 28px 74px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.10);
+}
+.faqCtaCard h2{
+  max-width: 780px;
+  margin: 12px 0 24px;
+  color: #fffaf0;
+  font-size: clamp(28px, 4vw, 52px);
+  line-height: 1.12;
+  font-weight: 640;
+  letter-spacing: 0;
+}
+.faqCtaActions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.faqButton{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.18);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 760;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+.faqButton:hover,
+.faqButton:focus-visible{
+  transform: translateY(-1px);
+  outline: none;
+}
+.faqButtonPrimary{
+  color: #07090d;
+  background: linear-gradient(135deg, #fffaf0, #d6b874);
+  border-color: rgba(214,184,116,.62);
+}
+.faqButtonSecondary{
+  color: rgba(255,255,255,.88);
+  background: rgba(255,255,255,.06);
+}
+
+@media (max-width: 780px){
+  .faqHeroSection{
+    padding: 72px 0 34px;
+  }
+  .faqHeroInner,
+  .faqListInner,
+  .faqCtaSection{
+    width: min(100% - 28px, 680px);
+  }
+  .faqListInner{
+    grid-template-columns: 1fr;
+  }
+  .faqCard{
+    grid-template-columns: 1fr;
+    gap: 14px;
+    min-height: 0;
+    padding: 22px;
+  }
+  .faqCardMeta{
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .faqCtaActions{
+    display: grid;
+  }
+  .faqButton{
+    width: 100%;
+  }
+}
+
 .formCard{
   max-width: 520px;
   margin: 26px auto;

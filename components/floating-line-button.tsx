@@ -59,6 +59,10 @@ export function FloatingActionButtons() {
         <span className="homeLuxuryFloatingHomeDivider" aria-hidden />
         <span className="homeLuxuryFloatingHomeText">首頁</span>
       </Link>
+      <Link className="homeLuxuryFloatingAction homeLuxuryFloatingFaq" href="/faq" aria-label="常見問題">
+        <span>常見</span>
+        <span>問題</span>
+      </Link>
       <Link
         className="homeLuxuryFloatingAction homeLuxuryFloatingBooking"
         href="/trial-booking"

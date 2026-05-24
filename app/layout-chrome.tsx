@@ -17,12 +17,14 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isPublicBookingRoute = pathname?.startsWith("/booking");
   const isTrialBookingRoute = pathname?.startsWith("/trial-booking");
   const isTrainingRoute = pathname?.startsWith("/training");
+  const isFaqRoute = pathname?.startsWith("/faq");
   const isHomeRoute = pathname === "/";
   const isWorkspaceRoute = isFrontdeskRoute || isMemberRoute || isCoachRoute;
   const showTopbar =
     !isEmbedded &&
     !isWorkspaceRoute &&
     !isHomeRoute &&
+    !isFaqRoute &&
     !isPublicBookingRoute &&
     !isTrialBookingRoute &&
     !isTrainingRoute;
