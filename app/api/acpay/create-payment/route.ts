@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     body: "BigE Trial Booking",
     total_fee: totalFee,
     nonce_str: createNonceStr(),
-    auto_settle: "N",
+    auto_settle: "Y",
     notify_url: `${config.appBaseUrl}/api/acpay/notify`,
     callback_url: `${config.appBaseUrl}/payment/acpay-result`,
     layout: 2,
