@@ -7,6 +7,7 @@ export type AcpayChecklistSnapshot = {
   outTradeNo?: string;
   transactionId?: string;
   callbackQuery?: Record<string, string>;
+  notifyXml?: string;
   notifyRawXml?: string;
   notifyParsedPayload?: AcpayParsedXml;
   captureRequestXml?: string;
@@ -16,8 +17,12 @@ export type AcpayChecklistSnapshot = {
   updatedAt?: string;
 };
 
+type AcpayChecklistStore = AcpayChecklistSnapshot & {
+  byOutTradeNo?: Record<string, AcpayChecklistSnapshot>;
+};
+
 const globalForAcpay = globalThis as typeof globalThis & {
-  __bigeAcpayChecklist?: AcpayChecklistSnapshot;
+  __bigeAcpayChecklist?: AcpayChecklistStore;
 };
 
 function snapshot() {
@@ -28,12 +33,43 @@ function snapshot() {
   return globalForAcpay.__bigeAcpayChecklist;
 }
 
+function getSnapshotOutTradeNo(update: AcpayChecklistSnapshot) {
+  return update.outTradeNo || update.notifyParsedPayload?.out_trade_no || update.callbackQuery?.out_trade_no || "";
+}
+
 export function recordAcpayChecklist(update: AcpayChecklistSnapshot) {
   const current = snapshot();
-  Object.assign(current, update, { updatedAt: new Date().toISOString() });
+  const updatedAt = new Date().toISOString();
+  const nextUpdate = {
+    ...update,
+    notifyXml: update.notifyXml || update.notifyRawXml,
+    updatedAt,
+  };
+  Object.assign(current, nextUpdate);
+
+  const outTradeNo = getSnapshotOutTradeNo(update);
+  if (outTradeNo) {
+    current.byOutTradeNo = current.byOutTradeNo || {};
+    current.byOutTradeNo[outTradeNo] = {
+      ...(current.byOutTradeNo[outTradeNo] || {}),
+      ...nextUpdate,
+      outTradeNo,
+    };
+  }
+
   return current;
 }
 
-export function getAcpayChecklistSnapshot() {
-  return { ...snapshot() };
+export function getAcpayChecklistSnapshot(outTradeNo?: string) {
+  const current = snapshot();
+  if (outTradeNo) {
+    return {
+      ...(current.byOutTradeNo?.[outTradeNo] || {}),
+    };
+  }
+
+  return {
+    ...current,
+    byOutTradeNo: current.byOutTradeNo ? { ...current.byOutTradeNo } : undefined,
+  };
 }

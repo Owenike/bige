@@ -8,6 +8,8 @@ function jsonError(status: number, error: string) {
 
 export async function GET(request: Request) {
   const config = getAcpayServerConfig();
+  const { searchParams } = new URL(request.url);
+  const outTradeNo = searchParams.get("out_trade_no")?.trim() || searchParams.get("outTradeNo")?.trim() || undefined;
 
   if (config.acpayEnv !== "test") {
     return jsonError(403, "ACpay checklist diagnostics are only available when ACPAY_ENV=test.");
@@ -23,7 +25,8 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     config: getAcpayConfigSummary(config),
-    checklist: getAcpayChecklistSnapshot(),
+    checklist: getAcpayChecklistSnapshot(outTradeNo),
+    outTradeNo: outTradeNo || null,
     note: "This in-memory snapshot is best-effort in serverless runtimes. Use Vercel structured logs as the source of truth for checklist evidence.",
   });
 }
