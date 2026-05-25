@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type TrialService = "weight_training" | "pilates" | "sports_massage";
 
@@ -34,8 +34,6 @@ type TrialBookingSuccess = {
   paymentStatus: PaymentStatus;
   bookingStatus: "new";
 };
-
-const isAcpayTrialPaymentEnabled = process.env.NEXT_PUBLIC_ACPAY_TRIAL_PAYMENT_ENABLED === "true";
 
 const serviceOptions: Array<{
   value: TrialService;
@@ -88,6 +86,11 @@ const paymentMethodOptions: Array<{
     label: "現場付款",
     description: "送出預約後，由專人協助確認時段，體驗當天現場付款。",
   },
+  {
+    value: "online_payment",
+    label: "線上付款（測試中）",
+    description: "僅供 ACpay 測試網址使用，付款完成後仍以系統通知確認為準。",
+  },
 ];
 
 const initialFormData: TrialBookingFormData = {
@@ -130,7 +133,26 @@ export default function TrialBookingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [acpayLoading, setAcpayLoading] = useState(false);
   const [acpayError, setAcpayError] = useState("");
+  const [isPaymentTestMode, setIsPaymentTestMode] = useState(false);
   const [submittedBooking, setSubmittedBooking] = useState<TrialBookingSuccess | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setIsPaymentTestMode(params.get("paymentTest") === "1");
+  }, []);
+
+  useEffect(() => {
+    if (isPaymentTestMode) return;
+    setFormData((current) =>
+      current.paymentMethod === "online_payment" ? { ...current, paymentMethod: "cash_on_site" } : current,
+    );
+    setAcpayError("");
+  }, [isPaymentTestMode]);
+
+  const visiblePaymentMethodOptions = useMemo(
+    () => paymentMethodOptions.filter((option) => isPaymentTestMode || option.value !== "online_payment"),
+    [isPaymentTestMode],
+  );
 
   const successMessage = useMemo(() => {
     if (!submittedBooking) return "";
@@ -452,7 +474,7 @@ export default function TrialBookingPage() {
                 <fieldset className="trialBookingFieldset">
                   <legend className="trialBookingLegend">付款方式</legend>
                   <div className="trialBookingRadioGroup">
-                    {paymentMethodOptions.map((option) => (
+                    {visiblePaymentMethodOptions.map((option) => (
                       <label
                         key={option.value}
                         className={`trialBookingRadioCard${formData.paymentMethod === option.value ? " is-selected" : ""}`}
@@ -478,7 +500,7 @@ export default function TrialBookingPage() {
               <button className="trialBookingSubmit" type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "送出中..." : "送出首次體驗預約"}
               </button>
-              {isAcpayTrialPaymentEnabled ? (
+              {isPaymentTestMode && formData.paymentMethod === "online_payment" ? (
                 <div className="trialBookingAcpayBox">
                   <button
                     className="trialBookingAcpayButton"
