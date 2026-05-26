@@ -7689,15 +7689,16 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   background: rgba(0, 0, 0, .52);
 }
 .trialBookingBirthdayPicker{
-  width: 100%;
-  max-width: 100%;
+  width: min(100%, 390px);
+  max-width: 390px;
   min-width: 0;
+  justify-self: start;
   box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, .12);
-  border-radius: 22px;
-  padding: 14px;
+  border-radius: 20px;
+  padding: 12px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .04)),
     rgba(7, 7, 7, .96);
@@ -7705,13 +7706,13 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .trialBookingBirthdayHeader{
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .trialBookingBirthdayHeader > button{
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border: 1px solid rgba(255, 255, 255, .14);
   border-radius: 50%;
   background: rgba(255, 255, 255, .06);
@@ -7740,27 +7741,51 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   text-align: center;
 }
 .trialBookingBirthdayMonthTitle strong{
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.2;
 }
-.trialBookingBirthdayMonthTitle select{
-  width: min(140px, 100%);
+.trialBookingBirthdayYearControl{
   min-width: 0;
   border: 1px solid rgba(214, 184, 116, .3);
   border-radius: 999px;
-  padding: 7px 12px;
+  padding: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   background: rgba(214, 184, 116, .08);
+  color: #fff;
+}
+.trialBookingBirthdayYearControl button{
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.trialBookingBirthdayYearControl button:disabled{
+  cursor: not-allowed;
+  opacity: .35;
+}
+.trialBookingBirthdayYearControl span{
+  min-width: 48px;
   color: #fff;
   font-size: 13px;
   font-weight: 800;
   text-align: center;
-  color-scheme: dark;
 }
 .trialBookingBirthdayWeekdays,
 .trialBookingBirthdayCalendar{
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
+  gap: 4px;
 }
 .trialBookingBirthdayWeekdays span{
   color: rgba(255, 255, 255, .48);
@@ -7775,13 +7800,13 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .trialBookingBirthdayCalendar button{
   border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 14px;
+  border-radius: 11px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, .045);
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
   transition: transform .2s ease, border-color .2s ease, background-color .2s ease, color .2s ease;
@@ -8327,6 +8352,26 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
   .trialBookingInput{
     padding: 14px 13px;
+  }
+  .trialBookingBirthdayPicker{
+    width: 100%;
+    max-width: 100%;
+    padding: 12px;
+  }
+  .trialBookingBirthdayHeader{
+    grid-template-columns: 36px minmax(0, 1fr) 36px;
+    gap: 8px;
+  }
+  .trialBookingBirthdayHeader > button{
+    width: 36px;
+    height: 36px;
+  }
+  .trialBookingBirthdayCalendar{
+    gap: 5px;
+  }
+  .trialBookingBirthdayCalendar button{
+    border-radius: 12px;
+    font-size: 14px;
   }
   .trialBookingRadioGroup{
     gap: 10px;

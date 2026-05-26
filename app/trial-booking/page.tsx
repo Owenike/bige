@@ -207,13 +207,6 @@ export default function TrialBookingPage() {
   const birthdayCalendarInitial = getBirthdayCalendarBase(formData.birthday, maxBirthday);
   const [birthdayCalendarYear, setBirthdayCalendarYear] = useState(birthdayCalendarInitial.year);
   const [birthdayCalendarMonth, setBirthdayCalendarMonth] = useState(birthdayCalendarInitial.month);
-  const birthdayYearOptions = useMemo(
-    () =>
-      Array.from({ length: currentYear - BIRTHDAY_START_YEAR + 1 }, (_, index) =>
-        String(currentYear - index),
-      ),
-    [currentYear],
-  );
   const birthdayCalendarCells = useMemo<BirthdayCalendarCell[]>(() => {
     const firstDayOfWeek = new Date(birthdayCalendarYear, birthdayCalendarMonth - 1, 1).getDay();
     const daysInMonth = getDaysInMonth(String(birthdayCalendarYear), String(birthdayCalendarMonth));
@@ -243,6 +236,8 @@ export default function TrialBookingPage() {
   const canGoToNextBirthdayMonth =
     birthdayCalendarYear < currentYear ||
     (birthdayCalendarYear === currentYear && birthdayCalendarMonth < currentMonth);
+  const canGoToPreviousBirthdayYear = birthdayCalendarYear > BIRTHDAY_START_YEAR;
+  const canGoToNextBirthdayYear = birthdayCalendarYear < currentYear;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -303,9 +298,9 @@ export default function TrialBookingPage() {
     setIsBirthdayPickerOpen(true);
   }
 
-  function updateBirthdayCalendarYear(value: string) {
-    const nextYear = Number(value);
-    if (!nextYear) return;
+  function moveBirthdayCalendarYear(direction: -1 | 1) {
+    const nextYear = birthdayCalendarYear + direction;
+    if (nextYear < BIRTHDAY_START_YEAR || nextYear > currentYear) return;
     setBirthdayCalendarYear(nextYear);
     setBirthdayCalendarMonth((current) =>
       nextYear === currentYear && current > currentMonth ? currentMonth : current,
@@ -703,17 +698,25 @@ export default function TrialBookingPage() {
                             <strong>
                               {birthdayCalendarYear} 年 {birthdayCalendarMonth} 月
                             </strong>
-                            <select
-                              aria-label="選擇年份"
-                              value={String(birthdayCalendarYear)}
-                              onChange={(event) => updateBirthdayCalendarYear(event.target.value)}
-                            >
-                              {birthdayYearOptions.map((year) => (
-                                <option key={year} value={year}>
-                                  {year}
-                                </option>
-                              ))}
-                            </select>
+                            <div className="trialBookingBirthdayYearControl" aria-label="年份切換">
+                              <button
+                                type="button"
+                                onClick={() => moveBirthdayCalendarYear(-1)}
+                                disabled={!canGoToPreviousBirthdayYear}
+                                aria-label="前一年"
+                              >
+                                −
+                              </button>
+                              <span>{birthdayCalendarYear}</span>
+                              <button
+                                type="button"
+                                onClick={() => moveBirthdayCalendarYear(1)}
+                                disabled={!canGoToNextBirthdayYear}
+                                aria-label="後一年"
+                              >
+                                +
+                              </button>
+                            </div>
                           </div>
                           <button
                             type="button"
