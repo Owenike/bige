@@ -198,6 +198,7 @@ export default function TrialBookingPage() {
   const [isPaymentTestMode, setIsPaymentTestMode] = useState(false);
   const [submittedBooking, setSubmittedBooking] = useState<TrialBookingSuccess | null>(null);
   const [isBirthdayPickerOpen, setIsBirthdayPickerOpen] = useState(false);
+  const [isBirthdayYearPanelOpen, setIsBirthdayYearPanelOpen] = useState(false);
   const [draftSelectedBirthday, setDraftSelectedBirthday] = useState("");
   const [birthdayPickerError, setBirthdayPickerError] = useState("");
   const birthdayPickerRef = useRef<HTMLDivElement>(null);
@@ -236,8 +237,11 @@ export default function TrialBookingPage() {
   const canGoToNextBirthdayMonth =
     birthdayCalendarYear < currentYear ||
     (birthdayCalendarYear === currentYear && birthdayCalendarMonth < currentMonth);
-  const canGoToPreviousBirthdayYear = birthdayCalendarYear > BIRTHDAY_START_YEAR;
-  const canGoToNextBirthdayYear = birthdayCalendarYear < currentYear;
+  const birthdayYearOptions = useMemo(
+    () =>
+      Array.from({ length: currentYear - BIRTHDAY_START_YEAR + 1 }, (_, index) => currentYear - index),
+    [currentYear],
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -258,6 +262,7 @@ export default function TrialBookingPage() {
     function handlePointerDown(event: PointerEvent) {
       if (!birthdayPickerRef.current?.contains(event.target as Node)) {
         setIsBirthdayPickerOpen(false);
+        setIsBirthdayYearPanelOpen(false);
         setBirthdayPickerError("");
       }
     }
@@ -295,16 +300,17 @@ export default function TrialBookingPage() {
     setBirthdayCalendarMonth(base.month);
     setDraftSelectedBirthday(formData.birthday);
     setBirthdayPickerError("");
+    setIsBirthdayYearPanelOpen(false);
     setIsBirthdayPickerOpen(true);
   }
 
-  function moveBirthdayCalendarYear(direction: -1 | 1) {
-    const nextYear = birthdayCalendarYear + direction;
-    if (nextYear < BIRTHDAY_START_YEAR || nextYear > currentYear) return;
-    setBirthdayCalendarYear(nextYear);
+  function selectBirthdayCalendarYear(year: number) {
+    if (year < BIRTHDAY_START_YEAR || year > currentYear) return;
+    setBirthdayCalendarYear(year);
     setBirthdayCalendarMonth((current) =>
-      nextYear === currentYear && current > currentMonth ? currentMonth : current,
+      year === currentYear && current > currentMonth ? currentMonth : current,
     );
+    setIsBirthdayYearPanelOpen(false);
     setBirthdayPickerError("");
   }
 
@@ -324,6 +330,7 @@ export default function TrialBookingPage() {
 
     setBirthdayCalendarYear(nextYear);
     setBirthdayCalendarMonth(nextMonth);
+    setIsBirthdayYearPanelOpen(false);
     setBirthdayPickerError("");
   }
 
@@ -346,6 +353,7 @@ export default function TrialBookingPage() {
 
     updateField("birthday", draftSelectedBirthday);
     setBirthdayPickerError("");
+    setIsBirthdayYearPanelOpen(false);
     setIsBirthdayPickerOpen(false);
   }
 
@@ -353,12 +361,14 @@ export default function TrialBookingPage() {
     setDraftSelectedBirthday("");
     updateField("birthday", "");
     setBirthdayPickerError("");
+    setIsBirthdayYearPanelOpen(false);
     setIsBirthdayPickerOpen(false);
   }
 
   function cancelBirthdayPicker() {
     setDraftSelectedBirthday(formData.birthday);
     setBirthdayPickerError("");
+    setIsBirthdayYearPanelOpen(false);
     setIsBirthdayPickerOpen(false);
   }
 
@@ -698,23 +708,15 @@ export default function TrialBookingPage() {
                             <strong>
                               {birthdayCalendarYear} 年 {birthdayCalendarMonth} 月
                             </strong>
-                            <div className="trialBookingBirthdayYearControl" aria-label="年份切換">
+                            <div className="trialBookingBirthdayYearControl">
                               <button
                                 type="button"
-                                onClick={() => moveBirthdayCalendarYear(-1)}
-                                disabled={!canGoToPreviousBirthdayYear}
-                                aria-label="前一年"
+                                className="trialBookingBirthdayYearToggle"
+                                onClick={() => setIsBirthdayYearPanelOpen((current) => !current)}
+                                aria-expanded={isBirthdayYearPanelOpen}
+                                aria-controls="trial-birthday-year-panel"
                               >
-                                −
-                              </button>
-                              <span>{birthdayCalendarYear}</span>
-                              <button
-                                type="button"
-                                onClick={() => moveBirthdayCalendarYear(1)}
-                                disabled={!canGoToNextBirthdayYear}
-                                aria-label="後一年"
-                              >
-                                +
+                                選擇年份
                               </button>
                             </div>
                           </div>
@@ -727,6 +729,25 @@ export default function TrialBookingPage() {
                             ›
                           </button>
                         </div>
+                        {isBirthdayYearPanelOpen ? (
+                          <div
+                            className="trialBookingBirthdayYearPanel"
+                            id="trial-birthday-year-panel"
+                            aria-label="年份選擇"
+                          >
+                            {birthdayYearOptions.map((year) => (
+                              <button
+                                key={year}
+                                type="button"
+                                className={year === birthdayCalendarYear ? "is-selected" : undefined}
+                                onClick={() => selectBirthdayCalendarYear(year)}
+                                aria-pressed={year === birthdayCalendarYear}
+                              >
+                                {year}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                         <div className="trialBookingBirthdayWeekdays" aria-hidden="true">
                           {["日", "一", "二", "三", "四", "五", "六"].map((weekday) => (
                             <span key={weekday}>{weekday}</span>
