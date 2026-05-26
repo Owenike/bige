@@ -692,6 +692,31 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   line-height: 1.18;
   letter-spacing: .04em;
 }
+.homeLuxuryFloatingInstagram{
+  background:
+    radial-gradient(circle at 30% 108%, #fdf497 0 14%, transparent 30%),
+    radial-gradient(circle at 18% 16%, #feda75 0 16%, transparent 36%),
+    linear-gradient(145deg, #515bd4 0%, #8134af 34%, #dd2a7b 66%, #f58529 100%);
+  color: #fff;
+  border-color: rgba(255,255,255,.22);
+  box-shadow: 0 16px 34px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.18);
+}
+.homeLuxuryFloatingInstagramIcon{
+  width: 27px;
+  height: 27px;
+  display: block;
+}
+.homeLuxuryFloatingInstagramIcon rect,
+.homeLuxuryFloatingInstagramIcon circle{
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+.homeLuxuryFloatingInstagram:hover,
+.homeLuxuryFloatingInstagram:focus-visible{
+  filter: brightness(1.06) saturate(1.05);
+}
 .homeLuxuryFloatingLine{
   background: linear-gradient(145deg, #08b84f, #008f3a);
   color: #fff;
@@ -756,6 +781,10 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     width: 54px;
     height: 54px;
     font-size: 13px;
+  }
+  .homeLuxuryFloatingInstagramIcon{
+    width: 25px;
+    height: 25px;
   }
   .homeLuxuryFloatingHome{
     width: 60px;
