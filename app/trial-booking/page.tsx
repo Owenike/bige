@@ -515,37 +515,6 @@ export default function TrialBookingPage() {
             <section className="trialBookingSuccessCard" aria-live="polite">
               <p className="trialBookingSuccessBadge">預約成功</p>
               <h2>預約資料已送出</h2>
-              <div className="trialBookingSuccessCopy">
-                <p>您好，已成功收到您的體驗課程預約！</p>
-                <p>付款方式為「{successPaymentMethodLabel}」。</p>
-                <p>
-                  為了確保課程品質，教練會為您預留約 1.5～2 小時的完整體驗時段。
-                  若您臨時有事需要調整時間，請務必於 24 小時前告知我們取消或改期。
-                </p>
-              </div>
-
-              <div className="trialBookingSuccessNotice">
-                <strong>🔔 提醒您：</strong>
-                <p>
-                  若預約後未提前通知而未到場，我們將視為無故取消，並可能會影響您後續的預約資格（包含列入黑名單）。
-                </p>
-              </div>
-
-              <div className="trialBookingSuccessCopy">
-                <p>✨ 非常期待與您見面，一起開始更健康的生活步調！</p>
-                <p>
-                  若有任何問題，都歡迎透過官方 LINE 與我們聯繫，我們將會盡快請專人協助確認可預約時段。
-                </p>
-              </div>
-
-              <a
-                className="trialBookingLineCta"
-                href={BIGE_LINE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                聯絡官方 LINE
-              </a>
 
               <dl className="trialBookingSummary">
                 <div>
@@ -577,6 +546,38 @@ export default function TrialBookingPage() {
                   <dd>{getPaymentStatusText(submittedBooking.paymentStatus)}</dd>
                 </div>
               </dl>
+
+              <div className="trialBookingSuccessCopy">
+                <p>您好，已成功收到您的體驗課程預約！</p>
+                <p>付款方式為「{successPaymentMethodLabel}」。</p>
+                <p>
+                  為了確保課程品質，教練會為您預留約 1.5～2 小時的完整體驗時段。
+                  若您臨時有事需要調整時間，請務必於 24 小時前告知我們取消或改期。
+                </p>
+              </div>
+
+              <div className="trialBookingSuccessNotice">
+                <strong>🔔 提醒您：</strong>
+                <p>
+                  若預約後未提前通知而未到場，我們將視為無故取消，並可能會影響您後續的預約資格（包含列入黑名單）。
+                </p>
+              </div>
+
+              <div className="trialBookingSuccessCopy">
+                <p>✨ 非常期待與您見面，一起開始更健康的生活步調！</p>
+                <p>
+                  若有任何問題，都歡迎透過官方 LINE 與我們聯繫，我們將會盡快請專人協助確認可預約時段。
+                </p>
+              </div>
+
+              <a
+                className="trialBookingLineCta"
+                href={BIGE_LINE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                聯絡官方 LINE
+              </a>
 
               <div className="trialBookingActions">
                 <Link className="trialBookingBtn trialBookingBtnPrimary" href={BIGE_HOME_URL}>
