@@ -36,6 +36,15 @@ type TrialBookingSuccess = {
   bookingStatus: "new";
 };
 
+type BirthdayCalendarCell = {
+  key: string;
+  day: number | null;
+  value: string;
+  isToday: boolean;
+  isSelected: boolean;
+  isDisabled: boolean;
+};
+
 const serviceOptions: Array<{
   value: TrialService;
   label: string;
@@ -132,6 +141,10 @@ function buildBirthdayValue(year: string, month: string, day: string) {
   return `${year}-${padDatePart(month)}-${padDatePart(day)}`;
 }
 
+function buildBirthdayValueFromNumbers(year: number, month: number, day: number) {
+  return buildBirthdayValue(String(year), String(month), String(day));
+}
+
 function splitBirthdayValue(value: string) {
   if (!DATE_INPUT_PATTERN.test(value)) {
     return { year: "", month: "", day: "" };
@@ -141,6 +154,14 @@ function splitBirthdayValue(value: string) {
     year,
     month: String(Number(month)),
     day: String(Number(day)),
+  };
+}
+
+function getBirthdayCalendarBase(value: string, fallback: string) {
+  const parts = splitBirthdayValue(value || fallback);
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
   };
 }
 
@@ -177,13 +198,15 @@ export default function TrialBookingPage() {
   const [isPaymentTestMode, setIsPaymentTestMode] = useState(false);
   const [submittedBooking, setSubmittedBooking] = useState<TrialBookingSuccess | null>(null);
   const [isBirthdayPickerOpen, setIsBirthdayPickerOpen] = useState(false);
-  const [birthdayDraft, setBirthdayDraft] = useState({ year: "", month: "", day: "" });
+  const [draftSelectedBirthday, setDraftSelectedBirthday] = useState("");
   const [birthdayPickerError, setBirthdayPickerError] = useState("");
   const birthdayPickerRef = useRef<HTMLDivElement>(null);
   const maxBirthday = useMemo(() => getTodayDateInputValue(), []);
   const currentYear = Number(maxBirthday.slice(0, 4));
   const currentMonth = Number(maxBirthday.slice(5, 7));
-  const currentDay = Number(maxBirthday.slice(8, 10));
+  const birthdayCalendarInitial = getBirthdayCalendarBase(formData.birthday, maxBirthday);
+  const [birthdayCalendarYear, setBirthdayCalendarYear] = useState(birthdayCalendarInitial.year);
+  const [birthdayCalendarMonth, setBirthdayCalendarMonth] = useState(birthdayCalendarInitial.month);
   const birthdayYearOptions = useMemo(
     () =>
       Array.from({ length: currentYear - BIRTHDAY_START_YEAR + 1 }, (_, index) =>
@@ -191,21 +214,35 @@ export default function TrialBookingPage() {
       ),
     [currentYear],
   );
-  const birthdayMonthOptions = useMemo(() => {
-    const maxMonth = birthdayDraft.year === String(currentYear) ? currentMonth : 12;
-    return Array.from({ length: maxMonth }, (_, index) => String(index + 1));
-  }, [birthdayDraft.year, currentMonth, currentYear]);
-  const birthdayDayOptions = useMemo(
-    () => {
-      const daysInMonth = getDaysInMonth(birthdayDraft.year, birthdayDraft.month);
-      const maxDay =
-        birthdayDraft.year === String(currentYear) && birthdayDraft.month === String(currentMonth)
-          ? Math.min(daysInMonth, currentDay)
-          : daysInMonth;
-      return Array.from({ length: maxDay }, (_, index) => String(index + 1));
-    },
-    [birthdayDraft.year, birthdayDraft.month, currentDay, currentMonth, currentYear],
-  );
+  const birthdayCalendarCells = useMemo<BirthdayCalendarCell[]>(() => {
+    const firstDayOfWeek = new Date(birthdayCalendarYear, birthdayCalendarMonth - 1, 1).getDay();
+    const daysInMonth = getDaysInMonth(String(birthdayCalendarYear), String(birthdayCalendarMonth));
+    return [
+      ...Array.from({ length: firstDayOfWeek }, (_, index) => ({
+        key: `blank-${index}`,
+        day: null,
+        value: "",
+        isToday: false,
+        isSelected: false,
+        isDisabled: true,
+      })),
+      ...Array.from({ length: daysInMonth }, (_, index) => {
+        const day = index + 1;
+        const value = buildBirthdayValueFromNumbers(birthdayCalendarYear, birthdayCalendarMonth, day);
+        return {
+          key: value,
+          day,
+          value,
+          isToday: value === maxBirthday,
+          isSelected: value === draftSelectedBirthday,
+          isDisabled: value > maxBirthday,
+        };
+      }),
+    ];
+  }, [birthdayCalendarMonth, birthdayCalendarYear, draftSelectedBirthday, maxBirthday]);
+  const canGoToNextBirthdayMonth =
+    birthdayCalendarYear < currentYear ||
+    (birthdayCalendarYear === currentYear && birthdayCalendarMonth < currentMonth);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -258,66 +295,74 @@ export default function TrialBookingPage() {
   }
 
   function openBirthdayPicker() {
-    setBirthdayDraft(splitBirthdayValue(formData.birthday));
+    const base = getBirthdayCalendarBase(formData.birthday, maxBirthday);
+    setBirthdayCalendarYear(base.year);
+    setBirthdayCalendarMonth(base.month);
+    setDraftSelectedBirthday(formData.birthday);
     setBirthdayPickerError("");
     setIsBirthdayPickerOpen(true);
   }
 
-  function updateBirthdayDraft(field: "year" | "month" | "day", value: string) {
-    setBirthdayDraft((current) => {
-      const next = { ...current, [field]: value };
-      const maxMonth = next.year === String(currentYear) ? currentMonth : 12;
-      if (next.month && Number(next.month) > maxMonth) {
-        next.month = "";
-        next.day = "";
-      }
-      if (field !== "day") {
-        const daysInMonth = getDaysInMonth(next.year, next.month);
-        const maxDay =
-          next.year === String(currentYear) && next.month === String(currentMonth)
-            ? Math.min(daysInMonth, currentDay)
-            : daysInMonth;
-        if (next.day && Number(next.day) > maxDay) {
-          next.day = "";
-        }
-      }
-      return next;
-    });
+  function updateBirthdayCalendarYear(value: string) {
+    const nextYear = Number(value);
+    if (!nextYear) return;
+    setBirthdayCalendarYear(nextYear);
+    setBirthdayCalendarMonth((current) =>
+      nextYear === currentYear && current > currentMonth ? currentMonth : current,
+    );
+    setBirthdayPickerError("");
+  }
+
+  function moveBirthdayCalendarMonth(direction: -1 | 1) {
+    let nextMonth = birthdayCalendarMonth + direction;
+    let nextYear = birthdayCalendarYear;
+    if (nextMonth < 1) {
+      nextMonth = 12;
+      nextYear -= 1;
+    } else if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear += 1;
+    }
+
+    if (nextYear < BIRTHDAY_START_YEAR) return;
+    if (nextYear > currentYear || (nextYear === currentYear && nextMonth > currentMonth)) return;
+
+    setBirthdayCalendarYear(nextYear);
+    setBirthdayCalendarMonth(nextMonth);
+    setBirthdayPickerError("");
+  }
+
+  function selectDraftBirthday(value: string, isDisabled?: boolean) {
+    if (isDisabled) return;
+    setDraftSelectedBirthday(value);
     setBirthdayPickerError("");
   }
 
   function confirmBirthday() {
-    if (!birthdayDraft.year || !birthdayDraft.month || !birthdayDraft.day) {
-      setBirthdayPickerError("請完整選擇生日");
+    if (!draftSelectedBirthday) {
+      setBirthdayPickerError("請選擇生日");
       return;
     }
 
-    const maxDay = getDaysInMonth(birthdayDraft.year, birthdayDraft.month);
-    if (Number(birthdayDraft.day) > maxDay) {
+    if (!DATE_INPUT_PATTERN.test(draftSelectedBirthday) || draftSelectedBirthday > maxBirthday) {
       setBirthdayPickerError("請選擇有效生日");
       return;
     }
 
-    const nextBirthday = buildBirthdayValue(birthdayDraft.year, birthdayDraft.month, birthdayDraft.day);
-    if (nextBirthday > maxBirthday) {
-      setBirthdayPickerError("生日不可晚於今天");
-      return;
-    }
-
-    updateField("birthday", nextBirthday);
+    updateField("birthday", draftSelectedBirthday);
     setBirthdayPickerError("");
     setIsBirthdayPickerOpen(false);
   }
 
   function clearBirthday() {
-    setBirthdayDraft({ year: "", month: "", day: "" });
+    setDraftSelectedBirthday("");
     updateField("birthday", "");
     setBirthdayPickerError("");
     setIsBirthdayPickerOpen(false);
   }
 
   function cancelBirthdayPicker() {
-    setBirthdayDraft(splitBirthdayValue(formData.birthday));
+    setDraftSelectedBirthday(formData.birthday);
     setBirthdayPickerError("");
     setIsBirthdayPickerOpen(false);
   }
@@ -643,50 +688,69 @@ export default function TrialBookingPage() {
                     </button>
                     {isBirthdayPickerOpen ? (
                       <div className="trialBookingBirthdayPicker" id="trial-birthday-picker">
-                        <div className="trialBookingBirthdaySelects" aria-label="生日選擇器">
-                          <label>
-                            <span>年</span>
+                        <div className="trialBookingBirthdayHeader">
+                          <button
+                            type="button"
+                            onClick={() => moveBirthdayCalendarMonth(-1)}
+                            disabled={
+                              birthdayCalendarYear === BIRTHDAY_START_YEAR && birthdayCalendarMonth === 1
+                            }
+                            aria-label="上一月"
+                          >
+                            ‹
+                          </button>
+                          <div className="trialBookingBirthdayMonthTitle" aria-live="polite">
+                            <strong>
+                              {birthdayCalendarYear} 年 {birthdayCalendarMonth} 月
+                            </strong>
                             <select
-                              value={birthdayDraft.year}
-                              onChange={(event) => updateBirthdayDraft("year", event.target.value)}
+                              aria-label="選擇年份"
+                              value={String(birthdayCalendarYear)}
+                              onChange={(event) => updateBirthdayCalendarYear(event.target.value)}
                             >
-                              <option value="">請選擇</option>
                               {birthdayYearOptions.map((year) => (
                                 <option key={year} value={year}>
                                   {year}
                                 </option>
                               ))}
                             </select>
-                          </label>
-                          <label>
-                            <span>月</span>
-                            <select
-                              value={birthdayDraft.month}
-                              onChange={(event) => updateBirthdayDraft("month", event.target.value)}
-                            >
-                              <option value="">請選擇</option>
-                              {birthdayMonthOptions.map((month) => (
-                                <option key={month} value={month}>
-                                  {month}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <span>日</span>
-                            <select
-                              value={birthdayDraft.day}
-                              onChange={(event) => updateBirthdayDraft("day", event.target.value)}
-                              disabled={!birthdayDraft.year || !birthdayDraft.month}
-                            >
-                              <option value="">請選擇</option>
-                              {birthdayDayOptions.map((day) => (
-                                <option key={day} value={day}>
-                                  {day}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => moveBirthdayCalendarMonth(1)}
+                            disabled={!canGoToNextBirthdayMonth}
+                            aria-label="下一月"
+                          >
+                            ›
+                          </button>
+                        </div>
+                        <div className="trialBookingBirthdayWeekdays" aria-hidden="true">
+                          {["日", "一", "二", "三", "四", "五", "六"].map((weekday) => (
+                            <span key={weekday}>{weekday}</span>
+                          ))}
+                        </div>
+                        <div className="trialBookingBirthdayCalendar" aria-label="生日月曆">
+                          {birthdayCalendarCells.map((cell) =>
+                            cell.day ? (
+                              <button
+                                key={cell.key}
+                                type="button"
+                                className={[
+                                  cell.isToday ? "is-today" : "",
+                                  cell.isSelected ? "is-selected" : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                onClick={() => selectDraftBirthday(cell.value, cell.isDisabled)}
+                                disabled={cell.isDisabled}
+                                aria-pressed={cell.isSelected}
+                              >
+                                <span>{cell.day}</span>
+                              </button>
+                            ) : (
+                              <span key={cell.key} aria-hidden="true" />
+                            ),
+                          )}
                         </div>
                         {birthdayPickerError ? (
                           <p className="trialBookingFieldError">{birthdayPickerError}</p>
