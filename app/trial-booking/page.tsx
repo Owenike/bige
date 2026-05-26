@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type TrialService = "weight_training" | "pilates" | "sports_massage";
 
@@ -109,11 +109,39 @@ const BIGE_HOME_URL = "/";
 const BIGE_COURSE_URL = "/training/pilates";
 const BIGE_LINE_URL = "https://lin.ee/0GWm0oZ";
 const DATE_INPUT_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const BIRTHDAY_START_YEAR = 1920;
 
 function getTodayDateInputValue() {
   const now = new Date();
   const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
   return localDate.toISOString().slice(0, 10);
+}
+
+function padDatePart(value: string) {
+  return value.padStart(2, "0");
+}
+
+function getDaysInMonth(year: string, month: string) {
+  const numericYear = Number(year);
+  const numericMonth = Number(month);
+  if (!numericYear || !numericMonth) return 31;
+  return new Date(numericYear, numericMonth, 0).getDate();
+}
+
+function buildBirthdayValue(year: string, month: string, day: string) {
+  return `${year}-${padDatePart(month)}-${padDatePart(day)}`;
+}
+
+function splitBirthdayValue(value: string) {
+  if (!DATE_INPUT_PATTERN.test(value)) {
+    return { year: "", month: "", day: "" };
+  }
+  const [year, month, day] = value.split("-");
+  return {
+    year,
+    month: String(Number(month)),
+    day: String(Number(day)),
+  };
 }
 
 function getServiceLabel(value: TrialService | "") {
@@ -148,7 +176,36 @@ export default function TrialBookingPage() {
   const [acpayError, setAcpayError] = useState("");
   const [isPaymentTestMode, setIsPaymentTestMode] = useState(false);
   const [submittedBooking, setSubmittedBooking] = useState<TrialBookingSuccess | null>(null);
+  const [isBirthdayPickerOpen, setIsBirthdayPickerOpen] = useState(false);
+  const [birthdayDraft, setBirthdayDraft] = useState({ year: "", month: "", day: "" });
+  const [birthdayPickerError, setBirthdayPickerError] = useState("");
+  const birthdayPickerRef = useRef<HTMLDivElement>(null);
   const maxBirthday = useMemo(() => getTodayDateInputValue(), []);
+  const currentYear = Number(maxBirthday.slice(0, 4));
+  const currentMonth = Number(maxBirthday.slice(5, 7));
+  const currentDay = Number(maxBirthday.slice(8, 10));
+  const birthdayYearOptions = useMemo(
+    () =>
+      Array.from({ length: currentYear - BIRTHDAY_START_YEAR + 1 }, (_, index) =>
+        String(currentYear - index),
+      ),
+    [currentYear],
+  );
+  const birthdayMonthOptions = useMemo(() => {
+    const maxMonth = birthdayDraft.year === String(currentYear) ? currentMonth : 12;
+    return Array.from({ length: maxMonth }, (_, index) => String(index + 1));
+  }, [birthdayDraft.year, currentMonth, currentYear]);
+  const birthdayDayOptions = useMemo(
+    () => {
+      const daysInMonth = getDaysInMonth(birthdayDraft.year, birthdayDraft.month);
+      const maxDay =
+        birthdayDraft.year === String(currentYear) && birthdayDraft.month === String(currentMonth)
+          ? Math.min(daysInMonth, currentDay)
+          : daysInMonth;
+      return Array.from({ length: maxDay }, (_, index) => String(index + 1));
+    },
+    [birthdayDraft.year, birthdayDraft.month, currentDay, currentMonth, currentYear],
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -162,6 +219,20 @@ export default function TrialBookingPage() {
     );
     setAcpayError("");
   }, [isPaymentTestMode]);
+
+  useEffect(() => {
+    if (!isBirthdayPickerOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!birthdayPickerRef.current?.contains(event.target as Node)) {
+        setIsBirthdayPickerOpen(false);
+        setBirthdayPickerError("");
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isBirthdayPickerOpen]);
 
   const visiblePaymentMethodOptions = useMemo(
     () => paymentMethodOptions.filter((option) => isPaymentTestMode || option.value !== "online_payment"),
@@ -184,6 +255,71 @@ export default function TrialBookingPage() {
       return next;
     });
     setSubmitError("");
+  }
+
+  function openBirthdayPicker() {
+    setBirthdayDraft(splitBirthdayValue(formData.birthday));
+    setBirthdayPickerError("");
+    setIsBirthdayPickerOpen(true);
+  }
+
+  function updateBirthdayDraft(field: "year" | "month" | "day", value: string) {
+    setBirthdayDraft((current) => {
+      const next = { ...current, [field]: value };
+      const maxMonth = next.year === String(currentYear) ? currentMonth : 12;
+      if (next.month && Number(next.month) > maxMonth) {
+        next.month = "";
+        next.day = "";
+      }
+      if (field !== "day") {
+        const daysInMonth = getDaysInMonth(next.year, next.month);
+        const maxDay =
+          next.year === String(currentYear) && next.month === String(currentMonth)
+            ? Math.min(daysInMonth, currentDay)
+            : daysInMonth;
+        if (next.day && Number(next.day) > maxDay) {
+          next.day = "";
+        }
+      }
+      return next;
+    });
+    setBirthdayPickerError("");
+  }
+
+  function confirmBirthday() {
+    if (!birthdayDraft.year || !birthdayDraft.month || !birthdayDraft.day) {
+      setBirthdayPickerError("請完整選擇生日");
+      return;
+    }
+
+    const maxDay = getDaysInMonth(birthdayDraft.year, birthdayDraft.month);
+    if (Number(birthdayDraft.day) > maxDay) {
+      setBirthdayPickerError("請選擇有效生日");
+      return;
+    }
+
+    const nextBirthday = buildBirthdayValue(birthdayDraft.year, birthdayDraft.month, birthdayDraft.day);
+    if (nextBirthday > maxBirthday) {
+      setBirthdayPickerError("生日不可晚於今天");
+      return;
+    }
+
+    updateField("birthday", nextBirthday);
+    setBirthdayPickerError("");
+    setIsBirthdayPickerOpen(false);
+  }
+
+  function clearBirthday() {
+    setBirthdayDraft({ year: "", month: "", day: "" });
+    updateField("birthday", "");
+    setBirthdayPickerError("");
+    setIsBirthdayPickerOpen(false);
+  }
+
+  function cancelBirthdayPicker() {
+    setBirthdayDraft(splitBirthdayValue(formData.birthday));
+    setBirthdayPickerError("");
+    setIsBirthdayPickerOpen(false);
   }
 
   function validate(data: TrialBookingFormData) {
@@ -488,23 +624,86 @@ export default function TrialBookingPage() {
                     {errors.phone ? <p className="trialBookingFieldError">{errors.phone}</p> : null}
                   </div>
 
-                  <div className="trialBookingField trialBookingFieldWide">
+                  <div className="trialBookingField trialBookingFieldWide" ref={birthdayPickerRef}>
                     <label className="trialBookingLabel" htmlFor="trial-birthday">
                       生日
                       <RequiredBadge />
                     </label>
-                    <input
+                    <button
                       id="trial-birthday"
-                      className="trialBookingInput"
-                      type="date"
-                      value={formData.birthday}
-                      onChange={(event) => updateField("birthday", event.target.value)}
-                      placeholder="請選擇生日"
-                      max={maxBirthday}
+                      className={`trialBookingBirthdayTrigger${formData.birthday ? " has-value" : ""}`}
+                      type="button"
+                      onClick={openBirthdayPicker}
+                      aria-expanded={isBirthdayPickerOpen}
+                      aria-controls="trial-birthday-picker"
                       aria-describedby={errors.birthday ? "trial-birthday-error" : undefined}
-                      required
-                      aria-required="true"
-                    />
+                    >
+                      <span>{formData.birthday || "請選擇生日"}</span>
+                      <span aria-hidden="true">選擇</span>
+                    </button>
+                    {isBirthdayPickerOpen ? (
+                      <div className="trialBookingBirthdayPicker" id="trial-birthday-picker">
+                        <div className="trialBookingBirthdaySelects" aria-label="生日選擇器">
+                          <label>
+                            <span>年</span>
+                            <select
+                              value={birthdayDraft.year}
+                              onChange={(event) => updateBirthdayDraft("year", event.target.value)}
+                            >
+                              <option value="">請選擇</option>
+                              {birthdayYearOptions.map((year) => (
+                                <option key={year} value={year}>
+                                  {year}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>月</span>
+                            <select
+                              value={birthdayDraft.month}
+                              onChange={(event) => updateBirthdayDraft("month", event.target.value)}
+                            >
+                              <option value="">請選擇</option>
+                              {birthdayMonthOptions.map((month) => (
+                                <option key={month} value={month}>
+                                  {month}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>日</span>
+                            <select
+                              value={birthdayDraft.day}
+                              onChange={(event) => updateBirthdayDraft("day", event.target.value)}
+                              disabled={!birthdayDraft.year || !birthdayDraft.month}
+                            >
+                              <option value="">請選擇</option>
+                              {birthdayDayOptions.map((day) => (
+                                <option key={day} value={day}>
+                                  {day}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        {birthdayPickerError ? (
+                          <p className="trialBookingFieldError">{birthdayPickerError}</p>
+                        ) : null}
+                        <div className="trialBookingBirthdayActions">
+                          <button type="button" onClick={cancelBirthdayPicker}>
+                            取消
+                          </button>
+                          <button type="button" onClick={clearBirthday}>
+                            清除
+                          </button>
+                          <button type="button" onClick={confirmBirthday}>
+                            確認
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                     {errors.birthday ? (
                       <p className="trialBookingFieldError" id="trial-birthday-error">
                         {errors.birthday}

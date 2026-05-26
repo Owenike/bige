@@ -7640,6 +7640,131 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   box-shadow: 0 0 0 4px rgba(255, 255, 255, .1);
   background: rgba(0, 0, 0, .52);
 }
+.trialBookingBirthdayTrigger{
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 18px;
+  padding: 15px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, .055);
+  color: rgba(255, 255, 255, .36);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color .2s ease,
+    box-shadow .2s ease,
+    background-color .2s ease;
+}
+.trialBookingBirthdayTrigger.has-value{
+  color: #fff;
+}
+.trialBookingBirthdayTrigger > span:first-child{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trialBookingBirthdayTrigger > span:last-child{
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  padding: 4px 9px;
+  color: rgba(255, 255, 255, .66);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.trialBookingBirthdayTrigger:focus-visible{
+  outline: none;
+  border-color: rgba(255, 255, 255, .72);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, .1);
+  background: rgba(0, 0, 0, .52);
+}
+.trialBookingBirthdayPicker{
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 22px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .04)),
+    rgba(7, 7, 7, .96);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .28);
+}
+.trialBookingBirthdaySelects{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.trialBookingBirthdaySelects label{
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  color: rgba(255, 255, 255, .66);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.trialBookingBirthdaySelects select{
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 14px;
+  padding: 12px 10px;
+  background: rgba(255, 255, 255, .06);
+  color: #fff;
+  font: inherit;
+  color-scheme: dark;
+}
+.trialBookingBirthdaySelects select:focus{
+  outline: none;
+  border-color: rgba(255, 255, 255, .72);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .08);
+}
+.trialBookingBirthdaySelects select:disabled{
+  cursor: not-allowed;
+  opacity: .45;
+}
+.trialBookingBirthdayActions{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.trialBookingBirthdayActions button{
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, .06);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .2s ease, border-color .2s ease, background-color .2s ease;
+}
+.trialBookingBirthdayActions button:hover{
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, .36);
+  background: rgba(255, 255, 255, .1);
+}
+.trialBookingBirthdayActions button:last-child{
+  border-color: #fff;
+  background: #fff;
+  color: #050505;
+}
 .trialBookingTextarea{
   min-height: 132px;
   resize: vertical;
