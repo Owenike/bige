@@ -7557,11 +7557,13 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+  min-width: 0;
 }
 .trialBookingField,
 .trialBookingFieldset{
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 .trialBookingFieldWide{
   grid-column: 1 / -1;
@@ -7603,6 +7605,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .trialBookingInput{
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   min-height: 54px;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, .16);
@@ -7619,7 +7624,13 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   color: rgba(255, 255, 255, .36);
 }
 .trialBookingInput[type="date"]{
+  appearance: none;
+  -webkit-appearance: none;
   color-scheme: dark;
+}
+.trialBookingInput[type="date"]::-webkit-date-and-time-value{
+  min-width: 0;
+  text-align: left;
 }
 .trialBookingInput:focus{
   border-color: rgba(255, 255, 255, .72);
@@ -7637,7 +7648,12 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .trialBookingRadioCard{
   display: grid;
-  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 5px;
+  align-items: start;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 18px;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, .15);
@@ -7659,14 +7675,18 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   background: rgba(255, 255, 255, .12);
 }
 .trialBookingRadioCard input{
+  grid-row: 1 / span 2;
   margin: 0;
+  margin-top: 2px;
   accent-color: #fff;
 }
 .trialBookingRadioTitle{
+  min-width: 0;
   font-size: 16px;
   font-weight: 800;
 }
 .trialBookingRadioDescription{
+  min-width: 0;
   color: rgba(255, 255, 255, .62);
   line-height: 1.65;
   font-size: 14px;
@@ -8090,6 +8110,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     border-radius: 26px;
     padding: 20px 16px;
   }
+  .trialBookingForm{
+    gap: 24px;
+  }
   .trialBookingStepHead{
     grid-template-columns: 1fr;
   }
@@ -8102,10 +8125,33 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .trialBookingChip{
     flex: 1 1 calc(50% - 10px);
   }
+  .trialBookingFieldWide{
+    grid-column: auto;
+  }
+  .trialBookingInput{
+    padding: 14px 13px;
+  }
+  .trialBookingRadioGroup{
+    gap: 10px;
+  }
+  .trialBookingRadioCard{
+    width: 100%;
+    max-width: 100%;
+    padding: 15px 14px;
+    border-radius: 18px;
+    column-gap: 11px;
+    row-gap: 4px;
+  }
+  .trialBookingRadioDescription{
+    line-height: 1.58;
+  }
   .trialBookingSubmit,
   .trialBookingBtn,
   .acpayResultBtn{
     width: 100%;
+  }
+  .trialBookingSubmit{
+    margin-top: 2px;
   }
   .acpayResultSummary{
     grid-template-columns: 1fr;
