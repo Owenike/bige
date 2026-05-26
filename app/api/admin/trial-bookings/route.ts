@@ -11,6 +11,7 @@ const TRIAL_BOOKING_SELECT = [
   "created_at",
   "name",
   "phone",
+  "birthday",
   "line_name",
   "service",
   "preferred_time",

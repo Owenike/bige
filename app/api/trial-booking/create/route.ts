@@ -92,6 +92,7 @@ export async function POST(request: Request) {
     .insert({
       name: parsed.data.name,
       phone: parsed.data.phone,
+      birthday: parsed.data.birthday,
       line_name: parsed.data.lineName || null,
       service: parsed.data.service,
       preferred_time: parsed.data.preferredTime,

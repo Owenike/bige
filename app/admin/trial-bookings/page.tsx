@@ -13,6 +13,7 @@ type TrialBookingRow = {
   created_at: string;
   name: string;
   phone: string;
+  birthday: string | null;
   line_name: string | null;
   service: string;
   preferred_time: string;
