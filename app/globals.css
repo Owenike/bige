@@ -7779,6 +7779,8 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   max-height: 184px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(214, 184, 116, .46) rgba(255, 255, 255, .04);
   border: 1px solid rgba(214, 184, 116, .2);
   border-radius: 16px;
   padding: 8px;
@@ -7786,6 +7788,21 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   background: rgba(12, 12, 12, .96);
+}
+.trialBookingBirthdayYearPanel::-webkit-scrollbar{
+  width: 7px;
+}
+.trialBookingBirthdayYearPanel::-webkit-scrollbar-track{
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .04);
+}
+.trialBookingBirthdayYearPanel::-webkit-scrollbar-thumb{
+  border: 2px solid rgba(12, 12, 12, .96);
+  border-radius: 999px;
+  background: rgba(214, 184, 116, .48);
+}
+.trialBookingBirthdayYearPanel::-webkit-scrollbar-thumb:hover{
+  background: rgba(255, 231, 167, .68);
 }
 .trialBookingBirthdayYearPanel button{
   min-width: 0;
