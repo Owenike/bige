@@ -7573,6 +7573,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   padding: 0;
   border: 0;
 }
+.trialBookingFieldset .trialBookingRadioGroup{
+  margin-top: 4px;
+}
 .trialBookingLabel,
 .trialBookingLegend{
   margin: 0;
