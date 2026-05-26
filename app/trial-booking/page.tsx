@@ -128,6 +128,10 @@ function getPaymentMethodLabel(value: PaymentMethod | "") {
   return paymentMethodOptions.find((option) => option.value === value)?.label ?? "-";
 }
 
+function RequiredBadge() {
+  return <span className="trialBookingRequiredBadge">必填</span>;
+}
+
 function getPaymentStatusText(value: PaymentStatus) {
   if (value === "pending_cash") {
     return "現場付款，待 BigE 團隊確認體驗時段。";
@@ -376,7 +380,10 @@ export default function TrialBookingPage() {
                 <div className="trialBookingStepHead">
                   <span>01</span>
                   <div>
-                    <h2 id="trial-service-heading">選擇體驗項目</h2>
+                    <h2 id="trial-service-heading">
+                      選擇體驗項目
+                      <RequiredBadge />
+                    </h2>
                     <p>先選擇你想開始的方向，我們會依照你的目標與需求，協助安排合適的體驗內容。</p>
                   </div>
                 </div>
@@ -410,7 +417,10 @@ export default function TrialBookingPage() {
                 <div className="trialBookingStepHead">
                   <span>02</span>
                   <div>
-                    <h2 id="trial-time-heading">選擇方便時段</h2>
+                    <h2 id="trial-time-heading">
+                      選擇方便時段
+                      <RequiredBadge />
+                    </h2>
                     <p>先選擇你方便聯繫與安排的時段，實際課程時間將由專人再與你確認。</p>
                   </div>
                 </div>
@@ -440,7 +450,10 @@ export default function TrialBookingPage() {
                 </div>
                 <div className="trialBookingContactGrid">
                   <div className="trialBookingField">
-                    <label className="trialBookingLabel" htmlFor="trial-name">姓名</label>
+                    <label className="trialBookingLabel" htmlFor="trial-name">
+                      姓名
+                      <RequiredBadge />
+                    </label>
                     <input
                       id="trial-name"
                       className="trialBookingInput"
@@ -449,12 +462,17 @@ export default function TrialBookingPage() {
                       placeholder="請輸入姓名"
                       autoComplete="name"
                       maxLength={50}
+                      required
+                      aria-required="true"
                     />
                     {errors.name ? <p className="trialBookingFieldError">{errors.name}</p> : null}
                   </div>
 
                   <div className="trialBookingField">
-                    <label className="trialBookingLabel" htmlFor="trial-phone">電話</label>
+                    <label className="trialBookingLabel" htmlFor="trial-phone">
+                      電話
+                      <RequiredBadge />
+                    </label>
                     <input
                       id="trial-phone"
                       className="trialBookingInput"
@@ -464,12 +482,17 @@ export default function TrialBookingPage() {
                       autoComplete="tel"
                       inputMode="tel"
                       maxLength={30}
+                      required
+                      aria-required="true"
                     />
                     {errors.phone ? <p className="trialBookingFieldError">{errors.phone}</p> : null}
                   </div>
 
                   <div className="trialBookingField trialBookingFieldWide">
-                    <label className="trialBookingLabel" htmlFor="trial-birthday">生日</label>
+                    <label className="trialBookingLabel" htmlFor="trial-birthday">
+                      生日
+                      <RequiredBadge />
+                    </label>
                     <input
                       id="trial-birthday"
                       className="trialBookingInput"
@@ -479,6 +502,8 @@ export default function TrialBookingPage() {
                       placeholder="請選擇生日"
                       max={maxBirthday}
                       aria-describedby={errors.birthday ? "trial-birthday-error" : undefined}
+                      required
+                      aria-required="true"
                     />
                     {errors.birthday ? (
                       <p className="trialBookingFieldError" id="trial-birthday-error">
@@ -511,7 +536,10 @@ export default function TrialBookingPage() {
                   </div>
                 </div>
                 <fieldset className="trialBookingFieldset">
-                  <legend className="trialBookingLegend">付款方式</legend>
+                  <legend className="trialBookingLegend">
+                    付款方式
+                    <RequiredBadge />
+                  </legend>
                   <div className="trialBookingRadioGroup">
                     {visiblePaymentMethodOptions.map((option) => (
                       <label
@@ -524,6 +552,7 @@ export default function TrialBookingPage() {
                           value={option.value}
                           checked={formData.paymentMethod === option.value}
                           onChange={(event) => updateField("paymentMethod", event.target.value as PaymentMethod)}
+                          required
                         />
                         <span className="trialBookingRadioTitle">{option.label}</span>
                         <span className="trialBookingRadioDescription">{option.description}</span>

@@ -7579,6 +7579,28 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   font-size: 14px;
   letter-spacing: .04em;
 }
+.trialBookingStepHead h2,
+.trialBookingLabel,
+.trialBookingLegend{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.trialBookingRequiredBadge{
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(214, 184, 108, .28);
+  background: rgba(214, 184, 108, .1);
+  color: rgba(255, 238, 188, .82);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .08em;
+}
 .trialBookingInput{
   width: 100%;
   min-height: 54px;
