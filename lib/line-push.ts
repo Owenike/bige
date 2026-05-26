@@ -12,6 +12,7 @@ export type LineBookingNotificationInput = {
 export type LineTrialBookingNotificationInput = {
   name: string;
   phone: string;
+  birthday: string;
   lineName?: string | null;
   service: string;
   preferredTime: string;
@@ -91,6 +92,7 @@ function buildTrialBookingNotificationText(input: LineTrialBookingNotificationIn
     "",
     `姓名：${input.name}`,
     `電話：${input.phone}`,
+    `生日：${input.birthday}`,
   ];
 
   const lineName = input.lineName?.trim();

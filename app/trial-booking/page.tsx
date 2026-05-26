@@ -19,6 +19,7 @@ type PaymentStatus = "pending_cash" | "pending_payment";
 type TrialBookingFormData = {
   name: string;
   phone: string;
+  birthday: string;
   lineName: string;
   service: TrialService | "";
   preferredTime: PreferredTime | "";
@@ -96,6 +97,7 @@ const paymentMethodOptions: Array<{
 const initialFormData: TrialBookingFormData = {
   name: "",
   phone: "",
+  birthday: "",
   lineName: "",
   service: "",
   preferredTime: "",
@@ -106,6 +108,13 @@ const initialFormData: TrialBookingFormData = {
 const BIGE_HOME_URL = "/";
 const BIGE_COURSE_URL = "/training/pilates";
 const BIGE_LINE_URL = "https://lin.ee/0GWm0oZ";
+const DATE_INPUT_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function getTodayDateInputValue() {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 10);
+}
 
 function getServiceLabel(value: TrialService | "") {
   return serviceOptions.find((option) => option.value === value)?.label ?? "-";
@@ -135,6 +144,7 @@ export default function TrialBookingPage() {
   const [acpayError, setAcpayError] = useState("");
   const [isPaymentTestMode, setIsPaymentTestMode] = useState(false);
   const [submittedBooking, setSubmittedBooking] = useState<TrialBookingSuccess | null>(null);
+  const maxBirthday = useMemo(() => getTodayDateInputValue(), []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -177,6 +187,11 @@ export default function TrialBookingPage() {
 
     if (!data.name.trim()) nextErrors.name = "請填寫姓名";
     if (!data.phone.trim()) nextErrors.phone = "請填寫電話";
+    if (!data.birthday.trim()) {
+      nextErrors.birthday = "請選擇生日";
+    } else if (!DATE_INPUT_PATTERN.test(data.birthday) || data.birthday > getTodayDateInputValue()) {
+      nextErrors.birthday = "請選擇有效生日";
+    }
     if (!data.service) nextErrors.service = "請選擇想體驗項目";
     if (!data.preferredTime) nextErrors.preferredTime = "請選擇方便預約時段";
     if (!data.paymentMethod) nextErrors.paymentMethod = "請選擇付款方式";
@@ -208,6 +223,7 @@ export default function TrialBookingPage() {
         body: JSON.stringify({
           name: formData.name,
           phone: formData.phone,
+          birthday: formData.birthday,
           lineName: "",
           service: formData.service,
           preferredTime: formData.preferredTime,
@@ -322,6 +338,10 @@ export default function TrialBookingPage() {
                 <div>
                   <dt>電話</dt>
                   <dd>{formData.phone}</dd>
+                </div>
+                <div>
+                  <dt>生日</dt>
+                  <dd>{formData.birthday}</dd>
                 </div>
                 <div>
                   <dt>體驗項目</dt>
@@ -446,6 +466,25 @@ export default function TrialBookingPage() {
                       maxLength={30}
                     />
                     {errors.phone ? <p className="trialBookingFieldError">{errors.phone}</p> : null}
+                  </div>
+
+                  <div className="trialBookingField trialBookingFieldWide">
+                    <label className="trialBookingLabel" htmlFor="trial-birthday">生日</label>
+                    <input
+                      id="trial-birthday"
+                      className="trialBookingInput"
+                      type="date"
+                      value={formData.birthday}
+                      onChange={(event) => updateField("birthday", event.target.value)}
+                      placeholder="請選擇生日"
+                      max={maxBirthday}
+                      aria-describedby={errors.birthday ? "trial-birthday-error" : undefined}
+                    />
+                    {errors.birthday ? (
+                      <p className="trialBookingFieldError" id="trial-birthday-error">
+                        {errors.birthday}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="trialBookingField trialBookingFieldWide">

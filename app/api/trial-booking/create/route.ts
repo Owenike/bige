@@ -14,10 +14,22 @@ const preferredTimeValues = [
   "other",
 ] as const;
 const paymentMethodValues = ["cash_on_site", "online_payment"] as const;
+const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
+
+function todayDateInputValue() {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 10);
+}
 
 const trialBookingSchema = z.object({
   name: z.string().trim().min(1).max(50),
   phone: z.string().trim().min(1).max(30),
+  birthday: z
+    .string()
+    .trim()
+    .regex(dateInputPattern)
+    .refine((value) => value <= todayDateInputValue()),
   lineName: z.string().trim().max(80).optional().default(""),
   service: z.enum(serviceValues),
   preferredTime: z.enum(preferredTimeValues),
@@ -111,6 +123,7 @@ export async function POST(request: Request) {
   const lineResult = await sendLineTrialBookingNotification({
     name: parsed.data.name,
     phone: parsed.data.phone,
+    birthday: parsed.data.birthday,
     lineName: parsed.data.lineName,
     service: serviceLabel(parsed.data.service),
     preferredTime: preferredTimeLabel(parsed.data.preferredTime),

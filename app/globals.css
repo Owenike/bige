@@ -7596,6 +7596,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .trialBookingInput::placeholder{
   color: rgba(255, 255, 255, .36);
 }
+.trialBookingInput[type="date"]{
+  color-scheme: dark;
+}
 .trialBookingInput:focus{
   border-color: rgba(255, 255, 255, .72);
   box-shadow: 0 0 0 4px rgba(255, 255, 255, .1);
