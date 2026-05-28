@@ -88,8 +88,8 @@ const paymentMethodLabels: Record<PaymentMethod, string> = {
 
 const paymentStatusLabels: Record<PaymentStatus, string> = {
   pending_cash: "現場付款待確認",
-  pending_payment: "線上付款待處理",
-  paid: "已付款",
+  pending_payment: "線上付款待付款",
+  paid: "線上付款已付款",
   failed: "付款失敗",
   cancelled: "已取消",
 };
@@ -508,11 +508,11 @@ export default function TrialBookingsAdminPage() {
             <span>付款狀態</span>
             <select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)}>
               <option value="">全部</option>
-              <option value="pending_cash">pending_cash</option>
-              <option value="pending_payment">pending_payment</option>
-              <option value="paid">paid</option>
-              <option value="failed">failed</option>
-              <option value="cancelled">cancelled</option>
+              <option value="pending_cash">現場付款待確認</option>
+              <option value="pending_payment">線上付款待付款</option>
+              <option value="paid">線上付款已付款</option>
+              <option value="failed">付款失敗</option>
+              <option value="cancelled">已取消</option>
             </select>
           </label>
           <label className="trialAdminField">
