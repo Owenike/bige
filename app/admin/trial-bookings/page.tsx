@@ -19,8 +19,14 @@ type TrialBookingRow = {
   preferred_time: string;
   payment_method: PaymentMethod;
   payment_status: PaymentStatus;
+  amount: number | string | null;
+  currency: string | null;
+  merchant_trade_no: string | null;
+  acpay_trade_no: string | null;
+  paid_at: string | null;
   booking_status: BookingStatus;
   note: string | null;
+  updated_at: string | null;
 };
 
 type TrialBookingResponse = {
@@ -134,6 +140,40 @@ function formatDateTime(value: string) {
 function labelOrFallback(labels: Record<string, string>, value: string | null | undefined) {
   if (!value) return "-";
   return labels[value] || value;
+}
+
+function formatMoney(amount: TrialBookingRow["amount"], currency: string | null) {
+  if (amount === null || amount === undefined || amount === "") return "-";
+  return `${currency || "TWD"} ${amount}`;
+}
+
+function paymentPaidAtLabel(booking: TrialBookingRow) {
+  if (booking.paid_at) return formatDateTime(booking.paid_at);
+  if (booking.payment_status === "pending_payment") return "尚未付款";
+  return "-";
+}
+
+function renderPaymentDetails(booking: TrialBookingRow) {
+  return (
+    <dl className="trialAdminPaymentDetails">
+      <div>
+        <dt>金額</dt>
+        <dd>{formatMoney(booking.amount, booking.currency)}</dd>
+      </div>
+      <div>
+        <dt>商店訂單編號</dt>
+        <dd>{booking.merchant_trade_no || "-"}</dd>
+      </div>
+      <div>
+        <dt>ACPay 交易序號</dt>
+        <dd>{booking.acpay_trade_no || "-"}</dd>
+      </div>
+      <div>
+        <dt>付款時間</dt>
+        <dd>{paymentPaidAtLabel(booking)}</dd>
+      </div>
+    </dl>
+  );
 }
 
 export default function TrialBookingsAdminPage() {
@@ -525,6 +565,7 @@ export default function TrialBookingsAdminPage() {
                     <th>方便時段</th>
                     <th>付款方式</th>
                     <th>付款狀態</th>
+                    <th>付款資訊</th>
                     <th>預約狀態</th>
                     <th>備註</th>
                   </tr>
@@ -544,6 +585,7 @@ export default function TrialBookingsAdminPage() {
                           {labelOrFallback(paymentStatusLabels, booking.payment_status)}
                         </span>
                       </td>
+                      <td>{renderPaymentDetails(booking)}</td>
                       <td>
                         {renderStatusControl(booking)}
                       </td>
@@ -588,6 +630,10 @@ export default function TrialBookingsAdminPage() {
                     <div>
                       <dt>付款狀態</dt>
                       <dd>{labelOrFallback(paymentStatusLabels, booking.payment_status)}</dd>
+                    </div>
+                    <div className="trialAdminMobilePayment">
+                      <dt>付款資訊</dt>
+                      <dd>{renderPaymentDetails(booking)}</dd>
                     </div>
                     <div className="trialAdminMobileNote">
                       <dt>備註</dt>

@@ -17,8 +17,14 @@ const TRIAL_BOOKING_SELECT = [
   "preferred_time",
   "payment_method",
   "payment_status",
+  "amount",
+  "currency",
+  "merchant_trade_no",
+  "acpay_trade_no",
+  "paid_at",
   "booking_status",
   "note",
+  "updated_at",
 ].join(", ");
 
 function readEnumParam(searchParams: URLSearchParams, name: string, allowed: Set<string>) {
