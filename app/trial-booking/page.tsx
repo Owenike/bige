@@ -100,8 +100,8 @@ const paymentMethodOptions: Array<{
   },
   {
     value: "online_payment",
-    label: "線上付款（測試中）",
-    description: "僅供 ACpay 測試網址使用，付款完成後仍以系統通知確認為準。",
+    label: "線上付款",
+    description: "可線上完成付款，預約送出後將進入 ACPay 安全付款頁。",
   },
 ];
 
@@ -119,6 +119,7 @@ const initialFormData: TrialBookingFormData = {
 const BIGE_HOME_URL = "/";
 const BIGE_COURSE_URL = "/training/pilates";
 const BIGE_LINE_URL = "https://lin.ee/0GWm0oZ";
+const PAYMENT_PREVIEW_TOKEN = "bige-acpay-preview";
 const DATE_INPUT_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const BIRTHDAY_START_YEAR = 1920;
 
@@ -187,7 +188,7 @@ function getPaymentStatusText(value: PaymentStatus) {
   if (value === "pending_cash") {
     return "現場付款，待 BigE 團隊確認體驗時段。";
   }
-  return "線上付款待確認，BigE 團隊將協助完成付款與預約安排。";
+  return "付款完成後，BigE 團隊將協助確認體驗時段。";
 }
 
 export default function TrialBookingPage() {
@@ -197,7 +198,7 @@ export default function TrialBookingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [acpayLoading, setAcpayLoading] = useState(false);
   const [acpayError, setAcpayError] = useState("");
-  const [isPaymentTestMode, setIsPaymentTestMode] = useState(false);
+  const [isPaymentPreviewMode, setIsPaymentPreviewMode] = useState(false);
   const [submittedBooking, setSubmittedBooking] = useState<TrialBookingSuccess | null>(null);
   const [isBirthdayPickerOpen, setIsBirthdayPickerOpen] = useState(false);
   const [isBirthdayYearPanelOpen, setIsBirthdayYearPanelOpen] = useState(false);
@@ -247,16 +248,18 @@ export default function TrialBookingPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setIsPaymentTestMode(params.get("paymentTest") === "1");
+    setIsPaymentPreviewMode(
+      params.get("paymentPreview") === "1" && params.get("token") === PAYMENT_PREVIEW_TOKEN,
+    );
   }, []);
 
   useEffect(() => {
-    if (isPaymentTestMode) return;
+    if (isPaymentPreviewMode) return;
     setFormData((current) =>
       current.paymentMethod === "online_payment" ? { ...current, paymentMethod: "cash_on_site" } : current,
     );
     setAcpayError("");
-  }, [isPaymentTestMode]);
+  }, [isPaymentPreviewMode]);
 
   useEffect(() => {
     if (!isBirthdayPickerOpen) return;
@@ -274,8 +277,8 @@ export default function TrialBookingPage() {
   }, [isBirthdayPickerOpen]);
 
   const visiblePaymentMethodOptions = useMemo(
-    () => paymentMethodOptions.filter((option) => isPaymentTestMode || option.value !== "online_payment"),
-    [isPaymentTestMode],
+    () => paymentMethodOptions.filter((option) => isPaymentPreviewMode || option.value !== "online_payment"),
+    [isPaymentPreviewMode],
   );
 
   const successPaymentMethodLabel = submittedBooking
@@ -892,17 +895,17 @@ export default function TrialBookingPage() {
               <button className="trialBookingSubmit" type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "送出中..." : "送出首次體驗預約"}
               </button>
-              {isPaymentTestMode && formData.paymentMethod === "online_payment" ? (
+              {isPaymentPreviewMode && formData.paymentMethod === "online_payment" ? (
                 <div className="trialBookingAcpayBox">
                   <button
                     className="trialBookingAcpayButton"
                     type="submit"
                     disabled={acpayLoading}
                   >
-                    {acpayLoading ? "正在建立付款連結..." : "線上付款預約體驗"}
+                    {acpayLoading ? "正在建立付款連結..." : "前往 ACPay 安全付款"}
                   </button>
                   <p className="trialBookingAcpayHint">
-                    將開啟 ACpay 測試付款頁；付款結果仍以系統通知確認為準。
+                    將開啟 ACPay 安全付款頁；付款完成後，BigE 團隊將協助確認體驗時段。
                   </p>
                   {acpayError ? <div className="trialBookingError">{acpayError}</div> : null}
                 </div>

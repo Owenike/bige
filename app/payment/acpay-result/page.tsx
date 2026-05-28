@@ -42,7 +42,7 @@ export default async function AcpayResultPage({ searchParams }: AcpayResultPageP
         <h1>{isSuccess ? "付款已完成" : isPending ? "付款結果確認中" : "付款未完成"}</h1>
         <p className="acpayResultLead">
           {isSuccess
-            ? "我們已收到 ACpay 付款頁回傳結果。付款結果仍以系統通知確認為準，BigE 團隊會協助確認後續安排。"
+            ? "我們已收到您的付款結果，後續將由 BigE 團隊協助確認體驗時段。"
             : "這筆付款尚未完成或付款結果無法確認。你可以回到首頁、重新預約，或透過 LINE 聯繫 BigE 團隊。"}
         </p>
 
