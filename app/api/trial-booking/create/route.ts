@@ -126,23 +126,25 @@ export async function POST(request: Request) {
     paymentStatus: insertResult.data.payment_status,
   });
 
-  const lineResult = await sendLineTrialBookingNotification({
-    name: parsed.data.name,
-    phone: parsed.data.phone,
-    birthday: parsed.data.birthday,
-    lineName: parsed.data.lineName,
-    service: serviceLabel(parsed.data.service),
-    preferredTime: preferredTimeLabel(parsed.data.preferredTime),
-    paymentMethod: paymentMethodLabel(parsed.data.paymentMethod),
-    note: parsed.data.note,
-  });
-
-  if (!lineResult.ok) {
-    console.warn("[trial-booking] line notification did not complete", {
-      status: lineResult.status,
-      error: lineResult.error,
-      skipped: lineResult.skipped,
+  if (parsed.data.paymentMethod === "cash_on_site") {
+    const lineResult = await sendLineTrialBookingNotification({
+      name: parsed.data.name,
+      phone: parsed.data.phone,
+      birthday: parsed.data.birthday,
+      lineName: parsed.data.lineName,
+      service: serviceLabel(parsed.data.service),
+      preferredTime: preferredTimeLabel(parsed.data.preferredTime),
+      paymentMethod: paymentMethodLabel(parsed.data.paymentMethod),
+      note: parsed.data.note,
     });
+
+    if (!lineResult.ok) {
+      console.warn("[trial-booking] line notification did not complete", {
+        status: lineResult.status,
+        error: lineResult.error,
+        skipped: lineResult.skipped,
+      });
+    }
   }
 
   return NextResponse.json({

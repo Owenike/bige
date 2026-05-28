@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
 import { parseAcpayXml, verifyAcpaySign } from "../../../../lib/acpay";
 import { recordAcpayChecklist } from "../../../../lib/acpay-checklist";
+import { sendLineTrialBookingNotification } from "../../../../lib/line-push";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 type TrialBookingPaymentRow = {
   id: string;
+  name: string;
+  phone: string;
+  birthday: string;
+  line_name: string | null;
+  service: string;
+  preferred_time: string;
+  note: string | null;
+  payment_method: string;
   payment_status: string;
   amount: number | string | null;
+  currency: string | null;
   merchant_trade_no: string | null;
   acpay_trade_no: string | null;
 };
@@ -20,6 +30,27 @@ function textResponse(text: string, status = 200) {
 
 function sameAmount(left: number | string | null, right: string | undefined) {
   return Number(left) === Number(right);
+}
+
+function serviceLabel(value: string) {
+  if (value === "weight_training") return "重量訓練";
+  if (value === "boxing_fitness") return "拳擊體能訓練";
+  if (value === "pilates") return "器械皮拉提斯";
+  if (value === "sports_massage") return "運動按摩";
+  return value || "未提供";
+}
+
+function preferredTimeLabel(value: string) {
+  const labels: Record<string, string> = {
+    weekday_morning: "平日上午",
+    weekday_afternoon: "平日下午",
+    weekday_evening: "平日晚上",
+    weekend_morning: "假日上午",
+    weekend_afternoon: "假日下午",
+    weekend_evening: "假日晚上",
+    other: "其他時段",
+  };
+  return labels[value] || value || "未提供";
 }
 
 export async function POST(request: Request) {
@@ -68,7 +99,9 @@ export async function POST(request: Request) {
 
   const bookingResult = await admin
     .from("trial_bookings")
-    .select("id, payment_status, amount, merchant_trade_no, acpay_trade_no")
+    .select(
+      "id, name, phone, birthday, line_name, service, preferred_time, note, payment_method, payment_status, amount, currency, merchant_trade_no, acpay_trade_no",
+    )
     .eq("merchant_trade_no", parsed.out_trade_no)
     .maybeSingle();
 
@@ -87,6 +120,15 @@ export async function POST(request: Request) {
       hasTransactionId: Boolean(parsed.transaction_id),
     });
     return textResponse("FAIL", 404);
+  }
+
+  if (booking.payment_method !== "online_payment") {
+    console.warn("[acpay] notify booking payment method mismatch", {
+      outTradeNo: parsed.out_trade_no,
+      bookingId: booking.id,
+      paymentMethod: booking.payment_method,
+    });
+    return textResponse("FAIL", 409);
   }
 
   if (!sameAmount(booking.amount, parsed.total_fee)) {
@@ -119,6 +161,30 @@ export async function POST(request: Request) {
         error: updateResult.error?.message || "booking_not_updated",
       });
       return textResponse("FAIL", 500);
+    }
+
+    const lineResult = await sendLineTrialBookingNotification({
+      name: booking.name,
+      phone: booking.phone,
+      birthday: booking.birthday,
+      lineName: booking.line_name,
+      service: serviceLabel(booking.service),
+      preferredTime: preferredTimeLabel(booking.preferred_time),
+      paymentMethod: "線上付款",
+      paymentStatus: "已付款",
+      amount: booking.amount,
+      currency: booking.currency,
+      note: booking.note,
+    });
+
+    if (!lineResult.ok) {
+      console.warn("[acpay] notify line notification did not complete", {
+        outTradeNo: parsed.out_trade_no,
+        bookingId: booking.id,
+        status: lineResult.status,
+        error: lineResult.error,
+        skipped: lineResult.skipped,
+      });
     }
   }
 

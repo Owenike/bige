@@ -17,6 +17,9 @@ export type LineTrialBookingNotificationInput = {
   service: string;
   preferredTime: string;
   paymentMethod: string;
+  paymentStatus?: string | null;
+  amount?: number | string | null;
+  currency?: string | null;
   note?: string | null;
   submittedAt?: Date;
 };
@@ -104,6 +107,18 @@ function buildTrialBookingNotificationText(input: LineTrialBookingNotificationIn
     `體驗項目：${input.service}`,
     `方便時段：${input.preferredTime}`,
     `付款方式：${input.paymentMethod}`,
+  );
+
+  if (input.paymentStatus?.trim()) {
+    lines.push(`付款狀態：${input.paymentStatus.trim()}`);
+  }
+
+  if (input.amount) {
+    const currency = input.currency?.trim() || "TWD";
+    lines.push(`金額：${currency} ${input.amount}`);
+  }
+
+  lines.push(
     `備註：${input.note?.trim() || "無"}`,
     `送出時間：${formatTaipeiDateTime(input.submittedAt || new Date())}`,
     "",
