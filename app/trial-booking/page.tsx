@@ -892,9 +892,6 @@ export default function TrialBookingPage() {
 
               {submitError ? <div className="trialBookingError">{submitError}</div> : null}
 
-              <button className="trialBookingSubmit" type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "送出中..." : "送出首次體驗預約"}
-              </button>
               {isPaymentPreviewMode && formData.paymentMethod === "online_payment" ? (
                 <div className="trialBookingAcpayBox">
                   <button
@@ -905,11 +902,15 @@ export default function TrialBookingPage() {
                     {acpayLoading ? "正在建立付款連結..." : "前往 ACPay 安全付款"}
                   </button>
                   <p className="trialBookingAcpayHint">
-                    將開啟 ACPay 安全付款頁；付款完成後，BigE 團隊將協助確認體驗時段。
+                    付款完成後，BigE 團隊將協助確認體驗時段。若付款未完成，預約不會成立。
                   </p>
                   {acpayError ? <div className="trialBookingError">{acpayError}</div> : null}
                 </div>
-              ) : null}
+              ) : (
+                <button className="trialBookingSubmit" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "送出中..." : "送出首次體驗預約"}
+                </button>
+              )}
             </form>
           )}
         </div>
