@@ -65,6 +65,10 @@ function paymentMethodLabel(value: (typeof paymentMethodValues)[number]) {
   return value === "cash_on_site" ? "現場付款" : "線上付款";
 }
 
+function trialAmount(value: (typeof serviceValues)[number]) {
+  return value === "sports_massage" ? 1500 : 880;
+}
+
 export async function POST(request: Request) {
   let body: unknown;
   try {
@@ -86,6 +90,7 @@ export async function POST(request: Request) {
   }
 
   const paymentStatus = parsed.data.paymentMethod === "cash_on_site" ? "pending_cash" : "pending_payment";
+  const amount = trialAmount(parsed.data.service);
 
   const insertResult = await admin
     .from("trial_bookings")
@@ -99,12 +104,12 @@ export async function POST(request: Request) {
       note: parsed.data.note || null,
       payment_method: parsed.data.paymentMethod,
       payment_status: paymentStatus,
-      amount: null,
+      amount,
       currency: "TWD",
       source: "website_trial_booking",
       booking_status: "new",
     })
-    .select("id, payment_method, payment_status, booking_status")
+    .select("id, payment_method, payment_status, booking_status, amount, currency")
     .maybeSingle();
 
   if (insertResult.error) {
@@ -147,6 +152,8 @@ export async function POST(request: Request) {
       paymentMethod: insertResult.data.payment_method,
       paymentStatus: insertResult.data.payment_status,
       bookingStatus: insertResult.data.booking_status,
+      amount: insertResult.data.amount,
+      currency: insertResult.data.currency,
     },
   });
 }

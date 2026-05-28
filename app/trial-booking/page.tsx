@@ -34,6 +34,8 @@ type TrialBookingSuccess = {
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   bookingStatus: "new";
+  amount: number | null;
+  currency: string;
 };
 
 type BirthdayCalendarCell = {
@@ -432,6 +434,11 @@ export default function TrialBookingPage() {
         return;
       }
 
+      if (payload.booking.paymentMethod === "online_payment") {
+        await handleAcpayPayment(payload.booking);
+        return;
+      }
+
       setSubmittedBooking(payload.booking);
     } catch {
       setSubmitError("預約送出失敗，請稍後再試或直接聯繫 BigE 團隊。");
@@ -440,20 +447,22 @@ export default function TrialBookingPage() {
     }
   }
 
-  async function handleAcpayPayment() {
+  async function handleAcpayPayment(booking: TrialBookingSuccess) {
     if (acpayLoading) return;
 
     setAcpayError("");
     setAcpayLoading(true);
 
     try {
-      const amount = formData.service === "sports_massage" ? 1500 : 880;
       const response = await fetch("/api/acpay/create-payment", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({
+          bookingId: booking.id,
+          amount: booking.amount,
+        }),
       });
       const payload = (await response.json().catch(() => null)) as
         | {
@@ -887,8 +896,7 @@ export default function TrialBookingPage() {
                 <div className="trialBookingAcpayBox">
                   <button
                     className="trialBookingAcpayButton"
-                    type="button"
-                    onClick={handleAcpayPayment}
+                    type="submit"
                     disabled={acpayLoading}
                   >
                     {acpayLoading ? "正在建立付款連結..." : "線上付款預約體驗"}
