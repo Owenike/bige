@@ -169,7 +169,7 @@ export default async function AcpayResultPage({ searchParams }: AcpayResultPageP
         <h1>{isSuccess ? "付款與預約資料已送出" : isPending ? "付款結果確認中" : "付款未完成"}</h1>
         <p className="acpayResultLead">
           {isSuccess
-            ? "我們已收到您的線上付款與體驗課程預約，BigE 團隊將協助確認實際體驗時段。"
+            ? "歡迎報名 BigE 的體驗課程，我們已收到您的預約資料，團隊將會盡快與您聯繫，協助確認實際體驗時間。"
             : "目前付款尚未完成。如有疑問，歡迎透過官方 LINE 與 BigE 團隊聯繫。"}
         </p>
 
@@ -190,8 +190,8 @@ export default async function AcpayResultPage({ searchParams }: AcpayResultPageP
             </div>
 
             <div className="trialBookingSuccessNotice">
-              <strong>提醒您：</strong>
-              <p>若臨時未到且未事先告知，可能會影響後續預約安排。</p>
+              <strong>提醒您</strong>
+              <p>若臨時未到且未事先告知，可能會影響後續安排。</p>
             </div>
 
             <div className="trialBookingSuccessCopy">

@@ -560,26 +560,19 @@ export default function TrialBookingPage() {
               </dl>
 
               <div className="trialBookingSuccessCopy">
-                <p>您好，已成功收到您的體驗課程預約！</p>
-                <p>付款方式為「{successPaymentMethodLabel}」。</p>
-                <p>
-                  為了確保課程品質，教練會為您預留約 1.5～2 小時的完整體驗時段。
-                  若您臨時有事需要調整時間，請務必於 24 小時前告知我們取消或改期。
-                </p>
+                <p>歡迎報名 BigE 的體驗課程，我們已收到您的預約資料，團隊將會盡快與您聯繫，協助確認實際體驗時間。</p>
+                <p>體驗課程約 1.5～2 小時，實際時間會依課程內容與現場狀況調整。</p>
+                <p>如需取消或改期，請至少於 24 小時前聯繫 BigE 團隊。</p>
               </div>
 
               <div className="trialBookingSuccessNotice">
-                <strong>🔔 提醒您：</strong>
-                <p>
-                  若預約後未提前通知而未到場，我們將視為無故取消，並可能會影響您後續的預約資格（包含列入黑名單）。
-                </p>
+                <strong>提醒您</strong>
+                <p>若臨時未到且未事先告知，可能會影響後續安排。</p>
               </div>
 
               <div className="trialBookingSuccessCopy">
-                <p>✨ 非常期待與您見面，一起開始更健康的生活步調！</p>
-                <p>
-                  若有任何問題，都歡迎透過官方 LINE 與我們聯繫，我們將會盡快請專人協助確認可預約時段。
-                </p>
+                <p>期待與您在 BigE 見面，協助您完成這次體驗課程。</p>
+                <p>若有任何問題，歡迎透過官方 LINE 與我們聯繫。</p>
               </div>
 
               <a
