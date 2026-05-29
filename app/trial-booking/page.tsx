@@ -119,7 +119,6 @@ const initialFormData: TrialBookingFormData = {
 const BIGE_HOME_URL = "/";
 const BIGE_COURSE_URL = "/training/pilates";
 const BIGE_LINE_URL = "https://lin.ee/0GWm0oZ";
-const PAYMENT_PREVIEW_TOKEN = "bige-acpay-preview";
 const DATE_INPUT_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const BIRTHDAY_START_YEAR = 1920;
 
@@ -198,7 +197,6 @@ export default function TrialBookingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [acpayLoading, setAcpayLoading] = useState(false);
   const [acpayError, setAcpayError] = useState("");
-  const [isPaymentPreviewMode, setIsPaymentPreviewMode] = useState(false);
   const [submittedBooking, setSubmittedBooking] = useState<TrialBookingSuccess | null>(null);
   const [isBirthdayPickerOpen, setIsBirthdayPickerOpen] = useState(false);
   const [isBirthdayYearPanelOpen, setIsBirthdayYearPanelOpen] = useState(false);
@@ -247,21 +245,6 @@ export default function TrialBookingPage() {
   );
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setIsPaymentPreviewMode(
-      params.get("paymentPreview") === "1" && params.get("token") === PAYMENT_PREVIEW_TOKEN,
-    );
-  }, []);
-
-  useEffect(() => {
-    if (isPaymentPreviewMode) return;
-    setFormData((current) =>
-      current.paymentMethod === "online_payment" ? { ...current, paymentMethod: "cash_on_site" } : current,
-    );
-    setAcpayError("");
-  }, [isPaymentPreviewMode]);
-
-  useEffect(() => {
     if (!isBirthdayPickerOpen) return;
 
     function handlePointerDown(event: PointerEvent) {
@@ -275,11 +258,6 @@ export default function TrialBookingPage() {
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [isBirthdayPickerOpen]);
-
-  const visiblePaymentMethodOptions = useMemo(
-    () => paymentMethodOptions.filter((option) => isPaymentPreviewMode || option.value !== "online_payment"),
-    [isPaymentPreviewMode],
-  );
 
   const successPaymentMethodLabel = submittedBooking
     ? getPaymentMethodLabel(submittedBooking.paymentMethod)
@@ -861,7 +839,7 @@ export default function TrialBookingPage() {
                     <RequiredBadge />
                   </legend>
                   <div className="trialBookingRadioGroup">
-                    {visiblePaymentMethodOptions.map((option) => (
+                    {paymentMethodOptions.map((option) => (
                       <label
                         key={option.value}
                         className={`trialBookingRadioCard${formData.paymentMethod === option.value ? " is-selected" : ""}`}
@@ -885,7 +863,7 @@ export default function TrialBookingPage() {
 
               {submitError ? <div className="trialBookingError">{submitError}</div> : null}
 
-              {isPaymentPreviewMode && formData.paymentMethod === "online_payment" ? (
+              {formData.paymentMethod === "online_payment" ? (
                 <div className="trialBookingAcpayBox">
                   <button
                     className="trialBookingAcpayButton"
