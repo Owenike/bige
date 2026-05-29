@@ -89,14 +89,14 @@ function buildSummaryRows(booking: TrialBookingResultRow | null, isSuccess: bool
   const rows: SummaryRow[] = [];
 
   if (booking) {
+    addRow(rows, "姓名", booking.name || "");
+    addRow(rows, "電話", booking.phone || "");
+    addRow(rows, "生日", booking.birthday || "");
     addRow(rows, "體驗項目", serviceLabel(booking.service));
     addRow(rows, "方便時段", preferredTimeLabel(booking.preferred_time));
     addRow(rows, "付款方式", paymentMethodLabel(booking.payment_method));
     addRow(rows, "付款金額", formatCurrency(booking.amount, booking.currency));
     addRow(rows, "付款狀態", paymentStatusLabel(booking.payment_status, isSuccess, isPending));
-    addRow(rows, "姓名", booking.name || "");
-    addRow(rows, "電話", booking.phone || "");
-    addRow(rows, "生日", booking.birthday || "");
     addRow(rows, "備註", booking.note || "");
     return rows;
   }
@@ -165,11 +165,11 @@ export default async function AcpayResultPage({ searchParams }: AcpayResultPageP
   return (
     <main className="acpayResultPage">
       <section className="acpayResultCard">
-        <p className="acpayResultEyebrow">ACPAY RESULT</p>
-        <h1>{isSuccess ? "付款已完成" : isPending ? "付款結果確認中" : "付款未完成"}</h1>
+        <p className="acpayResultEyebrow">{isSuccess ? "預約成功" : "付款結果"}</p>
+        <h1>{isSuccess ? "付款與預約資料已送出" : isPending ? "付款結果確認中" : "付款未完成"}</h1>
         <p className="acpayResultLead">
           {isSuccess
-            ? "我們已收到您的線上付款，BigE 團隊將協助確認實際體驗時段。"
+            ? "我們已收到您的線上付款與體驗課程預約，BigE 團隊將協助確認實際體驗時段。"
             : "目前付款尚未完成。如有疑問，歡迎透過官方 LINE 與 BigE 團隊聯繫。"}
         </p>
 
@@ -182,13 +182,32 @@ export default async function AcpayResultPage({ searchParams }: AcpayResultPageP
           ))}
         </dl>
 
+        {isSuccess ? (
+          <>
+            <div className="trialBookingSuccessCopy">
+              <p>體驗課程約 1.5～2 小時，實際時間會依課程內容與現場狀況調整。</p>
+              <p>如需取消或改期，請至少於 24 小時前聯繫 BigE 團隊。</p>
+            </div>
+
+            <div className="trialBookingSuccessNotice">
+              <strong>提醒您：</strong>
+              <p>若臨時未到且未事先告知，可能會影響後續預約安排。</p>
+            </div>
+
+            <div className="trialBookingSuccessCopy">
+              <p>期待與您在 BigE 見面，協助您完成這次體驗課程。</p>
+              <p>若有任何問題，歡迎透過官方 LINE 與我們聯繫。</p>
+            </div>
+          </>
+        ) : null}
+
         <div className="acpayResultActions">
-          <Link className="acpayResultBtn acpayResultBtnPrimary" href="/">
-            回到首頁
-          </Link>
           <a className="acpayResultBtn acpayResultBtnSecondary" href={LINE_URL} target="_blank" rel="noopener noreferrer">
             聯繫 LINE
           </a>
+          <Link className="acpayResultBtn acpayResultBtnPrimary" href="/">
+            回到首頁
+          </Link>
         </div>
       </section>
     </main>
