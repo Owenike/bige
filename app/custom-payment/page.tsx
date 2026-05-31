@@ -1,0 +1,293 @@
+"use client";
+
+import Link from "next/link";
+import type { FormEvent } from "react";
+import { useMemo, useState } from "react";
+
+type PaymentPurpose = "course_fee" | "price_difference" | "event_fee" | "other";
+
+type CustomPaymentFormData = {
+  amount: string;
+  payerName: string;
+  phone: string;
+  purpose: PaymentPurpose | "";
+  note: string;
+};
+
+type CustomPaymentErrors = Partial<Record<keyof CustomPaymentFormData, string>>;
+
+const purposeOptions: Array<{ value: PaymentPurpose; label: string; description: string }> = [
+  {
+    value: "course_fee",
+    label: "課程費用",
+    description: "用於單堂課程、方案尾款或已確認的課程款項。",
+  },
+  {
+    value: "price_difference",
+    label: "補差額",
+    description: "用於方案調整、服務升級或其他差額補款。",
+  },
+  {
+    value: "event_fee",
+    label: "活動費用",
+    description: "用於講座、活動、工作坊或限定體驗費用。",
+  },
+  {
+    value: "other",
+    label: "其他",
+    description: "若不屬於上述項目，請於備註補充付款內容。",
+  },
+];
+
+const initialFormData: CustomPaymentFormData = {
+  amount: "",
+  payerName: "",
+  phone: "",
+  purpose: "",
+  note: "",
+};
+
+function formatCurrency(amount: string) {
+  if (!amount) return "";
+  return `NT$${Number(amount).toLocaleString("zh-TW")}`;
+}
+
+function getPurposeLabel(value: PaymentPurpose | "") {
+  return purposeOptions.find((option) => option.value === value)?.label ?? "";
+}
+
+function validateAmount(value: string) {
+  if (!value.trim()) return "請輸入付款金額。";
+  if (value !== value.trim()) return "金額不可包含空白。";
+  if (!/^\d+$/.test(value)) return "金額必須為不含逗號、空白、小數或符號的正整數。";
+  if (Number(value) <= 0) return "金額必須大於 0。";
+  return "";
+}
+
+function validateForm(data: CustomPaymentFormData) {
+  const errors: CustomPaymentErrors = {};
+  const amountError = validateAmount(data.amount);
+
+  if (amountError) errors.amount = amountError;
+  if (!data.payerName.trim()) errors.payerName = "請輸入姓名。";
+  if (!data.phone.trim()) errors.phone = "請輸入電話。";
+  if (!data.purpose) errors.purpose = "請選擇付款用途。";
+
+  return errors;
+}
+
+export default function CustomPaymentPage() {
+  const [formData, setFormData] = useState<CustomPaymentFormData>(initialFormData);
+  const [errors, setErrors] = useState<CustomPaymentErrors>({});
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  const formattedAmount = useMemo(() => formatCurrency(formData.amount), [formData.amount]);
+
+  function updateField<K extends keyof CustomPaymentFormData>(field: K, value: CustomPaymentFormData[K]) {
+    setFormData((current) => ({ ...current, [field]: value }));
+    setErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+    setNotice("");
+  }
+
+  function handleConfirm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors = validateForm(formData);
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      setIsConfirming(false);
+      return;
+    }
+
+    setErrors({});
+    setIsConfirming(true);
+  }
+
+  function handlePlaceholderPayment() {
+    setNotice("自訂金額付款功能準備中，尚未正式啟用。");
+  }
+
+  return (
+    <main className="customPaymentPage">
+      <header className="customPaymentHeader">
+        <Link className="customPaymentBrand" href="/" aria-label="回到 BigE 首頁">
+          BIGE
+        </Link>
+        <Link className="customPaymentHeaderLink" href="/trial-booking">
+          首次體驗預約
+        </Link>
+      </header>
+
+      <section className="customPaymentShell">
+        <div className="customPaymentIntro">
+          <p className="customPaymentEyebrow">BIGE PAYMENT</p>
+          <h1>自訂金額付款</h1>
+          <p>
+            請輸入付款資訊並再次確認金額。確認無誤後，未來將導向 ACPay 安全付款頁完成付款。
+          </p>
+        </div>
+
+        <div className="customPaymentCard">
+          {isConfirming ? (
+            <section className="customPaymentConfirm" aria-live="polite">
+              <p className="customPaymentStepLabel">確認付款資訊</p>
+              <h2>{formattedAmount}</h2>
+              <p className="customPaymentConfirmLead">
+                請確認以下資訊正確。本輪尚未啟用正式付款，因此不會建立付款單。
+              </p>
+
+              <dl className="customPaymentSummary">
+                <div>
+                  <dt>付款金額</dt>
+                  <dd>{formattedAmount}</dd>
+                </div>
+                <div>
+                  <dt>姓名</dt>
+                  <dd>{formData.payerName.trim()}</dd>
+                </div>
+                <div>
+                  <dt>電話</dt>
+                  <dd>{formData.phone.trim()}</dd>
+                </div>
+                <div>
+                  <dt>付款用途</dt>
+                  <dd>{getPurposeLabel(formData.purpose)}</dd>
+                </div>
+                {formData.note.trim() ? (
+                  <div>
+                    <dt>備註</dt>
+                    <dd>{formData.note.trim()}</dd>
+                  </div>
+                ) : null}
+              </dl>
+
+              {notice ? <p className="customPaymentNotice">{notice}</p> : null}
+
+              <div className="customPaymentActions">
+                <button
+                  className="customPaymentButton customPaymentButtonSecondary"
+                  type="button"
+                  onClick={() => {
+                    setIsConfirming(false);
+                    setNotice("");
+                  }}
+                >
+                  返回修改
+                </button>
+                <button
+                  className="customPaymentButton customPaymentButtonGold"
+                  type="button"
+                  onClick={handlePlaceholderPayment}
+                >
+                  前往 ACPay 安全付款
+                </button>
+              </div>
+            </section>
+          ) : (
+            <form className="customPaymentForm" onSubmit={handleConfirm} noValidate>
+              <section className="customPaymentField customPaymentAmountField">
+                <label htmlFor="custom-payment-amount">付款金額</label>
+                <div className="customPaymentAmountInputWrap">
+                  <span>NT$</span>
+                  <input
+                    id="custom-payment-amount"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={formData.amount}
+                    onChange={(event) => updateField("amount", event.target.value)}
+                    placeholder="請輸入正整數金額"
+                    aria-describedby={errors.amount ? "custom-payment-amount-error" : undefined}
+                  />
+                </div>
+                {formattedAmount && !errors.amount ? (
+                  <p className="customPaymentHint">付款金額：{formattedAmount}</p>
+                ) : null}
+                {errors.amount ? (
+                  <p className="customPaymentError" id="custom-payment-amount-error">
+                    {errors.amount}
+                  </p>
+                ) : null}
+              </section>
+
+              <div className="customPaymentGrid">
+                <section className="customPaymentField">
+                  <label htmlFor="custom-payment-name">姓名</label>
+                  <input
+                    id="custom-payment-name"
+                    value={formData.payerName}
+                    onChange={(event) => updateField("payerName", event.target.value)}
+                    placeholder="請輸入付款人姓名"
+                    autoComplete="name"
+                    maxLength={50}
+                  />
+                  {errors.payerName ? <p className="customPaymentError">{errors.payerName}</p> : null}
+                </section>
+
+                <section className="customPaymentField">
+                  <label htmlFor="custom-payment-phone">電話</label>
+                  <input
+                    id="custom-payment-phone"
+                    value={formData.phone}
+                    onChange={(event) => updateField("phone", event.target.value)}
+                    placeholder="請輸入聯絡電話"
+                    autoComplete="tel"
+                    inputMode="tel"
+                    maxLength={30}
+                  />
+                  {errors.phone ? <p className="customPaymentError">{errors.phone}</p> : null}
+                </section>
+              </div>
+
+              <fieldset className="customPaymentPurposeGroup">
+                <legend>付款用途</legend>
+                <div>
+                  {purposeOptions.map((option) => (
+                    <label
+                      key={option.value}
+                      className={`customPaymentPurposeCard${
+                        formData.purpose === option.value ? " is-selected" : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="purpose"
+                        value={option.value}
+                        checked={formData.purpose === option.value}
+                        onChange={(event) => updateField("purpose", event.target.value as PaymentPurpose)}
+                      />
+                      <span>{option.label}</span>
+                      <small>{option.description}</small>
+                    </label>
+                  ))}
+                </div>
+                {errors.purpose ? <p className="customPaymentError">{errors.purpose}</p> : null}
+              </fieldset>
+
+              <section className="customPaymentField">
+                <label htmlFor="custom-payment-note">備註</label>
+                <textarea
+                  id="custom-payment-note"
+                  value={formData.note}
+                  onChange={(event) => updateField("note", event.target.value)}
+                  placeholder="可補充課程名稱、付款原因或與 BigE 團隊確認過的事項"
+                  rows={5}
+                  maxLength={500}
+                />
+              </section>
+
+              <button className="customPaymentButton customPaymentButtonPrimary" type="submit">
+                確認付款資訊
+              </button>
+            </form>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}

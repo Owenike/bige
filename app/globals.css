@@ -8273,6 +8273,290 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   color: rgba(255, 255, 255, .86);
 }
 
+.customPaymentPage{
+  min-height: 100svh;
+  padding: 22px 18px 80px;
+  background:
+    radial-gradient(circle at top left, rgba(214, 184, 116, .18), transparent 34%),
+    linear-gradient(145deg, #050505 0%, #101010 48%, #050505 100%);
+  color: #fff;
+}
+.customPaymentHeader{
+  width: min(1080px, 100%);
+  margin: 0 auto clamp(42px, 7vw, 78px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.customPaymentBrand{
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+.customPaymentHeaderLink{
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 999px;
+  padding: 0 16px;
+  color: rgba(255, 255, 255, .72);
+  font-size: 13px;
+  transition: transform .2s ease, border-color .2s ease, color .2s ease;
+}
+.customPaymentHeaderLink:hover{
+  transform: translateY(-1px);
+  border-color: rgba(214, 184, 116, .54);
+  color: #ffe7a7;
+}
+.customPaymentShell{
+  width: min(100%, 980px);
+  margin: 0 auto;
+  display: grid;
+  gap: 26px;
+}
+.customPaymentIntro{
+  display: grid;
+  gap: 12px;
+}
+.customPaymentEyebrow,
+.customPaymentStepLabel{
+  width: fit-content;
+  margin: 0;
+  border: 1px solid rgba(214, 184, 116, .28);
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: #d6b874;
+  background: rgba(214, 184, 116, .08);
+  font-size: 12px;
+  font-weight: 800;
+}
+.customPaymentIntro h1{
+  margin: 0;
+  font-size: clamp(42px, 7vw, 76px);
+  line-height: .96;
+}
+.customPaymentIntro p{
+  max-width: 640px;
+  margin: 0;
+  color: rgba(255, 255, 255, .68);
+  line-height: 1.75;
+}
+.customPaymentCard{
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 32px;
+  padding: clamp(22px, 4vw, 42px);
+  background: rgba(255, 255, 255, .055);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .28);
+}
+.customPaymentForm,
+.customPaymentConfirm{
+  display: grid;
+  gap: 22px;
+}
+.customPaymentGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.customPaymentField,
+.customPaymentPurposeGroup{
+  display: grid;
+  gap: 10px;
+}
+.customPaymentField label,
+.customPaymentPurposeGroup legend{
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+.customPaymentField input,
+.customPaymentField textarea{
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 18px;
+  padding: 15px 16px;
+  background: rgba(0, 0, 0, .22);
+  color: #fff;
+  font: inherit;
+  outline: none;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.customPaymentField textarea{
+  resize: vertical;
+}
+.customPaymentField input:focus,
+.customPaymentField textarea:focus{
+  border-color: rgba(214, 184, 116, .58);
+  box-shadow: 0 0 0 4px rgba(214, 184, 116, .12);
+}
+.customPaymentField input::placeholder,
+.customPaymentField textarea::placeholder{
+  color: rgba(255, 255, 255, .36);
+}
+.customPaymentAmountField{
+  border: 1px solid rgba(214, 184, 116, .2);
+  border-radius: 24px;
+  padding: 18px;
+  background: rgba(214, 184, 116, .06);
+}
+.customPaymentAmountInputWrap{
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 20px;
+  padding: 0 16px;
+  background: rgba(0, 0, 0, .22);
+}
+.customPaymentAmountInputWrap span{
+  color: #ffe7a7;
+  font-weight: 900;
+}
+.customPaymentAmountInputWrap input{
+  border: 0;
+  border-radius: 0;
+  padding: 17px 0;
+  background: transparent;
+  font-size: clamp(28px, 6vw, 46px);
+  font-weight: 900;
+}
+.customPaymentAmountInputWrap input:focus{
+  box-shadow: none;
+}
+.customPaymentHint{
+  margin: 0;
+  color: rgba(255, 231, 167, .82);
+  font-size: 14px;
+}
+.customPaymentError{
+  margin: 0;
+  color: #ffb4b4;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.customPaymentPurposeGroup{
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.customPaymentPurposeGroup > div{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.customPaymentPurposeCard{
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 20px;
+  padding: 16px;
+  background: rgba(255, 255, 255, .045);
+  cursor: pointer;
+  transition: transform .2s ease, border-color .2s ease, background .2s ease;
+}
+.customPaymentPurposeCard:hover,
+.customPaymentPurposeCard.is-selected{
+  transform: translateY(-1px);
+  border-color: rgba(255, 231, 167, .72);
+  background: rgba(214, 184, 116, .11);
+}
+.customPaymentPurposeCard input{
+  grid-row: 1 / span 2;
+  margin-top: 3px;
+  accent-color: #d6b874;
+}
+.customPaymentPurposeCard span{
+  color: #fff;
+  font-weight: 900;
+}
+.customPaymentPurposeCard small{
+  color: rgba(255, 255, 255, .58);
+  line-height: 1.6;
+}
+.customPaymentButton{
+  min-height: 52px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  padding: 0 22px;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform .2s ease, filter .2s ease, border-color .2s ease;
+}
+.customPaymentButton:hover{
+  transform: translateY(-1px);
+}
+.customPaymentButtonPrimary{
+  background: #fff;
+  color: #050505;
+}
+.customPaymentButtonSecondary{
+  background: transparent;
+  color: rgba(255, 255, 255, .84);
+}
+.customPaymentButtonGold{
+  border-color: rgba(255, 232, 171, .76);
+  color: #fffaf0;
+  background: linear-gradient(135deg, #8b6420 0%, #d6b874 54%, #9a6f27 100%);
+  box-shadow: 0 16px 42px rgba(214, 184, 116, .2);
+}
+.customPaymentButtonGold:hover{
+  filter: brightness(1.06);
+}
+.customPaymentConfirm h2{
+  margin: 0;
+  color: #ffe7a7;
+  font-size: clamp(42px, 8vw, 76px);
+  line-height: .95;
+}
+.customPaymentConfirmLead{
+  margin: 0;
+  color: rgba(255, 255, 255, .68);
+  line-height: 1.75;
+}
+.customPaymentSummary{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.customPaymentSummary div{
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(0, 0, 0, .16);
+}
+.customPaymentSummary dt{
+  color: rgba(255, 255, 255, .5);
+  font-size: 12px;
+}
+.customPaymentSummary dd{
+  margin: 8px 0 0;
+  color: #fff;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.customPaymentNotice{
+  margin: 0;
+  border: 1px solid rgba(214, 184, 116, .26);
+  border-radius: 18px;
+  padding: 14px 16px;
+  color: #ffe7a7;
+  background: rgba(214, 184, 116, .09);
+  line-height: 1.7;
+}
+.customPaymentActions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .acpayTestPage{
   min-height: 100svh;
   padding: clamp(28px, 5vw, 72px) 18px;
@@ -8537,6 +8821,30 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
   .acpayResultSummary{
     grid-template-columns: 1fr;
+  }
+  .customPaymentPage{
+    padding: 18px 14px 58px;
+  }
+  .customPaymentHeader{
+    margin-bottom: 38px;
+  }
+  .customPaymentHeaderLink{
+    padding: 0 12px;
+  }
+  .customPaymentCard{
+    border-radius: 26px;
+    padding: 20px 16px;
+  }
+  .customPaymentGrid,
+  .customPaymentPurposeGroup > div,
+  .customPaymentSummary{
+    grid-template-columns: 1fr;
+  }
+  .customPaymentAmountInputWrap{
+    padding: 0 13px;
+  }
+  .customPaymentButton{
+    width: 100%;
   }
   .acpayTestGrid{
     grid-template-columns: 1fr;
