@@ -22,6 +22,12 @@ type CreatePaymentSuccess = {
   paymentStatus: "pending_payment";
 };
 
+type CreateAcpayPaymentSuccess = {
+  codeUrl: string;
+  outTradeNo: string;
+  customPaymentId: string;
+};
+
 const purposeOptions: Array<{ value: PaymentPurpose; label: string; description: string }> = [
   {
     value: "course_fee",
@@ -89,6 +95,7 @@ export default function CustomPaymentPage() {
   const [notice, setNotice] = useState("");
   const [createdPayment, setCreatedPayment] = useState<CreatePaymentSuccess | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingAcpay, setIsCreatingAcpay] = useState(false);
 
   const formattedAmount = useMemo(() => formatCurrency(formData.amount), [formData.amount]);
 
@@ -117,10 +124,9 @@ export default function CustomPaymentPage() {
     setIsConfirming(true);
   }
 
-  async function handleCreatePaymentRecord() {
-    if (createdPayment || isCreating) return;
+  async function createPaymentRecord() {
+    if (createdPayment) return createdPayment;
 
-    setNotice("");
     setIsCreating(true);
 
     try {
@@ -149,11 +155,49 @@ export default function CustomPaymentPage() {
         amount: payload.amount,
         paymentStatus: "pending_payment",
       });
-      setNotice("自訂付款資料已建立。付款功能下一步將導向 ACPay，目前尚未正式啟用。");
+      return {
+        id: payload.id,
+        amount: payload.amount,
+        paymentStatus: "pending_payment" as const,
+      };
     } catch {
       setNotice("目前無法建立付款資料，請稍後再試。");
+      return null;
     } finally {
       setIsCreating(false);
+    }
+  }
+
+  async function handleCreateAcpayPayment() {
+    if (isCreating || isCreatingAcpay) return;
+
+    setNotice("");
+    const payment = await createPaymentRecord();
+    if (!payment) return;
+
+    setIsCreatingAcpay(true);
+
+    try {
+      const response = await fetch("/api/acpay/create-custom-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customPaymentId: payment.id }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | (Partial<CreateAcpayPaymentSuccess> & { ok?: boolean; error?: string })
+        | null;
+
+      if (!response.ok || !payload?.ok || !payload.codeUrl) {
+        setNotice(payload?.error || "ACPay 付款建立失敗，請稍後再試。");
+        return;
+      }
+
+      setNotice("即將前往 ACPay 安全付款頁，請確認金額無誤。");
+      window.location.assign(payload.codeUrl);
+    } catch {
+      setNotice("目前無法建立 ACPay 付款，請稍後再試。");
+    } finally {
+      setIsCreatingAcpay(false);
     }
   }
 
@@ -184,7 +228,7 @@ export default function CustomPaymentPage() {
               <h2>{formattedAmount}</h2>
               <p className="customPaymentConfirmLead">
                 {createdPayment
-                  ? "自訂付款資料已建立，正式付款導向會在下一階段啟用。"
+                  ? "自訂付款資料已建立，接著會進入 ACPay 安全付款頁。"
                   : "請確認以下資訊正確，送出後會先建立一筆待付款資料。"}
               </p>
 
@@ -229,6 +273,7 @@ export default function CustomPaymentPage() {
                     setIsConfirming(false);
                     setNotice("");
                     setCreatedPayment(null);
+                    setIsCreatingAcpay(false);
                   }}
                 >
                   返回修改
@@ -236,10 +281,10 @@ export default function CustomPaymentPage() {
                 <button
                   className="customPaymentButton customPaymentButtonGold"
                   type="button"
-                  onClick={handleCreatePaymentRecord}
-                  disabled={isCreating || Boolean(createdPayment)}
+                  onClick={handleCreateAcpayPayment}
+                  disabled={isCreating || isCreatingAcpay}
                 >
-                  {isCreating ? "建立付款資料中..." : "前往 ACPay 安全付款"}
+                  {isCreating || isCreatingAcpay ? "建立付款中..." : "前往 ACPay 安全付款"}
                 </button>
               </div>
             </section>
