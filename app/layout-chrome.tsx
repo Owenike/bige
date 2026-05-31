@@ -17,6 +17,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isPublicBookingRoute = pathname?.startsWith("/booking");
   const isTrialBookingRoute = pathname?.startsWith("/trial-booking");
   const isAcpayResultRoute = pathname?.startsWith("/payment/acpay-result");
+  const isCustomPaymentRoute = pathname?.startsWith("/custom-payment");
   const isTrainingRoute = pathname?.startsWith("/training");
   const isFaqRoute = pathname?.startsWith("/faq");
   const isHomeRoute = pathname === "/";
@@ -29,6 +30,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
     !isPublicBookingRoute &&
     !isTrialBookingRoute &&
     !isAcpayResultRoute &&
+    !isCustomPaymentRoute &&
     !isTrainingRoute;
   const shellClassName = [
     "shell",
@@ -77,7 +79,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
 
       {!isEmbedded ? <FloatingActionButtons /> : null}
 
-      {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute && !isAcpayResultRoute ? (
+      {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute && !isAcpayResultRoute && !isCustomPaymentRoute ? (
         <footer className="footer">
           <div className="footerInner">
             <div>© {new Date().getFullYear()} BigE Fitness. All rights reserved.</div>

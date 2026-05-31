@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 
@@ -55,7 +54,7 @@ const initialFormData: CustomPaymentFormData = {
   amount: "",
   payerName: "",
   phone: "",
-  purpose: "",
+  purpose: "course_fee",
   note: "",
 };
 
@@ -203,15 +202,6 @@ export default function CustomPaymentPage() {
 
   return (
     <main className="customPaymentPage">
-      <header className="customPaymentHeader">
-        <Link className="customPaymentBrand" href="/" aria-label="回到 BigE 首頁">
-          BIGE
-        </Link>
-        <Link className="customPaymentHeaderLink" href="/trial-booking">
-          首次體驗預約
-        </Link>
-      </header>
-
       <section className="customPaymentShell">
         <div className="customPaymentIntro">
           <p className="customPaymentEyebrow">BIGE PAYMENT</p>
@@ -342,31 +332,6 @@ export default function CustomPaymentPage() {
                   {errors.phone ? <p className="customPaymentError">{errors.phone}</p> : null}
                 </section>
               </div>
-
-              <fieldset className="customPaymentPurposeGroup">
-                <legend>付款用途</legend>
-                <div>
-                  {purposeOptions.map((option) => (
-                    <label
-                      key={option.value}
-                      className={`customPaymentPurposeCard${
-                        formData.purpose === option.value ? " is-selected" : ""
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="purpose"
-                        value={option.value}
-                        checked={formData.purpose === option.value}
-                        onChange={(event) => updateField("purpose", event.target.value as PaymentPurpose)}
-                      />
-                      <span>{option.label}</span>
-                      <small>{option.description}</small>
-                    </label>
-                  ))}
-                </div>
-                {errors.purpose ? <p className="customPaymentError">{errors.purpose}</p> : null}
-              </fieldset>
 
               <section className="customPaymentField">
                 <label htmlFor="custom-payment-note">備註</label>
