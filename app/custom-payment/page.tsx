@@ -63,10 +63,6 @@ function formatCurrency(amount: string) {
   return `NT$${Number(amount).toLocaleString("zh-TW")}`;
 }
 
-function getPurposeLabel(value: PaymentPurpose | "") {
-  return purposeOptions.find((option) => option.value === value)?.label ?? "";
-}
-
 function validateAmount(value: string) {
   if (!value.trim()) return "請輸入付款金額。";
   if (value !== value.trim()) return "金額不可包含空白。";
@@ -234,10 +230,6 @@ export default function CustomPaymentPage() {
                 <div>
                   <dt>電話</dt>
                   <dd>{formData.phone.trim()}</dd>
-                </div>
-                <div>
-                  <dt>付款用途</dt>
-                  <dd>{getPurposeLabel(formData.purpose)}</dd>
                 </div>
                 {formData.note.trim() ? (
                   <div>
