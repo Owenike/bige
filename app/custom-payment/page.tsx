@@ -16,6 +16,12 @@ type CustomPaymentFormData = {
 
 type CustomPaymentErrors = Partial<Record<keyof CustomPaymentFormData, string>>;
 
+type CreatePaymentSuccess = {
+  id: string;
+  amount: number;
+  paymentStatus: "pending_payment";
+};
+
 const purposeOptions: Array<{ value: PaymentPurpose; label: string; description: string }> = [
   {
     value: "course_fee",
@@ -81,6 +87,8 @@ export default function CustomPaymentPage() {
   const [errors, setErrors] = useState<CustomPaymentErrors>({});
   const [isConfirming, setIsConfirming] = useState(false);
   const [notice, setNotice] = useState("");
+  const [createdPayment, setCreatedPayment] = useState<CreatePaymentSuccess | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const formattedAmount = useMemo(() => formatCurrency(formData.amount), [formData.amount]);
 
@@ -109,8 +117,44 @@ export default function CustomPaymentPage() {
     setIsConfirming(true);
   }
 
-  function handlePlaceholderPayment() {
-    setNotice("自訂金額付款功能準備中，尚未正式啟用。");
+  async function handleCreatePaymentRecord() {
+    if (createdPayment || isCreating) return;
+
+    setNotice("");
+    setIsCreating(true);
+
+    try {
+      const response = await fetch("/api/custom-payment/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payerName: formData.payerName,
+          phone: formData.phone,
+          purpose: formData.purpose,
+          note: formData.note,
+          amount: formData.amount,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | (Partial<CreatePaymentSuccess> & { ok?: boolean; error?: string })
+        | null;
+
+      if (!response.ok || !payload?.ok || !payload.id || typeof payload.amount !== "number") {
+        setNotice(payload?.error || "付款資料建立失敗，請稍後再試。");
+        return;
+      }
+
+      setCreatedPayment({
+        id: payload.id,
+        amount: payload.amount,
+        paymentStatus: "pending_payment",
+      });
+      setNotice("自訂付款資料已建立。付款功能下一步將導向 ACPay，目前尚未正式啟用。");
+    } catch {
+      setNotice("目前無法建立付款資料，請稍後再試。");
+    } finally {
+      setIsCreating(false);
+    }
   }
 
   return (
@@ -139,7 +183,9 @@ export default function CustomPaymentPage() {
               <p className="customPaymentStepLabel">確認付款資訊</p>
               <h2>{formattedAmount}</h2>
               <p className="customPaymentConfirmLead">
-                請確認以下資訊正確。本輪尚未啟用正式付款，因此不會建立付款單。
+                {createdPayment
+                  ? "自訂付款資料已建立，正式付款導向會在下一階段啟用。"
+                  : "請確認以下資訊正確，送出後會先建立一筆待付款資料。"}
               </p>
 
               <dl className="customPaymentSummary">
@@ -165,6 +211,12 @@ export default function CustomPaymentPage() {
                     <dd>{formData.note.trim()}</dd>
                   </div>
                 ) : null}
+                {createdPayment ? (
+                  <div>
+                    <dt>付款狀態</dt>
+                    <dd>待付款</dd>
+                  </div>
+                ) : null}
               </dl>
 
               {notice ? <p className="customPaymentNotice">{notice}</p> : null}
@@ -176,6 +228,7 @@ export default function CustomPaymentPage() {
                   onClick={() => {
                     setIsConfirming(false);
                     setNotice("");
+                    setCreatedPayment(null);
                   }}
                 >
                   返回修改
@@ -183,9 +236,10 @@ export default function CustomPaymentPage() {
                 <button
                   className="customPaymentButton customPaymentButtonGold"
                   type="button"
-                  onClick={handlePlaceholderPayment}
+                  onClick={handleCreatePaymentRecord}
+                  disabled={isCreating || Boolean(createdPayment)}
                 >
-                  前往 ACPay 安全付款
+                  {isCreating ? "建立付款資料中..." : "前往 ACPay 安全付款"}
                 </button>
               </div>
             </section>
