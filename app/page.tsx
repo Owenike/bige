@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { HomeHoverVideo } from "@/components/home-hover-video";
 import { getLocaleFromCookies, getT } from "../lib/i18n-server";
+import HomeIntroVideo from "./home-intro-video";
 import HomeScrollEffects from "./home-scroll-effects";
 
 const siteUrl = "https://bigefitness.com";
@@ -328,35 +329,26 @@ export default async function Home() {
   return (
     <main className="homeLuxury">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }} />
+      <HomeIntroVideo />
       <HomeScrollEffects />
       <section className="homeLuxuryHero homeLuxuryFullImageSection homeLuxuryHeroImage">
         <div className="homeLuxuryFullShade" />
         <div className="homeLuxuryOverlayContent">
-          <div className="homeLuxuryHeroLayout">
-            <div className="homeLuxuryHeroCopy">
-              <p className="homeLuxuryEyebrow">BIGE</p>
-              <h1 className="homeLuxuryHeroTitle">
-                {heroTitleLines.map((line, index) => (
-                  <span key={`${line}-${index}`}>
-                    {index > 0 ? <br /> : null}
-                    {line}
-                  </span>
-                ))}
-              </h1>
-              <p className="homeLuxuryHeroSub">{heroSubDisplayText}</p>
-              <p className="homeLuxuryHeroSeo">高雄仁武健身房｜重量訓練｜器械皮拉提斯｜運動按摩</p>
-              <div className="homeLuxuryHeroActions">
-                <a className="homeLuxuryBtn homeLuxuryBtnPrimary" href="/trial-booking">
-                  立即預約首次體驗
-                </a>
-              </div>
-            </div>
-            <div className="homeLuxuryHeroMediaPanel" aria-hidden>
-              <video className="homeLuxuryHeroVideo" autoPlay muted loop playsInline poster="/home-videos/hero-poster.jpg">
-                <source src="/home-videos/hero-mobile.mp4" media="(max-width: 767px)" type="video/mp4" />
-                <source src="/home-videos/hero-desktop.mp4" type="video/mp4" />
-              </video>
-            </div>
+          <p className="homeLuxuryEyebrow">BIGE</p>
+          <h1 className="homeLuxuryHeroTitle">
+            {heroTitleLines.map((line, index) => (
+              <span key={`${line}-${index}`}>
+                {index > 0 ? <br /> : null}
+                {line}
+              </span>
+            ))}
+          </h1>
+          <p className="homeLuxuryHeroSub">{heroSubDisplayText}</p>
+          <p className="homeLuxuryHeroSeo">高雄仁武健身房｜重量訓練｜器械皮拉提斯｜運動按摩</p>
+          <div className="homeLuxuryHeroActions">
+            <a className="homeLuxuryBtn homeLuxuryBtnPrimary" href="/trial-booking">
+              立即預約首次體驗
+            </a>
           </div>
         </div>
       </section>
