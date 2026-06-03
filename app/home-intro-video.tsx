@@ -23,6 +23,18 @@ export default function HomeIntroVideo() {
   return (
     <section className="homeIntroVideoOverlay" aria-label="BigE intro video">
       <video
+        className="homeIntroVideoBackdrop"
+        autoPlay
+        muted
+        playsInline
+        preload="metadata"
+        poster="/home-videos/hero-poster.jpg"
+        aria-hidden
+        tabIndex={-1}
+      >
+        <source src="/home-videos/hero-desktop.mp4" type="video/mp4" />
+      </video>
+      <video
         className="homeIntroVideoMedia"
         autoPlay
         muted

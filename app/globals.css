@@ -395,19 +395,35 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   color: #f6f7f9;
 }
 .homeIntroVideoMedia{
-  width: 100vw;
+  position: relative;
+  z-index: 1;
+  width: auto;
   height: 100dvh;
+  max-width: 100vw;
+  max-height: 100dvh;
+  display: block;
+  object-fit: contain;
+  object-position: center center;
+  background: transparent;
+  filter: brightness(.82) contrast(1.06) saturate(.94);
+}
+.homeIntroVideoBackdrop{
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
   display: block;
   object-fit: cover;
   object-position: center center;
-  background: #020203;
-  filter: brightness(.68) contrast(1.08) saturate(.92);
-  transform: scale(1.02);
+  filter: blur(28px) brightness(.35) contrast(1.08) saturate(.92);
+  opacity: .85;
+  transform: scale(1.08);
 }
 .homeIntroVideoShade{
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
   background:
     radial-gradient(68% 58% at 50% 45%, rgba(255,255,255,0) 0%, rgba(0,0,0,.22) 62%, rgba(0,0,0,.68) 100%),
@@ -417,7 +433,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .homeIntroVideoChrome{
   position: absolute;
   inset: max(26px, env(safe-area-inset-top)) max(28px, env(safe-area-inset-right)) auto max(28px, env(safe-area-inset-left));
-  z-index: 2;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -436,7 +452,7 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   position: absolute;
   left: max(30px, env(safe-area-inset-left));
   bottom: max(30px, env(safe-area-inset-bottom));
-  z-index: 2;
+  z-index: 3;
   display: grid;
   gap: 8px;
   max-width: 360px;
@@ -2164,6 +2180,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   }
 }
 @media (max-width: 767px){
+  .homeIntroVideoBackdrop{
+    display: none;
+  }
   .homeIntroVideoMedia{
     object-fit: cover;
     object-position: center center;
