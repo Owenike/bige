@@ -3,10 +3,21 @@
 import { useEffect, useState } from "react";
 
 export default function HomeIntroVideo() {
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
-    if (!showIntro) return;
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const syncViewport = () => setIsMobileViewport(mediaQuery.matches);
+
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!showIntro || !isMobileViewport) return;
 
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -14,9 +25,9 @@ export default function HomeIntroVideo() {
     return () => {
       document.body.style.overflow = originalOverflow;
     };
-  }, [showIntro]);
+  }, [isMobileViewport, showIntro]);
 
-  if (!showIntro) return null;
+  if (!showIntro || !isMobileViewport) return null;
 
   const closeIntro = () => setShowIntro(false);
 

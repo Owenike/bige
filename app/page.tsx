@@ -345,11 +345,6 @@ export default async function Home() {
           </h1>
           <p className="homeLuxuryHeroSub">{heroSubDisplayText}</p>
           <p className="homeLuxuryHeroSeo">高雄仁武健身房｜重量訓練｜器械皮拉提斯｜運動按摩</p>
-          <div className="homeLuxuryHeroActions">
-            <a className="homeLuxuryBtn homeLuxuryBtnPrimary" href="/trial-booking">
-              立即預約首次體驗
-            </a>
-          </div>
         </div>
       </section>
 
