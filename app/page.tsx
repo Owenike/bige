@@ -295,7 +295,7 @@ export default async function Home() {
       title: isEn ? "Book a Trial Session" : "立即預約首次體驗",
       description: isEn
         ? "Choose your preferred program and time, then let the BigE team arrange the first experience with you."
-        : "選擇想體驗的項目與方便時段，讓 BigE 團隊協助安排你的第一堂課。",
+        : "選擇想體驗的項目，讓 BigE 團隊協助安排你的第一堂課。",
       href: "/trial-booking",
       mediaClass: "homeLuxuryMediaS8B",
       cta: "Open",
