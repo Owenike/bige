@@ -35,11 +35,16 @@ export default function HomeIntroVideo() {
         <source src="/home-videos/hero-mobile.mp4" media="(max-width: 767px)" type="video/mp4" />
         <source src="/home-videos/hero-desktop.mp4" type="video/mp4" />
       </video>
+      <div className="homeIntroVideoShade" aria-hidden />
       <div className="homeIntroVideoChrome">
-        <span className="homeIntroVideoBrand">BigE</span>
+        <span className="homeIntroVideoBrand">BigE Fitness</span>
         <button className="homeIntroVideoSkip" type="button" onClick={closeIntro}>
           跳過
         </button>
+      </div>
+      <div className="homeIntroVideoStatement" aria-hidden>
+        <span>綻放優雅，雕塑不凡</span>
+        <span>Strength. Grace. Transformation.</span>
       </div>
     </section>
   );

@@ -389,7 +389,8 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   justify-content: center;
   overflow: hidden;
   background:
-    radial-gradient(72% 52% at 50% 44%, rgba(46, 48, 54, .36), rgba(0, 0, 0, 0) 72%),
+    radial-gradient(78% 60% at 54% 44%, rgba(42, 43, 47, .42), rgba(0, 0, 0, 0) 70%),
+    linear-gradient(120deg, #020203 0%, #0b0c0e 38%, #020203 100%),
     #020203;
   color: #f6f7f9;
 }
@@ -397,14 +398,26 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   width: 100vw;
   height: 100dvh;
   display: block;
-  object-fit: contain;
-  object-position: center;
+  object-fit: cover;
+  object-position: center center;
   background: #020203;
+  filter: brightness(.68) contrast(1.08) saturate(.92);
+  transform: scale(1.02);
+}
+.homeIntroVideoShade{
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(68% 58% at 50% 45%, rgba(255,255,255,0) 0%, rgba(0,0,0,.22) 62%, rgba(0,0,0,.68) 100%),
+    linear-gradient(90deg, rgba(0,0,0,.74) 0%, rgba(0,0,0,.28) 34%, rgba(0,0,0,.24) 66%, rgba(0,0,0,.70) 100%),
+    linear-gradient(180deg, rgba(0,0,0,.68) 0%, rgba(0,0,0,.08) 36%, rgba(0,0,0,.72) 100%);
 }
 .homeIntroVideoChrome{
   position: absolute;
-  inset: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) auto max(18px, env(safe-area-inset-left));
-  z-index: 1;
+  inset: max(26px, env(safe-area-inset-top)) max(28px, env(safe-area-inset-right)) auto max(28px, env(safe-area-inset-left));
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -413,31 +426,56 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .homeIntroVideoBrand{
   text-transform: uppercase;
-  letter-spacing: .18em;
-  font-size: 12px;
-  color: rgba(255,255,255,.72);
-  text-shadow: 0 1px 12px rgba(0,0,0,.55);
+  letter-spacing: .24em;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255,255,255,.86);
+  text-shadow: 0 1px 18px rgba(0,0,0,.72);
+}
+.homeIntroVideoStatement{
+  position: absolute;
+  left: max(30px, env(safe-area-inset-left));
+  bottom: max(30px, env(safe-area-inset-bottom));
+  z-index: 2;
+  display: grid;
+  gap: 8px;
+  max-width: 360px;
+  color: rgba(255,255,255,.84);
+  text-shadow: 0 1px 18px rgba(0,0,0,.74);
+  pointer-events: none;
+}
+.homeIntroVideoStatement span:first-child{
+  font-size: 22px;
+  font-weight: 650;
+}
+.homeIntroVideoStatement span:last-child{
+  text-transform: uppercase;
+  letter-spacing: .16em;
+  font-size: 11px;
+  color: rgba(255,255,255,.58);
 }
 .homeIntroVideoSkip{
-  min-width: 72px;
-  min-height: 42px;
+  min-width: 78px;
+  min-height: 40px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.34);
-  background: rgba(5,7,10,.42);
-  color: rgba(255,255,255,.92);
+  border: 1px solid rgba(255,255,255,.26);
+  background: rgba(6,8,12,.34);
+  color: rgba(255,255,255,.86);
   font: inherit;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   pointer-events: auto;
-  transition: background .18s ease, border-color .18s ease, transform .18s ease;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 12px 34px rgba(0,0,0,.24);
+  transition: background .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
 }
 .homeIntroVideoSkip:hover,
 .homeIntroVideoSkip:focus-visible{
-  background: rgba(255,255,255,.16);
-  border-color: rgba(255,255,255,.58);
+  background: rgba(255,255,255,.12);
+  border-color: rgba(255,255,255,.48);
+  color: #fff;
   transform: translateY(-1px);
   outline: none;
 }
@@ -2128,14 +2166,39 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 767px){
   .homeIntroVideoMedia{
     object-fit: cover;
+    object-position: center center;
+    filter: brightness(.74) contrast(1.06) saturate(.94);
+    transform: none;
+  }
+  .homeIntroVideoShade{
+    background:
+      radial-gradient(82% 62% at 50% 42%, rgba(255,255,255,0) 0%, rgba(0,0,0,.20) 64%, rgba(0,0,0,.62) 100%),
+      linear-gradient(180deg, rgba(0,0,0,.64) 0%, rgba(0,0,0,.06) 42%, rgba(0,0,0,.62) 100%);
   }
   .homeIntroVideoChrome{
-    inset: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) auto max(14px, env(safe-area-inset-left));
+    inset: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) auto max(18px, env(safe-area-inset-left));
+  }
+  .homeIntroVideoBrand{
+    letter-spacing: .18em;
+    font-size: 11px;
+  }
+  .homeIntroVideoStatement{
+    left: max(20px, env(safe-area-inset-left));
+    right: max(20px, env(safe-area-inset-right));
+    bottom: max(22px, env(safe-area-inset-bottom));
+    gap: 6px;
+    max-width: none;
+  }
+  .homeIntroVideoStatement span:first-child{
+    font-size: 16px;
+  }
+  .homeIntroVideoStatement span:last-child{
+    display: none;
   }
   .homeIntroVideoSkip{
-    min-width: 76px;
+    min-width: 74px;
     min-height: 44px;
-    font-size: 14px;
+    font-size: 13px;
   }
   .homeLuxuryShowcaseVideoGrid{
     display: grid;
