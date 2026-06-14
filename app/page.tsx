@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { HomeHoverVideo } from "@/components/home-hover-video";
 import { getLocaleFromCookies, getT } from "../lib/i18n-server";
-import HomeIntroVideo from "./home-intro-video";
 import HomeScrollEffects from "./home-scroll-effects";
 
 const siteUrl = "https://bigefitness.com";
@@ -329,7 +328,6 @@ export default async function Home() {
   return (
     <main className="homeLuxury">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }} />
-      <HomeIntroVideo />
       <HomeScrollEffects />
       <section className="homeLuxuryHero homeLuxuryFullImageSection homeLuxuryHeroImage">
         <div className="homeLuxuryFullShade" />
