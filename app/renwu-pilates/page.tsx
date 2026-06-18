@@ -190,13 +190,13 @@ export default function RenwuPilatesPage() {
           <h2>不適合或需要先評估的狀況</h2>
           <p className="trainingTopicSectionLead">
             如果你有以下狀況，請先告知教練。必要時，建議先諮詢專業醫療人員，再安排運動訓練。
+            我們會以安全、保守與可調整的方式評估，不急著把強度推高。
           </p>
         </div>
         <div className="trainingTopicGrid">
           {cautionItems.map((item) => (
             <article className="trainingTopicCard" key={item}>
               <h3>{item}</h3>
-              <p>我們會以安全、保守與可調整的方式評估，不急著把強度推高。</p>
             </article>
           ))}
         </div>
