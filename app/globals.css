@@ -1253,6 +1253,43 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
     linear-gradient(180deg, rgba(255,255,255,.062), rgba(255,255,255,.025)),
     rgba(255,255,255,.025);
 }
+.trainingTopicCautionCard{
+  max-width: 920px;
+  min-height: auto;
+  margin: 0 auto;
+}
+.trainingTopicCautionList{
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.trainingTopicCautionItem{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid rgba(238,202,146,.18);
+  color: rgba(255,255,255,.84);
+  line-height: 1.75;
+  padding: 14px 0;
+  text-align: left;
+}
+.trainingTopicCautionItem:first-child{
+  border-top: 0;
+  padding-top: 0;
+}
+.trainingTopicCautionItem:last-child{
+  padding-bottom: 0;
+}
+.trainingTopicCautionDot{
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgba(238,202,146,.38);
+  border-radius: 999px;
+  background: rgba(238,202,146,.22);
+}
 .trainingTopicRelatedGrid{
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

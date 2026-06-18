@@ -193,13 +193,16 @@ export default function RenwuPilatesPage() {
             我們會以安全、保守與可調整的方式評估，不急著把強度推高。
           </p>
         </div>
-        <div className="trainingTopicGrid">
-          {cautionItems.map((item) => (
-            <article className="trainingTopicCard" key={item}>
-              <h3>{item}</h3>
-            </article>
-          ))}
-        </div>
+        <article className="trainingTopicCard trainingTopicCautionCard">
+          <ul className="trainingTopicCautionList">
+            {cautionItems.map((item) => (
+              <li className="trainingTopicCautionItem" key={item}>
+                <span className="trainingTopicCautionDot" aria-hidden="true" />
+                <span>{item.replace(/。$/, "")}</span>
+              </li>
+            ))}
+          </ul>
+        </article>
       </section>
 
       <section className="trainingTopicPanel">
