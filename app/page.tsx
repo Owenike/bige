@@ -56,10 +56,11 @@ export const metadata: Metadata = {
 const homeJsonLd = {
   "@context": "https://schema.org",
   "@type": "HealthClub",
-  name: "巨挺健身館 BigE Fitness",
+  name: "巨挺健身館 BigE",
   alternateName: "BigE Fitness",
   url: siteUrl,
-  description: homeSeoDescription,
+  telephone: "0972-484686",
+  description: "巨挺健身館 BigE 位於高雄市仁武區，提供器械皮拉提斯、重量訓練、運動按摩與體態調整服務。",
   image: `${siteUrl}${homeOgImage}`,
   address: {
     "@type": "PostalAddress",
@@ -76,8 +77,35 @@ const homeJsonLd = {
       closes: "22:00",
     },
   ],
-  areaServed: "高雄仁武區",
-  serviceType: ["重量訓練", "器械皮拉提斯", "拳擊體能", "樂齡訓練", "運動按摩", "功能性調整", "INBODY 測量"],
+  areaServed: "高雄市仁武區",
+  serviceType: ["器械皮拉提斯", "重量訓練", "運動按摩"],
+  hasOfferCatalog: {
+    "@type": "OfferCatalog",
+    name: "BigE 服務項目",
+    itemListElement: [
+      {
+        "@type": "Offer",
+        itemOffered: {
+          "@type": "Service",
+          name: "器械皮拉提斯",
+        },
+      },
+      {
+        "@type": "Offer",
+        itemOffered: {
+          "@type": "Service",
+          name: "重量訓練",
+        },
+      },
+      {
+        "@type": "Offer",
+        itemOffered: {
+          "@type": "Service",
+          name: "運動按摩",
+        },
+      },
+    ],
+  },
 };
 
 type GridItem = {
