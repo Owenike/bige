@@ -46,6 +46,8 @@ type TrainingTopicPageProps = {
   intro: string;
   priceLabel: string;
   priceDescription: string;
+  secondaryCtaLabel?: string;
+  secondaryCtaHref?: string;
   flowSteps: TrainingTopicCard[];
   relatedTopics: TrainingTopicLink[];
   features: TrainingTopicCard[];
@@ -64,6 +66,8 @@ export function TrainingTopicPage({
   intro,
   priceLabel,
   priceDescription,
+  secondaryCtaLabel = "回到首頁",
+  secondaryCtaHref = "/",
   flowSteps,
   relatedTopics,
   features,
@@ -93,8 +97,8 @@ export function TrainingTopicPage({
             <Link href="/trial-booking" className="trainingTopicButton trainingTopicButtonPrimary">
               預約首次體驗
             </Link>
-            <Link href="/" className="trainingTopicButton trainingTopicButtonGhost">
-              回到首頁
+            <Link href={secondaryCtaHref} className="trainingTopicButton trainingTopicButtonGhost">
+              {secondaryCtaLabel}
             </Link>
           </div>
         </div>

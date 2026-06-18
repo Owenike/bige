@@ -21,6 +21,8 @@ export default function PilatesPage() {
       intro="器械皮拉提斯透過器械輔助與阻力控制，幫助你更精準感受核心、姿勢與身體排列。BigE 會依照你的能力安排動作，讓訓練同時兼具穩定、控制與線條感。"
       priceLabel="首次體驗 NT$880"
       priceDescription="器械皮拉提斯首次體驗 NT$880，透過器械輔助建立核心控制與身體覺察。"
+      secondaryCtaLabel="器械皮拉提斯適合我嗎？"
+      secondaryCtaHref="/renwu-pilates"
       flowSteps={[
         {
           title: "了解目標",
