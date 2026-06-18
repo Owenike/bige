@@ -21,6 +21,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isTrainingRoute = pathname?.startsWith("/training");
   const isRenwuPilatesRoute = pathname?.startsWith("/renwu-pilates");
   const isRenwuPersonalTrainingRoute = pathname?.startsWith("/renwu-personal-training");
+  const isRenwuSportsMassageRoute = pathname?.startsWith("/renwu-sports-massage");
   const isFaqRoute = pathname?.startsWith("/faq");
   const isHomeRoute = pathname === "/";
   const isWorkspaceRoute = isFrontdeskRoute || isMemberRoute || isCoachRoute;
@@ -35,6 +36,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
     !isCustomPaymentRoute &&
     !isRenwuPilatesRoute &&
     !isRenwuPersonalTrainingRoute &&
+    !isRenwuSportsMassageRoute &&
     !isTrainingRoute;
   const shellClassName = [
     "shell",

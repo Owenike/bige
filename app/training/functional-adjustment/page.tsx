@@ -21,6 +21,8 @@ export default function FunctionalAdjustmentPage() {
       intro="功能性調整會從動作模式、緊繃感與身體使用習慣開始觀察，搭配放鬆、活動度與基礎修正訓練，協助你找回更順暢的身體狀態。這不是醫療治療，而是幫助你更了解自己的身體使用方式。"
       priceLabel="首次體驗 NT$1,500"
       priceDescription="功能性調整首次體驗 NT$1,500，協助你從放鬆、活動度與動作品質找回更順暢的身體狀態。"
+      secondaryCtaLabel="運動按摩適合我嗎？"
+      secondaryCtaHref="/renwu-sports-massage"
       flowSteps={[
         {
           title: "了解狀態",
