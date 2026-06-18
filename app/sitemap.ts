@@ -7,6 +7,7 @@ const publicRoutes = [
   "/faq",
   "/trial-booking",
   "/renwu-pilates",
+  "/renwu-personal-training",
   "/training/pilates",
   "/training/weight-training",
   "/training/boxing",

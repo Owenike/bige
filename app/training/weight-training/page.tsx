@@ -21,6 +21,8 @@ export default function WeightTrainingPage() {
       intro="BigE 的重量訓練不是一開始就追求大重量，而是先建立正確動作品質。教練會依照你的身體狀況、訓練經驗與目標，安排適合的動作與強度，幫助你安全地提升肌力、體態與日常活動能力。"
       priceLabel="首次體驗 NT$880"
       priceDescription="重量訓練首次體驗 NT$880，由教練協助安排適合你的第一堂課。"
+      secondaryCtaLabel="重量訓練適合我嗎？"
+      secondaryCtaHref="/renwu-personal-training"
       flowSteps={[
         {
           title: "了解目標",
