@@ -19,6 +19,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isAcpayResultRoute = pathname?.startsWith("/payment/acpay-result");
   const isCustomPaymentRoute = pathname?.startsWith("/custom-payment");
   const isTrainingRoute = pathname?.startsWith("/training");
+  const isRenwuPilatesRoute = pathname?.startsWith("/renwu-pilates");
   const isFaqRoute = pathname?.startsWith("/faq");
   const isHomeRoute = pathname === "/";
   const isWorkspaceRoute = isFrontdeskRoute || isMemberRoute || isCoachRoute;
@@ -31,6 +32,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
     !isTrialBookingRoute &&
     !isAcpayResultRoute &&
     !isCustomPaymentRoute &&
+    !isRenwuPilatesRoute &&
     !isTrainingRoute;
   const shellClassName = [
     "shell",
