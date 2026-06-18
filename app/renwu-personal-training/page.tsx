@@ -291,7 +291,7 @@ export default function RenwuPersonalTrainingPage() {
       <section className="trainingTopicPanel">
         <div className="trainingTopicSectionHeader">
           <p className="trainingTopicSectionKicker">RENWU BIGE</p>
-          <h2>高雄仁武八德北路的重量訓練起點</h2>
+          <h2>高雄仁武區的重量訓練起點</h2>
           <p className="trainingTopicSectionLead">
             巨挺健身館 BigE 位於高雄市仁武區八德北路728號，適合正在搜尋仁武健身教練、仁武私人教練、
             仁武重量訓練或想在高雄仁武建立運動習慣的人。你可以先用首次體驗了解教練方式，
