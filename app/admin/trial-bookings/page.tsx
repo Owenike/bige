@@ -619,7 +619,13 @@ export default function TrialBookingsAdminPage() {
         return;
       }
 
-      upsertBooking(payload.booking);
+      const shouldHideScheduledBooking = payload.booking.booking_status === "scheduled" && bookingStatus !== "scheduled";
+
+      if (shouldHideScheduledBooking) {
+        setBookings((currentBookings) => currentBookings.filter((booking) => booking.id !== payload.booking!.id));
+      } else {
+        upsertBooking(payload.booking);
+      }
       setRowMessages((messages) => ({
         ...messages,
         [payload.booking!.id]: {
@@ -856,7 +862,7 @@ export default function TrialBookingsAdminPage() {
           <label className="trialAdminField">
             <span>預約狀態</span>
             <select value={bookingStatus} onChange={(event) => setBookingStatus(event.target.value)}>
-              <option value="">全部</option>
+              <option value="">待處理</option>
               {bookingStatusOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}

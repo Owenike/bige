@@ -160,7 +160,7 @@ export async function GET(request: Request) {
     } else if (bookingStatus) {
       query = query.eq("booking_status", bookingStatus);
     } else {
-      query = query.neq("booking_status", "cancelled");
+      query = query.neq("booking_status", "cancelled").neq("booking_status", "scheduled");
     }
     if (source) query = query.eq("source", source);
     if (q) {
