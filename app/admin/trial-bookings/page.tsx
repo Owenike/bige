@@ -116,6 +116,14 @@ const serviceOptions = [
   { value: "sports_massage", label: "運動按摩" },
 ];
 
+const appointmentTimeOptions = Array.from({ length: 27 }, (_, index) => {
+  const totalMinutes = 9 * 60 + index * 30;
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+});
+const appointmentTimeSet = new Set(appointmentTimeOptions);
+
 const preferredTimeLabels: Record<string, string> = {
   weekday_morning: "平日上午",
   weekday_afternoon: "平日下午",
@@ -242,7 +250,7 @@ function initialScheduleForm(): ScheduleFormData {
 function formFromBooking(booking: TrialBookingRow): ScheduleFormData {
   return {
     appointmentDate: booking.appointment_date || todayDateInputValue(),
-    appointmentTime: booking.appointment_time || "16:00",
+    appointmentTime: booking.appointment_time && appointmentTimeSet.has(booking.appointment_time) ? booking.appointment_time : "09:00",
     service: booking.service || "pilates",
     name: booking.name || "",
     phone: booking.phone || "",
@@ -1143,7 +1151,13 @@ export default function TrialBookingsAdminPage() {
               </label>
               <label className="trialAdminField">
                 <span>預約時間</span>
-                <input type="time" value={scheduleForm.appointmentTime} onChange={(event) => updateScheduleField("appointmentTime", event.target.value)} />
+                <select value={scheduleForm.appointmentTime} onChange={(event) => updateScheduleField("appointmentTime", event.target.value)}>
+                  {appointmentTimeOptions.map((time) => (
+                    <option key={time} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="trialAdminField">
                 <span>預約項目</span>

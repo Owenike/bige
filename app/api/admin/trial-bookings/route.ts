@@ -12,6 +12,14 @@ const serviceValues = ["weight_training", "boxing_fitness", "pilates", "sports_m
 const sourceValues = ["website", "official_line", "walk_in"] as const;
 const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
 const timeInputPattern = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+const appointmentTimeValues = new Set(
+  Array.from({ length: 27 }, (_, index) => {
+    const totalMinutes = 9 * 60 + index * 30;
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }),
+);
 
 const TRIAL_BOOKING_SELECT = [
   "id",
@@ -44,7 +52,7 @@ const TRIAL_BOOKING_SELECT = [
 
 const adminBookingCreateSchema = z.object({
   appointmentDate: z.string().trim().regex(dateInputPattern),
-  appointmentTime: z.string().trim().regex(timeInputPattern),
+  appointmentTime: z.string().trim().regex(timeInputPattern).refine((value) => appointmentTimeValues.has(value)),
   service: z.enum(serviceValues),
   name: z.string().trim().min(1).max(50),
   phone: z.string().trim().min(1).max(30),

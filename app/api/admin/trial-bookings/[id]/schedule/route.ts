@@ -7,11 +7,19 @@ import { createSupabaseAdminClient } from "../../../../../../lib/supabase/admin"
 const serviceValues = ["weight_training", "boxing_fitness", "pilates", "sports_massage"] as const;
 const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
 const timeInputPattern = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+const appointmentTimeValues = new Set(
+  Array.from({ length: 27 }, (_, index) => {
+    const totalMinutes = 9 * 60 + index * 30;
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }),
+);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const scheduleSchema = z.object({
   appointmentDate: z.string().trim().regex(dateInputPattern),
-  appointmentTime: z.string().trim().regex(timeInputPattern),
+  appointmentTime: z.string().trim().regex(timeInputPattern).refine((value) => appointmentTimeValues.has(value)),
   service: z.enum(serviceValues),
   name: z.string().trim().min(1).max(50),
   phone: z.string().trim().min(1).max(30),
