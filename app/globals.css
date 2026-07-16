@@ -9296,13 +9296,22 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .trialAdminTable{
   width: 100%;
-  min-width: 1240px;
+  min-width: 1040px;
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 13px;
 }
+.trialAdminColCustomer{ width: 150px; }
+.trialAdminColAppointment{ width: 170px; }
+.trialAdminColCoach{ width: 140px; }
+.trialAdminColPayment{ width: 130px; }
+.trialAdminColStatus{ width: 150px; }
+.trialAdminColLine{ width: 120px; }
+.trialAdminColNote{ width: 180px; }
+.trialAdminColAction{ width: 150px; }
 .trialAdminTable th,
 .trialAdminTable td{
-  padding: 14px 12px;
+  padding: 12px 10px;
   border-bottom: 1px solid rgba(190, 207, 231, .09);
   text-align: left;
   vertical-align: top;
@@ -9318,6 +9327,13 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .trialAdminTable td{
   color: rgba(242, 247, 255, .88);
 }
+.trialAdminTable th:last-child,
+.trialAdminTable td:last-child{
+  position: sticky;
+  right: 0;
+  background: rgba(8, 16, 28, .96);
+  box-shadow: -14px 0 24px rgba(2, 8, 17, .22);
+}
 .trialAdminNoteText{
   max-width: 480px;
   margin: 0;
@@ -9325,6 +9341,17 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   overflow-wrap: anywhere;
   font: inherit;
   color: inherit;
+}
+.trialAdminTableNote{
+  max-width: none;
+  max-height: 86px;
+  overflow: auto;
+  border: 1px solid rgba(190, 207, 231, .1);
+  border-radius: 12px;
+  background: rgba(244, 248, 255, .045);
+  color: rgba(226, 236, 250, .78);
+  padding: 9px 10px;
+  font-size: 12px;
 }
 .trialAdminPaymentDetails{
   display: grid;
@@ -9446,14 +9473,19 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .trialAdminActions{
   display: grid;
   gap: 8px;
-  min-width: 140px;
+  min-width: 0;
 }
 .trialAdminCompactStack strong{
   font-weight: 650;
   color: #f6f9ff;
+  overflow-wrap: anywhere;
+}
+.trialAdminMutedLine{
+  color: rgba(196, 213, 237, .58);
+  font-size: 12px;
 }
 .trialAdminActions{
-  min-width: 160px;
+  min-width: 0;
 }
 .trialAdminModalBackdrop{
   position: fixed;

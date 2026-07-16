@@ -886,17 +886,23 @@ export default function TrialBookingsAdminPage() {
           <>
             <div className="trialAdminTableWrap">
               <table className="trialAdminTable">
+                <colgroup>
+                  <col className="trialAdminColCustomer" />
+                  <col className="trialAdminColAppointment" />
+                  <col className="trialAdminColCoach" />
+                  <col className="trialAdminColPayment" />
+                  <col className="trialAdminColStatus" />
+                  <col className="trialAdminColLine" />
+                  <col className="trialAdminColNote" />
+                  <col className="trialAdminColAction" />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th>建立時間</th>
-                    <th>預約時間</th>
-                    <th>姓名</th>
-                    <th>電話</th>
-                    <th>體驗項目</th>
-                    <th>來源</th>
+                    <th>客戶</th>
+                    <th>預約</th>
                     <th>教練</th>
                     <th>付款</th>
-                    <th>預約狀態</th>
+                    <th>狀態</th>
                     <th>LINE</th>
                     <th>備註</th>
                     <th>操作</th>
@@ -907,18 +913,22 @@ export default function TrialBookingsAdminPage() {
                     const bookingSource = normalizeSource(booking.source);
                     return (
                       <tr key={booking.id}>
-                        <td>{formatDateTime(booking.created_at)}</td>
+                        <td>
+                          <div className="trialAdminCompactStack">
+                            <strong>{booking.name || "-"}</strong>
+                            <span>{booking.phone || "-"}</span>
+                            <span className="trialAdminMutedLine">建立：{formatDateTime(booking.created_at)}</span>
+                          </div>
+                        </td>
                         <td>
                           <div className="trialAdminCompactStack">
                             <strong>{formatDate(booking.appointment_date)}</strong>
                             <span>{booking.appointment_time || "-"}</span>
+                            <span>{labelOrFallback(serviceLabels, booking.service)}</span>
+                            <span className="trialAdminMutedLine">來源：{sourceLabels[bookingSource]}</span>
                             <span>方便時段：{labelOrFallback(preferredTimeLabels, booking.preferred_time)}</span>
                           </div>
                         </td>
-                        <td>{booking.name || "-"}</td>
-                        <td>{booking.phone || "-"}</td>
-                        <td>{labelOrFallback(serviceLabels, booking.service)}</td>
-                        <td>{sourceLabels[bookingSource]}</td>
                         <td>
                           <div className="trialAdminCompactStack">
                             <span>預約：{booking.booking_coach || "-"}</span>
@@ -931,7 +941,6 @@ export default function TrialBookingsAdminPage() {
                             <span className={`trialAdminBadge is-${booking.payment_status}`}>
                               {labelOrFallback(paymentStatusLabels, booking.payment_status)}
                             </span>
-                            {renderPaymentDetails(booking)}
                           </div>
                         </td>
                         <td>{renderStatusControl(booking)}</td>
@@ -942,7 +951,7 @@ export default function TrialBookingsAdminPage() {
                           </div>
                         </td>
                         <td>
-                          <pre className="trialAdminNoteText">{booking.note || "-"}</pre>
+                          <pre className="trialAdminNoteText trialAdminTableNote">{booking.note || "-"}</pre>
                         </td>
                         <td>{renderActions(booking)}</td>
                       </tr>
