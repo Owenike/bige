@@ -922,8 +922,14 @@ export default function TrialBookingsAdminPage() {
                         </td>
                         <td>
                           <div className="trialAdminCompactStack">
-                            <strong>{formatDate(booking.appointment_date)}</strong>
-                            <span>{booking.appointment_time || "-"}</span>
+                            {booking.appointment_date || booking.appointment_time ? (
+                              <>
+                                <strong>{formatDate(booking.appointment_date)}</strong>
+                                <span>{booking.appointment_time || "-"}</span>
+                              </>
+                            ) : (
+                              <span className="trialAdminBadge is-new">尚未安排</span>
+                            )}
                             <span>{labelOrFallback(serviceLabels, booking.service)}</span>
                             <span className="trialAdminMutedLine">來源：{sourceLabels[bookingSource]}</span>
                             <span>方便時段：{labelOrFallback(preferredTimeLabels, booking.preferred_time)}</span>
