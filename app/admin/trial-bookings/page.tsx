@@ -157,6 +157,19 @@ const bookingStatusOptions: Array<{ value: BookingStatus; label: string }> = [
   { value: "no_show", label: "未到場" },
 ];
 
+const unscheduledStatusOptions: Array<{ value: BookingStatus; label: string }> = [
+  { value: "new", label: "待聯絡" },
+  { value: "contacted", label: "已聯繫" },
+  { value: "cancelled", label: "已取消" },
+];
+
+const scheduledStatusOptions: Array<{ value: BookingStatus; label: string }> = [
+  { value: "scheduled", label: "已安排" },
+  { value: "completed", label: "已完成" },
+  { value: "cancelled", label: "已取消" },
+  { value: "no_show", label: "未到場" },
+];
+
 const sourceLabels: Record<BookingSource, string> = {
   website: "網站",
   official_line: "官方 LINE",
@@ -310,6 +323,12 @@ function lineStatus(booking: TrialBookingRow): LineNotificationStatus {
     return booking.line_notification_status;
   }
   return "not_sent";
+}
+
+function statusOptionsForBooking(booking: TrialBookingRow) {
+  const baseOptions = booking.booking_status === "scheduled" || booking.appointment_date ? scheduledStatusOptions : unscheduledStatusOptions;
+  if (baseOptions.some((option) => option.value === booking.booking_status)) return baseOptions;
+  return [{ value: booking.booking_status, label: labelOrFallback(bookingStatusLabels, booking.booking_status) }, ...baseOptions];
 }
 
 export default function TrialBookingsAdminPage() {
@@ -648,9 +667,13 @@ export default function TrialBookingsAdminPage() {
   function renderStatusControl(booking: TrialBookingRow) {
     const isUpdating = updatingBookingId === booking.id;
     const message = rowMessages[booking.id];
+    const statusOptions = statusOptionsForBooking(booking);
 
     return (
       <div className={`trialAdminStatusControl${isUpdating ? " trialAdminRowUpdating" : ""}`}>
+        <span className={`trialAdminBadge is-${booking.booking_status}`}>
+          {labelOrFallback(bookingStatusLabels, booking.booking_status)}
+        </span>
         <select
           className="trialAdminStatusSelect"
           value={booking.booking_status}
@@ -660,15 +683,12 @@ export default function TrialBookingsAdminPage() {
           }}
           aria-label={`${booking.name || "booking"} 預約狀態`}
         >
-          {bookingStatusOptions.map((option) => (
+          {statusOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
-        <span className={`trialAdminBadge is-${booking.booking_status}`}>
-          {labelOrFallback(bookingStatusLabels, booking.booking_status)}
-        </span>
         {message ? (
           <span className={`trialAdminInlineMessage is-${message.type}`} role={message.type === "error" ? "alert" : "status"}>
             {message.text}
@@ -684,11 +704,11 @@ export default function TrialBookingsAdminPage() {
     return (
       <div className="trialAdminActions">
         <button className="trialAdminButton trialAdminButtonSmall" type="button" onClick={() => openScheduleModal(booking)} disabled={isUpdating}>
-          {booking.booking_status === "scheduled" ? "編輯安排" : "已安排"}
+          {booking.booking_status === "scheduled" ? "編輯安排" : "安排預約"}
         </button>
         {booking.booking_status === "scheduled" ? (
           <button className="trialAdminButton trialAdminButtonSmall" type="button" onClick={() => void resendLine(booking)} disabled={isUpdating}>
-            重新發送 LINE
+            {status === "not_sent" ? "發送 LINE" : "重新發送 LINE"}
           </button>
         ) : null}
         <span className={`trialAdminBadge is-line-${status}`}>{lineStatusLabels[status]}</span>
@@ -796,7 +816,7 @@ export default function TrialBookingsAdminPage() {
         <section className="trialAdminFilters" aria-label="首次體驗預約篩選">
           <label className="trialAdminField">
             <span>搜尋</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜尋姓名 / 電話 / LINE 名稱" maxLength={80} />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜尋姓名 / 電話" maxLength={80} />
           </label>
           <label className="trialAdminField">
             <span>來源</span>
@@ -872,7 +892,6 @@ export default function TrialBookingsAdminPage() {
                     <th>預約時間</th>
                     <th>姓名</th>
                     <th>電話</th>
-                    <th>LINE 名稱</th>
                     <th>體驗項目</th>
                     <th>來源</th>
                     <th>教練</th>
@@ -898,7 +917,6 @@ export default function TrialBookingsAdminPage() {
                         </td>
                         <td>{booking.name || "-"}</td>
                         <td>{booking.phone || "-"}</td>
-                        <td>{booking.line_name || "-"}</td>
                         <td>{labelOrFallback(serviceLabels, booking.service)}</td>
                         <td>{sourceLabels[bookingSource]}</td>
                         <td>

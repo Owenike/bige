@@ -16,6 +16,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isCoachRoute = pathname?.startsWith("/coach");
   const isPublicBookingRoute = pathname?.startsWith("/booking");
   const isTrialBookingRoute = pathname?.startsWith("/trial-booking");
+  const isAdminRoute = pathname?.startsWith("/admin");
   const isAcpayResultRoute = pathname?.startsWith("/payment/acpay-result");
   const isCustomPaymentRoute = pathname?.startsWith("/custom-payment");
   const isTrainingRoute = pathname?.startsWith("/training");
@@ -28,6 +29,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const showTopbar =
     !isEmbedded &&
     !isWorkspaceRoute &&
+    !isAdminRoute &&
     !isHomeRoute &&
     !isFaqRoute &&
     !isPublicBookingRoute &&
