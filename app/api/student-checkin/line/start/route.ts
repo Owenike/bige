@@ -17,6 +17,8 @@ export async function GET(request: Request) {
   authorizeUrl.searchParams.set("state", state);
   authorizeUrl.searchParams.set("scope", "profile");
   authorizeUrl.searchParams.set("bot_prompt", "normal");
+  authorizeUrl.searchParams.set("ui_locales", "zh-TW");
+  authorizeUrl.searchParams.set("initial_amr_display", "lineqr");
 
   const response = NextResponse.redirect(authorizeUrl);
   response.cookies.set(STUDENT_LINE_STATE_COOKIE, state, {
