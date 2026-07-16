@@ -153,7 +153,7 @@ const bookingStatusOptions: Array<{ value: BookingStatus; label: string }> = [
   { value: "contacted", label: "已聯繫" },
   { value: "scheduled", label: "已安排" },
   { value: "completed", label: "已完成" },
-  { value: "cancelled", label: "已取消" },
+  { value: "cancelled", label: "已隱藏" },
   { value: "no_show", label: "未到場" },
 ];
 
@@ -491,11 +491,17 @@ export default function TrialBookingsAdminPage() {
         return;
       }
 
-      setBookings((currentBookings) =>
-        currentBookings.map((booking) =>
+      const shouldHideCancelledBooking = payload.booking.booking_status === "cancelled" && bookingStatus !== "cancelled";
+
+      setBookings((currentBookings) => {
+        if (shouldHideCancelledBooking) {
+          return currentBookings.filter((booking) => booking.id !== bookingId);
+        }
+
+        return currentBookings.map((booking) =>
           booking.id === bookingId ? { ...booking, booking_status: payload.booking!.booking_status } : booking,
-        ),
-      );
+        );
+      });
       setRowMessages((messages) => ({ ...messages, [bookingId]: { type: "success", text: "已更新" } }));
     } catch {
       setRowMessages((messages) => ({

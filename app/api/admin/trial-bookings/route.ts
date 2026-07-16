@@ -153,7 +153,11 @@ export async function GET(request: Request) {
 
     if (paymentMethod) query = query.eq("payment_method", paymentMethod);
     if (paymentStatus) query = query.eq("payment_status", paymentStatus);
-    if (bookingStatus) query = query.eq("booking_status", bookingStatus);
+    if (bookingStatus) {
+      query = query.eq("booking_status", bookingStatus);
+    } else {
+      query = query.neq("booking_status", "cancelled");
+    }
     if (source) query = query.eq("source", source);
     if (q) {
       const escapedQ = escapeIlikeValue(q);
