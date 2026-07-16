@@ -148,7 +148,7 @@ function formatDisplayDate(value: string) {
 
 function buildScheduledTrialBookingNotificationText(input: LineScheduledTrialBookingNotificationInput) {
   return [
-    "BigE 新增體驗預約",
+    "BigE 體驗課程已安排",
     "",
     `預約日期：${formatDisplayDate(input.appointmentDate)}`,
     `預約時間：${input.appointmentTime}`,
