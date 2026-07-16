@@ -20,6 +20,7 @@ type SessionContext = {
 function normalizePathScope(pathname: string): RouteScope {
   if (pathname === "/platform-admin" || pathname.startsWith("/platform-admin/")) return "platform_admin";
   if (pathname === "/manager" || pathname.startsWith("/manager/")) return "manager";
+  if (pathname === "/admin/student-check-ins" || pathname.startsWith("/admin/student-check-ins/")) return "frontdesk";
   if (pathname === "/frontdesk" || pathname.startsWith("/frontdesk/")) return "frontdesk";
   if (pathname === "/coach" || pathname.startsWith("/coach/")) return "coach";
   if (pathname === "/member/bookings") return null;

@@ -123,6 +123,17 @@ function resolveLoginEntryCopy(panel: LoginPanel, returnTo: string | null, zh: b
     };
   }
 
+  if (returnTo === "/admin/student-check-ins") {
+    return {
+      eyebrow: zh ? "管理後台入口" : "Admin Entry",
+      title: zh ? "自主運動報到管理登入" : "Student Check-in Admin Sign In",
+      description: zh
+        ? "登入後會前往自主運動報到管理頁，確認現場學員身分並處理放行。"
+        : "After sign-in you will open the student check-in admin page to verify members and approve entry.",
+      badge: zh ? "登入後前往：自主運動報到管理" : "After sign-in: Student Check-in Admin",
+    };
+  }
+
   if (returnTo === "/platform-admin") {
     return {
       eyebrow: zh ? "平台管理入口" : "Platform Admin Entry",
@@ -161,7 +172,10 @@ function LoginContent() {
 
     return null;
   }, [searchParams]);
-  const isFocusedBackofficeEntry = returnTo === "/admin/trial-bookings" || returnTo === "/platform-admin";
+  const isFocusedBackofficeEntry =
+    returnTo === "/admin/trial-bookings" ||
+    returnTo === "/admin/student-check-ins" ||
+    returnTo === "/platform-admin";
   const selectedPanel = useMemo(
     () => (isFocusedBackofficeEntry ? "staff" : resolveLoginPanel(searchParams.get("tab"))),
     [isFocusedBackofficeEntry, searchParams],

@@ -41,6 +41,21 @@ type StudentCheckInsResponse = {
   error?: string;
 };
 
+const STUDENT_CHECK_INS_ADMIN_PATH = "/admin/student-check-ins";
+
+function redirectToStaffLogin() {
+  const loginUrl = new URL("/login", window.location.origin);
+  loginUrl.searchParams.set("tab", "staff");
+  loginUrl.searchParams.set("returnTo", STUDENT_CHECK_INS_ADMIN_PATH);
+  window.location.replace(loginUrl.toString());
+}
+
+function handleAdminAuthFailure(response: Response) {
+  if (response.status !== 401) return false;
+  redirectToStaffLogin();
+  return true;
+}
+
 function todayDateInputValue() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Taipei",
@@ -116,24 +131,29 @@ export default function StudentCheckInsAdminPage() {
 
   const loadCheckIns = useCallback(async (quiet = false) => {
     if (!quiet) setIsLoading(true);
-    setError("");
-    const response = await fetch(`/api/admin/student-check-ins?date=${encodeURIComponent(date)}`, { cache: "no-store" });
-    const payload = (await response.json().catch(() => null)) as StudentCheckInsResponse | null;
-    if (!response.ok || !payload?.ok) {
-      setError(payload?.error || "無法載入報到資料。");
-      if (!quiet) {
-        setPending([]);
-        setToday([]);
-        setRecent([]);
+    if (!quiet) setError("");
+    try {
+      const response = await fetch(`/api/admin/student-check-ins?date=${encodeURIComponent(date)}`, { cache: "no-store" });
+      if (handleAdminAuthFailure(response)) return;
+      const payload = (await response.json().catch(() => null)) as StudentCheckInsResponse | null;
+      if (!response.ok || !payload?.ok) {
+        setError(response.status === 403 ? "此帳號沒有報到管理權限。" : payload?.error || "無法載入報到資料。");
+        if (!quiet) {
+          setPending([]);
+          setToday([]);
+          setRecent([]);
+        }
+        return;
       }
+      setCheckInUrl(payload.checkInUrl || "");
+      setPending(payload.pending || []);
+      setToday(payload.today || []);
+      setRecent(payload.recent || []);
+    } catch {
+      setError("網路連線不穩定，系統會自動重新取得報到資料。");
+    } finally {
       setIsLoading(false);
-      return;
     }
-    setCheckInUrl(payload.checkInUrl || "");
-    setPending(payload.pending || []);
-    setToday(payload.today || []);
-    setRecent(payload.recent || []);
-    setIsLoading(false);
   }, [date]);
 
   useEffect(() => {
@@ -169,6 +189,7 @@ export default function StudentCheckInsAdminPage() {
     const form = new FormData();
     form.set("photo", capturedPhoto.file);
     const response = await fetch(`/api/admin/student-check-ins/${activeRequest.id}/photo`, { method: "POST", body: form });
+    if (handleAdminAuthFailure(response)) return;
     const payload = (await response.json().catch(() => null)) as { ok?: boolean; photoUrl?: string; error?: string } | null;
     if (!response.ok || !payload?.ok || !payload.photoUrl) {
       setError(payload?.error || "照片上傳失敗，請重新拍攝。");
@@ -192,6 +213,7 @@ export default function StudentCheckInsAdminPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ decision }),
     });
+    if (handleAdminAuthFailure(response)) return;
     const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
     if (!response.ok || !payload?.ok) {
       setError(payload?.error || "無法更新報到狀態。");
