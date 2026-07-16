@@ -105,7 +105,9 @@ export default function StudentCheckInsAdminPage() {
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const activeRequest = pending[0] || null;
-  const activePhotoPreview = capturedPhoto?.requestId === activeRequest?.id ? capturedPhoto.preview : "";
+  const activePhotoPreview = capturedPhoto && activeRequest && capturedPhoto.requestId === activeRequest.id
+    ? capturedPhoto.preview
+    : "";
   const capturedPhotoPreview = capturedPhoto?.preview || "";
   const qrUrl = useMemo(() => {
     if (!checkInUrl) return "";
