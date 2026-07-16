@@ -16,6 +16,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isCoachRoute = pathname?.startsWith("/coach");
   const isPublicBookingRoute = pathname?.startsWith("/booking");
   const isTrialBookingRoute = pathname?.startsWith("/trial-booking");
+  const isStudentCheckInRoute = pathname?.startsWith("/check-in");
   const isAdminRoute = pathname?.startsWith("/admin");
   const isAcpayResultRoute = pathname?.startsWith("/payment/acpay-result");
   const isCustomPaymentRoute = pathname?.startsWith("/custom-payment");
@@ -34,6 +35,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
     !isFaqRoute &&
     !isPublicBookingRoute &&
     !isTrialBookingRoute &&
+    !isStudentCheckInRoute &&
     !isAcpayResultRoute &&
     !isCustomPaymentRoute &&
     !isRenwuPilatesRoute &&
@@ -85,9 +87,9 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
 
       {children}
 
-      {!isEmbedded ? <FloatingActionButtons /> : null}
+      {!isEmbedded && !isStudentCheckInRoute ? <FloatingActionButtons /> : null}
 
-      {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute && !isAcpayResultRoute && !isCustomPaymentRoute ? (
+      {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute && !isStudentCheckInRoute && !isAcpayResultRoute && !isCustomPaymentRoute ? (
         <footer className="footer">
           <div className="footerInner">
             <div>© {new Date().getFullYear()} BigE Fitness. All rights reserved.</div>
