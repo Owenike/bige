@@ -106,7 +106,7 @@ export async function POST(request: Request) {
       payment_status: paymentStatus,
       amount,
       currency: "TWD",
-      source: "website_trial_booking",
+      source: "website",
       booking_status: "new",
     })
     .select("id, payment_method, payment_status, booking_status, amount, currency")

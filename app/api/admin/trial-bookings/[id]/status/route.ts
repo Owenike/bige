@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../../../lib/auth-context";
 import { createSupabaseAdminClient } from "../../../../../../lib/supabase/admin";
 
-const bookingStatuses = new Set(["new", "contacted", "scheduled", "completed", "cancelled"]);
+const bookingStatuses = new Set(["new", "contacted", "scheduled", "completed", "cancelled", "no_show"]);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function authFailureResponse(status: number) {

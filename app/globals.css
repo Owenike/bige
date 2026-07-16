@@ -9085,6 +9085,12 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   padding: clamp(20px, 4vw, 32px);
   box-shadow: 0 24px 54px rgba(1, 7, 16, .28);
 }
+.trialAdminHeaderActions{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
 .trialAdminHeader h1{
   margin: 0;
   font-size: clamp(28px, 4vw, 44px);
@@ -9120,6 +9126,12 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   cursor: not-allowed;
   opacity: .62;
 }
+.trialAdminButtonSmall{
+  min-height: 36px;
+  border-radius: 12px;
+  padding: 0 12px;
+  font-size: 12px;
+}
 .trialAdminButtonDanger{
   border-color: rgba(226, 116, 116, .28);
   background: rgba(156, 48, 48, .18);
@@ -9131,12 +9143,48 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .trialAdminFilters{
   display: grid;
-  grid-template-columns: minmax(240px, 1.4fr) repeat(3, minmax(170px, 1fr));
+  grid-template-columns: minmax(240px, 1.4fr) repeat(4, minmax(150px, 1fr));
   gap: 14px;
   border: 1px solid rgba(190, 207, 231, .12);
   background: rgba(11, 20, 33, .76);
   border-radius: 20px;
   padding: 16px;
+}
+.trialAdminStatsPanel{
+  display: grid;
+  gap: 16px;
+  border: 1px solid rgba(190, 207, 231, .12);
+  background: rgba(11, 20, 33, .76);
+  border-radius: 20px;
+  padding: 16px;
+}
+.trialAdminStatsFilters{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 14px;
+}
+.trialAdminStatsGrid{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.trialAdminStatsGrid article{
+  display: grid;
+  gap: 8px;
+  min-height: 92px;
+  border: 1px solid rgba(190, 207, 231, .12);
+  border-radius: 16px;
+  background: rgba(244, 248, 255, .06);
+  padding: 14px;
+}
+.trialAdminStatsGrid span{
+  color: rgba(218, 230, 248, .72);
+  font-size: 12px;
+}
+.trialAdminStatsGrid strong{
+  color: #f6f9ff;
+  font-size: 30px;
+  line-height: 1;
 }
 .trialAdminSection{
   display: grid;
@@ -9171,7 +9219,8 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   text-transform: uppercase;
 }
 .trialAdminField input,
-.trialAdminField select{
+.trialAdminField select,
+.trialAdminField textarea{
   width: 100%;
   min-height: 44px;
   border-radius: 14px;
@@ -9180,6 +9229,15 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   color: #f6f9ff;
   padding: 0 13px;
   outline: none;
+}
+.trialAdminField textarea{
+  min-height: 108px;
+  padding: 12px 13px;
+  resize: vertical;
+  line-height: 1.55;
+}
+.trialAdminField input:disabled{
+  opacity: .78;
 }
 .trialAdminField option{
   color: #0f1b2a;
@@ -9332,6 +9390,22 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   background: rgba(59, 119, 184, .16);
   color: #dceeff;
 }
+.trialAdminBadge.is-no_show,
+.trialAdminBadge.is-line-failed{
+  border-color: rgba(226, 116, 116, .3);
+  background: rgba(156, 48, 48, .18);
+  color: #ffd9d9;
+}
+.trialAdminBadge.is-line-sent{
+  border-color: rgba(123, 211, 158, .28);
+  background: rgba(60, 143, 94, .16);
+  color: #d9f8e5;
+}
+.trialAdminBadge.is-line-not_sent{
+  border-color: rgba(133, 188, 240, .28);
+  background: rgba(59, 119, 184, .16);
+  color: #dceeff;
+}
 .trialAdminStatusControl{
   display: grid;
   gap: 8px;
@@ -9367,6 +9441,61 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .trialAdminRowUpdating{
   opacity: .76;
+}
+.trialAdminCompactStack,
+.trialAdminActions{
+  display: grid;
+  gap: 8px;
+  min-width: 140px;
+}
+.trialAdminCompactStack strong{
+  font-weight: 650;
+  color: #f6f9ff;
+}
+.trialAdminActions{
+  min-width: 160px;
+}
+.trialAdminModalBackdrop{
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(2, 8, 16, .72);
+  backdrop-filter: blur(14px);
+}
+.trialAdminModal{
+  width: min(860px, 100%);
+  max-height: min(92vh, 920px);
+  overflow: auto;
+  display: grid;
+  gap: 18px;
+  border: 1px solid rgba(190, 207, 231, .16);
+  border-radius: 20px;
+  background: #0b1421;
+  color: #eef5ff;
+  padding: clamp(18px, 4vw, 28px);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, .45);
+}
+.trialAdminModalHeader,
+.trialAdminModalFooter{
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+.trialAdminModalHeader h2{
+  margin: 0;
+  font-size: clamp(24px, 3vw, 34px);
+}
+.trialAdminModalGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.trialAdminModalNote{
+  grid-column: 1 / -1;
 }
 .trialAdminMobileList{
   display: none;
@@ -9427,11 +9556,17 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     align-items: stretch;
     flex-direction: column;
   }
+  .trialAdminHeaderActions{
+    justify-content: stretch;
+  }
   .trialAdminButton{
     width: 100%;
   }
   .trialAdminFilters{
     grid-template-columns: 1fr 1fr;
+  }
+  .trialAdminStatsGrid{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .trialAdminSectionHeader{
     align-items: stretch;
@@ -9444,6 +9579,24 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
   .trialAdminFilters{
     grid-template-columns: 1fr;
+  }
+  .trialAdminStatsFilters,
+  .trialAdminStatsGrid,
+  .trialAdminModalGrid{
+    grid-template-columns: 1fr;
+  }
+  .trialAdminModalBackdrop{
+    align-items: end;
+    padding: 10px;
+  }
+  .trialAdminModal{
+    max-height: 94vh;
+    border-radius: 18px;
+  }
+  .trialAdminModalHeader,
+  .trialAdminModalFooter{
+    align-items: stretch;
+    flex-direction: column;
   }
   .trialAdminTableWrap{
     display: none;

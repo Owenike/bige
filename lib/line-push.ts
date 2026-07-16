@@ -24,6 +24,18 @@ export type LineTrialBookingNotificationInput = {
   submittedAt?: Date;
 };
 
+export type LineScheduledTrialBookingNotificationInput = {
+  appointmentDate: string;
+  appointmentTime: string;
+  service: string;
+  name: string;
+  phone: string;
+  bookingCoach: string;
+  executingCoach: string;
+  source: string;
+  note?: string | null;
+};
+
 export type LineBookingNotificationResult = {
   ok: boolean;
   skipped?: boolean;
@@ -128,6 +140,28 @@ function buildTrialBookingNotificationText(input: LineTrialBookingNotificationIn
   return lines.join("\n");
 }
 
+function formatDisplayDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  return `${Number(match[2])}/${Number(match[3])}`;
+}
+
+function buildScheduledTrialBookingNotificationText(input: LineScheduledTrialBookingNotificationInput) {
+  return [
+    "BigE 新增體驗預約",
+    "",
+    `預約日期：${formatDisplayDate(input.appointmentDate)}`,
+    `預約時間：${input.appointmentTime}`,
+    `預約項目：${input.service}`,
+    `姓名：${input.name}`,
+    `電話：${input.phone}`,
+    `預約教練：${input.bookingCoach}`,
+    `執行教練：${input.executingCoach}`,
+    `來源：${input.source}`,
+    `備註：${input.note?.trim() || ""}`,
+  ].join("\n");
+}
+
 async function pushLineTextMessage(
   logPrefix: string,
   text: string,
@@ -198,4 +232,10 @@ export async function sendLineTrialBookingNotification(
   input: LineTrialBookingNotificationInput,
 ): Promise<LineBookingNotificationResult> {
   return pushLineTextMessage("[trial-booking]", buildTrialBookingNotificationText(input));
+}
+
+export async function sendLineScheduledTrialBookingNotification(
+  input: LineScheduledTrialBookingNotificationInput,
+): Promise<LineBookingNotificationResult> {
+  return pushLineTextMessage("[trial-booking-scheduled]", buildScheduledTrialBookingNotificationText(input));
 }

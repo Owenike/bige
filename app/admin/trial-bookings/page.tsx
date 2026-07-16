@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 
 type PaymentMethod = "cash_on_site" | "online_payment";
 type PaymentStatus = "pending_cash" | "pending_payment" | "paid" | "failed" | "cancelled";
-type BookingStatus = "new" | "contacted" | "scheduled" | "completed" | "cancelled";
+type BookingStatus = "new" | "contacted" | "scheduled" | "completed" | "cancelled" | "no_show";
 type WaitlistStatus = "pending" | "contacted" | "booked" | "cancelled";
+type BookingSource = "website" | "official_line" | "walk_in";
+type LineNotificationStatus = "not_sent" | "sent" | "failed";
 
 type TrialBookingRow = {
   id: string;
@@ -24,14 +26,38 @@ type TrialBookingRow = {
   merchant_trade_no: string | null;
   acpay_trade_no: string | null;
   paid_at: string | null;
+  appointment_date: string | null;
+  appointment_time: string | null;
+  booking_coach: string | null;
+  executing_coach: string | null;
+  source: BookingSource | "website_trial_booking" | string | null;
   booking_status: BookingStatus;
+  line_notification_status: LineNotificationStatus | string | null;
+  line_notified_at: string | null;
+  line_notification_error: string | null;
   note: string | null;
   updated_at: string | null;
+};
+
+type TrialBookingStats = {
+  total: number;
+  website: number;
+  officialLine: number;
+  walkIn: number;
 };
 
 type TrialBookingResponse = {
   ok?: boolean;
   bookings?: TrialBookingRow[];
+  stats?: TrialBookingStats;
+  error?: string;
+};
+
+type TrialBookingMutationResponse = {
+  ok?: boolean;
+  booking?: TrialBookingRow;
+  lineNotification?: "sent" | "failed" | "not_sent";
+  message?: string;
   error?: string;
 };
 
@@ -64,12 +90,31 @@ type BookingWaitlistResponse = {
   message?: string;
 };
 
+type ScheduleFormData = {
+  appointmentDate: string;
+  appointmentTime: string;
+  service: string;
+  name: string;
+  phone: string;
+  bookingCoach: string;
+  executingCoach: string;
+  source: BookingSource;
+  note: string;
+};
+
 const serviceLabels: Record<string, string> = {
   weight_training: "重量訓練",
   boxing_fitness: "拳擊體能訓練",
   pilates: "器械皮拉提斯",
   sports_massage: "運動按摩",
 };
+
+const serviceOptions = [
+  { value: "weight_training", label: "重量訓練" },
+  { value: "boxing_fitness", label: "拳擊體能訓練" },
+  { value: "pilates", label: "器械皮拉提斯" },
+  { value: "sports_massage", label: "運動按摩" },
+];
 
 const preferredTimeLabels: Record<string, string> = {
   weekday_morning: "平日上午",
@@ -95,20 +140,34 @@ const paymentStatusLabels: Record<PaymentStatus, string> = {
 };
 
 const bookingStatusLabels: Record<BookingStatus, string> = {
-  new: "新預約",
+  new: "待聯絡",
   contacted: "已聯繫",
   scheduled: "已安排",
   completed: "已完成",
   cancelled: "已取消",
+  no_show: "未到場",
 };
 
 const bookingStatusOptions: Array<{ value: BookingStatus; label: string }> = [
-  { value: "new", label: "新預約" },
+  { value: "new", label: "待聯絡" },
   { value: "contacted", label: "已聯繫" },
   { value: "scheduled", label: "已安排" },
   { value: "completed", label: "已完成" },
   { value: "cancelled", label: "已取消" },
+  { value: "no_show", label: "未到場" },
 ];
+
+const sourceLabels: Record<BookingSource, string> = {
+  website: "網站",
+  official_line: "官方 LINE",
+  walk_in: "現場",
+};
+
+const lineStatusLabels: Record<LineNotificationStatus, string> = {
+  not_sent: "未發送",
+  sent: "已發送",
+  failed: "發送失敗",
+};
 
 const waitlistStatusLabels: Record<WaitlistStatus, string> = {
   pending: "待聯繫",
@@ -124,17 +183,87 @@ const waitlistStatusOptions: Array<{ value: WaitlistStatus; label: string }> = [
   { value: "cancelled", label: "已取消" },
 ];
 
-function formatDateTime(value: string) {
+const emptyStats: TrialBookingStats = {
+  total: 0,
+  website: 0,
+  officialLine: 0,
+  walkIn: 0,
+};
+
+function todayDateInputValue() {
+  const now = new Date();
+  const taipei = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  return taipei;
+}
+
+function defaultStatsFrom() {
+  const now = new Date();
+  const date = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function initialScheduleForm(): ScheduleFormData {
+  return {
+    appointmentDate: todayDateInputValue(),
+    appointmentTime: "16:00",
+    service: "pilates",
+    name: "",
+    phone: "",
+    bookingCoach: "",
+    executingCoach: "",
+    source: "official_line",
+    note: "",
+  };
+}
+
+function formFromBooking(booking: TrialBookingRow): ScheduleFormData {
+  return {
+    appointmentDate: booking.appointment_date || todayDateInputValue(),
+    appointmentTime: booking.appointment_time || "16:00",
+    service: booking.service || "pilates",
+    name: booking.name || "",
+    phone: booking.phone || "",
+    bookingCoach: booking.booking_coach || "",
+    executingCoach: booking.executing_coach || "",
+    source: "website",
+    note: booking.note || "",
+  };
+}
+
+function normalizeSource(value: TrialBookingRow["source"] | undefined): BookingSource {
+  if (value === "official_line" || value === "walk_in") return value;
+  return "website";
+}
+
+function formatDateTime(value: string | null | undefined) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "-";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  return `${match[1]}/${match[2]}/${match[3]}`;
 }
 
 function labelOrFallback(labels: Record<string, string>, value: string | null | undefined) {
@@ -176,14 +305,25 @@ function renderPaymentDetails(booking: TrialBookingRow) {
   );
 }
 
+function lineStatus(booking: TrialBookingRow): LineNotificationStatus {
+  if (booking.line_notification_status === "sent" || booking.line_notification_status === "failed") {
+    return booking.line_notification_status;
+  }
+  return "not_sent";
+}
+
 export default function TrialBookingsAdminPage() {
   const router = useRouter();
   const [bookings, setBookings] = useState<TrialBookingRow[]>([]);
   const [waitlistItems, setWaitlistItems] = useState<BookingWaitlistRow[]>([]);
+  const [stats, setStats] = useState<TrialBookingStats>(emptyStats);
   const [search, setSearch] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
   const [bookingStatus, setBookingStatus] = useState("");
+  const [source, setSource] = useState("");
+  const [statsFrom, setStatsFrom] = useState(defaultStatsFrom);
+  const [statsTo, setStatsTo] = useState(todayDateInputValue);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [accessState, setAccessState] = useState<TrialAdminAccessState>("checking");
@@ -195,6 +335,11 @@ export default function TrialBookingsAdminPage() {
   const [waitlistRowMessages, setWaitlistRowMessages] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const [modalMode, setModalMode] = useState<"create" | "schedule" | null>(null);
+  const [activeBooking, setActiveBooking] = useState<TrialBookingRow | null>(null);
+  const [scheduleForm, setScheduleForm] = useState<ScheduleFormData>(initialScheduleForm);
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+  const [modalError, setModalError] = useState("");
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -203,8 +348,11 @@ export default function TrialBookingsAdminPage() {
     if (paymentMethod) params.set("paymentMethod", paymentMethod);
     if (paymentStatus) params.set("paymentStatus", paymentStatus);
     if (bookingStatus) params.set("bookingStatus", bookingStatus);
+    if (source) params.set("source", source);
+    if (statsFrom) params.set("statsFrom", statsFrom);
+    if (statsTo) params.set("statsTo", statsTo);
     return params.toString();
-  }, [bookingStatus, paymentMethod, paymentStatus, search]);
+  }, [bookingStatus, paymentMethod, paymentStatus, search, source, statsFrom, statsTo]);
 
   const loadBookings = useCallback(async () => {
     setIsLoading(true);
@@ -229,14 +377,17 @@ export default function TrialBookingsAdminPage() {
           setError(payload?.error || "無法讀取首次體驗預約資料。");
         }
         setBookings([]);
+        setStats(emptyStats);
         return;
       }
 
       setAccessState("allowed");
       setBookings(payload.bookings || []);
+      setStats(payload.stats || emptyStats);
     } catch {
       setError("讀取資料時發生錯誤，請稍後再試。");
       setBookings([]);
+      setStats(emptyStats);
     } finally {
       setIsLoading(false);
     }
@@ -277,14 +428,8 @@ export default function TrialBookingsAdminPage() {
     setLogoutError("");
 
     try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("登出失敗，請稍後再試。");
-      }
-
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (!response.ok) throw new Error("登出失敗，請稍後再試。");
       router.replace("/login");
     } catch (err) {
       setLogoutError(err instanceof Error ? err.message : "登出失敗，請稍後再試。");
@@ -292,15 +437,24 @@ export default function TrialBookingsAdminPage() {
     }
   }
 
+  function upsertBooking(updated: TrialBookingRow) {
+    setBookings((current) => {
+      const exists = current.some((booking) => booking.id === updated.id);
+      if (!exists) return [updated, ...current];
+      return current.map((booking) => (booking.id === updated.id ? updated : booking));
+    });
+  }
+
   async function updateBookingStatus(bookingId: string, nextStatus: BookingStatus) {
     const current = bookings.find((booking) => booking.id === bookingId);
     if (!current || current.booking_status === nextStatus || updatingBookingId) return;
+    if (nextStatus === "scheduled") {
+      openScheduleModal(current);
+      return;
+    }
 
     setUpdatingBookingId(bookingId);
-    setRowMessages((messages) => ({
-      ...messages,
-      [bookingId]: { type: "success", text: "更新中..." },
-    }));
+    setRowMessages((messages) => ({ ...messages, [bookingId]: { type: "success", text: "更新中..." } }));
 
     try {
       const response = await fetch(`/api/admin/trial-bookings/${bookingId}/status`, {
@@ -313,29 +467,17 @@ export default function TrialBookingsAdminPage() {
       if (!response.ok || !payload?.ok || !payload.booking) {
         setRowMessages((messages) => ({
           ...messages,
-          [bookingId]: {
-            type: "error",
-            text: payload?.error || "更新預約狀態失敗。",
-          },
+          [bookingId]: { type: "error", text: payload?.error || "更新預約狀態失敗。" },
         }));
         return;
       }
 
-      const updatedBooking = payload.booking;
       setBookings((currentBookings) =>
         currentBookings.map((booking) =>
-          booking.id === bookingId
-            ? {
-                ...booking,
-                booking_status: updatedBooking.booking_status,
-              }
-            : booking,
+          booking.id === bookingId ? { ...booking, booking_status: payload.booking!.booking_status } : booking,
         ),
       );
-      setRowMessages((messages) => ({
-        ...messages,
-        [bookingId]: { type: "success", text: "已更新" },
-      }));
+      setRowMessages((messages) => ({ ...messages, [bookingId]: { type: "success", text: "已更新" } }));
     } catch {
       setRowMessages((messages) => ({
         ...messages,
@@ -351,10 +493,7 @@ export default function TrialBookingsAdminPage() {
     if (!current || current.status === nextStatus || updatingWaitlistId) return;
 
     setUpdatingWaitlistId(itemId);
-    setWaitlistRowMessages((messages) => ({
-      ...messages,
-      [itemId]: { type: "success", text: "更新中..." },
-    }));
+    setWaitlistRowMessages((messages) => ({ ...messages, [itemId]: { type: "success", text: "更新中..." } }));
 
     try {
       const response = await fetch("/api/admin/booking-waitlist", {
@@ -367,19 +506,13 @@ export default function TrialBookingsAdminPage() {
       if (!response.ok || !payload?.ok || !payload.item) {
         setWaitlistRowMessages((messages) => ({
           ...messages,
-          [itemId]: {
-            type: "error",
-            text: payload?.message || payload?.error || "更新公開預約需求狀態失敗。",
-          },
+          [itemId]: { type: "error", text: payload?.message || payload?.error || "更新公開預約需求狀態失敗。" },
         }));
         return;
       }
 
       setWaitlistItems((items) => items.map((item) => (item.id === itemId ? { ...item, status: payload.item!.status } : item)));
-      setWaitlistRowMessages((messages) => ({
-        ...messages,
-        [itemId]: { type: "success", text: "已更新" },
-      }));
+      setWaitlistRowMessages((messages) => ({ ...messages, [itemId]: { type: "success", text: "已更新" } }));
     } catch {
       setWaitlistRowMessages((messages) => ({
         ...messages,
@@ -387,6 +520,128 @@ export default function TrialBookingsAdminPage() {
       }));
     } finally {
       setUpdatingWaitlistId(null);
+    }
+  }
+
+  function openCreateModal() {
+    setModalMode("create");
+    setActiveBooking(null);
+    setScheduleForm(initialScheduleForm());
+    setModalError("");
+  }
+
+  function openScheduleModal(booking: TrialBookingRow) {
+    setModalMode("schedule");
+    setActiveBooking(booking);
+    setScheduleForm(formFromBooking(booking));
+    setModalError("");
+  }
+
+  function closeModal() {
+    if (isSavingSchedule) return;
+    setModalMode(null);
+    setActiveBooking(null);
+    setModalError("");
+  }
+
+  function updateScheduleField<K extends keyof ScheduleFormData>(field: K, value: ScheduleFormData[K]) {
+    setScheduleForm((current) => ({ ...current, [field]: value }));
+    setModalError("");
+  }
+
+  function validateScheduleForm() {
+    if (!scheduleForm.appointmentDate || !scheduleForm.appointmentTime || !scheduleForm.service) return false;
+    if (!scheduleForm.name.trim() || !scheduleForm.phone.trim()) return false;
+    if (!scheduleForm.bookingCoach.trim() || !scheduleForm.executingCoach.trim()) return false;
+    if (modalMode === "create" && !scheduleForm.source) return false;
+    return true;
+  }
+
+  async function submitSchedule() {
+    if (isSavingSchedule || !modalMode) return;
+    if (!validateScheduleForm()) {
+      setModalError("請填寫預約日期、時間、項目、姓名、電話、預約教練與執行教練。");
+      return;
+    }
+
+    setIsSavingSchedule(true);
+    setModalError("");
+
+    try {
+      const endpoint =
+        modalMode === "create"
+          ? "/api/admin/trial-bookings"
+          : `/api/admin/trial-bookings/${activeBooking?.id}/schedule`;
+      const response = await fetch(endpoint, {
+        method: modalMode === "create" ? "POST" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appointmentDate: scheduleForm.appointmentDate,
+          appointmentTime: scheduleForm.appointmentTime,
+          service: scheduleForm.service,
+          name: scheduleForm.name,
+          phone: scheduleForm.phone,
+          bookingCoach: scheduleForm.bookingCoach,
+          executingCoach: scheduleForm.executingCoach,
+          source: scheduleForm.source,
+          note: scheduleForm.note,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as TrialBookingMutationResponse | null;
+
+      if (!response.ok || !payload?.ok || !payload.booking) {
+        setModalError(payload?.error || "儲存體驗預約失敗。");
+        return;
+      }
+
+      upsertBooking(payload.booking);
+      setRowMessages((messages) => ({
+        ...messages,
+        [payload.booking!.id]: {
+          type: payload.lineNotification === "failed" ? "error" : "success",
+          text: payload.message || "已儲存",
+        },
+      }));
+      closeModal();
+      void loadBookings();
+    } catch {
+      setModalError("儲存體驗預約時發生錯誤。");
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  }
+
+  async function resendLine(booking: TrialBookingRow) {
+    if (updatingBookingId) return;
+    setUpdatingBookingId(booking.id);
+    setRowMessages((messages) => ({ ...messages, [booking.id]: { type: "success", text: "LINE 發送中..." } }));
+
+    try {
+      const response = await fetch(`/api/admin/trial-bookings/${booking.id}/resend-line`, { method: "POST" });
+      const payload = (await response.json().catch(() => null)) as TrialBookingMutationResponse | null;
+      if (!response.ok || !payload?.ok || !payload.booking) {
+        setRowMessages((messages) => ({
+          ...messages,
+          [booking.id]: { type: "error", text: payload?.error || "重新發送 LINE 失敗。" },
+        }));
+        return;
+      }
+      upsertBooking(payload.booking);
+      setRowMessages((messages) => ({
+        ...messages,
+        [booking.id]: {
+          type: payload.lineNotification === "failed" ? "error" : "success",
+          text: payload.message || "LINE 通知已處理。",
+        },
+      }));
+      void loadBookings();
+    } catch {
+      setRowMessages((messages) => ({
+        ...messages,
+        [booking.id]: { type: "error", text: "重新發送 LINE 時發生錯誤。" },
+      }));
+    } finally {
+      setUpdatingBookingId(null);
     }
   }
 
@@ -423,6 +678,25 @@ export default function TrialBookingsAdminPage() {
     );
   }
 
+  function renderActions(booking: TrialBookingRow) {
+    const isUpdating = updatingBookingId === booking.id;
+    const status = lineStatus(booking);
+    return (
+      <div className="trialAdminActions">
+        <button className="trialAdminButton trialAdminButtonSmall" type="button" onClick={() => openScheduleModal(booking)} disabled={isUpdating}>
+          {booking.booking_status === "scheduled" ? "編輯安排" : "已安排"}
+        </button>
+        {booking.booking_status === "scheduled" ? (
+          <button className="trialAdminButton trialAdminButtonSmall" type="button" onClick={() => void resendLine(booking)} disabled={isUpdating}>
+            重新發送 LINE
+          </button>
+        ) : null}
+        <span className={`trialAdminBadge is-line-${status}`}>{lineStatusLabels[status]}</span>
+        {booking.line_notification_error ? <span className="trialAdminInlineMessage is-error">{booking.line_notification_error}</span> : null}
+      </div>
+    );
+  }
+
   function renderWaitlistStatusControl(item: BookingWaitlistRow) {
     const isUpdating = updatingWaitlistId === item.id;
     const message = waitlistRowMessages[item.id];
@@ -454,6 +728,8 @@ export default function TrialBookingsAdminPage() {
     );
   }
 
+  const modalTitle = modalMode === "create" ? "新增體驗預約" : "安排體驗預約";
+
   return (
     <main className="trialAdminPage">
       <section className="trialAdminShell">
@@ -461,40 +737,75 @@ export default function TrialBookingsAdminPage() {
           <div>
             <p className="trialAdminEyebrow">BIGE ADMIN</p>
             <h1>首次體驗預約管理</h1>
-            <p>查看官網首次體驗預約進件與付款狀態。</p>
+            <p>查看官網首次體驗預約、安排體驗時段，並統計網站、官方 LINE 與現場來源。</p>
           </div>
-          <button
-            className="trialAdminButton"
-            type="button"
-            onClick={() => {
-              void loadBookings();
-              void loadWaitlist();
-            }}
-            disabled={isLoading || isWaitlistLoading}
-          >
-            {isLoading || isWaitlistLoading ? "讀取中" : "重新整理"}
-          </button>
-          <button
-            className="trialAdminButton trialAdminButtonDanger"
-            type="button"
-            onClick={handleLogout}
-            disabled={isLoggingOut}
-          >
-            {isLoggingOut ? "登出中..." : "登出"}
-          </button>
+          <div className="trialAdminHeaderActions">
+            <button className="trialAdminButton" type="button" onClick={openCreateModal}>
+              新增體驗預約
+            </button>
+            <button
+              className="trialAdminButton"
+              type="button"
+              onClick={() => {
+                void loadBookings();
+                void loadWaitlist();
+              }}
+              disabled={isLoading || isWaitlistLoading}
+            >
+              {isLoading || isWaitlistLoading ? "讀取中" : "重新整理"}
+            </button>
+            <button className="trialAdminButton trialAdminButtonDanger" type="button" onClick={handleLogout} disabled={isLoggingOut}>
+              {isLoggingOut ? "登出中..." : "登出"}
+            </button>
+          </div>
         </header>
 
         {logoutError ? <div className="trialAdminError">{logoutError}</div> : null}
 
+        <section className="trialAdminStatsPanel" aria-label="體驗預約來源統計">
+          <div className="trialAdminStatsFilters">
+            <label className="trialAdminField">
+              <span>開始日期</span>
+              <input type="date" value={statsFrom} onChange={(event) => setStatsFrom(event.target.value)} />
+            </label>
+            <label className="trialAdminField">
+              <span>結束日期</span>
+              <input type="date" value={statsTo} onChange={(event) => setStatsTo(event.target.value)} />
+            </label>
+          </div>
+          <div className="trialAdminStatsGrid">
+            <article>
+              <span>總預約筆數</span>
+              <strong>{stats.total}</strong>
+            </article>
+            <article>
+              <span>網站</span>
+              <strong>{stats.website}</strong>
+            </article>
+            <article>
+              <span>官方 LINE</span>
+              <strong>{stats.officialLine}</strong>
+            </article>
+            <article>
+              <span>現場</span>
+              <strong>{stats.walkIn}</strong>
+            </article>
+          </div>
+        </section>
+
         <section className="trialAdminFilters" aria-label="首次體驗預約篩選">
           <label className="trialAdminField">
             <span>搜尋</span>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜尋姓名 / 電話 / LINE 名稱"
-              maxLength={80}
-            />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜尋姓名 / 電話 / LINE 名稱" maxLength={80} />
+          </label>
+          <label className="trialAdminField">
+            <span>來源</span>
+            <select value={source} onChange={(event) => setSource(event.target.value)}>
+              <option value="">全部</option>
+              <option value="website">網站</option>
+              <option value="official_line">官方 LINE</option>
+              <option value="walk_in">現場</option>
+            </select>
           </label>
           <label className="trialAdminField">
             <span>付款方式</span>
@@ -519,11 +830,11 @@ export default function TrialBookingsAdminPage() {
             <span>預約狀態</span>
             <select value={bookingStatus} onChange={(event) => setBookingStatus(event.target.value)}>
               <option value="">全部</option>
-              <option value="new">new</option>
-              <option value="contacted">contacted</option>
-              <option value="scheduled">scheduled</option>
-              <option value="completed">completed</option>
-              <option value="cancelled">cancelled</option>
+              {bookingStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
         </section>
@@ -558,90 +869,132 @@ export default function TrialBookingsAdminPage() {
                 <thead>
                   <tr>
                     <th>建立時間</th>
+                    <th>預約時間</th>
                     <th>姓名</th>
                     <th>電話</th>
                     <th>LINE 名稱</th>
                     <th>體驗項目</th>
-                    <th>方便時段</th>
-                    <th>付款方式</th>
-                    <th>付款狀態</th>
-                    <th>付款資訊</th>
+                    <th>來源</th>
+                    <th>教練</th>
+                    <th>付款</th>
                     <th>預約狀態</th>
+                    <th>LINE</th>
                     <th>備註</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {bookings.map((booking) => (
-                    <tr key={booking.id}>
-                      <td>{formatDateTime(booking.created_at)}</td>
-                      <td>{booking.name || "-"}</td>
-                      <td>{booking.phone || "-"}</td>
-                      <td>{booking.line_name || "-"}</td>
-                      <td>{labelOrFallback(serviceLabels, booking.service)}</td>
-                      <td>{labelOrFallback(preferredTimeLabels, booking.preferred_time)}</td>
-                      <td>{labelOrFallback(paymentMethodLabels, booking.payment_method)}</td>
-                      <td>
-                        <span className={`trialAdminBadge is-${booking.payment_status}`}>
-                          {labelOrFallback(paymentStatusLabels, booking.payment_status)}
-                        </span>
-                      </td>
-                      <td>{renderPaymentDetails(booking)}</td>
-                      <td>
-                        {renderStatusControl(booking)}
-                      </td>
-                      <td>{booking.note || "-"}</td>
-                    </tr>
-                  ))}
+                  {bookings.map((booking) => {
+                    const bookingSource = normalizeSource(booking.source);
+                    return (
+                      <tr key={booking.id}>
+                        <td>{formatDateTime(booking.created_at)}</td>
+                        <td>
+                          <div className="trialAdminCompactStack">
+                            <strong>{formatDate(booking.appointment_date)}</strong>
+                            <span>{booking.appointment_time || "-"}</span>
+                            <span>方便時段：{labelOrFallback(preferredTimeLabels, booking.preferred_time)}</span>
+                          </div>
+                        </td>
+                        <td>{booking.name || "-"}</td>
+                        <td>{booking.phone || "-"}</td>
+                        <td>{booking.line_name || "-"}</td>
+                        <td>{labelOrFallback(serviceLabels, booking.service)}</td>
+                        <td>{sourceLabels[bookingSource]}</td>
+                        <td>
+                          <div className="trialAdminCompactStack">
+                            <span>預約：{booking.booking_coach || "-"}</span>
+                            <span>執行：{booking.executing_coach || "-"}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="trialAdminCompactStack">
+                            <span>{labelOrFallback(paymentMethodLabels, booking.payment_method)}</span>
+                            <span className={`trialAdminBadge is-${booking.payment_status}`}>
+                              {labelOrFallback(paymentStatusLabels, booking.payment_status)}
+                            </span>
+                            {renderPaymentDetails(booking)}
+                          </div>
+                        </td>
+                        <td>{renderStatusControl(booking)}</td>
+                        <td>
+                          <div className="trialAdminCompactStack">
+                            <span className={`trialAdminBadge is-line-${lineStatus(booking)}`}>{lineStatusLabels[lineStatus(booking)]}</span>
+                            <span>{formatDateTime(booking.line_notified_at)}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <pre className="trialAdminNoteText">{booking.note || "-"}</pre>
+                        </td>
+                        <td>{renderActions(booking)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             <div className="trialAdminMobileList">
-              {bookings.map((booking) => (
-                <article className="trialAdminMobileCard" key={booking.id}>
-                  <div className="trialAdminMobileCardHeader">
-                    <div>
-                      <strong>{booking.name || "-"}</strong>
-                      <span>{formatDateTime(booking.created_at)}</span>
+              {bookings.map((booking) => {
+                const bookingSource = normalizeSource(booking.source);
+                return (
+                  <article className="trialAdminMobileCard" key={booking.id}>
+                    <div className="trialAdminMobileCardHeader">
+                      <div>
+                        <strong>{booking.name || "-"}</strong>
+                        <span>{formatDateTime(booking.created_at)}</span>
+                      </div>
+                      {renderStatusControl(booking)}
                     </div>
-                    {renderStatusControl(booking)}
-                  </div>
-                  <dl>
-                    <div>
-                      <dt>電話</dt>
-                      <dd>{booking.phone || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>LINE 名稱</dt>
-                      <dd>{booking.line_name || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>體驗項目</dt>
-                      <dd>{labelOrFallback(serviceLabels, booking.service)}</dd>
-                    </div>
-                    <div>
-                      <dt>方便時段</dt>
-                      <dd>{labelOrFallback(preferredTimeLabels, booking.preferred_time)}</dd>
-                    </div>
-                    <div>
-                      <dt>付款方式</dt>
-                      <dd>{labelOrFallback(paymentMethodLabels, booking.payment_method)}</dd>
-                    </div>
-                    <div>
-                      <dt>付款狀態</dt>
-                      <dd>{labelOrFallback(paymentStatusLabels, booking.payment_status)}</dd>
-                    </div>
-                    <div className="trialAdminMobilePayment">
-                      <dt>付款資訊</dt>
-                      <dd>{renderPaymentDetails(booking)}</dd>
-                    </div>
-                    <div className="trialAdminMobileNote">
-                      <dt>備註</dt>
-                      <dd>{booking.note || "-"}</dd>
-                    </div>
-                  </dl>
-                </article>
-              ))}
+                    <dl>
+                      <div>
+                        <dt>電話</dt>
+                        <dd>{booking.phone || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt>來源</dt>
+                        <dd>{sourceLabels[bookingSource]}</dd>
+                      </div>
+                      <div>
+                        <dt>預約時間</dt>
+                        <dd>
+                          {formatDate(booking.appointment_date)} {booking.appointment_time || ""}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>體驗項目</dt>
+                        <dd>{labelOrFallback(serviceLabels, booking.service)}</dd>
+                      </div>
+                      <div>
+                        <dt>預約教練</dt>
+                        <dd>{booking.booking_coach || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt>執行教練</dt>
+                        <dd>{booking.executing_coach || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt>LINE</dt>
+                        <dd>{lineStatusLabels[lineStatus(booking)]}</dd>
+                      </div>
+                      <div className="trialAdminMobilePayment">
+                        <dt>付款資訊</dt>
+                        <dd>{renderPaymentDetails(booking)}</dd>
+                      </div>
+                      <div className="trialAdminMobileNote">
+                        <dt>備註</dt>
+                        <dd>
+                          <pre className="trialAdminNoteText">{booking.note || "-"}</pre>
+                        </dd>
+                      </div>
+                      <div className="trialAdminMobileNote">
+                        <dt>操作</dt>
+                        <dd>{renderActions(booking)}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                );
+              })}
             </div>
           </>
         ) : null}
@@ -723,6 +1076,83 @@ export default function TrialBookingsAdminPage() {
           </section>
         )}
       </section>
+
+      {modalMode ? (
+        <div className="trialAdminModalBackdrop" role="presentation">
+          <section className="trialAdminModal" role="dialog" aria-modal="true" aria-labelledby="trial-admin-modal-title">
+            <header className="trialAdminModalHeader">
+              <div>
+                <p className="trialAdminEyebrow">TRIAL BOOKING</p>
+                <h2 id="trial-admin-modal-title">{modalTitle}</h2>
+              </div>
+              <button className="trialAdminButton trialAdminButtonSmall" type="button" onClick={closeModal} disabled={isSavingSchedule}>
+                關閉
+              </button>
+            </header>
+
+            <div className="trialAdminModalGrid">
+              <label className="trialAdminField">
+                <span>預約日期</span>
+                <input type="date" value={scheduleForm.appointmentDate} onChange={(event) => updateScheduleField("appointmentDate", event.target.value)} />
+              </label>
+              <label className="trialAdminField">
+                <span>預約時間</span>
+                <input type="time" value={scheduleForm.appointmentTime} onChange={(event) => updateScheduleField("appointmentTime", event.target.value)} />
+              </label>
+              <label className="trialAdminField">
+                <span>預約項目</span>
+                <select value={scheduleForm.service} onChange={(event) => updateScheduleField("service", event.target.value)}>
+                  {serviceOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="trialAdminField">
+                <span>姓名</span>
+                <input value={scheduleForm.name} onChange={(event) => updateScheduleField("name", event.target.value)} maxLength={50} />
+              </label>
+              <label className="trialAdminField">
+                <span>電話</span>
+                <input value={scheduleForm.phone} onChange={(event) => updateScheduleField("phone", event.target.value)} maxLength={30} />
+              </label>
+              <label className="trialAdminField">
+                <span>預約教練</span>
+                <input value={scheduleForm.bookingCoach} onChange={(event) => updateScheduleField("bookingCoach", event.target.value)} maxLength={50} />
+              </label>
+              <label className="trialAdminField">
+                <span>執行教練</span>
+                <input value={scheduleForm.executingCoach} onChange={(event) => updateScheduleField("executingCoach", event.target.value)} maxLength={50} />
+              </label>
+              <label className="trialAdminField">
+                <span>來源</span>
+                {modalMode === "schedule" ? (
+                  <input value={sourceLabels[normalizeSource(activeBooking?.source)]} disabled readOnly />
+                ) : (
+                  <select value={scheduleForm.source} onChange={(event) => updateScheduleField("source", event.target.value as BookingSource)}>
+                    <option value="website">網站</option>
+                    <option value="official_line">官方 LINE</option>
+                    <option value="walk_in">現場</option>
+                  </select>
+                )}
+              </label>
+              <label className="trialAdminField trialAdminModalNote">
+                <span>備註</span>
+                <textarea value={scheduleForm.note} onChange={(event) => updateScheduleField("note", event.target.value)} maxLength={500} />
+              </label>
+            </div>
+
+            {modalError ? <div className="trialAdminError">{modalError}</div> : null}
+
+            <footer className="trialAdminModalFooter">
+              <button className="trialAdminButton" type="button" onClick={submitSchedule} disabled={isSavingSchedule}>
+                {isSavingSchedule ? "儲存中..." : "送出"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

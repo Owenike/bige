@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`/admin/trial-bookings` is a simple read-only admin page for checking first-time trial booking submissions from the public website.
+`/admin/trial-bookings` is the admin workspace for checking first-time trial booking submissions from the public website, arranging confirmed trial appointments, adding official LINE / walk-in appointments manually, and reviewing source totals.
 
-The page reads from `trial_bookings` through `/api/admin/trial-bookings` and shows the latest 100 records sorted by `created_at desc`.
+The page reads from `trial_bookings` through `/api/admin/trial-bookings` and shows the latest 100 records sorted by `created_at desc`. It now uses the existing `trial_bookings` table for all three sources instead of creating a parallel table.
 
 The page and API are protected with the existing `requireProfile` guard. Allowed roles are `platform_admin` and `manager`; the existing manager-equivalent role handling also covers supervisor, branch manager, store owner, and store manager profiles.
 
@@ -48,7 +48,10 @@ Query params:
 
 - `paymentMethod`: `cash_on_site` or `online_payment`
 - `paymentStatus`: `pending_cash`, `pending_payment`, `paid`, `failed`, or `cancelled`
-- `bookingStatus`: `new`, `contacted`, `scheduled`, `completed`, or `cancelled`
+- `bookingStatus`: `new`, `contacted`, `scheduled`, `completed`, `cancelled`, or `no_show`
+- `source`: `website`, `official_line`, or `walk_in`
+- `statsFrom`: `YYYY-MM-DD`
+- `statsTo`: `YYYY-MM-DD`
 - `q`: searches `name`, `phone`, and `line_name`; trimmed and capped at 80 characters
 
 Success response:
@@ -56,7 +59,13 @@ Success response:
 ```json
 {
   "ok": true,
-  "bookings": []
+  "bookings": [],
+  "stats": {
+    "total": 0,
+    "website": 0,
+    "officialLine": 0,
+    "walkIn": 0
+  }
 }
 ```
 
@@ -93,8 +102,27 @@ Allowed `bookingStatus` values:
 - `scheduled`
 - `completed`
 - `cancelled`
+- `no_show`
 
 This route only updates `booking_status`. It does not accept or update `payment_status`.
+
+Route: `/api/admin/trial-bookings`
+
+Method: `POST`
+
+Creates a manually added appointment for official LINE, walk-in, or special website backfill. The new row is stored in `trial_bookings`, starts as `scheduled`, and sends the scheduled appointment LINE notification server-side.
+
+Route: `/api/admin/trial-bookings/:id/schedule`
+
+Method: `PATCH`
+
+Updates an existing website booking into a scheduled appointment. This updates the original row and does not create a duplicate. The scheduled LINE notification is sent only when the previous status was not already `scheduled`.
+
+Route: `/api/admin/trial-bookings/:id/resend-line`
+
+Method: `POST`
+
+Explicitly resends the scheduled appointment LINE notification. This never creates a new booking row.
 
 Success response:
 
@@ -151,18 +179,43 @@ Error responses:
 
 ### booking_status
 
-- `new`: 新預約
+- `new`: 待聯絡
 - `contacted`: 已聯繫
 - `scheduled`: 已安排
 - `completed`: 已完成
 - `cancelled`: 已取消
+- `no_show`: 未到場
+
+### source
+
+- `website`: 網站
+- `official_line`: 官方 LINE
+- `walk_in`: 現場
+
+### line_notification_status
+
+- `not_sent`: 未發送
+- `sent`: 已發送
+- `failed`: 發送失敗
+
+## Scheduling Fields
+
+Migration `20260716133718_admin_trial_booking_scheduling.sql` adds:
+
+- `appointment_date`
+- `appointment_time`
+- `booking_coach`
+- `executing_coach`
+- `line_notification_status`
+- `line_notified_at`
+- `line_notification_error`
+
+Existing `source = 'website_trial_booking'` rows are normalized to `website`. The migration expands `booking_status` to include `no_show` and adds constraints / indexes for source and appointment-date reporting. Existing rows remain valid because the new scheduling fields are nullable and LINE status defaults to `not_sent`.
 
 ## Current Limits
 
-- The admin page supports updating `booking_status` only.
 - `payment_status` cannot be edited manually from this admin page.
 - Deleting bookings is not supported yet.
 - Exporting bookings is not supported yet.
 - ACPay is not connected yet.
-- LINE notification is not connected yet.
 - Status change audit logs are not implemented yet.
