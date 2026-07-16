@@ -1,9 +1,7 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
-
 import Link from "next/link";
-import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type CheckinRequest = {
   id: string;
@@ -34,29 +32,6 @@ function formatTaipeiTime(value: string) {
   }).format(new Date(value));
 }
 
-async function compressPhoto(file: File) {
-  const imageUrl = URL.createObjectURL(file);
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error("照片讀取失敗"));
-      element.src = imageUrl;
-    });
-    const maxSide = 1200;
-    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-    canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-    if (!blob) throw new Error("照片處理失敗");
-    return new File([blob], "check-in-photo.jpg", { type: "image/jpeg" });
-  } finally {
-    URL.revokeObjectURL(imageUrl);
-  }
-}
-
 export default function StudentCheckInPage() {
   const [view, setView] = useState<View>("loading");
   const [authMethod, setAuthMethod] = useState<"line" | "phone">("phone");
@@ -65,13 +40,9 @@ export default function StudentCheckInPage() {
   const [phone, setPhone] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [password, setPassword] = useState("");
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState("");
-  const [photoConfirmed, setPhotoConfirmed] = useState(false);
   const [requestId, setRequestId] = useState("");
   const [success, setSuccess] = useState<CheckinPayload | null>(null);
   const [error, setError] = useState("");
-  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const applyRequest = useCallback((payload: CheckinPayload) => {
     if (payload.profile?.fullName) setFullName(payload.profile.fullName);
@@ -148,12 +119,6 @@ export default function StudentCheckInPage() {
     return () => window.clearInterval(timer);
   }, [applyRequest, requestId, view]);
 
-  useEffect(() => {
-    return () => {
-      if (photoPreview) URL.revokeObjectURL(photoPreview);
-    };
-  }, [photoPreview]);
-
   async function submitPhoneLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -177,27 +142,8 @@ export default function StudentCheckInPage() {
     applyRequest(payload);
   }
 
-  async function selectPhoto(event: ChangeEvent<HTMLInputElement>) {
-    const selected = event.target.files?.[0];
-    if (!selected) return;
-    setError("");
-    try {
-      const compressed = await compressPhoto(selected);
-      if (photoPreview) URL.revokeObjectURL(photoPreview);
-      setPhoto(compressed);
-      setPhotoPreview(URL.createObjectURL(compressed));
-      setPhotoConfirmed(false);
-    } catch {
-      setError("照片無法讀取，請重新拍攝。");
-    }
-  }
-
   async function submitRegistration(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!photo || !photoConfirmed) {
-      setError("請先拍照並按下「使用這張照片」。");
-      return;
-    }
     setError("");
     setView("loading");
     const form = new FormData();
@@ -205,7 +151,6 @@ export default function StudentCheckInPage() {
     form.set("phone", phone);
     form.set("birthDate", birthDate);
     form.set("password", password);
-    form.set("photo", photo);
     const response = await fetch("/api/student-checkin/register", { method: "POST", body: form });
     const payload = (await response.json().catch(() => null)) as CheckinPayload | null;
     if (!response.ok || !payload?.ok) {
@@ -272,25 +217,6 @@ export default function StudentCheckInPage() {
                 <label><span>手機號碼</span><input value={phone} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" inputMode="tel" required /></label>
                 <label><span>生日</span><input type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} required /></label>
                 <label><span>密碼（至少 6 碼）</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={6} required /></label>
-              </div>
-              <div className="studentCheckInPhotoField">
-                <span>本人照片</span>
-                {!photoPreview ? (
-                  <button className="studentCheckInCameraButton" type="button" onClick={() => photoInputRef.current?.click()}>開啟相機拍照</button>
-                ) : (
-                  <div className="studentCheckInPhotoPreview">
-                    <img src={photoPreview} alt="即將使用的本人照片" />
-                    {photoConfirmed ? (
-                      <p>照片已確認</p>
-                    ) : (
-                      <div className="studentCheckInPhotoActions">
-                        <button type="button" onClick={() => setPhotoConfirmed(true)}>使用這張照片</button>
-                        <button type="button" onClick={() => photoInputRef.current?.click()}>重新拍攝</button>
-                      </div>
-                    )}
-                  </div>
-                )}
-                <input ref={photoInputRef} className="studentCheckInFileInput" type="file" accept="image/*" capture="user" onChange={selectPhoto} />
               </div>
               {error ? <p className="studentCheckInError">{error}</p> : null}
               <button className="studentCheckInPrimary" type="submit">建立資料並送出報到</button>

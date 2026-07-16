@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type StudentProfile = {
   id: string;
@@ -66,6 +66,31 @@ function formatBirthday(value: string | null) {
   return `${year}/${month}/${day}`;
 }
 
+async function compressPhoto(file: File) {
+  const imageUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("照片讀取失敗"));
+      element.src = imageUrl;
+    });
+    const maxSide = 1200;
+    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("照片處理失敗");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (!blob) throw new Error("照片處理失敗");
+    return new File([blob], "student-photo.jpg", { type: "image/jpeg" });
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+}
+
 export default function StudentCheckInsAdminPage() {
   const [date, setDate] = useState(todayDateInputValue());
   const [checkInUrl, setCheckInUrl] = useState("");
@@ -74,9 +99,14 @@ export default function StudentCheckInsAdminPage() {
   const [recent, setRecent] = useState<StudentCheckInRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeciding, setIsDeciding] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState<{ requestId: string; file: File; preview: string } | null>(null);
   const [error, setError] = useState("");
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const activeRequest = pending[0] || null;
+  const activePhotoPreview = capturedPhoto?.requestId === activeRequest?.id ? capturedPhoto.preview : "";
+  const capturedPhotoPreview = capturedPhoto?.preview || "";
   const qrUrl = useMemo(() => {
     if (!checkInUrl) return "";
     return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=${encodeURIComponent(checkInUrl)}`;
@@ -109,6 +139,48 @@ export default function StudentCheckInsAdminPage() {
     const timer = window.setInterval(() => void loadCheckIns(true), 3000);
     return () => window.clearInterval(timer);
   }, [loadCheckIns]);
+
+  useEffect(() => {
+    return () => {
+      if (capturedPhotoPreview) URL.revokeObjectURL(capturedPhotoPreview);
+    };
+  }, [capturedPhotoPreview]);
+
+  async function selectPhoto(event: ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0];
+    const requestId = activeRequest?.id;
+    event.target.value = "";
+    if (!selected || !requestId) return;
+    setError("");
+    try {
+      const compressed = await compressPhoto(selected);
+      setCapturedPhoto({ requestId, file: compressed, preview: URL.createObjectURL(compressed) });
+    } catch {
+      setError("照片無法讀取，請重新拍攝。");
+    }
+  }
+
+  async function uploadPhoto() {
+    if (!activeRequest || capturedPhoto?.requestId !== activeRequest.id) return;
+    setIsUploadingPhoto(true);
+    setError("");
+    const form = new FormData();
+    form.set("photo", capturedPhoto.file);
+    const response = await fetch(`/api/admin/student-check-ins/${activeRequest.id}/photo`, { method: "POST", body: form });
+    const payload = (await response.json().catch(() => null)) as { ok?: boolean; photoUrl?: string; error?: string } | null;
+    if (!response.ok || !payload?.ok || !payload.photoUrl) {
+      setError(payload?.error || "照片上傳失敗，請重新拍攝。");
+      setIsUploadingPhoto(false);
+      return;
+    }
+    setPending((current) => current.map((item) => (
+      item.id === activeRequest.id
+        ? { ...item, profile: { ...item.profile, photo_url: payload.photoUrl || null } }
+        : item
+    )));
+    setCapturedPhoto(null);
+    setIsUploadingPhoto(false);
+  }
 
   async function decide(requestId: string, decision: "approved" | "rejected") {
     setIsDeciding(true);
@@ -215,7 +287,25 @@ export default function StudentCheckInsAdminPage() {
         <div className="studentCheckInsApprovalBackdrop" role="presentation">
           <section className="studentCheckInsApprovalDialog" role="dialog" aria-modal="true" aria-labelledby="student-approval-title">
             <div className="studentCheckInsApprovalPhoto">
-              {activeRequest.profile.photo_url ? <img src={activeRequest.profile.photo_url} alt={`${activeRequest.profile.full_name} 的本人照片`} /> : <div>沒有照片</div>}
+              {activeRequest.profile.photo_url ? (
+                <img src={activeRequest.profile.photo_url} alt={`${activeRequest.profile.full_name} 的本人照片`} />
+              ) : activePhotoPreview ? (
+                <div className="studentCheckInsPhotoPreview">
+                  <img src={activePhotoPreview} alt={`${activeRequest.profile.full_name} 尚未確認的本人照片`} />
+                  <div className="studentCheckInsPhotoActions">
+                    <button type="button" disabled={isUploadingPhoto} onClick={() => void uploadPhoto()}>
+                      {isUploadingPhoto ? "上傳中" : "使用這張照片"}
+                    </button>
+                    <button type="button" disabled={isUploadingPhoto} onClick={() => photoInputRef.current?.click()}>重新拍攝</button>
+                  </div>
+                </div>
+              ) : (
+                <button className="studentCheckInsPhotoCapture" type="button" onClick={() => photoInputRef.current?.click()}>
+                  <strong>拍攝本人照片</strong>
+                  <span>照片確認後將永久鎖定</span>
+                </button>
+              )}
+              <input ref={photoInputRef} className="studentCheckInsPhotoInput" type="file" accept="image/*" capture="user" onChange={selectPhoto} />
             </div>
             <div className="studentCheckInsApprovalInfo">
               <p className="studentCheckInEyebrow">CHECK-IN REQUEST</p>
@@ -226,10 +316,12 @@ export default function StudentCheckInsAdminPage() {
                 <div><dt>登入方式</dt><dd>{activeRequest.auth_method === "line" ? "LINE" : "手機與密碼"}</dd></div>
                 <div><dt>送出時間</dt><dd>{formatTaipeiDateTime(activeRequest.requested_at)}</dd></div>
               </dl>
-              <p className="studentCheckInsApprovalHint">請核對現場本人與照片相符後再放行。</p>
+              <p className="studentCheckInsApprovalHint">
+                {activeRequest.profile.photo_url ? "請核對現場本人與照片相符後再放行。" : "請先拍攝並確認本人照片，才能放行。"}
+              </p>
               <div className="studentCheckInsApprovalActions">
-                <button className="studentCheckInsRejectButton" type="button" disabled={isDeciding} onClick={() => void decide(activeRequest.id, "rejected")}>拒絕</button>
-                <button className="studentCheckInsApproveButton" type="button" disabled={isDeciding} onClick={() => void decide(activeRequest.id, "approved")}>{isDeciding ? "處理中" : "放行"}</button>
+                <button className="studentCheckInsRejectButton" type="button" disabled={isDeciding || isUploadingPhoto} onClick={() => void decide(activeRequest.id, "rejected")}>拒絕</button>
+                <button className="studentCheckInsApproveButton" type="button" disabled={isDeciding || isUploadingPhoto || !activeRequest.profile.photo_url} onClick={() => void decide(activeRequest.id, "approved")}>{isDeciding ? "處理中" : "放行"}</button>
               </div>
               {pending.length > 1 ? <p className="studentCheckInsQueueNote">後面還有 {pending.length - 1} 位等待確認</p> : null}
             </div>

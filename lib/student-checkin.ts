@@ -180,8 +180,7 @@ export function isCompleteStudentProfile(profile: StudentProfileRow | null): pro
       profile.full_name &&
       profile.phone &&
       profile.birth_date &&
-      profile.password_hash &&
-      profile.photo_path,
+      profile.password_hash,
   );
 }
 
