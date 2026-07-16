@@ -137,7 +137,9 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const searchParams = url.searchParams;
     const paymentMethod = readEnumParam(searchParams, "paymentMethod", paymentMethods);
-    const paymentStatus = readEnumParam(searchParams, "paymentStatus", paymentStatuses);
+    const paymentStatusParam = searchParams.get("paymentStatus");
+    const hiddenCancelled = paymentStatusParam === "hidden_cancelled";
+    const paymentStatus = hiddenCancelled ? null : readEnumParam(searchParams, "paymentStatus", paymentStatuses);
     const bookingStatus = readEnumParam(searchParams, "bookingStatus", bookingStatuses);
     const source = readEnumParam(searchParams, "source", sources);
     const statsFrom = searchParams.get("statsFrom")?.trim() || null;
@@ -153,7 +155,9 @@ export async function GET(request: Request) {
 
     if (paymentMethod) query = query.eq("payment_method", paymentMethod);
     if (paymentStatus) query = query.eq("payment_status", paymentStatus);
-    if (bookingStatus) {
+    if (hiddenCancelled) {
+      query = query.eq("booking_status", "cancelled");
+    } else if (bookingStatus) {
       query = query.eq("booking_status", bookingStatus);
     } else {
       query = query.neq("booking_status", "cancelled");

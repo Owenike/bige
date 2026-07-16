@@ -850,6 +850,7 @@ export default function TrialBookingsAdminPage() {
               <option value="paid">線上付款已付款</option>
               <option value="failed">付款失敗</option>
               <option value="cancelled">已取消</option>
+              <option value="hidden_cancelled">已隱藏</option>
             </select>
           </label>
           <label className="trialAdminField">
