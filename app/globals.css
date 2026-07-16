@@ -9649,7 +9649,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   background:
     linear-gradient(180deg, rgba(6, 8, 11, .78) 0%, rgba(6, 8, 11, .92) 46%, rgba(6, 8, 11, .98) 100%),
     radial-gradient(72% 46% at 50% 0%, rgba(214, 184, 116, .18), rgba(214, 184, 116, 0) 72%),
-    var(--home-image-slogan-hero);
+    #06080b;
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
@@ -9685,11 +9685,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(100deg, rgba(7, 8, 11, .28), rgba(7, 8, 11, .86)),
-    var(--home-image-card-s2-b);
-  background-size: cover;
-  background-position: center 42%;
-  opacity: .32;
+    linear-gradient(110deg, rgba(218, 196, 142, .14), rgba(218, 196, 142, 0) 42%),
+    radial-gradient(60% 90% at 8% 0%, rgba(246, 242, 232, .08), rgba(246, 242, 232, 0) 70%);
+  opacity: 1;
 }
 .trialAdminHeader > *{
   position: relative;
