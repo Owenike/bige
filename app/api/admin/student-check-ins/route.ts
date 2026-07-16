@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../lib/auth-context";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
-import { checkInUrl, taipeiDateParts } from "../../../../lib/student-checkin";
+import { checkInUrl, STUDENT_PHOTO_BUCKET, taipeiDateParts } from "../../../../lib/student-checkin";
 
 function authFailureResponse(status: number) {
   if (status === 401) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   if (status === 403) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   return NextResponse.json({ ok: false, error: "Unable to verify access" }, { status: status || 500 });
+}
+
+type SignableRow = { photo_path?: string | null };
+
+async function signedPhotoMap(rows: SignableRow[]) {
+  const paths = [...new Set(rows.map((row) => row.photo_path).filter((path): path is string => Boolean(path)))];
+  if (paths.length === 0) return new Map<string, string>();
+  const result = await createSupabaseAdminClient().storage.from(STUDENT_PHOTO_BUCKET).createSignedUrls(paths, 5 * 60);
+  if (result.error) throw new Error(result.error.message);
+  return new Map((result.data || []).filter((item) => item.signedUrl).map((item) => [item.path, item.signedUrl]));
 }
 
 export async function GET(request: Request) {
@@ -17,28 +27,52 @@ export async function GET(request: Request) {
   const date = url.searchParams.get("date")?.trim() || taipeiDateParts().localDate;
   const admin = createSupabaseAdminClient();
 
-  const [todayResult, recentResult] = await Promise.all([
+  const [pendingResult, todayResult, recentResult] = await Promise.all([
+    admin
+      .from("student_checkin_requests")
+      .select(
+        "id, status, auth_method, requested_at, student_profile_id, student_line_profiles!student_checkin_requests_student_profile_id_fkey(id, full_name, phone, birth_date, photo_path, line_display_name)",
+      )
+      .eq("status", "pending")
+      .order("requested_at", { ascending: true })
+      .limit(50),
     admin
       .from("student_check_ins")
-      .select("id, full_name, phone, checked_in_at, local_date, local_month, month_sequence")
+      .select("id, request_id, full_name, phone, birth_date, photo_path, checked_in_at, local_date, local_month, month_sequence")
       .eq("local_date", date)
       .order("checked_in_at", { ascending: false })
       .limit(200),
     admin
       .from("student_check_ins")
-      .select("id, full_name, phone, checked_in_at, local_date, local_month, month_sequence")
+      .select("id, request_id, full_name, phone, birth_date, photo_path, checked_in_at, local_date, local_month, month_sequence")
       .order("checked_in_at", { ascending: false })
       .limit(20),
   ]);
 
+  if (pendingResult.error) return NextResponse.json({ ok: false, error: pendingResult.error.message }, { status: 500 });
   if (todayResult.error) return NextResponse.json({ ok: false, error: todayResult.error.message }, { status: 500 });
   if (recentResult.error) return NextResponse.json({ ok: false, error: recentResult.error.message }, { status: 500 });
+
+  const pending = (pendingResult.data || []).map((row) => {
+    const relation = Array.isArray(row.student_line_profiles) ? row.student_line_profiles[0] : row.student_line_profiles;
+    return { ...row, profile: relation, student_line_profiles: undefined };
+  });
+  const photoRows = [
+    ...pending.map((row) => ({ photo_path: row.profile?.photo_path || null })),
+    ...(todayResult.data || []),
+    ...(recentResult.data || []),
+  ];
+  const photos = await signedPhotoMap(photoRows);
 
   return NextResponse.json({
     ok: true,
     checkInUrl: checkInUrl(request),
     date,
-    today: todayResult.data || [],
-    recent: recentResult.data || [],
+    pending: pending.map((row) => ({
+      ...row,
+      profile: row.profile ? { ...row.profile, photo_url: photos.get(row.profile.photo_path || "") || null } : null,
+    })),
+    today: (todayResult.data || []).map((row) => ({ ...row, photo_url: photos.get(row.photo_path || "") || null })),
+    recent: (recentResult.data || []).map((row) => ({ ...row, photo_url: photos.get(row.photo_path || "") || null })),
   });
 }

@@ -1,0 +1,125 @@
+import crypto from "crypto";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
+import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
+import {
+  createCheckinRequest,
+  hashStudentPassword,
+  loadStudentProfileByLine,
+  loadStudentProfileByPhone,
+  normalizePhone,
+  readStudentLineSession,
+  setStudentAuthSession,
+  STUDENT_PHOTO_BUCKET,
+} from "../../../../lib/student-checkin";
+
+const registrationSchema = z.object({
+  fullName: z.string().trim().min(2).max(40),
+  phone: z.string().trim().min(8).max(20),
+  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  password: z.string().min(6).max(100),
+});
+
+const acceptedPhotoTypes = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+]);
+
+export async function POST(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const limit = rateLimitFixedWindow({ key: `student-checkin-register:${ip}`, limit: 8, windowMs: 60 * 60 * 1000 });
+  if (!limit.ok) {
+    return NextResponse.json(
+      { ok: false, error: "建立資料次數過多，請洽現場工作人員。" },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } },
+    );
+  }
+
+  const form = await request.formData().catch(() => null);
+  if (!form) return NextResponse.json({ ok: false, error: "資料格式不正確。" }, { status: 400 });
+
+  const parsed = registrationSchema.safeParse({
+    fullName: form.get("fullName"),
+    phone: form.get("phone"),
+    birthDate: form.get("birthDate"),
+    password: form.get("password"),
+  });
+  if (!parsed.success) {
+    return NextResponse.json({ ok: false, error: "請完整填寫姓名、電話、生日與至少 6 碼密碼。" }, { status: 400 });
+  }
+
+  const birthday = new Date(`${parsed.data.birthDate}T00:00:00+08:00`);
+  if (Number.isNaN(birthday.getTime()) || birthday > new Date() || parsed.data.birthDate < "1900-01-01") {
+    return NextResponse.json({ ok: false, error: "生日格式不正確。" }, { status: 400 });
+  }
+
+  const photo = form.get("photo");
+  if (!(photo instanceof File) || photo.size === 0) {
+    return NextResponse.json({ ok: false, error: "請拍攝並確認使用本人照片。" }, { status: 400 });
+  }
+  const extension = acceptedPhotoTypes.get(photo.type);
+  if (!extension || photo.size > 2 * 1024 * 1024) {
+    return NextResponse.json({ ok: false, error: "照片需為 JPG、PNG 或 WebP，且不可超過 2MB。" }, { status: 400 });
+  }
+
+  const phone = normalizePhone(parsed.data.phone);
+  if (phone.length < 8 || phone.length > 12) {
+    return NextResponse.json({ ok: false, error: "手機號碼格式不正確。" }, { status: 400 });
+  }
+
+  const lineSession = await readStudentLineSession();
+  const [phoneProfile, lineProfile] = await Promise.all([
+    loadStudentProfileByPhone(phone),
+    lineSession ? loadStudentProfileByLine(lineSession.lineUserId) : Promise.resolve(null),
+  ]);
+
+  if (phoneProfile && phoneProfile.id !== lineProfile?.id) {
+    return NextResponse.json({ ok: false, error: "這支手機已建立資料，請回登入頁使用手機與密碼報到。" }, { status: 409 });
+  }
+
+  const profileId = lineProfile?.id || crypto.randomUUID();
+  const photoPath = `${profileId}/${crypto.randomUUID()}.${extension}`;
+  const admin = createSupabaseAdminClient();
+  const upload = await admin.storage.from(STUDENT_PHOTO_BUCKET).upload(photoPath, photo, {
+    contentType: photo.type,
+    cacheControl: "3600",
+    upsert: false,
+  });
+  if (upload.error) return NextResponse.json({ ok: false, error: "照片上傳失敗，請重新拍攝。" }, { status: 500 });
+
+  const passwordHash = await hashStudentPassword(parsed.data.password);
+  const profilePayload = {
+    id: profileId,
+    line_user_id: lineSession?.lineUserId || null,
+    line_display_name: lineSession?.lineDisplayName || null,
+    full_name: parsed.data.fullName,
+    phone,
+    birth_date: parsed.data.birthDate,
+    password_hash: passwordHash,
+    photo_path: photoPath,
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  };
+
+  const saved = lineProfile
+    ? await admin.from("student_line_profiles").update(profilePayload).eq("id", profileId).select("id, full_name").single()
+    : await admin.from("student_line_profiles").insert(profilePayload).select("id, full_name").single();
+
+  if (saved.error) {
+    await admin.storage.from(STUDENT_PHOTO_BUCKET).remove([photoPath]);
+    const message = saved.error.code === "23505" ? "這支手機或 LINE 已建立資料。" : "學員資料建立失敗，請洽現場工作人員。";
+    return NextResponse.json({ ok: false, error: message }, { status: saved.error.code === "23505" ? 409 : 500 });
+  }
+
+  const authMethod = lineSession ? "line" : "phone";
+  const checkinRequest = await createCheckinRequest({ profileId, authMethod, request });
+  const response = NextResponse.json({
+    ok: true,
+    profile: { id: profileId, fullName: parsed.data.fullName },
+    request: checkinRequest,
+  });
+  setStudentAuthSession(response, profileId, authMethod);
+  return response;
+}

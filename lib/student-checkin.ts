@@ -1,10 +1,16 @@
 import crypto from "crypto";
+import { promisify } from "util";
 import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "./supabase/admin";
 
 export const STUDENT_LINE_SESSION_COOKIE = "bige_student_line_session";
 export const STUDENT_LINE_STATE_COOKIE = "bige_student_line_state";
+export const STUDENT_AUTH_SESSION_COOKIE = "bige_student_auth_session";
+export const STUDENT_PHOTO_BUCKET = "student-checkin-photos";
+
+const STUDENT_SESSION_MAX_AGE_SECONDS = 30 * 60;
+const scryptAsync = promisify(crypto.scrypt);
 
 type StudentLineSession = {
   lineUserId: string;
@@ -12,26 +18,35 @@ type StudentLineSession = {
   issuedAt: number;
 };
 
-type StudentProfileRow = {
+export type StudentAuthMethod = "line" | "phone";
+
+type StudentAuthSession = {
+  profileId: string;
+  authMethod: StudentAuthMethod;
+  issuedAt: number;
+};
+
+export type StudentProfileRow = {
   id: string;
-  line_user_id: string;
+  line_user_id: string | null;
   line_display_name: string | null;
   full_name: string;
   phone: string;
+  birth_date: string | null;
+  password_hash: string | null;
+  photo_path: string | null;
+  is_active: boolean;
   bound_at: string;
   last_checkin_at: string | null;
 };
 
-export type StudentCheckinResult = {
-  profile: StudentProfileRow;
-  checkIn: {
-    id: string;
-    checked_in_at: string;
-    local_date: string;
-    local_month: string;
-    month_sequence: number;
-  };
-  reused: boolean;
+export type StudentCheckinRequestRow = {
+  id: string;
+  student_profile_id: string;
+  status: "pending" | "approved" | "rejected";
+  auth_method: StudentAuthMethod;
+  requested_at: string;
+  reviewed_at: string | null;
 };
 
 function base64url(input: Buffer | string) {
@@ -40,7 +55,7 @@ function base64url(input: Buffer | string) {
 
 function readSessionSecret() {
   const secret = process.env.LINE_LOGIN_SESSION_SECRET || process.env.LINE_LOGIN_CHANNEL_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!secret) throw new Error("Missing LINE_LOGIN_SESSION_SECRET or LINE_LOGIN_CHANNEL_SECRET");
+  if (!secret) throw new Error("Missing student session secret");
   return secret;
 }
 
@@ -48,28 +63,40 @@ function signPayload(payload: string) {
   return crypto.createHmac("sha256", readSessionSecret()).update(payload).digest("base64url");
 }
 
-export function createStudentLineSessionCookie(input: { lineUserId: string; lineDisplayName?: string | null }) {
-  const payload = base64url(
-    JSON.stringify({
-      lineUserId: input.lineUserId,
-      lineDisplayName: input.lineDisplayName || null,
-      issuedAt: Date.now(),
-    } satisfies StudentLineSession),
-  );
+function createSignedCookie<T extends object>(data: T) {
+  const payload = base64url(JSON.stringify(data));
   return `${payload}.${signPayload(payload)}`;
 }
 
-export function verifyStudentLineSessionCookie(value: string | undefined | null): StudentLineSession | null {
+function verifySignedCookie<T extends { issuedAt: number }>(value: string | undefined | null): T | null {
   if (!value) return null;
   const [payload, signature] = value.split(".");
   if (!payload || !signature) return null;
   const expected = signPayload(payload);
   if (signature.length !== expected.length) return null;
   if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
-  const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as StudentLineSession;
-  if (!parsed.lineUserId || typeof parsed.issuedAt !== "number") return null;
-  if (Date.now() - parsed.issuedAt > 30 * 60 * 1000) return null;
-  return parsed;
+
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as T;
+    if (typeof parsed.issuedAt !== "number") return null;
+    if (Date.now() - parsed.issuedAt > STUDENT_SESSION_MAX_AGE_SECONDS * 1000) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function createStudentLineSessionCookie(input: { lineUserId: string; lineDisplayName?: string | null }) {
+  return createSignedCookie<StudentLineSession>({
+    lineUserId: input.lineUserId,
+    lineDisplayName: input.lineDisplayName || null,
+    issuedAt: Date.now(),
+  });
+}
+
+export function verifyStudentLineSessionCookie(value: string | undefined | null) {
+  const session = verifySignedCookie<StudentLineSession>(value);
+  return session?.lineUserId ? session : null;
 }
 
 export async function readStudentLineSession() {
@@ -80,11 +107,40 @@ export async function readStudentLineSession() {
 export function setStudentLineSession(response: NextResponse, sessionValue: string) {
   response.cookies.set(STUDENT_LINE_SESSION_COOKIE, sessionValue, {
     httpOnly: true,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 30 * 60,
+    maxAge: STUDENT_SESSION_MAX_AGE_SECONDS,
   });
+}
+
+export function clearStudentLineSession(response: NextResponse) {
+  response.cookies.delete(STUDENT_LINE_SESSION_COOKIE);
+}
+
+export function createStudentAuthSessionCookie(profileId: string, authMethod: StudentAuthMethod) {
+  return createSignedCookie<StudentAuthSession>({ profileId, authMethod, issuedAt: Date.now() });
+}
+
+export async function readStudentAuthSession() {
+  const cookieStore = await cookies();
+  const session = verifySignedCookie<StudentAuthSession>(cookieStore.get(STUDENT_AUTH_SESSION_COOKIE)?.value);
+  if (!session?.profileId || !["line", "phone"].includes(session.authMethod)) return null;
+  return session;
+}
+
+export function setStudentAuthSession(response: NextResponse, profileId: string, authMethod: StudentAuthMethod) {
+  response.cookies.set(STUDENT_AUTH_SESSION_COOKIE, createStudentAuthSessionCookie(profileId, authMethod), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: STUDENT_SESSION_MAX_AGE_SECONDS,
+  });
+}
+
+export function clearStudentAuthSession(response: NextResponse) {
+  response.cookies.delete(STUDENT_AUTH_SESSION_COOKIE);
 }
 
 export function appOrigin(request: Request) {
@@ -100,7 +156,9 @@ export function checkInUrl(request: Request) {
 }
 
 export function normalizePhone(input: string) {
-  return input.replace(/\D/g, "");
+  const digits = input.replace(/\D/g, "");
+  if (digits.startsWith("886") && digits.length === 12) return `0${digits.slice(3)}`;
+  return digits;
 }
 
 export function taipeiDateParts(date = new Date()) {
@@ -115,102 +173,138 @@ export function taipeiDateParts(date = new Date()) {
   return { localDate, localMonth: `${map.year}-${map.month}` };
 }
 
-export async function loadStudentProfile(lineUserId: string) {
-  const admin = createSupabaseAdminClient();
-  const result = await admin
+export function isCompleteStudentProfile(profile: StudentProfileRow | null): profile is StudentProfileRow {
+  return Boolean(
+    profile &&
+      profile.is_active &&
+      profile.full_name &&
+      profile.phone &&
+      profile.birth_date &&
+      profile.password_hash &&
+      profile.photo_path,
+  );
+}
+
+const profileSelect =
+  "id, line_user_id, line_display_name, full_name, phone, birth_date, password_hash, photo_path, is_active, bound_at, last_checkin_at";
+
+export async function loadStudentProfileById(profileId: string) {
+  const result = await createSupabaseAdminClient()
     .from("student_line_profiles")
-    .select("id, line_user_id, line_display_name, full_name, phone, bound_at, last_checkin_at")
+    .select(profileSelect)
+    .eq("id", profileId)
+    .maybeSingle();
+  if (result.error) throw new Error(result.error.message);
+  return (result.data || null) as StudentProfileRow | null;
+}
+
+export async function loadStudentProfileByLine(lineUserId: string) {
+  const result = await createSupabaseAdminClient()
+    .from("student_line_profiles")
+    .select(profileSelect)
     .eq("line_user_id", lineUserId)
     .maybeSingle();
   if (result.error) throw new Error(result.error.message);
   return (result.data || null) as StudentProfileRow | null;
 }
 
-export async function upsertStudentProfile(input: {
-  lineUserId: string;
-  lineDisplayName: string | null;
-  fullName: string;
-  phone: string;
-}) {
-  const admin = createSupabaseAdminClient();
-  const nowIso = new Date().toISOString();
-  const result = await admin
+export async function loadStudentProfileByPhone(phoneInput: string) {
+  const result = await createSupabaseAdminClient()
     .from("student_line_profiles")
-    .upsert(
-      {
-        line_user_id: input.lineUserId,
-        line_display_name: input.lineDisplayName,
-        full_name: input.fullName,
-        phone: normalizePhone(input.phone),
-        updated_at: nowIso,
-      },
-      { onConflict: "line_user_id" },
-    )
-    .select("id, line_user_id, line_display_name, full_name, phone, bound_at, last_checkin_at")
-    .single();
+    .select(profileSelect)
+    .eq("phone", normalizePhone(phoneInput))
+    .maybeSingle();
   if (result.error) throw new Error(result.error.message);
-  return result.data as StudentProfileRow;
+  return (result.data || null) as StudentProfileRow | null;
 }
 
-export async function recordStudentCheckin(params: {
-  profile: StudentProfileRow;
-  request: Request;
-}): Promise<StudentCheckinResult> {
-  const admin = createSupabaseAdminClient();
-  const now = new Date();
-  const nowIso = now.toISOString();
-  const { localDate, localMonth } = taipeiDateParts(now);
+export async function hashStudentPassword(password: string) {
+  const salt = crypto.randomBytes(16);
+  const derived = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `scrypt$${salt.toString("base64url")}$${derived.toString("base64url")}`;
+}
 
-  const recentResult = await admin
-    .from("student_check_ins")
-    .select("id, checked_in_at, local_date, local_month, month_sequence")
-    .eq("student_profile_id", params.profile.id)
-    .gte("checked_in_at", new Date(now.getTime() - 5 * 60 * 1000).toISOString())
-    .order("checked_in_at", { ascending: false })
+export async function verifyStudentPassword(password: string, storedHash: string | null) {
+  if (!storedHash) return false;
+  const [algorithm, saltText, hashText] = storedHash.split("$");
+  if (algorithm !== "scrypt" || !saltText || !hashText) return false;
+
+  try {
+    const expected = Buffer.from(hashText, "base64url");
+    const derived = (await scryptAsync(password, Buffer.from(saltText, "base64url"), expected.length)) as Buffer;
+    return expected.length === derived.length && crypto.timingSafeEqual(expected, derived);
+  } catch {
+    return false;
+  }
+}
+
+export async function createCheckinRequest(input: {
+  profileId: string;
+  authMethod: StudentAuthMethod;
+  request: Request;
+}) {
+  const admin = createSupabaseAdminClient();
+  const existing = await admin
+    .from("student_checkin_requests")
+    .select("id, student_profile_id, status, auth_method, requested_at, reviewed_at")
+    .eq("student_profile_id", input.profileId)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (existing.error) throw new Error(existing.error.message);
+  if (existing.data) return existing.data as StudentCheckinRequestRow;
+
+  const inserted = await admin
+    .from("student_checkin_requests")
+    .insert({
+      student_profile_id: input.profileId,
+      auth_method: input.authMethod,
+      user_agent: input.request.headers.get("user-agent") || null,
+      ip_address: input.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+    })
+    .select("id, student_profile_id, status, auth_method, requested_at, reviewed_at")
+    .single();
+  if (inserted.error) {
+    if (inserted.error.code === "23505") {
+      const raced = await admin
+        .from("student_checkin_requests")
+        .select("id, student_profile_id, status, auth_method, requested_at, reviewed_at")
+        .eq("student_profile_id", input.profileId)
+        .eq("status", "pending")
+        .single();
+      if (!raced.error) return raced.data as StudentCheckinRequestRow;
+    }
+    throw new Error(inserted.error.message);
+  }
+  return inserted.data as StudentCheckinRequestRow;
+}
+
+export async function loadRecentCheckinRequest(profileId: string) {
+  const cutoff = new Date(Date.now() - STUDENT_SESSION_MAX_AGE_SECONDS * 1000).toISOString();
+  const result = await createSupabaseAdminClient()
+    .from("student_checkin_requests")
+    .select("id, student_profile_id, status, auth_method, requested_at, reviewed_at")
+    .eq("student_profile_id", profileId)
+    .gte("requested_at", cutoff)
+    .order("requested_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (recentResult.error) throw new Error(recentResult.error.message);
-  if (recentResult.data) {
-    return { profile: params.profile, checkIn: recentResult.data as StudentCheckinResult["checkIn"], reused: true };
-  }
+  if (result.error) throw new Error(result.error.message);
+  return (result.data || null) as StudentCheckinRequestRow | null;
+}
 
-  const countResult = await admin
+export async function loadApprovedCheckin(requestId: string) {
+  const result = await createSupabaseAdminClient()
     .from("student_check_ins")
-    .select("id", { count: "exact", head: true })
-    .eq("student_profile_id", params.profile.id)
-    .eq("local_month", localMonth);
-  if (countResult.error) throw new Error(countResult.error.message);
-
-  const monthSequence = (countResult.count || 0) + 1;
-  const insertResult = await admin
-    .from("student_check_ins")
-    .insert({
-      student_profile_id: params.profile.id,
-      line_user_id: params.profile.line_user_id,
-      full_name: params.profile.full_name,
-      phone: params.profile.phone,
-      checked_in_at: nowIso,
-      local_date: localDate,
-      local_month: localMonth,
-      month_sequence: monthSequence,
-      user_agent: params.request.headers.get("user-agent") || null,
-      ip_address: params.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
-    })
     .select("id, checked_in_at, local_date, local_month, month_sequence")
-    .single();
-  if (insertResult.error) throw new Error(insertResult.error.message);
-
-  await admin
-    .from("student_line_profiles")
-    .update({ last_checkin_at: nowIso, updated_at: nowIso })
-    .eq("id", params.profile.id);
-
-  return { profile: params.profile, checkIn: insertResult.data as StudentCheckinResult["checkIn"], reused: false };
+    .eq("request_id", requestId)
+    .maybeSingle();
+  if (result.error) throw new Error(result.error.message);
+  return result.data || null;
 }
 
 export function encouragementFor(name: string, monthSequence: number) {
-  if (monthSequence <= 1) return `${name}，歡迎回到 BigE。這個月的第一步已經完成了，很棒。`;
-  if (monthSequence <= 4) return `${name}，你這個月已經第 ${monthSequence} 次來自主運動了，穩定出現就是最強的累積。`;
-  if (monthSequence <= 8) return `${name}，第 ${monthSequence} 次了。你不是偶爾努力，你是真的在養成自己的節奏。`;
-  return `${name}，這個月第 ${monthSequence} 次自主運動。這份自律很帥，身體一定會記得。`;
+  if (monthSequence <= 1) return `${name}，第一次來 BigE 自主運動就很棒。今天願意開始，就是最重要的一步！`;
+  if (monthSequence <= 4) return `${name}，這個月已經第 ${monthSequence} 次來運動了。你正在把照顧自己變成很好的習慣！`;
+  if (monthSequence <= 8) return `${name}，第 ${monthSequence} 次達成。你的穩定累積正在慢慢變成看得見的力量！`;
+  return `${name}，這個月第 ${monthSequence} 次報到。這份自律非常不簡單，今天也為自己好好加油！`;
 }
