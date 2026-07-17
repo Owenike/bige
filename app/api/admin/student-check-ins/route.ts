@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   const date = url.searchParams.get("date")?.trim() || taipeiDateParts().localDate;
   const admin = createSupabaseAdminClient();
 
-  const [pendingResult, todayResult, recentResult, studentsResult] = await Promise.all([
+  const [pendingResult, todayResult, studentsResult] = await Promise.all([
     admin
       .from("student_checkin_requests")
       .select(
@@ -43,11 +43,6 @@ export async function GET(request: Request) {
       .order("checked_in_at", { ascending: false })
       .limit(200),
     admin
-      .from("student_check_ins")
-      .select("id, request_id, student_profile_id, full_name, phone, birth_date, photo_path, checked_in_at, local_date, local_month, daily_sequence, month_sequence")
-      .order("checked_in_at", { ascending: false })
-      .limit(20),
-    admin
       .from("student_line_profiles")
       .select("id, full_name, phone, email, membership_starts_on, membership_expires_on, is_active, updated_at")
       .eq("is_active", true)
@@ -57,7 +52,6 @@ export async function GET(request: Request) {
 
   if (pendingResult.error) return NextResponse.json({ ok: false, error: pendingResult.error.message }, { status: 500 });
   if (todayResult.error) return NextResponse.json({ ok: false, error: todayResult.error.message }, { status: 500 });
-  if (recentResult.error) return NextResponse.json({ ok: false, error: recentResult.error.message }, { status: 500 });
   if (studentsResult.error) return NextResponse.json({ ok: false, error: studentsResult.error.message }, { status: 500 });
 
   const pending = (pendingResult.data || []).map((row) => {
@@ -67,7 +61,6 @@ export async function GET(request: Request) {
   const photoRows = [
     ...pending.map((row) => ({ photo_path: row.profile?.photo_path || null })),
     ...(todayResult.data || []),
-    ...(recentResult.data || []),
   ];
   const photos = await signedPhotoMap(photoRows);
 
@@ -80,7 +73,6 @@ export async function GET(request: Request) {
       profile: row.profile ? { ...row.profile, photo_url: photos.get(row.profile.photo_path || "") || null } : null,
     })),
     today: (todayResult.data || []).map((row) => ({ ...row, photo_url: photos.get(row.photo_path || "") || null })),
-    recent: (recentResult.data || []).map((row) => ({ ...row, photo_url: photos.get(row.photo_path || "") || null })),
     students: studentsResult.data || [],
   });
 }

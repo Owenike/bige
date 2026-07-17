@@ -52,7 +52,6 @@ type StudentCheckInsResponse = {
   date?: string;
   pending?: PendingRequest[];
   today?: StudentCheckInRow[];
-  recent?: StudentCheckInRow[];
   students?: ManagedStudent[];
   error?: string;
 };
@@ -137,7 +136,6 @@ export default function StudentCheckInsAdminPage() {
   const [checkInUrl, setCheckInUrl] = useState("");
   const [pending, setPending] = useState<PendingRequest[]>([]);
   const [today, setToday] = useState<StudentCheckInRow[]>([]);
-  const [recent, setRecent] = useState<StudentCheckInRow[]>([]);
   const [students, setStudents] = useState<ManagedStudent[]>([]);
   const [periodDrafts, setPeriodDrafts] = useState<Record<string, MembershipPeriodDraft>>({});
   const [savingExpiryId, setSavingExpiryId] = useState("");
@@ -174,14 +172,12 @@ export default function StudentCheckInsAdminPage() {
         if (!quiet) {
           setPending([]);
           setToday([]);
-          setRecent([]);
         }
         return;
       }
       setCheckInUrl(payload.checkInUrl || "");
       setPending(payload.pending || []);
       setToday(payload.today || []);
-      setRecent(payload.recent || []);
       const nextStudents = payload.students || [];
       setStudents(nextStudents);
       setPeriodDrafts((current) => Object.fromEntries(
@@ -357,48 +353,22 @@ export default function StudentCheckInsAdminPage() {
           <article className="studentCheckInsSummaryCard">
             <p className="studentCheckInEyebrow">TODAY</p>
             <strong>{today.length}</strong>
-            <span>今日已放行報到</span>
+            <span>所選日期已放行報到</span>
           </article>
         </section>
 
         <section className="studentCheckInsAdminToolbar">
-          <label><span>查看日期</span><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
+          <label><span>查詢日期</span><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
         </section>
 
         {error ? <div className="studentCheckInsAdminError">{error}</div> : null}
         {notice ? <div className="studentCheckInsAdminNotice">{notice}</div> : null}
 
         <section className="studentCheckInsTableCard">
-          <h2>已完成報到</h2>
-          {today.length === 0 ? (
-            <p className="studentCheckInsEmpty">{isLoading ? "正在載入報到資料" : "這個日期還沒有完成報到的學員。"}</p>
-          ) : (
-            <div className="studentCheckInsTableWrap">
-              <table className="studentCheckInsTable">
-                <thead><tr><th>照片</th><th>時間</th><th>姓名</th><th>電話</th><th>生日</th><th>今日次數</th><th>本月次數</th></tr></thead>
-                <tbody>
-                  {today.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.photo_url ? <button className="studentCheckInsTablePhotoButton" type="button" onClick={() => setSelectedCheckIn(item)} aria-label={`查看 ${item.full_name} 的資料`}><img className="studentCheckInsTablePhoto" src={item.photo_url} alt={`${item.full_name} 的本人照片`} /></button> : "-"}</td>
-                      <td>{formatTaipeiDateTime(item.checked_in_at)}</td>
-                      <td>{item.full_name}</td>
-                      <td>{item.phone}</td>
-                      <td>{formatBirthday(item.birth_date)}</td>
-                      <td>第 {item.daily_sequence} 次</td>
-                      <td>第 {item.month_sequence} 次</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className="studentCheckInsTableCard">
-          <h2>最近報到</h2>
+          <h2>今日報到</h2>
           <div className="studentCheckInsRecentList">
-            {recent.length === 0 ? <p className="studentCheckInsEmpty">尚無報到紀錄。</p> : null}
-            {recent.map((item) => {
+            {today.length === 0 ? <p className="studentCheckInsEmpty">{isLoading ? "正在載入報到資料" : "所選日期尚無報到紀錄。"}</p> : null}
+            {today.map((item) => {
               const student = studentsById.get(item.student_profile_id);
               const periodDraft = periodDrafts[item.student_profile_id] ?? { startsOn: "", expiresOn: "" };
               const isPeriodLocked = Boolean(student?.membership_starts_on && student.membership_expires_on);
@@ -488,7 +458,7 @@ export default function StudentCheckInsAdminPage() {
                 <div><dt>生日</dt><dd>{formatBirthday(selectedCheckIn.birth_date)}</dd></div>
                 <div><dt>開始日期</dt><dd>{formatBirthday(selectedStudent?.membership_starts_on || null)}</dd></div>
                 <div><dt>結束日期</dt><dd>{formatBirthday(selectedStudent?.membership_expires_on || null)}</dd></div>
-                <div><dt>最近報到</dt><dd>{formatTaipeiDateTime(selectedCheckIn.checked_in_at)}</dd></div>
+                <div><dt>報到時間</dt><dd>{formatTaipeiDateTime(selectedCheckIn.checked_in_at)}</dd></div>
                 <div><dt>今日次數</dt><dd>第 {selectedCheckIn.daily_sequence} 次</dd></div>
                 <div><dt>本月次數</dt><dd>第 {selectedCheckIn.month_sequence} 次</dd></div>
               </dl>
