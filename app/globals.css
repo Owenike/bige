@@ -10425,7 +10425,8 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .studentCheckInsPhotoPreview > img{
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #050608;
 }
 .studentCheckInsPhotoCapture{
   display: grid;

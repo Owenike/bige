@@ -330,7 +330,7 @@ export default function StudentCheckInsAdminPage() {
                   <span>照片確認後將永久鎖定</span>
                 </button>
               )}
-              <input ref={photoInputRef} className="studentCheckInsPhotoInput" type="file" accept="image/*" capture="user" onChange={selectPhoto} />
+              <input ref={photoInputRef} className="studentCheckInsPhotoInput" type="file" accept="image/*" capture="environment" onChange={selectPhoto} />
             </div>
             <div className="studentCheckInsApprovalInfo">
               <p className="studentCheckInEyebrow">CHECK-IN REQUEST</p>
