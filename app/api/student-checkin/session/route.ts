@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   isCompleteStudentProfile,
-  isStudentMembershipExpired,
   loadPendingCheckinRequest,
   loadStudentProfileById,
   readStudentAuthSession,
+  studentMembershipPeriodStatus,
 } from "../../../../lib/student-checkin";
 
 function publicProfile(profile: Awaited<ReturnType<typeof loadStudentProfileById>>) {
@@ -22,12 +22,16 @@ export async function GET() {
   if (authSession?.authMethod === "phone") {
     const profile = await loadStudentProfileById(authSession.profileId);
     if (isCompleteStudentProfile(profile)) {
-      if (isStudentMembershipExpired(profile)) {
+      const periodStatus = studentMembershipPeriodStatus(profile);
+      if (periodStatus !== "active") {
         return NextResponse.json({
           ok: false,
           authenticated: false,
-          code: "membership_expired",
-          error: "自主運動期限已到期，請洽現場人員協助續期。",
+          code: periodStatus === "not_started" ? "membership_not_started" : "membership_expired",
+          error: periodStatus === "not_started"
+            ? "自主運動期限尚未開始，請依後台設定的開始日期再來報到。"
+            : "自主運動期限已到期，請洽現場人員協助。",
+          startsOn: profile.membership_starts_on,
           expiresOn: profile.membership_expires_on,
           profile: publicProfile(profile),
         }, { status: 403 });

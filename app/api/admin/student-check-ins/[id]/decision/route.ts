@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireProfile } from "../../../../../../lib/auth-context";
 import { createSupabaseAdminClient } from "../../../../../../lib/supabase/admin";
-import { isStudentMembershipExpired } from "../../../../../../lib/student-checkin";
+import { studentMembershipPeriodStatus } from "../../../../../../lib/student-checkin";
 
 const decisionSchema = z.object({ decision: z.enum(["approved", "rejected"]) });
 
@@ -33,14 +33,20 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
     const profile = await admin
       .from("student_line_profiles")
-      .select("photo_path, membership_expires_on")
+      .select("photo_path, membership_starts_on, membership_expires_on")
       .eq("id", requestRow.data.student_profile_id)
       .maybeSingle();
     if (profile.error || !profile.data?.photo_path) {
       return NextResponse.json({ ok: false, error: "請先建立並確認本人照片，才能放行。" }, { status: 409 });
     }
-    if (isStudentMembershipExpired(profile.data)) {
-      return NextResponse.json({ ok: false, error: "學員期限已到期，請先更新期限再放行。" }, { status: 409 });
+    const periodStatus = studentMembershipPeriodStatus(profile.data);
+    if (periodStatus !== "active") {
+      return NextResponse.json({
+        ok: false,
+        error: periodStatus === "not_started"
+          ? "學員的自主運動期限尚未開始，現在無法放行。"
+          : "學員的自主運動期限已到期，現在無法放行。",
+      }, { status: 409 });
     }
   }
 

@@ -18,6 +18,7 @@ type CheckinPayload = {
   checkIn?: { checked_in_at: string; daily_sequence: number; month_sequence: number } | null;
   encouragement?: string | null;
   code?: string;
+  startsOn?: string | null;
   expiresOn?: string | null;
   error?: string;
 };
@@ -46,13 +47,15 @@ export default function StudentCheckInPage() {
   const [password, setPassword] = useState("");
   const [requestId, setRequestId] = useState("");
   const [success, setSuccess] = useState<CheckinPayload | null>(null);
+  const [startsOn, setStartsOn] = useState("");
   const [expiresOn, setExpiresOn] = useState("");
   const [error, setError] = useState("");
 
   const applyExpiryWarning = useCallback((payload: CheckinPayload | null) => {
-    if (payload?.code !== "membership_expired") return false;
+    if (payload?.code !== "membership_expired" && payload?.code !== "membership_not_started") return false;
+    setStartsOn(payload.startsOn || "");
     setExpiresOn(payload.expiresOn || "");
-    setError(payload.error || "自主運動期限已到期，請洽現場人員協助續期。");
+    setError(payload.error || "目前不在自主運動有效期限內，請洽現場人員協助。");
     setView("expired");
     return true;
   }, []);
@@ -173,6 +176,7 @@ export default function StudentCheckInPage() {
     await fetch("/api/student-checkin/logout", { method: "POST" });
     setRequestId("");
     setSuccess(null);
+    setStartsOn("");
     setExpiresOn("");
     setError("");
     setView("login");
@@ -263,8 +267,8 @@ export default function StudentCheckInPage() {
         {view === "expired" ? (
           <div className="studentCheckInCentered" role="alertdialog" aria-modal="true" aria-labelledby="student-expired-title">
             <div className="studentCheckInExpiredMark" aria-hidden="true">!</div>
-            <h1 id="student-expired-title">自主運動期限已到期</h1>
-            {expiresOn ? <p className="studentCheckInExpiryDate">原有效期限至 {formatDate(expiresOn)}</p> : null}
+            <h1 id="student-expired-title">目前無法自主運動報到</h1>
+            {startsOn && expiresOn ? <p className="studentCheckInExpiryDate">有效期限 {formatDate(startsOn)} 至 {formatDate(expiresOn)}</p> : null}
             <p className="studentCheckInError">{error}</p>
             <p className="studentCheckInLead">請先洽櫃檯更新期限，再重新登入報到。</p>
             <button className="studentCheckInPrimary" type="button" onClick={() => void returnToLogin()}>返回登入</button>

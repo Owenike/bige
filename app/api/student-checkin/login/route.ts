@@ -4,10 +4,10 @@ import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
 import {
   createCheckinRequest,
   isCompleteStudentProfile,
-  isStudentMembershipExpired,
   loadStudentProfileByPhone,
   normalizePhone,
   setStudentAuthSession,
+  studentMembershipPeriodStatus,
   verifyStudentPassword,
 } from "../../../../lib/student-checkin";
 
@@ -40,9 +40,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "手機號碼或密碼不正確。" }, { status: 401 });
   }
 
-  if (isStudentMembershipExpired(profile)) {
+  const periodStatus = studentMembershipPeriodStatus(profile);
+  if (periodStatus !== "active") {
     return NextResponse.json(
-      { ok: false, code: "membership_expired", error: "自主運動期限已到期，請洽現場人員協助續期。", expiresOn: profile.membership_expires_on },
+      {
+        ok: false,
+        code: periodStatus === "not_started" ? "membership_not_started" : "membership_expired",
+        error: periodStatus === "not_started"
+          ? "自主運動期限尚未開始，請依後台設定的開始日期再來報到。"
+          : "自主運動期限已到期，請洽現場人員協助。",
+        startsOn: profile.membership_starts_on,
+        expiresOn: profile.membership_expires_on,
+      },
       { status: 403 },
     );
   }

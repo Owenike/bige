@@ -29,6 +29,7 @@ export type StudentProfileRow = {
   phone: string;
   email: string | null;
   birth_date: string | null;
+  membership_starts_on: string | null;
   membership_expires_on: string | null;
   password_hash: string | null;
   photo_path: string | null;
@@ -155,7 +156,17 @@ export function isCompleteStudentProfile(profile: StudentProfileRow | null): pro
 }
 
 const profileSelect =
-  "id, auth_user_id, line_user_id, line_display_name, full_name, phone, email, birth_date, membership_expires_on, password_hash, photo_path, is_active, bound_at, last_checkin_at";
+  "id, auth_user_id, line_user_id, line_display_name, full_name, phone, email, birth_date, membership_starts_on, membership_expires_on, password_hash, photo_path, is_active, bound_at, last_checkin_at";
+
+export function studentMembershipPeriodStatus(
+  profile: Pick<StudentProfileRow, "membership_starts_on" | "membership_expires_on">,
+  date = new Date(),
+) {
+  const today = taipeiDateParts(date).localDate;
+  if (profile.membership_starts_on && today < profile.membership_starts_on) return "not_started" as const;
+  if (profile.membership_expires_on && today > profile.membership_expires_on) return "expired" as const;
+  return "active" as const;
+}
 
 export function isStudentMembershipExpired(profile: Pick<StudentProfileRow, "membership_expires_on">, date = new Date()) {
   return Boolean(profile.membership_expires_on && profile.membership_expires_on < taipeiDateParts(date).localDate);

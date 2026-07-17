@@ -3,18 +3,24 @@ import {
   createCheckinRequest,
   encouragementFor,
   isCompleteStudentProfile,
-  isStudentMembershipExpired,
   loadApprovedCheckin,
   loadRecentCheckinRequest,
   loadStudentProfileById,
   readStudentAuthSession,
+  studentMembershipPeriodStatus,
 } from "../../../../lib/student-checkin";
 
 async function requestPayload(profileId: string) {
   const profile = await loadStudentProfileById(profileId);
   if (!isCompleteStudentProfile(profile)) return null;
-  if (isStudentMembershipExpired(profile)) {
-    return { expired: true as const, expiresOn: profile.membership_expires_on };
+  const periodStatus = studentMembershipPeriodStatus(profile);
+  if (periodStatus !== "active") {
+    return {
+      unavailable: true as const,
+      periodStatus,
+      startsOn: profile.membership_starts_on,
+      expiresOn: profile.membership_expires_on,
+    };
   }
   const checkinRequest = await loadRecentCheckinRequest(profileId);
   if (!checkinRequest) return { profile, request: null, checkIn: null, encouragement: null };
@@ -32,9 +38,17 @@ export async function GET() {
   if (!session) return NextResponse.json({ ok: false, error: "請重新登入。" }, { status: 401 });
   const payload = await requestPayload(session.profileId);
   if (!payload) return NextResponse.json({ ok: false, error: "學員資料不完整。" }, { status: 409 });
-  if ("expired" in payload) {
+  if ("unavailable" in payload) {
     return NextResponse.json(
-      { ok: false, code: "membership_expired", error: "自主運動期限已到期，請洽現場人員協助續期。", expiresOn: payload.expiresOn },
+      {
+        ok: false,
+        code: payload.periodStatus === "not_started" ? "membership_not_started" : "membership_expired",
+        error: payload.periodStatus === "not_started"
+          ? "自主運動期限尚未開始，請依後台設定的開始日期再來報到。"
+          : "自主運動期限已到期，請洽現場人員協助。",
+        startsOn: payload.startsOn,
+        expiresOn: payload.expiresOn,
+      },
       { status: 403 },
     );
   }
@@ -48,9 +62,18 @@ export async function POST(request: Request) {
   if (!isCompleteStudentProfile(profile)) {
     return NextResponse.json({ ok: false, error: "學員資料不完整。" }, { status: 409 });
   }
-  if (isStudentMembershipExpired(profile)) {
+  const periodStatus = studentMembershipPeriodStatus(profile);
+  if (periodStatus !== "active") {
     return NextResponse.json(
-      { ok: false, code: "membership_expired", error: "自主運動期限已到期，請洽現場人員協助續期。", expiresOn: profile.membership_expires_on },
+      {
+        ok: false,
+        code: periodStatus === "not_started" ? "membership_not_started" : "membership_expired",
+        error: periodStatus === "not_started"
+          ? "自主運動期限尚未開始，請依後台設定的開始日期再來報到。"
+          : "自主運動期限已到期，請洽現場人員協助。",
+        startsOn: profile.membership_starts_on,
+        expiresOn: profile.membership_expires_on,
+      },
       { status: 403 },
     );
   }

@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     admin
       .from("student_checkin_requests")
       .select(
-        "id, status, auth_method, requested_at, student_profile_id, student_line_profiles!student_checkin_requests_student_profile_id_fkey(id, full_name, phone, email, birth_date, membership_expires_on, photo_path, line_display_name)",
+        "id, status, auth_method, requested_at, student_profile_id, student_line_profiles!student_checkin_requests_student_profile_id_fkey(id, full_name, phone, email, birth_date, membership_starts_on, membership_expires_on, photo_path, line_display_name)",
       )
       .eq("status", "pending")
       .order("requested_at", { ascending: true })
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
       .limit(20),
     admin
       .from("student_line_profiles")
-      .select("id, full_name, phone, email, membership_expires_on, is_active, updated_at")
+      .select("id, full_name, phone, email, membership_starts_on, membership_expires_on, is_active, updated_at")
       .eq("is_active", true)
       .order("full_name", { ascending: true })
       .limit(500),

@@ -10,6 +10,7 @@ type StudentProfile = {
   phone: string;
   email: string | null;
   birth_date: string;
+  membership_starts_on: string | null;
   membership_expires_on: string | null;
   photo_url: string | null;
 };
@@ -19,6 +20,7 @@ type ManagedStudent = {
   full_name: string;
   phone: string;
   email: string | null;
+  membership_starts_on: string | null;
   membership_expires_on: string | null;
   is_active: boolean;
 };
@@ -53,6 +55,11 @@ type StudentCheckInsResponse = {
   recent?: StudentCheckInRow[];
   students?: ManagedStudent[];
   error?: string;
+};
+
+type MembershipPeriodDraft = {
+  startsOn: string;
+  expiresOn: string;
 };
 
 const STUDENT_CHECK_INS_ADMIN_PATH = "/admin/student-check-ins";
@@ -95,6 +102,11 @@ function formatBirthday(value: string | null) {
   return `${year}/${month}/${day}`;
 }
 
+function formatMembershipPeriod(startsOn: string | null, expiresOn: string | null) {
+  if (!startsOn || !expiresOn) return "未設定";
+  return `${formatBirthday(startsOn)} 至 ${formatBirthday(expiresOn)}`;
+}
+
 async function compressPhoto(file: File) {
   const imageUrl = URL.createObjectURL(file);
   try {
@@ -127,7 +139,7 @@ export default function StudentCheckInsAdminPage() {
   const [today, setToday] = useState<StudentCheckInRow[]>([]);
   const [recent, setRecent] = useState<StudentCheckInRow[]>([]);
   const [students, setStudents] = useState<ManagedStudent[]>([]);
-  const [expiryDrafts, setExpiryDrafts] = useState<Record<string, string>>({});
+  const [periodDrafts, setPeriodDrafts] = useState<Record<string, MembershipPeriodDraft>>({});
   const [savingExpiryId, setSavingExpiryId] = useState("");
   const [notice, setNotice] = useState("");
   const [selectedCheckIn, setSelectedCheckIn] = useState<StudentCheckInRow | null>(null);
@@ -172,8 +184,11 @@ export default function StudentCheckInsAdminPage() {
       setRecent(payload.recent || []);
       const nextStudents = payload.students || [];
       setStudents(nextStudents);
-      setExpiryDrafts((current) => Object.fromEntries(
-        nextStudents.map((student) => [student.id, current[student.id] ?? student.membership_expires_on ?? ""]),
+      setPeriodDrafts((current) => Object.fromEntries(
+        nextStudents.map((student) => [student.id, current[student.id] ?? {
+          startsOn: student.membership_starts_on ?? "",
+          expiresOn: student.membership_expires_on ?? "",
+        }]),
       ));
     } catch {
       setError("網路連線不穩定，系統會自動重新取得報到資料。");
@@ -203,34 +218,52 @@ export default function StudentCheckInsAdminPage() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [selectedCheckIn]);
 
-  async function saveExpiry(studentId: string) {
+  async function saveMembershipPeriod(studentId: string) {
     setSavingExpiryId(studentId);
     setError("");
     setNotice("");
-    const expiresOn = expiryDrafts[studentId]?.trim() || null;
+    const startsOn = periodDrafts[studentId]?.startsOn.trim() || "";
+    const expiresOn = periodDrafts[studentId]?.expiresOn.trim() || "";
+    if (!startsOn || !expiresOn || expiresOn < startsOn) {
+      setError("請輸入正確的開始日期與結束日期。");
+      setSavingExpiryId("");
+      return;
+    }
     const response = await fetch(`/api/admin/student-check-ins/students/${studentId}/expiry`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expiresOn }),
+      body: JSON.stringify({ startsOn, expiresOn }),
     });
     if (handleAdminAuthFailure(response)) return;
-    const payload = (await response.json().catch(() => null)) as { ok?: boolean; expiresOn?: string | null; error?: string } | null;
+    const payload = (await response.json().catch(() => null)) as { ok?: boolean; startsOn?: string | null; expiresOn?: string | null; error?: string } | null;
     if (!response.ok || !payload?.ok) {
       setError(payload?.error || "期限更新失敗，請稍後再試。");
       setSavingExpiryId("");
       return;
     }
-    const savedDate = payload.expiresOn || null;
+    const savedStartsOn = payload.startsOn || null;
+    const savedExpiresOn = payload.expiresOn || null;
     setStudents((current) => current.map((student) => (
-      student.id === studentId ? { ...student, membership_expires_on: savedDate } : student
+      student.id === studentId ? {
+        ...student,
+        membership_starts_on: savedStartsOn,
+        membership_expires_on: savedExpiresOn,
+      } : student
     )));
     setPending((current) => current.map((item) => (
       item.profile.id === studentId
-        ? { ...item, profile: { ...item.profile, membership_expires_on: savedDate } }
+        ? { ...item, profile: {
+          ...item.profile,
+          membership_starts_on: savedStartsOn,
+          membership_expires_on: savedExpiresOn,
+        } }
         : item
     )));
-    setExpiryDrafts((current) => ({ ...current, [studentId]: savedDate || "" }));
-    setNotice(savedDate ? `期限已更新為 ${savedDate}。` : "已清除期限限制。");
+    setPeriodDrafts((current) => ({
+      ...current,
+      [studentId]: { startsOn: savedStartsOn || "", expiresOn: savedExpiresOn || "" },
+    }));
+    setNotice(`自主運動期限已儲存並鎖定：${formatMembershipPeriod(savedStartsOn, savedExpiresOn)}。`);
     setSavingExpiryId("");
   }
 
@@ -367,7 +400,9 @@ export default function StudentCheckInsAdminPage() {
             {recent.length === 0 ? <p className="studentCheckInsEmpty">尚無報到紀錄。</p> : null}
             {recent.map((item) => {
               const student = studentsById.get(item.student_profile_id);
-              const expiresOn = expiryDrafts[item.student_profile_id] ?? "";
+              const periodDraft = periodDrafts[item.student_profile_id] ?? { startsOn: "", expiresOn: "" };
+              const isPeriodLocked = Boolean(student?.membership_starts_on && student.membership_expires_on);
+              const hasNotStarted = Boolean(student?.membership_starts_on && student.membership_starts_on > todayDateInputValue());
               const isExpired = Boolean(student?.membership_expires_on && student.membership_expires_on < todayDateInputValue());
               return (
                 <article key={item.id}>
@@ -378,9 +413,10 @@ export default function StudentCheckInsAdminPage() {
                   ) : <div className="studentCheckInsRecentPhotoEmpty">無照片</div>}
                   <div className="studentCheckInsRecentInfo"><strong>{item.full_name}</strong><span>{formatTaipeiDateTime(item.checked_in_at)}</span><span>{item.phone}・生日 {formatBirthday(item.birth_date)}・今日第 {item.daily_sequence} 次・本月第 {item.month_sequence} 次</span></div>
                   <div className="studentCheckInsRecentExpiry">
-                    <label><span>自主運動期限</span><input type="date" value={expiresOn} disabled={!student} onChange={(event) => setExpiryDrafts((current) => ({ ...current, [item.student_profile_id]: event.target.value }))} /></label>
-                    <span className={isExpired ? "studentCheckInsExpiryStatus is-expired" : "studentCheckInsExpiryStatus"}>{student?.membership_expires_on ? (isExpired ? "已過期" : "有效") : "未設定"}</span>
-                    <button type="button" disabled={!student || savingExpiryId === item.student_profile_id} onClick={() => void saveExpiry(item.student_profile_id)}>{savingExpiryId === item.student_profile_id ? "儲存中" : "儲存"}</button>
+                    <label><span>開始日期</span><input type="date" value={periodDraft.startsOn} disabled={!student || isPeriodLocked} onChange={(event) => setPeriodDrafts((current) => ({ ...current, [item.student_profile_id]: { ...periodDraft, startsOn: event.target.value } }))} /></label>
+                    <label><span>結束日期</span><input type="date" min={periodDraft.startsOn || undefined} value={periodDraft.expiresOn} disabled={!student || isPeriodLocked} onChange={(event) => setPeriodDrafts((current) => ({ ...current, [item.student_profile_id]: { ...periodDraft, expiresOn: event.target.value } }))} /></label>
+                    <span className={isExpired ? "studentCheckInsExpiryStatus is-expired" : "studentCheckInsExpiryStatus"}>{isPeriodLocked ? (isExpired ? "已過期" : hasNotStarted ? "尚未開始" : "有效・已鎖定") : "未設定"}</span>
+                    {!isPeriodLocked ? <button type="button" disabled={!student || !periodDraft.startsOn || !periodDraft.expiresOn || savingExpiryId === item.student_profile_id} onClick={() => void saveMembershipPeriod(item.student_profile_id)}>{savingExpiryId === item.student_profile_id ? "儲存中" : "儲存期限"}</button> : null}
                   </div>
                 </article>
               );
@@ -422,15 +458,8 @@ export default function StudentCheckInsAdminPage() {
                 <div><dt>生日</dt><dd>{formatBirthday(activeRequest.profile.birth_date)}</dd></div>
                 <div><dt>登入方式</dt><dd>手機與密碼</dd></div>
                 <div><dt>送出時間</dt><dd>{formatTaipeiDateTime(activeRequest.requested_at)}</dd></div>
-                <div className="studentCheckInsApprovalExpiry">
-                  <dt>自主運動期限</dt>
-                  <dd>
-                    <input type="date" value={expiryDrafts[activeRequest.profile.id] ?? ""} onChange={(event) => setExpiryDrafts((current) => ({ ...current, [activeRequest.profile.id]: event.target.value }))} />
-                    <button type="button" disabled={savingExpiryId === activeRequest.profile.id} onClick={() => void saveExpiry(activeRequest.profile.id)}>
-                      {savingExpiryId === activeRequest.profile.id ? "儲存中" : "更新期限"}
-                    </button>
-                  </dd>
-                </div>
+                <div><dt>開始日期</dt><dd>{formatBirthday(activeRequest.profile.membership_starts_on)}</dd></div>
+                <div><dt>結束日期</dt><dd>{formatBirthday(activeRequest.profile.membership_expires_on)}</dd></div>
               </dl>
               <p className="studentCheckInsApprovalHint">
                 {activeRequest.profile.photo_url ? "請核對現場本人與照片相符後再放行。" : "請先拍攝並確認本人照片，才能放行。"}
@@ -457,7 +486,8 @@ export default function StudentCheckInsAdminPage() {
                 <div><dt>電話</dt><dd>{selectedCheckIn.phone}</dd></div>
                 <div><dt>Email</dt><dd>{selectedStudent?.email || "-"}</dd></div>
                 <div><dt>生日</dt><dd>{formatBirthday(selectedCheckIn.birth_date)}</dd></div>
-                <div><dt>自主運動期限</dt><dd>{selectedStudent?.membership_expires_on || "未設定"}</dd></div>
+                <div><dt>開始日期</dt><dd>{formatBirthday(selectedStudent?.membership_starts_on || null)}</dd></div>
+                <div><dt>結束日期</dt><dd>{formatBirthday(selectedStudent?.membership_expires_on || null)}</dd></div>
                 <div><dt>最近報到</dt><dd>{formatTaipeiDateTime(selectedCheckIn.checked_in_at)}</dd></div>
                 <div><dt>今日次數</dt><dd>第 {selectedCheckIn.daily_sequence} 次</dd></div>
                 <div><dt>本月次數</dt><dd>第 {selectedCheckIn.month_sequence} 次</dd></div>

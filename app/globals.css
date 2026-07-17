@@ -10292,8 +10292,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   font-weight: 620;
   letter-spacing: 0;
 }
-.studentCheckInsRecentExpiry input,
-.studentCheckInsApprovalExpiry input{
+.studentCheckInsRecentExpiry input{
   min-width: 0;
   min-height: 42px;
   border: 1px solid #3b4048;
@@ -10303,8 +10302,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   font: inherit;
   padding: 0 10px;
 }
-.studentCheckInsRecentExpiry button,
-.studentCheckInsApprovalExpiry button{
+.studentCheckInsRecentExpiry button{
   min-height: 42px;
   border: 1px solid #bda56d;
   border-radius: 8px;
@@ -10315,8 +10313,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   padding: 0 14px;
   cursor: pointer;
 }
-.studentCheckInsRecentExpiry button:disabled,
-.studentCheckInsApprovalExpiry button:disabled{
+.studentCheckInsRecentExpiry button:disabled{
   cursor: wait;
   opacity: .58;
 }
@@ -10450,7 +10447,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .studentCheckInsRecentExpiry{
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) 52px 68px;
+  grid-template-columns: minmax(130px, 1fr) minmax(130px, 1fr) 92px auto;
   align-items: end;
   gap: 10px;
   min-width: 0;
@@ -10682,14 +10679,6 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   color: #f5f1e8;
   font-weight: 650;
 }
-.studentCheckInsApprovalInfo .studentCheckInsApprovalExpiry{
-  align-items: start;
-}
-.studentCheckInsApprovalExpiry dd{
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
 .studentCheckInsApprovalHint{
   margin: 22px 0 0;
   color: #d8c99f;
@@ -10812,11 +10801,11 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
   .studentCheckInsRecentExpiry{
     grid-column: 1 / -1;
-    grid-template-columns: minmax(0, 1fr) 68px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     width: 100%;
   }
   .studentCheckInsRecentExpiry label{
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
   .studentCheckInsRecentExpiry .studentCheckInsExpiryStatus{
     justify-self: start;
@@ -10861,9 +10850,6 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .studentCheckInsApprovalActions{
     margin-top: 20px;
     padding-top: 0;
-  }
-  .studentCheckInsApprovalExpiry dd{
-    grid-template-columns: 1fr;
   }
 }
 
