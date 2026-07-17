@@ -40,6 +40,7 @@ type StudentCheckInRow = {
   checked_in_at: string;
   local_date: string;
   local_month: string;
+  daily_sequence: number;
   month_sequence: number;
 };
 
@@ -341,7 +342,7 @@ export default function StudentCheckInsAdminPage() {
           ) : (
             <div className="studentCheckInsTableWrap">
               <table className="studentCheckInsTable">
-                <thead><tr><th>照片</th><th>時間</th><th>姓名</th><th>電話</th><th>生日</th><th>本月次數</th></tr></thead>
+                <thead><tr><th>照片</th><th>時間</th><th>姓名</th><th>電話</th><th>生日</th><th>今日次數</th><th>本月次數</th></tr></thead>
                 <tbody>
                   {today.map((item) => (
                     <tr key={item.id}>
@@ -350,6 +351,7 @@ export default function StudentCheckInsAdminPage() {
                       <td>{item.full_name}</td>
                       <td>{item.phone}</td>
                       <td>{formatBirthday(item.birth_date)}</td>
+                      <td>第 {item.daily_sequence} 次</td>
                       <td>第 {item.month_sequence} 次</td>
                     </tr>
                   ))}
@@ -374,7 +376,7 @@ export default function StudentCheckInsAdminPage() {
                       <img src={item.photo_url} alt={`${item.full_name} 的本人照片`} />
                     </button>
                   ) : <div className="studentCheckInsRecentPhotoEmpty">無照片</div>}
-                  <div className="studentCheckInsRecentInfo"><strong>{item.full_name}</strong><span>{formatTaipeiDateTime(item.checked_in_at)}</span><span>{item.phone}・生日 {formatBirthday(item.birth_date)}・本月第 {item.month_sequence} 次</span></div>
+                  <div className="studentCheckInsRecentInfo"><strong>{item.full_name}</strong><span>{formatTaipeiDateTime(item.checked_in_at)}</span><span>{item.phone}・生日 {formatBirthday(item.birth_date)}・今日第 {item.daily_sequence} 次・本月第 {item.month_sequence} 次</span></div>
                   <div className="studentCheckInsRecentExpiry">
                     <label><span>自主運動期限</span><input type="date" value={expiresOn} disabled={!student} onChange={(event) => setExpiryDrafts((current) => ({ ...current, [item.student_profile_id]: event.target.value }))} /></label>
                     <span className={isExpired ? "studentCheckInsExpiryStatus is-expired" : "studentCheckInsExpiryStatus"}>{student?.membership_expires_on ? (isExpired ? "已過期" : "有效") : "未設定"}</span>
@@ -457,6 +459,7 @@ export default function StudentCheckInsAdminPage() {
                 <div><dt>生日</dt><dd>{formatBirthday(selectedCheckIn.birth_date)}</dd></div>
                 <div><dt>自主運動期限</dt><dd>{selectedStudent?.membership_expires_on || "未設定"}</dd></div>
                 <div><dt>最近報到</dt><dd>{formatTaipeiDateTime(selectedCheckIn.checked_in_at)}</dd></div>
+                <div><dt>今日次數</dt><dd>第 {selectedCheckIn.daily_sequence} 次</dd></div>
                 <div><dt>本月次數</dt><dd>第 {selectedCheckIn.month_sequence} 次</dd></div>
               </dl>
             </div>

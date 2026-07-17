@@ -55,8 +55,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const recent = await loadRecentCheckinRequest(profile.id);
-  const checkinRequest = recent || (await createCheckinRequest({ profileId: profile.id, authMethod: session.authMethod, request }));
+  const checkinRequest = await createCheckinRequest({ profileId: profile.id, authMethod: session.authMethod, request });
   const checkIn = checkinRequest.status === "approved" ? await loadApprovedCheckin(checkinRequest.id) : null;
   return NextResponse.json({
     ok: true,

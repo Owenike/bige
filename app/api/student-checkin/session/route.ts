@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   isCompleteStudentProfile,
   isStudentMembershipExpired,
-  loadRecentCheckinRequest,
+  loadPendingCheckinRequest,
   loadStudentProfileById,
   readStudentAuthSession,
 } from "../../../../lib/student-checkin";
@@ -32,7 +32,7 @@ export async function GET() {
           profile: publicProfile(profile),
         }, { status: 403 });
       }
-      const request = await loadRecentCheckinRequest(profile.id);
+      const request = await loadPendingCheckinRequest(profile.id);
       return NextResponse.json({
         ok: true,
         authenticated: true,

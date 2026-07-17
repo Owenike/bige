@@ -265,10 +265,21 @@ export async function loadRecentCheckinRequest(profileId: string) {
   return (result.data || null) as StudentCheckinRequestRow | null;
 }
 
+export async function loadPendingCheckinRequest(profileId: string) {
+  const result = await createSupabaseAdminClient()
+    .from("student_checkin_requests")
+    .select("id, student_profile_id, status, auth_method, requested_at, reviewed_at")
+    .eq("student_profile_id", profileId)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (result.error) throw new Error(result.error.message);
+  return (result.data || null) as StudentCheckinRequestRow | null;
+}
+
 export async function loadApprovedCheckin(requestId: string) {
   const result = await createSupabaseAdminClient()
     .from("student_check_ins")
-    .select("id, checked_in_at, local_date, local_month, month_sequence")
+    .select("id, checked_in_at, local_date, local_month, daily_sequence, month_sequence")
     .eq("request_id", requestId)
     .maybeSingle();
   if (result.error) throw new Error(result.error.message);

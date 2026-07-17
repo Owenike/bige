@@ -15,7 +15,7 @@ type CheckinPayload = {
   needsProfile?: boolean;
   profile?: { id: string; fullName: string } | null;
   request?: CheckinRequest | null;
-  checkIn?: { checked_in_at: string; month_sequence: number } | null;
+  checkIn?: { checked_in_at: string; daily_sequence: number; month_sequence: number } | null;
   encouragement?: string | null;
   code?: string;
   expiresOn?: string | null;
@@ -247,7 +247,7 @@ export default function StudentCheckInPage() {
             <h1>報到完成</h1>
             <p className="studentCheckInTime">放行時間 {formatTaipeiTime(success.checkIn.checked_in_at)}</p>
             <p className="studentCheckInPraise">{success.encouragement}</p>
-            <p className="studentCheckInCount">本月第 {success.checkIn.month_sequence} 次自主運動</p>
+            <p className="studentCheckInCount">今日第 {success.checkIn.daily_sequence} 次・本月第 {success.checkIn.month_sequence} 次自主運動</p>
             <Link className="studentCheckInPrimary" href="/">開始運動！GO</Link>
           </div>
         ) : null}
