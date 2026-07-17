@@ -176,6 +176,7 @@ function LoginContent() {
     returnTo === "/admin/trial-bookings" ||
     returnTo === "/admin/student-check-ins" ||
     returnTo === "/platform-admin";
+  const isStudentCheckInAdminEntry = returnTo === "/admin/student-check-ins";
   const selectedPanel = useMemo(
     () => (isFocusedBackofficeEntry ? "staff" : resolveLoginPanel(searchParams.get("tab"))),
     [isFocusedBackofficeEntry, searchParams],
@@ -190,6 +191,7 @@ function LoginContent() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -289,15 +291,30 @@ function LoginContent() {
   }
 
   return (
-    <main className="container" style={{ paddingTop: 28, paddingBottom: 48 }}>
-      <section className="card formCard" style={{ display: "grid", gap: 16, maxWidth: 640, margin: "0 auto" }}>
-        <div style={{ display: "grid", gap: 8 }}>
-          <div className="kvLabel">{entryCopy.eyebrow}</div>
-          <h1 className="sectionTitle">{entryCopy.title}</h1>
-          <p className="sub">
-            {entryCopy.description}
-          </p>
-          {entryCopy.badge ? (
+    <main
+      className={isStudentCheckInAdminEntry ? "studentAdminLoginPage" : "container"}
+      style={isStudentCheckInAdminEntry ? undefined : { paddingTop: 28, paddingBottom: 48 }}
+    >
+      <section
+        className={isStudentCheckInAdminEntry ? "studentAdminLoginPanel" : "card formCard"}
+        style={isStudentCheckInAdminEntry ? undefined : { display: "grid", gap: 16, maxWidth: 640, margin: "0 auto" }}
+      >
+        {isStudentCheckInAdminEntry ? (
+          <Link className="studentAdminLoginBrand" href="/" aria-label="返回 BigE Fitness 首頁">
+            <strong>BIGE</strong>
+            <span>FITNESS</span>
+          </Link>
+        ) : null}
+
+        <div className={isStudentCheckInAdminEntry ? "studentAdminLoginHeading" : undefined} style={{ display: "grid", gap: 8 }}>
+          <div className={isStudentCheckInAdminEntry ? "studentAdminLoginEyebrow" : "kvLabel"}>
+            {isStudentCheckInAdminEntry ? "STAFF SIGN IN" : entryCopy.eyebrow}
+          </div>
+          <h1 className={isStudentCheckInAdminEntry ? "studentAdminLoginTitle" : "sectionTitle"}>
+            {isStudentCheckInAdminEntry ? (zh ? "自主運動報到管理" : "Student Check-in Admin") : entryCopy.title}
+          </h1>
+          {!isStudentCheckInAdminEntry ? <p className="sub">{entryCopy.description}</p> : null}
+          {!isStudentCheckInAdminEntry && entryCopy.badge ? (
             <div
               className="pill"
               style={{
@@ -313,14 +330,10 @@ function LoginContent() {
           ) : null}
         </div>
 
-        <div
+        {!isStudentCheckInAdminEntry ? <div
           aria-label={zh ? "登入方式" : "Sign-in method"}
           role="tablist"
-          style={{
-            display: "grid",
-            gap: 8,
-            gridTemplateColumns: "repeat(auto-fit, minmax(138px, 1fr))",
-          }}
+          style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(138px, 1fr))" }}
         >
           <button
             aria-selected={activePanel === "staff"}
@@ -353,11 +366,16 @@ function LoginContent() {
               </button>
             </>
           ) : null}
-        </div>
+        </div> : null}
 
         {activePanel === "staff" ? (
-          <section id="staff-login" role="tabpanel" style={{ display: "grid", gap: 12 }}>
-            <div>
+          <section
+            id="staff-login"
+            className={isStudentCheckInAdminEntry ? "studentAdminLoginFormSection" : undefined}
+            role={isStudentCheckInAdminEntry ? undefined : "tabpanel"}
+            style={{ display: "grid", gap: 12 }}
+          >
+            {!isStudentCheckInAdminEntry ? <div>
               <div className="kvLabel">{zh ? "員工 / 後台登入" : "Staff / Backoffice"}</div>
               <h2 className="sectionTitle" style={{ fontSize: "1.28rem", marginTop: 8 }}>
                 {zh ? "Email + 密碼登入" : "Email + Password"}
@@ -367,13 +385,17 @@ function LoginContent() {
                   ? "櫃檯、教練、管理、平台角色請使用 Email 與密碼登入。"
                   : "Frontdesk, coach, manager, and platform roles should sign in with email and password."}
               </p>
-            </div>
+            </div> : null}
 
             {error ? <div className="error">{error}</div> : null}
 
-            <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
+            <form
+              className={isStudentCheckInAdminEntry ? "studentAdminLoginForm" : undefined}
+              onSubmit={submit}
+              style={{ display: "grid", gap: 12 }}
+            >
               <label className="field">
-                <span className="kvLabel" style={{ textTransform: "none" }}>
+                <span className={isStudentCheckInAdminEntry ? "studentAdminLoginLabel" : "kvLabel"} style={{ textTransform: "none" }}>
                   {t("auth.email")}
                 </span>
                 <input
@@ -388,29 +410,51 @@ function LoginContent() {
                 />
               </label>
 
-              <label className="field">
-                <span className="kvLabel" style={{ textTransform: "none" }}>
+              <div className="field">
+                <label
+                  className={isStudentCheckInAdminEntry ? "studentAdminLoginLabel" : "kvLabel"}
+                  htmlFor="staff-password"
+                  style={{ textTransform: "none" }}
+                >
                   {t("auth.password")}
-                </span>
-                <input
-                  autoComplete="current-password"
-                  className="input"
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="********"
-                  required
-                  type="password"
-                  value={password}
-                />
-              </label>
+                </label>
+                <div className={isStudentCheckInAdminEntry ? "studentAdminLoginPasswordField" : undefined}>
+                  <input
+                    autoComplete="current-password"
+                    className="input"
+                    id="staff-password"
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="********"
+                    required
+                    type={isStudentCheckInAdminEntry && showStaffPassword ? "text" : "password"}
+                    value={password}
+                  />
+                  {isStudentCheckInAdminEntry ? (
+                    <button
+                      aria-label={showStaffPassword ? "隱藏密碼" : "顯示密碼"}
+                      className="studentAdminLoginPasswordToggle"
+                      onClick={() => setShowStaffPassword((visible) => !visible)}
+                      title={showStaffPassword ? "隱藏密碼" : "顯示密碼"}
+                      type="button"
+                    >
+                      {showStaffPassword ? "隱藏" : "顯示"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
 
-              <div className="actions" style={{ marginTop: 2 }}>
-                <button className={`btn ${busy ? "" : "btnPrimary"}`} disabled={busy} type="submit">
-                  {busy ? t("auth.signing_in") : t("auth.sign_in")}
+              <div className={isStudentCheckInAdminEntry ? "studentAdminLoginActions" : "actions"} style={{ marginTop: 2 }}>
+                <button
+                  className={isStudentCheckInAdminEntry ? "studentAdminLoginSubmit" : `btn ${busy ? "" : "btnPrimary"}`}
+                  disabled={busy}
+                  type="submit"
+                >
+                  {busy ? t("auth.signing_in") : isStudentCheckInAdminEntry ? (zh ? "登入後台" : "Sign In") : t("auth.sign_in")}
                 </button>
-                <Link className="btn" href="/forgot-password">
+                <Link className={isStudentCheckInAdminEntry ? "studentAdminLoginLink" : "btn"} href="/forgot-password">
                   {zh ? "忘記密碼" : "Forgot Password"}
                 </Link>
-                <Link className="btn" href="/">
+                <Link className={isStudentCheckInAdminEntry ? "studentAdminLoginLink" : "btn"} href="/">
                   {t("common.back_home")}
                 </Link>
               </div>

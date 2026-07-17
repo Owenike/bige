@@ -26,9 +26,14 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isRenwuSportsMassageRoute = pathname?.startsWith("/renwu-sports-massage");
   const isFaqRoute = pathname?.startsWith("/faq");
   const isHomeRoute = pathname === "/";
+  const loginReturnTo = searchParams.get("returnTo") || searchParams.get("redirect") || searchParams.get("next");
+  const isStudentCheckInAdminLogin =
+    pathname === "/login" &&
+    (loginReturnTo === "/admin/student-check-ins" || loginReturnTo?.startsWith("/admin/student-check-ins?"));
   const isWorkspaceRoute = isFrontdeskRoute || isMemberRoute || isCoachRoute;
   const showTopbar =
     !isEmbedded &&
+    !isStudentCheckInAdminLogin &&
     !isWorkspaceRoute &&
     !isAdminRoute &&
     !isHomeRoute &&
@@ -47,6 +52,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
     isEmbedded ? "shellEmbedded" : "",
     isWorkspaceRoute ? "shellWorkspace" : "",
     isFrontdeskRoute ? "shellFrontdesk" : "",
+    isStudentCheckInAdminLogin ? "shellStudentCheckInLogin" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -87,9 +93,9 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
 
       {children}
 
-      {!isEmbedded && !isStudentCheckInRoute ? <FloatingActionButtons /> : null}
+      {!isEmbedded && !isStudentCheckInRoute && !isStudentCheckInAdminLogin ? <FloatingActionButtons /> : null}
 
-      {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute && !isStudentCheckInRoute && !isAcpayResultRoute && !isCustomPaymentRoute ? (
+      {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute && !isStudentCheckInRoute && !isStudentCheckInAdminLogin && !isAcpayResultRoute && !isCustomPaymentRoute ? (
         <footer className="footer">
           <div className="footerInner">
             <div>© {new Date().getFullYear()} BigE Fitness. All rights reserved.</div>

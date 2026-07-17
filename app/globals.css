@@ -372,6 +372,183 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   line-height: 1.6;
 }
 
+.shellStudentCheckInLogin{
+  background: #080a0d;
+}
+.studentAdminLoginPage{
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background: #080a0d;
+  color: #f5f1e8;
+}
+.studentAdminLoginPanel{
+  width: min(460px, 100%);
+  display: grid;
+  gap: 26px;
+  border: 1px solid #34373c;
+  border-radius: 8px;
+  background: #111419;
+  padding: 38px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .42);
+}
+.studentAdminLoginBrand{
+  width: fit-content;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 9px;
+  color: #fff8e8;
+  text-decoration: none;
+}
+.studentAdminLoginBrand:hover{
+  text-decoration: none;
+}
+.studentAdminLoginBrand strong{
+  font-size: 25px;
+  font-weight: 780;
+  letter-spacing: 0;
+}
+.studentAdminLoginBrand span{
+  color: #c9ad6d;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.studentAdminLoginHeading{
+  padding-bottom: 22px;
+  border-bottom: 1px solid #2b2f35;
+}
+.studentAdminLoginEyebrow{
+  color: #c9ad6d;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.studentAdminLoginTitle{
+  margin: 0;
+  color: #fff8e8;
+  font-size: 30px;
+  font-weight: 620;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+.studentAdminLoginFormSection{
+  min-width: 0;
+}
+.studentAdminLoginForm{
+  gap: 18px !important;
+}
+.studentAdminLoginLabel{
+  color: #c7c4bc;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.studentAdminLoginForm .input{
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid #3c4148;
+  border-radius: 6px;
+  background: #181c21;
+  color: #fff;
+  box-shadow: none;
+  padding: 0 15px;
+  font-size: 16px;
+}
+.studentAdminLoginForm .input::placeholder{
+  color: #747981;
+}
+.studentAdminLoginForm .input:focus{
+  border-color: #c9ad6d;
+  outline: 2px solid rgba(201, 173, 109, .2);
+  outline-offset: 1px;
+}
+.studentAdminLoginPasswordField{
+  position: relative;
+}
+.studentAdminLoginPasswordField .input{
+  padding-right: 68px;
+}
+.studentAdminLoginPasswordToggle{
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  min-width: 52px;
+  min-height: 40px;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: #c9ad6d;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.studentAdminLoginActions{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px !important;
+}
+.studentAdminLoginSubmit{
+  grid-column: 1 / -1;
+  min-height: 54px;
+  border: 1px solid #d4bd83;
+  border-radius: 6px;
+  background: #d4bd83;
+  color: #11100c;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 780;
+  cursor: pointer;
+}
+.studentAdminLoginSubmit:hover{
+  background: #e0cb96;
+}
+.studentAdminLoginSubmit:disabled{
+  cursor: wait;
+  opacity: .62;
+}
+.studentAdminLoginLink{
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #353a41;
+  border-radius: 6px;
+  color: #d2d0ca;
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.studentAdminLoginLink:hover{
+  border-color: #686d75;
+  color: #fff;
+  text-decoration: none;
+}
+.studentAdminLoginPanel .error{
+  border-color: #7c3d3d;
+  background: #2d1719;
+  color: #ffb8b8;
+}
+@media (max-width: 520px){
+  .studentAdminLoginPage{
+    align-items: start;
+    padding: max(24px, env(safe-area-inset-top)) 14px max(24px, env(safe-area-inset-bottom));
+  }
+  .studentAdminLoginPanel{
+    gap: 22px;
+    padding: 28px 20px;
+  }
+  .studentAdminLoginTitle{
+    font-size: 27px;
+  }
+}
+
 /* Home premium editorial layout */
 .homeLuxury{
   width: 100vw;
