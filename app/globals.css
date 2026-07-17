@@ -10292,35 +10292,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   font-weight: 620;
   letter-spacing: 0;
 }
-.studentCheckInsSectionLead{
-  margin: 8px 0 0;
-  color: #9da1a8;
-  line-height: 1.6;
-}
-.studentCheckInsExpiryList{
-  display: grid;
-  margin-top: 18px;
-  border-top: 1px solid #2b2f35;
-}
-.studentCheckInsExpiryList article{
-  display: grid;
-  grid-template-columns: minmax(150px, 1.2fr) minmax(180px, 1fr) 72px 84px;
-  align-items: end;
-  gap: 14px;
-  border-bottom: 1px solid #2b2f35;
-  padding: 14px 0;
-}
-.studentCheckInsExpiryIdentity,
-.studentCheckInsExpiryList label{
-  display: grid;
-  gap: 5px;
-}
-.studentCheckInsExpiryIdentity span,
-.studentCheckInsExpiryList label span{
-  color: #9da1a8;
-  font-size: 13px;
-}
-.studentCheckInsExpiryList input,
+.studentCheckInsRecentExpiry input,
 .studentCheckInsApprovalExpiry input{
   min-width: 0;
   min-height: 42px;
@@ -10331,7 +10303,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   font: inherit;
   padding: 0 10px;
 }
-.studentCheckInsExpiryList button,
+.studentCheckInsRecentExpiry button,
 .studentCheckInsApprovalExpiry button{
   min-height: 42px;
   border: 1px solid #bda56d;
@@ -10343,7 +10315,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   padding: 0 14px;
   cursor: pointer;
 }
-.studentCheckInsExpiryList button:disabled,
+.studentCheckInsRecentExpiry button:disabled,
 .studentCheckInsApprovalExpiry button:disabled{
   cursor: wait;
   opacity: .58;
@@ -10420,13 +10392,29 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   border-radius: 6px;
   object-fit: cover;
 }
+.studentCheckInsTablePhotoButton,
+.studentCheckInsRecentPhotoButton{
+  display: block;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.studentCheckInsTablePhotoButton:focus-visible,
+.studentCheckInsRecentPhotoButton:focus-visible{
+  outline: 2px solid #d4bd83;
+  outline-offset: 3px;
+}
 .studentCheckInsRecentList{
   display: grid;
   gap: 10px;
   margin-top: 14px;
 }
 .studentCheckInsRecentList article{
-  display: flex;
+  display: grid;
+  grid-template-columns: 58px minmax(180px, 1fr) minmax(350px, .9fr);
   align-items: center;
   gap: 12px;
   border: 1px solid #292d33;
@@ -10434,17 +10422,47 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   background: #15191f;
   padding: 12px;
 }
-.studentCheckInsRecentList article > img{
+.studentCheckInsRecentPhotoButton,
+.studentCheckInsRecentPhotoEmpty{
   width: 58px;
   height: 58px;
-  flex: 0 0 auto;
   border-radius: 6px;
+}
+.studentCheckInsRecentPhotoButton img{
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
   object-fit: cover;
 }
-.studentCheckInsRecentList article > div{
+.studentCheckInsRecentPhotoEmpty{
+  display: grid;
+  place-items: center;
+  border: 1px solid #343941;
+  color: #8f9298;
+  font-size: 11px;
+  text-align: center;
+}
+.studentCheckInsRecentInfo{
   display: grid;
   gap: 4px;
   min-width: 0;
+}
+.studentCheckInsRecentExpiry{
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 52px 68px;
+  align-items: end;
+  gap: 10px;
+  min-width: 0;
+}
+.studentCheckInsRecentExpiry label{
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.studentCheckInsRecentExpiry label span{
+  color: #9da1a8;
+  font-size: 12px;
 }
 .studentCheckInsRecentList strong{
   color: #fff8e8;
@@ -10452,6 +10470,90 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .studentCheckInsRecentList span{
   color: #aaa9a4;
   font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.studentCheckInsProfileBackdrop{
+  position: fixed;
+  inset: 0;
+  z-index: 1010;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, .84);
+}
+.studentCheckInsProfileDialog{
+  position: relative;
+  width: min(980px, 100%);
+  max-height: calc(100vh - 40px);
+  display: grid;
+  grid-template-columns: minmax(360px, 1.1fr) minmax(320px, .9fr);
+  overflow: auto;
+  border: 1px solid #c5aa68;
+  border-radius: 8px;
+  background: #111419;
+  box-shadow: 0 34px 100px rgba(0, 0, 0, .62);
+}
+.studentCheckInsProfileClose{
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #4a4f56;
+  border-radius: 50%;
+  background: rgba(17, 20, 25, .92);
+  color: #f5f1e8;
+  font: inherit;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+.studentCheckInsProfilePhoto{
+  display: grid;
+  min-height: 560px;
+  background: #050608;
+}
+.studentCheckInsProfilePhoto img{
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: calc(100vh - 40px);
+  object-fit: contain;
+}
+.studentCheckInsProfileInfo{
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 48px 38px;
+}
+.studentCheckInsProfileInfo h2{
+  margin: 0;
+  color: #fff8e8;
+  font-size: 36px;
+  letter-spacing: 0;
+}
+.studentCheckInsProfileInfo dl{
+  display: grid;
+  margin: 28px 0 0;
+}
+.studentCheckInsProfileInfo dl > div{
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  border-bottom: 1px solid #2b2f35;
+  padding: 14px 0;
+}
+.studentCheckInsProfileInfo dt{
+  color: #9b9da0;
+}
+.studentCheckInsProfileInfo dd{
+  min-width: 0;
+  margin: 0;
+  color: #f5f1e8;
+  font-weight: 650;
   overflow-wrap: anywhere;
 }
 .studentCheckInsApprovalBackdrop{
@@ -10643,7 +10745,8 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .studentCheckInFormGrid,
   .studentCheckInsAdminGrid,
   .studentCheckInsQrCard,
-  .studentCheckInsApprovalDialog{
+  .studentCheckInsApprovalDialog,
+  .studentCheckInsProfileDialog{
     grid-template-columns: 1fr;
   }
   .studentCheckInsAdminHeader{
@@ -10664,11 +10767,13 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     height: auto;
     aspect-ratio: 1;
   }
-  .studentCheckInsApprovalBackdrop{
+  .studentCheckInsApprovalBackdrop,
+  .studentCheckInsProfileBackdrop{
     place-items: stretch;
     padding: 0;
   }
-  .studentCheckInsApprovalDialog{
+  .studentCheckInsApprovalDialog,
+  .studentCheckInsProfileDialog{
     width: 100%;
     height: 100vh;
     height: 100dvh;
@@ -10676,6 +10781,30 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
     grid-template-rows: minmax(250px, 42dvh) auto;
     border: 0;
     border-radius: 0;
+  }
+  .studentCheckInsRecentList article{
+    grid-template-columns: 58px minmax(0, 1fr);
+    align-items: start;
+  }
+  .studentCheckInsRecentExpiry{
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) 52px 68px;
+    width: 100%;
+  }
+  .studentCheckInsProfilePhoto{
+    min-height: 250px;
+    height: 42dvh;
+  }
+  .studentCheckInsProfilePhoto img{
+    max-height: 42dvh;
+  }
+  .studentCheckInsProfileInfo{
+    justify-content: flex-start;
+    min-height: max-content;
+    padding: 24px 20px 30px;
+  }
+  .studentCheckInsProfileInfo h2{
+    font-size: 30px;
   }
   .studentCheckInsApprovalPhoto,
   .studentCheckInsApprovalPhoto > img,
@@ -10694,14 +10823,6 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .studentCheckInsApprovalActions{
     margin-top: 20px;
     padding-top: 0;
-  }
-  .studentCheckInsExpiryList article{
-    grid-template-columns: 1fr;
-    align-items: stretch;
-    gap: 10px;
-  }
-  .studentCheckInsExpiryList button{
-    width: 100%;
   }
   .studentCheckInsApprovalExpiry dd{
     grid-template-columns: 1fr;

@@ -32,6 +32,7 @@ type PendingRequest = {
 
 type StudentCheckInRow = {
   id: string;
+  student_profile_id: string;
   full_name: string;
   phone: string;
   birth_date: string | null;
@@ -128,6 +129,7 @@ export default function StudentCheckInsAdminPage() {
   const [expiryDrafts, setExpiryDrafts] = useState<Record<string, string>>({});
   const [savingExpiryId, setSavingExpiryId] = useState("");
   const [notice, setNotice] = useState("");
+  const [selectedCheckIn, setSelectedCheckIn] = useState<StudentCheckInRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeciding, setIsDeciding] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -144,6 +146,8 @@ export default function StudentCheckInsAdminPage() {
     if (!checkInUrl) return "";
     return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=${encodeURIComponent(checkInUrl)}`;
   }, [checkInUrl]);
+  const studentsById = useMemo(() => new Map(students.map((student) => [student.id, student])), [students]);
+  const selectedStudent = selectedCheckIn ? studentsById.get(selectedCheckIn.student_profile_id) || null : null;
 
   const loadCheckIns = useCallback(async (quiet = false) => {
     if (!quiet) setIsLoading(true);
@@ -188,6 +192,15 @@ export default function StudentCheckInsAdminPage() {
       if (capturedPhotoPreview) URL.revokeObjectURL(capturedPhotoPreview);
     };
   }, [capturedPhotoPreview]);
+
+  useEffect(() => {
+    if (!selectedCheckIn) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setSelectedCheckIn(null);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [selectedCheckIn]);
 
   async function saveExpiry(studentId: string) {
     setSavingExpiryId(studentId);
@@ -322,37 +335,6 @@ export default function StudentCheckInsAdminPage() {
         {notice ? <div className="studentCheckInsAdminNotice">{notice}</div> : null}
 
         <section className="studentCheckInsTableCard">
-          <h2>學員期限管理</h2>
-          <p className="studentCheckInsSectionLead">到期日當天仍可報到；留白代表不限制期限。</p>
-          {students.length === 0 ? <p className="studentCheckInsEmpty">尚無學員資料。</p> : (
-            <div className="studentCheckInsExpiryList">
-              {students.map((student) => {
-                const expiresOn = expiryDrafts[student.id] ?? "";
-                const isExpired = Boolean(student.membership_expires_on && student.membership_expires_on < todayDateInputValue());
-                return (
-                  <article key={student.id}>
-                    <div className="studentCheckInsExpiryIdentity">
-                      <strong>{student.full_name}</strong>
-                      <span>{student.phone}</span>
-                    </div>
-                    <label>
-                      <span>自主運動期限</span>
-                      <input type="date" value={expiresOn} onChange={(event) => setExpiryDrafts((current) => ({ ...current, [student.id]: event.target.value }))} />
-                    </label>
-                    <span className={isExpired ? "studentCheckInsExpiryStatus is-expired" : "studentCheckInsExpiryStatus"}>
-                      {student.membership_expires_on ? (isExpired ? "已過期" : "有效") : "未設定"}
-                    </span>
-                    <button type="button" disabled={savingExpiryId === student.id} onClick={() => void saveExpiry(student.id)}>
-                      {savingExpiryId === student.id ? "儲存中" : "儲存"}
-                    </button>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        <section className="studentCheckInsTableCard">
           <h2>已完成報到</h2>
           {today.length === 0 ? (
             <p className="studentCheckInsEmpty">{isLoading ? "正在載入報到資料" : "這個日期還沒有完成報到的學員。"}</p>
@@ -363,7 +345,7 @@ export default function StudentCheckInsAdminPage() {
                 <tbody>
                   {today.map((item) => (
                     <tr key={item.id}>
-                      <td>{item.photo_url ? <a href={item.photo_url} target="_blank" rel="noreferrer"><img className="studentCheckInsTablePhoto" src={item.photo_url} alt={`${item.full_name} 的本人照片`} /></a> : "-"}</td>
+                      <td>{item.photo_url ? <button className="studentCheckInsTablePhotoButton" type="button" onClick={() => setSelectedCheckIn(item)} aria-label={`查看 ${item.full_name} 的資料`}><img className="studentCheckInsTablePhoto" src={item.photo_url} alt={`${item.full_name} 的本人照片`} /></button> : "-"}</td>
                       <td>{formatTaipeiDateTime(item.checked_in_at)}</td>
                       <td>{item.full_name}</td>
                       <td>{item.phone}</td>
@@ -381,12 +363,26 @@ export default function StudentCheckInsAdminPage() {
           <h2>最近報到</h2>
           <div className="studentCheckInsRecentList">
             {recent.length === 0 ? <p className="studentCheckInsEmpty">尚無報到紀錄。</p> : null}
-            {recent.map((item) => (
-              <article key={item.id}>
-                {item.photo_url ? <img src={item.photo_url} alt={`${item.full_name} 的本人照片`} /> : null}
-                <div><strong>{item.full_name}</strong><span>{formatTaipeiDateTime(item.checked_in_at)}</span><span>{item.phone}・生日 {formatBirthday(item.birth_date)}・本月第 {item.month_sequence} 次</span></div>
-              </article>
-            ))}
+            {recent.map((item) => {
+              const student = studentsById.get(item.student_profile_id);
+              const expiresOn = expiryDrafts[item.student_profile_id] ?? "";
+              const isExpired = Boolean(student?.membership_expires_on && student.membership_expires_on < todayDateInputValue());
+              return (
+                <article key={item.id}>
+                  {item.photo_url ? (
+                    <button className="studentCheckInsRecentPhotoButton" type="button" onClick={() => setSelectedCheckIn(item)} aria-label={`查看 ${item.full_name} 的資料`}>
+                      <img src={item.photo_url} alt={`${item.full_name} 的本人照片`} />
+                    </button>
+                  ) : <div className="studentCheckInsRecentPhotoEmpty">無照片</div>}
+                  <div className="studentCheckInsRecentInfo"><strong>{item.full_name}</strong><span>{formatTaipeiDateTime(item.checked_in_at)}</span><span>{item.phone}・生日 {formatBirthday(item.birth_date)}・本月第 {item.month_sequence} 次</span></div>
+                  <div className="studentCheckInsRecentExpiry">
+                    <label><span>自主運動期限</span><input type="date" value={expiresOn} disabled={!student} onChange={(event) => setExpiryDrafts((current) => ({ ...current, [item.student_profile_id]: event.target.value }))} /></label>
+                    <span className={isExpired ? "studentCheckInsExpiryStatus is-expired" : "studentCheckInsExpiryStatus"}>{student?.membership_expires_on ? (isExpired ? "已過期" : "有效") : "未設定"}</span>
+                    <button type="button" disabled={!student || savingExpiryId === item.student_profile_id} onClick={() => void saveExpiry(item.student_profile_id)}>{savingExpiryId === item.student_profile_id ? "儲存中" : "儲存"}</button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       </section>
@@ -442,6 +438,27 @@ export default function StudentCheckInsAdminPage() {
                 <button className="studentCheckInsApproveButton" type="button" disabled={isDeciding || isUploadingPhoto || !activeRequest.profile.photo_url} onClick={() => void decide(activeRequest.id, "approved")}>{isDeciding ? "處理中" : "放行"}</button>
               </div>
               {pending.length > 1 ? <p className="studentCheckInsQueueNote">後面還有 {pending.length - 1} 位等待確認</p> : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {selectedCheckIn?.photo_url ? (
+        <div className="studentCheckInsProfileBackdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedCheckIn(null); }}>
+          <section className="studentCheckInsProfileDialog" role="dialog" aria-modal="true" aria-labelledby="student-profile-title">
+            <button className="studentCheckInsProfileClose" type="button" aria-label="關閉學員資料" title="關閉" onClick={() => setSelectedCheckIn(null)}>×</button>
+            <div className="studentCheckInsProfilePhoto"><img src={selectedCheckIn.photo_url} alt={`${selectedCheckIn.full_name} 的本人照片`} /></div>
+            <div className="studentCheckInsProfileInfo">
+              <p className="studentCheckInEyebrow">STUDENT PROFILE</p>
+              <h2 id="student-profile-title">{selectedCheckIn.full_name}</h2>
+              <dl>
+                <div><dt>電話</dt><dd>{selectedCheckIn.phone}</dd></div>
+                <div><dt>Email</dt><dd>{selectedStudent?.email || "-"}</dd></div>
+                <div><dt>生日</dt><dd>{formatBirthday(selectedCheckIn.birth_date)}</dd></div>
+                <div><dt>自主運動期限</dt><dd>{selectedStudent?.membership_expires_on || "未設定"}</dd></div>
+                <div><dt>最近報到</dt><dd>{formatTaipeiDateTime(selectedCheckIn.checked_in_at)}</dd></div>
+                <div><dt>本月次數</dt><dd>第 {selectedCheckIn.month_sequence} 次</dd></div>
+              </dl>
             </div>
           </section>
         </div>

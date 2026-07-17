@@ -38,13 +38,13 @@ export async function GET(request: Request) {
       .limit(50),
     admin
       .from("student_check_ins")
-      .select("id, request_id, full_name, phone, birth_date, photo_path, checked_in_at, local_date, local_month, month_sequence")
+      .select("id, request_id, student_profile_id, full_name, phone, birth_date, photo_path, checked_in_at, local_date, local_month, month_sequence")
       .eq("local_date", date)
       .order("checked_in_at", { ascending: false })
       .limit(200),
     admin
       .from("student_check_ins")
-      .select("id, request_id, full_name, phone, birth_date, photo_path, checked_in_at, local_date, local_month, month_sequence")
+      .select("id, request_id, student_profile_id, full_name, phone, birth_date, photo_path, checked_in_at, local_date, local_month, month_sequence")
       .order("checked_in_at", { ascending: false })
       .limit(20),
     admin
