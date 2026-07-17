@@ -358,7 +358,12 @@ export default function StudentCheckInsAdminPage() {
         </section>
 
         <section className="studentCheckInsAdminToolbar">
-          <label><span>查詢日期</span><input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
+          <label>
+            <span>查詢日期</span>
+            <span className="studentCheckInsDateField">
+              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            </span>
+          </label>
         </section>
 
         {error ? <div className="studentCheckInsAdminError">{error}</div> : null}
