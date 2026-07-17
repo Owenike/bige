@@ -28,10 +28,12 @@ type StudentAuthSession = {
 
 export type StudentProfileRow = {
   id: string;
+  auth_user_id: string | null;
   line_user_id: string | null;
   line_display_name: string | null;
   full_name: string;
   phone: string;
+  email: string | null;
   birth_date: string | null;
   password_hash: string | null;
   photo_path: string | null;
@@ -185,7 +187,7 @@ export function isCompleteStudentProfile(profile: StudentProfileRow | null): pro
 }
 
 const profileSelect =
-  "id, line_user_id, line_display_name, full_name, phone, birth_date, password_hash, photo_path, is_active, bound_at, last_checkin_at";
+  "id, auth_user_id, line_user_id, line_display_name, full_name, phone, email, birth_date, password_hash, photo_path, is_active, bound_at, last_checkin_at";
 
 export async function loadStudentProfileById(profileId: string) {
   const result = await createSupabaseAdminClient()
@@ -212,6 +214,16 @@ export async function loadStudentProfileByPhone(phoneInput: string) {
     .from("student_line_profiles")
     .select(profileSelect)
     .eq("phone", normalizePhone(phoneInput))
+    .maybeSingle();
+  if (result.error) throw new Error(result.error.message);
+  return (result.data || null) as StudentProfileRow | null;
+}
+
+export async function loadStudentProfileByEmail(emailInput: string) {
+  const result = await createSupabaseAdminClient()
+    .from("student_line_profiles")
+    .select(profileSelect)
+    .eq("email", emailInput.trim().toLowerCase())
     .maybeSingle();
   if (result.error) throw new Error(result.error.message);
   return (result.data || null) as StudentProfileRow | null;

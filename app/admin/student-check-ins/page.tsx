@@ -8,6 +8,7 @@ type StudentProfile = {
   id: string;
   full_name: string;
   phone: string;
+  email: string | null;
   birth_date: string;
   photo_url: string | null;
 };
@@ -336,6 +337,7 @@ export default function StudentCheckInsAdminPage() {
               <h2 id="student-approval-title">{activeRequest.profile.full_name}</h2>
               <dl>
                 <div><dt>電話</dt><dd>{activeRequest.profile.phone}</dd></div>
+                <div><dt>Email</dt><dd>{activeRequest.profile.email || "-"}</dd></div>
                 <div><dt>生日</dt><dd>{formatBirthday(activeRequest.profile.birth_date)}</dd></div>
                 <div><dt>登入方式</dt><dd>{activeRequest.auth_method === "line" ? "LINE" : "手機與密碼"}</dd></div>
                 <div><dt>送出時間</dt><dd>{formatTaipeiDateTime(activeRequest.requested_at)}</dd></div>

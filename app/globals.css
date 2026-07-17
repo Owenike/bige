@@ -10695,6 +10695,11 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   cursor: wait;
   opacity: .58;
 }
+.studentCheckInCard.resetPasswordCard .btn{
+  border-color: rgba(224, 194, 124, .34);
+  background: rgba(255, 255, 255, .04);
+  color: #f6f2e8;
+}
 .resetPasswordMessage{
   margin-top: 18px;
   border: 1px solid rgba(190, 207, 231, .14);

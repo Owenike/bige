@@ -17,6 +17,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isPublicBookingRoute = pathname?.startsWith("/booking");
   const isTrialBookingRoute = pathname?.startsWith("/trial-booking");
   const isStudentCheckInRoute = pathname?.startsWith("/check-in");
+  const isStudentPasswordRecoveryRoute = pathname === "/reset-password" && searchParams.get("mode") === "student";
   const isAdminRoute = pathname?.startsWith("/admin");
   const isAcpayResultRoute = pathname?.startsWith("/payment/acpay-result");
   const isCustomPaymentRoute = pathname?.startsWith("/custom-payment");
@@ -41,6 +42,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
     !isPublicBookingRoute &&
     !isTrialBookingRoute &&
     !isStudentCheckInRoute &&
+    !isStudentPasswordRecoveryRoute &&
     !isAcpayResultRoute &&
     !isCustomPaymentRoute &&
     !isRenwuPilatesRoute &&
@@ -93,9 +95,9 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
 
       {children}
 
-      {!isEmbedded && !isStudentCheckInRoute && !isStudentCheckInAdminLogin ? <FloatingActionButtons /> : null}
+      {!isEmbedded && !isStudentCheckInRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin ? <FloatingActionButtons /> : null}
 
-      {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute && !isStudentCheckInRoute && !isStudentCheckInAdminLogin && !isAcpayResultRoute && !isCustomPaymentRoute ? (
+      {!isEmbedded && !isPublicBookingRoute && !isTrialBookingRoute && !isStudentCheckInRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin && !isAcpayResultRoute && !isCustomPaymentRoute ? (
         <footer className="footer">
           <div className="footerInner">
             <div>© {new Date().getFullYear()} BigE Fitness. All rights reserved.</div>

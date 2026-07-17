@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     admin
       .from("student_checkin_requests")
       .select(
-        "id, status, auth_method, requested_at, student_profile_id, student_line_profiles!student_checkin_requests_student_profile_id_fkey(id, full_name, phone, birth_date, photo_path, line_display_name)",
+        "id, status, auth_method, requested_at, student_profile_id, student_line_profiles!student_checkin_requests_student_profile_id_fkey(id, full_name, phone, email, birth_date, photo_path, line_display_name)",
       )
       .eq("status", "pending")
       .order("requested_at", { ascending: true })

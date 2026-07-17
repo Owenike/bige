@@ -84,6 +84,7 @@ async function resolveRecoverySession(client: SupabaseClient): Promise<RecoveryS
 
 export default function ResetPasswordPage() {
   const [client, setClient] = useState<SupabaseClient | null>(null);
+  const [recoveryMode, setRecoveryMode] = useState<"account" | "student">("account");
   const [state, setState] = useState<ViewState>("loading");
   const [message, setMessage] = useState("正在驗證重設密碼連結...");
   const [password, setPassword] = useState("");
@@ -100,6 +101,8 @@ export default function ResetPasswordPage() {
     let cancelled = false;
 
     async function bootstrap() {
+      const isStudentRecovery = new URLSearchParams(window.location.search).get("mode") === "student";
+      if (!cancelled && isStudentRecovery) setRecoveryMode("student");
       let supabase: SupabaseClient;
       try {
         supabase = createBrowserSupabaseClient();
@@ -158,11 +161,30 @@ export default function ResetPasswordPage() {
     setState("submitting");
     setMessage("正在更新密碼...");
 
-    const { error } = await client.auth.updateUser({ password });
-    if (error) {
+    let updateError = "";
+    if (recoveryMode === "student") {
+      const session = await client.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) {
+        updateError = "重設連結已失效，請重新寄送。";
+      } else {
+        const response = await fetch("/api/student-checkin/password-reset/confirm", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        });
+        const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+        if (!response.ok || !payload?.ok) updateError = payload?.error || "密碼更新失敗，請稍後再試。";
+      }
+    } else {
+      const result = await client.auth.updateUser({ password });
+      updateError = result.error?.message || "";
+    }
+
+    if (updateError) {
       setState("ready");
       setMessage("密碼更新失敗，請重新確認連結或稍後再試。");
-      setFieldError(error.message || "密碼更新失敗。");
+      setFieldError(updateError);
       return;
     }
 
@@ -175,11 +197,11 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="resetPasswordPage">
-      <section className="resetPasswordCard" aria-labelledby="reset-password-title">
-        <div className="kvLabel">Account Recovery</div>
+    <main className={recoveryMode === "student" ? "studentCheckInPage" : "resetPasswordPage"}>
+      <section className={recoveryMode === "student" ? "studentCheckInCard resetPasswordCard" : "resetPasswordCard"} aria-labelledby="reset-password-title">
+        <div className="kvLabel">{recoveryMode === "student" ? "BIGE CHECK-IN" : "Account Recovery"}</div>
         <h1 id="reset-password-title" className="sectionTitle">
-          重設密碼
+          {recoveryMode === "student" ? "重設學員密碼" : "重設密碼"}
         </h1>
         <p className="sub">請輸入新的登入密碼，完成後即可使用新密碼登入。</p>
 
@@ -228,8 +250,8 @@ export default function ResetPasswordPage() {
               <button className="resetPasswordButton" type="submit" disabled={!canSubmit || state === "submitting"}>
                 {state === "submitting" ? "更新中..." : "更新密碼"}
               </button>
-              <Link className="btn" href="/login">
-                前往登入
+              <Link className="btn" href={recoveryMode === "student" ? "/check-in" : "/login"}>
+                {recoveryMode === "student" ? "返回報到登入" : "前往登入"}
               </Link>
             </div>
           </form>
@@ -237,11 +259,11 @@ export default function ResetPasswordPage() {
 
         {(state === "invalid" || state === "done") && (
           <div className="actions">
-            <Link className="resetPasswordButton" href="/login">
-              前往登入
+            <Link className="resetPasswordButton" href={recoveryMode === "student" ? "/check-in" : "/login"}>
+              {recoveryMode === "student" ? "返回報到登入" : "前往登入"}
             </Link>
             {state === "invalid" ? (
-              <Link className="btn" href="/forgot-password">
+              <Link className="btn" href={recoveryMode === "student" ? "/check-in/forgot-password" : "/forgot-password"}>
                 重新寄送密碼重設信
               </Link>
             ) : null}

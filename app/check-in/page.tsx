@@ -38,6 +38,7 @@ export default function StudentCheckInPage() {
   const [lineDisplayName, setLineDisplayName] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [password, setPassword] = useState("");
   const [requestId, setRequestId] = useState("");
@@ -149,6 +150,7 @@ export default function StudentCheckInPage() {
     const form = new FormData();
     form.set("fullName", fullName);
     form.set("phone", phone);
+    form.set("email", email);
     form.set("birthDate", birthDate);
     form.set("password", password);
     const response = await fetch("/api/student-checkin/register", { method: "POST", body: form });
@@ -198,6 +200,7 @@ export default function StudentCheckInPage() {
                 <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" minLength={6} required />
               </label>
               <button className="studentCheckInPrimary" type="submit">登入並報到</button>
+              <Link className="studentCheckInTextButton" href="/check-in/forgot-password">忘記密碼</Link>
               <button className="studentCheckInTextButton" type="button" onClick={() => { setAuthMethod("phone"); setError(""); setView("register"); }}>
                 第一次使用，建立學員資料
               </button>
@@ -215,6 +218,7 @@ export default function StudentCheckInPage() {
               <div className="studentCheckInFormGrid">
                 <label><span>真實姓名</span><input value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" required /></label>
                 <label><span>手機號碼</span><input value={phone} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" inputMode="tel" required /></label>
+                <label><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" inputMode="email" required /></label>
                 <label><span>生日</span><input type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} required /></label>
                 <label><span>密碼（至少 6 碼）</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={6} required /></label>
               </div>
