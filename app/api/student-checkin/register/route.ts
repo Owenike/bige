@@ -7,10 +7,8 @@ import {
   createCheckinRequest,
   hashStudentPassword,
   loadStudentProfileByEmail,
-  loadStudentProfileByLine,
   loadStudentProfileByPhone,
   normalizePhone,
-  readStudentLineSession,
   setStudentAuthSession,
 } from "../../../../lib/student-checkin";
 
@@ -56,61 +54,47 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "手機號碼格式不正確。" }, { status: 400 });
   }
 
-  const lineSession = await readStudentLineSession();
   const email = parsed.data.email;
-  const [phoneProfile, emailProfile, lineProfile] = await Promise.all([
+  const [phoneProfile, emailProfile] = await Promise.all([
     loadStudentProfileByPhone(phone),
     loadStudentProfileByEmail(email),
-    lineSession ? loadStudentProfileByLine(lineSession.lineUserId) : Promise.resolve(null),
   ]);
 
-  if (phoneProfile && phoneProfile.id !== lineProfile?.id) {
+  if (phoneProfile) {
     return NextResponse.json({ ok: false, error: "這支手機已建立資料，請回登入頁使用手機與密碼報到。" }, { status: 409 });
   }
 
-  if (emailProfile && emailProfile.id !== lineProfile?.id) {
+  if (emailProfile) {
     return NextResponse.json({ ok: false, error: "這個 Email 已建立學員資料，請使用原本的手機與密碼登入。" }, { status: 409 });
   }
 
-  const profileId = lineProfile?.id || crypto.randomUUID();
+  const profileId = crypto.randomUUID();
   const admin = createSupabaseAdminClient();
   const passwordHash = await hashStudentPassword(parsed.data.password);
-  let authUserId = lineProfile?.auth_user_id || null;
+  let authUserId: string | null = null;
   let createdAuthUserId: string | null = null;
 
-  if (authUserId) {
-    const updatedAuth = await admin.auth.admin.updateUserById(authUserId, {
-      email,
-      password: parsed.data.password,
-      email_confirm: true,
-      app_metadata: { account_type: "student_checkin" },
-    });
-    if (updatedAuth.error) {
-      return NextResponse.json({ ok: false, error: "Email 帳號連結失敗，請洽現場工作人員。" }, { status: 500 });
-    }
-  } else {
-    const createdAuth = await admin.auth.admin.createUser({
-      email,
-      password: parsed.data.password,
-      email_confirm: true,
-      app_metadata: { account_type: "student_checkin" },
-    });
-    if (createdAuth.error || !createdAuth.data.user) {
-      const duplicate = createdAuth.error?.message.toLowerCase().includes("already") || createdAuth.error?.status === 422;
-      return NextResponse.json(
-        { ok: false, error: duplicate ? "這個 Email 已被使用，請改用其他 Email 或洽現場人員。" : "Email 帳號建立失敗，請洽現場工作人員。" },
-        { status: duplicate ? 409 : 500 },
-      );
-    }
-    authUserId = createdAuth.data.user.id;
-    createdAuthUserId = authUserId;
+  const createdAuth = await admin.auth.admin.createUser({
+    email,
+    password: parsed.data.password,
+    email_confirm: true,
+    app_metadata: { account_type: "student_checkin" },
+  });
+  if (createdAuth.error || !createdAuth.data.user) {
+    const duplicate = createdAuth.error?.message.toLowerCase().includes("already") || createdAuth.error?.status === 422;
+    return NextResponse.json(
+      { ok: false, error: duplicate ? "這個 Email 已被使用，請改用其他 Email 或洽現場人員。" : "Email 帳號建立失敗，請洽現場工作人員。" },
+      { status: duplicate ? 409 : 500 },
+    );
   }
+  authUserId = createdAuth.data.user.id;
+  createdAuthUserId = authUserId;
 
   const profilePayload = {
     id: profileId,
     auth_user_id: authUserId,
-    line_user_id: lineSession?.lineUserId || null,
-    line_display_name: lineSession?.lineDisplayName || null,
+    line_user_id: null,
+    line_display_name: null,
     full_name: parsed.data.fullName,
     phone,
     email,
@@ -120,23 +104,20 @@ export async function POST(request: Request) {
     updated_at: new Date().toISOString(),
   };
 
-  const saved = lineProfile
-    ? await admin.from("student_line_profiles").update(profilePayload).eq("id", profileId).select("id, full_name").single()
-    : await admin.from("student_line_profiles").insert(profilePayload).select("id, full_name").single();
+  const saved = await admin.from("student_line_profiles").insert(profilePayload).select("id, full_name").single();
 
   if (saved.error) {
     if (createdAuthUserId) await admin.auth.admin.deleteUser(createdAuthUserId).catch(() => null);
-    const message = saved.error.code === "23505" ? "這支手機或 LINE 已建立資料。" : "學員資料建立失敗，請洽現場工作人員。";
+    const message = saved.error.code === "23505" ? "這支手機或 Email 已建立資料。" : "學員資料建立失敗，請洽現場工作人員。";
     return NextResponse.json({ ok: false, error: message }, { status: saved.error.code === "23505" ? 409 : 500 });
   }
 
-  const authMethod = lineSession ? "line" : "phone";
-  const checkinRequest = await createCheckinRequest({ profileId, authMethod, request });
+  const checkinRequest = await createCheckinRequest({ profileId, authMethod: "phone", request });
   const response = NextResponse.json({
     ok: true,
     profile: { id: profileId, fullName: parsed.data.fullName },
     request: checkinRequest,
   });
-  setStudentAuthSession(response, profileId, authMethod);
+  setStudentAuthSession(response, profileId, "phone");
   return response;
 }

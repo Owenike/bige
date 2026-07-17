@@ -27,11 +27,11 @@ export async function GET(request: Request) {
   const date = url.searchParams.get("date")?.trim() || taipeiDateParts().localDate;
   const admin = createSupabaseAdminClient();
 
-  const [pendingResult, todayResult, recentResult] = await Promise.all([
+  const [pendingResult, todayResult, recentResult, studentsResult] = await Promise.all([
     admin
       .from("student_checkin_requests")
       .select(
-        "id, status, auth_method, requested_at, student_profile_id, student_line_profiles!student_checkin_requests_student_profile_id_fkey(id, full_name, phone, email, birth_date, photo_path, line_display_name)",
+        "id, status, auth_method, requested_at, student_profile_id, student_line_profiles!student_checkin_requests_student_profile_id_fkey(id, full_name, phone, email, birth_date, membership_expires_on, photo_path, line_display_name)",
       )
       .eq("status", "pending")
       .order("requested_at", { ascending: true })
@@ -47,11 +47,18 @@ export async function GET(request: Request) {
       .select("id, request_id, full_name, phone, birth_date, photo_path, checked_in_at, local_date, local_month, month_sequence")
       .order("checked_in_at", { ascending: false })
       .limit(20),
+    admin
+      .from("student_line_profiles")
+      .select("id, full_name, phone, email, membership_expires_on, is_active, updated_at")
+      .eq("is_active", true)
+      .order("full_name", { ascending: true })
+      .limit(500),
   ]);
 
   if (pendingResult.error) return NextResponse.json({ ok: false, error: pendingResult.error.message }, { status: 500 });
   if (todayResult.error) return NextResponse.json({ ok: false, error: todayResult.error.message }, { status: 500 });
   if (recentResult.error) return NextResponse.json({ ok: false, error: recentResult.error.message }, { status: 500 });
+  if (studentsResult.error) return NextResponse.json({ ok: false, error: studentsResult.error.message }, { status: 500 });
 
   const pending = (pendingResult.data || []).map((row) => {
     const relation = Array.isArray(row.student_line_profiles) ? row.student_line_profiles[0] : row.student_line_profiles;
@@ -74,5 +81,6 @@ export async function GET(request: Request) {
     })),
     today: (todayResult.data || []).map((row) => ({ ...row, photo_url: photos.get(row.photo_path || "") || null })),
     recent: (recentResult.data || []).map((row) => ({ ...row, photo_url: photos.get(row.photo_path || "") || null })),
+    students: studentsResult.data || [],
   });
 }

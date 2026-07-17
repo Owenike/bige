@@ -4,6 +4,7 @@ import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
 import {
   createCheckinRequest,
   isCompleteStudentProfile,
+  isStudentMembershipExpired,
   loadStudentProfileByPhone,
   normalizePhone,
   setStudentAuthSession,
@@ -37,6 +38,13 @@ export async function POST(request: Request) {
   const passwordMatches = await verifyStudentPassword(parsed.data.password, profile.password_hash);
   if (!passwordMatches || !isCompleteStudentProfile(profile)) {
     return NextResponse.json({ ok: false, error: "手機號碼或密碼不正確。" }, { status: 401 });
+  }
+
+  if (isStudentMembershipExpired(profile)) {
+    return NextResponse.json(
+      { ok: false, code: "membership_expired", error: "自主運動期限已到期，請洽現場人員協助續期。", expiresOn: profile.membership_expires_on },
+      { status: 403 },
+    );
   }
 
   const checkinRequest = await createCheckinRequest({ profileId: profile.id, authMethod: "phone", request });

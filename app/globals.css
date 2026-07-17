@@ -10067,7 +10067,6 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   font-size: 16px;
 }
 .studentCheckInPrimary,
-.studentCheckInLineButton,
 .studentCheckInsAdminButton{
   min-height: 48px;
   width: fit-content;
@@ -10087,33 +10086,10 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .studentCheckInPrimary{
   margin-top: 6px;
 }
-.studentCheckInLineButton{
-  width: 100%;
-  margin-top: 24px;
-  border-color: #06a742;
-  background: #06c755;
-  color: #fff;
-}
 .studentCheckInPrimary:hover,
-.studentCheckInLineButton:hover,
 .studentCheckInsAdminButton:hover{
   filter: brightness(1.08);
   text-decoration: none;
-}
-.studentCheckInDivider{
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 12px;
-  margin: 24px 0 0;
-  color: #777b82;
-  font-size: 13px;
-}
-.studentCheckInDivider::before,
-.studentCheckInDivider::after{
-  content: "";
-  height: 1px;
-  background: #30343a;
 }
 .studentCheckInForm{
   display: grid;
@@ -10167,6 +10143,30 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   color: #ffd9cf;
   padding: 12px 14px;
   line-height: 1.55;
+}
+.studentCheckInsAdminNotice{
+  border: 1px solid rgba(74, 222, 128, .3);
+  border-radius: 8px;
+  background: rgba(20, 83, 45, .18);
+  color: #dcfce7;
+  padding: 12px 14px;
+}
+.studentCheckInExpiredMark{
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #ef6a70;
+  border-radius: 50%;
+  color: #ffd5d8;
+  font-size: 38px;
+  font-weight: 800;
+}
+.studentCheckInExpiryDate{
+  margin: 0;
+  color: #f4d78f;
+  font-size: 18px;
+  font-weight: 760;
 }
 .studentCheckInCentered{
   display: grid;
@@ -10291,6 +10291,71 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   font-size: 22px;
   font-weight: 620;
   letter-spacing: 0;
+}
+.studentCheckInsSectionLead{
+  margin: 8px 0 0;
+  color: #9da1a8;
+  line-height: 1.6;
+}
+.studentCheckInsExpiryList{
+  display: grid;
+  margin-top: 18px;
+  border-top: 1px solid #2b2f35;
+}
+.studentCheckInsExpiryList article{
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) minmax(180px, 1fr) 72px 84px;
+  align-items: end;
+  gap: 14px;
+  border-bottom: 1px solid #2b2f35;
+  padding: 14px 0;
+}
+.studentCheckInsExpiryIdentity,
+.studentCheckInsExpiryList label{
+  display: grid;
+  gap: 5px;
+}
+.studentCheckInsExpiryIdentity span,
+.studentCheckInsExpiryList label span{
+  color: #9da1a8;
+  font-size: 13px;
+}
+.studentCheckInsExpiryList input,
+.studentCheckInsApprovalExpiry input{
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid #3b4048;
+  border-radius: 8px;
+  background: #171b21;
+  color: #f7f2e7;
+  font: inherit;
+  padding: 0 10px;
+}
+.studentCheckInsExpiryList button,
+.studentCheckInsApprovalExpiry button{
+  min-height: 42px;
+  border: 1px solid #bda56d;
+  border-radius: 8px;
+  background: #d4bd83;
+  color: #11100c;
+  font: inherit;
+  font-weight: 760;
+  padding: 0 14px;
+  cursor: pointer;
+}
+.studentCheckInsExpiryList button:disabled,
+.studentCheckInsApprovalExpiry button:disabled{
+  cursor: wait;
+  opacity: .58;
+}
+.studentCheckInsExpiryStatus{
+  align-self: center;
+  color: #9ee5b4;
+  font-size: 13px;
+  font-weight: 760;
+}
+.studentCheckInsExpiryStatus.is-expired{
+  color: #ff9ca2;
 }
 .studentCheckInsQrCard img,
 .studentCheckInsQrEmpty{
@@ -10515,6 +10580,14 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   color: #f5f1e8;
   font-weight: 650;
 }
+.studentCheckInsApprovalInfo .studentCheckInsApprovalExpiry{
+  align-items: start;
+}
+.studentCheckInsApprovalExpiry dd{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
 .studentCheckInsApprovalHint{
   margin: 22px 0 0;
   color: #d8c99f;
@@ -10621,6 +10694,17 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .studentCheckInsApprovalActions{
     margin-top: 20px;
     padding-top: 0;
+  }
+  .studentCheckInsExpiryList article{
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .studentCheckInsExpiryList button{
+    width: 100%;
+  }
+  .studentCheckInsApprovalExpiry dd{
+    grid-template-columns: 1fr;
   }
 }
 

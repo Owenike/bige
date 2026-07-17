@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   isCompleteStudentProfile,
+  isStudentMembershipExpired,
   loadRecentCheckinRequest,
   loadStudentProfileById,
-  loadStudentProfileByLine,
   readStudentAuthSession,
-  readStudentLineSession,
-  setStudentAuthSession,
 } from "../../../../lib/student-checkin";
 
 function publicProfile(profile: Awaited<ReturnType<typeof loadStudentProfileById>>) {
@@ -16,15 +14,24 @@ function publicProfile(profile: Awaited<ReturnType<typeof loadStudentProfileById
     fullName: profile.full_name,
     phone: profile.phone,
     birthDate: profile.birth_date,
-    lineDisplayName: profile.line_display_name,
   };
 }
 
 export async function GET() {
   const authSession = await readStudentAuthSession();
-  if (authSession) {
+  if (authSession?.authMethod === "phone") {
     const profile = await loadStudentProfileById(authSession.profileId);
     if (isCompleteStudentProfile(profile)) {
+      if (isStudentMembershipExpired(profile)) {
+        return NextResponse.json({
+          ok: false,
+          authenticated: false,
+          code: "membership_expired",
+          error: "自主運動期限已到期，請洽現場人員協助續期。",
+          expiresOn: profile.membership_expires_on,
+          profile: publicProfile(profile),
+        }, { status: 403 });
+      }
       const request = await loadRecentCheckinRequest(profile.id);
       return NextResponse.json({
         ok: true,
@@ -35,29 +42,5 @@ export async function GET() {
       });
     }
   }
-
-  const lineSession = await readStudentLineSession();
-  if (!lineSession) return NextResponse.json({ ok: true, authenticated: false });
-
-  const profile = await loadStudentProfileByLine(lineSession.lineUserId);
-  if (!isCompleteStudentProfile(profile)) {
-    return NextResponse.json({
-      ok: true,
-      authenticated: true,
-      authMethod: "line",
-      needsProfile: true,
-      lineDisplayName: lineSession.lineDisplayName,
-    });
-  }
-
-  const request = await loadRecentCheckinRequest(profile.id);
-  const response = NextResponse.json({
-    ok: true,
-    authenticated: true,
-    authMethod: "line",
-    profile: publicProfile(profile),
-    request,
-  });
-  setStudentAuthSession(response, profile.id, "line");
-  return response;
+  return NextResponse.json({ ok: true, authenticated: false });
 }

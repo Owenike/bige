@@ -4,19 +4,13 @@ import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "./supabase/admin";
 
-export const STUDENT_LINE_SESSION_COOKIE = "bige_student_line_session";
-export const STUDENT_LINE_STATE_COOKIE = "bige_student_line_state";
+const STUDENT_LINE_SESSION_COOKIE = "bige_student_line_session";
+const STUDENT_LINE_STATE_COOKIE = "bige_student_line_state";
 export const STUDENT_AUTH_SESSION_COOKIE = "bige_student_auth_session";
 export const STUDENT_PHOTO_BUCKET = "student-checkin-photos";
 
 const STUDENT_SESSION_MAX_AGE_SECONDS = 30 * 60;
 const scryptAsync = promisify(crypto.scrypt);
-
-type StudentLineSession = {
-  lineUserId: string;
-  lineDisplayName: string | null;
-  issuedAt: number;
-};
 
 export type StudentAuthMethod = "line" | "phone";
 
@@ -35,6 +29,7 @@ export type StudentProfileRow = {
   phone: string;
   email: string | null;
   birth_date: string | null;
+  membership_expires_on: string | null;
   password_hash: string | null;
   photo_path: string | null;
   is_active: boolean;
@@ -88,36 +83,9 @@ function verifySignedCookie<T extends { issuedAt: number }>(value: string | unde
   }
 }
 
-export function createStudentLineSessionCookie(input: { lineUserId: string; lineDisplayName?: string | null }) {
-  return createSignedCookie<StudentLineSession>({
-    lineUserId: input.lineUserId,
-    lineDisplayName: input.lineDisplayName || null,
-    issuedAt: Date.now(),
-  });
-}
-
-export function verifyStudentLineSessionCookie(value: string | undefined | null) {
-  const session = verifySignedCookie<StudentLineSession>(value);
-  return session?.lineUserId ? session : null;
-}
-
-export async function readStudentLineSession() {
-  const cookieStore = await cookies();
-  return verifyStudentLineSessionCookie(cookieStore.get(STUDENT_LINE_SESSION_COOKIE)?.value);
-}
-
-export function setStudentLineSession(response: NextResponse, sessionValue: string) {
-  response.cookies.set(STUDENT_LINE_SESSION_COOKIE, sessionValue, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: STUDENT_SESSION_MAX_AGE_SECONDS,
-  });
-}
-
 export function clearStudentLineSession(response: NextResponse) {
   response.cookies.delete(STUDENT_LINE_SESSION_COOKIE);
+  response.cookies.delete(STUDENT_LINE_STATE_COOKIE);
 }
 
 export function createStudentAuthSessionCookie(profileId: string, authMethod: StudentAuthMethod) {
@@ -127,7 +95,7 @@ export function createStudentAuthSessionCookie(profileId: string, authMethod: St
 export async function readStudentAuthSession() {
   const cookieStore = await cookies();
   const session = verifySignedCookie<StudentAuthSession>(cookieStore.get(STUDENT_AUTH_SESSION_COOKIE)?.value);
-  if (!session?.profileId || !["line", "phone"].includes(session.authMethod)) return null;
+  if (!session?.profileId || session.authMethod !== "phone") return null;
   return session;
 }
 
@@ -187,23 +155,17 @@ export function isCompleteStudentProfile(profile: StudentProfileRow | null): pro
 }
 
 const profileSelect =
-  "id, auth_user_id, line_user_id, line_display_name, full_name, phone, email, birth_date, password_hash, photo_path, is_active, bound_at, last_checkin_at";
+  "id, auth_user_id, line_user_id, line_display_name, full_name, phone, email, birth_date, membership_expires_on, password_hash, photo_path, is_active, bound_at, last_checkin_at";
+
+export function isStudentMembershipExpired(profile: Pick<StudentProfileRow, "membership_expires_on">, date = new Date()) {
+  return Boolean(profile.membership_expires_on && profile.membership_expires_on < taipeiDateParts(date).localDate);
+}
 
 export async function loadStudentProfileById(profileId: string) {
   const result = await createSupabaseAdminClient()
     .from("student_line_profiles")
     .select(profileSelect)
     .eq("id", profileId)
-    .maybeSingle();
-  if (result.error) throw new Error(result.error.message);
-  return (result.data || null) as StudentProfileRow | null;
-}
-
-export async function loadStudentProfileByLine(lineUserId: string) {
-  const result = await createSupabaseAdminClient()
-    .from("student_line_profiles")
-    .select(profileSelect)
-    .eq("line_user_id", lineUserId)
     .maybeSingle();
   if (result.error) throw new Error(result.error.message);
   return (result.data || null) as StudentProfileRow | null;

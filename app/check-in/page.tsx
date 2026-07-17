@@ -13,16 +13,16 @@ type CheckinPayload = {
   ok?: boolean;
   authenticated?: boolean;
   needsProfile?: boolean;
-  authMethod?: "line" | "phone";
-  lineDisplayName?: string | null;
   profile?: { id: string; fullName: string } | null;
   request?: CheckinRequest | null;
   checkIn?: { checked_in_at: string; month_sequence: number } | null;
   encouragement?: string | null;
+  code?: string;
+  expiresOn?: string | null;
   error?: string;
 };
 
-type View = "loading" | "login" | "register" | "pending" | "success" | "rejected" | "error";
+type View = "loading" | "login" | "register" | "pending" | "success" | "rejected" | "expired" | "error";
 
 function formatTaipeiTime(value: string) {
   return new Intl.DateTimeFormat("zh-TW", {
@@ -32,10 +32,13 @@ function formatTaipeiTime(value: string) {
   }).format(new Date(value));
 }
 
+function formatDate(value: string) {
+  const [year, month, day] = value.split("-");
+  return `${year}/${month}/${day}`;
+}
+
 export default function StudentCheckInPage() {
   const [view, setView] = useState<View>("loading");
-  const [authMethod, setAuthMethod] = useState<"line" | "phone">("phone");
-  const [lineDisplayName, setLineDisplayName] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -43,7 +46,16 @@ export default function StudentCheckInPage() {
   const [password, setPassword] = useState("");
   const [requestId, setRequestId] = useState("");
   const [success, setSuccess] = useState<CheckinPayload | null>(null);
+  const [expiresOn, setExpiresOn] = useState("");
   const [error, setError] = useState("");
+
+  const applyExpiryWarning = useCallback((payload: CheckinPayload | null) => {
+    if (payload?.code !== "membership_expired") return false;
+    setExpiresOn(payload.expiresOn || "");
+    setError(payload.error || "自主運動期限已到期，請洽現場人員協助續期。");
+    setView("expired");
+    return true;
+  }, []);
 
   const applyRequest = useCallback((payload: CheckinPayload) => {
     if (payload.profile?.fullName) setFullName(payload.profile.fullName);
@@ -63,33 +75,26 @@ export default function StudentCheckInPage() {
   const createRequest = useCallback(async () => {
     const response = await fetch("/api/student-checkin/request", { method: "POST" });
     const payload = (await response.json().catch(() => null)) as CheckinPayload | null;
+    if (applyExpiryWarning(payload)) return;
     if (!response.ok || !payload?.ok) throw new Error(payload?.error || "無法送出報到申請。");
     applyRequest(payload);
-  }, [applyRequest]);
+  }, [applyExpiryWarning, applyRequest]);
 
   useEffect(() => {
     let active = true;
     async function load() {
-      const urlError = new URLSearchParams(window.location.search).get("error");
-      if (urlError) {
-        setError("LINE 登入未完成，請再試一次或改用手機登入。");
-        setView("login");
-        return;
-      }
       const response = await fetch("/api/student-checkin/session", { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as CheckinPayload | null;
       if (!active) return;
+      if (applyExpiryWarning(payload)) return;
       if (!payload?.authenticated) {
         setView("login");
         return;
       }
       if (payload.needsProfile) {
-        setAuthMethod("line");
-        setLineDisplayName(payload.lineDisplayName || null);
         setView("register");
         return;
       }
-      setAuthMethod(payload.authMethod || "phone");
       if (applyRequest(payload)) {
         if (payload.request?.status === "approved") {
           const statusResponse = await fetch("/api/student-checkin/request", { cache: "no-store" });
@@ -108,17 +113,18 @@ export default function StudentCheckInPage() {
     return () => {
       active = false;
     };
-  }, [applyRequest, createRequest]);
+  }, [applyExpiryWarning, applyRequest, createRequest]);
 
   useEffect(() => {
     if (view !== "pending" || !requestId) return;
     const timer = window.setInterval(async () => {
       const response = await fetch("/api/student-checkin/request", { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as CheckinPayload | null;
+      if (applyExpiryWarning(payload)) return;
       if (response.ok && payload?.ok) applyRequest(payload);
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [applyRequest, requestId, view]);
+  }, [applyExpiryWarning, applyRequest, requestId, view]);
 
   async function submitPhoneLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -130,8 +136,8 @@ export default function StudentCheckInPage() {
       body: JSON.stringify({ phone, password }),
     });
     const payload = (await response.json().catch(() => null)) as CheckinPayload | null;
+    if (applyExpiryWarning(payload)) return;
     if (response.ok && payload?.needsProfile) {
-      setAuthMethod("phone");
       setView("register");
       return;
     }
@@ -167,6 +173,7 @@ export default function StudentCheckInPage() {
     await fetch("/api/student-checkin/logout", { method: "POST" });
     setRequestId("");
     setSuccess(null);
+    setExpiresOn("");
     setError("");
     setView("login");
   }
@@ -186,10 +193,8 @@ export default function StudentCheckInPage() {
         {view === "login" ? (
           <>
             <h1>自主運動報到</h1>
-            <p className="studentCheckInLead">選擇 LINE，或使用手機號碼與密碼登入。</p>
+            <p className="studentCheckInLead">請使用手機號碼與密碼登入。</p>
             {error ? <p className="studentCheckInError">{error}</p> : null}
-            <a className="studentCheckInLineButton" href="/api/student-checkin/line/start">使用 LINE 登入</a>
-            <div className="studentCheckInDivider"><span>或</span></div>
             <form className="studentCheckInForm" onSubmit={submitPhoneLogin}>
               <label>
                 <span>手機號碼</span>
@@ -201,7 +206,7 @@ export default function StudentCheckInPage() {
               </label>
               <button className="studentCheckInPrimary" type="submit">登入並報到</button>
               <Link className="studentCheckInTextButton" href="/check-in/forgot-password">忘記密碼</Link>
-              <button className="studentCheckInTextButton" type="button" onClick={() => { setAuthMethod("phone"); setError(""); setView("register"); }}>
+              <button className="studentCheckInTextButton" type="button" onClick={() => { setError(""); setView("register"); }}>
                 第一次使用，建立學員資料
               </button>
             </form>
@@ -211,9 +216,7 @@ export default function StudentCheckInPage() {
         {view === "register" ? (
           <>
             <h1>第一次報到</h1>
-            <p className="studentCheckInLead">
-              {authMethod === "line" && lineDisplayName ? `${lineDisplayName}，` : ""}請建立本人資料。之後可直接用 {authMethod === "line" ? "LINE 或手機密碼" : "手機與密碼"} 報到。
-            </p>
+            <p className="studentCheckInLead">請建立本人資料。之後可直接使用手機號碼與密碼報到。</p>
             <form className="studentCheckInForm" onSubmit={submitRegistration}>
               <div className="studentCheckInFormGrid">
                 <label><span>真實姓名</span><input value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" required /></label>
@@ -254,6 +257,17 @@ export default function StudentCheckInPage() {
             <h1>請洽現場人員</h1>
             <p className="studentCheckInLead">這次報到尚未通過，請由櫃檯協助確認資料。</p>
             <button className="studentCheckInPrimary" type="button" onClick={() => void returnToLogin()}>重新登入</button>
+          </div>
+        ) : null}
+
+        {view === "expired" ? (
+          <div className="studentCheckInCentered" role="alertdialog" aria-modal="true" aria-labelledby="student-expired-title">
+            <div className="studentCheckInExpiredMark" aria-hidden="true">!</div>
+            <h1 id="student-expired-title">自主運動期限已到期</h1>
+            {expiresOn ? <p className="studentCheckInExpiryDate">原有效期限至 {formatDate(expiresOn)}</p> : null}
+            <p className="studentCheckInError">{error}</p>
+            <p className="studentCheckInLead">請先洽櫃檯更新期限，再重新登入報到。</p>
+            <button className="studentCheckInPrimary" type="button" onClick={() => void returnToLogin()}>返回登入</button>
           </div>
         ) : null}
 
