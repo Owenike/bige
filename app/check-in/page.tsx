@@ -194,8 +194,8 @@ export default function StudentCheckInPage() {
           </div>
         ) : null}
 
-        {view === "login" || view === "pending" ? (
-          <div className="studentCheckInLoginLayer" aria-hidden={view === "pending"}>
+        {view === "login" || view === "pending" || view === "success" ? (
+          <div className="studentCheckInLoginLayer" aria-hidden={view !== "login"}>
             <h1>自主運動報到</h1>
             <p className="studentCheckInLead">請使用手機號碼與密碼登入。</p>
             {error ? <p className="studentCheckInError">{error}</p> : null}
@@ -234,17 +234,6 @@ export default function StudentCheckInPage() {
               <button className="studentCheckInTextButton" type="button" onClick={() => void returnToLogin()}>返回登入</button>
             </form>
           </>
-        ) : null}
-
-        {view === "success" && success?.checkIn ? (
-          <div className="studentCheckInCentered">
-            <div className="studentCheckInApprovedMark" aria-hidden="true">✓</div>
-            <h1>報到完成</h1>
-            <p className="studentCheckInTime">放行時間 {formatTaipeiTime(success.checkIn.checked_in_at)}</p>
-            <p className="studentCheckInPraise">{success.encouragement}</p>
-            <p className="studentCheckInCount">今日第 {success.checkIn.daily_sequence} 次・本月第 {success.checkIn.month_sequence} 次自主運動</p>
-            <Link className="studentCheckInPrimary" href="/">開始運動！GO</Link>
-          </div>
         ) : null}
 
         {view === "rejected" ? (
@@ -291,6 +280,27 @@ export default function StudentCheckInPage() {
                 {fullName ? `${fullName}，` : ""}請稍候現場人員確認本人資料。
               </p>
               <p className="studentCheckInLead">此視窗會自動更新，通過後就能開始運動。</p>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {view === "success" && success?.checkIn ? (
+        <div className="studentCheckInPendingBackdrop">
+          <section
+            className="studentCheckInPendingDialog studentCheckInSuccessDialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="student-check-in-success-title"
+            aria-describedby="student-check-in-success-description"
+          >
+            <div className="studentCheckInCentered">
+              <div className="studentCheckInApprovedMark" aria-hidden="true">✓</div>
+              <h1 id="student-check-in-success-title">報到完成</h1>
+              <p className="studentCheckInTime">放行時間 {formatTaipeiTime(success.checkIn.checked_in_at)}</p>
+              <p id="student-check-in-success-description" className="studentCheckInPraise">{success.encouragement}</p>
+              <p className="studentCheckInCount">今日第 {success.checkIn.daily_sequence} 次・本月第 {success.checkIn.month_sequence} 次自主運動</p>
+              <Link className="studentCheckInPrimary" href="/">開始運動！GO</Link>
             </div>
           </section>
         </div>
