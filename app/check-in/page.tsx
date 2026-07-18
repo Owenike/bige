@@ -194,8 +194,8 @@ export default function StudentCheckInPage() {
           </div>
         ) : null}
 
-        {view === "login" ? (
-          <>
+        {view === "login" || view === "pending" ? (
+          <div className="studentCheckInLoginLayer" aria-hidden={view === "pending"}>
             <h1>自主運動報到</h1>
             <p className="studentCheckInLead">請使用手機號碼與密碼登入。</p>
             {error ? <p className="studentCheckInError">{error}</p> : null}
@@ -214,7 +214,7 @@ export default function StudentCheckInPage() {
                 第一次使用，建立學員資料
               </button>
             </form>
-          </>
+          </div>
         ) : null}
 
         {view === "register" ? (
@@ -234,15 +234,6 @@ export default function StudentCheckInPage() {
               <button className="studentCheckInTextButton" type="button" onClick={() => void returnToLogin()}>返回登入</button>
             </form>
           </>
-        ) : null}
-
-        {view === "pending" ? (
-          <div className="studentCheckInCentered">
-            <div className="studentCheckInPendingMark" aria-hidden="true">✓</div>
-            <h1>已通知櫃檯</h1>
-            <p className="studentCheckInPraise">{fullName ? `${fullName}，` : ""}請稍候現場人員確認本人資料。</p>
-            <p className="studentCheckInLead">此頁會自動更新，通過後就能開始運動。</p>
-          </div>
         ) : null}
 
         {view === "success" && success?.checkIn ? (
@@ -283,6 +274,27 @@ export default function StudentCheckInPage() {
           </div>
         ) : null}
       </section>
+
+      {view === "pending" ? (
+        <div className="studentCheckInPendingBackdrop">
+          <section
+            className="studentCheckInPendingDialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="student-check-in-pending-title"
+            aria-describedby="student-check-in-pending-description"
+          >
+            <div className="studentCheckInCentered">
+              <div className="studentCheckInPendingMark" aria-hidden="true">✓</div>
+              <h1 id="student-check-in-pending-title">已通知櫃檯</h1>
+              <p id="student-check-in-pending-description" className="studentCheckInPraise">
+                {fullName ? `${fullName}，` : ""}請稍候現場人員確認本人資料。
+              </p>
+              <p className="studentCheckInLead">此視窗會自動更新，通過後就能開始運動。</p>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
