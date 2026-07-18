@@ -10917,21 +10917,372 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   }
 }
 
+/* BigE check-in Liquid Glass */
+.studentCheckInPage,
+.studentCheckInsAdminPage{
+  --checkin-glass-surface: rgba(38, 43, 51, .54);
+  --checkin-glass-surface-strong: rgba(30, 34, 41, .76);
+  --checkin-glass-surface-soft: rgba(255, 255, 255, .055);
+  --checkin-glass-border: rgba(255, 255, 255, .17);
+  --checkin-glass-border-soft: rgba(255, 255, 255, .1);
+  --checkin-glass-highlight: rgba(255, 255, 255, .13);
+  --checkin-glass-gold: rgba(216, 190, 126, .2);
+  --checkin-glass-gold-border: rgba(232, 207, 148, .48);
+  --checkin-glass-shadow: 0 24px 64px rgba(0, 0, 0, .3);
+  min-height: 100svh;
+  background: #0d1014;
+  color: #f7f5ef;
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+}
+.studentCheckInCard,
+.studentCheckInsAdminHeader,
+.studentCheckInsQrCard,
+.studentCheckInsSummaryCard,
+.studentCheckInsAdminToolbar,
+.studentCheckInsTableCard{
+  border: 1px solid var(--checkin-glass-border);
+  background: var(--checkin-glass-surface);
+  box-shadow:
+    inset 0 1px 0 var(--checkin-glass-highlight),
+    inset 0 -1px 0 rgba(0, 0, 0, .18),
+    var(--checkin-glass-shadow);
+  -webkit-backdrop-filter: blur(26px) saturate(145%);
+  backdrop-filter: blur(26px) saturate(145%);
+}
+.studentCheckInCard{
+  background: rgba(34, 39, 47, .62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -1px 0 rgba(0, 0, 0, .2),
+    0 30px 80px rgba(0, 0, 0, .36);
+}
+.studentCheckInEyebrow{
+  color: #ddc98f;
+  font-weight: 700;
+}
+.studentCheckInCard h1,
+.studentCheckInsAdminHeader h1,
+.studentCheckInsQrCard h2,
+.studentCheckInsTableCard h2,
+.studentCheckInsProfileInfo h2,
+.studentCheckInsApprovalInfo h2{
+  color: #fffdf7;
+  text-shadow: 0 1px 20px rgba(255, 255, 255, .06);
+}
+.studentCheckInLead,
+.studentCheckInsAdminHeader p,
+.studentCheckInsQrCard p{
+  color: rgba(245, 244, 239, .68);
+}
+.studentCheckInPrimary,
+.studentCheckInsAdminButton,
+.studentCheckInTextButton,
+.studentCheckInsRecentExpiry button,
+.studentCheckInsPhotoActions button,
+.studentCheckInsRejectButton,
+.studentCheckInsApproveButton{
+  border: 1px solid var(--checkin-glass-border);
+  background: rgba(255, 255, 255, .085);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 -1px 0 rgba(0, 0, 0, .18),
+    0 10px 28px rgba(0, 0, 0, .18);
+  color: #fffdf7;
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.studentCheckInPrimary{
+  border-color: var(--checkin-glass-gold-border);
+  background: var(--checkin-glass-gold);
+  color: #fff8e6;
+}
+.studentCheckInsAdminButton{
+  border-color: rgba(255, 255, 255, .2);
+  background: rgba(255, 255, 255, .08);
+  color: #fffdf7;
+}
+.studentCheckInTextButton{
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  padding: 0 16px;
+  text-decoration: none;
+}
+.studentCheckInPrimary:hover,
+.studentCheckInsAdminButton:hover,
+.studentCheckInTextButton:hover,
+.studentCheckInsRecentExpiry button:hover,
+.studentCheckInsPhotoActions button:hover,
+.studentCheckInsRejectButton:hover,
+.studentCheckInsApproveButton:hover{
+  border-color: rgba(255, 255, 255, .3);
+  background-color: rgba(255, 255, 255, .14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .24),
+    0 14px 34px rgba(0, 0, 0, .22);
+  filter: none;
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.studentCheckInPrimary:hover{
+  border-color: rgba(239, 216, 163, .66);
+  background-color: rgba(216, 190, 126, .29);
+}
+.studentCheckInPrimary:active,
+.studentCheckInsAdminButton:active,
+.studentCheckInTextButton:active,
+.studentCheckInsRecentExpiry button:active,
+.studentCheckInsPhotoActions button:active,
+.studentCheckInsRejectButton:active,
+.studentCheckInsApproveButton:active{
+  transform: scale(.985);
+}
+.studentCheckInForm input,
+.studentCheckInsAdminToolbar input,
+.studentCheckInsRecentExpiry input,
+.studentCheckInsDateField{
+  border-color: var(--checkin-glass-border-soft);
+  background: rgba(255, 255, 255, .065);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 -1px 0 rgba(0, 0, 0, .14);
+  color: #fffdf7;
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  backdrop-filter: blur(16px) saturate(135%);
+}
+.studentCheckInForm input::placeholder,
+.studentCheckInsAdminToolbar input::placeholder,
+.studentCheckInsRecentExpiry input::placeholder{
+  color: rgba(245, 244, 239, .38);
+}
+.studentCheckInForm input:focus,
+.studentCheckInsAdminToolbar input:focus,
+.studentCheckInsRecentExpiry input:focus,
+.studentCheckInsDateField:focus-within{
+  border-color: rgba(230, 206, 148, .56);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 0 0 3px rgba(216, 190, 126, .12),
+    0 10px 28px rgba(0, 0, 0, .16);
+  outline: none;
+}
+.studentCheckInError,
+.studentCheckInsAdminError,
+.studentCheckInsAdminNotice,
+.studentCheckInCount,
+.studentCheckInExpiryDate{
+  border: 1px solid var(--checkin-glass-border);
+  background: rgba(255, 255, 255, .07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(18px) saturate(145%);
+}
+.studentCheckInError,
+.studentCheckInsAdminError{
+  border-color: rgba(255, 132, 132, .3);
+  background: rgba(126, 44, 48, .2);
+  color: #ffd9dc;
+}
+.studentCheckInsAdminNotice{
+  border-color: rgba(113, 224, 157, .28);
+  background: rgba(35, 117, 71, .18);
+}
+.studentCheckInExpiryDate{
+  border-radius: 8px;
+  color: #f5dda4;
+  padding: 9px 14px;
+}
+.studentCheckInCount{
+  background: rgba(216, 190, 126, .12);
+  color: #f9e7ba;
+}
+.studentCheckInSpinner{
+  border-color: rgba(255, 255, 255, .12);
+  border-top-color: #e0c98e;
+  box-shadow: 0 0 24px rgba(216, 190, 126, .12);
+}
+.studentCheckInPendingMark,
+.studentCheckInApprovedMark,
+.studentCheckInExpiredMark{
+  border-color: rgba(232, 207, 148, .48);
+  background: rgba(255, 255, 255, .07);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 14px 34px rgba(0, 0, 0, .2);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+}
+.studentCheckInApprovedMark{
+  border-color: rgba(113, 224, 157, .44);
+  background: rgba(43, 139, 82, .2);
+}
+.studentCheckInExpiredMark{
+  border-color: rgba(255, 132, 132, .42);
+  background: rgba(126, 44, 48, .2);
+}
+.studentCheckInsPendingBadge{
+  border-color: var(--checkin-glass-border-soft);
+  background: rgba(255, 255, 255, .055);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+.studentCheckInsPendingBadge.is-active{
+  border-color: var(--checkin-glass-gold-border);
+  background: rgba(216, 190, 126, .16);
+  color: #ffe7aa;
+}
+.studentCheckInsQrCard img,
+.studentCheckInsQrEmpty{
+  border-color: rgba(255, 255, 255, .22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .3),
+    0 20px 50px rgba(0, 0, 0, .26);
+}
+.studentCheckInsRecentList article{
+  border-color: var(--checkin-glass-border-soft);
+  background: rgba(255, 255, 255, .05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .075),
+    0 12px 30px rgba(0, 0, 0, .14);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+.studentCheckInsRecentPhotoButton,
+.studentCheckInsRecentPhotoEmpty,
+.studentCheckInsTablePhoto{
+  border: 1px solid rgba(255, 255, 255, .18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 8px 20px rgba(0, 0, 0, .2);
+}
+.studentCheckInsExpiryStatus{
+  color: #9fe0b8;
+}
+.studentCheckInsExpiryStatus.is-expired{
+  color: #ffb0b5;
+}
+.studentCheckInsProfileBackdrop,
+.studentCheckInsApprovalBackdrop{
+  background: rgba(7, 9, 12, .48);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+.studentCheckInsProfileDialog,
+.studentCheckInsApprovalDialog{
+  border-color: rgba(255, 255, 255, .2);
+  background: rgba(31, 36, 43, .7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .17),
+    inset 0 -1px 0 rgba(0, 0, 0, .22),
+    0 36px 110px rgba(0, 0, 0, .48);
+  -webkit-backdrop-filter: blur(32px) saturate(155%);
+  backdrop-filter: blur(32px) saturate(155%);
+}
+.studentCheckInsProfileClose{
+  border-color: rgba(255, 255, 255, .2);
+  background: rgba(255, 255, 255, .1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 10px 24px rgba(0, 0, 0, .22);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+}
+.studentCheckInsProfilePhoto,
+.studentCheckInsApprovalPhoto,
+.studentCheckInsApprovalPhoto > img,
+.studentCheckInsPhotoPreview > img,
+.studentCheckInsPhotoCapture{
+  background: rgba(5, 7, 9, .62);
+}
+.studentCheckInsProfileInfo dl > div,
+.studentCheckInsApprovalInfo dl > div{
+  border-bottom-color: rgba(255, 255, 255, .1);
+}
+.studentCheckInsPhotoActions{
+  border-top-color: rgba(255, 255, 255, .1);
+  background: rgba(25, 29, 35, .64);
+  -webkit-backdrop-filter: blur(20px) saturate(145%);
+  backdrop-filter: blur(20px) saturate(145%);
+}
+.studentCheckInsPhotoActions button:first-child,
+.studentCheckInsApproveButton{
+  border-color: rgba(113, 224, 157, .38);
+  background: rgba(43, 139, 82, .24);
+  color: #effff3;
+}
+.studentCheckInsRejectButton{
+  border-color: rgba(255, 132, 132, .32);
+  background: rgba(126, 44, 48, .2);
+  color: #ffdadd;
+}
+.studentCheckInsApprovalHint{
+  color: rgba(244, 224, 174, .82);
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))){
+  .studentCheckInCard,
+  .studentCheckInsAdminHeader,
+  .studentCheckInsQrCard,
+  .studentCheckInsSummaryCard,
+  .studentCheckInsAdminToolbar,
+  .studentCheckInsTableCard,
+  .studentCheckInsProfileDialog,
+  .studentCheckInsApprovalDialog{
+    background: #252a32;
+  }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .studentCheckInPrimary,
+  .studentCheckInsAdminButton,
+  .studentCheckInTextButton,
+  .studentCheckInsRecentExpiry button,
+  .studentCheckInsPhotoActions button,
+  .studentCheckInsRejectButton,
+  .studentCheckInsApproveButton{
+    transition: none;
+  }
+}
+
+@media (max-width: 820px){
+  .studentCheckInPage{
+    align-items: start;
+    padding: 12px;
+  }
+  .studentCheckInCard{
+    padding: 26px 20px;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .15),
+      0 20px 52px rgba(0, 0, 0, .28);
+  }
+  .studentCheckInsAdminPage{
+    padding: 12px 10px 28px;
+  }
+  .studentCheckInsAdminShell{
+    gap: 12px;
+  }
+  .studentCheckInsProfileDialog,
+  .studentCheckInsApprovalDialog{
+    background: rgba(27, 31, 38, .82);
+  }
+}
+
 .resetPasswordPage{
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 48px 16px;
-  background:
-    linear-gradient(180deg, rgba(5, 10, 18, .94), rgba(12, 20, 31, .98)),
-    radial-gradient(circle at 50% 0%, rgba(210, 174, 95, .18), transparent 42%);
+  background: #0d1014;
 }
 .resetPasswordCard{
   width: min(100%, 560px);
-  border: 1px solid rgba(218, 196, 142, .18);
+  border: 1px solid rgba(255, 255, 255, .17);
   border-radius: 8px;
-  background: rgba(11, 18, 29, .92);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, .34);
+  background: rgba(38, 43, 51, .58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .13), 0 28px 80px rgba(0, 0, 0, .36);
+  -webkit-backdrop-filter: blur(26px) saturate(145%);
+  backdrop-filter: blur(26px) saturate(145%);
   color: #f6f2e8;
   padding: clamp(24px, 5vw, 42px);
 }
