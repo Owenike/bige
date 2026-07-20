@@ -16,11 +16,13 @@ npx tsc `
   tests/member-progress-events.test.ts `
   tests/member-progress-feedback.test.ts `
   tests/notification-productization.test.ts `
+  tests/student-phone.test.ts `
   lib/member-progress-events.ts `
   lib/member-progress-feedback.ts `
   lib/notification-productization.ts `
   lib/notification-retry-policy.ts `
-  lib/notification-alert-workflow.ts
+  lib/notification-alert-workflow.ts `
+  lib/student-phone.ts
 
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
@@ -29,6 +31,7 @@ if ($LASTEXITCODE -ne 0) {
 node --test `
   "$outDir/tests/member-progress-events.test.js" `
   "$outDir/tests/member-progress-feedback.test.js" `
-  "$outDir/tests/notification-productization.test.js"
+  "$outDir/tests/notification-productization.test.js" `
+  "$outDir/tests/student-phone.test.js"
 
 exit $LASTEXITCODE

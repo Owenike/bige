@@ -32,7 +32,14 @@ export async function POST(request: Request) {
   const phone = normalizePhone(parsed.data.phone);
   const profile = await loadStudentProfileByPhone(phone);
   if (!profile) {
-    return NextResponse.json({ ok: true, needsProfile: true, phone });
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "profile_not_found",
+        error: "查無此手機資料，請確認手機號碼。若是第一次使用，請點下方建立學員資料。",
+      },
+      { status: 404 },
+    );
   }
 
   const passwordMatches = await verifyStudentPassword(parsed.data.password, profile.password_hash);

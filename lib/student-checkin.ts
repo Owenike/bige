@@ -3,6 +3,7 @@ import { promisify } from "util";
 import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "./supabase/admin";
+import { normalizeStudentPhone } from "./student-phone";
 
 const STUDENT_LINE_SESSION_COOKIE = "bige_student_line_session";
 const STUDENT_LINE_STATE_COOKIE = "bige_student_line_state";
@@ -126,11 +127,7 @@ export function checkInUrl(request: Request) {
   return `${appOrigin(request)}/check-in`;
 }
 
-export function normalizePhone(input: string) {
-  const digits = input.replace(/\D/g, "");
-  if (digits.startsWith("886") && digits.length === 12) return `0${digits.slice(3)}`;
-  return digits;
-}
+export const normalizePhone = normalizeStudentPhone;
 
 export function taipeiDateParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
