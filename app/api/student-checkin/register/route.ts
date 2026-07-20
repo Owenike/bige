@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 import {
   createCheckinRequest,
   hashStudentPassword,
+  isValidTaiwanMobile,
   loadStudentProfileByEmail,
   loadStudentProfileByPhone,
   normalizePhone,
@@ -50,8 +51,11 @@ export async function POST(request: Request) {
   }
 
   const phone = normalizePhone(parsed.data.phone);
-  if (phone.length < 8 || phone.length > 12) {
-    return NextResponse.json({ ok: false, error: "手機號碼格式不正確。" }, { status: 400 });
+  if (!isValidTaiwanMobile(phone)) {
+    return NextResponse.json(
+      { ok: false, error: "請輸入正確的 10 位手機號碼，例如 0912345678。" },
+      { status: 400 },
+    );
   }
 
   const email = parsed.data.email;

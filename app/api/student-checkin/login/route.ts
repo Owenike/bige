@@ -3,6 +3,7 @@ import { z } from "zod";
 import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
 import {
   createCheckinRequest,
+  isValidTaiwanMobile,
   isCompleteStudentProfile,
   loadStudentProfileByPhone,
   normalizePhone,
@@ -30,6 +31,12 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ ok: false, error: "請輸入正確的手機號碼與密碼。" }, { status: 400 });
 
   const phone = normalizePhone(parsed.data.phone);
+  if (!isValidTaiwanMobile(phone)) {
+    return NextResponse.json(
+      { ok: false, error: "請輸入正確的 10 位手機號碼，例如 0912345678。" },
+      { status: 400 },
+    );
+  }
   const profile = await loadStudentProfileByPhone(phone);
   if (!profile) {
     return NextResponse.json(

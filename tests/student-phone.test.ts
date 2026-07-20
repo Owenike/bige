@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeStudentPhone } from "../lib/student-phone";
+import { isValidTaiwanMobile, normalizeStudentPhone } from "../lib/student-phone";
 
 test("keeps a canonical Taiwan mobile number", () => {
   assert.equal(normalizeStudentPhone("0912-345-678"), "0912345678");
@@ -24,4 +24,11 @@ test("accepts full-width digits from mobile input methods", () => {
 test("does not guess at unrelated or malformed numbers", () => {
   assert.equal(normalizeStudentPhone("02-2345-6789"), "0223456789");
   assert.equal(normalizeStudentPhone("09811801111"), "09811801111");
+});
+
+test("accepts only canonical 10-digit Taiwan mobile numbers", () => {
+  assert.equal(isValidTaiwanMobile("0912345678"), true);
+  assert.equal(isValidTaiwanMobile("09811801111"), false);
+  assert.equal(isValidTaiwanMobile("091234567"), false);
+  assert.equal(isValidTaiwanMobile("0212345678"), false);
 });

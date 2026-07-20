@@ -10,3 +10,7 @@ export function normalizeStudentPhone(input: string) {
   if (/^9\d{8}$/.test(local)) return `0${local}`;
   return digits;
 }
+
+export function isValidTaiwanMobile(phone: string) {
+  return /^09\d{8}$/.test(phone);
+}

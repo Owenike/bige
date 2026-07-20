@@ -3,7 +3,7 @@ import { promisify } from "util";
 import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "./supabase/admin";
-import { normalizeStudentPhone } from "./student-phone";
+import { isValidTaiwanMobile, normalizeStudentPhone } from "./student-phone";
 
 const STUDENT_LINE_SESSION_COOKIE = "bige_student_line_session";
 const STUDENT_LINE_STATE_COOKIE = "bige_student_line_state";
@@ -128,6 +128,7 @@ export function checkInUrl(request: Request) {
 }
 
 export const normalizePhone = normalizeStudentPhone;
+export { isValidTaiwanMobile };
 
 export function taipeiDateParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
