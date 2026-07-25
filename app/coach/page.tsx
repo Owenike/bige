@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "../i18n-provider";
 
@@ -541,6 +542,11 @@ function CoachPortalContent() {
       <p className="mt-1 text-sm text-gray-600">
         {zh ? "\u6211\u7684\u9810\u7d04" : "My bookings"}: {bookings.length} | {zh ? "\u9032\u884c\u4e2d\u5834\u6b21" : "Active sessions"}: {activeCount}
       </p>
+      <div className="mt-3">
+        <Link className="rounded border px-3 py-2 text-sm font-semibold" href="/coach/fitness">
+          {zh ? "\u958b\u555f\u6559\u7df4\u8ab2\u7a0b\u71df\u904b" : "Open Fitness Operations"}
+        </Link>
+      </div>
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       {message ? <p className="mt-3 text-sm text-green-700">{message}</p> : null}
 

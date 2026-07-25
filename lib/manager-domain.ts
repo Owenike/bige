@@ -1,5 +1,6 @@
 export type ManagerDomainKey =
   | "manager"
+  | "fitness"
   | "settings"
   | "therapists"
   | "coach-slots"
@@ -56,6 +57,16 @@ const ITEMS: ManagerDomainItem[] = [
     owns: "Coach identity, branch assignment, and active status master data.",
     doesNotOwn: "Slot scheduling rules, global operations policy, or booking-day frontdesk execution.",
     useWhen: "Use this page when coach master data or branch coverage needs to change.",
+  },
+  {
+    key: "fitness",
+    label: "Fitness Operations",
+    pagePath: "/manager/fitness",
+    section: "business",
+    routeKind: "manager-subpage",
+    owns: "Daily coach board, FA conversion, contracts, payment unlocks, attendance deductions, extensions, and daily close.",
+    doesNotOwn: "Existing ACPay checkout, public trial intake, student check-in, or storefront content.",
+    useWhen: "Use this page for formal coaching operations from scheduling through contract and session completion.",
   },
   {
     key: "coach-slots",

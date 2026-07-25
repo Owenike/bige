@@ -119,6 +119,82 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       existingResult.data.booking_status !== "scheduled" &&
       existingResult.data.line_notification_status !== "sent";
 
+    const tenantId = auth.context.tenantId;
+    if (!tenantId) {
+      return NextResponse.json({ ok: false, error: "Missing tenant context" }, { status: 400 });
+    }
+    const coachResult = await auth.supabase
+      .from("profiles")
+      .select("id, branch_id")
+      .eq("tenant_id", tenantId)
+      .in("role", ["coach", "therapist"])
+      .eq("display_name", data.executingCoach)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+    if (coachResult.error) {
+      return NextResponse.json({ ok: false, error: coachResult.error.message }, { status: 500 });
+    }
+    if (!coachResult.data) {
+      return NextResponse.json(
+        { ok: false, error: "請先為執行教練建立後台帳號，且教練姓名需與排課選項一致" },
+        { status: 400 },
+      );
+    }
+
+    const startsAt = `${data.appointmentDate}T${data.appointmentTime}:00+08:00`;
+    const endsAt = new Date(new Date(startsAt).getTime() + 60 * 60_000).toISOString();
+    const courseType =
+      data.service === "pilates"
+        ? "reformer_pilates"
+        : data.service === "sports_massage"
+          ? "relaxation"
+          : "weight_training";
+    const existingSchedule = await auth.supabase
+      .from("bookings")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("trial_booking_id", bookingId)
+      .eq("is_bige_schedule", true)
+      .in("status", ["pending", "confirmed", "booked", "checked_in"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existingSchedule.error) {
+      return NextResponse.json({ ok: false, error: existingSchedule.error.message }, { status: 500 });
+    }
+
+    const scheduleResult = existingSchedule.data
+      ? await auth.supabase.rpc("bige_reschedule_schedule_booking", {
+          p_booking_id: existingSchedule.data.id,
+          p_branch_id: coachResult.data.branch_id || auth.context.branchId,
+          p_coach_id: coachResult.data.id,
+          p_course_type: courseType,
+          p_starts_at: startsAt,
+          p_ends_at: endsAt,
+          p_note: data.note || null,
+        })
+      : await auth.supabase.rpc("bige_create_schedule_booking", {
+          p_tenant_id: tenantId,
+          p_branch_id: coachResult.data.branch_id || auth.context.branchId,
+          p_member_id: null,
+          p_trial_booking_id: bookingId,
+          p_coach_id: coachResult.data.id,
+          p_operation_kind: "trial",
+          p_course_type: courseType,
+          p_starts_at: startsAt,
+          p_ends_at: endsAt,
+          p_note: data.note || null,
+          p_group_id: null,
+          p_idempotency_key: `trial-admin-schedule:${bookingId}`,
+        });
+    if (scheduleResult.error) {
+      return NextResponse.json(
+        { ok: false, error: scheduleResult.error.message.split("\n")[0] || "無法加入教練日表" },
+        { status: 409 },
+      );
+    }
+
     const updateResult = await admin
       .from("trial_bookings")
       .update({

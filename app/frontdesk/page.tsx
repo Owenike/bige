@@ -4052,6 +4052,9 @@ export default function FrontdeskPortalPage() {
               : "The frontdesk domain stays focused on live desk operations. The formal booking workbench is /frontdesk/bookings, while managerial, settings, and notification-governance responsibilities now belong to the manager domain rather than frontdesk."}
           </p>
           <div className="fdPillActions" style={{ marginTop: 10 }}>
+            <Link className="fdPillBtn fdPillBtnPrimary" href="/frontdesk/fitness">
+              {lang === "zh" ? "開啟教練課程營運" : "Open Fitness Operations"}
+            </Link>
             <Link className="fdPillBtn fdPillBtnPrimary" href="/frontdesk/bookings" data-frontdesk-bookings-link>
               {lang === "zh" ? "開啟排課作業台" : "Open Booking Workbench"}
             </Link>

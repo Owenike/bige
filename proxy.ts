@@ -15,6 +15,7 @@ type SessionContext = {
   branchId: string | null;
   tenantStatus: TenantStatus;
   subscription: TenantSubscriptionSnapshot | null;
+  mustChangePassword: boolean;
 };
 
 function normalizePathScope(pathname: string): RouteScope {
@@ -104,7 +105,7 @@ async function loadSessionContext(request: NextRequest, response: NextResponse):
 
   const profileResult = await supabase
     .from("profiles")
-    .select("id, role, is_active, tenant_id, branch_id")
+    .select("id, role, is_active, tenant_id, branch_id, must_change_password")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -117,6 +118,7 @@ async function loadSessionContext(request: NextRequest, response: NextResponse):
       branchId: null,
       tenantStatus: null,
       subscription: null,
+      mustChangePassword: false,
     };
   }
 
@@ -126,6 +128,7 @@ async function loadSessionContext(request: NextRequest, response: NextResponse):
     is_active: boolean;
     tenant_id: string | null;
     branch_id: string | null;
+    must_change_password: boolean | null;
   };
 
   let tenantStatus: TenantStatus = null;
@@ -183,6 +186,7 @@ async function loadSessionContext(request: NextRequest, response: NextResponse):
     branchId: profile.branch_id,
     tenantStatus,
     subscription,
+    mustChangePassword: profile.must_change_password === true,
   };
 }
 
@@ -209,6 +213,17 @@ export async function proxy(request: NextRequest) {
 
   if (!session.isActive) {
     return redirectBlocked(request, requestId, "INACTIVE_ACCOUNT");
+  }
+
+  if (
+    session.mustChangePassword &&
+    request.nextUrl.pathname !== "/staff/change-password" &&
+    !request.nextUrl.pathname.startsWith("/staff/change-password/")
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/staff/change-password";
+    url.search = "";
+    return withRequestId(NextResponse.redirect(url), requestId);
   }
 
   if (!isRouteAllowed(scope, session.role)) {

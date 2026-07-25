@@ -12,6 +12,7 @@ type MeResponse = {
   role: Role;
   tenantId: string | null;
   branchId: string | null;
+  mustChangePassword?: boolean;
 };
 
 type MemberActivationRequestResponse = {
@@ -223,7 +224,7 @@ function LoginContent() {
       const mePayload = (await meRes.json().catch(() => null)) as MeResponse | null;
       if (!meRes.ok || !mePayload?.role) throw new Error((mePayload as { error?: string } | null)?.error || "Profile not ready");
 
-      router.replace(returnTo || roleHome(mePayload.role));
+      router.replace(mePayload.mustChangePassword ? "/staff/change-password" : returnTo || roleHome(mePayload.role));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -250,7 +251,7 @@ function LoginContent() {
       const mePayload = (await meRes.json().catch(() => null)) as MeResponse | null;
       if (!meRes.ok || !mePayload?.role) throw new Error((mePayload as { error?: string } | null)?.error || "Profile not ready");
 
-      router.replace(returnTo || roleHome(mePayload.role));
+      router.replace(mePayload.mustChangePassword ? "/staff/change-password" : returnTo || roleHome(mePayload.role));
     } catch (err) {
       setMemberLoginError(err instanceof Error ? err.message : zh ? "會員登入失敗" : "Phone login failed");
     } finally {

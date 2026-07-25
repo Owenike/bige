@@ -50,9 +50,15 @@ function normalizeEmail(value: unknown) {
 function canAssignRole(actorRole: AppRole, targetRole: StaffRole) {
   if (actorRole === "platform_admin") return true;
   if (actorRole === "manager") {
-    return targetRole === "frontdesk" || targetRole === "coach" || targetRole === "sales" || targetRole === "supervisor";
+    return targetRole === "frontdesk" || targetRole === "coach";
   }
   return false;
+}
+
+function resolveCanonicalAppUrl(request: Request) {
+  const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
+  if (configured) return configured.replace(/\/+$/, "");
+  return new URL(request.url).origin.replace(/\/+$/, "");
 }
 
 function formatStaffItem(row: StaffRow, email?: string | null): StaffItem {
@@ -269,7 +275,7 @@ export async function POST(request: Request) {
   const userResult = await admin.auth.admin.createUser({
     email,
     password,
-    email_confirm: true,
+    email_confirm: false,
   });
   if (userResult.error || !userResult.data.user) {
     await finalizeIdempotency({
@@ -301,6 +307,9 @@ export async function POST(request: Request) {
         invited_by: scoped.auth.context.userId,
         created_by: scoped.auth.context.userId,
         updated_by: scoped.auth.context.userId,
+        must_change_password: true,
+        password_reset_required_at: now,
+        staff_email_verified_at: null,
         updated_at: now,
       },
       { onConflict: "id" },
@@ -335,8 +344,21 @@ export async function POST(request: Request) {
     },
   });
 
+  const verificationResult = await admin.auth.resend({
+    type: "signup",
+    email,
+    options: {
+      emailRedirectTo: `${resolveCanonicalAppUrl(request)}/staff/change-password`,
+    },
+  });
+
   const successPayload = {
     item: formatStaffItem(profileResult.data as StaffRow, email),
+    verification: {
+      maskedEmail: email.replace(/^(.{2}).*(@.*)$/, "$1***$2"),
+      deliveryStatus: verificationResult.error ? "failed" : "sent",
+      deliveryError: verificationResult.error?.message || null,
+    },
   };
   await finalizeIdempotency({
     supabase: scoped.auth.supabase,
