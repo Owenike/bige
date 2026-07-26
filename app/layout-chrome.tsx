@@ -18,8 +18,10 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isTrialBookingRoute = pathname?.startsWith("/trial-booking");
   const isStudentCheckInRoute = pathname?.startsWith("/check-in");
   const isStudentCheckInAdminRoute = pathname?.startsWith("/admin/student-check-ins");
+  const isStaffSecurityRoute = pathname === "/staff/change-password";
   const isFitnessOperationsRoute =
     pathname === "/manager/fitness" ||
+    pathname === "/manager/staff" ||
     pathname === "/frontdesk/fitness" ||
     pathname === "/coach/fitness" ||
     pathname === "/dev/fitness-preview";
@@ -37,7 +39,12 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isStudentCheckInAdminLogin =
     pathname === "/login" &&
     (loginReturnTo === "/admin/student-check-ins" || loginReturnTo?.startsWith("/admin/student-check-ins?"));
-  const isWorkspaceRoute = isFrontdeskRoute || isMemberRoute || isCoachRoute || isFitnessOperationsRoute;
+  const isWorkspaceRoute =
+    isFrontdeskRoute ||
+    isMemberRoute ||
+    isCoachRoute ||
+    isFitnessOperationsRoute ||
+    isStaffSecurityRoute;
   const showTopbar =
     !isEmbedded &&
     !isStudentCheckInAdminLogin &&
@@ -102,9 +109,9 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
 
       {children}
 
-      {!isEmbedded && !isFitnessOperationsRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin ? <FloatingActionButtons /> : null}
+      {!isEmbedded && !isFitnessOperationsRoute && !isStaffSecurityRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin ? <FloatingActionButtons /> : null}
 
-      {!isEmbedded && !isFitnessOperationsRoute && !isPublicBookingRoute && !isTrialBookingRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin && !isAcpayResultRoute && !isCustomPaymentRoute ? (
+      {!isEmbedded && !isFitnessOperationsRoute && !isStaffSecurityRoute && !isPublicBookingRoute && !isTrialBookingRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin && !isAcpayResultRoute && !isCustomPaymentRoute ? (
         <footer className="footer">
           <div className="footerInner">
             <div>© {new Date().getFullYear()} BigE Fitness. All rights reserved.</div>

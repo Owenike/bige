@@ -815,7 +815,7 @@ export default function BigeFitnessOperations({
               </section>
             </>
           ) : (
-            <section className={`${styles.glass} ${styles.section}`}>
+            <section className={`${styles.glass} ${styles.section} ${styles.emptyState}`}>
               <h2 className={styles.sectionTitle}>尚未建立教練帳號</h2>
               <p className={styles.muted}>
                 請先由主管建立教練的後台帳號，日排課表才會顯示教練欄位。

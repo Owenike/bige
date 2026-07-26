@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
-import BigeFitnessOperations, {
-  type BoardData,
-} from "../../../components/bige-fitness-operations";
+import BigeFitnessOperations from "../../../components/bige-fitness-operations";
+import type { BoardData } from "../../../components/bige-fitness-operations";
 
 const preview: BoardData = {
   businessDate: "2026-07-26",

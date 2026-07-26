@@ -3055,6 +3055,11 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 .shellFrontdesk:not(.shellEmbedded){
   background: #04070d;
 }
+.shellWorkspace:not(.shellEmbedded) .fdGlassScene{
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
 .footerInner{
   display:flex;
   align-items: center;

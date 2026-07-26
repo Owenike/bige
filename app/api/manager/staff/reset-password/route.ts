@@ -32,9 +32,10 @@ export async function POST(request: Request) {
   const profileId = typeof body?.id === "string" ? body.id.trim() : "";
   if (!profileId) return apiError(400, "FORBIDDEN", "id is required");
 
-  const tenantId = auth.context.role === "platform_admin"
-    ? (typeof body?.tenantId === "string" ? body.tenantId.trim() : "")
-    : auth.context.tenantId || "";
+  const tenantId =
+    auth.context.role === "platform_admin"
+      ? (typeof body?.tenantId === "string" ? body.tenantId.trim() : "") || auth.context.tenantId || ""
+      : auth.context.tenantId || "";
   if (!tenantId) return apiError(400, "FORBIDDEN", "Missing tenant context");
 
   const targetResult = await auth.supabase

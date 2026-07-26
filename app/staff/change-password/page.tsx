@@ -101,6 +101,7 @@ export default function StaffChangePasswordPage() {
       }}
     >
       <section
+        className="formCard"
         style={{
           width: "min(480px, 100%)",
           padding: 24,

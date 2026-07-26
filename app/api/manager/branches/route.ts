@@ -8,10 +8,15 @@ function normalizeOptionalText(value: unknown) {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireProfile(["manager"], request);
+  const auth = await requireProfile(["platform_admin", "manager"], request);
   if (!auth.ok) return auth.response;
 
-  if (!auth.context.tenantId) {
+  const requestedTenantId = new URL(request.url).searchParams.get("tenantId");
+  const tenantId =
+    auth.context.role === "platform_admin"
+      ? requestedTenantId || auth.context.tenantId
+      : auth.context.tenantId;
+  if (!tenantId) {
     return NextResponse.json({ error: "Missing tenant context" }, { status: 400 });
   }
 
@@ -21,7 +26,7 @@ export async function GET(request: Request) {
   let query = auth.supabase
     .from("branches")
     .select("id, tenant_id, name, code, address, is_active, created_at, updated_at")
-    .eq("tenant_id", auth.context.tenantId)
+    .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false })
     .limit(200);
 

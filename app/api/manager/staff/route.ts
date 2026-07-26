@@ -84,7 +84,10 @@ async function resolveTenantScope(request: Request) {
   if (!auth.ok) return auth;
 
   const requestedTenantId = new URL(request.url).searchParams.get("tenantId");
-  const scopedTenantId = auth.context.role === "platform_admin" ? requestedTenantId : auth.context.tenantId;
+  const scopedTenantId =
+    auth.context.role === "platform_admin"
+      ? requestedTenantId || auth.context.tenantId
+      : auth.context.tenantId;
 
   if (!scopedTenantId) {
     return {
@@ -234,9 +237,10 @@ export async function POST(request: Request) {
   const isActive = body?.isActive === false ? false : true;
   const nextBranchId = typeof body?.branchId === "string" ? body.branchId.trim() || null : null;
   const idempotencyKeyInput = typeof body?.idempotencyKey === "string" ? body.idempotencyKey.trim() : "";
-  const tenantId = scoped.auth.context.role === "platform_admin"
-    ? (typeof body?.tenantId === "string" ? body.tenantId.trim() : "")
-    : scoped.scopedTenantId;
+  const tenantId =
+    scoped.auth.context.role === "platform_admin"
+      ? (typeof body?.tenantId === "string" ? body.tenantId.trim() : "") || scoped.scopedTenantId
+      : scoped.scopedTenantId;
 
   if (!tenantId) return apiError(400, "FORBIDDEN", "tenantId is required");
   if (!email || !password) return apiError(400, "FORBIDDEN", "email and password are required");
