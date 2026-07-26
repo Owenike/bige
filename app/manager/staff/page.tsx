@@ -118,6 +118,7 @@ export default function ManagerStaffPage() {
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthTitle, setReauthTitle] = useState("");
   const [reauth, setReauth] = useState<Reauth>(EMPTY_REAUTH);
+  const [reauthError, setReauthError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<((credentials: Reauth) => Promise<void>) | null>(
     null,
   );
@@ -235,23 +236,25 @@ export default function ManagerStaffPage() {
   function requestSensitive(title: string, action: (credentials: Reauth) => Promise<void>) {
     setReauthTitle(title);
     setReauth(EMPTY_REAUTH);
+    setReauthError(null);
     setPendingAction(() => action);
     setReauthOpen(true);
   }
 
   async function confirmSensitive() {
     if (!pendingAction || !reauth.account || !reauth.password || !reauth.reason.trim()) {
-      setError("請輸入員工 Email、密碼與操作原因");
+      setReauthError("請輸入員工 Email、密碼與操作原因");
       return;
     }
     setSaving(true);
     setError(null);
+    setReauthError(null);
     try {
       await pendingAction(reauth);
       setReauthOpen(false);
       setPendingAction(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "操作失敗");
+      setReauthError(caught instanceof Error ? caught.message : "操作失敗");
     } finally {
       setSaving(false);
     }
@@ -614,27 +617,38 @@ export default function ManagerStaffPage() {
                 <button className={styles.iconButton} type="button" onClick={() => setReauthOpen(false)} disabled={saving} title="關閉"><X size={18} /></button>
               </div>
               <p className={styles.panelHint}>請由實際執行此操作的人輸入自己的員工帳號與密碼。</p>
-              <div className={styles.form}>
+              <form
+                className={styles.form}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void confirmSensitive();
+                }}
+              >
                 <label className={`${styles.field} ${styles.full}`}>
                   <span className={styles.label}>員工 Email</span>
-                  <input className={styles.input} type="email" autoComplete="username" value={reauth.account} onChange={(event) => setReauth({ ...reauth, account: event.target.value })} />
+                  <input className={styles.input} type="email" autoComplete="username" required autoFocus value={reauth.account} onChange={(event) => setReauth({ ...reauth, account: event.target.value })} />
                 </label>
                 <label className={`${styles.field} ${styles.full}`}>
                   <span className={styles.label}>密碼</span>
-                  <input className={styles.input} type="password" autoComplete="current-password" value={reauth.password} onChange={(event) => setReauth({ ...reauth, password: event.target.value })} />
+                  <input className={styles.input} type="password" autoComplete="current-password" required value={reauth.password} onChange={(event) => setReauth({ ...reauth, password: event.target.value })} />
                 </label>
                 <label className={`${styles.field} ${styles.full}`}>
                   <span className={styles.label}>操作原因</span>
-                  <input className={styles.input} value={reauth.reason} onChange={(event) => setReauth({ ...reauth, reason: event.target.value })} placeholder="例如：新進員工建檔" />
+                  <input className={styles.input} required value={reauth.reason} onChange={(event) => setReauth({ ...reauth, reason: event.target.value })} placeholder="例如：新進員工建檔" />
                 </label>
+                {reauthError ? (
+                  <p className={`${styles.error} ${styles.full}`} role="alert" aria-live="assertive">
+                    {reauthError}
+                  </p>
+                ) : null}
                 <div className={styles.formActions}>
                   <button className={styles.button} type="button" onClick={() => setReauthOpen(false)} disabled={saving}>取消</button>
-                  <button className={`${styles.button} ${styles.primary}`} type="button" onClick={() => void confirmSensitive()} disabled={saving}>
+                  <button className={`${styles.button} ${styles.primary}`} type="submit" disabled={saving}>
                     <ShieldCheck size={17} />
                     {saving ? "驗證中" : "驗證並執行"}
                   </button>
                 </div>
-              </div>
+              </form>
             </section>
           </div>
         ) : null}
