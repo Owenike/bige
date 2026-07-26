@@ -1,0 +1,229 @@
+.page {
+  min-height: 100vh;
+  padding: 24px;
+  color: #142033;
+  background: linear-gradient(135deg, #eaf4ff, #f4f1ff);
+}
+
+.shell {
+  width: min(1040px, 100%);
+  margin: 0 auto;
+}
+
+.header,
+.sectionTitle,
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.header {
+  margin-bottom: 18px;
+}
+
+.header h1,
+.header p,
+.createPanel h2,
+.createPanel p,
+.sectionTitle h2 {
+  margin: 0;
+}
+
+.header h1 {
+  font-size: clamp(28px, 4vw, 42px);
+}
+
+.header > div > p:last-child,
+.createPanel p,
+.item p,
+.item span,
+.sectionTitle span {
+  color: #667287;
+}
+
+.eyebrow {
+  margin-bottom: 6px !important;
+  color: #76632f !important;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tabs {
+  display: flex;
+  width: fit-content;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.86);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.48);
+  backdrop-filter: blur(24px) saturate(1.4);
+}
+
+.tabs button,
+.iconButton,
+.primaryButton,
+.completeButton {
+  min-height: 40px;
+  border: 1px solid rgba(113, 126, 148, 0.24);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.62);
+  color: #1d2a3d;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.tabs button {
+  padding: 9px 14px;
+}
+
+.tabs .activeTab,
+.primaryButton {
+  color: #fff;
+  background: #223045;
+}
+
+.iconButton {
+  display: inline-grid;
+  width: 40px;
+  place-items: center;
+  padding: 0;
+}
+
+.createPanel,
+.listPanel {
+  margin-bottom: 14px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.54);
+  box-shadow: 0 18px 48px rgba(78, 98, 126, 0.12);
+  backdrop-filter: blur(26px) saturate(1.45);
+}
+
+.createPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.createPanel label {
+  display: grid;
+  gap: 6px;
+  color: #6c5a29;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.createPanel input,
+.createPanel textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(116, 130, 152, 0.28);
+  border-radius: 7px;
+  padding: 11px;
+  color: #172236;
+  background: rgba(255, 255, 255, 0.7);
+  font: inherit;
+  resize: vertical;
+}
+
+.primaryButton,
+.completeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: fit-content;
+  padding: 9px 14px;
+}
+
+.primaryButton {
+  justify-self: end;
+}
+
+.list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.item {
+  padding: 13px;
+  border: 1px solid rgba(118, 132, 153, 0.2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.itemBody {
+  min-width: 0;
+}
+
+.item p {
+  margin: 6px 0;
+  white-space: pre-wrap;
+}
+
+.item span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.completeButton {
+  flex: 0 0 auto;
+  color: #22613f;
+}
+
+.empty,
+.error,
+.notice {
+  margin: 12px 0 0;
+  padding: 12px;
+  border-radius: 7px;
+}
+
+.empty {
+  color: #667287;
+  text-align: center;
+}
+
+.error {
+  color: #8e2634;
+  background: rgba(255, 229, 234, 0.78);
+}
+
+.notice {
+  color: #22613f;
+  background: rgba(226, 248, 235, 0.78);
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 12px;
+  }
+
+  .header {
+    align-items: flex-start;
+  }
+
+  .tabs {
+    width: 100%;
+  }
+
+  .tabs button:not(.iconButton) {
+    flex: 1;
+  }
+
+  .item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .completeButton,
+  .primaryButton {
+    width: 100%;
+  }
+}

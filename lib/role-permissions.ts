@@ -64,6 +64,11 @@ export const PERMISSION_ACTIONS = [
   "storefront.write",
   "booking_settings.read",
   "booking_settings.write",
+  "assistance.read",
+  "assistance.create",
+  "assistance.complete",
+  "finance.general_affairs.approve",
+  "finance.coaching.approve",
 ] as const;
 
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];

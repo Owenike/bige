@@ -217,7 +217,14 @@
 }
 
 .panel {
+  margin-bottom: 14px;
   padding: 17px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .panelTitle {
@@ -327,6 +334,7 @@
 .role {
   color: #526177;
   background: rgba(229, 236, 246, 0.88);
+  white-space: normal;
 }
 
 .status {
@@ -433,6 +441,11 @@
 
   .header {
     align-items: flex-start;
+  }
+
+  .headerActions {
+    flex-direction: column-reverse;
+    align-items: flex-end;
   }
 
   .subtitle {

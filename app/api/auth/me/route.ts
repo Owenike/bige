@@ -14,6 +14,8 @@ export async function GET(request: Request) {
   return NextResponse.json({
     userId: auth.context.userId,
     role: auth.context.role,
+    department: auth.context.department,
+    position: auth.context.position,
     tenantId: auth.context.tenantId,
     branchId: auth.context.branchId,
     mustChangePassword: profileResult.data?.must_change_password === true,

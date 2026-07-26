@@ -34,13 +34,18 @@ export async function GET(request: Request) {
 
   let query = auth.supabase
     .from("orders")
-    .select("id, member_id, amount, status, channel, note, created_at, updated_at, branch_id")
+    .select("id, member_id, amount, status, channel, note, owning_department, created_at, updated_at, branch_id")
     .eq("tenant_id", auth.context.tenantId)
     .order("created_at", { ascending: false })
     .limit(50);
 
   if (auth.context.role === "frontdesk" && auth.context.branchId) {
     query = query.eq("branch_id", auth.context.branchId);
+  }
+  if (auth.context.role !== "platform_admin" && auth.context.department === "general_affairs") {
+    query = query.or("owning_department.eq.general_affairs,owning_department.is.null");
+  } else if (auth.context.role !== "platform_admin" && auth.context.department === "coaching") {
+    query = query.eq("owning_department", "coaching");
   }
 
   const { data, error } = await query;
@@ -56,6 +61,9 @@ export async function POST(request: Request) {
   if (!permission.ok) return permission.response;
   if (auth.context.role === "frontdesk" && !auth.context.branchId) {
     return fail(403, "BRANCH_SCOPE_DENIED", "Missing branch context for frontdesk");
+  }
+  if (auth.context.role !== "platform_admin" && auth.context.department === "coaching") {
+    return fail(403, "FORBIDDEN", "Coaching income must be created from the contract and course payment flow");
   }
 
   const shiftGuard = await requireOpenShift({ supabase: auth.supabase, context: auth.context });
@@ -150,9 +158,10 @@ export async function POST(request: Request) {
       status: "confirmed",
       channel,
       note: persistedNote || null,
+      owning_department: "general_affairs",
       created_by: auth.context.userId,
     })
-    .select("id, amount, status, channel, note")
+    .select("id, amount, status, channel, note, owning_department")
     .maybeSingle();
 
   if (error) {

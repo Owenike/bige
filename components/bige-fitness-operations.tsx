@@ -45,6 +45,21 @@ type DialogName =
   | "payment"
   | "extension"
   | null;
+type SensitiveCredentials = {
+  account: string;
+  password: string;
+  reason: string;
+};
+
+const SENSITIVE_ACTION_LABELS: Record<string, string> = {
+  create_plan: "建立課程方案",
+  create_contract: "建立正式會員與合約",
+  record_payment: "登記合約收款",
+  reverse_payment: "退款或作廢付款",
+  extend_contract: "辦理合約延期",
+  confirm_day: "確認每日報表",
+  reopen_day: "重新開啟每日報表",
+};
 
 type Coach = { id: string; display_name: string | null };
 type Member = {
@@ -348,6 +363,14 @@ export default function BigeFitnessOperations({
     payments: any[];
     extensions: any[];
   } | null>(null);
+  const [sensitiveRequest, setSensitiveRequest] = useState<{
+    resolve: (credentials: SensitiveCredentials | null) => void;
+  } | null>(null);
+  const [sensitiveDraft, setSensitiveDraft] = useState<SensitiveCredentials>({
+    account: "",
+    password: "",
+    reason: "",
+  });
 
   const loadBoard = useCallback(async () => {
     if (previewData) {
@@ -391,14 +414,45 @@ export default function BigeFitnessOperations({
     return () => window.clearTimeout(timer);
   }, [previewData, search]);
 
+  const requestSensitiveCredentials = (reason: string) =>
+    new Promise<SensitiveCredentials | null>((resolve) => {
+      setSensitiveDraft({ account: "", password: "", reason });
+      setSensitiveRequest({ resolve });
+    });
+
+  const cancelSensitiveRequest = () => {
+    sensitiveRequest?.resolve(null);
+    setSensitiveRequest(null);
+    setSensitiveDraft({ account: "", password: "", reason: "" });
+  };
+
+  const confirmSensitiveRequest = (event: FormEvent) => {
+    event.preventDefault();
+    if (!sensitiveRequest) return;
+    sensitiveRequest.resolve(sensitiveDraft);
+    setSensitiveRequest(null);
+    setSensitiveDraft({ account: "", password: "", reason: "" });
+  };
+
   const post = async (body: Record<string, unknown>) => {
     if (previewData) throw new Error("預覽模式不會寫入資料");
     setError("");
     setSuccess("");
+    const action = typeof body.action === "string" ? body.action : "";
+    let requestBody = body;
+    if (SENSITIVE_ACTION_LABELS[action]) {
+      const credentials = await requestSensitiveCredentials(
+        typeof body.reason === "string" && body.reason.trim()
+          ? body.reason.trim()
+          : SENSITIVE_ACTION_LABELS[action],
+      );
+      if (!credentials) throw new Error("已取消敏感操作");
+      requestBody = { ...body, reauth: credentials };
+    }
     const response = await fetch("/api/bige-fitness", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(requestBody),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) throw new Error(apiMessage(payload, "操作失敗"));
@@ -758,6 +812,14 @@ export default function BigeFitnessOperations({
             <button className={`${styles.tab} ${tab === "report" ? styles.activeTab : ""}`} onClick={() => setTab("report")}>
               每日報表
             </button>
+          ) : null}
+          {!coachView ? (
+            <a
+              className={styles.tab}
+              href={managerView ? "/manager/assistance" : "/frontdesk/assistance"}
+            >
+              行政協助事項
+            </a>
           ) : null}
         </nav>
 
@@ -1411,6 +1473,61 @@ export default function BigeFitnessOperations({
             <div className={`${styles.formActions} ${styles.fieldFull}`}>
               <button className={`${styles.button} ${styles.primary}`} disabled={!extensionDraft.signature} type="submit">
                 保存簽名並完成延期
+              </button>
+            </div>
+          </form>
+        </Dialog>
+      ) : null}
+
+      {sensitiveRequest ? (
+        <Dialog title="確認本次操作者" onClose={cancelSensitiveRequest}>
+          <form className={styles.formGrid} onSubmit={confirmSensitiveRequest}>
+            <p className={`${styles.warning} ${styles.fieldFull}`}>
+              此操作會留下個人稽核紀錄，請輸入實際操作者的帳號與密碼。
+            </p>
+            <label className={styles.field}>
+              <span className={styles.label}>員工帳號（Email）</span>
+              <input
+                className={styles.input}
+                type="email"
+                autoComplete="username"
+                required
+                value={sensitiveDraft.account}
+                onChange={(event) =>
+                  setSensitiveDraft({ ...sensitiveDraft, account: event.target.value })
+                }
+              />
+            </label>
+            <label className={styles.field}>
+              <span className={styles.label}>密碼</span>
+              <input
+                className={styles.input}
+                type="password"
+                autoComplete="current-password"
+                required
+                value={sensitiveDraft.password}
+                onChange={(event) =>
+                  setSensitiveDraft({ ...sensitiveDraft, password: event.target.value })
+                }
+              />
+            </label>
+            <label className={`${styles.field} ${styles.fieldFull}`}>
+              <span className={styles.label}>操作原因</span>
+              <textarea
+                className={styles.textarea}
+                required
+                value={sensitiveDraft.reason}
+                onChange={(event) =>
+                  setSensitiveDraft({ ...sensitiveDraft, reason: event.target.value })
+                }
+              />
+            </label>
+            <div className={`${styles.formActions} ${styles.fieldFull}`}>
+              <button className={styles.button} type="button" onClick={cancelSensitiveRequest}>
+                取消
+              </button>
+              <button className={`${styles.button} ${styles.primary}`} type="submit">
+                <Check size={17} /> 驗證並繼續
               </button>
             </div>
           </form>

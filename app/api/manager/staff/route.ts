@@ -1,6 +1,17 @@
 import { apiError, apiSuccess, requireProfile, type AppRole, type ProfileContext } from "../../../../lib/auth-context";
 import { claimIdempotency, finalizeIdempotency } from "../../../../lib/idempotency";
 import { requirePermission } from "../../../../lib/permissions";
+import { verifySensitiveOperator, type SensitiveCredentials } from "../../../../lib/sensitive-reauth";
+import {
+  canCreatePosition,
+  canManagePosition,
+  legacyRoleForPosition,
+  normalizeStaffDepartment,
+  normalizeStaffPosition,
+  positionBelongsToDepartment,
+  type StaffDepartment,
+  type StaffPosition,
+} from "../../../../lib/staff-organization";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 const STAFF_FILTER_ROLES = ["manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales"] as const;
@@ -9,6 +20,8 @@ type StaffRole = (typeof STAFF_FILTER_ROLES)[number];
 type StaffRow = {
   id: string;
   role: StaffRole;
+  department: StaffDepartment | null;
+  position: StaffPosition | null;
   tenant_id: string | null;
   branch_id: string | null;
   display_name: string | null;
@@ -24,6 +37,8 @@ type StaffRow = {
 type StaffItem = {
   id: string;
   role: StaffRole;
+  department: StaffDepartment | null;
+  position: StaffPosition | null;
   tenant_id: string | null;
   branch_id: string | null;
   display_name: string | null;
@@ -47,7 +62,7 @@ function normalizeEmail(value: unknown) {
   return value.trim().toLowerCase();
 }
 
-function canAssignRole(actorRole: AppRole, targetRole: StaffRole) {
+function canAssignLegacyRole(actorRole: AppRole, targetRole: StaffRole) {
   if (actorRole === "platform_admin") return true;
   if (actorRole === "manager") {
     return targetRole === "frontdesk" || targetRole === "coach";
@@ -65,6 +80,8 @@ function formatStaffItem(row: StaffRow, email?: string | null): StaffItem {
   return {
     id: row.id,
     role: row.role,
+    department: row.department,
+    position: row.position,
     tenant_id: row.tenant_id,
     branch_id: row.branch_id,
     display_name: row.display_name,
@@ -78,6 +95,20 @@ function formatStaffItem(row: StaffRow, email?: string | null): StaffItem {
     email: email ?? null,
   };
 }
+
+function organizationActor(
+  context: Pick<ProfileContext, "role" | "department" | "position" | "branchId">,
+) {
+  return {
+    role: context.role,
+    department: context.department || null,
+    position: context.position || null,
+    branchId: context.branchId,
+  };
+}
+
+const STAFF_SELECT =
+  "id, role, department, position, tenant_id, branch_id, display_name, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at";
 
 async function resolveTenantScope(request: Request) {
   const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager"], request);
@@ -104,12 +135,12 @@ async function resolveTenantScope(request: Request) {
 }
 
 async function validateBranchScope(params: {
-  auth: { context: ProfileContext };
+  context: Pick<ProfileContext, "role" | "branchId">;
   supabase: any;
   tenantId: string;
   branchId: string | null;
 }) {
-  const { auth, supabase, tenantId, branchId } = params;
+  const { context, supabase, tenantId, branchId } = params;
   if (!branchId) return { ok: true as const };
 
   const branchCheck = await supabase
@@ -126,9 +157,9 @@ async function validateBranchScope(params: {
   }
 
   if (
-    auth.context.role !== "platform_admin" &&
-    auth.context.branchId &&
-    auth.context.branchId !== branchId
+    context.role !== "platform_admin" &&
+    context.branchId &&
+    context.branchId !== branchId
   ) {
     return { ok: false as const, response: apiError(403, "BRANCH_SCOPE_DENIED", "Cannot assign staff to another branch outside your scope") };
   }
@@ -180,7 +211,7 @@ export async function GET(request: Request) {
 
   let query = scoped.auth.supabase
     .from("profiles")
-    .select("id, role, tenant_id, branch_id, display_name, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at")
+    .select(STAFF_SELECT)
     .eq("tenant_id", scoped.scopedTenantId)
     .in("role", [...STAFF_FILTER_ROLES])
     .order("created_at", { ascending: false })
@@ -214,25 +245,37 @@ export async function POST(request: Request) {
   const scoped = await resolveTenantScope(request);
   if (!scoped.ok) return scoped.response;
 
-  const permission = requirePermission(scoped.auth.context, "staff.create");
-  if (!permission.ok) return permission.response;
-
   const body = (await request.json().catch(() => null)) as
     | {
         email?: string;
         password?: string;
         role?: string;
+        department?: string;
+        position?: string;
         displayName?: string | null;
         branchId?: string | null;
         isActive?: boolean;
         tenantId?: string;
         idempotencyKey?: string;
+        reauth?: SensitiveCredentials;
       }
     | null;
 
+  const reauth = await verifySensitiveOperator({
+    session: scoped.auth.context,
+    credentials: body?.reauth,
+  });
+  if (!reauth.ok) return apiError(401, "UNAUTHORIZED", reauth.message);
+  const permission = requirePermission(reauth.operator, "staff.create");
+  if (!permission.ok) return permission.response;
+
   const email = normalizeEmail(body?.email);
   const password = typeof body?.password === "string" ? body.password : "";
-  const role = parseRole(typeof body?.role === "string" ? body.role : null);
+  const department = normalizeStaffDepartment(body?.department);
+  const position = normalizeStaffPosition(body?.position);
+  const role = position
+    ? (legacyRoleForPosition(position) as StaffRole)
+    : parseRole(typeof body?.role === "string" ? body.role : null);
   const displayName = typeof body?.displayName === "string" ? body.displayName.trim() || null : null;
   const isActive = body?.isActive === false ? false : true;
   const nextBranchId = typeof body?.branchId === "string" ? body.branchId.trim() || null : null;
@@ -246,12 +289,18 @@ export async function POST(request: Request) {
   if (!email || !password) return apiError(400, "FORBIDDEN", "email and password are required");
   if (password.length < 8) return apiError(400, "FORBIDDEN", "password must be at least 8 characters");
   if (!role) return apiError(400, "INVALID_ROLE", "role is invalid");
-  if (!canAssignRole(scoped.auth.context.role, role)) {
+  if ((department || position) && !positionBelongsToDepartment(department, position)) {
+    return apiError(400, "INVALID_ROLE", "department and position do not match");
+  }
+  const canAssign = position
+    ? canCreatePosition(organizationActor(reauth.operator), position)
+    : canAssignLegacyRole(reauth.operator.role, role);
+  if (!canAssign) {
     return apiError(403, "ROLE_ASSIGNMENT_DENIED", "You cannot assign this role");
   }
 
   const branchScope = await validateBranchScope({
-    auth: scoped.auth,
+    context: reauth.operator,
     supabase: scoped.auth.supabase,
     tenantId,
     branchId: nextBranchId,
@@ -259,12 +308,13 @@ export async function POST(request: Request) {
   if (!branchScope.ok) return branchScope.response;
 
   const operationKey =
-    idempotencyKeyInput || ["staff_create", tenantId, email, role, nextBranchId || "na", String(isActive)].join(":");
+    idempotencyKeyInput ||
+    ["staff_create", tenantId, email, department || "legacy", position || role, nextBranchId || "na", String(isActive)].join(":");
   const operationClaim = await claimIdempotency({
     supabase: scoped.auth.supabase,
     tenantId,
     operationKey,
-    actorId: scoped.auth.context.userId,
+    actorId: reauth.operator.userId,
     ttlMinutes: 60,
   });
   if (!operationClaim.ok) return apiError(500, "INTERNAL_ERROR", operationClaim.error);
@@ -306,11 +356,15 @@ export async function POST(request: Request) {
         tenant_id: tenantId,
         branch_id: nextBranchId,
         role,
+        department,
+        position,
+        organization_assigned_at: department && position ? now : null,
+        organization_assigned_by: department && position ? reauth.operator.userId : null,
         display_name: displayName,
         is_active: isActive,
-        invited_by: scoped.auth.context.userId,
-        created_by: scoped.auth.context.userId,
-        updated_by: scoped.auth.context.userId,
+        invited_by: reauth.operator.userId,
+        created_by: reauth.operator.userId,
+        updated_by: reauth.operator.userId,
         must_change_password: true,
         password_reset_required_at: now,
         staff_email_verified_at: null,
@@ -318,7 +372,7 @@ export async function POST(request: Request) {
       },
       { onConflict: "id" },
     )
-    .select("id, role, tenant_id, branch_id, display_name, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at")
+    .select(STAFF_SELECT)
     .maybeSingle();
 
   if (profileResult.error || !profileResult.data) {
@@ -334,14 +388,16 @@ export async function POST(request: Request) {
 
   await scoped.auth.supabase.from("audit_logs").insert({
     tenant_id: tenantId,
-    actor_id: scoped.auth.context.userId,
+    actor_id: reauth.operator.userId,
     action: "staff_account_created",
     target_type: "profile",
     target_id: userId,
-    reason: null,
+    reason: reauth.reason,
     payload: {
       email,
       role,
+      department,
+      position,
       branchId: nextBranchId,
       isActive,
       displayName,
@@ -378,6 +434,8 @@ export async function POST(request: Request) {
 function changedFields(before: StaffRow, after: StaffRow) {
   return {
     roleChanged: before.role !== after.role,
+    organizationChanged:
+      before.department !== after.department || before.position !== after.position,
     branchChanged: (before.branch_id || null) !== (after.branch_id || null),
     activeChanged: before.is_active !== after.is_active,
     profileChanged:
@@ -393,18 +451,27 @@ export async function PATCH(request: Request) {
     | {
         id?: string;
         role?: string;
+        department?: string | null;
+        position?: string | null;
         displayName?: string | null;
         branchId?: string | null;
         isActive?: boolean;
+        reauth?: SensitiveCredentials;
       }
     | null;
+
+  const reauth = await verifySensitiveOperator({
+    session: scoped.auth.context,
+    credentials: body?.reauth,
+  });
+  if (!reauth.ok) return apiError(401, "UNAUTHORIZED", reauth.message);
 
   const id = typeof body?.id === "string" ? body.id.trim() : "";
   if (!id) return apiError(400, "FORBIDDEN", "id is required");
 
   const existingResult = await scoped.auth.supabase
     .from("profiles")
-    .select("id, role, tenant_id, branch_id, display_name, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at")
+    .select(STAFF_SELECT)
     .eq("tenant_id", scoped.scopedTenantId)
     .eq("id", id)
     .in("role", [...STAFF_FILTER_ROLES])
@@ -412,22 +479,56 @@ export async function PATCH(request: Request) {
   if (existingResult.error) return apiError(500, "INTERNAL_ERROR", existingResult.error.message);
   if (!existingResult.data) return apiError(404, "FORBIDDEN", "staff not found");
   const existing = existingResult.data as StaffRow;
+  if (
+    !canManagePosition(
+      organizationActor(reauth.operator),
+      existing.department,
+      existing.position,
+    ) &&
+    reauth.operator.role !== "platform_admin"
+  ) {
+    return apiError(403, "ROLE_ASSIGNMENT_DENIED", "You cannot manage this employee");
+  }
 
-  if (scoped.auth.context.role !== "platform_admin" && scoped.auth.context.branchId && existing.branch_id !== scoped.auth.context.branchId) {
+  if (reauth.operator.role !== "platform_admin" && reauth.operator.branchId && existing.branch_id !== reauth.operator.branchId) {
     return apiError(403, "BRANCH_SCOPE_DENIED", "Cannot manage staff outside your branch scope");
   }
 
   const updates: Record<string, unknown> = {};
   let nextRole = existing.role;
+  let nextDepartment = existing.department;
+  let nextPosition = existing.position;
 
   if (typeof body?.role === "string") {
     const parsed = parseRole(body.role);
     if (!parsed) return apiError(400, "INVALID_ROLE", "invalid role");
-    if (!canAssignRole(scoped.auth.context.role, parsed)) {
+    if (!canAssignLegacyRole(reauth.operator.role, parsed)) {
       return apiError(403, "ROLE_ASSIGNMENT_DENIED", "You cannot assign this role");
     }
     updates.role = parsed;
     nextRole = parsed;
+  }
+
+  if (body && ("department" in body || "position" in body)) {
+    nextDepartment =
+      body.department === null ? null : normalizeStaffDepartment(body.department ?? existing.department);
+    nextPosition =
+      body.position === null ? null : normalizeStaffPosition(body.position ?? existing.position);
+    if (!positionBelongsToDepartment(nextDepartment, nextPosition)) {
+      return apiError(400, "INVALID_ROLE", "department and position do not match");
+    }
+    if (
+      !nextPosition ||
+      !canCreatePosition(organizationActor(reauth.operator), nextPosition)
+    ) {
+      return apiError(403, "ROLE_ASSIGNMENT_DENIED", "You cannot assign this position");
+    }
+    nextRole = legacyRoleForPosition(nextPosition) as StaffRole;
+    updates.department = nextDepartment;
+    updates.position = nextPosition;
+    updates.role = nextRole;
+    updates.organization_assigned_at = new Date().toISOString();
+    updates.organization_assigned_by = reauth.operator.userId;
   }
 
   if (body && "displayName" in body) {
@@ -462,26 +563,31 @@ export async function PATCH(request: Request) {
   }
 
   if ("is_active" in updates && updates.is_active !== existing.is_active) {
-    const disablePermission = requirePermission(scoped.auth.context, "staff.disable");
+    const disablePermission = requirePermission(reauth.operator, "staff.disable");
     if (!disablePermission.ok) return disablePermission.response;
   } else {
-    const updatePermission = requirePermission(scoped.auth.context, "staff.update");
+    const updatePermission = requirePermission(reauth.operator, "staff.update");
     if (!updatePermission.ok) return updatePermission.response;
   }
 
-  if ("role" in updates && nextRole !== existing.role && !canAssignRole(scoped.auth.context.role, nextRole)) {
+  if (
+    "role" in updates &&
+    nextRole !== existing.role &&
+    !nextPosition &&
+    !canAssignLegacyRole(reauth.operator.role, nextRole)
+  ) {
     return apiError(403, "ROLE_ASSIGNMENT_DENIED", "You cannot assign this role");
   }
 
   const branchScope = await validateBranchScope({
-    auth: scoped.auth,
+    context: reauth.operator,
     supabase: scoped.auth.supabase,
     tenantId: scoped.scopedTenantId,
     branchId: nextBranchId,
   });
   if (!branchScope.ok) return branchScope.response;
 
-  updates.updated_by = scoped.auth.context.userId;
+  updates.updated_by = reauth.operator.userId;
   updates.updated_at = new Date().toISOString();
 
   const { data, error } = await scoped.auth.supabase
@@ -490,7 +596,7 @@ export async function PATCH(request: Request) {
     .eq("tenant_id", scoped.scopedTenantId)
     .eq("id", id)
     .in("role", [...STAFF_FILTER_ROLES])
-    .select("id, role, tenant_id, branch_id, display_name, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at")
+    .select(STAFF_SELECT)
     .maybeSingle();
   if (error) return apiError(500, "INTERNAL_ERROR", error.message);
   if (!data) return apiError(404, "FORBIDDEN", "staff not found");
@@ -502,44 +608,58 @@ export async function PATCH(request: Request) {
   if (changes.roleChanged) {
     auditInserts.push({
       tenant_id: scoped.scopedTenantId,
-      actor_id: scoped.auth.context.userId,
+      actor_id: reauth.operator.userId,
       action: "staff_role_updated",
       target_type: "profile",
       target_id: id,
-      reason: null,
+      reason: reauth.reason,
       payload: { before: existing.role, after: updated.role },
+    });
+  }
+  if (changes.organizationChanged) {
+    auditInserts.push({
+      tenant_id: scoped.scopedTenantId,
+      actor_id: reauth.operator.userId,
+      action: "staff_organization_updated",
+      target_type: "profile",
+      target_id: id,
+      reason: reauth.reason,
+      payload: {
+        before: { department: existing.department, position: existing.position },
+        after: { department: updated.department, position: updated.position },
+      },
     });
   }
   if (changes.branchChanged) {
     auditInserts.push({
       tenant_id: scoped.scopedTenantId,
-      actor_id: scoped.auth.context.userId,
+      actor_id: reauth.operator.userId,
       action: "staff_branch_updated",
       target_type: "profile",
       target_id: id,
-      reason: null,
+      reason: reauth.reason,
       payload: { before: existing.branch_id, after: updated.branch_id },
     });
   }
   if (changes.activeChanged) {
     auditInserts.push({
       tenant_id: scoped.scopedTenantId,
-      actor_id: scoped.auth.context.userId,
+      actor_id: reauth.operator.userId,
       action: updated.is_active ? "staff_activated" : "staff_deactivated",
       target_type: "profile",
       target_id: id,
-      reason: null,
+      reason: reauth.reason,
       payload: { before: existing.is_active, after: updated.is_active },
     });
   }
   if (changes.profileChanged && !changes.roleChanged && !changes.branchChanged && !changes.activeChanged) {
     auditInserts.push({
       tenant_id: scoped.scopedTenantId,
-      actor_id: scoped.auth.context.userId,
+      actor_id: reauth.operator.userId,
       action: "staff_profile_updated",
       target_type: "profile",
       target_id: id,
-      reason: null,
+      reason: reauth.reason,
       payload: { before: existing.display_name, after: updated.display_name },
     });
   }

@@ -1,6 +1,8 @@
 import { apiError, apiSuccess, requireProfile } from "../../../../lib/auth-context";
 import { claimIdempotency, finalizeIdempotency } from "../../../../lib/idempotency";
 import { requirePermission } from "../../../../lib/permissions";
+import { verifySensitiveOperator, type SensitiveCredentials } from "../../../../lib/sensitive-reauth";
+import { canApproveDepartmentMoney } from "../../../../lib/staff-organization";
 import { evaluateContractStatus } from "../../../../lib/member-plan-lifecycle";
 
 function isMissingTableError(message: string | undefined, table: string) {
@@ -17,13 +19,18 @@ export async function POST(request: Request) {
   const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager"], request);
   if (!auth.ok) return auth.response;
 
-  const permission = requirePermission(auth.context, "pass_adjustments.approve");
-  if (!permission.ok) {
-    return apiError(403, "PASS_ADJUSTMENT_DENIED", "Permission denied: pass_adjustments.approve");
-  }
   if (!auth.context.tenantId) return apiError(400, "FORBIDDEN", "Missing tenant context");
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const reauth = await verifySensitiveOperator({
+    session: auth.context,
+    credentials: body?.reauth as SensitiveCredentials | undefined,
+  });
+  if (!reauth.ok) return apiError(401, "UNAUTHORIZED", reauth.message);
+  const permission = requirePermission(reauth.operator, "pass_adjustments.approve");
+  if (!permission.ok || !canApproveDepartmentMoney(reauth.operator, "coaching")) {
+    return apiError(403, "PASS_ADJUSTMENT_DENIED", "Only coaching management can adjust lesson balances");
+  }
   const passId = typeof body?.passId === "string" ? body.passId.trim() : "";
   const delta = Number(body?.delta ?? 0);
   const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
@@ -50,8 +57,8 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (memberResult.error) return apiError(500, "INTERNAL_ERROR", memberResult.error.message);
   if (!memberResult.data) return apiError(404, "ENTITLEMENT_NOT_FOUND", "Member not found for pass");
-  if (auth.context.branchId) {
-    if (!memberResult.data.store_id || auth.context.branchId !== memberResult.data.store_id) {
+  if (reauth.operator.branchId) {
+    if (!memberResult.data.store_id || reauth.operator.branchId !== memberResult.data.store_id) {
       return apiError(403, "BRANCH_SCOPE_DENIED", "Member is outside branch scope");
     }
   }
@@ -62,7 +69,7 @@ export async function POST(request: Request) {
     supabase: auth.supabase,
     tenantId: auth.context.tenantId,
     operationKey,
-    actorId: auth.context.userId,
+    actorId: reauth.operator.userId,
     ttlMinutes: 60,
   });
   if (!operationClaim.ok) return apiError(500, "INTERNAL_ERROR", operationClaim.error);
@@ -141,7 +148,7 @@ export async function POST(request: Request) {
         .update({
           remaining_sessions: nextSessions,
           status: nextContractStatus,
-          updated_by: auth.context.userId,
+          updated_by: reauth.operator.userId,
           updated_at: nowIso,
         })
         .eq("tenant_id", auth.context.tenantId)
@@ -179,7 +186,7 @@ export async function POST(request: Request) {
           nextRemaining,
           contractStatus: nextContractStatus,
         },
-        created_by: auth.context.userId,
+        created_by: reauth.operator.userId,
       });
       if (ledgerInsert.error && !isMissingTableError(ledgerInsert.error.message, "member_plan_ledger")) {
         await finalizeIdempotency({
@@ -196,7 +203,7 @@ export async function POST(request: Request) {
 
   await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
-    actor_id: auth.context.userId,
+    actor_id: reauth.operator.userId,
     action: "pass_adjustment",
     target_type: "entry_pass",
     target_id: passId,

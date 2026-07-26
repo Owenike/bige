@@ -176,6 +176,9 @@ export default function ManagerDashboardPage() {
   const [passId, setPassId] = useState("");
   const [delta, setDelta] = useState("1");
   const [adjustReason, setAdjustReason] = useState("");
+  const [sensitiveAccount, setSensitiveAccount] = useState("");
+  const [sensitivePassword, setSensitivePassword] = useState("");
+  const [sensitiveReason, setSensitiveReason] = useState("");
 
   function paymentMethodLabel(method: string) {
     if (!zh) return method;
@@ -353,10 +356,17 @@ export default function ManagerDashboardPage() {
   async function voidOrder(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
+    if (!sensitiveAccount || !sensitivePassword || !sensitiveReason.trim()) {
+      setError(zh ? "請先完成敏感操作身分確認欄位" : "Enter reauthentication fields first");
+      return;
+    }
     const res = await fetch(`/api/orders/${encodeURIComponent(voidOrderId)}/void`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: voidReason }),
+      body: JSON.stringify({
+        reason: voidReason,
+        reauth: { account: sensitiveAccount, password: sensitivePassword, reason: sensitiveReason },
+      }),
     });
     const payload = await res.json();
     if (!res.ok) {
@@ -364,16 +374,26 @@ export default function ManagerDashboardPage() {
       return;
     }
     setMessage(`${zh ? "\u8a02\u55ae\u5df2\u4f5c\u5ee2" : "Voided order"}: ${voidOrderId}`);
+    setSensitiveAccount("");
+    setSensitivePassword("");
+    setSensitiveReason("");
     await load();
   }
 
   async function refundPayment(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
+    if (!sensitiveAccount || !sensitivePassword || !sensitiveReason.trim()) {
+      setError(zh ? "請先完成敏感操作身分確認欄位" : "Enter reauthentication fields first");
+      return;
+    }
     const res = await fetch(`/api/payments/${encodeURIComponent(refundPaymentId)}/refund`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: refundReason }),
+      body: JSON.stringify({
+        reason: refundReason,
+        reauth: { account: sensitiveAccount, password: sensitivePassword, reason: sensitiveReason },
+      }),
     });
     const payload = await res.json();
     if (!res.ok) {
@@ -381,16 +401,28 @@ export default function ManagerDashboardPage() {
       return;
     }
     setMessage(`${zh ? "\u4ed8\u6b3e\u5df2\u9000\u6b3e" : "Refunded payment"}: ${refundPaymentId}`);
+    setSensitiveAccount("");
+    setSensitivePassword("");
+    setSensitiveReason("");
     await load();
   }
 
   async function adjustPass(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
+    if (!sensitiveAccount || !sensitivePassword || !sensitiveReason.trim()) {
+      setError(zh ? "請先完成敏感操作身分確認欄位" : "Enter reauthentication fields first");
+      return;
+    }
     const res = await fetch("/api/manager/pass-adjustments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ passId, delta: Number(delta), reason: adjustReason }),
+      body: JSON.stringify({
+        passId,
+        delta: Number(delta),
+        reason: adjustReason,
+        reauth: { account: sensitiveAccount, password: sensitivePassword, reason: sensitiveReason },
+      }),
     });
     const payload = await res.json();
     if (!res.ok) {
@@ -398,16 +430,27 @@ export default function ManagerDashboardPage() {
       return;
     }
     setMessage(`${zh ? "\u7968\u5238\u5df2\u8abf\u6574" : "Adjusted pass"}: ${payload.adjustment?.pass_id || passId}`);
+    setSensitiveAccount("");
+    setSensitivePassword("");
+    setSensitiveReason("");
     await load();
   }
 
   async function decideApproval(requestId: string, decision: "approve" | "reject") {
     setMessage(null);
     setError(null);
+    if (!sensitiveAccount || !sensitivePassword || !sensitiveReason.trim()) {
+      setError(zh ? "請先完成敏感操作身分確認欄位" : "Enter reauthentication fields first");
+      return;
+    }
     const res = await fetch(`/api/approvals/${encodeURIComponent(requestId)}/decision`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({
+        decision,
+        decisionNote: sensitiveReason,
+        reauth: { account: sensitiveAccount, password: sensitivePassword, reason: sensitiveReason },
+      }),
     });
     const payload = await res.json();
     if (!res.ok) {
@@ -423,6 +466,9 @@ export default function ManagerDashboardPage() {
           ? "\u5df2\u99c1\u56de\u7533\u8acb"
           : "Approval request rejected",
     );
+    setSensitiveAccount("");
+    setSensitivePassword("");
+    setSensitiveReason("");
     await load();
   }
 
@@ -751,6 +797,39 @@ export default function ManagerDashboardPage() {
             {unreconciledItems.length === 0 ? (
               <p className="fdGlassText">{zh ? "目前沒有未歸戶事件。" : "No unreconciled events."}</p>
             ) : null}
+          </div>
+        </section>
+
+        <section className="fdGlassSubPanel" style={{ padding: 14, marginTop: 14 }}>
+          <h2 className="sectionTitle">{zh ? "敏感操作身分確認" : "Sensitive action verification"}</h2>
+          <p className="fdGlassText">
+            {zh
+              ? "作廢、退款與核准前，請由實際執行人重新輸入自己的員工帳號、密碼與原因。每次操作後會自動清空。"
+              : "Re-enter the actual operator account, password, and reason before every void, refund, or approval."}
+          </p>
+          <div className="fdThreeCol">
+            <input
+              value={sensitiveAccount}
+              onChange={(event) => setSensitiveAccount(event.target.value)}
+              placeholder={zh ? "員工 Email" : "Staff email"}
+              className="input"
+              type="email"
+              autoComplete="username"
+            />
+            <input
+              value={sensitivePassword}
+              onChange={(event) => setSensitivePassword(event.target.value)}
+              placeholder={zh ? "密碼" : "Password"}
+              className="input"
+              type="password"
+              autoComplete="current-password"
+            />
+            <input
+              value={sensitiveReason}
+              onChange={(event) => setSensitiveReason(event.target.value)}
+              placeholder={zh ? "本次操作原因" : "Reason for this action"}
+              className="input"
+            />
           </div>
         </section>
 

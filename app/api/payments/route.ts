@@ -33,18 +33,27 @@ export async function GET(request: Request) {
 
   const orderResult = await auth.supabase
     .from("orders")
-    .select("id, branch_id")
+    .select("id, branch_id, owning_department")
     .eq("tenant_id", auth.context.tenantId)
     .eq("id", orderId)
     .maybeSingle();
   if (orderResult.error || !orderResult.data) return fail(404, "FORBIDDEN", "Order not found");
+  const orderDepartment = orderResult.data.owning_department || "general_affairs";
+  if (
+    auth.context.role !== "platform_admin" &&
+    auth.context.department &&
+    auth.context.department !== orderDepartment &&
+    auth.context.department !== "general_affairs"
+  ) {
+    return fail(403, "FORBIDDEN", "Order belongs to another department");
+  }
   if (auth.context.role === "frontdesk" && auth.context.branchId && String(orderResult.data.branch_id || "") !== auth.context.branchId) {
     return fail(403, "BRANCH_SCOPE_DENIED", "Forbidden order access for current branch");
   }
 
   const { data, error } = await auth.supabase
     .from("payments")
-    .select("id, order_id, amount, status, method, gateway_ref, paid_at")
+    .select("id, order_id, amount, status, method, gateway_ref, owning_department, paid_at")
     .eq("tenant_id", auth.context.tenantId)
     .eq("order_id", orderId)
     .order("created_at", { ascending: false });
@@ -80,12 +89,21 @@ export async function POST(request: Request) {
 
   const { data: order, error: orderError } = await auth.supabase
     .from("orders")
-    .select("id, amount, status, member_id, branch_id")
+    .select("id, amount, status, member_id, branch_id, owning_department")
     .eq("id", orderId)
     .eq("tenant_id", auth.context.tenantId)
     .maybeSingle();
 
   if (orderError || !order) return fail(404, "FORBIDDEN", "Order not found");
+  const orderDepartment = order.owning_department || "general_affairs";
+  if (
+    auth.context.role !== "platform_admin" &&
+    auth.context.department &&
+    auth.context.department !== orderDepartment &&
+    auth.context.department !== "general_affairs"
+  ) {
+    return fail(403, "FORBIDDEN", "Order belongs to another department");
+  }
   if (auth.context.role === "frontdesk" && auth.context.branchId && String(order.branch_id || "") !== auth.context.branchId) {
     return fail(403, "BRANCH_SCOPE_DENIED", "Forbidden order access for current branch");
   }
@@ -150,9 +168,10 @@ export async function POST(request: Request) {
       status: "paid",
       method,
       gateway_ref: gatewayRef,
+      owning_department: order.owning_department || "general_affairs",
       paid_at: new Date().toISOString(),
     })
-    .select("id, order_id, amount, status, method, paid_at")
+    .select("id, order_id, amount, status, method, owning_department, paid_at")
     .maybeSingle();
 
   if (error) {

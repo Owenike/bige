@@ -97,6 +97,7 @@
 .button,
 .tab {
   padding: 9px 14px;
+  text-decoration: none;
 }
 
 .iconButton {

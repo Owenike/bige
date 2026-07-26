@@ -1,6 +1,9 @@
 import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-context";
 import { executeOrderVoid, executePaymentRefund } from "../../../../../lib/high-risk-actions";
 import { notifyApprovalDecision } from "../../../../../lib/in-app-notifications";
+import { requireAnyPermission } from "../../../../../lib/permissions";
+import { verifySensitiveOperator } from "../../../../../lib/sensitive-reauth";
+import { canApproveDepartmentMoney, type StaffDepartment } from "../../../../../lib/staff-organization";
 
 type Decision = "approve" | "reject";
 
@@ -16,10 +19,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const body = await request.json().catch(() => null);
   const decision: Decision = body?.decision === "reject" ? "reject" : "approve";
   const decisionNote = typeof body?.decisionNote === "string" ? body.decisionNote.trim() : "";
+  const reauth = await verifySensitiveOperator({
+    session: auth.context,
+    credentials: body?.reauth,
+  });
+  if (!reauth.ok) return apiError(401, "UNAUTHORIZED", reauth.message);
 
   const { data: reqRow, error: reqError } = await auth.supabase
     .from("high_risk_action_requests")
-    .select("id, action, target_type, target_id, reason, status, requested_by")
+    .select("id, action, target_type, target_id, owning_department, reason, status, requested_by")
     .eq("id", id)
     .eq("tenant_id", auth.context.tenantId)
     .maybeSingle();
@@ -29,13 +37,53 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return apiError(409, "FORBIDDEN", "This request is already resolved");
   }
 
+  const requiredPermission =
+    reqRow.action === "payment_refund"
+      ? "refunds.approve"
+      : reqRow.action === "order_void"
+        ? "orders.void.approve"
+        : "pass_adjustments.approve";
+  const permission = requireAnyPermission(reauth.operator, [requiredPermission]);
+  if (!permission.ok) return permission.response;
+
+  let owningDepartment: StaffDepartment = "coaching";
+  if (reqRow.action === "order_void") {
+    const order = await auth.supabase
+      .from("orders")
+      .select("owning_department")
+      .eq("tenant_id", auth.context.tenantId)
+      .eq("id", reqRow.target_id)
+      .maybeSingle();
+    if (order.error || !order.data) return apiError(404, "FORBIDDEN", "Order not found");
+    owningDepartment = (order.data.owning_department || "general_affairs") as StaffDepartment;
+  } else if (reqRow.action === "payment_refund") {
+    const payment = await auth.supabase
+      .from("payments")
+      .select("owning_department, orders(owning_department)")
+      .eq("tenant_id", auth.context.tenantId)
+      .eq("id", reqRow.target_id)
+      .maybeSingle();
+    if (payment.error || !payment.data) return apiError(404, "FORBIDDEN", "Payment not found");
+    const orderRelation = Array.isArray(payment.data.orders)
+      ? payment.data.orders[0]
+      : payment.data.orders;
+    owningDepartment = (
+      payment.data.owning_department ||
+      orderRelation?.owning_department ||
+      "general_affairs"
+    ) as StaffDepartment;
+  }
+  if (!canApproveDepartmentMoney(reauth.operator, owningDepartment)) {
+    return apiError(403, "FORBIDDEN", "This request belongs to another department");
+  }
+
   if (decision === "reject") {
     const { data, error } = await auth.supabase
       .from("high_risk_action_requests")
       .update({
         status: "rejected",
         decision_note: decisionNote || null,
-        resolved_by: auth.context.userId,
+        resolved_by: reauth.operator.userId,
         resolved_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -48,7 +96,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     await auth.supabase.from("audit_logs").insert({
       tenant_id: auth.context.tenantId,
-      actor_id: auth.context.userId,
+      actor_id: reauth.operator.userId,
       action: "high_risk_request_rejected",
       target_type: reqRow.target_type,
       target_id: reqRow.target_id,
@@ -64,7 +112,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       targetType: reqRow.target_type,
       targetId: reqRow.target_id,
       requestedBy: typeof reqRow.requested_by === "string" ? reqRow.requested_by : null,
-      resolvedBy: auth.context.userId,
+      resolvedBy: reauth.operator.userId,
     }).catch(() => null);
 
     return apiSuccess({ request: data, decision: "rejected" });
@@ -74,9 +122,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const result = await executeOrderVoid({
       supabase: auth.supabase,
       tenantId: auth.context.tenantId,
-      actorId: auth.context.userId,
+      actorId: reauth.operator.userId,
       role: "manager",
-      branchId: auth.context.branchId,
+      branchId: reauth.operator.branchId,
       orderId: reqRow.target_id,
       reason: reqRow.reason,
     });
@@ -85,7 +133,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const result = await executePaymentRefund({
       supabase: auth.supabase,
       tenantId: auth.context.tenantId,
-      actorId: auth.context.userId,
+      actorId: reauth.operator.userId,
       paymentId: reqRow.target_id,
       reason: reqRow.reason,
     });
@@ -99,7 +147,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     .update({
       status: "approved",
       decision_note: decisionNote || null,
-      resolved_by: auth.context.userId,
+      resolved_by: reauth.operator.userId,
       resolved_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -112,7 +160,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   await auth.supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
-    actor_id: auth.context.userId,
+    actor_id: reauth.operator.userId,
     action: "high_risk_request_approved",
     target_type: reqRow.target_type,
     target_id: reqRow.target_id,
@@ -128,7 +176,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     targetType: reqRow.target_type,
     targetId: reqRow.target_id,
     requestedBy: typeof reqRow.requested_by === "string" ? reqRow.requested_by : null,
-    resolvedBy: auth.context.userId,
+    resolvedBy: reauth.operator.userId,
   }).catch(() => null);
 
   return apiSuccess({ request: data, decision: "approved" });

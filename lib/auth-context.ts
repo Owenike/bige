@@ -3,6 +3,12 @@ import { createSupabaseServerClient } from "./supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "./supabase/admin";
 import { evaluateTenantAccess, type TenantStatus, type TenantSubscriptionSnapshot } from "./tenant-subscription";
+import {
+  normalizeStaffDepartment,
+  normalizeStaffPosition,
+  type StaffDepartment,
+  type StaffPosition,
+} from "./staff-organization";
 
 export type AppRole =
   | "platform_admin"
@@ -88,6 +94,8 @@ function roleMatchesAllowed(role: AppRole, allowedRoles: AppRole[]) {
 export interface ProfileContext {
   userId: string;
   role: AppRole;
+  department?: StaffDepartment | null;
+  position?: StaffPosition | null;
   tenantId: string | null;
   branchId: string | null;
   tenantStatus: TenantStatus;
@@ -106,6 +114,8 @@ export const TEMP_DISABLE_ROLE_GUARD = false;
 interface ProfileRow {
   id: string;
   role: string;
+  department: string | null;
+  position: string | null;
   tenant_id: string | null;
   branch_id: string | null;
   is_active: boolean;
@@ -225,7 +235,7 @@ export async function requireProfile(allowedRoles?: AppRole[], request?: Request
 
   const profileResult = await supabase
     .from("profiles")
-    .select("id, role, tenant_id, branch_id, is_active")
+    .select("id, role, department, position, tenant_id, branch_id, is_active")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -366,6 +376,8 @@ export async function requireProfile(allowedRoles?: AppRole[], request?: Request
   const context: ProfileContext = {
     userId: profile.id,
     role,
+    department: normalizeStaffDepartment(profile.department),
+    position: normalizeStaffPosition(profile.position),
     tenantId: profile.tenant_id,
     branchId: profile.branch_id,
     tenantStatus,

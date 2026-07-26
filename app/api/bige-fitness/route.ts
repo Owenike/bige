@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { apiError, apiSuccess, requireProfile, type AppRole } from "../../../lib/auth-context";
+import { createClient } from "@supabase/supabase-js";
+import { apiError, apiSuccess, requireProfile, type ProfileContext } from "../../../lib/auth-context";
 import {
   BIGE_MANAGER_ROLES,
   bigeFitnessActionSchema,
@@ -10,6 +11,7 @@ import {
 } from "../../../lib/bige-fitness";
 import { sendNotification } from "../../../lib/integrations/notify";
 import { insertDeliveryRows } from "../../../lib/notification-ops";
+import { verifySensitiveOperator } from "../../../lib/sensitive-reauth";
 import { createSupabaseAdminClient } from "../../../lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -21,9 +23,27 @@ type AuthContext = Awaited<ReturnType<typeof requireProfile>> extends infer Resu
   : never;
 
 const ACTIVE_BOOKING_STATUSES = ["pending", "confirmed", "booked", "checked_in"];
+const SENSITIVE_ACTIONS = new Set([
+  "create_plan",
+  "create_contract",
+  "record_payment",
+  "reverse_payment",
+  "extend_contract",
+  "confirm_day",
+  "reopen_day",
+]);
 
-function isManager(role: AppRole) {
-  return (BIGE_MANAGER_ROLES as readonly string[]).includes(role);
+function isManager(
+  context: Pick<ProfileContext, "role" | "department" | "position">,
+) {
+  if (context.role === "platform_admin") return true;
+  if (context.department || context.position) {
+    return (
+      context.department === "coaching" &&
+      (context.position === "coach_manager" || context.position === "coach_city_manager")
+    );
+  }
+  return (BIGE_MANAGER_ROLES as readonly string[]).includes(context.role);
 }
 
 function addDays(date: string, days: number) {
@@ -320,7 +340,7 @@ export async function GET(request: Request) {
   if (membersResult.error) return apiError(500, "INTERNAL_ERROR", membersResult.error.message);
 
   let expiringContracts: any[] = [];
-  if (isManager(auth.context.role) || auth.context.role === "frontdesk") {
+  if (isManager(auth.context) || auth.context.role === "frontdesk" || auth.context.department === "general_affairs") {
     const expiryEnd = `${addDays(toTaipeiDateString(), 31)}T00:00:00+08:00`;
     const contractsResult = await auth.supabase
       .from("member_plan_contracts")
@@ -373,6 +393,35 @@ export async function POST(request: Request) {
   const tenantId = auth.context.tenantId;
   if (!tenantId) return apiError(400, "FORBIDDEN", "目前帳號沒有場館範圍");
 
+  let operationSupabase = auth.supabase;
+  let operationContext: Pick<
+    ProfileContext,
+    "userId" | "role" | "department" | "position" | "tenantId" | "branchId"
+  > = auth.context;
+  if (SENSITIVE_ACTIONS.has(input.action)) {
+    const reauthenticated = await verifySensitiveOperator({
+      session: auth.context,
+      credentials:
+        payload && typeof payload === "object"
+          ? ((payload as { reauth?: unknown }).reauth as
+              | { account?: string; password?: string; reason?: string }
+              | undefined)
+          : undefined,
+    });
+    if (!reauthenticated.ok) {
+      return apiError(401, "UNAUTHORIZED", reauthenticated.message);
+    }
+    operationContext = reauthenticated.operator;
+    operationSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+      {
+        accessToken: async () => reauthenticated.accessToken,
+        auth: { persistSession: false, autoRefreshToken: false },
+      },
+    ) as typeof auth.supabase;
+  }
+
   if (input.action === "create_schedule") {
     if (auth.context.role === "coach") return apiError(403, "FORBIDDEN", "教練不能建立排課");
     const result = await auth.supabase.rpc("bige_create_schedule_booking", {
@@ -416,12 +465,12 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "create_plan") {
-    if (!isManager(auth.context.role)) return apiError(403, "FORBIDDEN", "只有主管能建立方案");
+    if (!isManager(operationContext)) return apiError(403, "FORBIDDEN", "只有教練經理或城市經理能建立方案");
     if (!validateCourseAllocationTotal(input.allocations, input.totalSessions)) {
       return apiError(400, "FORBIDDEN", "三種課別分配加總必須等於總堂數");
     }
     const terms = calculateContractTerms(input.totalSessions);
-    const result = await auth.supabase
+    const result = await operationSupabase
       .from("member_plan_catalog")
       .insert({
         tenant_id: tenantId,
@@ -447,8 +496,8 @@ export async function POST(request: Request) {
           baseValidityDays: terms.baseDays,
           extensionLimitDays: terms.extensionLimitDays,
         },
-        created_by: auth.context.userId,
-        updated_by: auth.context.userId,
+        created_by: operationContext.userId,
+        updated_by: operationContext.userId,
       })
       .select(
         "id, code, name, description, total_sessions, price_amount, course_allocations, fitness_plan_kind, is_active, version",
@@ -459,11 +508,11 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "create_contract") {
-    if (auth.context.role === "coach") return apiError(403, "FORBIDDEN", "教練不能建立合約");
+    if (operationContext.role === "coach") return apiError(403, "FORBIDDEN", "教練不能建立合約");
     if (input.emailUnavailable && input.email) {
       return apiError(400, "FORBIDDEN", "已有 Email 時請不要勾選沒有 Email");
     }
-    const result = await auth.supabase.rpc("bige_create_member_contract", {
+    const result = await operationSupabase.rpc("bige_create_member_contract", {
       p_tenant_id: tenantId,
       p_branch_id: input.branchId || auth.context.branchId,
       p_member_id: input.memberId || null,
@@ -486,8 +535,8 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "record_payment") {
-    if (auth.context.role === "coach") return apiError(403, "FORBIDDEN", "教練不能登記付款");
-    const result = await auth.supabase.rpc("bige_record_contract_payment", {
+    if (operationContext.role === "coach") return apiError(403, "FORBIDDEN", "教練不能登記付款");
+    const result = await operationSupabase.rpc("bige_record_contract_payment", {
       p_contract_id: input.contractId,
       p_schedule_item_id: input.scheduleItemId || null,
       p_payment_kind: input.paymentKind,
@@ -502,8 +551,8 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "reverse_payment") {
-    if (!isManager(auth.context.role)) return apiError(403, "FORBIDDEN", "只有主管能退款或作廢");
-    const result = await auth.supabase.rpc("bige_reverse_contract_payment", {
+    if (!isManager(operationContext)) return apiError(403, "FORBIDDEN", "只有教練經理或城市經理能退款或作廢");
+    const result = await operationSupabase.rpc("bige_reverse_contract_payment", {
       p_payment_id: input.paymentId,
       p_action: input.reversal,
       p_reason: input.reason,
@@ -688,7 +737,7 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "extend_contract") {
-    if (!isManager(auth.context.role)) return apiError(403, "FORBIDDEN", "只有主管能辦理延期");
+    if (!isManager(operationContext)) return apiError(403, "FORBIDDEN", "只有教練經理或城市經理能辦理延期");
     const match = /^data:(image\/(?:png|jpeg));base64,(.+)$/.exec(input.signatureDataUrl);
     if (!match) return apiError(400, "FORBIDDEN", "簽名圖片格式錯誤");
     const bytes = Buffer.from(match[2], "base64");
@@ -702,7 +751,7 @@ export async function POST(request: Request) {
     if (uploadResult.error) return apiError(500, "INTERNAL_ERROR", uploadResult.error.message);
 
     const statement = `本人 ${input.signedMemberName} 確認合約期限已到或即將到期，並同意本次延期 ${input.extensionDays} 天。`;
-    const result = await auth.supabase.rpc("bige_extend_contract", {
+    const result = await operationSupabase.rpc("bige_extend_contract", {
       p_contract_id: input.contractId,
       p_extension_days: input.extensionDays,
       p_reason: input.reason,
@@ -716,14 +765,14 @@ export async function POST(request: Request) {
       return handleDatabaseError(result.error, "合約延期失敗");
     }
 
-    const contractResult = await auth.supabase
+    const contractResult = await operationSupabase
       .from("member_plan_contracts")
       .select("member_id, branch_id")
       .eq("id", input.contractId)
       .single();
     let emailDelivery: { status: string; error?: string | null } = { status: "skipped" };
     if (contractResult.data?.member_id) {
-      const memberResult = await auth.supabase
+      const memberResult = await operationSupabase
         .from("members")
         .select("full_name, email, email_unavailable")
         .eq("id", contractResult.data.member_id)
@@ -748,7 +797,7 @@ export async function POST(request: Request) {
           error: notifyResult.error,
         };
         await insertDeliveryRows({
-          supabase: auth.supabase,
+          supabase: operationSupabase,
           rows: [
             {
               tenantId,
@@ -773,7 +822,7 @@ export async function POST(request: Request) {
                 message: `${memberResult.data.full_name} 您好，您的 BIG E FITNESS 課程合約已完成延期 ${input.extensionDays} 天。`,
                 emailSubject: "BIG E 合約延期完成通知",
               },
-              createdBy: auth.context.userId,
+              createdBy: operationContext.userId,
             },
           ],
         });
@@ -783,14 +832,14 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "confirm_day" || input.action === "reopen_day") {
-    if (!isManager(auth.context.role)) return apiError(403, "FORBIDDEN", "只有主管能確認或重開日報");
+    if (!isManager(operationContext)) return apiError(403, "FORBIDDEN", "只有教練經理或城市經理能確認或重開日報");
     if (input.action === "reopen_day" && !input.reason) {
       return apiError(400, "FORBIDDEN", "重開日報必須填寫原因");
     }
     let snapshot;
     try {
       snapshot = await buildDailySnapshot(
-        auth as AuthContext,
+        { context: operationContext, supabase: operationSupabase } as AuthContext,
         tenantId,
         input.businessDate,
         input.branchId || auth.context.branchId,
@@ -800,7 +849,7 @@ export async function POST(request: Request) {
     }
     const now = new Date().toISOString();
     const isConfirm = input.action === "confirm_day";
-    const closureResult = await auth.supabase
+    const closureResult = await operationSupabase
       .from("bige_daily_closures")
       .upsert(
         {
@@ -809,9 +858,9 @@ export async function POST(request: Request) {
           business_date: input.businessDate,
           status: isConfirm ? "confirmed" : "reopened",
           snapshot,
-          confirmed_by: isConfirm ? auth.context.userId : null,
+          confirmed_by: isConfirm ? operationContext.userId : null,
           confirmed_at: isConfirm ? now : null,
-          reopened_by: isConfirm ? null : auth.context.userId,
+          reopened_by: isConfirm ? null : operationContext.userId,
           reopened_at: isConfirm ? null : now,
           reopen_reason: isConfirm ? null : input.reason,
           updated_at: now,
@@ -821,13 +870,13 @@ export async function POST(request: Request) {
       .select("id, status, revision, snapshot, confirmed_at, reopened_at, reopen_reason")
       .single();
     if (closureResult.error) return handleDatabaseError(closureResult.error, "日報更新失敗");
-    await auth.supabase.from("bige_daily_closure_history").insert({
+    await operationSupabase.from("bige_daily_closure_history").insert({
       tenant_id: tenantId,
       closure_id: closureResult.data.id,
       action: isConfirm ? "confirmed" : "reopened",
       reason: input.reason || null,
       snapshot,
-      actor_id: auth.context.userId,
+      actor_id: operationContext.userId,
     });
     return apiSuccess({ item: closureResult.data });
   }

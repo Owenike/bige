@@ -3,31 +3,36 @@
 import {
   ArrowLeft,
   KeyRound,
+  LogIn,
   Pencil,
   Plus,
   RefreshCw,
   Save,
   ShieldCheck,
-  UserRound,
   UserRoundCheck,
   UserRoundX,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { useI18n } from "../../i18n-provider";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { AppRole } from "../../../lib/auth-context";
+import {
+  DEPARTMENT_POSITIONS,
+  STAFF_DEPARTMENTS,
+  STAFF_POSITIONS,
+  canCreatePosition,
+  canManagePosition,
+  departmentLabel,
+  positionLabel,
+  type StaffDepartment,
+  type StaffPosition,
+} from "../../../lib/staff-organization";
 import styles from "./page.module.css";
 
-type StaffRole = "manager" | "supervisor" | "branch_manager" | "frontdesk" | "coach" | "sales";
-
-interface BranchItem {
+type StaffItem = {
   id: string;
-  name: string;
-  is_active: boolean;
-}
-
-interface StaffItem {
-  id: string;
-  role: StaffRole;
+  role: string;
+  department: StaffDepartment | null;
+  position: StaffPosition | null;
   tenant_id: string | null;
   branch_id: string | null;
   display_name: string | null;
@@ -36,373 +41,330 @@ interface StaffItem {
   updated_at: string;
   last_login_at: string | null;
   email: string | null;
-}
+};
 
-interface MePayload {
+type BranchItem = {
+  id: string;
+  name: string;
+  is_active: boolean;
+};
+
+type MePayload = {
   role?: string;
+  department?: StaffDepartment | null;
+  position?: StaffPosition | null;
   tenantId?: string | null;
-}
+  branchId?: string | null;
+};
 
-interface ApiErrorBody {
-  error?: { code?: string; message?: string } | string;
+type Reauth = {
+  account: string;
+  password: string;
+  reason: string;
+};
+
+type ApiErrorBody = {
+  error?: { message?: string } | string;
   message?: string;
-}
+};
 
-const ALL_STAFF_ROLES: StaffRole[] = [
-  "manager",
-  "supervisor",
-  "branch_manager",
-  "frontdesk",
-  "coach",
-  "sales",
-];
-const MANAGER_ASSIGNABLE_ROLES: StaffRole[] = ["frontdesk", "coach"];
+const EMPTY_REAUTH: Reauth = { account: "", password: "", reason: "" };
 
-function getErrorMessage(payload: unknown, fallback: string) {
-  if (!payload || typeof payload !== "object") return fallback;
-  const body = payload as ApiErrorBody;
-  if (typeof body.error === "string" && body.error) return body.error;
-  if (body.error && typeof body.error === "object" && typeof body.error.message === "string") {
-    return body.error.message || fallback;
+function readError(payload: ApiErrorBody | null, fallback: string) {
+  if (typeof payload?.error === "string") return payload.error;
+  if (payload?.error && typeof payload.error === "object" && payload.error.message) {
+    return payload.error.message;
   }
-  return typeof body.message === "string" && body.message ? body.message : fallback;
+  return payload?.message || fallback;
 }
 
-function formatDate(value: string | null, locale: string) {
+function formatDate(value: string | null) {
   if (!value) return "尚未登入";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(locale === "en" ? "en-US" : "zh-TW", {
+  return new Intl.DateTimeFormat("zh-TW", {
     year: "numeric",
     month: "numeric",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  });
-}
-
-function roleLabel(role: StaffRole, zh: boolean) {
-  const labels: Record<StaffRole, [string, string]> = {
-    manager: ["主管", "Manager"],
-    supervisor: ["營運主管", "Supervisor"],
-    branch_manager: ["分店主管", "Branch manager"],
-    frontdesk: ["櫃台", "Frontdesk"],
-    coach: ["教練", "Coach"],
-    sales: ["業務", "Sales"],
-  };
-  return labels[role][zh ? 0 : 1];
-}
-
-async function safeJson<T>(response: Response): Promise<T | null> {
-  const text = await response.text();
-  if (!text) return null;
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return null;
-  }
+  }).format(new Date(value));
 }
 
 export default function ManagerStaffPage() {
-  const { locale } = useI18n();
-  const zh = locale !== "en";
-
+  const [me, setMe] = useState<MePayload>({});
   const [items, setItems] = useState<StaffItem[]>([]);
   const [branches, setBranches] = useState<BranchItem[]>([]);
-  const [myRole, setMyRole] = useState<string | null>(null);
-  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [quickBusyId, setQuickBusyId] = useState<string | null>(null);
-  const [editorOpen, setEditorOpen] = useState(false);
-
-  const [roleFilter, setRoleFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState<"all" | StaffDepartment>("all");
   const [activeOnly, setActiveOnly] = useState(false);
 
-  const [selectedId, setSelectedId] = useState("");
-  const [editRole, setEditRole] = useState<StaffRole>("frontdesk");
-  const [editDisplayName, setEditDisplayName] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newDepartment, setNewDepartment] = useState<StaffDepartment>("general_affairs");
+  const [newPosition, setNewPosition] = useState<StaffPosition>("frontdesk");
+  const [newBranchId, setNewBranchId] = useState("");
+
+  const [editing, setEditing] = useState<StaffItem | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDepartment, setEditDepartment] = useState<StaffDepartment>("general_affairs");
+  const [editPosition, setEditPosition] = useState<StaffPosition>("frontdesk");
   const [editBranchId, setEditBranchId] = useState("");
   const [editActive, setEditActive] = useState(true);
 
-  const [newEmail, setNewEmail] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newDisplayName, setNewDisplayName] = useState("");
-  const [newRole, setNewRole] = useState<StaffRole>("frontdesk");
-  const [newBranchId, setNewBranchId] = useState("");
-  const [newActive, setNewActive] = useState(true);
-
-  const canCreate = myRole === "manager" || myRole === "platform_admin";
-  const canEdit = myRole === "manager" || myRole === "platform_admin";
-  const canDisable = myRole === "manager" || myRole === "platform_admin";
-  const createRoleOptions = myRole === "platform_admin" ? ALL_STAFF_ROLES : MANAGER_ASSIGNABLE_ROLES;
-  const branchNames = useMemo(
-    () => new Map(branches.map((branch) => [branch.id, branch.name])),
-    [branches],
+  const [reauthOpen, setReauthOpen] = useState(false);
+  const [reauthTitle, setReauthTitle] = useState("");
+  const [reauth, setReauth] = useState<Reauth>(EMPTY_REAUTH);
+  const [pendingAction, setPendingAction] = useState<((credentials: Reauth) => Promise<void>) | null>(
+    null,
   );
-  const selectedItem = useMemo(
-    () => items.find((item) => item.id === selectedId) || null,
-    [items, selectedId],
+
+  const actor = useMemo(
+    () => ({
+      role: (me.role || "customer") as AppRole,
+      department: me.department || null,
+      position: me.position || null,
+      branchId: me.branchId || null,
+    }),
+    [me],
   );
-  const canManageSelected =
-    !!selectedItem &&
-    (myRole === "platform_admin" ||
-      (myRole === "manager" && MANAGER_ASSIGNABLE_ROLES.includes(selectedItem.role)));
 
-  const stats = useMemo(() => {
-    const total = items.length;
-    const active = items.filter((item) => item.is_active).length;
-    const coach = items.filter((item) => item.role === "coach").length;
-    const frontdesk = items.filter((item) => item.role === "frontdesk").length;
-    return { total, active, inactive: total - active, coach, frontdesk };
-  }, [items]);
+  const assignablePositions = useMemo(
+    () =>
+      STAFF_POSITIONS.filter(
+        (position) => me.role === "platform_admin" || canCreatePosition(actor, position),
+      ),
+    [actor, me.role],
+  );
+  const canCreate = assignablePositions.length > 0;
+  const createPositions = DEPARTMENT_POSITIONS[newDepartment].filter((position) =>
+    assignablePositions.includes(position),
+  );
+  const editPositions = DEPARTMENT_POSITIONS[editDepartment].filter(
+    (position) => me.role === "platform_admin" || assignablePositions.includes(position),
+  );
 
-  function scopedUrl(path: string, params?: URLSearchParams) {
-    const next = params || new URLSearchParams();
-    if (myRole === "platform_admin" && tenantId) next.set("tenantId", tenantId);
-    const suffix = next.toString();
-    return suffix ? `${path}?${suffix}` : path;
-  }
-
-  function bindEditor(item: StaffItem) {
-    setSelectedId(item.id);
-    setEditRole(item.role);
-    setEditDisplayName(item.display_name || "");
-    setEditBranchId(item.branch_id || "");
-    setEditActive(item.is_active);
-  }
-
-  function openEditor(item: StaffItem) {
-    bindEditor(item);
-    setEditorOpen(true);
-  }
-
-  function patchLocal(item: StaffItem) {
-    setItems((current) => current.map((row) => (row.id === item.id ? item : row)));
-  }
-
-  async function loadMeta() {
-    const meResponse = await fetch("/api/auth/me", { cache: "no-store" });
-    const mePayload = (await safeJson<MePayload>(meResponse)) || {};
-    const nextRole = typeof mePayload.role === "string" ? mePayload.role : null;
-    const nextTenantId = typeof mePayload.tenantId === "string" ? mePayload.tenantId : null;
-    if (meResponse.ok) {
-      setMyRole(nextRole);
-      setTenantId(nextTenantId);
-    }
-
-    const branchParams = new URLSearchParams({ activeOnly: "1" });
-    if (nextRole === "platform_admin" && nextTenantId) branchParams.set("tenantId", nextTenantId);
-    const branchResponse = await fetch(`/api/manager/branches?${branchParams.toString()}`, {
-      cache: "no-store",
-    });
-    const branchPayload =
-      (await safeJson<{ items?: BranchItem[] } & ApiErrorBody>(branchResponse)) || {};
-    setBranches(branchResponse.ok ? branchPayload.items || [] : []);
-  }
-
-  async function loadStaff(role = myRole, scopeTenantId = tenantId) {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setNotice(null);
     try {
-      const params = new URLSearchParams();
-      if (roleFilter !== "all") params.set("role", roleFilter);
-      if (query.trim()) params.set("q", query.trim());
-      if (activeOnly) params.set("activeOnly", "1");
-      if (role === "platform_admin" && scopeTenantId) params.set("tenantId", scopeTenantId);
+      const meResponse = await fetch("/api/auth/me", { cache: "no-store" });
+      const mePayload = (await meResponse.json().catch(() => null)) as MePayload | null;
+      if (!meResponse.ok || !mePayload) throw new Error("無法確認登入身分");
+      setMe(mePayload);
 
-      const response = await fetch(`/api/manager/staff?${params.toString()}`, {
-        cache: "no-store",
-      });
-      const payload = (await safeJson<{ items?: StaffItem[] } & ApiErrorBody>(response)) || {};
-      if (!response.ok) throw new Error(getErrorMessage(payload, "讀取員工資料失敗"));
+      const tenantParams = new URLSearchParams();
+      if (mePayload.role === "platform_admin" && mePayload.tenantId) {
+        tenantParams.set("tenantId", mePayload.tenantId);
+      }
+      const staffParams = new URLSearchParams(tenantParams);
+      if (query.trim()) staffParams.set("q", query.trim());
+      if (activeOnly) staffParams.set("activeOnly", "1");
 
-      const rows = payload.items || [];
-      setItems(rows);
-      const current = rows.find((item) => item.id === selectedId) || rows[0] || null;
-      if (current) bindEditor(current);
-      else setSelectedId("");
+      const branchParams = new URLSearchParams(tenantParams);
+      branchParams.set("activeOnly", "1");
+      const [staffResponse, branchResponse] = await Promise.all([
+        fetch(`/api/manager/staff?${staffParams.toString()}`, { cache: "no-store" }),
+        fetch(`/api/manager/branches?${branchParams.toString()}`, { cache: "no-store" }),
+      ]);
+      const staffPayload = (await staffResponse.json().catch(() => null)) as
+        | ({ items?: StaffItem[] } & ApiErrorBody)
+        | null;
+      const branchPayload = (await branchResponse.json().catch(() => null)) as
+        | ({ items?: BranchItem[] } & ApiErrorBody)
+        | null;
+      if (!staffResponse.ok) throw new Error(readError(staffPayload, "讀取員工清單失敗"));
+      setItems(staffPayload?.items || []);
+      setBranches(branchResponse.ok ? branchPayload?.items || [] : []);
     } catch (caught) {
       setItems([]);
-      setSelectedId("");
       setError(caught instanceof Error ? caught.message : "讀取員工資料失敗");
     } finally {
       setLoading(false);
     }
-  }
+  }, [activeOnly, query]);
 
   useEffect(() => {
-    const initialize = async () => {
-      const meResponse = await fetch("/api/auth/me", { cache: "no-store" });
-      const mePayload = (await safeJson<MePayload>(meResponse)) || {};
-      const nextRole = typeof mePayload.role === "string" ? mePayload.role : null;
-      const nextTenantId = typeof mePayload.tenantId === "string" ? mePayload.tenantId : null;
-      if (meResponse.ok) {
-        setMyRole(nextRole);
-        setTenantId(nextTenantId);
-      }
-      await Promise.all([loadMeta(), loadStaff(nextRole, nextTenantId)]);
-    };
-    void initialize();
-    // Initial load intentionally runs once with the authenticated scope.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void load();
+  }, [load]);
 
-  async function createStaff() {
-    if (!canCreate) return;
-    if (!newDisplayName.trim() || !newEmail.trim() || newPassword.length < 8) {
-      setError(zh ? "請完整填寫姓名、Email 與至少 8 位的初始密碼。" : "Name, email, and an 8-character password are required.");
+  useEffect(() => {
+    if (!me.department || me.role === "platform_admin") return;
+    setNewDepartment(me.department);
+    const first = assignablePositions.find((position) =>
+      DEPARTMENT_POSITIONS[me.department!].includes(position),
+    );
+    if (first) setNewPosition(first);
+  }, [assignablePositions, me.department, me.role]);
+
+  useEffect(() => {
+    if (!createPositions.includes(newPosition) && createPositions[0]) {
+      setNewPosition(createPositions[0]);
+    }
+  }, [createPositions, newPosition]);
+
+  const visibleItems = useMemo(
+    () =>
+      items.filter(
+        (item) => departmentFilter === "all" || item.department === departmentFilter,
+      ),
+    [departmentFilter, items],
+  );
+  const branchNames = useMemo(
+    () => new Map(branches.map((branch) => [branch.id, branch.name])),
+    [branches],
+  );
+  const stats = useMemo(
+    () => ({
+      total: items.length,
+      active: items.filter((item) => item.is_active).length,
+      generalAffairs: items.filter((item) => item.department === "general_affairs").length,
+      coaching: items.filter((item) => item.department === "coaching").length,
+    }),
+    [items],
+  );
+
+  function scopedPath(path: string) {
+    if (me.role !== "platform_admin" || !me.tenantId) return path;
+    return `${path}?tenantId=${encodeURIComponent(me.tenantId)}`;
+  }
+
+  function requestSensitive(title: string, action: (credentials: Reauth) => Promise<void>) {
+    setReauthTitle(title);
+    setReauth(EMPTY_REAUTH);
+    setPendingAction(() => action);
+    setReauthOpen(true);
+  }
+
+  async function confirmSensitive() {
+    if (!pendingAction || !reauth.account || !reauth.password || !reauth.reason.trim()) {
+      setError("請輸入員工 Email、密碼與操作原因");
       return;
     }
-
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
-      const response = await fetch("/api/manager/staff", {
+      await pendingAction(reauth);
+      setReauthOpen(false);
+      setPendingAction(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "操作失敗");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function createStaff() {
+    if (!canCreate || !newName.trim() || !newEmail.trim() || newPassword.length < 8) {
+      setError("請填寫姓名、Email 與至少 8 位的初始密碼");
+      return;
+    }
+    requestSensitive("確認建立員工帳號", async (credentials) => {
+      const response = await fetch(scopedPath("/api/manager/staff"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: newEmail,
           password: newPassword,
-          displayName: newDisplayName,
-          role: newRole,
+          displayName: newName,
+          department: newDepartment,
+          position: newPosition,
           branchId: newBranchId || null,
-          isActive: newActive,
-          tenantId: myRole === "platform_admin" ? tenantId : undefined,
+          tenantId: me.role === "platform_admin" ? me.tenantId : undefined,
           idempotencyKey: `staff:${crypto.randomUUID()}`,
+          reauth: credentials,
         }),
       });
-      const payload =
-        (await safeJson<{
-          item?: StaffItem;
-          verification?: { deliveryStatus?: string; deliveryError?: string | null };
-        } & ApiErrorBody>(response)) || {};
-      if (!response.ok || !payload.item) {
-        throw new Error(getErrorMessage(payload, "建立員工帳號失敗"));
-      }
-
-      setItems((current) => [payload.item as StaffItem, ...current]);
-      bindEditor(payload.item);
+      const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
+      if (!response.ok) throw new Error(readError(payload, "建立員工失敗"));
+      setNewName("");
       setNewEmail("");
       setNewPassword("");
-      setNewDisplayName("");
-      setNewRole("frontdesk");
       setNewBranchId("");
-      setNewActive(true);
-      setNotice(
-        payload.verification?.deliveryStatus === "sent"
-          ? "員工帳號已建立，Email 驗證信已寄出。首次登入時必須重新設定密碼。"
-          : `員工帳號已建立，但驗證信寄送失敗：${payload.verification?.deliveryError || "請稍後重寄"}`,
-      );
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "建立員工帳號失敗");
-    } finally {
-      setSaving(false);
-    }
+      setNotice("員工帳號已建立，驗證信已送出");
+      await load();
+    });
   }
 
-  async function saveEditor() {
-    if (!selectedItem || !canEdit || !canManageSelected) return;
-    if (!editDisplayName.trim()) {
-      setError(zh ? "員工姓名不能留空。" : "Staff name is required.");
-      return;
-    }
+  function openEditor(item: StaffItem) {
+    const department = item.department || "general_affairs";
+    const position = item.position || DEPARTMENT_POSITIONS[department][0];
+    setEditing(item);
+    setEditName(item.display_name || "");
+    setEditDepartment(department);
+    setEditPosition(position);
+    setEditBranchId(item.branch_id || "");
+    setEditActive(item.is_active);
+  }
 
-    setSaving(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const params = new URLSearchParams();
-      if (myRole === "platform_admin" && tenantId) params.set("tenantId", tenantId);
-      const response = await fetch(scopedUrl("/api/manager/staff", params), {
+  function saveEditor() {
+    if (!editing || !editName.trim()) return;
+    requestSensitive("確認儲存員工資料", async (credentials) => {
+      const response = await fetch(scopedPath("/api/manager/staff"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: selectedItem.id,
-          role: editRole,
-          displayName: editDisplayName,
+          id: editing.id,
+          displayName: editName,
+          department: editDepartment,
+          position: editPosition,
           branchId: editBranchId || null,
           isActive: editActive,
+          reauth: credentials,
         }),
       });
-      const payload = (await safeJson<{ item?: StaffItem } & ApiErrorBody>(response)) || {};
-      if (!response.ok || !payload.item) {
-        throw new Error(getErrorMessage(payload, "儲存員工資料失敗"));
-      }
-      patchLocal(payload.item);
-      bindEditor(payload.item);
-      setNotice("員工資料已更新。");
-      setEditorOpen(false);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "儲存員工資料失敗");
-    } finally {
-      setSaving(false);
-    }
+      const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
+      if (!response.ok) throw new Error(readError(payload, "儲存員工資料失敗"));
+      setEditing(null);
+      setNotice("員工資料已更新");
+      await load();
+    });
   }
 
-  async function toggleStaff(item: StaffItem) {
-    const manageable =
-      myRole === "platform_admin" ||
-      (myRole === "manager" && MANAGER_ASSIGNABLE_ROLES.includes(item.role));
-    if (!canDisable || !manageable) return;
-
-    setQuickBusyId(item.id);
-    setError(null);
-    setNotice(null);
-    try {
-      const params = new URLSearchParams();
-      if (myRole === "platform_admin" && tenantId) params.set("tenantId", tenantId);
-      const response = await fetch(scopedUrl("/api/manager/staff", params), {
+  function toggleStaff(item: StaffItem) {
+    requestSensitive(item.is_active ? "確認停用員工帳號" : "確認啟用員工帳號", async (credentials) => {
+      const response = await fetch(scopedPath("/api/manager/staff"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: item.id, isActive: !item.is_active }),
+        body: JSON.stringify({ id: item.id, isActive: !item.is_active, reauth: credentials }),
       });
-      const payload = (await safeJson<{ item?: StaffItem } & ApiErrorBody>(response)) || {};
-      if (!response.ok || !payload.item) {
-        throw new Error(getErrorMessage(payload, "更新員工狀態失敗"));
-      }
-      patchLocal(payload.item);
-      if (selectedId === item.id) bindEditor(payload.item);
-      setNotice(payload.item.is_active ? "員工帳號已啟用。" : "員工帳號已停用。");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "更新員工狀態失敗");
-    } finally {
-      setQuickBusyId(null);
-    }
+      const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
+      if (!response.ok) throw new Error(readError(payload, "更新帳號狀態失敗"));
+      setNotice(item.is_active ? "員工帳號已停用" : "員工帳號已啟用");
+      await load();
+    });
   }
 
-  async function sendPasswordReset(item: StaffItem) {
-    const manageable =
-      myRole === "platform_admin" ||
-      (myRole === "manager" && MANAGER_ASSIGNABLE_ROLES.includes(item.role));
-    if (!canEdit || !manageable) return;
-
-    setSaving(true);
-    setError(null);
-    setNotice(null);
-    try {
+  function resetPassword(item: StaffItem) {
+    requestSensitive("確認寄送密碼重設信", async (credentials) => {
       const response = await fetch("/api/manager/staff/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: item.id,
-          tenantId: myRole === "platform_admin" ? tenantId : undefined,
+          tenantId: me.role === "platform_admin" ? me.tenantId : undefined,
+          reauth: credentials,
         }),
       });
-      const payload =
-        (await safeJson<{ maskedEmail?: string; deliveryStatus?: string } & ApiErrorBody>(response)) || {};
-      if (!response.ok) throw new Error(getErrorMessage(payload, "寄送密碼重設信失敗"));
-      setNotice(`密碼重設信已寄送至 ${payload.maskedEmail || item.email || "員工信箱"}。`);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "寄送密碼重設信失敗");
-    } finally {
-      setSaving(false);
-    }
+      const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
+      if (!response.ok) throw new Error(readError(payload, "寄送密碼重設信失敗"));
+      setNotice("密碼重設信已寄出");
+    });
+  }
+
+  async function switchUser() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login?tab=staff";
+  }
+
+  function manageable(item: StaffItem) {
+    return (
+      me.role === "platform_admin" ||
+      canManagePosition(actor, item.department, item.position)
+    );
   }
 
   return (
@@ -411,72 +373,63 @@ export default function ManagerStaffPage() {
         <header className={styles.header}>
           <div>
             <p className={styles.eyebrow}>BIG E FITNESS · STAFF</p>
-            <h1 className={styles.title}>{zh ? "員工帳號管理" : "Staff management"}</h1>
-            <p className={styles.subtitle}>
-              {zh
-                ? "建立員工帳號、設定角色與分店、停用帳號及寄送密碼重設信"
-                : "Create staff accounts, assign scope, manage access, and send password resets"}
-            </p>
+            <h1 className={styles.title}>員工與權限</h1>
+            <p className={styles.subtitle}>依庶務部與教練部管理職務、分店範圍與帳號狀態。</p>
           </div>
-          <a className={styles.iconButton} href="/manager/fitness" title={zh ? "返回主管營運後台" : "Back"}>
-            <ArrowLeft size={19} />
-          </a>
+          <div className={styles.headerActions}>
+            <button className={styles.button} type="button" onClick={() => void switchUser()}>
+              <LogIn size={17} />
+              切換使用者
+            </button>
+            <a className={styles.iconButton} href="/manager/fitness" title="返回營運後台">
+              <ArrowLeft size={19} />
+            </a>
+          </div>
         </header>
 
         {error ? <p className={styles.error}>{error}</p> : null}
         {notice ? <p className={styles.notice}>{notice}</p> : null}
 
-        <section className={styles.stats} aria-label={zh ? "員工統計" : "Staff statistics"}>
-          <article className={`${styles.glassCard} ${styles.stat}`}>
-            <span className={styles.statLabel}>{zh ? "全部員工" : "Total"}</span>
-            <strong className={styles.statValue}>{stats.total}</strong>
-          </article>
-          <article className={`${styles.glassCard} ${styles.stat}`}>
-            <span className={styles.statLabel}>{zh ? "啟用中" : "Active"}</span>
-            <strong className={styles.statValue}>{stats.active}</strong>
-          </article>
-          <article className={`${styles.glassCard} ${styles.stat}`}>
-            <span className={styles.statLabel}>{zh ? "教練" : "Coaches"}</span>
-            <strong className={styles.statValue}>{stats.coach}</strong>
-          </article>
-          <article className={`${styles.glassCard} ${styles.stat}`}>
-            <span className={styles.statLabel}>{zh ? "櫃台" : "Frontdesk"}</span>
-            <strong className={styles.statValue}>{stats.frontdesk}</strong>
-          </article>
+        <section className={styles.stats}>
+          {[
+            ["員工總數", stats.total],
+            ["啟用帳號", stats.active],
+            ["庶務部", stats.generalAffairs],
+            ["教練部", stats.coaching],
+          ].map(([label, value]) => (
+            <article className={`${styles.glassCard} ${styles.stat}`} key={label}>
+              <span className={styles.statLabel}>{label}</span>
+              <strong className={styles.statValue}>{value}</strong>
+            </article>
+          ))}
         </section>
 
         <section className={`${styles.glassCard} ${styles.filters}`}>
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="staff-role-filter">
-              {zh ? "角色" : "Role"}
-            </label>
+            <label className={styles.label}>部門</label>
             <select
-              id="staff-role-filter"
               className={styles.select}
-              value={roleFilter}
-              onChange={(event) => setRoleFilter(event.target.value)}
+              value={departmentFilter}
+              onChange={(event) =>
+                setDepartmentFilter(event.target.value as "all" | StaffDepartment)
+              }
             >
-              <option value="all">{zh ? "全部角色" : "All roles"}</option>
-              {ALL_STAFF_ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {roleLabel(role, zh)}
+              <option value="all">全部部門</option>
+              {STAFF_DEPARTMENTS.map((department) => (
+                <option value={department} key={department}>
+                  {departmentLabel(department)}
                 </option>
               ))}
             </select>
           </div>
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="staff-search">
-              {zh ? "搜尋員工" : "Search"}
-            </label>
+            <label className={styles.label}>搜尋員工</label>
             <input
-              id="staff-search"
               className={styles.input}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void loadStaff();
-              }}
-              placeholder={zh ? "姓名或 Email" : "Name or email"}
+              onKeyDown={(event) => event.key === "Enter" && void load()}
+              placeholder="姓名或 Email"
             />
           </div>
           <label className={styles.toggle}>
@@ -485,314 +438,200 @@ export default function ManagerStaffPage() {
               checked={activeOnly}
               onChange={(event) => setActiveOnly(event.target.checked)}
             />
-            {zh ? "只顯示啟用帳號" : "Active only"}
+            只顯示啟用帳號
           </label>
-          <button className={styles.button} type="button" onClick={() => void loadStaff()} disabled={loading}>
+          <button className={styles.button} type="button" onClick={() => void load()} disabled={loading}>
             <RefreshCw size={17} />
-            {loading ? (zh ? "讀取中" : "Loading") : zh ? "更新清單" : "Refresh"}
+            {loading ? "讀取中" : "更新清單"}
           </button>
         </section>
 
-        <div className={styles.workspace}>
+        {canCreate ? (
           <section className={`${styles.glassCard} ${styles.panel}`}>
-            <h2 className={styles.panelTitle}>{zh ? "建立員工帳號" : "Create staff account"}</h2>
-            <p className={styles.panelHint}>
-              {zh
-                ? "建立後會寄出 Email 驗證信；員工第一次登入時必須重新設定密碼。"
-                : "A verification email is sent, and the employee must change their password on first sign-in."}
-            </p>
+            <h2 className={styles.panelTitle}>建立員工帳號</h2>
+            <p className={styles.panelHint}>員工第一次登入須完成 Email 驗證並重新設定密碼。</p>
             <div className={styles.form}>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="new-staff-name">
-                  {zh ? "真實姓名" : "Name"}
-                </label>
-                <input
-                  id="new-staff-name"
-                  className={styles.input}
-                  value={newDisplayName}
-                  onChange={(event) => setNewDisplayName(event.target.value)}
-                />
-              </div>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="new-staff-role">
-                  {zh ? "角色" : "Role"}
-                </label>
+              <label className={styles.field}>
+                <span className={styles.label}>真實姓名</span>
+                <input className={styles.input} value={newName} onChange={(event) => setNewName(event.target.value)} />
+              </label>
+              <label className={styles.field}>
+                <span className={styles.label}>Email</span>
+                <input className={styles.input} type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} />
+              </label>
+              <label className={styles.field}>
+                <span className={styles.label}>初始密碼</span>
+                <input className={styles.input} type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="至少 8 位" />
+              </label>
+              <label className={styles.field}>
+                <span className={styles.label}>部門</span>
                 <select
-                  id="new-staff-role"
                   className={styles.select}
-                  value={newRole}
-                  onChange={(event) => setNewRole(event.target.value as StaffRole)}
-                  disabled={!canCreate}
+                  value={newDepartment}
+                  onChange={(event) => setNewDepartment(event.target.value as StaffDepartment)}
+                  disabled={me.role !== "platform_admin"}
                 >
-                  {createRoleOptions.map((role) => (
-                    <option key={role} value={role}>
-                      {roleLabel(role, zh)}
-                    </option>
+                  {STAFF_DEPARTMENTS.map((department) => (
+                    <option value={department} key={department}>{departmentLabel(department)}</option>
                   ))}
                 </select>
-              </div>
-              <div className={`${styles.field} ${styles.full}`}>
-                <label className={styles.label} htmlFor="new-staff-email">
-                  Email
-                </label>
-                <input
-                  id="new-staff-email"
-                  className={styles.input}
-                  type="email"
-                  value={newEmail}
-                  onChange={(event) => setNewEmail(event.target.value)}
-                  autoComplete="off"
-                />
-              </div>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="new-staff-password">
-                  {zh ? "初始密碼" : "Initial password"}
-                </label>
-                <input
-                  id="new-staff-password"
-                  className={styles.input}
-                  type="password"
-                  minLength={8}
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  autoComplete="new-password"
-                  placeholder={zh ? "至少 8 位" : "At least 8 characters"}
-                />
-              </div>
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="new-staff-branch">
-                  {zh ? "分店" : "Branch"}
-                </label>
-                <select
-                  id="new-staff-branch"
-                  className={styles.select}
-                  value={newBranchId}
-                  onChange={(event) => setNewBranchId(event.target.value)}
-                  disabled={!canCreate}
-                >
-                  <option value="">{zh ? "不指定分店" : "No branch"}</option>
-                  {branches.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
+              </label>
+              <label className={styles.field}>
+                <span className={styles.label}>職務</span>
+                <select className={styles.select} value={newPosition} onChange={(event) => setNewPosition(event.target.value as StaffPosition)}>
+                  {createPositions.map((position) => (
+                    <option value={position} key={position}>{positionLabel(position)}</option>
                   ))}
                 </select>
-              </div>
-              <label className={`${styles.toggle} ${styles.full}`}>
-                <input
-                  type="checkbox"
-                  checked={newActive}
-                  onChange={(event) => setNewActive(event.target.checked)}
-                  disabled={!canCreate}
-                />
-                {zh ? "建立後立即啟用" : "Activate immediately"}
+              </label>
+              <label className={styles.field}>
+                <span className={styles.label}>分店</span>
+                <select className={styles.select} value={newBranchId} onChange={(event) => setNewBranchId(event.target.value)}>
+                  <option value="">不指定分店</option>
+                  {branches.map((branch) => <option value={branch.id} key={branch.id}>{branch.name}</option>)}
+                </select>
               </label>
               <div className={styles.formActions}>
-                <button
-                  className={`${styles.button} ${styles.primary}`}
-                  type="button"
-                  onClick={() => void createStaff()}
-                  disabled={!canCreate || saving}
-                >
+                <button className={`${styles.button} ${styles.primary}`} type="button" onClick={createStaff}>
                   <Plus size={17} />
-                  {saving ? (zh ? "建立中" : "Creating") : zh ? "建立員工" : "Create staff"}
+                  建立員工
                 </button>
               </div>
             </div>
           </section>
-
-        </div>
+        ) : null}
 
         <section className={`${styles.glassCard} ${styles.listPanel}`}>
           <div className={styles.listHeader}>
             <div>
-              <h2 className={styles.panelTitle}>{zh ? "員工清單" : "Staff list"}</h2>
-              <span className={styles.count}>
-                {zh ? `共 ${items.length} 筆，停用 ${stats.inactive} 筆` : `${items.length} records`}
-              </span>
+              <h2 className={styles.panelTitle}>員工清單</h2>
+              <span className={styles.count}>共 {visibleItems.length} 筆</span>
             </div>
-            <ShieldCheck size={22} aria-hidden="true" />
+            <ShieldCheck size={22} />
           </div>
-
-          {items.length ? (
-            <div className={styles.staffList}>
-              {items.map((item) => {
-                const manageable =
-                  myRole === "platform_admin" ||
-                  (myRole === "manager" && MANAGER_ASSIGNABLE_ROLES.includes(item.role));
-                return (
-                  <article
-                    className={`${styles.staffRow} ${selectedId === item.id ? styles.staffRowSelected : ""}`}
-                    key={item.id}
-                  >
-                    <div className={styles.staffIdentity}>
-                      <span className={styles.staffName}>{item.display_name || "未填姓名"}</span>
-                      <span className={styles.staffEmail}>{item.email || (zh ? "未提供 Email" : "No email")}</span>
-                    </div>
-                    <span className={styles.role}>{roleLabel(item.role, zh)}</span>
-                    <div>
-                      <span className={styles.meta}>
-                        {zh ? "分店：" : "Branch: "}
-                        {item.branch_id ? branchNames.get(item.branch_id) || "已指定" : "未指定"}
-                      </span>
-                      <span className={styles.meta}>
-                        {zh ? "上次登入：" : "Last login: "}
-                        {formatDate(item.last_login_at, locale)}
-                      </span>
-                    </div>
-                    <span className={`${styles.status} ${item.is_active ? "" : styles.inactive}`}>
-                      {item.is_active ? (zh ? "啟用" : "Active") : zh ? "停用" : "Inactive"}
-                    </span>
-                    <div className={styles.rowActions}>
-                      <button className={styles.button} type="button" onClick={() => openEditor(item)}>
-                        <Pencil size={16} />
-                        {zh ? "編輯" : "Edit"}
-                      </button>
-                      <button
-                        className={`${styles.iconButton} ${item.is_active ? styles.danger : ""}`}
-                        type="button"
-                        title={item.is_active ? (zh ? "停用帳號" : "Disable") : zh ? "啟用帳號" : "Enable"}
-                        onClick={() => void toggleStaff(item)}
-                        disabled={!manageable || quickBusyId === item.id}
-                      >
-                        {item.is_active ? <UserRoundX size={17} /> : <UserRoundCheck size={17} />}
-                      </button>
-                      <button
-                        className={styles.iconButton}
-                        type="button"
-                        title={zh ? "寄送密碼重設信" : "Send password reset"}
-                        onClick={() => void sendPasswordReset(item)}
-                        disabled={!manageable || saving}
-                      >
-                        <KeyRound size={17} />
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <p className={styles.empty}>
-              <UserRound size={24} aria-hidden="true" />
-              <br />
-              {loading ? (zh ? "正在讀取員工資料" : "Loading staff") : zh ? "沒有符合條件的員工" : "No matching staff"}
-            </p>
-          )}
+          <div className={styles.staffList}>
+            {visibleItems.map((item) => (
+              <article className={styles.staffRow} key={item.id}>
+                <div className={styles.staffIdentity}>
+                  <span className={styles.staffName}>{item.display_name || "未命名員工"}</span>
+                  <span className={styles.staffEmail}>{item.email || "未設定 Email"}</span>
+                </div>
+                <span className={styles.role}>
+                  {departmentLabel(item.department)} · {positionLabel(item.position)}
+                </span>
+                <div>
+                  <span className={styles.meta}>分店：{item.branch_id ? branchNames.get(item.branch_id) || "未知分店" : "未指定"}</span>
+                  <span className={styles.meta}>上次登入：{formatDate(item.last_login_at)}</span>
+                </div>
+                <span className={`${styles.status} ${item.is_active ? "" : styles.inactive}`}>
+                  {item.is_active ? "啟用" : "停用"}
+                </span>
+                <div className={styles.rowActions}>
+                  <button className={styles.button} type="button" onClick={() => openEditor(item)} disabled={!manageable(item)}>
+                    <Pencil size={16} />
+                    編輯
+                  </button>
+                  <button className={`${styles.iconButton} ${item.is_active ? styles.danger : ""}`} type="button" onClick={() => toggleStaff(item)} disabled={!manageable(item)} title={item.is_active ? "停用帳號" : "啟用帳號"}>
+                    {item.is_active ? <UserRoundX size={17} /> : <UserRoundCheck size={17} />}
+                  </button>
+                  <button className={styles.iconButton} type="button" onClick={() => resetPassword(item)} disabled={!manageable(item)} title="寄送密碼重設信">
+                    <KeyRound size={17} />
+                  </button>
+                </div>
+              </article>
+            ))}
+            {!loading && visibleItems.length === 0 ? <p className={styles.empty}>目前沒有符合條件的員工</p> : null}
+          </div>
         </section>
 
-        {editorOpen && selectedItem ? (
-          <div className={styles.modalBackdrop} role="presentation" onMouseDown={() => setEditorOpen(false)}>
-            <section
-              className={`${styles.glassCard} ${styles.modal}`}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="staff-editor-title"
-              onMouseDown={(event) => event.stopPropagation()}
-            >
+        {editing ? (
+          <div className={styles.modalBackdrop} onMouseDown={() => setEditing(null)}>
+            <section className={`${styles.glassCard} ${styles.modal}`} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
               <div className={styles.modalHeader}>
                 <div>
                   <p className={styles.eyebrow}>BIG E FITNESS · STAFF</p>
-                  <h2 className={styles.panelTitle} id="staff-editor-title">
-                    {zh ? "編輯員工" : "Edit staff"}
-                  </h2>
+                  <h2 className={styles.panelTitle}>編輯員工資料</h2>
                 </div>
-                <button
-                  className={styles.iconButton}
-                  type="button"
-                  onClick={() => setEditorOpen(false)}
-                  title={zh ? "關閉" : "Close"}
-                >
-                  <X size={18} />
-                </button>
+                <button className={styles.iconButton} type="button" onClick={() => setEditing(null)} title="關閉"><X size={18} /></button>
               </div>
-
               <div className={styles.modalIdentity}>
-                <strong>
-                  {selectedItem.display_name ||
-                    selectedItem.email ||
-                    (zh ? "未命名員工" : "Unnamed staff")}
-                </strong>
-                <span>{selectedItem.email || (zh ? "未提供 Email" : "No email")}</span>
+                <strong>{editing.display_name || editing.email || "未命名員工"}</strong>
+                <span>{editing.email}</span>
               </div>
-
               <div className={styles.form}>
-                <div className={`${styles.field} ${styles.full}`}>
-                  <label className={styles.label} htmlFor="modal-edit-staff-name">
-                    {zh ? "姓名" : "Name"}
-                  </label>
-                  <input
-                    id="modal-edit-staff-name"
-                    className={styles.input}
-                    value={editDisplayName}
-                    onChange={(event) => setEditDisplayName(event.target.value)}
-                    disabled={!canManageSelected}
-                  />
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="modal-edit-staff-role">
-                    {zh ? "角色" : "Role"}
-                  </label>
-                  <select
-                    id="modal-edit-staff-role"
-                    className={styles.select}
-                    value={editRole}
-                    onChange={(event) => setEditRole(event.target.value as StaffRole)}
-                    disabled={!canManageSelected}
-                  >
-                    {(myRole === "platform_admin"
-                      ? ALL_STAFF_ROLES
-                      : MANAGER_ASSIGNABLE_ROLES
-                    ).map((role) => (
-                      <option key={role} value={role}>
-                        {roleLabel(role, zh)}
-                      </option>
-                    ))}
+                <label className={`${styles.field} ${styles.full}`}>
+                  <span className={styles.label}>姓名</span>
+                  <input className={styles.input} value={editName} onChange={(event) => setEditName(event.target.value)} />
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.label}>部門</span>
+                  <select className={styles.select} value={editDepartment} onChange={(event) => {
+                    const next = event.target.value as StaffDepartment;
+                    setEditDepartment(next);
+                    const first = DEPARTMENT_POSITIONS[next].find((position) => me.role === "platform_admin" || assignablePositions.includes(position));
+                    if (first) setEditPosition(first);
+                  }} disabled={me.role !== "platform_admin"}>
+                    {STAFF_DEPARTMENTS.map((department) => <option value={department} key={department}>{departmentLabel(department)}</option>)}
                   </select>
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor="modal-edit-staff-branch">
-                    {zh ? "分店" : "Branch"}
-                  </label>
-                  <select
-                    id="modal-edit-staff-branch"
-                    className={styles.select}
-                    value={editBranchId}
-                    onChange={(event) => setEditBranchId(event.target.value)}
-                    disabled={!canManageSelected}
-                  >
-                    <option value="">{zh ? "不指定分店" : "No branch"}</option>
-                    {branches.map((branch) => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.name}
-                      </option>
-                    ))}
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.label}>職務</span>
+                  <select className={styles.select} value={editPosition} onChange={(event) => setEditPosition(event.target.value as StaffPosition)}>
+                    {editPositions.map((position) => <option value={position} key={position}>{positionLabel(position)}</option>)}
                   </select>
-                </div>
-                <label className={`${styles.toggle} ${styles.full}`}>
-                  <input
-                    type="checkbox"
-                    checked={editActive}
-                    onChange={(event) => setEditActive(event.target.checked)}
-                    disabled={!canManageSelected}
-                  />
-                  {zh ? "帳號啟用" : "Account active"}
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.label}>分店</span>
+                  <select className={styles.select} value={editBranchId} onChange={(event) => setEditBranchId(event.target.value)}>
+                    <option value="">不指定分店</option>
+                    {branches.map((branch) => <option value={branch.id} key={branch.id}>{branch.name}</option>)}
+                  </select>
+                </label>
+                <label className={styles.toggle}>
+                  <input type="checkbox" checked={editActive} onChange={(event) => setEditActive(event.target.checked)} />
+                  帳號啟用
                 </label>
                 <div className={styles.formActions}>
-                  <button
-                    className={styles.button}
-                    type="button"
-                    onClick={() => setEditorOpen(false)}
-                  >
-                    {zh ? "取消" : "Cancel"}
-                  </button>
-                  <button
-                    className={`${styles.button} ${styles.primary}`}
-                    type="button"
-                    onClick={() => void saveEditor()}
-                    disabled={saving || !canManageSelected}
-                  >
+                  <button className={styles.button} type="button" onClick={() => setEditing(null)}>取消</button>
+                  <button className={`${styles.button} ${styles.primary}`} type="button" onClick={saveEditor}>
                     <Save size={17} />
-                    {saving ? (zh ? "儲存中" : "Saving") : zh ? "儲存變更" : "Save changes"}
+                    儲存變更
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+        {reauthOpen ? (
+          <div className={styles.modalBackdrop} onMouseDown={() => !saving && setReauthOpen(false)}>
+            <section className={`${styles.glassCard} ${styles.modal}`} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>敏感操作身分確認</p>
+                  <h2 className={styles.panelTitle}>{reauthTitle}</h2>
+                </div>
+                <button className={styles.iconButton} type="button" onClick={() => setReauthOpen(false)} disabled={saving} title="關閉"><X size={18} /></button>
+              </div>
+              <p className={styles.panelHint}>請由實際執行此操作的人輸入自己的員工帳號與密碼。</p>
+              <div className={styles.form}>
+                <label className={`${styles.field} ${styles.full}`}>
+                  <span className={styles.label}>員工 Email</span>
+                  <input className={styles.input} type="email" autoComplete="username" value={reauth.account} onChange={(event) => setReauth({ ...reauth, account: event.target.value })} />
+                </label>
+                <label className={`${styles.field} ${styles.full}`}>
+                  <span className={styles.label}>密碼</span>
+                  <input className={styles.input} type="password" autoComplete="current-password" value={reauth.password} onChange={(event) => setReauth({ ...reauth, password: event.target.value })} />
+                </label>
+                <label className={`${styles.field} ${styles.full}`}>
+                  <span className={styles.label}>操作原因</span>
+                  <input className={styles.input} value={reauth.reason} onChange={(event) => setReauth({ ...reauth, reason: event.target.value })} placeholder="例如：新進員工建檔" />
+                </label>
+                <div className={styles.formActions}>
+                  <button className={styles.button} type="button" onClick={() => setReauthOpen(false)} disabled={saving}>取消</button>
+                  <button className={`${styles.button} ${styles.primary}`} type="button" onClick={() => void confirmSensitive()} disabled={saving}>
+                    <ShieldCheck size={17} />
+                    {saving ? "驗證中" : "驗證並執行"}
                   </button>
                 </div>
               </div>
