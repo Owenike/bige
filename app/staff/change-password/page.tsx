@@ -17,6 +17,20 @@ function browserClient() {
   });
 }
 
+function verificationErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("expired") ||
+    normalized.includes("invalid") ||
+    normalized.includes("otp") ||
+    normalized.includes("token")
+  ) {
+    return "這個驗證連結已使用或逾期，請使用最新一封驗證信，或請主管重新寄送。";
+  }
+  return message || "無法驗證員工帳號，請請主管重新寄送驗證信。";
+}
+
 export default function StaffChangePasswordPage() {
   const [client, setClient] = useState<SupabaseClient | null>(null);
   const [ready, setReady] = useState(false);
@@ -32,18 +46,36 @@ export default function StaffChangePasswordPage() {
       try {
         const supabase = browserClient();
         setClient(supabase);
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get("code");
+        const query = new URLSearchParams(window.location.search);
+        const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const linkError = query.get("error_description") || hash.get("error_description");
+        if (linkError) throw new Error(linkError);
+
+        const code = query.get("code");
+        const accessToken = hash.get("access_token");
+        const refreshToken = hash.get("refresh_token");
         if (code) {
           const result = await supabase.auth.exchangeCodeForSession(code);
           if (result.error) throw result.error;
-          window.history.replaceState(null, "", window.location.pathname);
+        } else if (accessToken && refreshToken) {
+          const result = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (result.error) throw result.error;
         }
+
         const session = await supabase.auth.getSession();
-        if (!session.data.session) throw new Error("驗證連結已失效，請重新登入或請主管再次發送");
-        if (active) setReady(true);
+        if (session.error) throw session.error;
+        if (!session.data.session) {
+          throw new Error("驗證連結已失效，請重新登入或請主管再次發送");
+        }
+        if (active) {
+          window.history.replaceState(null, "", window.location.pathname);
+          setReady(true);
+        }
       } catch (caught) {
-        if (active) setError(caught instanceof Error ? caught.message : "無法驗證帳號");
+        if (active) setError(verificationErrorMessage(caught));
       }
     })();
     return () => {
@@ -115,7 +147,9 @@ export default function StaffChangePasswordPage() {
         <KeyRound size={26} />
         <p style={{ color: "#75622e", fontSize: 12, fontWeight: 800 }}>BIG E STAFF SECURITY</p>
         <h1 style={{ margin: "6px 0 8px", letterSpacing: 0 }}>設定您的後台密碼</h1>
-        <p style={{ color: "#667287" }}>完成 Email 驗證後，請設定只有您本人知道的新密碼。</p>
+        <p style={{ color: "#667287" }}>
+          完成 Email 驗證後，請設定只有您本人知道的新密碼。驗證連結僅能使用一次。
+        </p>
         {error ? <p style={{ color: "#942d3b", background: "#ffe8ec", padding: 10, borderRadius: 7 }}>{error}</p> : null}
         {done ? (
           <p style={{ color: "#22613f", display: "flex", gap: 8, alignItems: "center" }}>
