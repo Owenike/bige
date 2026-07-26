@@ -11,6 +11,7 @@ import {
   UserRound,
   UserRoundCheck,
   UserRoundX,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../i18n-provider";
@@ -115,6 +116,7 @@ export default function ManagerStaffPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [quickBusyId, setQuickBusyId] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   const [roleFilter, setRoleFilter] = useState("all");
   const [query, setQuery] = useState("");
@@ -171,6 +173,11 @@ export default function ManagerStaffPage() {
     setEditDisplayName(item.display_name || "");
     setEditBranchId(item.branch_id || "");
     setEditActive(item.is_active);
+  }
+
+  function openEditor(item: StaffItem) {
+    bindEditor(item);
+    setEditorOpen(true);
   }
 
   function patchLocal(item: StaffItem) {
@@ -330,6 +337,7 @@ export default function ManagerStaffPage() {
       patchLocal(payload.item);
       bindEditor(payload.item);
       setNotice("員工資料已更新。");
+      setEditorOpen(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "儲存員工資料失敗");
     } finally {
@@ -601,8 +609,8 @@ export default function ManagerStaffPage() {
             {selectedItem ? (
               <>
                 <p className={styles.selectedStaff}>
-                  <strong>{selectedItem.display_name || selectedItem.email || selectedItem.id}</strong>
-                  <span>{selectedItem.email || selectedItem.id}</span>
+                  <strong>{selectedItem.display_name || selectedItem.email || (zh ? "未命名員工" : "Unnamed staff")}</strong>
+                  <span>{selectedItem.email || (zh ? "未提供 Email" : "No email")}</span>
                 </p>
                 <div className={styles.form}>
                   <div className={`${styles.field} ${styles.full}`}>
@@ -711,7 +719,7 @@ export default function ManagerStaffPage() {
                   >
                     <div className={styles.staffIdentity}>
                       <span className={styles.staffName}>{item.display_name || "未填姓名"}</span>
-                      <span className={styles.staffEmail}>{item.email || item.id}</span>
+                      <span className={styles.staffEmail}>{item.email || (zh ? "未提供 Email" : "No email")}</span>
                     </div>
                     <span className={styles.role}>{roleLabel(item.role, zh)}</span>
                     <div>
@@ -728,9 +736,9 @@ export default function ManagerStaffPage() {
                       {item.is_active ? (zh ? "啟用" : "Active") : zh ? "停用" : "Inactive"}
                     </span>
                     <div className={styles.rowActions}>
-                      <button className={styles.button} type="button" onClick={() => bindEditor(item)}>
+                      <button className={styles.button} type="button" onClick={() => openEditor(item)}>
                         <Pencil size={16} />
-                        {zh ? "選擇" : "Select"}
+                        {zh ? "編輯" : "Edit"}
                       </button>
                       <button
                         className={`${styles.iconButton} ${item.is_active ? styles.danger : ""}`}
@@ -763,6 +771,126 @@ export default function ManagerStaffPage() {
             </p>
           )}
         </section>
+
+        {editorOpen && selectedItem ? (
+          <div className={styles.modalBackdrop} role="presentation" onMouseDown={() => setEditorOpen(false)}>
+            <section
+              className={`${styles.glassCard} ${styles.modal}`}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="staff-editor-title"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>BIG E FITNESS · STAFF</p>
+                  <h2 className={styles.panelTitle} id="staff-editor-title">
+                    {zh ? "編輯員工" : "Edit staff"}
+                  </h2>
+                </div>
+                <button
+                  className={styles.iconButton}
+                  type="button"
+                  onClick={() => setEditorOpen(false)}
+                  title={zh ? "關閉" : "Close"}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className={styles.modalIdentity}>
+                <strong>
+                  {selectedItem.display_name ||
+                    selectedItem.email ||
+                    (zh ? "未命名員工" : "Unnamed staff")}
+                </strong>
+                <span>{selectedItem.email || (zh ? "未提供 Email" : "No email")}</span>
+              </div>
+
+              <div className={styles.form}>
+                <div className={`${styles.field} ${styles.full}`}>
+                  <label className={styles.label} htmlFor="modal-edit-staff-name">
+                    {zh ? "姓名" : "Name"}
+                  </label>
+                  <input
+                    id="modal-edit-staff-name"
+                    className={styles.input}
+                    value={editDisplayName}
+                    onChange={(event) => setEditDisplayName(event.target.value)}
+                    disabled={!canManageSelected}
+                  />
+                </div>
+                <div className={styles.field}>
+                  <label className={styles.label} htmlFor="modal-edit-staff-role">
+                    {zh ? "角色" : "Role"}
+                  </label>
+                  <select
+                    id="modal-edit-staff-role"
+                    className={styles.select}
+                    value={editRole}
+                    onChange={(event) => setEditRole(event.target.value as StaffRole)}
+                    disabled={!canManageSelected}
+                  >
+                    {(myRole === "platform_admin"
+                      ? ALL_STAFF_ROLES
+                      : MANAGER_ASSIGNABLE_ROLES
+                    ).map((role) => (
+                      <option key={role} value={role}>
+                        {roleLabel(role, zh)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className={styles.field}>
+                  <label className={styles.label} htmlFor="modal-edit-staff-branch">
+                    {zh ? "分店" : "Branch"}
+                  </label>
+                  <select
+                    id="modal-edit-staff-branch"
+                    className={styles.select}
+                    value={editBranchId}
+                    onChange={(event) => setEditBranchId(event.target.value)}
+                    disabled={!canManageSelected}
+                  >
+                    <option value="">{zh ? "不指定分店" : "No branch"}</option>
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <label className={`${styles.toggle} ${styles.full}`}>
+                  <input
+                    type="checkbox"
+                    checked={editActive}
+                    onChange={(event) => setEditActive(event.target.checked)}
+                    disabled={!canManageSelected}
+                  />
+                  {zh ? "帳號啟用" : "Account active"}
+                </label>
+                <div className={styles.formActions}>
+                  <button
+                    className={styles.button}
+                    type="button"
+                    onClick={() => setEditorOpen(false)}
+                  >
+                    {zh ? "取消" : "Cancel"}
+                  </button>
+                  <button
+                    className={`${styles.button} ${styles.primary}`}
+                    type="button"
+                    onClick={() => void saveEditor()}
+                    disabled={saving || !canManageSelected}
+                  >
+                    <Save size={17} />
+                    {saving ? (zh ? "儲存中" : "Saving") : zh ? "儲存變更" : "Save changes"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : null}
       </div>
     </main>
   );
