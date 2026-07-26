@@ -211,7 +211,7 @@
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-bottom: 14px;
 }
@@ -249,25 +249,6 @@
   justify-content: flex-end;
   gap: 8px;
   margin-top: 2px;
-}
-
-.selectedStaff {
-  margin: 0 0 14px;
-  padding: 11px 12px;
-  border-left: 3px solid #8d7330;
-  border-radius: 6px;
-  background: rgba(255, 248, 222, 0.64);
-}
-
-.selectedStaff strong,
-.selectedStaff span {
-  display: block;
-}
-
-.selectedStaff span {
-  margin-top: 3px;
-  color: #6d798c;
-  font-size: 12px;
 }
 
 .listPanel {
