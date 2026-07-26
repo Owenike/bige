@@ -471,6 +471,10 @@
     width: 100%;
   }
 
+  .modal .formActions {
+    flex-direction: column-reverse;
+  }
+
   .staffRow {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -482,7 +486,7 @@
   .rowActions {
     grid-column: 1;
     display: grid;
-    grid-template-columns: 1fr 44px 44px;
+    grid-template-columns: minmax(0, 1fr) repeat(3, 44px);
   }
 
   .rowActions .button {

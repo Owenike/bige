@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Save,
   ShieldCheck,
+  Trash2,
   UserRoundCheck,
   UserRoundX,
   X,
@@ -50,6 +51,7 @@ type BranchItem = {
 };
 
 type MePayload = {
+  userId?: string;
   role?: string;
   department?: StaffDepartment | null;
   position?: StaffPosition | null;
@@ -114,6 +116,7 @@ export default function ManagerStaffPage() {
   const [editPosition, setEditPosition] = useState<StaffPosition>("frontdesk");
   const [editBranchId, setEditBranchId] = useState("");
   const [editActive, setEditActive] = useState(true);
+  const [deleteConfirm, setDeleteConfirm] = useState<StaffItem | null>(null);
 
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthTitle, setReauthTitle] = useState("");
@@ -358,6 +361,25 @@ export default function ManagerStaffPage() {
     });
   }
 
+  function deleteStaff(item: StaffItem) {
+    setDeleteConfirm(null);
+    requestSensitive("確認永久刪除員工", async (credentials) => {
+      const response = await fetch(scopedPath("/api/manager/staff"), {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: item.id,
+          reauth: credentials,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
+      if (!response.ok) throw new Error(readError(payload, "刪除員工失敗"));
+      if (editing?.id === item.id) setEditing(null);
+      setNotice(`已刪除員工「${item.display_name || item.email || "未命名員工"}」`);
+      await load();
+    });
+  }
+
   async function switchUser() {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/login?tab=staff";
@@ -540,12 +562,59 @@ export default function ManagerStaffPage() {
                   <button className={styles.iconButton} type="button" onClick={() => resetPassword(item)} disabled={!manageable(item)} title="寄送密碼重設信">
                     <KeyRound size={17} />
                   </button>
+                  {me.role === "platform_admin" && me.userId !== item.id ? (
+                    <button
+                      className={`${styles.iconButton} ${styles.danger}`}
+                      type="button"
+                      onClick={() => setDeleteConfirm(item)}
+                      title="永久刪除員工"
+                      aria-label={`永久刪除 ${item.display_name || item.email || "員工"}`}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  ) : null}
                 </div>
               </article>
             ))}
             {!loading && visibleItems.length === 0 ? <p className={styles.empty}>目前沒有符合條件的員工</p> : null}
           </div>
         </section>
+
+        {deleteConfirm ? (
+          <div className={styles.modalBackdrop} onMouseDown={() => setDeleteConfirm(null)}>
+            <section
+              className={`${styles.glassCard} ${styles.modal}`}
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="delete-staff-title"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>永久刪除員工</p>
+                  <h2 className={styles.panelTitle} id="delete-staff-title">確認刪除這個員工帳號？</h2>
+                </div>
+                <button className={styles.iconButton} type="button" onClick={() => setDeleteConfirm(null)} title="關閉">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className={styles.modalIdentity}>
+                <strong>{deleteConfirm.display_name || "未命名員工"}</strong>
+                <span>{deleteConfirm.email || "未設定 Email"}</span>
+              </div>
+              <p className={styles.error}>
+                刪除後無法復原。若此員工已有排課、學員或合約相關紀錄，系統會阻止刪除並保留資料，請改用停用帳號。
+              </p>
+              <div className={styles.formActions}>
+                <button className={styles.button} type="button" onClick={() => setDeleteConfirm(null)}>取消</button>
+                <button className={`${styles.button} ${styles.danger}`} type="button" onClick={() => deleteStaff(deleteConfirm)}>
+                  <Trash2 size={17} />
+                  繼續驗證並刪除
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
 
         {editing ? (
           <div className={styles.modalBackdrop} onMouseDown={() => setEditing(null)}>
