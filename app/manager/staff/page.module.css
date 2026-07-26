@@ -153,7 +153,7 @@
 
 .filters {
   display: grid;
-  grid-template-columns: 180px minmax(220px, 1fr) auto auto;
+  grid-template-columns: 180px minmax(220px, 1fr) auto auto auto;
   align-items: end;
   gap: 10px;
   margin-bottom: 14px;

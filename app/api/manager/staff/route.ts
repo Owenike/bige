@@ -32,6 +32,9 @@ type StaffRow = {
   created_by: string | null;
   updated_by: string | null;
   last_login_at: string | null;
+  staff_deleted_at: string | null;
+  staff_deleted_by: string | null;
+  staff_delete_reason: string | null;
 };
 
 type StaffItem = {
@@ -49,6 +52,9 @@ type StaffItem = {
   created_by: string | null;
   updated_by: string | null;
   last_login_at: string | null;
+  staff_deleted_at: string | null;
+  staff_deleted_by: string | null;
+  staff_delete_reason: string | null;
   email: string | null;
 };
 
@@ -92,6 +98,9 @@ function formatStaffItem(row: StaffRow, email?: string | null): StaffItem {
     created_by: row.created_by ?? null,
     updated_by: row.updated_by ?? null,
     last_login_at: row.last_login_at ?? null,
+    staff_deleted_at: row.staff_deleted_at ?? null,
+    staff_deleted_by: row.staff_deleted_by ?? null,
+    staff_delete_reason: row.staff_delete_reason ?? null,
     email: email ?? null,
   };
 }
@@ -108,7 +117,7 @@ function organizationActor(
 }
 
 const STAFF_SELECT =
-  "id, role, department, position, tenant_id, branch_id, display_name, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at";
+  "id, role, department, position, tenant_id, branch_id, display_name, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at, staff_deleted_at, staff_deleted_by, staff_delete_reason";
 
 async function resolveTenantScope(request: Request) {
   const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager"], request);
@@ -208,6 +217,7 @@ export async function GET(request: Request) {
   const role = parseRole(searchParams.get("role"));
   const q = (searchParams.get("q") || "").trim().toLowerCase();
   const activeOnly = searchParams.get("activeOnly") === "1";
+  const deletedOnly = searchParams.get("deletedOnly") === "1";
 
   let query = scoped.auth.supabase
     .from("profiles")
@@ -218,7 +228,10 @@ export async function GET(request: Request) {
     .limit(200);
 
   if (role) query = query.eq("role", role);
-  if (activeOnly) query = query.eq("is_active", true);
+  query = deletedOnly
+    ? query.not("staff_deleted_at", "is", null)
+    : query.is("staff_deleted_at", null);
+  if (activeOnly && !deletedOnly) query = query.eq("is_active", true);
   if (q) query = query.or(`display_name.ilike.%${q}%,id.ilike.%${q}%`);
   if (scoped.auth.context.role !== "platform_admin" && scoped.auth.context.branchId) {
     query = query.eq("branch_id", scoped.auth.context.branchId);
@@ -456,6 +469,7 @@ export async function PATCH(request: Request) {
         displayName?: string | null;
         branchId?: string | null;
         isActive?: boolean;
+        restore?: boolean;
         reauth?: SensitiveCredentials;
       }
     | null;
@@ -479,6 +493,55 @@ export async function PATCH(request: Request) {
   if (existingResult.error) return apiError(500, "INTERNAL_ERROR", existingResult.error.message);
   if (!existingResult.data) return apiError(404, "FORBIDDEN", "staff not found");
   const existing = existingResult.data as StaffRow;
+
+  if (body?.restore === true) {
+    if (reauth.operator.role !== "platform_admin") {
+      return apiError(403, "FORBIDDEN", "只有平台管理員可以復原已刪除員工");
+    }
+    if (!existing.staff_deleted_at) {
+      return apiError(409, "FORBIDDEN", "此員工不在已刪除清單中");
+    }
+
+    const now = new Date().toISOString();
+    const restoreResult = await scoped.auth.supabase
+      .from("profiles")
+      .update({
+        staff_deleted_at: null,
+        staff_deleted_by: null,
+        staff_delete_reason: null,
+        is_active: true,
+        updated_by: reauth.operator.userId,
+        updated_at: now,
+      })
+      .eq("tenant_id", scoped.scopedTenantId)
+      .eq("id", id)
+      .select(STAFF_SELECT)
+      .maybeSingle();
+    if (restoreResult.error) {
+      return apiError(500, "INTERNAL_ERROR", restoreResult.error.message);
+    }
+    if (!restoreResult.data) return apiError(404, "FORBIDDEN", "staff not found");
+
+    await scoped.auth.supabase.from("audit_logs").insert({
+      tenant_id: scoped.scopedTenantId,
+      actor_id: reauth.operator.userId,
+      action: "staff_account_restored",
+      target_type: "profile",
+      target_id: id,
+      reason: reauth.reason,
+      payload: {
+        deletedAt: existing.staff_deleted_at,
+        previousDeleteReason: existing.staff_delete_reason,
+      },
+    });
+
+    return apiSuccess({ item: formatStaffItem(restoreResult.data as StaffRow) });
+  }
+
+  if (existing.staff_deleted_at) {
+    return apiError(409, "FORBIDDEN", "已刪除員工只能先復原，不能直接修改");
+  }
+
   if (
     !canManagePosition(
       organizationActor(reauth.operator),
@@ -671,17 +734,6 @@ export async function PATCH(request: Request) {
   return apiSuccess({ item: formatStaffItem(updated) });
 }
 
-const STAFF_DELETE_REFERENCES = [
-  { table: "bookings", column: "coach_id", label: "預約或上課紀錄" },
-  { table: "members", column: "primary_coach_id", label: "主要教練學員" },
-  { table: "coach_slots", column: "coach_id", label: "教練時段" },
-  { table: "coach_blocks", column: "coach_id", label: "教練封鎖時段" },
-  { table: "coach_branch_links", column: "coach_id", label: "教練分店設定" },
-  { table: "coach_recurring_schedules", column: "coach_id", label: "固定排班" },
-  { table: "bige_schedule_notes", column: "coach_id", label: "營運排課紀錄" },
-  { table: "bige_contract_extensions", column: "approved_by", label: "合約延期核准紀錄" },
-] as const;
-
 export async function DELETE(request: Request) {
   const scoped = await resolveTenantScope(request);
   if (!scoped.ok) return scoped.response;
@@ -699,7 +751,7 @@ export async function DELETE(request: Request) {
   });
   if (!reauth.ok) return apiError(401, "UNAUTHORIZED", reauth.message);
   if (reauth.operator.role !== "platform_admin") {
-    return apiError(403, "FORBIDDEN", "只有平台管理員可以永久刪除員工");
+    return apiError(403, "FORBIDDEN", "只有平台管理員可以刪除員工");
   }
 
   const id = typeof body?.id === "string" ? body.id.trim() : "";
@@ -719,42 +771,30 @@ export async function DELETE(request: Request) {
   if (existingResult.error) return apiError(500, "INTERNAL_ERROR", existingResult.error.message);
   if (!existingResult.data) return apiError(404, "FORBIDDEN", "找不到要刪除的員工");
   const existing = existingResult.data as StaffRow;
-
-  const referenceResults = await Promise.all(
-    STAFF_DELETE_REFERENCES.map(async (reference) => {
-      const result = await admin
-        .from(reference.table)
-        .select("id", { count: "exact", head: true })
-        .eq("tenant_id", scoped.scopedTenantId)
-        .eq(reference.column, id);
-      return { ...reference, count: result.count || 0, error: result.error };
-    }),
-  );
-  const referenceError = referenceResults.find((result) => result.error);
-  if (referenceError?.error) {
-    return apiError(500, "INTERNAL_ERROR", referenceError.error.message);
+  if (existing.staff_deleted_at) {
+    return apiError(409, "FORBIDDEN", "此員工已在已刪除清單中");
   }
 
-  const linkedRecords = referenceResults
-    .filter((result) => result.count > 0)
-    .map((result) => `${result.label} ${result.count} 筆`);
-  if (linkedRecords.length > 0) {
-    return apiError(
-      409,
-      "FORBIDDEN",
-      `此員工已有營運資料，為保護歷史紀錄不能刪除（${linkedRecords.join("、")}）。請改用停用帳號。`,
-    );
-  }
-
-  const userResult = await admin.auth.admin.getUserById(id);
-  if (userResult.error || !userResult.data.user) {
-    return apiError(404, "FORBIDDEN", "找不到員工登入帳號");
-  }
-
-  const deleteResult = await admin.auth.admin.deleteUser(id);
+  const now = new Date().toISOString();
+  const deleteResult = await admin
+    .from("profiles")
+    .update({
+      staff_deleted_at: now,
+      staff_deleted_by: reauth.operator.userId,
+      staff_delete_reason: reauth.reason,
+      is_active: false,
+      updated_by: reauth.operator.userId,
+      updated_at: now,
+    })
+    .eq("tenant_id", scoped.scopedTenantId)
+    .eq("id", id)
+    .is("staff_deleted_at", null)
+    .select(STAFF_SELECT)
+    .maybeSingle();
   if (deleteResult.error) {
-    return apiError(409, "FORBIDDEN", `無法刪除員工：${deleteResult.error.message}`);
+    return apiError(500, "INTERNAL_ERROR", deleteResult.error.message);
   }
+  if (!deleteResult.data) return apiError(409, "FORBIDDEN", "員工已被刪除或狀態已變更");
 
   await admin.from("audit_logs").insert({
     tenant_id: scoped.scopedTenantId,
@@ -764,14 +804,14 @@ export async function DELETE(request: Request) {
     target_id: id,
     reason: reauth.reason,
     payload: {
-      email: userResult.data.user.email || null,
       displayName: existing.display_name,
       role: existing.role,
       department: existing.department,
       position: existing.position,
       branchId: existing.branch_id,
+      recoverable: true,
     },
   });
 
-  return apiSuccess({ deletedId: id });
+  return apiSuccess({ deletedId: id, item: formatStaffItem(deleteResult.data as StaffRow) });
 }

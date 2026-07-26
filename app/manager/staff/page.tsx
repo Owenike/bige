@@ -7,6 +7,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  RotateCcw,
   Save,
   ShieldCheck,
   Trash2,
@@ -41,6 +42,9 @@ type StaffItem = {
   created_at: string;
   updated_at: string;
   last_login_at: string | null;
+  staff_deleted_at: string | null;
+  staff_deleted_by: string | null;
+  staff_delete_reason: string | null;
   email: string | null;
 };
 
@@ -102,6 +106,7 @@ export default function ManagerStaffPage() {
   const [query, setQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<"all" | StaffDepartment>("all");
   const [activeOnly, setActiveOnly] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -166,7 +171,11 @@ export default function ManagerStaffPage() {
       }
       const staffParams = new URLSearchParams(tenantParams);
       if (query.trim()) staffParams.set("q", query.trim());
-      if (activeOnly) staffParams.set("activeOnly", "1");
+      if (showDeleted) {
+        staffParams.set("deletedOnly", "1");
+      } else if (activeOnly) {
+        staffParams.set("activeOnly", "1");
+      }
 
       const branchParams = new URLSearchParams(tenantParams);
       branchParams.set("activeOnly", "1");
@@ -189,7 +198,7 @@ export default function ManagerStaffPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeOnly, query]);
+  }, [activeOnly, query, showDeleted]);
 
   useEffect(() => {
     void load();
@@ -375,7 +384,25 @@ export default function ManagerStaffPage() {
       const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
       if (!response.ok) throw new Error(readError(payload, "刪除員工失敗"));
       if (editing?.id === item.id) setEditing(null);
-      setNotice(`已刪除員工「${item.display_name || item.email || "未命名員工"}」`);
+      setNotice(`已將員工「${item.display_name || item.email || "未命名員工"}」移至已刪除清單`);
+      await load();
+    });
+  }
+
+  function restoreStaff(item: StaffItem) {
+    requestSensitive("確認復原員工", async (credentials) => {
+      const response = await fetch(scopedPath("/api/manager/staff"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: item.id,
+          restore: true,
+          reauth: credentials,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
+      if (!response.ok) throw new Error(readError(payload, "復原員工失敗"));
+      setNotice(`已復原員工「${item.display_name || item.email || "未命名員工"}」`);
       await load();
     });
   }
@@ -461,17 +488,31 @@ export default function ManagerStaffPage() {
             <input
               type="checkbox"
               checked={activeOnly}
+              disabled={showDeleted}
               onChange={(event) => setActiveOnly(event.target.checked)}
             />
             只顯示啟用帳號
           </label>
+          {me.role === "platform_admin" ? (
+            <label className={styles.toggle}>
+              <input
+                type="checkbox"
+                checked={showDeleted}
+                onChange={(event) => {
+                  setShowDeleted(event.target.checked);
+                  if (event.target.checked) setActiveOnly(false);
+                }}
+              />
+              查看已刪除員工
+            </label>
+          ) : null}
           <button className={styles.button} type="button" onClick={() => void load()} disabled={loading}>
             <RefreshCw size={17} />
             {loading ? "讀取中" : "更新清單"}
           </button>
         </section>
 
-        {canCreate ? (
+        {canCreate && !showDeleted ? (
           <section className={`${styles.glassCard} ${styles.panel}`}>
             <h2 className={styles.panelTitle}>建立員工帳號</h2>
             <p className={styles.panelHint}>員工第一次登入須完成 Email 驗證並重新設定密碼。</p>
@@ -529,7 +570,7 @@ export default function ManagerStaffPage() {
         <section className={`${styles.glassCard} ${styles.listPanel}`}>
           <div className={styles.listHeader}>
             <div>
-              <h2 className={styles.panelTitle}>員工清單</h2>
+              <h2 className={styles.panelTitle}>{showDeleted ? "已刪除員工" : "員工清單"}</h2>
               <span className={styles.count}>共 {visibleItems.length} 筆</span>
             </div>
             <ShieldCheck size={22} />
@@ -546,33 +587,49 @@ export default function ManagerStaffPage() {
                 </span>
                 <div>
                   <span className={styles.meta}>分店：{item.branch_id ? branchNames.get(item.branch_id) || "未知分店" : "未指定"}</span>
-                  <span className={styles.meta}>上次登入：{formatDate(item.last_login_at)}</span>
+                  {item.staff_deleted_at ? (
+                    <>
+                      <span className={styles.meta}>刪除時間：{formatDate(item.staff_deleted_at)}</span>
+                      <span className={styles.meta}>刪除原因：{item.staff_delete_reason || "未填寫"}</span>
+                    </>
+                  ) : (
+                    <span className={styles.meta}>上次登入：{formatDate(item.last_login_at)}</span>
+                  )}
                 </div>
-                <span className={`${styles.status} ${item.is_active ? "" : styles.inactive}`}>
-                  {item.is_active ? "啟用" : "停用"}
+                <span className={`${styles.status} ${item.is_active && !item.staff_deleted_at ? "" : styles.inactive}`}>
+                  {item.staff_deleted_at ? "已刪除" : item.is_active ? "啟用" : "停用"}
                 </span>
                 <div className={styles.rowActions}>
-                  <button className={styles.button} type="button" onClick={() => openEditor(item)} disabled={!manageable(item)}>
-                    <Pencil size={16} />
-                    編輯
-                  </button>
-                  <button className={`${styles.iconButton} ${item.is_active ? styles.danger : ""}`} type="button" onClick={() => toggleStaff(item)} disabled={!manageable(item)} title={item.is_active ? "停用帳號" : "啟用帳號"}>
-                    {item.is_active ? <UserRoundX size={17} /> : <UserRoundCheck size={17} />}
-                  </button>
-                  <button className={styles.iconButton} type="button" onClick={() => resetPassword(item)} disabled={!manageable(item)} title="寄送密碼重設信">
-                    <KeyRound size={17} />
-                  </button>
-                  {me.role === "platform_admin" && me.userId !== item.id ? (
-                    <button
-                      className={`${styles.iconButton} ${styles.danger}`}
-                      type="button"
-                      onClick={() => setDeleteConfirm(item)}
-                      title="永久刪除員工"
-                      aria-label={`永久刪除 ${item.display_name || item.email || "員工"}`}
-                    >
-                      <Trash2 size={17} />
+                  {item.staff_deleted_at ? (
+                    <button className={`${styles.button} ${styles.primary}`} type="button" onClick={() => restoreStaff(item)}>
+                      <RotateCcw size={16} />
+                      復原
                     </button>
-                  ) : null}
+                  ) : (
+                    <>
+                      <button className={styles.button} type="button" onClick={() => openEditor(item)} disabled={!manageable(item)}>
+                        <Pencil size={16} />
+                        編輯
+                      </button>
+                      <button className={`${styles.iconButton} ${item.is_active ? styles.danger : ""}`} type="button" onClick={() => toggleStaff(item)} disabled={!manageable(item)} title={item.is_active ? "停用帳號" : "啟用帳號"}>
+                        {item.is_active ? <UserRoundX size={17} /> : <UserRoundCheck size={17} />}
+                      </button>
+                      <button className={styles.iconButton} type="button" onClick={() => resetPassword(item)} disabled={!manageable(item)} title="寄送密碼重設信">
+                        <KeyRound size={17} />
+                      </button>
+                      {me.role === "platform_admin" && me.userId !== item.id ? (
+                        <button
+                          className={`${styles.iconButton} ${styles.danger}`}
+                          type="button"
+                          onClick={() => setDeleteConfirm(item)}
+                          title="刪除員工"
+                          aria-label={`刪除 ${item.display_name || item.email || "員工"}`}
+                        >
+                          <Trash2 size={17} />
+                        </button>
+                      ) : null}
+                    </>
+                  )}
                 </div>
               </article>
             ))}
@@ -591,7 +648,7 @@ export default function ManagerStaffPage() {
             >
               <div className={styles.modalHeader}>
                 <div>
-                  <p className={styles.eyebrow}>永久刪除員工</p>
+                  <p className={styles.eyebrow}>刪除員工</p>
                   <h2 className={styles.panelTitle} id="delete-staff-title">確認刪除這個員工帳號？</h2>
                 </div>
                 <button className={styles.iconButton} type="button" onClick={() => setDeleteConfirm(null)} title="關閉">
@@ -602,14 +659,14 @@ export default function ManagerStaffPage() {
                 <strong>{deleteConfirm.display_name || "未命名員工"}</strong>
                 <span>{deleteConfirm.email || "未設定 Email"}</span>
               </div>
-              <p className={styles.error}>
-                刪除後無法復原。若此員工已有排課、學員或合約相關紀錄，系統會阻止刪除並保留資料，請改用停用帳號。
+              <p className={styles.notice}>
+                刪除後會立即停用帳號並移到「已刪除員工」，所有排課、學員及歷史紀錄都會保留，之後可以復原。
               </p>
               <div className={styles.formActions}>
                 <button className={styles.button} type="button" onClick={() => setDeleteConfirm(null)}>取消</button>
                 <button className={`${styles.button} ${styles.danger}`} type="button" onClick={() => deleteStaff(deleteConfirm)}>
                   <Trash2 size={17} />
-                  繼續驗證並刪除
+                  驗證並移至已刪除
                 </button>
               </div>
             </section>
