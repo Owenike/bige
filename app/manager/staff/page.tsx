@@ -372,7 +372,7 @@ export default function ManagerStaffPage() {
 
   function deleteStaff(item: StaffItem) {
     setDeleteConfirm(null);
-    requestSensitive("確認永久刪除員工", async (credentials) => {
+    requestSensitive("確認刪除員工", async (credentials) => {
       const response = await fetch(scopedPath("/api/manager/staff"), {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
