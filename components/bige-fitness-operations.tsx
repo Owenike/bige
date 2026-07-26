@@ -309,6 +309,20 @@ export default function BigeFitnessOperations({
 }) {
   const managerView = view === "manager";
   const coachView = view === "coach";
+  const viewCopy: Record<RoleView, { title: string; subtitle: string }> = {
+    manager: {
+      title: "主管營運後台",
+      subtitle: "排課、FA 成交、方案、付款解鎖、合約期限與營運報表",
+    },
+    frontdesk: {
+      title: "櫃台營運後台",
+      subtitle: "排課、FA 成交、會員合約與明日聯絡工作",
+    },
+    coach: {
+      title: "教練營運後台",
+      subtitle: "查看課表、確認到店結果與學員密碼扣堂",
+    },
+  };
   const [tab, setTab] = useState<Tab>("schedule");
   const [date, setDate] = useState(localDate);
   const [data, setData] = useState<BoardData | null>(previewData || null);
@@ -704,8 +718,8 @@ export default function BigeFitnessOperations({
         <header className={styles.header}>
           <div>
             <p className={styles.eyebrow}>BIG E FITNESS OPERATIONS</p>
-            <h1 className={styles.title}>教練課程營運</h1>
-            <p className={styles.subtitle}>排課、FA 成交、付款解鎖、學員確認扣堂與期限管理</p>
+            <h1 className={styles.title}>{viewCopy[view].title}</h1>
+            <p className={styles.subtitle}>{viewCopy[view].subtitle}</p>
           </div>
           <div className={styles.toolbar}>
             <button className={styles.iconButton} onClick={() => setDate(shiftDate(date, -1))} title="前一天">
