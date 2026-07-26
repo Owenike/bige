@@ -2,13 +2,14 @@
 
 import { CheckCircle2, KeyRound } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr/dist/module/createBrowserClient";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 function browserClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) throw new Error("缺少登入環境設定");
-  return createClient(url, key, {
+  return createBrowserClient(url, key, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
