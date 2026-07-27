@@ -340,29 +340,31 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
           </Link>
         ) : null}
 
-        <div className={isStudentCheckInAdminEntry ? "studentAdminLoginHeading" : undefined} style={{ display: "grid", gap: 8 }}>
-          <div className={isStudentCheckInAdminEntry ? "studentAdminLoginEyebrow" : "kvLabel"}>
-            {isStudentCheckInAdminEntry ? "STAFF SIGN IN" : entryCopy.eyebrow}
-          </div>
-          <h1 className={isStudentCheckInAdminEntry ? "studentAdminLoginTitle" : "sectionTitle"}>
-            {isStudentCheckInAdminEntry ? (zh ? "自主運動報到管理" : "Student Check-in Admin") : entryCopy.title}
-          </h1>
-          {!isStudentCheckInAdminEntry ? <p className="sub">{entryCopy.description}</p> : null}
-          {!isStudentCheckInAdminEntry && entryCopy.badge ? (
-            <div
-              className="pill"
-              style={{
-                width: "fit-content",
-                maxWidth: "100%",
-                color: "var(--ink)",
-                fontSize: 13,
-                fontWeight: 700,
-              }}
-            >
-              {entryCopy.badge}
+        {isStudentCheckInAdminEntry || portal === "member" ? (
+          <div className={isStudentCheckInAdminEntry ? "studentAdminLoginHeading" : undefined} style={{ display: "grid", gap: 8 }}>
+            <div className={isStudentCheckInAdminEntry ? "studentAdminLoginEyebrow" : "kvLabel"}>
+              {isStudentCheckInAdminEntry ? "STAFF SIGN IN" : entryCopy.eyebrow}
             </div>
-          ) : null}
-        </div>
+            <h1 className={isStudentCheckInAdminEntry ? "studentAdminLoginTitle" : "sectionTitle"}>
+              {isStudentCheckInAdminEntry ? (zh ? "自主運動報到管理" : "Student Check-in Admin") : entryCopy.title}
+            </h1>
+            {!isStudentCheckInAdminEntry ? <p className="sub">{entryCopy.description}</p> : null}
+            {!isStudentCheckInAdminEntry && entryCopy.badge ? (
+              <div
+                className="pill"
+                style={{
+                  width: "fit-content",
+                  maxWidth: "100%",
+                  color: "var(--ink)",
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                {entryCopy.badge}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {!isStudentCheckInAdminEntry && portal === "member" ? <div
           aria-label={zh ? "登入方式" : "Sign-in method"}
@@ -396,18 +398,6 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
             role={isStudentCheckInAdminEntry ? undefined : "tabpanel"}
             style={{ display: "grid", gap: 12 }}
           >
-            {!isStudentCheckInAdminEntry ? <div>
-              <div className="kvLabel">{zh ? "員工 / 後台登入" : "Staff / Backoffice"}</div>
-              <h2 className="sectionTitle" style={{ fontSize: "1.28rem", marginTop: 8 }}>
-                {zh ? "員工編號＋密碼／一次性啟用碼" : "Employee Number + Password / Activation Code"}
-              </h2>
-              <p className="sub" style={{ marginTop: 8 }}>
-                {zh
-                  ? "首次登入請使用主管提供的一次性啟用碼；完成啟用後請使用自己設定的正式密碼。"
-                  : "Use the one-time activation code for first sign-in, then use your permanent password after activation."}
-              </p>
-            </div> : null}
-
             {error ? <div className="error">{error}</div> : null}
 
             <form
@@ -438,7 +428,7 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
                   htmlFor="staff-password"
                   style={{ textTransform: "none" }}
                 >
-                  {zh ? "密碼／一次性啟用碼" : "Password / activation code"}
+                  {zh ? "正式密碼／一次性啟用碼" : "Permanent password / activation code"}
                 </label>
                 <div className={isStudentCheckInAdminEntry ? "studentAdminLoginPasswordField" : undefined}>
                   <input
@@ -446,7 +436,7 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
                     className="input"
                     id="staff-password"
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="********"
+                    placeholder={zh ? "首次登入請向主管索取啟用碼" : "First sign-in: request a code from your supervisor"}
                     required
                     type={isStudentCheckInAdminEntry && showStaffPassword ? "text" : "password"}
                     value={password}
