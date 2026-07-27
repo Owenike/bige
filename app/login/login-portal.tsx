@@ -90,6 +90,16 @@ function isSafeReturnTo(value: string | null): value is string {
   );
 }
 
+function staffLoginErrorMessage(message: unknown, zh: boolean) {
+  const normalized = typeof message === "string" ? message.trim() : "";
+  if (normalized === "Invalid credentials") {
+    return zh
+      ? "員工編號、正式密碼或一次性啟用碼不正確。"
+      : "The employee number, password, or activation code is incorrect.";
+  }
+  return normalized || (zh ? "員工登入失敗，請稍後再試。" : "Staff sign-in failed. Please try again.");
+}
+
 function resolveLoginEntryCopy(panel: LoginPanel, returnTo: string | null, zh: boolean): LoginEntryCopy {
   if (panel === "member") {
     return {
@@ -222,7 +232,7 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
         body: JSON.stringify({ employeeNumber, password }),
       });
       const payload = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(payload?.error || "Login failed");
+      if (!res.ok) throw new Error(staffLoginErrorMessage(payload?.error, zh));
 
       const meRes = await fetch("/api/auth/me");
       const mePayload = (await meRes.json().catch(() => null)) as MeResponse | null;
@@ -240,7 +250,7 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
             : returnTo || roleHome(mePayload.role),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(staffLoginErrorMessage(err instanceof Error ? err.message : null, zh));
     } finally {
       setBusy(false);
     }
