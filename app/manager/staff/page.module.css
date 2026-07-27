@@ -400,6 +400,30 @@
   display: block;
 }
 
+.activationCode {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 44px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid rgba(113, 91, 35, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 250, 229, 0.72);
+}
+
+.activationCode span {
+  color: #6d798c;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.activationCode strong {
+  font-size: 28px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .modalIdentity span {
   margin-top: 3px;
   color: #6d798c;
@@ -501,5 +525,19 @@
   .modal {
     max-height: calc(100vh - 20px);
     padding: 16px;
+  }
+
+  .activationCode {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .activationCode strong {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .activationCode .iconButton {
+    grid-column: 2;
+    grid-row: 1 / 3;
   }
 }

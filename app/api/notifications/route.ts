@@ -25,7 +25,10 @@ function parseIds(input: unknown) {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk"], request);
+  const auth = await requireProfile(
+    ["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales"],
+    request,
+  );
   if (!auth.ok) return auth.response;
 
   const params = new URL(request.url).searchParams;
@@ -64,7 +67,10 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk"], request);
+  const auth = await requireProfile(
+    ["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales"],
+    request,
+  );
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);
@@ -86,4 +92,3 @@ export async function PATCH(request: Request) {
     action,
   });
 }
-

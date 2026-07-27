@@ -61,7 +61,9 @@ async function emailBelongsToAnotherUser(email: string, currentUserId: string) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireProfile([...STAFF_ROLES], request);
+  const auth = await requireProfile([...STAFF_ROLES], request, {
+    allowIncompleteStaffActivation: true,
+  });
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);
@@ -89,7 +91,7 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdminClient();
   const profileResult = await admin
     .from("profiles")
-    .select("id, tenant_id, display_name, english_name, employee_number, is_active, staff_deleted_at, staff_email_verified_at")
+    .select("id, tenant_id, display_name, english_name, employee_number, is_active, staff_deleted_at, staff_email_verified_at, staff_activation_status")
     .eq("id", auth.context.userId)
     .maybeSingle();
   if (profileResult.error || !profileResult.data) {
@@ -98,6 +100,9 @@ export async function POST(request: Request) {
   const profile = profileResult.data;
   if (!profile.is_active || profile.staff_deleted_at) {
     return NextResponse.json({ error: "員工帳號已停用" }, { status: 403 });
+  }
+  if (profile.staff_activation_status !== "identity_confirmed") {
+    return NextResponse.json({ error: "請先完成本人確認" }, { status: 403 });
   }
   if (profile.staff_email_verified_at) {
     return NextResponse.json({ error: "此員工帳號已完成 Email 驗證" }, { status: 409 });

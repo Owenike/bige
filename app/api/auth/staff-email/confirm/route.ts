@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { httpLogBase } from "../../../../../lib/observability";
 import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
+import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
 
 function tokenHash(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
@@ -126,6 +127,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: profileUpdate.error.message }, { status: 500 });
   }
 
+  const signInLink = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email: tokenRow.email,
+  });
+  if (signInLink.error || !signInLink.data.properties?.hashed_token) {
+    return NextResponse.json(
+      { error: signInLink.error?.message || "建立員工啟用工作階段失敗" },
+      { status: 500 },
+    );
+  }
+
+  const sessionClient = await createSupabaseServerClient(request);
+  const sessionResult = await sessionClient.auth.verifyOtp({
+    token_hash: signInLink.data.properties.hashed_token,
+    type: "magiclink",
+  });
+  if (sessionResult.error || !sessionResult.data.user) {
+    return NextResponse.json(
+      { error: sessionResult.error?.message || "建立員工啟用工作階段失敗" },
+      { status: 500 },
+    );
+  }
+
   await admin.from("audit_logs").insert({
     tenant_id: tokenRow.tenant_id,
     actor_id: tokenRow.profile_id,
@@ -136,5 +160,5 @@ export async function POST(request: Request) {
     payload: { verifiedAt: now },
   });
 
-  return NextResponse.json({ verified: true });
+  return NextResponse.json({ verified: true, sessionReady: true });
 }

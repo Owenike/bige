@@ -14,6 +14,7 @@ type MeResponse = {
   tenantId: string | null;
   branchId: string | null;
   mustChangePassword?: boolean;
+  staffActivationStatus?: string | null;
 };
 
 type MemberActivationRequestResponse = {
@@ -147,8 +148,8 @@ function resolveLoginEntryCopy(panel: LoginPanel, returnTo: string | null, zh: b
     eyebrow: zh ? "員工登入入口" : "Staff Login Entry",
     title: zh ? "員工後台登入" : "Staff Sign In",
     description: zh
-      ? "櫃檯、教練、主管與平台管理員皆使用員工編號與密碼登入，系統會依帳號權限前往正確後台。"
-      : "Frontdesk, coaches, managers, and platform administrators sign in with employee number and password, then continue to the correct workspace.",
+      ? "首次登入使用員工編號與一次性啟用碼；完成啟用後改用員工編號與正式密碼。"
+      : "Use employee number and a one-time activation code first, then employee number and permanent password.",
   };
 }
 
@@ -231,7 +232,13 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
         throw new Error(zh ? "會員請使用會員登入入口。" : "Members must use the member login.");
       }
 
-      router.replace(mePayload.mustChangePassword ? "/staff/change-password" : returnTo || roleHome(mePayload.role));
+      router.replace(
+        mePayload.staffActivationStatus && mePayload.staffActivationStatus !== "completed"
+          ? "/staff/activate"
+          : mePayload.mustChangePassword
+            ? "/staff/change-password"
+            : returnTo || roleHome(mePayload.role),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -382,12 +389,12 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
             {!isStudentCheckInAdminEntry ? <div>
               <div className="kvLabel">{zh ? "員工 / 後台登入" : "Staff / Backoffice"}</div>
               <h2 className="sectionTitle" style={{ fontSize: "1.28rem", marginTop: 8 }}>
-                {zh ? "員工編號 + 密碼登入" : "Employee Number + Password"}
+                {zh ? "員工編號＋密碼／一次性啟用碼" : "Employee Number + Password / Activation Code"}
               </h2>
               <p className="sub" style={{ marginTop: 8 }}>
                 {zh
-                  ? "櫃檯、教練、管理、平台角色請使用員工編號與密碼登入。"
-                  : "Frontdesk, coach, manager, and platform roles should sign in with employee number and password."}
+                  ? "首次登入請使用主管提供的一次性啟用碼；完成啟用後請使用自己設定的正式密碼。"
+                  : "Use the one-time activation code for first sign-in, then use your permanent password after activation."}
               </p>
             </div> : null}
 
@@ -421,7 +428,7 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
                   htmlFor="staff-password"
                   style={{ textTransform: "none" }}
                 >
-                  {t("auth.password")}
+                  {zh ? "密碼／一次性啟用碼" : "Password / activation code"}
                 </label>
                 <div className={isStudentCheckInAdminEntry ? "studentAdminLoginPasswordField" : undefined}>
                   <input

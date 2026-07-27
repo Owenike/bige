@@ -4,6 +4,15 @@ import { httpLogBase, logEvent } from "../../../../lib/observability";
 import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 import { isEmployeeNumber, normalizeEmployeeNumber } from "../../../../lib/staff-credentials";
+import {
+  STAFF_ACTIVATION_MAX_ATTEMPTS,
+  isStaffActivationCode,
+  isStaffActivationComplete,
+  matchesStaffActivationCode,
+  normalizeStaffActivationCode,
+  staffActivationSecret,
+} from "../../../../lib/staff-activation";
+import { createInAppNotifications } from "../../../../lib/in-app-notifications";
 
 function normalizePhone(input: string) {
   return input.replace(/\D/g, "");
@@ -66,6 +75,19 @@ export async function POST(request: Request) {
 
   const admin = createSupabaseAdminClient();
   let emailToLogin = "";
+  let activationLogin = false;
+  let staffProfile:
+    | {
+        id: string;
+        tenant_id: string | null;
+        branch_id: string | null;
+        display_name: string | null;
+        employee_number: string | null;
+        is_active: boolean;
+        staff_deleted_at: string | null;
+        staff_activation_status: string | null;
+      }
+    | null = null;
   if (employeeNumber) {
     if (!isEmployeeNumber(employeeNumber)) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
@@ -73,7 +95,7 @@ export async function POST(request: Request) {
 
     const profileResult = await admin
       .from("profiles")
-      .select("id, is_active, staff_deleted_at")
+      .select("id, tenant_id, branch_id, display_name, employee_number, is_active, staff_deleted_at, staff_activation_status")
       .eq("employee_number", employeeNumber)
       .maybeSingle();
 
@@ -85,13 +107,25 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
+    staffProfile = profileResult.data;
 
-    const authUserResult = await admin.auth.admin.getUserById(profileResult.data.id);
+    if (
+      staffProfile.staff_activation_status === "denied" ||
+      staffProfile.staff_activation_status === "locked"
+    ) {
+      return NextResponse.json(
+        { error: "首次啟用已中斷，請聯絡主管重新產生啟用碼" },
+        { status: 423 },
+      );
+    }
+
+    const authUserResult = await admin.auth.admin.getUserById(staffProfile.id);
     const staffEmail = authUserResult.data.user?.email?.trim().toLowerCase() || "";
     if (authUserResult.error || !staffEmail) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
     emailToLogin = staffEmail;
+    activationLogin = !isStaffActivationComplete(staffProfile.staff_activation_status);
   } else if (phone) {
     const memberByPhoneWithPortal = await admin
       .from("members")
@@ -129,7 +163,124 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createSupabaseServerClient(request);
-  const result = await supabase.auth.signInWithPassword({ email: emailToLogin, password });
+  let result;
+  if (activationLogin && staffProfile) {
+    const activationCode = normalizeStaffActivationCode(password);
+    if (!isStaffActivationCode(activationCode)) {
+      return NextResponse.json({ error: "員工編號或一次性啟用碼錯誤" }, { status: 401 });
+    }
+
+    const nowIso = new Date().toISOString();
+    const tokenResult = await admin
+      .from("staff_activation_tokens")
+      .select("id, token_hash, expires_at, failed_attempts")
+      .eq("profile_id", staffProfile.id)
+      .is("used_at", null)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (tokenResult.error) {
+      return NextResponse.json({ error: tokenResult.error.message }, { status: 500 });
+    }
+    if (!tokenResult.data || tokenResult.data.expires_at <= nowIso) {
+      return NextResponse.json(
+        { error: "一次性啟用碼已失效，請聯絡主管重新產生" },
+        { status: 410 },
+      );
+    }
+
+    let codeMatches = false;
+    try {
+      codeMatches = matchesStaffActivationCode({
+        code: activationCode,
+        expectedHash: tokenResult.data.token_hash,
+        secret: staffActivationSecret(),
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "啟用碼驗證設定錯誤" },
+        { status: 500 },
+      );
+    }
+
+    if (!codeMatches) {
+      const failedAttempts = Math.min(
+        STAFF_ACTIVATION_MAX_ATTEMPTS,
+        Number(tokenResult.data.failed_attempts || 0) + 1,
+      );
+      await admin
+        .from("staff_activation_tokens")
+        .update({ failed_attempts: failedAttempts, last_attempt_at: nowIso })
+        .eq("id", tokenResult.data.id)
+        .is("used_at", null);
+
+      if (failedAttempts >= STAFF_ACTIVATION_MAX_ATTEMPTS) {
+        await admin
+          .from("profiles")
+          .update({ staff_activation_status: "locked", updated_at: nowIso })
+          .eq("id", staffProfile.id);
+        await createInAppNotifications({
+          supabase: admin,
+          tenantId: staffProfile.tenant_id,
+          branchId: staffProfile.branch_id,
+          recipientRoles: ["platform_admin", "manager", "supervisor", "branch_manager"],
+          title: "員工首次啟用已鎖定",
+          message: `${staffProfile.display_name || staffProfile.employee_number || "員工"}的一次性啟用碼已連續輸入錯誤 ${STAFF_ACTIVATION_MAX_ATTEMPTS} 次，請主管確認本人後重新產生啟用碼。`,
+          severity: "critical",
+          eventType: "staff_activation_locked",
+          targetType: "profile",
+          targetId: staffProfile.id,
+          actionUrl: "/manager/staff",
+          dedupeKey: `staff-activation-locked:${staffProfile.id}:${tokenResult.data.id}`,
+        }).catch(() => null);
+      }
+      return NextResponse.json({ error: "員工編號或一次性啟用碼錯誤" }, { status: 401 });
+    }
+
+    const claimed = await admin
+      .from("staff_activation_tokens")
+      .update({ used_at: nowIso, last_attempt_at: nowIso })
+      .eq("id", tokenResult.data.id)
+      .is("used_at", null)
+      .is("revoked_at", null)
+      .select("id")
+      .maybeSingle();
+    if (claimed.error || !claimed.data) {
+      return NextResponse.json(
+        { error: "一次性啟用碼已使用，請聯絡主管重新產生" },
+        { status: 409 },
+      );
+    }
+
+    const linkResult = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email: emailToLogin,
+    });
+    if (linkResult.error || !linkResult.data.properties?.hashed_token) {
+      await admin
+        .from("staff_activation_tokens")
+        .update({ used_at: null })
+        .eq("id", tokenResult.data.id);
+      return NextResponse.json(
+        { error: linkResult.error?.message || "建立首次啟用工作階段失敗" },
+        { status: 500 },
+      );
+    }
+
+    result = await supabase.auth.verifyOtp({
+      token_hash: linkResult.data.properties.hashed_token,
+      type: "magiclink",
+    });
+    if (result.error || !result.data.user) {
+      await admin
+        .from("staff_activation_tokens")
+        .update({ used_at: null })
+        .eq("id", tokenResult.data.id);
+    }
+  } else {
+    result = await supabase.auth.signInWithPassword({ email: emailToLogin, password });
+  }
 
   if (result.error || !result.data.user) {
     logEvent("info", { type: "http", action: "login", ...base, status: 401, durationMs: Date.now() - t0 });
@@ -235,5 +386,6 @@ export async function POST(request: Request) {
   });
   return NextResponse.json({
     user: { id: authUser.id, email: authUser.email },
+    activationRequired: activationLogin,
   });
 }

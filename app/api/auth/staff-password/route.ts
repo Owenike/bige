@@ -6,6 +6,7 @@ export async function POST(request: Request) {
   const auth = await requireProfile(
     ["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales"],
     request,
+    { allowIncompleteStaffActivation: true },
   );
   if (!auth.ok) return auth.response;
 
@@ -25,11 +26,17 @@ export async function POST(request: Request) {
 
   const profileResult = await admin
     .from("profiles")
-    .select("staff_email_verified_at")
+    .select("staff_email_verified_at, staff_activation_status")
     .eq("id", auth.context.userId)
     .maybeSingle();
   if (profileResult.error || !profileResult.data?.staff_email_verified_at) {
     return apiError(403, "FORBIDDEN", "請先完成本人 Email 驗證");
+  }
+  if (
+    profileResult.data.staff_activation_status !== "identity_confirmed" &&
+    profileResult.data.staff_activation_status !== "completed"
+  ) {
+    return apiError(403, "FORBIDDEN", "請先完成本人確認");
   }
 
   const now = new Date().toISOString();
@@ -39,6 +46,8 @@ export async function POST(request: Request) {
       must_change_password: false,
       password_reset_required_at: null,
       staff_email_verified_at: userResult.data.user.email_confirmed_at || now,
+      staff_activation_status: "completed",
+      staff_activation_completed_at: now,
       updated_at: now,
     })
     .eq("id", auth.context.userId);

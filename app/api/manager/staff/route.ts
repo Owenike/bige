@@ -13,11 +13,18 @@ import {
   type StaffPosition,
 } from "../../../../lib/staff-organization";
 import {
-  INITIAL_STAFF_PASSWORD,
   isEmployeeNumber,
   isStaffPlaceholderEmail,
   staffPlaceholderEmail,
 } from "../../../../lib/staff-credentials";
+import {
+  generateInternalStaffPassword,
+  generateStaffActivationCode,
+  staffActivationCodeHash,
+  staffActivationExpiresAt,
+  staffActivationSecret,
+  type StaffActivationStatus,
+} from "../../../../lib/staff-activation";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 const STAFF_FILTER_ROLES = ["manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales"] as const;
@@ -43,6 +50,7 @@ type StaffRow = {
   staff_deleted_at: string | null;
   staff_deleted_by: string | null;
   staff_delete_reason: string | null;
+  staff_activation_status: StaffActivationStatus;
 };
 
 type StaffItem = {
@@ -65,6 +73,7 @@ type StaffItem = {
   staff_deleted_at: string | null;
   staff_deleted_by: string | null;
   staff_delete_reason: string | null;
+  staff_activation_status: StaffActivationStatus;
   email: string | null;
 };
 
@@ -102,6 +111,7 @@ function formatStaffItem(row: StaffRow, email?: string | null): StaffItem {
     staff_deleted_at: row.staff_deleted_at ?? null,
     staff_deleted_by: row.staff_deleted_by ?? null,
     staff_delete_reason: row.staff_delete_reason ?? null,
+    staff_activation_status: row.staff_activation_status,
     email: email ?? null,
   };
 }
@@ -118,7 +128,7 @@ function organizationActor(
 }
 
 const STAFF_SELECT =
-  "id, role, department, position, tenant_id, branch_id, display_name, english_name, employee_number, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at, staff_deleted_at, staff_deleted_by, staff_delete_reason";
+  "id, role, department, position, tenant_id, branch_id, display_name, english_name, employee_number, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at, staff_deleted_at, staff_deleted_by, staff_delete_reason, staff_activation_status";
 
 async function resolveTenantScope(request: Request) {
   const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager"], request);
@@ -378,9 +388,28 @@ export async function POST(request: Request) {
   }
 
   const internalEmail = staffPlaceholderEmail(employeeNumber);
+  const activationCode = generateStaffActivationCode();
+  const activationExpiresAt = staffActivationExpiresAt();
+  let activationHash = "";
+  try {
+    activationHash = staffActivationCodeHash(activationCode, staffActivationSecret());
+  } catch (error) {
+    await finalizeIdempotency({
+      supabase: scoped.auth.supabase,
+      tenantId,
+      operationKey,
+      status: "failed",
+      errorCode: "STAFF_ACTIVATION_CONFIG_MISSING",
+    });
+    return apiError(
+      500,
+      "INTERNAL_ERROR",
+      error instanceof Error ? error.message : "Staff activation configuration is missing",
+    );
+  }
   const userResult = await admin.auth.admin.createUser({
     email: internalEmail,
-    password: INITIAL_STAFF_PASSWORD,
+    password: generateInternalStaffPassword(),
     email_confirm: true,
     user_metadata: {
       employee_number: employeeNumber,
@@ -428,6 +457,10 @@ export async function POST(request: Request) {
         must_change_password: true,
         password_reset_required_at: now,
         staff_email_verified_at: null,
+        staff_activation_status: "pending_identity",
+        staff_identity_confirmed_at: null,
+        staff_identity_denied_at: null,
+        staff_activation_completed_at: null,
         updated_at: now,
       },
       { onConflict: "id" },
@@ -446,6 +479,26 @@ export async function POST(request: Request) {
     return apiError(500, "INTERNAL_ERROR", profileResult.error?.message || "Create profile failed");
   }
 
+  const activationResult = await admin.from("staff_activation_tokens").insert({
+    profile_id: userId,
+    tenant_id: tenantId,
+    token_hash: activationHash,
+    expires_at: activationExpiresAt,
+    failed_attempts: 0,
+    created_by: reauth.operator.userId,
+  });
+  if (activationResult.error) {
+    await admin.auth.admin.deleteUser(userId);
+    await finalizeIdempotency({
+      supabase: scoped.auth.supabase,
+      tenantId,
+      operationKey,
+      status: "failed",
+      errorCode: "STAFF_ACTIVATION_CREATE_FAILED",
+    });
+    return apiError(500, "INTERNAL_ERROR", activationResult.error.message);
+  }
+
   await scoped.auth.supabase.from("audit_logs").insert({
     tenant_id: tenantId,
     actor_id: reauth.operator.userId,
@@ -462,11 +515,28 @@ export async function POST(request: Request) {
       isActive,
       displayName,
       englishName,
+      activationExpiresAt,
     },
   });
 
   const successPayload = {
     item: formatStaffItem(profileResult.data as StaffRow, null),
+    activation: {
+      code: activationCode,
+      expiresAt: activationExpiresAt,
+      shownOnce: true,
+    },
+    verification: {
+      deliveryStatus: "pending_employee_email",
+    },
+  };
+  const storedSuccessPayload = {
+    item: formatStaffItem(profileResult.data as StaffRow, null),
+    activation: {
+      code: null,
+      expiresAt: activationExpiresAt,
+      shownOnce: false,
+    },
     verification: {
       deliveryStatus: "pending_employee_email",
     },
@@ -476,7 +546,7 @@ export async function POST(request: Request) {
     tenantId,
     operationKey,
     status: "succeeded",
-    response: successPayload as Record<string, unknown>,
+    response: storedSuccessPayload as Record<string, unknown>,
   });
 
   return apiSuccess(successPayload);
@@ -871,6 +941,12 @@ export async function DELETE(request: Request) {
     return apiError(500, "INTERNAL_ERROR", deleteResult.error.message);
   }
   if (!deleteResult.data) return apiError(409, "FORBIDDEN", "員工已被刪除或狀態已變更");
+
+  await admin
+    .from("staff_activation_tokens")
+    .update({ revoked_at: now })
+    .eq("profile_id", id)
+    .is("revoked_at", null);
 
   await admin.from("audit_logs").insert({
     tenant_id: scoped.scopedTenantId,

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  INITIAL_STAFF_PASSWORD,
   isEmployeeNumber,
   isStaffPlaceholderEmail,
   normalizeEmployeeNumber,
@@ -18,10 +17,6 @@ test("employee number format is strict", () => {
   assert.equal(isEmployeeNumber("e000001"), false);
   assert.equal(isEmployeeNumber("E123"), false);
   assert.equal(isEmployeeNumber("BE000001"), false);
-});
-
-test("initial staff password stays fixed", () => {
-  assert.equal(INITIAL_STAFF_PASSWORD, "88888888");
 });
 
 test("placeholder emails are deterministic and identifiable", () => {

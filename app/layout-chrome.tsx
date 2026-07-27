@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { FloatingActionButtons } from "@/components/floating-line-button";
 import LangSwitch from "./lang-switch";
 import { useI18n } from "./i18n-provider";
+import StaffNotificationButton from "../components/staff-notification-button";
 
 export default function LayoutChrome({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
@@ -19,7 +20,9 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isStudentCheckInRoute = pathname?.startsWith("/check-in");
   const isStudentCheckInAdminRoute = pathname?.startsWith("/admin/student-check-ins");
   const isLoginRoute = pathname === "/login" || pathname?.startsWith("/login/");
-  const isStaffSecurityRoute = pathname === "/staff/change-password";
+  const isStaffSecurityRoute =
+    pathname === "/staff/change-password" || pathname === "/staff/activate";
+  const isStaffNotificationRoute = pathname === "/staff/notifications";
   const isFitnessOperationsRoute =
     pathname === "/manager/fitness" ||
     pathname === "/manager/staff" ||
@@ -45,7 +48,19 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
     isMemberRoute ||
     isCoachRoute ||
     isFitnessOperationsRoute ||
-    isStaffSecurityRoute;
+    isStaffSecurityRoute ||
+    isStaffNotificationRoute;
+  const showStaffNotifications =
+    !isEmbedded &&
+    !isLoginRoute &&
+    !isStaffSecurityRoute &&
+    !isMemberRoute &&
+    (pathname?.startsWith("/manager") ||
+      pathname?.startsWith("/frontdesk") ||
+      pathname?.startsWith("/coach") ||
+      pathname?.startsWith("/platform-admin") ||
+      pathname?.startsWith("/admin") ||
+      isStaffNotificationRoute);
   const showTopbar =
     !isEmbedded &&
     !isLoginRoute &&
@@ -110,6 +125,8 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
       ) : null}
 
       {children}
+
+      {showStaffNotifications ? <StaffNotificationButton /> : null}
 
       {!isEmbedded && !isLoginRoute && !isFitnessOperationsRoute && !isStaffSecurityRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin ? <FloatingActionButtons /> : null}
 

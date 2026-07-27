@@ -13,6 +13,7 @@ type MePayload = {
   employeeNumber?: string | null;
   mustChangePassword?: boolean;
   staffEmailVerifiedAt?: string | null;
+  staffActivationStatus?: string | null;
 };
 
 function browserClient() {
@@ -105,6 +106,10 @@ export default function StaffChangePasswordPage() {
           const payload = await response.json().catch(() => null);
           if (!response.ok) throw new Error(readError(payload, "Email 驗證失敗"));
           window.history.replaceState(null, "", window.location.pathname);
+          if (payload?.sessionReady) {
+            window.location.replace("/staff/change-password");
+            return;
+          }
         } else {
           const code = query.get("code");
           const accessToken = hash.get("access_token");
@@ -144,6 +149,14 @@ export default function StaffChangePasswordPage() {
           throw new Error(readError(mePayload, "無法讀取員工資料"));
         }
         if (!active) return;
+        if (
+          mePayload.staffActivationStatus &&
+          mePayload.staffActivationStatus !== "identity_confirmed" &&
+          mePayload.staffActivationStatus !== "completed"
+        ) {
+          window.location.replace("/staff/activate");
+          return;
+        }
         setProfile(mePayload);
         setPhase(mePayload.staffEmailVerifiedAt || staffEmailToken ? "password" : "email");
       } catch (caught) {

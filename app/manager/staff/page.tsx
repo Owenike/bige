@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  Copy,
   KeyRound,
   LogIn,
   Pencil,
@@ -48,6 +49,7 @@ type StaffItem = {
   staff_deleted_by: string | null;
   staff_delete_reason: string | null;
   email: string | null;
+  staff_activation_status: "pending_identity" | "identity_confirmed" | "denied" | "locked" | "completed";
 };
 
 type BranchItem = {
@@ -75,6 +77,20 @@ type ApiErrorBody = {
   error?: { message?: string } | string;
   message?: string;
   item?: StaffItem;
+  activation?: {
+    code?: string | null;
+    expiresAt?: string;
+    shownOnce?: boolean;
+  };
+  employeeNumber?: string | null;
+  displayName?: string | null;
+};
+
+type ActivationReveal = {
+  employeeNumber: string;
+  displayName: string;
+  code: string;
+  expiresAt: string;
 };
 
 const EMPTY_REAUTH: Reauth = { account: "", password: "", reason: "" };
@@ -98,6 +114,14 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
+function activationLabel(status: StaffItem["staff_activation_status"]) {
+  if (status === "pending_identity") return "待本人啟用";
+  if (status === "identity_confirmed") return "本人已確認，待完成設定";
+  if (status === "denied") return "本人否認，待主管處理";
+  if (status === "locked") return "啟用碼已鎖定";
+  return "啟用完成";
+}
+
 export default function ManagerStaffPage() {
   const [me, setMe] = useState<MePayload>({});
   const [items, setItems] = useState<StaffItem[]>([]);
@@ -106,6 +130,7 @@ export default function ManagerStaffPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [activationReveal, setActivationReveal] = useState<ActivationReveal | null>(null);
   const [query, setQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<"all" | StaffDepartment>("all");
   const [activeOnly, setActiveOnly] = useState(false);
@@ -300,11 +325,50 @@ export default function ManagerStaffPage() {
       setNewName("");
       setNewEnglishName("");
       setNewBranchId("");
-      setNotice(
-        payload?.item?.employee_number
-          ? `員工帳號已建立，員工編號為 ${payload.item.employee_number}，初始密碼為 88888888`
-          : "員工帳號已建立",
-      );
+      const employeeNumber = payload?.item?.employee_number || "";
+      const activationCode = payload?.activation?.code || "";
+      if (employeeNumber && activationCode && payload?.activation?.expiresAt) {
+        setActivationReveal({
+          employeeNumber,
+          displayName: payload.item?.display_name || newName,
+          code: activationCode,
+          expiresAt: payload.activation.expiresAt,
+        });
+      } else {
+        setNotice(
+          employeeNumber
+            ? `員工帳號已建立，員工編號為 ${employeeNumber}。若未顯示啟用碼，請重新產生。`
+            : "員工帳號已建立",
+        );
+      }
+      await load();
+    });
+  }
+
+  function regenerateActivationCode(item: StaffItem) {
+    requestSensitive("確認重新產生一次性啟用碼", async (credentials) => {
+      const response = await fetch("/api/manager/staff/activation-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: item.id,
+          tenantId: me.role === "platform_admin" ? me.tenantId : undefined,
+          reauth: credentials,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
+      if (!response.ok) throw new Error(readError(payload, "重新產生啟用碼失敗"));
+      const activationCode = payload?.activation?.code || "";
+      const expiresAt = payload?.activation?.expiresAt || "";
+      if (!activationCode || !expiresAt) {
+        throw new Error("系統未回傳新的啟用碼，請再試一次");
+      }
+      setActivationReveal({
+        employeeNumber: payload?.employeeNumber || item.employee_number || "",
+        displayName: payload?.displayName || item.display_name || "",
+        code: activationCode,
+        expiresAt,
+      });
       await load();
     });
   }
@@ -526,7 +590,7 @@ export default function ManagerStaffPage() {
           <section className={`${styles.glassCard} ${styles.panel}`}>
             <h2 className={styles.panelTitle}>建立員工帳號</h2>
             <p className={styles.panelHint}>
-              系統會自動產生員工編號，初始密碼固定為 88888888。員工首次登入後必須自行填寫並驗證 Email，再設定新密碼；Email 將用於忘記密碼與帳號安全。
+              系統會自動產生員工編號與一次性啟用碼。啟用碼只顯示一次、24 小時內有效；員工確認本人後，必須自行驗證 Email 並設定正式密碼。
             </p>
             <div className={styles.form}>
               <label className={styles.field}>
@@ -596,6 +660,7 @@ export default function ManagerStaffPage() {
                   <span className={styles.staffEmail}>{item.english_name || "尚未填寫英文姓名"}</span>
                   <span className={styles.staffEmail}>員工編號：{item.employee_number || "尚未建立"}</span>
                   <span className={styles.staffEmail}>{item.email || "尚未由員工設定 Email"}</span>
+                  <span className={styles.staffEmail}>首次啟用：{activationLabel(item.staff_activation_status)}</span>
                 </div>
                 <span className={styles.role}>
                   {departmentLabel(item.department)} · {positionLabel(item.position)}
@@ -629,7 +694,21 @@ export default function ManagerStaffPage() {
                       <button className={`${styles.iconButton} ${item.is_active ? styles.danger : ""}`} type="button" onClick={() => toggleStaff(item)} disabled={!manageable(item)} title={item.is_active ? "停用帳號" : "啟用帳號"}>
                         {item.is_active ? <UserRoundX size={17} /> : <UserRoundCheck size={17} />}
                       </button>
-                      <button className={styles.iconButton} type="button" onClick={() => resetPassword(item)} disabled={!manageable(item)} title="寄送密碼重設信">
+                      <button
+                        className={styles.iconButton}
+                        type="button"
+                        onClick={() =>
+                          item.staff_activation_status === "completed"
+                            ? resetPassword(item)
+                            : regenerateActivationCode(item)
+                        }
+                        disabled={!manageable(item)}
+                        title={
+                          item.staff_activation_status === "completed"
+                            ? "寄送密碼重設信"
+                            : "重新產生一次性啟用碼"
+                        }
+                      >
                         <KeyRound size={17} />
                       </button>
                       {me.role === "platform_admin" && me.userId !== item.id ? (
@@ -651,6 +730,56 @@ export default function ManagerStaffPage() {
             {!loading && visibleItems.length === 0 ? <p className={styles.empty}>目前沒有符合條件的員工</p> : null}
           </div>
         </section>
+
+        {activationReveal ? (
+          <div className={styles.modalBackdrop}>
+            <section
+              className={`${styles.glassCard} ${styles.modal}`}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="activation-code-title"
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>只顯示這一次</p>
+                  <h2 className={styles.panelTitle} id="activation-code-title">員工一次性啟用資料</h2>
+                </div>
+                <button className={styles.iconButton} type="button" onClick={() => setActivationReveal(null)} title="關閉">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className={styles.modalIdentity}>
+                <strong>{activationReveal.displayName || "新進員工"}</strong>
+                <span>員工編號：{activationReveal.employeeNumber}</span>
+              </div>
+              <div className={styles.activationCode}>
+                <span>一次性啟用碼</span>
+                <strong>{activationReveal.code}</strong>
+                <button
+                  className={styles.iconButton}
+                  type="button"
+                  title="複製啟用資料"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(
+                      `員工編號：${activationReveal.employeeNumber}\n一次性啟用碼：${activationReveal.code}`,
+                    );
+                    setNotice("員工編號與一次性啟用碼已複製");
+                  }}
+                >
+                  <Copy size={18} />
+                </button>
+              </div>
+              <p className={styles.panelHint}>
+                有效期限：{formatDate(activationReveal.expiresAt)}。關閉後無法再次查看原碼；需要時只能重新產生，新碼產生後舊碼立即失效。
+              </p>
+              <div className={styles.formActions}>
+                <button className={`${styles.button} ${styles.primary}`} type="button" onClick={() => setActivationReveal(null)}>
+                  我已妥善交付
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
 
         {deleteConfirm ? (
           <div className={styles.modalBackdrop} onMouseDown={() => setDeleteConfirm(null)}>

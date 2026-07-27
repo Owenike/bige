@@ -37,6 +37,7 @@ type ErrorCode =
   | "STAFF_CREATE_DENIED"
   | "STAFF_UPDATE_DENIED"
   | "STAFF_DISABLE_DENIED"
+  | "STAFF_ACTIVATION_REQUIRED"
   | "ROLE_ASSIGNMENT_DENIED"
   | "INVALID_ROLE"
   | "EMAIL_ALREADY_EXISTS"
@@ -119,6 +120,7 @@ interface ProfileRow {
   tenant_id: string | null;
   branch_id: string | null;
   is_active: boolean;
+  staff_activation_status: string | null;
 }
 
 interface OpenShiftRow {
@@ -210,7 +212,11 @@ async function recordSecurityAudit(params: {
     .catch(() => null);
 }
 
-export async function requireProfile(allowedRoles?: AppRole[], request?: Request) {
+export async function requireProfile(
+  allowedRoles?: AppRole[],
+  request?: Request,
+  options?: { allowIncompleteStaffActivation?: boolean },
+) {
   let supabase;
   try {
     supabase = await createSupabaseServerClient(request);
@@ -235,7 +241,7 @@ export async function requireProfile(allowedRoles?: AppRole[], request?: Request
 
   const profileResult = await supabase
     .from("profiles")
-    .select("id, role, department, position, tenant_id, branch_id, is_active")
+    .select("id, role, department, position, tenant_id, branch_id, is_active, staff_activation_status")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -263,6 +269,23 @@ export async function requireProfile(allowedRoles?: AppRole[], request?: Request
       reason: "profile_inactive",
     });
     return { ok: false as const, response: apiError(403, "INACTIVE_ACCOUNT", "Account is inactive") };
+  }
+
+  if (
+    !TEMP_DISABLE_ROLE_GUARD &&
+    !options?.allowIncompleteStaffActivation &&
+    !ROLE_MEMBER_EQUIVALENTS.has(role) &&
+    profile.staff_activation_status &&
+    profile.staff_activation_status !== "completed"
+  ) {
+    return {
+      ok: false as const,
+      response: apiError(
+        403,
+        "STAFF_ACTIVATION_REQUIRED",
+        "請先完成員工帳號啟用流程",
+      ),
+    };
   }
 
   if (!TEMP_DISABLE_ROLE_GUARD && allowedRoles && !roleMatchesAllowed(role, allowedRoles)) {

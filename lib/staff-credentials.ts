@@ -1,4 +1,3 @@
-export const INITIAL_STAFF_PASSWORD = "88888888";
 export const STAFF_PLACEHOLDER_EMAIL_DOMAIN = "staff.bigefitness.invalid";
 
 export function normalizeEmployeeNumber(value: unknown) {
