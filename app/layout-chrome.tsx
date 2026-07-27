@@ -18,6 +18,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isTrialBookingRoute = pathname?.startsWith("/trial-booking");
   const isStudentCheckInRoute = pathname?.startsWith("/check-in");
   const isStudentCheckInAdminRoute = pathname?.startsWith("/admin/student-check-ins");
+  const isLoginRoute = pathname === "/login" || pathname?.startsWith("/login/");
   const isStaffSecurityRoute = pathname === "/staff/change-password";
   const isFitnessOperationsRoute =
     pathname === "/manager/fitness" ||
@@ -37,7 +38,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isHomeRoute = pathname === "/";
   const loginReturnTo = searchParams.get("returnTo") || searchParams.get("redirect") || searchParams.get("next");
   const isStudentCheckInAdminLogin =
-    pathname === "/login" &&
+    (pathname === "/login" || pathname === "/login/staff") &&
     (loginReturnTo === "/admin/student-check-ins" || loginReturnTo?.startsWith("/admin/student-check-ins?"));
   const isWorkspaceRoute =
     isFrontdeskRoute ||
@@ -47,6 +48,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
     isStaffSecurityRoute;
   const showTopbar =
     !isEmbedded &&
+    !isLoginRoute &&
     !isStudentCheckInAdminLogin &&
     !isFitnessOperationsRoute &&
     !isWorkspaceRoute &&
@@ -83,22 +85,22 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
               <div className="brandTag">{t("brand.tagline")}</div>
             </div>
             <nav className="navLinks">
-              <a className="pill" href="/login?tab=staff">
+              <a className="pill" href="/login/staff">
                 {t("nav.login")}
               </a>
-              <a className="pill" href="/login?tab=member">
+              <a className="pill" href="/login/member">
                 {t("nav.member")}
               </a>
-              <a className="pill" href="/login?tab=staff">
+              <a className="pill" href="/login/staff">
                 {t("nav.coach")}
               </a>
-              <a className="pill" href="/login?tab=staff">
+              <a className="pill" href="/login/staff">
                 {t("nav.frontdesk")}
               </a>
-              <a className="pill" href="/login?tab=staff&returnTo=/admin/trial-bookings">
+              <a className="pill" href="/login/staff?returnTo=/admin/trial-bookings">
                 {t("nav.manager")}
               </a>
-              <a className="pill" href="/login?tab=staff&returnTo=/platform-admin">
+              <a className="pill" href="/login/staff?returnTo=/platform-admin">
                 {t("nav.platform")}
               </a>
               <LangSwitch />
@@ -109,9 +111,9 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
 
       {children}
 
-      {!isEmbedded && !isFitnessOperationsRoute && !isStaffSecurityRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin ? <FloatingActionButtons /> : null}
+      {!isEmbedded && !isLoginRoute && !isFitnessOperationsRoute && !isStaffSecurityRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin ? <FloatingActionButtons /> : null}
 
-      {!isEmbedded && !isFitnessOperationsRoute && !isStaffSecurityRoute && !isPublicBookingRoute && !isTrialBookingRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin && !isAcpayResultRoute && !isCustomPaymentRoute ? (
+      {!isEmbedded && !isLoginRoute && !isFitnessOperationsRoute && !isStaffSecurityRoute && !isPublicBookingRoute && !isTrialBookingRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin && !isAcpayResultRoute && !isCustomPaymentRoute ? (
         <footer className="footer">
           <div className="footerInner">
             <div>© {new Date().getFullYear()} BigE Fitness. All rights reserved.</div>

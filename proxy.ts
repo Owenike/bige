@@ -70,7 +70,9 @@ function withRequestId(response: NextResponse, requestId: string) {
 
 function redirectToLogin(request: NextRequest, requestId: string) {
   const url = request.nextUrl.clone();
-  url.pathname = "/login";
+  url.pathname = request.nextUrl.pathname === "/member" || request.nextUrl.pathname.startsWith("/member/")
+    ? "/login/member"
+    : "/login/staff";
   url.searchParams.set("redirect", `${request.nextUrl.pathname}${request.nextUrl.search}`);
   return withRequestId(NextResponse.redirect(url), requestId);
 }

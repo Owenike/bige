@@ -63,8 +63,7 @@ type StudentCheckInsResponse = {
 const STUDENT_CHECK_INS_ADMIN_PATH = "/admin/student-check-ins";
 
 function redirectToStaffLogin() {
-  const loginUrl = new URL("/login", window.location.origin);
-  loginUrl.searchParams.set("tab", "staff");
+  const loginUrl = new URL("/login/staff", window.location.origin);
   loginUrl.searchParams.set("returnTo", STUDENT_CHECK_INS_ADMIN_PATH);
   window.location.replace(loginUrl.toString());
 }

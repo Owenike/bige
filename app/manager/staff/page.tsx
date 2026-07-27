@@ -409,7 +409,7 @@ export default function ManagerStaffPage() {
 
   async function switchUser() {
     await fetch("/api/auth/logout", { method: "POST" });
-    window.location.href = "/login?tab=staff";
+    window.location.href = "/login/staff";
   }
 
   function manageable(item: StaffItem) {
