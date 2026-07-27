@@ -318,7 +318,19 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
   return (
     <main
       className={isStudentCheckInAdminEntry ? "studentAdminLoginPage" : "container"}
-      style={isStudentCheckInAdminEntry ? undefined : { paddingTop: 28, paddingBottom: 48 }}
+      style={
+        isStudentCheckInAdminEntry
+          ? undefined
+          : portal === "staff"
+            ? {
+                alignItems: "center",
+                display: "grid",
+                minHeight: "100dvh",
+                paddingBottom: 24,
+                paddingTop: 24,
+              }
+            : { paddingTop: 28, paddingBottom: 48 }
+      }
     >
       <section
         className={isStudentCheckInAdminEntry ? "studentAdminLoginPanel" : "card formCard"}
