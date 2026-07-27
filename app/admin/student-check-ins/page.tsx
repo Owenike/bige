@@ -3,6 +3,10 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  mergeMembershipPeriodDrafts,
+  type MembershipPeriodDraft,
+} from "../../../lib/student-membership-period";
 
 type StudentProfile = {
   id: string;
@@ -54,11 +58,6 @@ type StudentCheckInsResponse = {
   today?: StudentCheckInRow[];
   students?: ManagedStudent[];
   error?: string;
-};
-
-type MembershipPeriodDraft = {
-  startsOn: string;
-  expiresOn: string;
 };
 
 const STUDENT_CHECK_INS_ADMIN_PATH = "/admin/student-check-ins";
@@ -180,12 +179,7 @@ export default function StudentCheckInsAdminPage() {
       setToday(payload.today || []);
       const nextStudents = payload.students || [];
       setStudents(nextStudents);
-      setPeriodDrafts((current) => Object.fromEntries(
-        nextStudents.map((student) => [student.id, current[student.id] ?? {
-          startsOn: student.membership_starts_on ?? "",
-          expiresOn: student.membership_expires_on ?? "",
-        }]),
-      ));
+      setPeriodDrafts((current) => mergeMembershipPeriodDrafts(current, nextStudents));
     } catch {
       setError("網路連線不穩定，系統會自動重新取得報到資料。");
     } finally {
@@ -390,8 +384,8 @@ export default function StudentCheckInsAdminPage() {
                   <div className="studentCheckInsRecentExpiry">
                     <label><span>開始日期</span><input type="date" value={periodDraft.startsOn} disabled={!student || isPeriodLocked} onChange={(event) => setPeriodDrafts((current) => ({ ...current, [item.student_profile_id]: { ...periodDraft, startsOn: event.target.value } }))} /></label>
                     <label><span>結束日期</span><input type="date" min={periodDraft.startsOn || undefined} value={periodDraft.expiresOn} disabled={!student || isPeriodLocked} onChange={(event) => setPeriodDrafts((current) => ({ ...current, [item.student_profile_id]: { ...periodDraft, expiresOn: event.target.value } }))} /></label>
-                    <span className={isExpired ? "studentCheckInsExpiryStatus is-expired" : "studentCheckInsExpiryStatus"}>{isPeriodLocked ? (isExpired ? "已過期" : hasNotStarted ? "尚未開始" : "有效・已鎖定") : "未設定"}</span>
-                    {!isPeriodLocked ? <button type="button" disabled={!student || !periodDraft.startsOn || !periodDraft.expiresOn || savingExpiryId === item.student_profile_id} onClick={() => void saveMembershipPeriod(item.student_profile_id)}>{savingExpiryId === item.student_profile_id ? "儲存中" : "儲存期限"}</button> : null}
+                    <span className={isExpired ? "studentCheckInsExpiryStatus is-expired" : "studentCheckInsExpiryStatus"}>{isPeriodLocked ? (isExpired ? "已過期" : hasNotStarted ? "尚未開始" : "有效・已鎖定") : periodDraft.startsOn || periodDraft.expiresOn ? "尚未儲存" : "未設定"}</span>
+                    {!isPeriodLocked ? <button type="button" disabled={!student || !periodDraft.startsOn || !periodDraft.expiresOn || savingExpiryId === item.student_profile_id} onClick={() => void saveMembershipPeriod(item.student_profile_id)}>{savingExpiryId === item.student_profile_id ? "儲存中" : "儲存並鎖定"}</button> : null}
                   </div>
                 </article>
               );

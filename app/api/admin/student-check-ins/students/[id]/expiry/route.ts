@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireProfile } from "../../../../../../../lib/auth-context";
+import { writeStudentMembershipPeriodAuditNonBlocking } from "../../../../../../../lib/student-membership-period-audit";
 import { createSupabaseAdminClient } from "../../../../../../../lib/supabase/admin";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -19,17 +20,31 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const auth = await requireProfile(["platform_admin", "manager", "frontdesk"], request);
   if (!auth.ok) return authFailureResponse(auth.response.status);
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const { id } = await context.params;
+  const admin = createSupabaseAdminClient();
+  const body = await request.json().catch(() => null);
+  const parsed = schema.safeParse(body);
+  const attempted = {
+    startsOn: typeof body?.startsOn === "string" ? body.startsOn : null,
+    expiresOn: typeof body?.expiresOn === "string" ? body.expiresOn : null,
+  };
   if (
     !parsed.success
     || parsed.data.startsOn < "1900-01-01"
     || parsed.data.expiresOn < parsed.data.startsOn
   ) {
+    await writeStudentMembershipPeriodAuditNonBlocking({
+      supabase: admin,
+      tenantId: auth.context.tenantId,
+      actorId: auth.context.userId,
+      actorRole: auth.context.role,
+      studentProfileId: id,
+      outcome: "invalid",
+      attempted,
+    });
     return NextResponse.json({ ok: false, error: "請輸入正確的開始日期與結束日期。" }, { status: 400 });
   }
 
-  const { id } = await context.params;
-  const admin = createSupabaseAdminClient();
   const current = await admin
     .from("student_line_profiles")
     .select("id, membership_starts_on, membership_expires_on")
@@ -37,9 +52,46 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .eq("is_active", true)
     .maybeSingle();
 
-  if (current.error) return NextResponse.json({ ok: false, error: "期限資料讀取失敗，請稍後再試。" }, { status: 500 });
-  if (!current.data) return NextResponse.json({ ok: false, error: "找不到這位學員。" }, { status: 404 });
+  if (current.error) {
+    await writeStudentMembershipPeriodAuditNonBlocking({
+      supabase: admin,
+      tenantId: auth.context.tenantId,
+      actorId: auth.context.userId,
+      actorRole: auth.context.role,
+      studentProfileId: id,
+      outcome: "database_error",
+      attempted,
+      error: current.error.message,
+    });
+    return NextResponse.json({ ok: false, error: "期限資料讀取失敗，請稍後再試。" }, { status: 500 });
+  }
+  if (!current.data) {
+    await writeStudentMembershipPeriodAuditNonBlocking({
+      supabase: admin,
+      tenantId: auth.context.tenantId,
+      actorId: auth.context.userId,
+      actorRole: auth.context.role,
+      studentProfileId: id,
+      outcome: "not_found",
+      attempted,
+    });
+    return NextResponse.json({ ok: false, error: "找不到這位學員。" }, { status: 404 });
+  }
+  const previous = {
+    startsOn: current.data.membership_starts_on,
+    expiresOn: current.data.membership_expires_on,
+  };
   if (current.data.membership_starts_on || current.data.membership_expires_on) {
+    await writeStudentMembershipPeriodAuditNonBlocking({
+      supabase: admin,
+      tenantId: auth.context.tenantId,
+      actorId: auth.context.userId,
+      actorRole: auth.context.role,
+      studentProfileId: id,
+      outcome: "already_locked",
+      attempted,
+      previous,
+    });
     return NextResponse.json({ ok: false, error: "自主運動期限已儲存並鎖定，無法再次更改。" }, { status: 409 });
   }
 
@@ -57,10 +109,43 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .select("id, membership_starts_on, membership_expires_on")
     .maybeSingle();
 
-  if (result.error) return NextResponse.json({ ok: false, error: "期限儲存失敗，請稍後再試。" }, { status: 500 });
+  if (result.error) {
+    await writeStudentMembershipPeriodAuditNonBlocking({
+      supabase: admin,
+      tenantId: auth.context.tenantId,
+      actorId: auth.context.userId,
+      actorRole: auth.context.role,
+      studentProfileId: id,
+      outcome: "database_error",
+      attempted,
+      previous,
+      error: result.error.message,
+    });
+    return NextResponse.json({ ok: false, error: "期限儲存失敗，請稍後再試。" }, { status: 500 });
+  }
   if (!result.data) {
+    await writeStudentMembershipPeriodAuditNonBlocking({
+      supabase: admin,
+      tenantId: auth.context.tenantId,
+      actorId: auth.context.userId,
+      actorRole: auth.context.role,
+      studentProfileId: id,
+      outcome: "conflict",
+      attempted,
+      previous,
+    });
     return NextResponse.json({ ok: false, error: "自主運動期限已被設定，無法再次更改。" }, { status: 409 });
   }
+  await writeStudentMembershipPeriodAuditNonBlocking({
+    supabase: admin,
+    tenantId: auth.context.tenantId,
+    actorId: auth.context.userId,
+    actorRole: auth.context.role,
+    studentProfileId: id,
+    outcome: "saved",
+    attempted,
+    previous,
+  });
   return NextResponse.json({
     ok: true,
     startsOn: result.data.membership_starts_on,
