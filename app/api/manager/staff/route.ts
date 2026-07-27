@@ -12,6 +12,12 @@ import {
   type StaffDepartment,
   type StaffPosition,
 } from "../../../../lib/staff-organization";
+import {
+  INITIAL_STAFF_PASSWORD,
+  isEmployeeNumber,
+  isStaffPlaceholderEmail,
+  staffPlaceholderEmail,
+} from "../../../../lib/staff-credentials";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 const STAFF_FILTER_ROLES = ["manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales"] as const;
@@ -25,6 +31,8 @@ type StaffRow = {
   tenant_id: string | null;
   branch_id: string | null;
   display_name: string | null;
+  english_name: string | null;
+  employee_number: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -45,6 +53,8 @@ type StaffItem = {
   tenant_id: string | null;
   branch_id: string | null;
   display_name: string | null;
+  english_name: string | null;
+  employee_number: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -63,23 +73,12 @@ function parseRole(value: string | null): StaffRole | null {
   return STAFF_FILTER_ROLES.includes(value as StaffRole) ? (value as StaffRole) : null;
 }
 
-function normalizeEmail(value: unknown) {
-  if (typeof value !== "string") return "";
-  return value.trim().toLowerCase();
-}
-
 function canAssignLegacyRole(actorRole: AppRole, targetRole: StaffRole) {
   if (actorRole === "platform_admin") return true;
   if (actorRole === "manager") {
     return targetRole === "frontdesk" || targetRole === "coach";
   }
   return false;
-}
-
-function resolveCanonicalAppUrl(request: Request) {
-  const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
-  if (configured) return configured.replace(/\/+$/, "");
-  return new URL(request.url).origin.replace(/\/+$/, "");
 }
 
 function formatStaffItem(row: StaffRow, email?: string | null): StaffItem {
@@ -91,6 +90,8 @@ function formatStaffItem(row: StaffRow, email?: string | null): StaffItem {
     tenant_id: row.tenant_id,
     branch_id: row.branch_id,
     display_name: row.display_name,
+    english_name: row.english_name,
+    employee_number: row.employee_number,
     is_active: row.is_active,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -117,7 +118,7 @@ function organizationActor(
 }
 
 const STAFF_SELECT =
-  "id, role, department, position, tenant_id, branch_id, display_name, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at, staff_deleted_at, staff_deleted_by, staff_delete_reason";
+  "id, role, department, position, tenant_id, branch_id, display_name, english_name, employee_number, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at, staff_deleted_at, staff_deleted_by, staff_delete_reason";
 
 async function resolveTenantScope(request: Request) {
   const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager"], request);
@@ -196,7 +197,8 @@ async function loadEmailsByIds(userIds: string[]) {
     if (users.length === 0) break;
     for (const user of users) {
       if (!wanted.has(user.id)) continue;
-      emailById.set(user.id, user.email || "");
+      const email = user.email || "";
+      emailById.set(user.id, isStaffPlaceholderEmail(email) ? "" : email);
       wanted.delete(user.id);
     }
     if (users.length < perPage) break;
@@ -232,7 +234,11 @@ export async function GET(request: Request) {
     ? query.not("staff_deleted_at", "is", null)
     : query.is("staff_deleted_at", null);
   if (activeOnly && !deletedOnly) query = query.eq("is_active", true);
-  if (q) query = query.or(`display_name.ilike.%${q}%,id.ilike.%${q}%`);
+  if (q) {
+    query = query.or(
+      `display_name.ilike.%${q}%,english_name.ilike.%${q}%,employee_number.ilike.%${q}%,id.ilike.%${q}%`,
+    );
+  }
   if (scoped.auth.context.role !== "platform_admin" && scoped.auth.context.branchId) {
     query = query.eq("branch_id", scoped.auth.context.branchId);
   }
@@ -247,9 +253,17 @@ export async function GET(request: Request) {
     .filter((item) => {
       if (!q) return true;
       const displayName = (item.display_name || "").toLowerCase();
+      const englishName = (item.english_name || "").toLowerCase();
+      const employeeNumber = (item.employee_number || "").toLowerCase();
       const id = item.id.toLowerCase();
       const email = (item.email || "").toLowerCase();
-      return displayName.includes(q) || id.includes(q) || email.includes(q);
+      return (
+        displayName.includes(q) ||
+        englishName.includes(q) ||
+        employeeNumber.includes(q) ||
+        id.includes(q) ||
+        email.includes(q)
+      );
     });
   return apiSuccess({ items });
 }
@@ -260,12 +274,11 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as
     | {
-        email?: string;
-        password?: string;
         role?: string;
         department?: string;
         position?: string;
         displayName?: string | null;
+        englishName?: string | null;
         branchId?: string | null;
         isActive?: boolean;
         tenantId?: string;
@@ -282,14 +295,13 @@ export async function POST(request: Request) {
   const permission = requirePermission(reauth.operator, "staff.create");
   if (!permission.ok) return permission.response;
 
-  const email = normalizeEmail(body?.email);
-  const password = typeof body?.password === "string" ? body.password : "";
   const department = normalizeStaffDepartment(body?.department);
   const position = normalizeStaffPosition(body?.position);
   const role = position
     ? (legacyRoleForPosition(position) as StaffRole)
     : parseRole(typeof body?.role === "string" ? body.role : null);
   const displayName = typeof body?.displayName === "string" ? body.displayName.trim() || null : null;
+  const englishName = typeof body?.englishName === "string" ? body.englishName.trim() || null : null;
   const isActive = body?.isActive === false ? false : true;
   const nextBranchId = typeof body?.branchId === "string" ? body.branchId.trim() || null : null;
   const idempotencyKeyInput = typeof body?.idempotencyKey === "string" ? body.idempotencyKey.trim() : "";
@@ -299,8 +311,8 @@ export async function POST(request: Request) {
       : scoped.scopedTenantId;
 
   if (!tenantId) return apiError(400, "FORBIDDEN", "tenantId is required");
-  if (!email || !password) return apiError(400, "FORBIDDEN", "email and password are required");
-  if (password.length < 8) return apiError(400, "FORBIDDEN", "password must be at least 8 characters");
+  if (!displayName) return apiError(400, "FORBIDDEN", "真實姓名為必填");
+  if (!englishName) return apiError(400, "FORBIDDEN", "英文姓名為必填");
   if (!role) return apiError(400, "INVALID_ROLE", "role is invalid");
   if ((department || position) && !positionBelongsToDepartment(department, position)) {
     return apiError(400, "INVALID_ROLE", "department and position do not match");
@@ -322,7 +334,16 @@ export async function POST(request: Request) {
 
   const operationKey =
     idempotencyKeyInput ||
-    ["staff_create", tenantId, email, department || "legacy", position || role, nextBranchId || "na", String(isActive)].join(":");
+    [
+      "staff_create",
+      tenantId,
+      displayName,
+      englishName,
+      department || "legacy",
+      position || role,
+      nextBranchId || "na",
+      String(isActive),
+    ].join(":");
   const operationClaim = await claimIdempotency({
     supabase: scoped.auth.supabase,
     tenantId,
@@ -335,14 +356,38 @@ export async function POST(request: Request) {
     if (operationClaim.existing?.status === "succeeded" && operationClaim.existing.response) {
       return apiSuccess({ replayed: true, ...operationClaim.existing.response });
     }
-    return apiError(409, "EMAIL_ALREADY_EXISTS", "Duplicate staff create request in progress");
+    return apiError(409, "FORBIDDEN", "相同的員工建立作業正在處理中");
   }
 
   const admin = createSupabaseAdminClient();
+  const employeeNumberResult = await admin.rpc("next_staff_employee_number");
+  const employeeNumber = typeof employeeNumberResult.data === "string" ? employeeNumberResult.data : "";
+  if (employeeNumberResult.error || !isEmployeeNumber(employeeNumber)) {
+    await finalizeIdempotency({
+      supabase: scoped.auth.supabase,
+      tenantId,
+      operationKey,
+      status: "failed",
+      errorCode: "EMPLOYEE_NUMBER_CREATE_FAILED",
+    });
+    return apiError(
+      500,
+      "INTERNAL_ERROR",
+      employeeNumberResult.error?.message || "Create employee number failed",
+    );
+  }
+
+  const internalEmail = staffPlaceholderEmail(employeeNumber);
   const userResult = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: false,
+    email: internalEmail,
+    password: INITIAL_STAFF_PASSWORD,
+    email_confirm: true,
+    user_metadata: {
+      employee_number: employeeNumber,
+      display_name: displayName,
+      english_name: englishName,
+      role,
+    },
   });
   if (userResult.error || !userResult.data.user) {
     await finalizeIdempotency({
@@ -354,7 +399,7 @@ export async function POST(request: Request) {
     });
     const message = userResult.error?.message || "Create user failed";
     if (message.toLowerCase().includes("already") || message.toLowerCase().includes("registered")) {
-      return apiError(409, "EMAIL_ALREADY_EXISTS", "Email already exists");
+      return apiError(409, "FORBIDDEN", "員工編號已存在，請重新建立");
     }
     return apiError(500, "INTERNAL_ERROR", message);
   }
@@ -374,6 +419,8 @@ export async function POST(request: Request) {
         organization_assigned_at: department && position ? now : null,
         organization_assigned_by: department && position ? reauth.operator.userId : null,
         display_name: displayName,
+        english_name: englishName,
+        employee_number: employeeNumber,
         is_active: isActive,
         invited_by: reauth.operator.userId,
         created_by: reauth.operator.userId,
@@ -407,30 +454,21 @@ export async function POST(request: Request) {
     target_id: userId,
     reason: reauth.reason,
     payload: {
-      email,
+      employeeNumber,
       role,
       department,
       position,
       branchId: nextBranchId,
       isActive,
       displayName,
-    },
-  });
-
-  const verificationResult = await admin.auth.resend({
-    type: "signup",
-    email,
-    options: {
-      emailRedirectTo: `${resolveCanonicalAppUrl(request)}/staff/change-password`,
+      englishName,
     },
   });
 
   const successPayload = {
-    item: formatStaffItem(profileResult.data as StaffRow, email),
+    item: formatStaffItem(profileResult.data as StaffRow, null),
     verification: {
-      maskedEmail: email.replace(/^(.{2}).*(@.*)$/, "$1***$2"),
-      deliveryStatus: verificationResult.error ? "failed" : "sent",
-      deliveryError: verificationResult.error?.message || null,
+      deliveryStatus: "pending_employee_email",
     },
   };
   await finalizeIdempotency({
@@ -452,7 +490,8 @@ function changedFields(before: StaffRow, after: StaffRow) {
     branchChanged: (before.branch_id || null) !== (after.branch_id || null),
     activeChanged: before.is_active !== after.is_active,
     profileChanged:
-      before.display_name !== after.display_name,
+      before.display_name !== after.display_name ||
+      before.english_name !== after.english_name,
   };
 }
 
@@ -467,6 +506,7 @@ export async function PATCH(request: Request) {
         department?: string | null;
         position?: string | null;
         displayName?: string | null;
+        englishName?: string | null;
         branchId?: string | null;
         isActive?: boolean;
         restore?: boolean;
@@ -502,10 +542,26 @@ export async function PATCH(request: Request) {
       return apiError(409, "FORBIDDEN", "此員工不在已刪除清單中");
     }
 
+    let restoredEmployeeNumber = existing.employee_number;
+    if (!restoredEmployeeNumber) {
+      const admin = createSupabaseAdminClient();
+      const employeeNumberResult = await admin.rpc("next_staff_employee_number");
+      restoredEmployeeNumber =
+        typeof employeeNumberResult.data === "string" ? employeeNumberResult.data : "";
+      if (employeeNumberResult.error || !isEmployeeNumber(restoredEmployeeNumber)) {
+        return apiError(
+          500,
+          "INTERNAL_ERROR",
+          employeeNumberResult.error?.message || "復原員工編號失敗",
+        );
+      }
+    }
+
     const now = new Date().toISOString();
     const restoreResult = await scoped.auth.supabase
       .from("profiles")
       .update({
+        employee_number: restoredEmployeeNumber,
         staff_deleted_at: null,
         staff_deleted_by: null,
         staff_delete_reason: null,
@@ -601,6 +657,17 @@ export async function PATCH(request: Request) {
       updates.display_name = body.displayName.trim() || null;
     } else {
       return apiError(400, "FORBIDDEN", "invalid displayName");
+    }
+  }
+
+  if (body && "englishName" in body) {
+    if (body.englishName === null) {
+      return apiError(400, "FORBIDDEN", "英文姓名為必填");
+    }
+    if (typeof body.englishName === "string" && body.englishName.trim()) {
+      updates.english_name = body.englishName.trim();
+    } else {
+      return apiError(400, "FORBIDDEN", "英文姓名為必填");
     }
   }
 
@@ -723,7 +790,16 @@ export async function PATCH(request: Request) {
       target_type: "profile",
       target_id: id,
       reason: reauth.reason,
-      payload: { before: existing.display_name, after: updated.display_name },
+      payload: {
+        before: {
+          displayName: existing.display_name,
+          englishName: existing.english_name,
+        },
+        after: {
+          displayName: updated.display_name,
+          englishName: updated.english_name,
+        },
+      },
     });
   }
 

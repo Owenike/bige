@@ -147,8 +147,8 @@ function resolveLoginEntryCopy(panel: LoginPanel, returnTo: string | null, zh: b
     eyebrow: zh ? "員工登入入口" : "Staff Login Entry",
     title: zh ? "員工後台登入" : "Staff Sign In",
     description: zh
-      ? "櫃檯、教練、主管與平台管理員皆使用 Email 與密碼登入，系統會依帳號權限前往正確後台。"
-      : "Frontdesk, coaches, managers, and platform administrators sign in with email and password, then continue to the correct workspace.",
+      ? "櫃檯、教練、主管與平台管理員皆使用員工編號與密碼登入，系統會依帳號權限前往正確後台。"
+      : "Frontdesk, coaches, managers, and platform administrators sign in with employee number and password, then continue to the correct workspace.",
   };
 }
 
@@ -193,7 +193,7 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
 
   const entryCopy = useMemo(() => resolveLoginEntryCopy(activePanel, returnTo, zh), [activePanel, returnTo, zh]);
 
-  const [email, setEmail] = useState("");
+  const [employeeNumber, setEmployeeNumber] = useState("");
   const [password, setPassword] = useState("");
   const [showStaffPassword, setShowStaffPassword] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -218,7 +218,7 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ employeeNumber, password }),
       });
       const payload = await res.json().catch(() => null);
       if (!res.ok) throw new Error(payload?.error || "Login failed");
@@ -382,12 +382,12 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
             {!isStudentCheckInAdminEntry ? <div>
               <div className="kvLabel">{zh ? "員工 / 後台登入" : "Staff / Backoffice"}</div>
               <h2 className="sectionTitle" style={{ fontSize: "1.28rem", marginTop: 8 }}>
-                {zh ? "Email + 密碼登入" : "Email + Password"}
+                {zh ? "員工編號 + 密碼登入" : "Employee Number + Password"}
               </h2>
               <p className="sub" style={{ marginTop: 8 }}>
                 {zh
-                  ? "櫃檯、教練、管理、平台角色請使用 Email 與密碼登入。"
-                  : "Frontdesk, coach, manager, and platform roles should sign in with email and password."}
+                  ? "櫃檯、教練、管理、平台角色請使用員工編號與密碼登入。"
+                  : "Frontdesk, coach, manager, and platform roles should sign in with employee number and password."}
               </p>
             </div> : null}
 
@@ -400,17 +400,18 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
             >
               <label className="field">
                 <span className={isStudentCheckInAdminEntry ? "studentAdminLoginLabel" : "kvLabel"} style={{ textTransform: "none" }}>
-                  {t("auth.email")}
+                  {zh ? "員工編號" : "Employee number"}
                 </span>
                 <input
-                  autoComplete="email"
+                  autoComplete="username"
+                  autoCapitalize="characters"
                   autoFocus={activePanel === "staff"}
                   className="input"
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  onChange={(e) => setEmployeeNumber(e.target.value.toUpperCase())}
+                  placeholder="E000001"
                   required
-                  type="email"
-                  value={email}
+                  type="text"
+                  value={employeeNumber}
                 />
               </label>
 

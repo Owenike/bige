@@ -2,6 +2,7 @@ import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-co
 import { requirePermission } from "../../../../../lib/permissions";
 import { verifySensitiveOperator } from "../../../../../lib/sensitive-reauth";
 import { canManagePosition, normalizeStaffDepartment, normalizeStaffPosition } from "../../../../../lib/staff-organization";
+import { isStaffPlaceholderEmail } from "../../../../../lib/staff-credentials";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 
 const STAFF_ROLES = ["manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales"] as const;
@@ -81,6 +82,9 @@ export async function POST(request: Request) {
   const userResult = await admin.auth.admin.getUserById(profileId);
   if (userResult.error || !userResult.data.user?.email) {
     return apiError(500, "INTERNAL_ERROR", userResult.error?.message || "User email not found");
+  }
+  if (isStaffPlaceholderEmail(userResult.data.user.email)) {
+    return apiError(409, "FORBIDDEN", "此員工尚未完成本人 Email 驗證，無法寄送忘記密碼信");
   }
 
   const redirectTo = `${resolveCanonicalAppUrl(request)}/staff/change-password?recovery=1`;

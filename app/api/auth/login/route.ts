@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 import { httpLogBase, logEvent } from "../../../../lib/observability";
 import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
+import { isEmployeeNumber, normalizeEmployeeNumber } from "../../../../lib/staff-credentials";
 
 function normalizePhone(input: string) {
   return input.replace(/\D/g, "");
@@ -53,19 +54,45 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => null);
-  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  const employeeNumber = normalizeEmployeeNumber(body?.employeeNumber);
   const phoneRaw = typeof body?.phone === "string" ? body.phone.trim() : "";
   const phone = normalizePhone(phoneRaw);
   const password = typeof body?.password === "string" ? body.password : "";
 
-  if ((!email && !phone) || !password) {
+  if ((!employeeNumber && !phone) || !password) {
     logEvent("info", { type: "http", action: "login", ...base, status: 400, durationMs: Date.now() - t0 });
-    return NextResponse.json({ error: "email/phone and password are required" }, { status: 400 });
+    return NextResponse.json({ error: "employee number/phone and password are required" }, { status: 400 });
   }
 
-  let emailToLogin = email;
-  if (!emailToLogin && phone) {
-    const admin = createSupabaseAdminClient();
+  const admin = createSupabaseAdminClient();
+  let emailToLogin = "";
+  if (employeeNumber) {
+    if (!isEmployeeNumber(employeeNumber)) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+
+    const profileResult = await admin
+      .from("profiles")
+      .select("id, is_active, staff_deleted_at")
+      .eq("employee_number", employeeNumber)
+      .maybeSingle();
+
+    if (
+      profileResult.error ||
+      !profileResult.data ||
+      profileResult.data.is_active !== true ||
+      profileResult.data.staff_deleted_at
+    ) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+
+    const authUserResult = await admin.auth.admin.getUserById(profileResult.data.id);
+    const staffEmail = authUserResult.data.user?.email?.trim().toLowerCase() || "";
+    if (authUserResult.error || !staffEmail) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+    emailToLogin = staffEmail;
+  } else if (phone) {
     const memberByPhoneWithPortal = await admin
       .from("members")
       .select("id, email, portal_status")
@@ -112,7 +139,6 @@ export async function POST(request: Request) {
   const authUser = result.data.user;
   const userAgent = request.headers.get("user-agent") || null;
   const platform = normalizePlatform(request.headers.get("sec-ch-ua-platform"));
-  const admin = createSupabaseAdminClient();
   const nowIso = new Date().toISOString();
 
   await admin

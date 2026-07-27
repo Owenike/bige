@@ -38,6 +38,8 @@ type StaffItem = {
   tenant_id: string | null;
   branch_id: string | null;
   display_name: string | null;
+  english_name: string | null;
+  employee_number: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -72,6 +74,7 @@ type Reauth = {
 type ApiErrorBody = {
   error?: { message?: string } | string;
   message?: string;
+  item?: StaffItem;
 };
 
 const EMPTY_REAUTH: Reauth = { account: "", password: "", reason: "" };
@@ -109,14 +112,14 @@ export default function ManagerStaffPage() {
   const [showDeleted, setShowDeleted] = useState(false);
 
   const [newName, setNewName] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [newPassword, setNewPassword] = useState("");
+  const [newEnglishName, setNewEnglishName] = useState("");
   const [newDepartment, setNewDepartment] = useState<StaffDepartment>("general_affairs");
   const [newPosition, setNewPosition] = useState<StaffPosition>("frontdesk");
   const [newBranchId, setNewBranchId] = useState("");
 
   const [editing, setEditing] = useState<StaffItem | null>(null);
   const [editName, setEditName] = useState("");
+  const [editEnglishName, setEditEnglishName] = useState("");
   const [editDepartment, setEditDepartment] = useState<StaffDepartment>("general_affairs");
   const [editPosition, setEditPosition] = useState<StaffPosition>("frontdesk");
   const [editBranchId, setEditBranchId] = useState("");
@@ -255,7 +258,7 @@ export default function ManagerStaffPage() {
 
   async function confirmSensitive() {
     if (!pendingAction || !reauth.account || !reauth.password || !reauth.reason.trim()) {
-      setReauthError("請輸入員工 Email、密碼與操作原因");
+      setReauthError("請輸入員工編號、密碼與操作原因");
       return;
     }
     setSaving(true);
@@ -273,8 +276,8 @@ export default function ManagerStaffPage() {
   }
 
   function createStaff() {
-    if (!canCreate || !newName.trim() || !newEmail.trim() || newPassword.length < 8) {
-      setError("請填寫姓名、Email 與至少 8 位的初始密碼");
+    if (!canCreate || !newName.trim() || !newEnglishName.trim()) {
+      setError("請填寫真實姓名與英文姓名");
       return;
     }
     requestSensitive("確認建立員工帳號", async (credentials) => {
@@ -282,9 +285,8 @@ export default function ManagerStaffPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: newEmail,
-          password: newPassword,
           displayName: newName,
+          englishName: newEnglishName,
           department: newDepartment,
           position: newPosition,
           branchId: newBranchId || null,
@@ -296,10 +298,13 @@ export default function ManagerStaffPage() {
       const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
       if (!response.ok) throw new Error(readError(payload, "建立員工失敗"));
       setNewName("");
-      setNewEmail("");
-      setNewPassword("");
+      setNewEnglishName("");
       setNewBranchId("");
-      setNotice("員工帳號已建立，驗證信已送出");
+      setNotice(
+        payload?.item?.employee_number
+          ? `員工帳號已建立，員工編號為 ${payload.item.employee_number}，初始密碼為 88888888`
+          : "員工帳號已建立",
+      );
       await load();
     });
   }
@@ -309,6 +314,7 @@ export default function ManagerStaffPage() {
     const position = item.position || DEPARTMENT_POSITIONS[department][0];
     setEditing(item);
     setEditName(item.display_name || "");
+    setEditEnglishName(item.english_name || "");
     setEditDepartment(department);
     setEditPosition(position);
     setEditBranchId(item.branch_id || "");
@@ -316,7 +322,10 @@ export default function ManagerStaffPage() {
   }
 
   function saveEditor() {
-    if (!editing || !editName.trim()) return;
+    if (!editing || !editName.trim() || !editEnglishName.trim()) {
+      setError("請填寫真實姓名與英文姓名");
+      return;
+    }
     requestSensitive("確認儲存員工資料", async (credentials) => {
       const response = await fetch(scopedPath("/api/manager/staff"), {
         method: "PATCH",
@@ -324,6 +333,7 @@ export default function ManagerStaffPage() {
         body: JSON.stringify({
           id: editing.id,
           displayName: editName,
+          englishName: editEnglishName,
           department: editDepartment,
           position: editPosition,
           branchId: editBranchId || null,
@@ -481,7 +491,7 @@ export default function ManagerStaffPage() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => event.key === "Enter" && void load()}
-              placeholder="姓名或 Email"
+              placeholder="真實姓名、英文姓名、員工編號或 Email"
             />
           </div>
           <label className={styles.toggle}>
@@ -515,19 +525,22 @@ export default function ManagerStaffPage() {
         {canCreate && !showDeleted ? (
           <section className={`${styles.glassCard} ${styles.panel}`}>
             <h2 className={styles.panelTitle}>建立員工帳號</h2>
-            <p className={styles.panelHint}>員工第一次登入須完成 Email 驗證並重新設定密碼。</p>
+            <p className={styles.panelHint}>
+              系統會自動產生員工編號，初始密碼固定為 88888888。員工首次登入後必須自行填寫並驗證 Email，再設定新密碼；Email 將用於忘記密碼與帳號安全。
+            </p>
             <div className={styles.form}>
               <label className={styles.field}>
                 <span className={styles.label}>真實姓名</span>
                 <input className={styles.input} value={newName} onChange={(event) => setNewName(event.target.value)} />
               </label>
               <label className={styles.field}>
-                <span className={styles.label}>Email</span>
-                <input className={styles.input} type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} />
-              </label>
-              <label className={styles.field}>
-                <span className={styles.label}>初始密碼</span>
-                <input className={styles.input} type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="至少 8 位" />
+                <span className={styles.label}>英文姓名</span>
+                <input
+                  className={styles.input}
+                  value={newEnglishName}
+                  onChange={(event) => setNewEnglishName(event.target.value)}
+                  autoCapitalize="words"
+                />
               </label>
               <label className={styles.field}>
                 <span className={styles.label}>部門</span>
@@ -580,7 +593,9 @@ export default function ManagerStaffPage() {
               <article className={styles.staffRow} key={item.id}>
                 <div className={styles.staffIdentity}>
                   <span className={styles.staffName}>{item.display_name || "未命名員工"}</span>
-                  <span className={styles.staffEmail}>{item.email || "未設定 Email"}</span>
+                  <span className={styles.staffEmail}>{item.english_name || "尚未填寫英文姓名"}</span>
+                  <span className={styles.staffEmail}>員工編號：{item.employee_number || "尚未建立"}</span>
+                  <span className={styles.staffEmail}>{item.email || "尚未由員工設定 Email"}</span>
                 </div>
                 <span className={styles.role}>
                   {departmentLabel(item.department)} · {positionLabel(item.position)}
@@ -657,7 +672,7 @@ export default function ManagerStaffPage() {
               </div>
               <div className={styles.modalIdentity}>
                 <strong>{deleteConfirm.display_name || "未命名員工"}</strong>
-                <span>{deleteConfirm.email || "未設定 Email"}</span>
+                <span>{deleteConfirm.english_name || "尚未填寫英文姓名"}</span>
               </div>
               <p className={styles.notice}>
                 刪除後會立即停用帳號並移到「已刪除員工」，所有排課、學員及歷史紀錄都會保留，之後可以復原。
@@ -685,12 +700,21 @@ export default function ManagerStaffPage() {
               </div>
               <div className={styles.modalIdentity}>
                 <strong>{editing.display_name || editing.email || "未命名員工"}</strong>
-                <span>{editing.email}</span>
+                <span>{editing.employee_number} · {editing.email || "尚未由員工設定 Email"}</span>
               </div>
               <div className={styles.form}>
-                <label className={`${styles.field} ${styles.full}`}>
-                  <span className={styles.label}>姓名</span>
+                <label className={styles.field}>
+                  <span className={styles.label}>真實姓名</span>
                   <input className={styles.input} value={editName} onChange={(event) => setEditName(event.target.value)} />
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.label}>英文姓名</span>
+                  <input
+                    className={styles.input}
+                    value={editEnglishName}
+                    onChange={(event) => setEditEnglishName(event.target.value)}
+                    autoCapitalize="words"
+                  />
                 </label>
                 <label className={styles.field}>
                   <span className={styles.label}>部門</span>
@@ -742,7 +766,7 @@ export default function ManagerStaffPage() {
                 </div>
                 <button className={styles.iconButton} type="button" onClick={() => setReauthOpen(false)} disabled={saving} title="關閉"><X size={18} /></button>
               </div>
-              <p className={styles.panelHint}>請由實際執行此操作的人輸入自己的員工帳號與密碼。</p>
+              <p className={styles.panelHint}>請由實際執行此操作的人輸入自己的員工編號與密碼。</p>
               <form
                 className={styles.form}
                 onSubmit={(event) => {
@@ -751,8 +775,8 @@ export default function ManagerStaffPage() {
                 }}
               >
                 <label className={`${styles.field} ${styles.full}`}>
-                  <span className={styles.label}>員工 Email</span>
-                  <input className={styles.input} type="email" autoComplete="username" required autoFocus value={reauth.account} onChange={(event) => setReauth({ ...reauth, account: event.target.value })} />
+                  <span className={styles.label}>員工編號</span>
+                  <input className={styles.input} type="text" autoComplete="username" autoCapitalize="characters" required autoFocus value={reauth.account} onChange={(event) => setReauth({ ...reauth, account: event.target.value.toUpperCase() })} placeholder="E000001" />
                 </label>
                 <label className={`${styles.field} ${styles.full}`}>
                   <span className={styles.label}>密碼</span>

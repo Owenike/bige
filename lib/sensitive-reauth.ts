@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { ProfileContext } from "./auth-context";
 import { normalizeStaffDepartment, normalizeStaffPosition } from "./staff-organization";
+import { isEmployeeNumber, normalizeEmployeeNumber } from "./staff-credentials";
 import { createSupabaseAdminClient } from "./supabase/admin";
 
 export type SensitiveCredentials = {
@@ -23,14 +24,14 @@ export async function verifySensitiveOperator(params: {
     Partial<Pick<ProfileContext, "department" | "position">>;
   credentials: SensitiveCredentials | null | undefined;
 }) {
-  const account = params.credentials?.account?.trim().toLowerCase() || "";
+  const account = normalizeEmployeeNumber(params.credentials?.account);
   const password = params.credentials?.password || "";
   const reason = params.credentials?.reason?.trim() || "";
-  if (!account || !password || !reason) {
+  if (!isEmployeeNumber(account) || !password || !reason) {
     return {
       ok: false as const,
       code: "SENSITIVE_REAUTH_REQUIRED",
-      message: "此操作需要重新輸入員工 Email、密碼與操作原因",
+      message: "此操作需要重新輸入員工編號、密碼與操作原因",
     };
   }
 
@@ -51,16 +52,44 @@ export async function verifySensitiveOperator(params: {
       detectSessionInUrl: false,
     },
   });
-  const signedIn = await isolated.auth.signInWithPassword({ email: account, password });
+  const admin = createSupabaseAdminClient();
+  const employeeProfile = await admin
+    .from("profiles")
+    .select("id, is_active, staff_deleted_at")
+    .eq("employee_number", account)
+    .maybeSingle();
+  if (
+    employeeProfile.error ||
+    !employeeProfile.data ||
+    employeeProfile.data.is_active !== true ||
+    employeeProfile.data.staff_deleted_at
+  ) {
+    return {
+      ok: false as const,
+      code: "SENSITIVE_REAUTH_FAILED",
+      message: "員工編號或密碼不正確",
+    };
+  }
+
+  const authUserResult = await admin.auth.admin.getUserById(employeeProfile.data.id);
+  const email = authUserResult.data.user?.email?.trim().toLowerCase() || "";
+  if (authUserResult.error || !email) {
+    return {
+      ok: false as const,
+      code: "SENSITIVE_REAUTH_FAILED",
+      message: "員工編號或密碼不正確",
+    };
+  }
+
+  const signedIn = await isolated.auth.signInWithPassword({ email, password });
   if (signedIn.error || !signedIn.data.user) {
     return {
       ok: false as const,
       code: "SENSITIVE_REAUTH_FAILED",
-      message: "員工帳號或密碼不正確",
+      message: "員工編號或密碼不正確",
     };
   }
 
-  const admin = createSupabaseAdminClient();
   const profile = await admin
     .from("profiles")
     .select("id, role, department, position, tenant_id, branch_id, is_active")

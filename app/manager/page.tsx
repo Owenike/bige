@@ -804,17 +804,18 @@ export default function ManagerDashboardPage() {
           <h2 className="sectionTitle">{zh ? "敏感操作身分確認" : "Sensitive action verification"}</h2>
           <p className="fdGlassText">
             {zh
-              ? "作廢、退款與核准前，請由實際執行人重新輸入自己的員工帳號、密碼與原因。每次操作後會自動清空。"
-              : "Re-enter the actual operator account, password, and reason before every void, refund, or approval."}
+              ? "作廢、退款與核准前，請由實際執行人重新輸入自己的員工編號、密碼與原因。每次操作後會自動清空。"
+              : "Re-enter the actual operator employee number, password, and reason before every void, refund, or approval."}
           </p>
           <div className="fdThreeCol">
             <input
               value={sensitiveAccount}
-              onChange={(event) => setSensitiveAccount(event.target.value)}
-              placeholder={zh ? "員工 Email" : "Staff email"}
+              onChange={(event) => setSensitiveAccount(event.target.value.toUpperCase())}
+              placeholder={zh ? "員工編號" : "Employee number"}
               className="input"
-              type="email"
+              type="text"
               autoComplete="username"
+              autoCapitalize="characters"
             />
             <input
               value={sensitivePassword}

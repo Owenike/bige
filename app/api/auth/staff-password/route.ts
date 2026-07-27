@@ -1,9 +1,10 @@
 import { apiError, apiSuccess, requireProfile } from "../../../../lib/auth-context";
+import { isStaffPlaceholderEmail } from "../../../../lib/staff-credentials";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 export async function POST(request: Request) {
   const auth = await requireProfile(
-    ["platform_admin", "manager", "frontdesk", "coach"],
+    ["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales"],
     request,
   );
   if (!auth.ok) return auth.response;
@@ -17,8 +18,18 @@ export async function POST(request: Request) {
   if (userResult.error || !userResult.data.user) {
     return apiError(500, "INTERNAL_ERROR", userResult.error?.message || "User not found");
   }
-  if (!userResult.data.user.email_confirmed_at) {
-    return apiError(403, "FORBIDDEN", "請先完成 Email 驗證");
+  const userEmail = userResult.data.user.email || "";
+  if (!userResult.data.user.email_confirmed_at || !userEmail || isStaffPlaceholderEmail(userEmail)) {
+    return apiError(403, "FORBIDDEN", "請先完成本人 Email 驗證");
+  }
+
+  const profileResult = await admin
+    .from("profiles")
+    .select("staff_email_verified_at")
+    .eq("id", auth.context.userId)
+    .maybeSingle();
+  if (profileResult.error || !profileResult.data?.staff_email_verified_at) {
+    return apiError(403, "FORBIDDEN", "請先完成本人 Email 驗證");
   }
 
   const now = new Date().toISOString();
