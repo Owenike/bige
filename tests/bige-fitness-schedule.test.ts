@@ -1052,7 +1052,7 @@ test("every FA result path shares server and database payment barriers", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
   const migration = readFileSync(
-    "supabase/migrations/20260815233644_enforce_fa_contract_payment_integrity.sql",
+    "supabase/migrations/20260815234009_enforce_fa_contract_payment_integrity.sql",
     "utf8",
   );
 
@@ -1566,7 +1566,7 @@ test("generated assistant TO markers warn without blocking real schedule mutatio
 
 test("schedule swaps can roundtrip without stale occupancy or duplicate error dialogs", () => {
   const migration = readFileSync(
-    "supabase/migrations/20260815212707_fix_schedule_drag_roundtrip_occupancy.sql",
+    "supabase/migrations/20260815212928_fix_schedule_drag_roundtrip_occupancy.sql",
     "utf8",
   );
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
@@ -1591,7 +1591,7 @@ test("schedule swaps can roundtrip without stale occupancy or duplicate error di
 
 test("FA ECPay conversion and restore remove only conversion-created formal identity", () => {
   const migration = readFileSync(
-    "supabase/migrations/20260815220754_fix_fa_payment_and_restore_member.sql",
+    "supabase/migrations/20260815221634_fix_fa_payment_and_restore_member.sql",
     "utf8",
   );
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
@@ -1619,7 +1619,7 @@ test("FA ECPay conversion and restore remove only conversion-created formal iden
 
 test("FA signing date is locked to today and ECPay installments require a stored count", () => {
   const migration = readFileSync(
-    "supabase/migrations/20260815225225_lock_fa_signed_date_and_record_ecpay_installments.sql",
+    "supabase/migrations/20260815225909_lock_fa_signed_date_and_record_ecpay_installments.sql",
     "utf8",
   );
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
