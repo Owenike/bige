@@ -1,0 +1,112 @@
+.page {
+  padding: 20px;
+  color: #172235;
+  background: #fff;
+  min-height: 100vh;
+}
+.tools {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.tools button,
+.tools a {
+  border: 1px solid #bccadd;
+  border-radius: 10px;
+  background: #fff;
+  padding: 9px 13px;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  text-decoration: none;
+}
+.tools button {
+  background: #1f63c6;
+  color: #fff;
+}
+.page header {
+  text-align: center;
+  margin-bottom: 12px;
+}
+.page header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+.page header p {
+  margin: 5px;
+  color: #62738a;
+}
+.scroller {
+  overflow: auto;
+}
+.scroller table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 10px;
+}
+.scroller th,
+.scroller td {
+  border: 1px solid #8f9aaa;
+  min-width: 68px;
+  padding: 5px;
+  text-align: center;
+  vertical-align: middle;
+}
+.scroller thead th {
+  background: #eaf0f7;
+}
+.scroller tbody th {
+  min-width: 130px;
+  text-align: left;
+  background: #f7f9fc;
+}
+.off {
+  background: #ffe49a;
+}
+.page small {
+  display: block;
+  margin-top: 3px;
+  color: #5d6d82;
+}
+.page footer {
+  text-align: right;
+  font-size: 9px;
+  margin-top: 8px;
+  color: #65758a;
+}
+@page {
+  size: A3 landscape;
+  margin: 8mm;
+}
+@media print {
+  .page {
+    padding: 0;
+  }
+  .tools {
+    display: none;
+  }
+  .scroller {
+    overflow: visible;
+  }
+  .scroller table {
+    font-size: 8px;
+  }
+  .scroller th,
+  .scroller td {
+    min-width: 0;
+    padding: 3px;
+  }
+  .page header h1 {
+    font-size: 16px;
+  }
+}
+
+.error {
+  margin: 30px auto;
+  max-width: 720px;
+  border-radius: 12px;
+  background: #fff0ed;
+  padding: 16px;
+  color: #9c2d27;
+}

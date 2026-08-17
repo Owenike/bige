@@ -627,6 +627,121 @@ export async function runNotificationSweep(input: SweepInput): Promise<{ ok: tru
       if (created.ok) addCount(summary, "booking_upcoming", created.inserted);
     }
 
+    // Employee scheduling reminders use one daily dedupe key. Missing tables are
+    // tolerated during rolling deployment so the existing notification sweep keeps working.
+    const taipeiToday = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Taipei",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const taipeiDay = Number(taipeiToday.slice(-2));
+    const openPeriods = await supabase
+      .from("staff_schedule_periods")
+      .select("id, month_start, branch_id, reminder_starts_on, selection_closes_at")
+      .eq("tenant_id", tenant.id)
+      .eq("status", "selection_open")
+      .gte("selection_closes_at", nowIso)
+      .limit(20);
+    if (!openPeriods.error) {
+      for (const period of openPeriods.data || []) {
+        if (taipeiDay < Number(period.reminder_starts_on || 15)) continue;
+        let employeeQuery = supabase
+          .from("profiles")
+          .select("id, display_name, employee_number")
+          .eq("tenant_id", tenant.id)
+          .eq("is_active", true)
+          .is("staff_deleted_at", null)
+          .not("role", "in", '("member","customer")');
+        if (period.branch_id) employeeQuery = employeeQuery.or(`branch_id.is.null,branch_id.eq.${period.branch_id}`);
+        const [employeeResult, preferenceResult] = await Promise.all([
+          employeeQuery,
+          supabase
+            .from("staff_time_off_preferences")
+            .select("employee_id")
+            .eq("period_id", period.id)
+            .eq("status", "submitted"),
+        ]);
+        if (employeeResult.error || preferenceResult.error) continue;
+        const completed = new Set((preferenceResult.data || []).map((row) => String(row.employee_id)));
+        const incomplete = (employeeResult.data || []).filter((row) => !completed.has(String(row.id)));
+        if (incomplete.length === 0) continue;
+        const monthText = String(period.month_start).slice(0, 7);
+        const employeeReminder = await createInAppNotifications({
+          supabase,
+          tenantId: tenant.id,
+          branchId: period.branch_id,
+          recipientUserIds: incomplete.map((row) => String(row.id)),
+          title: `${monthText} 排休尚未完成`,
+          message: "您尚未選滿 8 天排休，請於 20 日 23:59 前完成；截止前可再修改。",
+          severity: "warning",
+          eventType: "staff_time_off_incomplete",
+          targetType: "staff_schedule_period",
+          targetId: String(period.id),
+          actionUrl: `/staff/schedule?month=${monthText}`,
+          dedupeKey: `staff-time-off-incomplete:${period.id}:${taipeiToday}`,
+          createdBy: input.actorUserId,
+        });
+        if (employeeReminder.ok) addCount(summary, "staff_time_off_incomplete", employeeReminder.inserted);
+        const managerReminder = await createInAppNotifications({
+          supabase,
+          tenantId: tenant.id,
+          branchId: period.branch_id,
+          recipientRoles: ["supervisor", "manager"],
+          title: `${monthText} 尚有 ${incomplete.length} 人未完成排休`,
+          message: incomplete.map((row) => row.display_name || row.employee_number || "未命名員工").join("、"),
+          severity: "warning",
+          eventType: "staff_time_off_manager_reminder",
+          targetType: "staff_schedule_period",
+          targetId: String(period.id),
+          actionUrl: `/manager/staff-scheduling?month=${monthText}`,
+          dedupeKey: `staff-time-off-manager:${period.id}:${taipeiToday}`,
+          createdBy: input.actorUserId,
+        });
+        if (managerReminder.ok) addCount(summary, "staff_time_off_manager_reminder", managerReminder.inserted);
+      }
+    }
+
+    const publishedVersions = await supabase
+      .from("staff_schedule_versions")
+      .select("id, period_id, published_at, staff_schedule_periods!inner(month_start, branch_id)")
+      .eq("tenant_id", tenant.id)
+      .eq("status", "published")
+      .gte("published_at", new Date(nowMs - 14 * 24 * 60 * 60 * 1000).toISOString())
+      .limit(20);
+    if (!publishedVersions.error) {
+      for (const version of publishedVersions.data || []) {
+        const periodInfo = Array.isArray(version.staff_schedule_periods)
+          ? version.staff_schedule_periods[0]
+          : version.staff_schedule_periods;
+        const [entryEmployees, acknowledgements] = await Promise.all([
+          supabase.from("staff_schedule_entries").select("employee_id").eq("version_id", version.id),
+          supabase.from("staff_schedule_acknowledgements").select("employee_id").eq("version_id", version.id).in("status", ["signed", "objected", "carried_forward"]),
+        ]);
+        if (entryEmployees.error || acknowledgements.error) continue;
+        const done = new Set((acknowledgements.data || []).map((row) => String(row.employee_id)));
+        const pending = Array.from(new Set((entryEmployees.data || []).map((row) => String(row.employee_id)))).filter((id) => !done.has(id));
+        if (pending.length === 0) continue;
+        const monthText = String(periodInfo?.month_start || "").slice(0, 7);
+        const reminder = await createInAppNotifications({
+          supabase,
+          tenantId: tenant.id,
+          branchId: periodInfo?.branch_id || null,
+          recipientUserIds: pending,
+          title: `${monthText} 正式班表尚未簽名`,
+          message: "請查看自己的正式班表與國定假日調移內容，並於發布後 3 天內完成手機簽名。",
+          severity: "warning",
+          eventType: "staff_schedule_signature_reminder",
+          targetType: "staff_schedule_version",
+          targetId: String(version.id),
+          actionUrl: `/staff/schedule?month=${monthText}`,
+          dedupeKey: `staff-schedule-signature:${version.id}:${taipeiToday}`,
+          createdBy: input.actorUserId,
+        });
+        if (reminder.ok) addCount(summary, "staff_schedule_signature_reminder", reminder.inserted);
+      }
+    }
+
     const crmLeadsResult = await supabase
       .from("crm_leads")
       .select("id, tenant_id, branch_id, owner_staff_id, name, status, trial_status, trial_result, trial_at, next_action_at, last_followed_up_at, updated_at")
@@ -720,22 +835,35 @@ export async function notifyHighRiskRequestCreated(params: {
   tenantId: string;
   branchId: string | null;
   requestId: string;
-  action: "order_void" | "payment_refund";
-  targetType: "order" | "payment";
+  action:
+    | "order_void"
+    | "payment_refund"
+    | "bige_contract_payment_void"
+    | "bige_contract_payment_refund"
+    | "bige_contract_extension";
+  targetType: "order" | "payment" | "bige_contract_payment" | "member_plan_contract";
   targetId: string;
   requestedBy: string;
 }) {
+  const labels = {
+    order_void: "訂單作廢",
+    payment_refund: "付款退款",
+    bige_contract_payment_void: "合約收款作廢",
+    bige_contract_payment_refund: "合約收款退款",
+    bige_contract_extension: "合約延期",
+  } as const;
+  const label = labels[params.action];
   return createInAppNotifications({
     tenantId: params.tenantId,
     branchId: params.branchId,
-    recipientRoles: ["manager", "platform_admin"],
-    title: params.action === "order_void" ? "Void request pending approval" : "Refund request pending approval",
-    message: `${params.targetType}:${params.targetId} requires approval.`,
+    recipientRoles: ["manager", "branch_manager"],
+    title: `${label}待經理覆核`,
+    message: `${label}申請已送出，請由經理本人核准或拒絕。`,
     severity: "warning",
     eventType: "high_risk_approval_pending",
     targetType: "approval_request",
     targetId: params.requestId,
-    actionUrl: "/manager",
+    actionUrl: `/manager/approvals?id=${encodeURIComponent(params.requestId)}`,
     dedupeKey: `approval-request:${params.requestId}`,
     createdBy: params.requestedBy,
   });
@@ -755,13 +883,13 @@ export async function notifyApprovalDecision(params: {
   return createInAppNotifications({
     tenantId: params.tenantId,
     recipientUserIds: [params.requestedBy],
-    title: params.decision === "approved" ? "Approval request approved" : "Approval request rejected",
-    message: `${params.action} for ${params.targetType}:${params.targetId} was ${params.decision}.`,
+    title: params.decision === "approved" ? "覆核申請已核准" : "覆核申請已拒絕",
+    message: `${params.action} 已由經理${params.decision === "approved" ? "核准" : "拒絕"}。`,
     severity: params.decision === "approved" ? "info" : "warning",
     eventType: "high_risk_approval_decision",
     targetType: "approval_request",
     targetId: params.requestId,
-    actionUrl: "/manager",
+    actionUrl: `/manager/approvals?id=${encodeURIComponent(params.requestId)}`,
     dedupeKey: `approval-decision:${params.requestId}:${params.decision}`,
     createdBy: params.resolvedBy,
   });

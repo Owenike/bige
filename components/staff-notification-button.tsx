@@ -3,6 +3,7 @@
 import { Bell } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { canUseStaffNotificationCenter } from "../lib/staff-credentials";
 import styles from "./staff-notification-button.module.css";
 
 export default function StaffNotificationButton() {
@@ -13,6 +14,18 @@ export default function StaffNotificationButton() {
     let active = true;
 
     async function load() {
+      const identityResponse = await fetch("/api/auth/me", {
+        cache: "no-store",
+      }).catch(() => null);
+      if (!active) return;
+      if (identityResponse?.ok) {
+        const identity = await identityResponse.json().catch(() => null);
+        if (!canUseStaffNotificationCenter(identity?.employeeNumber)) {
+          setAvailable(false);
+          return;
+        }
+      }
+
       const response = await fetch("/api/notifications?status=unread&limit=1", {
         cache: "no-store",
       }).catch(() => null);

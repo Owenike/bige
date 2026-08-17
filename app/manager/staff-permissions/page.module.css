@@ -1,0 +1,133 @@
+.page {
+  min-height: 100vh;
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 30px;
+  color: #172235;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 22px;
+  margin-bottom: 20px;
+}
+.header p {
+  color: #3371c6;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  margin: 0;
+}
+.header h1 {
+  font-size: 38px;
+  margin: 5px 0;
+}
+.header span {
+  color: #65758a;
+}
+.header > div:last-child {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.header input,
+.header a,
+.page select {
+  min-height: 40px;
+  border: 1px solid #cad5e4;
+  border-radius: 11px;
+  background: #fff;
+  padding: 8px 11px;
+  color: inherit;
+  text-decoration: none;
+}
+.error,
+.notice,
+.empty {
+  border-radius: 13px;
+  padding: 13px 15px;
+  margin-bottom: 15px;
+}
+.error {
+  background: #fff0ed;
+  color: #9c2d27;
+}
+.notice {
+  background: #eafff1;
+  color: #1f6a41;
+}
+.empty {
+  border: 1px dashed #b8c6d8;
+  text-align: center;
+}
+.scroller {
+  overflow: auto;
+  border: 1px solid #cfd9e6;
+  border-radius: 17px;
+  background: #fff;
+}
+.scroller table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+  font-size: 12px;
+}
+.scroller th,
+.scroller td {
+  min-width: 138px;
+  padding: 9px;
+  border-right: 1px solid #e0e6ee;
+  border-bottom: 1px solid #e0e6ee;
+  text-align: center;
+}
+.scroller thead th {
+  position: sticky;
+  top: 0;
+  background: #f4f7fb;
+  z-index: 2;
+}
+.scroller tbody th {
+  position: sticky;
+  left: 0;
+  background: #f9fbfd;
+  text-align: left;
+  z-index: 1;
+  min-width: 180px;
+}
+.scroller th strong,
+.scroller th small,
+.scroller td small {
+  display: block;
+}
+.scroller th small {
+  color: #718197;
+  margin-top: 4px;
+}
+.scroller select {
+  width: 100%;
+  font-size: 12px;
+}
+.allowed {
+  color: #187044;
+  margin-top: 5px;
+}
+.denied {
+  color: #a53830;
+  margin-top: 5px;
+}
+@media (max-width: 760px) {
+  .page {
+    padding: 15px;
+  }
+  .header {
+    display: grid;
+  }
+  .header h1 {
+    font-size: 30px;
+  }
+  .header input {
+    width: 100%;
+  }
+}

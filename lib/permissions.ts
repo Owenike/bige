@@ -1,6 +1,6 @@
 import { apiError, type ProfileContext } from "./auth-context";
 import { hasPermission, listPermissionsForRole, normalizePermissionRole, type PermissionAction } from "./role-permissions";
-import type { StaffPosition } from "./staff-organization";
+import { isTenantManager, type StaffPosition } from "./staff-organization";
 
 const FRONTDESK_PERMISSIONS: readonly PermissionAction[] = [
   "members.read",
@@ -62,8 +62,11 @@ const POSITION_PERMISSIONS: Record<StaffPosition, readonly PermissionAction[]> =
     "services.read",
     "coach_slots.write",
     "reports.read",
+    "audit.read",
     "payments.read",
+    "payments.write",
     "plans.read",
+    "plans.write",
     "member_plans.read",
     "crm.read",
     "crm.write",
@@ -159,6 +162,9 @@ export function canPerformInContext(
   action: PermissionAction,
 ) {
   if (context.role === "platform_admin") return true;
+  // A manager owns every business permission inside their tenant. Platform
+  // routes remain separately protected by the platform_admin role guard.
+  if (isTenantManager(context)) return canPerform("manager", action);
   if (context.department && context.position) {
     return POSITION_PERMISSIONS[context.position].includes(action);
   }

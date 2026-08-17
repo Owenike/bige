@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   Copy,
+  History,
   KeyRound,
   LogIn,
   Pencil,
@@ -18,6 +19,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AppRole } from "../../../lib/auth-context";
+import {
+  canChooseStaffEmployeeNumber,
+  isEmployeeNumber,
+  normalizeEmployeeNumber,
+} from "../../../lib/staff-credentials";
 import {
   DEPARTMENT_POSITIONS,
   STAFF_DEPARTMENTS,
@@ -65,6 +71,7 @@ type MePayload = {
   position?: StaffPosition | null;
   tenantId?: string | null;
   branchId?: string | null;
+  employeeNumber?: string | null;
 };
 
 type Reauth = {
@@ -84,6 +91,7 @@ type ApiErrorBody = {
   };
   employeeNumber?: string | null;
   displayName?: string | null;
+  linkedExistingAccount?: boolean;
 };
 
 type ActivationReveal = {
@@ -91,6 +99,13 @@ type ActivationReveal = {
   displayName: string;
   code: string;
   expiresAt: string;
+};
+
+type EmailHistoryItem = {
+  id: string;
+  previousEmail: string | null;
+  newEmail: string | null;
+  changedAt: string;
 };
 
 const EMPTY_REAUTH: Reauth = { account: "", password: "", reason: "" };
@@ -138,6 +153,7 @@ export default function ManagerStaffPage() {
 
   const [newName, setNewName] = useState("");
   const [newEnglishName, setNewEnglishName] = useState("");
+  const [newEmployeeNumber, setNewEmployeeNumber] = useState("");
   const [newDepartment, setNewDepartment] = useState<StaffDepartment>("general_affairs");
   const [newPosition, setNewPosition] = useState<StaffPosition>("frontdesk");
   const [newBranchId, setNewBranchId] = useState("");
@@ -150,6 +166,9 @@ export default function ManagerStaffPage() {
   const [editBranchId, setEditBranchId] = useState("");
   const [editActive, setEditActive] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<StaffItem | null>(null);
+  const [emailHistoryTarget, setEmailHistoryTarget] = useState<StaffItem | null>(null);
+  const [emailHistory, setEmailHistory] = useState<EmailHistoryItem[]>([]);
+  const [emailHistoryLoading, setEmailHistoryLoading] = useState(false);
 
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthTitle, setReauthTitle] = useState("");
@@ -177,6 +196,10 @@ export default function ManagerStaffPage() {
     [actor, me.role],
   );
   const canCreate = assignablePositions.length > 0;
+  const canChooseEmployeeNumber = canChooseStaffEmployeeNumber(me.employeeNumber);
+  const canViewEmailHistory =
+    me.role === "platform_admin" ||
+    normalizeEmployeeNumber(me.employeeNumber) === "E000001";
   const createPositions = DEPARTMENT_POSITIONS[newDepartment].filter((position) =>
     assignablePositions.includes(position),
   );
@@ -282,15 +305,23 @@ export default function ManagerStaffPage() {
   }
 
   async function confirmSensitive() {
-    if (!pendingAction || !reauth.account || !reauth.password || !reauth.reason.trim()) {
+    const normalizedAccount = normalizeEmployeeNumber(reauth.account);
+    if (
+      !pendingAction ||
+      !isEmployeeNumber(normalizedAccount) ||
+      !reauth.password ||
+      !reauth.reason.trim()
+    ) {
       setReauthError("請輸入員工編號、密碼與操作原因");
       return;
     }
+    const normalizedReauth = { ...reauth, account: normalizedAccount };
+    setReauth(normalizedReauth);
     setSaving(true);
     setError(null);
     setReauthError(null);
     try {
-      await pendingAction(reauth);
+      await pendingAction(normalizedReauth);
       setReauthOpen(false);
       setPendingAction(null);
     } catch (caught) {
@@ -305,6 +336,11 @@ export default function ManagerStaffPage() {
       setError("請填寫真實姓名與英文姓名");
       return;
     }
+    const requestedEmployeeNumber = normalizeEmployeeNumber(newEmployeeNumber);
+    if (canChooseEmployeeNumber && newEmployeeNumber.trim() && !isEmployeeNumber(requestedEmployeeNumber)) {
+      setError("員工編號請輸入 01 或完整格式 E000001");
+      return;
+    }
     requestSensitive("確認建立員工帳號", async (credentials) => {
       const response = await fetch(scopedPath("/api/manager/staff"), {
         method: "POST",
@@ -312,6 +348,7 @@ export default function ManagerStaffPage() {
         body: JSON.stringify({
           displayName: newName,
           englishName: newEnglishName,
+          employeeNumber: canChooseEmployeeNumber ? requestedEmployeeNumber || undefined : undefined,
           department: newDepartment,
           position: newPosition,
           branchId: newBranchId || null,
@@ -324,10 +361,13 @@ export default function ManagerStaffPage() {
       if (!response.ok) throw new Error(readError(payload, "建立員工失敗"));
       setNewName("");
       setNewEnglishName("");
+      setNewEmployeeNumber("");
       setNewBranchId("");
       const employeeNumber = payload?.item?.employee_number || "";
       const activationCode = payload?.activation?.code || "";
-      if (employeeNumber && activationCode && payload?.activation?.expiresAt) {
+      if (payload?.linkedExistingAccount) {
+        setNotice("既有的 01 管理帳號已加入教練名單，原本權限、Email 與密碼均未變更。");
+      } else if (employeeNumber && activationCode && payload?.activation?.expiresAt) {
         setActivationReveal({
           employeeNumber,
           displayName: payload.item?.display_name || newName,
@@ -440,8 +480,31 @@ export default function ManagerStaffPage() {
       });
       const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
       if (!response.ok) throw new Error(readError(payload, "寄送密碼重設信失敗"));
-      setNotice("密碼重設信已寄出");
+      setNotice("密碼重設信已寄出；員工仍可使用原密碼登入，直到完成重設");
     });
+  }
+
+  async function openEmailHistory(item: StaffItem) {
+    setEmailHistoryTarget(item);
+    setEmailHistory([]);
+    setEmailHistoryLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/manager/staff/email-history?profileId=${encodeURIComponent(item.id)}`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | (ApiErrorBody & { items?: EmailHistoryItem[] })
+        | null;
+      if (!response.ok) throw new Error(readError(payload, "讀取信箱變更紀錄失敗"));
+      setEmailHistory(payload?.items || []);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "讀取信箱變更紀錄失敗");
+      setEmailHistoryTarget(null);
+    } finally {
+      setEmailHistoryLoading(false);
+    }
   }
 
   function deleteStaff(item: StaffItem) {
@@ -590,7 +653,10 @@ export default function ManagerStaffPage() {
           <section className={`${styles.glassCard} ${styles.panel}`}>
             <h2 className={styles.panelTitle}>建立員工帳號</h2>
             <p className={styles.panelHint}>
-              系統會自動產生員工編號與一次性啟用碼。啟用碼只顯示一次、24 小時內有效；員工確認本人後，必須自行驗證 Email 並設定正式密碼。
+              {canChooseEmployeeNumber
+                ? "您可以自行指定員工編號；留空時由系統自動產生。"
+                : "系統會自動產生員工編號。"}
+              啟用碼只顯示一次、24 小時內有效；員工確認本人後，必須自行驗證 Email 並設定正式密碼。
             </p>
             <div className={styles.form}>
               <label className={styles.field}>
@@ -606,6 +672,31 @@ export default function ManagerStaffPage() {
                   autoCapitalize="words"
                 />
               </label>
+              {canChooseEmployeeNumber ? (
+                <label className={styles.field}>
+                  <span className={styles.label}>員工編號（選填）</span>
+                  <input
+                    className={styles.input}
+                    value={newEmployeeNumber}
+                    onChange={(event) => setNewEmployeeNumber(event.target.value)}
+                    onBlur={() => {
+                      const normalized = newEmployeeNumber.trim()
+                        ? normalizeEmployeeNumber(newEmployeeNumber)
+                        : "";
+                      setNewEmployeeNumber(normalized);
+                      if (normalized === "E000001") {
+                        setNewDepartment("coaching");
+                        setNewPosition("coach");
+                      }
+                    }}
+                    placeholder="例如 07 或 E000007；留空自動配號"
+                    autoCapitalize="characters"
+                  />
+                  <small className={styles.panelHint}>
+                    輸入 01 時會使用目前登入的 01 管理帳號加入教練名單，不會建立第二個帳號，也不會變更原本管理權限。
+                  </small>
+                </label>
+              ) : null}
               <label className={styles.field}>
                 <span className={styles.label}>部門</span>
                 <select
@@ -691,26 +782,43 @@ export default function ManagerStaffPage() {
                         <Pencil size={16} />
                         編輯
                       </button>
-                      <button className={`${styles.iconButton} ${item.is_active ? styles.danger : ""}`} type="button" onClick={() => toggleStaff(item)} disabled={!manageable(item)} title={item.is_active ? "停用帳號" : "啟用帳號"}>
+                      {canViewEmailHistory ? (
+                        <button
+                          className={styles.button}
+                          type="button"
+                          onClick={() => void openEmailHistory(item)}
+                          title="查看信箱變更紀錄"
+                        >
+                          <History size={16} />
+                          信箱紀錄
+                        </button>
+                      ) : null}
+                      <button className={`${styles.iconButton} ${item.is_active ? styles.danger : ""}`} type="button" onClick={() => toggleStaff(item)} disabled={!manageable(item) || item.id === me.userId} title={item.id === me.userId ? "不能停用目前登入帳號" : item.is_active ? "停用帳號" : "啟用帳號"}>
                         {item.is_active ? <UserRoundX size={17} /> : <UserRoundCheck size={17} />}
                       </button>
-                      <button
-                        className={styles.iconButton}
-                        type="button"
-                        onClick={() =>
-                          item.staff_activation_status === "completed"
-                            ? resetPassword(item)
-                            : regenerateActivationCode(item)
-                        }
-                        disabled={!manageable(item)}
-                        title={
-                          item.staff_activation_status === "completed"
-                            ? "寄送密碼重設信"
-                            : "重新產生一次性啟用碼"
-                        }
-                      >
-                        <KeyRound size={17} />
-                      </button>
+                      {item.staff_activation_status === "completed" ? (
+                        <button
+                          className={styles.button}
+                          type="button"
+                          onClick={() => resetPassword(item)}
+                          disabled={!manageable(item)}
+                          title="寄送密碼重設信；寄出後不會封鎖原密碼登入"
+                        >
+                          <KeyRound size={17} />
+                          寄送密碼重設信
+                        </button>
+                      ) : (
+                        <button
+                          className={styles.button}
+                          type="button"
+                          onClick={() => regenerateActivationCode(item)}
+                          disabled={!manageable(item)}
+                          title="重新產生一次性啟用碼；舊啟用碼將立即失效"
+                        >
+                          <KeyRound size={17} />
+                          重新產生啟用碼
+                        </button>
+                      )}
                       {me.role === "platform_admin" && me.userId !== item.id ? (
                         <button
                           className={`${styles.iconButton} ${styles.danger}`}
@@ -758,12 +866,10 @@ export default function ManagerStaffPage() {
                 <button
                   className={styles.iconButton}
                   type="button"
-                  title="複製啟用資料"
+                  title="複製一次性啟用碼"
                   onClick={() => {
-                    void navigator.clipboard.writeText(
-                      `員工編號：${activationReveal.employeeNumber}\n一次性啟用碼：${activationReveal.code}`,
-                    );
-                    setNotice("員工編號與一次性啟用碼已複製");
+                    void navigator.clipboard.writeText(activationReveal.code);
+                    setNotice("一次性啟用碼已複製");
                   }}
                 >
                   <Copy size={18} />
@@ -813,6 +919,50 @@ export default function ManagerStaffPage() {
                   驗證並移至已刪除
                 </button>
               </div>
+            </section>
+          </div>
+        ) : null}
+
+        {emailHistoryTarget ? (
+          <div className={styles.modalBackdrop} onMouseDown={() => setEmailHistoryTarget(null)}>
+            <section
+              className={`${styles.glassCard} ${styles.modal}`}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="email-history-title"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>僅管理端可見</p>
+                  <h2 className={styles.panelTitle} id="email-history-title">信箱變更紀錄</h2>
+                </div>
+                <button className={styles.iconButton} type="button" onClick={() => setEmailHistoryTarget(null)} title="關閉">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className={styles.modalIdentity}>
+                <strong>{emailHistoryTarget.display_name || "未命名員工"}</strong>
+                <span>{emailHistoryTarget.employee_number || "尚未建立員工編號"} · 目前信箱：{emailHistoryTarget.email || "尚未設定"}</span>
+              </div>
+              {emailHistoryLoading ? <p className={styles.empty}>正在讀取紀錄…</p> : null}
+              {!emailHistoryLoading && emailHistory.length === 0 ? (
+                <p className={styles.empty}>目前沒有信箱變更紀錄</p>
+              ) : null}
+              {!emailHistoryLoading && emailHistory.length > 0 ? (
+                <div className={styles.historyList}>
+                  {emailHistory.map((item) => (
+                    <article className={styles.historyItem} key={item.id}>
+                      <time>{formatDate(item.changedAt)}</time>
+                      <div>
+                        <span>{item.previousEmail || "未設定"}</span>
+                        <strong>→</strong>
+                        <span>{item.newEmail || "未設定"}</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
             </section>
           </div>
         ) : null}
@@ -905,7 +1055,7 @@ export default function ManagerStaffPage() {
               >
                 <label className={`${styles.field} ${styles.full}`}>
                   <span className={styles.label}>員工編號</span>
-                  <input className={styles.input} type="text" autoComplete="username" autoCapitalize="characters" required autoFocus value={reauth.account} onChange={(event) => setReauth({ ...reauth, account: event.target.value.toUpperCase() })} placeholder="E000001" />
+                  <input className={styles.input} type="text" autoComplete="username" autoCapitalize="characters" required autoFocus value={reauth.account} onChange={(event) => setReauth({ ...reauth, account: event.target.value.toUpperCase() })} onBlur={() => setReauth({ ...reauth, account: normalizeEmployeeNumber(reauth.account) })} placeholder="01 或 E000001" />
                 </label>
                 <label className={`${styles.field} ${styles.full}`}>
                   <span className={styles.label}>密碼</span>

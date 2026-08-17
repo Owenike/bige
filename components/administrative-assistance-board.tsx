@@ -46,8 +46,12 @@ function formatDateTime(value: string | null) {
 }
 
 export default function AdministrativeAssistanceBoard({
+  embedded = false,
+  premium = false,
   returnTo,
 }: {
+  embedded?: boolean;
+  premium?: boolean;
   returnTo: string;
 }) {
   const [items, setItems] = useState<AssistanceItem[]>([]);
@@ -133,10 +137,12 @@ export default function AdministrativeAssistanceBoard({
     }
   }
 
-  return (
-    <main className={styles.page}>
-      <div className={styles.shell}>
-        <header className={styles.header}>
+  const content = (
+      <div
+        className={`${embedded ? styles.embedded : styles.shell} ${premium ? styles.premium : ""}`.trim()}
+      >
+        {!embedded ? (
+          <header className={styles.header}>
           <div>
             <p className={styles.eyebrow}>BIG E FITNESS OPERATIONS</p>
             <h1>行政協助事項</h1>
@@ -145,7 +151,8 @@ export default function AdministrativeAssistanceBoard({
           <a className={styles.iconButton} href={returnTo} title="返回營運後台">
             <ArrowLeft size={19} />
           </a>
-        </header>
+          </header>
+        ) : null}
 
         <nav className={styles.tabs} aria-label="行政協助狀態">
           <button
@@ -246,6 +253,15 @@ export default function AdministrativeAssistanceBoard({
           ) : null}
         </section>
       </div>
+  );
+
+  if (embedded) {
+    return <section>{content}</section>;
+  }
+
+  return (
+    <main className={`${styles.page} ${premium ? styles.premiumPage : ""}`.trim()}>
+      {content}
     </main>
   );
 }

@@ -1,15 +1,40 @@
 import { apiError, apiSuccess, requireProfile } from "../../../lib/auth-context";
-import { requireAnyPermission } from "../../../lib/permissions";
+import { isBigeContractRiskRequester, isTenantManager } from "../../../lib/staff-organization";
+
+type ApprovalListRow = {
+  id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  owning_department: string | null;
+  reason: string;
+  status: string;
+  decision_note: string | null;
+  requested_by: string | null;
+  resolved_by: string | null;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+type RequesterProfile = {
+  id: string;
+  display_name: string | null;
+  employee_number: string | null;
+};
 
 export async function GET(request: Request) {
-  const auth = await requireProfile(["manager", "frontdesk"], request);
+  const auth = await requireProfile(
+    ["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk"],
+    request,
+  );
   if (!auth.ok) return auth.response;
 
-  const permission =
-    auth.context.role === "frontdesk"
-      ? requireAnyPermission(auth.context, ["refunds.request", "orders.void.request", "pass_adjustments.request"])
-      : requireAnyPermission(auth.context, ["refunds.approve", "orders.void.approve", "pass_adjustments.approve"]);
-  if (!permission.ok) return permission.response;
+  const canResolve = isTenantManager(auth.context);
+  const canReadOwn =
+    auth.context.role === "frontdesk" || isBigeContractRiskRequester(auth.context);
+  if (!canResolve && !canReadOwn) {
+    return apiError(403, "FORBIDDEN", "您沒有覆核事項的查看權限");
+  }
 
   if (!auth.context.tenantId) {
     return apiError(400, "FORBIDDEN", "Invalid tenant context");
@@ -27,7 +52,7 @@ export async function GET(request: Request) {
     .limit(limit);
 
   if (status !== "all") query = query.eq("status", status);
-  if (auth.context.role === "frontdesk") query = query.eq("requested_by", auth.context.userId);
+  if (!canResolve) query = query.eq("requested_by", auth.context.userId);
   if (auth.context.role !== "platform_admin" && auth.context.department) {
     query =
       auth.context.department === "general_affairs"
@@ -37,5 +62,27 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) return apiError(500, "INTERNAL_ERROR", error.message);
-  return apiSuccess({ items: data ?? [] });
+  const items = (data || []) as ApprovalListRow[];
+  const requesterIds = [...new Set(
+    items
+      .map((item) => item.requested_by)
+      .filter((value): value is string => typeof value === "string" && value.length > 0),
+  )];
+  const requesterResult = requesterIds.length
+    ? await auth.supabase
+        .from("profiles")
+        .select("id, display_name, employee_number")
+        .in("id", requesterIds)
+    : { data: [], error: null };
+  if (requesterResult.error) return apiError(500, "INTERNAL_ERROR", requesterResult.error.message);
+  const requesterMap = new Map<string, RequesterProfile>(
+    ((requesterResult.data || []) as RequesterProfile[]).map((profile) => [String(profile.id), profile]),
+  );
+  return apiSuccess({
+    canResolve,
+    items: items.map((item) => ({
+      ...item,
+      requester: item.requested_by ? requesterMap.get(String(item.requested_by)) || null : null,
+    })),
+  });
 }

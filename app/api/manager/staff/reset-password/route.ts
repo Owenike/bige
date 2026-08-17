@@ -93,18 +93,6 @@ export async function POST(request: Request) {
     return apiError(500, "INTERNAL_ERROR", linkResult.error?.message || "Failed to create reset link");
   }
 
-  const profileUpdate = await admin
-    .from("profiles")
-    .update({
-      must_change_password: true,
-      password_reset_required_at: new Date().toISOString(),
-      updated_by: reauth.operator.userId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", profileId)
-    .eq("tenant_id", tenantId);
-  if (profileUpdate.error) return apiError(500, "INTERNAL_ERROR", profileUpdate.error.message);
-
   await auth.supabase.from("audit_logs").insert({
     tenant_id: tenantId,
     actor_id: reauth.operator.userId,

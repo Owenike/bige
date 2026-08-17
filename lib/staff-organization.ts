@@ -79,11 +79,11 @@ export function positionLabel(position: StaffPosition | null | undefined) {
     general_affairs_assistant_manager: "庶務副理",
     general_affairs_manager: "庶務經理",
     coach: "教練",
-    coach_team_lead: "組長",
-    coach_director: "主任",
-    coach_assistant_manager: "副理",
-    coach_manager: "經理",
-    coach_city_manager: "城市經理",
+    coach_team_lead: "教練組長",
+    coach_director: "教練主任",
+    coach_assistant_manager: "教練副理",
+    coach_manager: "教練經理",
+    coach_city_manager: "教練城市經理",
   };
   return position ? labels[position] : "尚未設定";
 }
@@ -103,12 +103,49 @@ export function legacyRoleForPosition(position: StaffPosition): AppRole {
   return "manager";
 }
 
+export function roleForOrganizationAssignment(
+  currentRole: AppRole,
+  position: StaffPosition,
+): AppRole {
+  return currentRole === "platform_admin"
+    ? "platform_admin"
+    : legacyRoleForPosition(position);
+}
+
 export type OrganizationActor = {
   role: AppRole;
   department: StaffDepartment | null;
   position: StaffPosition | null;
   branchId?: string | null;
 };
+
+const COACH_SCHEDULE_OVERVIEW_POSITIONS = new Set<StaffPosition>([
+  "coach_team_lead",
+  "coach_director",
+  "coach_assistant_manager",
+  "coach_manager",
+  "coach_city_manager",
+]);
+
+const LEGACY_SCHEDULE_OVERVIEW_ROLES = new Set<AppRole>([
+  "manager",
+  "supervisor",
+  "branch_manager",
+  "store_owner",
+  "store_manager",
+]);
+
+export function canViewAllCoachSchedules(actor: OrganizationActor) {
+  if (actor.role === "platform_admin") return true;
+  if (
+    actor.department === "coaching" &&
+    actor.position &&
+    COACH_SCHEDULE_OVERVIEW_POSITIONS.has(actor.position)
+  ) {
+    return true;
+  }
+  return LEGACY_SCHEDULE_OVERVIEW_ROLES.has(actor.role);
+}
 
 export function canCreatePosition(actor: OrganizationActor, target: StaffPosition) {
   if (actor.role === "platform_admin") return true;
@@ -170,7 +207,8 @@ export function canProcessAdministrativeAssistance(actor: OrganizationActor) {
 }
 
 export function canApproveDepartmentMoney(
-  actor: OrganizationActor,
+  actor: Pick<OrganizationActor, "role"> &
+    Partial<Pick<OrganizationActor, "department" | "position">>,
   owningDepartment: StaffDepartment,
 ) {
   if (actor.role === "platform_admin") return true;
@@ -179,6 +217,141 @@ export function canApproveDepartmentMoney(
     return actor.position === "general_affairs_manager";
   }
   return actor.position === "coach_manager" || actor.position === "coach_city_manager";
+}
+
+export function canManageBigeContractRefundOrExtension(
+  actor: Pick<OrganizationActor, "role"> &
+    Partial<Pick<OrganizationActor, "department" | "position">>,
+) {
+  if (actor.role === "platform_admin") return true;
+  if (actor.department || actor.position) {
+    return (
+      actor.department === "coaching" &&
+      (actor.position === "coach_assistant_manager" ||
+        actor.position === "coach_manager" ||
+        actor.position === "coach_city_manager")
+    );
+  }
+  return (
+    actor.role === "manager" ||
+    actor.role === "supervisor" ||
+    actor.role === "branch_manager" ||
+    actor.role === "store_owner" ||
+    actor.role === "store_manager"
+  );
+}
+
+export function canDirectlyApproveBigeContractRisk(
+  actor: Pick<OrganizationActor, "role"> &
+    Partial<Pick<OrganizationActor, "department" | "position">>,
+) {
+  if (actor.role === "platform_admin") return true;
+  if (actor.department || actor.position) {
+    return (
+      actor.department === "coaching" &&
+      (actor.position === "coach_manager" || actor.position === "coach_city_manager")
+    );
+  }
+  return (
+    actor.role === "manager" ||
+    actor.role === "branch_manager" ||
+    actor.role === "store_owner" ||
+    actor.role === "store_manager"
+  );
+}
+
+export function isBigeContractRiskRequester(
+  actor: Pick<OrganizationActor, "role"> &
+    Partial<Pick<OrganizationActor, "department" | "position">>,
+) {
+  return (
+    canDirectlyApproveBigeContractRisk(actor) ||
+    (actor.department === "coaching" && actor.position === "coach_assistant_manager") ||
+    (!actor.department && !actor.position && actor.role === "supervisor")
+  );
+}
+
+export function canRecordBigeContractPayment(
+  actor: Pick<OrganizationActor, "role"> &
+    Partial<Pick<OrganizationActor, "department" | "position">>,
+) {
+  if (canDirectlyApproveBigeContractRisk(actor)) return true;
+  if (actor.role === "frontdesk") return true;
+  return (
+    (actor.department === "coaching" && actor.position === "coach_assistant_manager") ||
+    (!actor.department && !actor.position && actor.role === "supervisor")
+  );
+}
+
+export function isTenantManager(
+  actor: Pick<OrganizationActor, "role"> &
+    Partial<Pick<OrganizationActor, "department" | "position">>,
+) {
+  if (actor.role === "platform_admin") return true;
+  if (actor.position) {
+    return (
+      actor.position === "general_affairs_manager" ||
+      actor.position === "coach_manager" ||
+      actor.position === "coach_city_manager"
+    );
+  }
+  return (
+    actor.role === "manager" ||
+    actor.role === "branch_manager" ||
+    actor.role === "store_owner" ||
+    actor.role === "store_manager"
+  );
+}
+
+export function canManageBigePlansAndDailyReports(
+  actor: Pick<OrganizationActor, "role"> &
+    Partial<Pick<OrganizationActor, "department" | "position">>,
+) {
+  if (actor.role === "platform_admin") return true;
+  if (actor.department || actor.position) {
+    return (
+      actor.department === "coaching" &&
+      (actor.position === "coach_assistant_manager" ||
+        actor.position === "coach_manager" ||
+        actor.position === "coach_city_manager")
+    );
+  }
+  return (
+    actor.role === "manager" ||
+    actor.role === "supervisor" ||
+    actor.role === "branch_manager" ||
+    actor.role === "store_owner" ||
+    actor.role === "store_manager"
+  );
+}
+
+export function canManageBigeCourseAllocations(
+  actor: Pick<OrganizationActor, "role"> &
+    Partial<Pick<OrganizationActor, "department" | "position">>,
+) {
+  if (actor.role === "platform_admin") return true;
+  if (actor.department || actor.position) {
+    return (
+      actor.department === "coaching" &&
+      (actor.position === "coach_assistant_manager" ||
+        actor.position === "coach_manager" ||
+        actor.position === "coach_city_manager")
+    );
+  }
+  return (
+    actor.role === "manager" ||
+    actor.role === "supervisor" ||
+    actor.role === "branch_manager" ||
+    actor.role === "store_owner" ||
+    actor.role === "store_manager"
+  );
+}
+
+export function canManageMemberPersonalData(
+  actor: Pick<OrganizationActor, "role"> &
+    Partial<Pick<OrganizationActor, "department" | "position">>,
+) {
+  return canManageBigePlansAndDailyReports(actor);
 }
 
 export function canAccessManagerWorkspace(actor: OrganizationActor) {

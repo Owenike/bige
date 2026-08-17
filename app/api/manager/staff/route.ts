@@ -1,7 +1,23 @@
-import { apiError, apiSuccess, requireProfile, type AppRole, type ProfileContext } from "../../../../lib/auth-context";
-import { claimIdempotency, finalizeIdempotency } from "../../../../lib/idempotency";
+import {
+  apiError,
+  apiSuccess,
+  requireProfile,
+  type AppRole,
+  type ProfileContext,
+} from "../../../../lib/auth-context";
+import {
+  claimIdempotency,
+  finalizeIdempotency,
+} from "../../../../lib/idempotency";
 import { requirePermission } from "../../../../lib/permissions";
-import { verifySensitiveOperator, type SensitiveCredentials } from "../../../../lib/sensitive-reauth";
+import {
+  verifySensitiveOperator,
+  type SensitiveCredentials,
+} from "../../../../lib/sensitive-reauth";
+import {
+  hasStaffPermission,
+  type StaffPermissionKey,
+} from "../../../../lib/staff-operation-permissions";
 import {
   canCreatePosition,
   canManagePosition,
@@ -9,12 +25,16 @@ import {
   normalizeStaffDepartment,
   normalizeStaffPosition,
   positionBelongsToDepartment,
+  roleForOrganizationAssignment,
   type StaffDepartment,
   type StaffPosition,
 } from "../../../../lib/staff-organization";
 import {
+  CUSTOM_EMPLOYEE_NUMBER_MANAGER,
+  canChooseStaffEmployeeNumber,
   isEmployeeNumber,
   isStaffPlaceholderEmail,
+  normalizeEmployeeNumber,
   staffPlaceholderEmail,
 } from "../../../../lib/staff-credentials";
 import {
@@ -27,12 +47,19 @@ import {
 } from "../../../../lib/staff-activation";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
-const STAFF_FILTER_ROLES = ["manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales"] as const;
+const STAFF_FILTER_ROLES = [
+  "manager",
+  "supervisor",
+  "branch_manager",
+  "frontdesk",
+  "coach",
+  "sales",
+] as const;
 type StaffRole = (typeof STAFF_FILTER_ROLES)[number];
 
 type StaffRow = {
   id: string;
-  role: StaffRole;
+  role: AppRole;
   department: StaffDepartment | null;
   position: StaffPosition | null;
   tenant_id: string | null;
@@ -55,7 +82,7 @@ type StaffRow = {
 
 type StaffItem = {
   id: string;
-  role: StaffRole;
+  role: AppRole;
   department: StaffDepartment | null;
   position: StaffPosition | null;
   tenant_id: string | null;
@@ -79,7 +106,15 @@ type StaffItem = {
 
 function parseRole(value: string | null): StaffRole | null {
   if (!value) return null;
-  return STAFF_FILTER_ROLES.includes(value as StaffRole) ? (value as StaffRole) : null;
+  return STAFF_FILTER_ROLES.includes(value as StaffRole)
+    ? (value as StaffRole)
+    : null;
+}
+
+function managedStaffRoles(actorRole: AppRole): AppRole[] {
+  return actorRole === "platform_admin"
+    ? [...STAFF_FILTER_ROLES, "platform_admin"]
+    : [...STAFF_FILTER_ROLES];
 }
 
 function canAssignLegacyRole(actorRole: AppRole, targetRole: StaffRole) {
@@ -117,7 +152,10 @@ function formatStaffItem(row: StaffRow, email?: string | null): StaffItem {
 }
 
 function organizationActor(
-  context: Pick<ProfileContext, "role" | "department" | "position" | "branchId">,
+  context: Pick<
+    ProfileContext,
+    "role" | "department" | "position" | "branchId"
+  >,
 ) {
   return {
     role: context.role,
@@ -130,8 +168,35 @@ function organizationActor(
 const STAFF_SELECT =
   "id, role, department, position, tenant_id, branch_id, display_name, english_name, employee_number, is_active, created_at, updated_at, invited_by, created_by, updated_by, last_login_at, staff_deleted_at, staff_deleted_by, staff_delete_reason, staff_activation_status";
 
+async function checkOperationPermission(params: {
+  context: Pick<ProfileContext, "userId" | "role" | "position">;
+  tenantId: string;
+  permission: StaffPermissionKey;
+  message: string;
+}) {
+  try {
+    const allowed = await hasStaffPermission({
+      supabase: createSupabaseAdminClient(),
+      tenantId: params.tenantId,
+      employeeId: params.context.userId,
+      context: params.context,
+      permission: params.permission,
+    });
+    return allowed ? null : apiError(403, "FORBIDDEN", params.message);
+  } catch (error) {
+    return apiError(
+      500,
+      "INTERNAL_ERROR",
+      error instanceof Error ? error.message : "權限檢查失敗",
+    );
+  }
+}
+
 async function resolveTenantScope(request: Request) {
-  const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager"], request);
+  const auth = await requireProfile(
+    ["platform_admin", "manager", "supervisor", "branch_manager"],
+    request,
+  );
   if (!auth.ok) return auth;
 
   const requestedTenantId = new URL(request.url).searchParams.get("tenantId");
@@ -143,7 +208,11 @@ async function resolveTenantScope(request: Request) {
   if (!scopedTenantId) {
     return {
       ok: false as const,
-      response: apiError(400, "FORBIDDEN", "tenantId is required for platform admin or missing in profile context"),
+      response: apiError(
+        400,
+        "FORBIDDEN",
+        "tenantId is required for platform admin or missing in profile context",
+      ),
     };
   }
 
@@ -170,10 +239,20 @@ async function validateBranchScope(params: {
     .eq("id", branchId)
     .maybeSingle();
   if (branchCheck.error) {
-    return { ok: false as const, response: apiError(500, "INTERNAL_ERROR", branchCheck.error.message) };
+    return {
+      ok: false as const,
+      response: apiError(500, "INTERNAL_ERROR", branchCheck.error.message),
+    };
   }
   if (!branchCheck.data) {
-    return { ok: false as const, response: apiError(403, "BRANCH_SCOPE_DENIED", "branchId is outside tenant scope") };
+    return {
+      ok: false as const,
+      response: apiError(
+        403,
+        "BRANCH_SCOPE_DENIED",
+        "branchId is outside tenant scope",
+      ),
+    };
   }
 
   if (
@@ -181,7 +260,14 @@ async function validateBranchScope(params: {
     context.branchId &&
     context.branchId !== branchId
   ) {
-    return { ok: false as const, response: apiError(403, "BRANCH_SCOPE_DENIED", "Cannot assign staff to another branch outside your scope") };
+    return {
+      ok: false as const,
+      response: apiError(
+        403,
+        "BRANCH_SCOPE_DENIED",
+        "Cannot assign staff to another branch outside your scope",
+      ),
+    };
   }
 
   return { ok: true as const };
@@ -218,6 +304,33 @@ async function loadEmailsByIds(userIds: string[]) {
   return emailById;
 }
 
+async function nextAvailableEmployeeNumber(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+): Promise<{ data: string | null; error: { message: string } | null }> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const generated = await admin.rpc("next_staff_employee_number");
+    if (generated.error) return { data: null, error: generated.error };
+
+    const candidate = typeof generated.data === "string" ? generated.data : "";
+    if (!isEmployeeNumber(candidate)) {
+      return {
+        data: null,
+        error: { message: "Create employee number failed" },
+      };
+    }
+
+    const existing = await admin
+      .from("profiles")
+      .select("id")
+      .eq("employee_number", candidate)
+      .maybeSingle();
+    if (existing.error) return { data: null, error: existing.error };
+    if (!existing.data) return { data: candidate, error: null };
+  }
+
+  return { data: null, error: { message: "No available employee number" } };
+}
+
 export async function GET(request: Request) {
   const scoped = await resolveTenantScope(request);
   if (!scoped.ok) return scoped.response;
@@ -235,7 +348,7 @@ export async function GET(request: Request) {
     .from("profiles")
     .select(STAFF_SELECT)
     .eq("tenant_id", scoped.scopedTenantId)
-    .in("role", [...STAFF_FILTER_ROLES])
+    .in("role", managedStaffRoles(scoped.auth.context.role))
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -249,7 +362,10 @@ export async function GET(request: Request) {
       `display_name.ilike.%${q}%,english_name.ilike.%${q}%,employee_number.ilike.%${q}%,id.ilike.%${q}%`,
     );
   }
-  if (scoped.auth.context.role !== "platform_admin" && scoped.auth.context.branchId) {
+  if (
+    scoped.auth.context.role !== "platform_admin" &&
+    scoped.auth.context.branchId
+  ) {
     query = query.eq("branch_id", scoped.auth.context.branchId);
   }
 
@@ -282,56 +398,99 @@ export async function POST(request: Request) {
   const scoped = await resolveTenantScope(request);
   if (!scoped.ok) return scoped.response;
 
-  const body = (await request.json().catch(() => null)) as
-    | {
-        role?: string;
-        department?: string;
-        position?: string;
-        displayName?: string | null;
-        englishName?: string | null;
-        branchId?: string | null;
-        isActive?: boolean;
-        tenantId?: string;
-        idempotencyKey?: string;
-        reauth?: SensitiveCredentials;
-      }
-    | null;
+  const body = (await request.json().catch(() => null)) as {
+    role?: string;
+    department?: string;
+    position?: string;
+    displayName?: string | null;
+    englishName?: string | null;
+    employeeNumber?: string | null;
+    branchId?: string | null;
+    isActive?: boolean;
+    tenantId?: string;
+    idempotencyKey?: string;
+    reauth?: SensitiveCredentials;
+  } | null;
 
   const reauth = await verifySensitiveOperator({
     session: scoped.auth.context,
     credentials: body?.reauth,
   });
   if (!reauth.ok) return apiError(401, "UNAUTHORIZED", reauth.message);
-  const permission = requirePermission(reauth.operator, "staff.create");
-  if (!permission.ok) return permission.response;
 
   const department = normalizeStaffDepartment(body?.department);
   const position = normalizeStaffPosition(body?.position);
   const role = position
     ? (legacyRoleForPosition(position) as StaffRole)
     : parseRole(typeof body?.role === "string" ? body.role : null);
-  const displayName = typeof body?.displayName === "string" ? body.displayName.trim() || null : null;
-  const englishName = typeof body?.englishName === "string" ? body.englishName.trim() || null : null;
+  const displayName =
+    typeof body?.displayName === "string"
+      ? body.displayName.trim() || null
+      : null;
+  const englishName =
+    typeof body?.englishName === "string"
+      ? body.englishName.trim() || null
+      : null;
+  const requestedEmployeeNumber = normalizeEmployeeNumber(body?.employeeNumber);
   const isActive = body?.isActive === false ? false : true;
-  const nextBranchId = typeof body?.branchId === "string" ? body.branchId.trim() || null : null;
-  const idempotencyKeyInput = typeof body?.idempotencyKey === "string" ? body.idempotencyKey.trim() : "";
+  const nextBranchId =
+    typeof body?.branchId === "string" ? body.branchId.trim() || null : null;
+  const idempotencyKeyInput =
+    typeof body?.idempotencyKey === "string" ? body.idempotencyKey.trim() : "";
   const tenantId =
     scoped.auth.context.role === "platform_admin"
-      ? (typeof body?.tenantId === "string" ? body.tenantId.trim() : "") || scoped.scopedTenantId
+      ? (typeof body?.tenantId === "string" ? body.tenantId.trim() : "") ||
+        scoped.scopedTenantId
       : scoped.scopedTenantId;
 
   if (!tenantId) return apiError(400, "FORBIDDEN", "tenantId is required");
+  const createPermission = await checkOperationPermission({
+    context: reauth.operator,
+    tenantId,
+    permission: "create_employee",
+    message: "您沒有新增員工帳號的權限",
+  });
+  if (createPermission) return createPermission;
   if (!displayName) return apiError(400, "FORBIDDEN", "真實姓名為必填");
   if (!englishName) return apiError(400, "FORBIDDEN", "英文姓名為必填");
+  if (body?.employeeNumber && !isEmployeeNumber(requestedEmployeeNumber)) {
+    return apiError(400, "FORBIDDEN", "員工編號格式不正確");
+  }
   if (!role) return apiError(400, "INVALID_ROLE", "role is invalid");
-  if ((department || position) && !positionBelongsToDepartment(department, position)) {
-    return apiError(400, "INVALID_ROLE", "department and position do not match");
+  if (
+    (department || position) &&
+    !positionBelongsToDepartment(department, position)
+  ) {
+    return apiError(
+      400,
+      "INVALID_ROLE",
+      "department and position do not match",
+    );
   }
   const canAssign = position
     ? canCreatePosition(organizationActor(reauth.operator), position)
     : canAssignLegacyRole(reauth.operator.role, role);
   if (!canAssign) {
-    return apiError(403, "ROLE_ASSIGNMENT_DENIED", "You cannot assign this role");
+    return apiError(
+      403,
+      "ROLE_ASSIGNMENT_DENIED",
+      "You cannot assign this role",
+    );
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (requestedEmployeeNumber) {
+    const actorIdentity = await admin
+      .from("profiles")
+      .select("employee_number")
+      .eq("id", scoped.auth.context.userId)
+      .maybeSingle();
+    if (actorIdentity.error) {
+      return apiError(500, "INTERNAL_ERROR", actorIdentity.error.message);
+    }
+    if (!canChooseStaffEmployeeNumber(actorIdentity.data?.employee_number)) {
+      return apiError(403, "FORBIDDEN", "只有 01 帳號可以指定員工編號");
+    }
   }
 
   const branchScope = await validateBranchScope({
@@ -352,6 +511,7 @@ export async function POST(request: Request) {
       department || "legacy",
       position || role,
       nextBranchId || "na",
+      requestedEmployeeNumber || "auto",
       String(isActive),
     ].join(":");
   const operationClaim = await claimIdempotency({
@@ -361,17 +521,131 @@ export async function POST(request: Request) {
     actorId: reauth.operator.userId,
     ttlMinutes: 60,
   });
-  if (!operationClaim.ok) return apiError(500, "INTERNAL_ERROR", operationClaim.error);
+  if (!operationClaim.ok)
+    return apiError(500, "INTERNAL_ERROR", operationClaim.error);
   if (!operationClaim.claimed) {
-    if (operationClaim.existing?.status === "succeeded" && operationClaim.existing.response) {
-      return apiSuccess({ replayed: true, ...operationClaim.existing.response });
+    if (
+      operationClaim.existing?.status === "succeeded" &&
+      operationClaim.existing.response
+    ) {
+      return apiSuccess({
+        replayed: true,
+        ...operationClaim.existing.response,
+      });
     }
     return apiError(409, "FORBIDDEN", "相同的員工建立作業正在處理中");
   }
 
-  const admin = createSupabaseAdminClient();
-  const employeeNumberResult = await admin.rpc("next_staff_employee_number");
-  const employeeNumber = typeof employeeNumberResult.data === "string" ? employeeNumberResult.data : "";
+  if (requestedEmployeeNumber === CUSTOM_EMPLOYEE_NUMBER_MANAGER) {
+    if (
+      reauth.operator.role !== "platform_admin" ||
+      department !== "coaching"
+    ) {
+      await finalizeIdempotency({
+        supabase: scoped.auth.supabase,
+        tenantId,
+        operationKey,
+        status: "failed",
+        errorCode: "SELF_COACH_LINK_DENIED",
+      });
+      return apiError(403, "FORBIDDEN", "01 本人帳號只能由本人加入教練部");
+    }
+
+    const existingSelfResult = await admin
+      .from("profiles")
+      .select(STAFF_SELECT)
+      .eq("id", reauth.operator.userId)
+      .eq("tenant_id", tenantId)
+      .eq("employee_number", CUSTOM_EMPLOYEE_NUMBER_MANAGER)
+      .maybeSingle();
+    if (existingSelfResult.error || !existingSelfResult.data) {
+      await finalizeIdempotency({
+        supabase: scoped.auth.supabase,
+        tenantId,
+        operationKey,
+        status: "failed",
+        errorCode: "SELF_COACH_ACCOUNT_NOT_FOUND",
+      });
+      return apiError(
+        existingSelfResult.error ? 500 : 404,
+        existingSelfResult.error ? "INTERNAL_ERROR" : "FORBIDDEN",
+        existingSelfResult.error?.message || "找不到目前登入的 01 帳號",
+      );
+    }
+
+    const now = new Date().toISOString();
+    const linkedSelfResult = await admin
+      .from("profiles")
+      .update({
+        display_name: displayName,
+        english_name: englishName,
+        department,
+        position,
+        branch_id: nextBranchId,
+        is_active: isActive,
+        organization_assigned_at: now,
+        organization_assigned_by: reauth.operator.userId,
+        updated_by: reauth.operator.userId,
+        updated_at: now,
+      })
+      .eq("id", reauth.operator.userId)
+      .eq("tenant_id", tenantId)
+      .eq("employee_number", CUSTOM_EMPLOYEE_NUMBER_MANAGER)
+      .select(STAFF_SELECT)
+      .maybeSingle();
+    if (linkedSelfResult.error || !linkedSelfResult.data) {
+      await finalizeIdempotency({
+        supabase: scoped.auth.supabase,
+        tenantId,
+        operationKey,
+        status: "failed",
+        errorCode: "SELF_COACH_LINK_FAILED",
+      });
+      return apiError(
+        500,
+        "INTERNAL_ERROR",
+        linkedSelfResult.error?.message || "01 帳號加入教練名單失敗",
+      );
+    }
+
+    await scoped.auth.supabase.from("audit_logs").insert({
+      tenant_id: tenantId,
+      actor_id: reauth.operator.userId,
+      action: "platform_admin_linked_as_schedule_coach",
+      target_type: "profile",
+      target_id: reauth.operator.userId,
+      reason: reauth.reason,
+      payload: {
+        employeeNumber: CUSTOM_EMPLOYEE_NUMBER_MANAGER,
+        department,
+        position,
+        branchId: nextBranchId,
+        displayName,
+        englishName,
+      },
+    });
+
+    const linkedPayload = {
+      item: formatStaffItem(linkedSelfResult.data as StaffRow),
+      linkedExistingAccount: true,
+    };
+    await finalizeIdempotency({
+      supabase: scoped.auth.supabase,
+      tenantId,
+      operationKey,
+      status: "succeeded",
+      response: linkedPayload as Record<string, unknown>,
+    });
+    return apiSuccess(linkedPayload);
+  }
+
+  const employeeNumberResult = requestedEmployeeNumber
+    ? { data: requestedEmployeeNumber, error: null }
+    : await nextAvailableEmployeeNumber(admin);
+  const employeeNumber =
+    typeof employeeNumberResult.data === "string"
+      ? employeeNumberResult.data
+      : "";
   if (employeeNumberResult.error || !isEmployeeNumber(employeeNumber)) {
     await finalizeIdempotency({
       supabase: scoped.auth.supabase,
@@ -392,7 +666,10 @@ export async function POST(request: Request) {
   const activationExpiresAt = staffActivationExpiresAt();
   let activationHash = "";
   try {
-    activationHash = staffActivationCodeHash(activationCode, staffActivationSecret());
+    activationHash = staffActivationCodeHash(
+      activationCode,
+      staffActivationSecret(),
+    );
   } catch (error) {
     await finalizeIdempotency({
       supabase: scoped.auth.supabase,
@@ -404,7 +681,9 @@ export async function POST(request: Request) {
     return apiError(
       500,
       "INTERNAL_ERROR",
-      error instanceof Error ? error.message : "Staff activation configuration is missing",
+      error instanceof Error
+        ? error.message
+        : "Staff activation configuration is missing",
     );
   }
   const userResult = await admin.auth.admin.createUser({
@@ -427,7 +706,10 @@ export async function POST(request: Request) {
       errorCode: "AUTH_USER_CREATE_FAILED",
     });
     const message = userResult.error?.message || "Create user failed";
-    if (message.toLowerCase().includes("already") || message.toLowerCase().includes("registered")) {
+    if (
+      message.toLowerCase().includes("already") ||
+      message.toLowerCase().includes("registered")
+    ) {
       return apiError(409, "FORBIDDEN", "員工編號已存在，請重新建立");
     }
     return apiError(500, "INTERNAL_ERROR", message);
@@ -446,7 +728,8 @@ export async function POST(request: Request) {
         department,
         position,
         organization_assigned_at: department && position ? now : null,
-        organization_assigned_by: department && position ? reauth.operator.userId : null,
+        organization_assigned_by:
+          department && position ? reauth.operator.userId : null,
         display_name: displayName,
         english_name: englishName,
         employee_number: employeeNumber,
@@ -469,6 +752,7 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (profileResult.error || !profileResult.data) {
+    await admin.auth.admin.deleteUser(userId);
     await finalizeIdempotency({
       supabase: scoped.auth.supabase,
       tenantId,
@@ -476,7 +760,11 @@ export async function POST(request: Request) {
       status: "failed",
       errorCode: "PROFILE_UPSERT_FAILED",
     });
-    return apiError(500, "INTERNAL_ERROR", profileResult.error?.message || "Create profile failed");
+    return apiError(
+      500,
+      "INTERNAL_ERROR",
+      profileResult.error?.message || "Create profile failed",
+    );
   }
 
   const activationResult = await admin.from("staff_activation_tokens").insert({
@@ -556,7 +844,8 @@ function changedFields(before: StaffRow, after: StaffRow) {
   return {
     roleChanged: before.role !== after.role,
     organizationChanged:
-      before.department !== after.department || before.position !== after.position,
+      before.department !== after.department ||
+      before.position !== after.position,
     branchChanged: (before.branch_id || null) !== (after.branch_id || null),
     activeChanged: before.is_active !== after.is_active,
     profileChanged:
@@ -569,20 +858,18 @@ export async function PATCH(request: Request) {
   const scoped = await resolveTenantScope(request);
   if (!scoped.ok) return scoped.response;
 
-  const body = (await request.json().catch(() => null)) as
-    | {
-        id?: string;
-        role?: string;
-        department?: string | null;
-        position?: string | null;
-        displayName?: string | null;
-        englishName?: string | null;
-        branchId?: string | null;
-        isActive?: boolean;
-        restore?: boolean;
-        reauth?: SensitiveCredentials;
-      }
-    | null;
+  const body = (await request.json().catch(() => null)) as {
+    id?: string;
+    role?: string;
+    department?: string | null;
+    position?: string | null;
+    displayName?: string | null;
+    englishName?: string | null;
+    branchId?: string | null;
+    isActive?: boolean;
+    restore?: boolean;
+    reauth?: SensitiveCredentials;
+  } | null;
 
   const reauth = await verifySensitiveOperator({
     session: scoped.auth.context,
@@ -598,16 +885,39 @@ export async function PATCH(request: Request) {
     .select(STAFF_SELECT)
     .eq("tenant_id", scoped.scopedTenantId)
     .eq("id", id)
-    .in("role", [...STAFF_FILTER_ROLES])
+    .in("role", managedStaffRoles(scoped.auth.context.role))
     .maybeSingle();
-  if (existingResult.error) return apiError(500, "INTERNAL_ERROR", existingResult.error.message);
-  if (!existingResult.data) return apiError(404, "FORBIDDEN", "staff not found");
+  if (existingResult.error)
+    return apiError(500, "INTERNAL_ERROR", existingResult.error.message);
+  if (!existingResult.data)
+    return apiError(404, "FORBIDDEN", "staff not found");
   const existing = existingResult.data as StaffRow;
+
+  if (
+    existing.role === "platform_admin" &&
+    existing.id !== reauth.operator.userId
+  ) {
+    return apiError(
+      403,
+      "ROLE_ASSIGNMENT_DENIED",
+      "不能修改其他系統管理員帳號",
+    );
+  }
+  if (existing.role === "platform_admin" && body?.isActive === false) {
+    return apiError(409, "FORBIDDEN", "不能停用目前登入的 01 系統管理員帳號");
+  }
 
   if (body?.restore === true) {
     if (reauth.operator.role !== "platform_admin") {
       return apiError(403, "FORBIDDEN", "只有平台管理員可以復原已刪除員工");
     }
+    const restorePermission = await checkOperationPermission({
+      context: reauth.operator,
+      tenantId: scoped.scopedTenantId,
+      permission: "suspend_employee",
+      message: "您沒有恢復員工帳號的權限",
+    });
+    if (restorePermission) return restorePermission;
     if (!existing.staff_deleted_at) {
       return apiError(409, "FORBIDDEN", "此員工不在已刪除清單中");
     }
@@ -615,10 +925,17 @@ export async function PATCH(request: Request) {
     let restoredEmployeeNumber = existing.employee_number;
     if (!restoredEmployeeNumber) {
       const admin = createSupabaseAdminClient();
-      const employeeNumberResult = await admin.rpc("next_staff_employee_number");
+      const employeeNumberResult = await admin.rpc(
+        "next_staff_employee_number",
+      );
       restoredEmployeeNumber =
-        typeof employeeNumberResult.data === "string" ? employeeNumberResult.data : "";
-      if (employeeNumberResult.error || !isEmployeeNumber(restoredEmployeeNumber)) {
+        typeof employeeNumberResult.data === "string"
+          ? employeeNumberResult.data
+          : "";
+      if (
+        employeeNumberResult.error ||
+        !isEmployeeNumber(restoredEmployeeNumber)
+      ) {
         return apiError(
           500,
           "INTERNAL_ERROR",
@@ -646,7 +963,8 @@ export async function PATCH(request: Request) {
     if (restoreResult.error) {
       return apiError(500, "INTERNAL_ERROR", restoreResult.error.message);
     }
-    if (!restoreResult.data) return apiError(404, "FORBIDDEN", "staff not found");
+    if (!restoreResult.data)
+      return apiError(404, "FORBIDDEN", "staff not found");
 
     await scoped.auth.supabase.from("audit_logs").insert({
       tenant_id: scoped.scopedTenantId,
@@ -661,7 +979,9 @@ export async function PATCH(request: Request) {
       },
     });
 
-    return apiSuccess({ item: formatStaffItem(restoreResult.data as StaffRow) });
+    return apiSuccess({
+      item: formatStaffItem(restoreResult.data as StaffRow),
+    });
   }
 
   if (existing.staff_deleted_at) {
@@ -676,11 +996,23 @@ export async function PATCH(request: Request) {
     ) &&
     reauth.operator.role !== "platform_admin"
   ) {
-    return apiError(403, "ROLE_ASSIGNMENT_DENIED", "You cannot manage this employee");
+    return apiError(
+      403,
+      "ROLE_ASSIGNMENT_DENIED",
+      "You cannot manage this employee",
+    );
   }
 
-  if (reauth.operator.role !== "platform_admin" && reauth.operator.branchId && existing.branch_id !== reauth.operator.branchId) {
-    return apiError(403, "BRANCH_SCOPE_DENIED", "Cannot manage staff outside your branch scope");
+  if (
+    reauth.operator.role !== "platform_admin" &&
+    reauth.operator.branchId &&
+    existing.branch_id !== reauth.operator.branchId
+  ) {
+    return apiError(
+      403,
+      "BRANCH_SCOPE_DENIED",
+      "Cannot manage staff outside your branch scope",
+    );
   }
 
   const updates: Record<string, unknown> = {};
@@ -689,10 +1021,21 @@ export async function PATCH(request: Request) {
   let nextPosition = existing.position;
 
   if (typeof body?.role === "string") {
+    if (existing.role === "platform_admin") {
+      return apiError(
+        403,
+        "ROLE_ASSIGNMENT_DENIED",
+        "01 系統管理員權限不能在員工頁變更",
+      );
+    }
     const parsed = parseRole(body.role);
     if (!parsed) return apiError(400, "INVALID_ROLE", "invalid role");
     if (!canAssignLegacyRole(reauth.operator.role, parsed)) {
-      return apiError(403, "ROLE_ASSIGNMENT_DENIED", "You cannot assign this role");
+      return apiError(
+        403,
+        "ROLE_ASSIGNMENT_DENIED",
+        "You cannot assign this role",
+      );
     }
     updates.role = parsed;
     nextRole = parsed;
@@ -700,22 +1043,34 @@ export async function PATCH(request: Request) {
 
   if (body && ("department" in body || "position" in body)) {
     nextDepartment =
-      body.department === null ? null : normalizeStaffDepartment(body.department ?? existing.department);
+      body.department === null
+        ? null
+        : normalizeStaffDepartment(body.department ?? existing.department);
     nextPosition =
-      body.position === null ? null : normalizeStaffPosition(body.position ?? existing.position);
+      body.position === null
+        ? null
+        : normalizeStaffPosition(body.position ?? existing.position);
     if (!positionBelongsToDepartment(nextDepartment, nextPosition)) {
-      return apiError(400, "INVALID_ROLE", "department and position do not match");
+      return apiError(
+        400,
+        "INVALID_ROLE",
+        "department and position do not match",
+      );
     }
     if (
       !nextPosition ||
       !canCreatePosition(organizationActor(reauth.operator), nextPosition)
     ) {
-      return apiError(403, "ROLE_ASSIGNMENT_DENIED", "You cannot assign this position");
+      return apiError(
+        403,
+        "ROLE_ASSIGNMENT_DENIED",
+        "You cannot assign this position",
+      );
     }
-    nextRole = legacyRoleForPosition(nextPosition) as StaffRole;
+    nextRole = roleForOrganizationAssignment(existing.role, nextPosition);
     updates.department = nextDepartment;
     updates.position = nextPosition;
-    updates.role = nextRole;
+    if (existing.role !== "platform_admin") updates.role = nextRole;
     updates.organization_assigned_at = new Date().toISOString();
     updates.organization_assigned_by = reauth.operator.userId;
   }
@@ -762,21 +1117,56 @@ export async function PATCH(request: Request) {
     return apiError(400, "FORBIDDEN", "no updates provided");
   }
 
-  if ("is_active" in updates && updates.is_active !== existing.is_active) {
-    const disablePermission = requirePermission(reauth.operator, "staff.disable");
-    if (!disablePermission.ok) return disablePermission.response;
-  } else {
-    const updatePermission = requirePermission(reauth.operator, "staff.update");
-    if (!updatePermission.ok) return updatePermission.response;
+  const changesActiveState =
+    "is_active" in updates && updates.is_active !== existing.is_active;
+  const changesAssignment =
+    ("role" in updates && nextRole !== existing.role) ||
+    "department" in updates ||
+    "position" in updates ||
+    "branch_id" in updates;
+  const changesProfile = Object.keys(updates).some(
+    (key) => !["is_active", "updated_by", "updated_at"].includes(key),
+  );
+
+  if (changesActiveState) {
+    const suspendPermission = await checkOperationPermission({
+      context: reauth.operator,
+      tenantId: scoped.scopedTenantId,
+      permission: "suspend_employee",
+      message: "您沒有停用或恢復員工帳號的權限",
+    });
+    if (suspendPermission) return suspendPermission;
+  }
+  if (changesProfile) {
+    const editPermission = await checkOperationPermission({
+      context: reauth.operator,
+      tenantId: scoped.scopedTenantId,
+      permission: "edit_employee",
+      message: "您沒有修改員工資料的權限",
+    });
+    if (editPermission) return editPermission;
+  }
+  if (changesAssignment) {
+    const assignmentPermission = await checkOperationPermission({
+      context: reauth.operator,
+      tenantId: scoped.scopedTenantId,
+      permission: "assign_supervisor",
+      message: "您沒有調整員工職務、角色或分館的權限",
+    });
+    if (assignmentPermission) return assignmentPermission;
   }
 
   if (
     "role" in updates &&
     nextRole !== existing.role &&
     !nextPosition &&
-    !canAssignLegacyRole(reauth.operator.role, nextRole)
+    !canAssignLegacyRole(reauth.operator.role, nextRole as StaffRole)
   ) {
-    return apiError(403, "ROLE_ASSIGNMENT_DENIED", "You cannot assign this role");
+    return apiError(
+      403,
+      "ROLE_ASSIGNMENT_DENIED",
+      "You cannot assign this role",
+    );
   }
 
   const branchScope = await validateBranchScope({
@@ -795,7 +1185,7 @@ export async function PATCH(request: Request) {
     .update(updates)
     .eq("tenant_id", scoped.scopedTenantId)
     .eq("id", id)
-    .in("role", [...STAFF_FILTER_ROLES])
+    .in("role", managedStaffRoles(scoped.auth.context.role))
     .select(STAFF_SELECT)
     .maybeSingle();
   if (error) return apiError(500, "INTERNAL_ERROR", error.message);
@@ -825,7 +1215,10 @@ export async function PATCH(request: Request) {
       target_id: id,
       reason: reauth.reason,
       payload: {
-        before: { department: existing.department, position: existing.position },
+        before: {
+          department: existing.department,
+          position: existing.position,
+        },
         after: { department: updated.department, position: updated.position },
       },
     });
@@ -852,7 +1245,12 @@ export async function PATCH(request: Request) {
       payload: { before: existing.is_active, after: updated.is_active },
     });
   }
-  if (changes.profileChanged && !changes.roleChanged && !changes.branchChanged && !changes.activeChanged) {
+  if (
+    changes.profileChanged &&
+    !changes.roleChanged &&
+    !changes.branchChanged &&
+    !changes.activeChanged
+  ) {
     auditInserts.push({
       tenant_id: scoped.scopedTenantId,
       actor_id: reauth.operator.userId,
@@ -884,12 +1282,10 @@ export async function DELETE(request: Request) {
   const scoped = await resolveTenantScope(request);
   if (!scoped.ok) return scoped.response;
 
-  const body = (await request.json().catch(() => null)) as
-    | {
-        id?: string;
-        reauth?: SensitiveCredentials;
-      }
-    | null;
+  const body = (await request.json().catch(() => null)) as {
+    id?: string;
+    reauth?: SensitiveCredentials;
+  } | null;
 
   const reauth = await verifySensitiveOperator({
     session: scoped.auth.context,
@@ -899,6 +1295,14 @@ export async function DELETE(request: Request) {
   if (reauth.operator.role !== "platform_admin") {
     return apiError(403, "FORBIDDEN", "只有平台管理員可以刪除員工");
   }
+
+  const deletePermission = await checkOperationPermission({
+    context: reauth.operator,
+    tenantId: scoped.scopedTenantId,
+    permission: "suspend_employee",
+    message: "您沒有刪除或停用員工帳號的權限",
+  });
+  if (deletePermission) return deletePermission;
 
   const id = typeof body?.id === "string" ? body.id.trim() : "";
   if (!id) return apiError(400, "FORBIDDEN", "id is required");
@@ -914,8 +1318,10 @@ export async function DELETE(request: Request) {
     .eq("id", id)
     .in("role", [...STAFF_FILTER_ROLES])
     .maybeSingle();
-  if (existingResult.error) return apiError(500, "INTERNAL_ERROR", existingResult.error.message);
-  if (!existingResult.data) return apiError(404, "FORBIDDEN", "找不到要刪除的員工");
+  if (existingResult.error)
+    return apiError(500, "INTERNAL_ERROR", existingResult.error.message);
+  if (!existingResult.data)
+    return apiError(404, "FORBIDDEN", "找不到要刪除的員工");
   const existing = existingResult.data as StaffRow;
   if (existing.staff_deleted_at) {
     return apiError(409, "FORBIDDEN", "此員工已在已刪除清單中");
@@ -940,7 +1346,8 @@ export async function DELETE(request: Request) {
   if (deleteResult.error) {
     return apiError(500, "INTERNAL_ERROR", deleteResult.error.message);
   }
-  if (!deleteResult.data) return apiError(409, "FORBIDDEN", "員工已被刪除或狀態已變更");
+  if (!deleteResult.data)
+    return apiError(409, "FORBIDDEN", "員工已被刪除或狀態已變更");
 
   await admin
     .from("staff_activation_tokens")
@@ -965,5 +1372,8 @@ export async function DELETE(request: Request) {
     },
   });
 
-  return apiSuccess({ deletedId: id, item: formatStaffItem(deleteResult.data as StaffRow) });
+  return apiSuccess({
+    deletedId: id,
+    item: formatStaffItem(deleteResult.data as StaffRow),
+  });
 }

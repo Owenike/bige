@@ -349,6 +349,7 @@
 
 .rowActions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
 }
@@ -398,6 +399,37 @@
 .modalIdentity strong,
 .modalIdentity span {
   display: block;
+}
+
+.historyList {
+  display: grid;
+  gap: 9px;
+}
+
+.historyItem {
+  display: grid;
+  gap: 7px;
+  padding: 12px 13px;
+  border: 1px solid rgba(118, 132, 153, 0.2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.historyItem time {
+  color: #6d798c;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.historyItem div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.historyItem span {
+  overflow-wrap: anywhere;
 }
 
 .activationCode {
@@ -509,11 +541,13 @@
 
   .rowActions {
     grid-column: 1;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) repeat(3, 44px);
+    display: flex;
+    flex-wrap: wrap;
   }
 
   .rowActions .button {
+    flex: 1 1 180px;
+    justify-content: center;
     padding-inline: 10px;
   }
 
