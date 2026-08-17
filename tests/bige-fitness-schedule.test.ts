@@ -1425,7 +1425,7 @@ test("daily schedule prefetches nearest dates first and never starts more than t
   assert.deepEqual(queue.getState().pendingDates, [dates[4]]);
 });
 
-test("daily schedule loading scans mechanical flips from the top row to the bottom row", () => {
+test("daily schedule loading turns real time faces and blank rows from top to bottom", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
   const loadingBoard = component.match(
@@ -1446,11 +1446,18 @@ test("daily schedule loading scans mechanical flips from the top row to the bott
   assert.ok(upperFlip);
   assert.ok(lowerFlip);
   assert.match(component, /const DAILY_SCHEDULE_LOADING_COACH_COUNT = 7;/);
-  assert.match(component, /const DAILY_SCHEDULE_LOADING_ROW_STEP_MS = 70;/);
+  assert.match(component, /const DAILY_SCHEDULE_LOADING_ROW_STEP_MS = 55;/);
+  assert.match(component, /const DAILY_SCHEDULE_LOADING_PAGE_MS = 1900;/);
   assert.match(component, /\{ length: 15 \}/);
   assert.match(component, /loading \? <DailyScheduleLoadingBoard \/>/);
   assert.match(loadingBoard, /aria-busy="true"/);
-  assert.match(loadingBoard, /<LoadingFlipMechanism \/>/);
+  assert.match(loadingBoard, /const \[loadingPage, setLoadingPage\] = useState\(0\)/);
+  assert.match(loadingBoard, /window\.setInterval/);
+  assert.match(loadingBoard, /setLoadingPage\(\(current\) => current \+ 1\)/);
+  assert.match(loadingBoard, /DAILY_SCHEDULE_LOADING_PAGE_MS/);
+  assert.match(loadingBoard, /window\.clearInterval\(timer\)/);
+  assert.match(loadingBoard, /data-loading-page=\{loadingPage % 2\}/);
+  assert.match(loadingBoard, /<LoadingFlipMechanism/);
   assert.match(loadingBoard, /data-loading-row="0"/);
   assert.match(loadingBoard, /data-loading-row=\{rowIndex \+ 1\}/);
   assert.match(loadingBoard, /style=\{dailyScheduleLoadingRowStyle\(0\)\}/);
@@ -1460,29 +1467,49 @@ test("daily schedule loading scans mechanical flips from the top row to the bott
   assert.match(component, /styles\.loadingFlipUpperFlap/);
   assert.match(component, /styles\.loadingFlipLowerFlap/);
   assert.match(component, /styles\.loadingFlipHinge/);
-  assert.doesNotMatch(loadingBoard, /fetch\(|requestBoard|loadBoard|setLoading|setData|setDate/);
+  assert.match(component, /function LoadingTimeFace/);
+  assert.match(component, /data-loading-half=\{half\}/);
+  assert.match(component, /data-loading-page-face=\{pageFace\}/);
+  assert.match(
+    loadingBoard,
+    /oldValue=\{dailyScheduleLoadingHourLabel\(hour \+ loadingPage - 1\)\}/,
+  );
+  assert.match(
+    loadingBoard,
+    /newValue=\{dailyScheduleLoadingHourLabel\(hour \+ loadingPage\)\}/,
+  );
+  assert.match(loadingBoard, /key=\{`time:\$\{loadingPage\}`\}/);
+  assert.match(loadingBoard, /key=\{`slot:\$\{loadingPage\}`\}/);
+  assert.doesNotMatch(loadingBoard, /fetch\(|requestBoard|loadBoard|setLoading\(|setData|setDate/);
   assert.doesNotMatch(component, /dailyScheduleLoadingCellStyle|--loading-flip-delay|loadingFlipBlade/);
   assert.match(styles, /\.loadingFlipUpperFlap[\s\S]*transform-origin: 50% 100%/);
   assert.match(styles, /\.loadingFlipLowerFlap[\s\S]*transform-origin: 50% 0%/);
-  assert.match(styles, /animation: schedule-loading-flip-upper 3500ms/);
-  assert.match(styles, /animation: schedule-loading-flip-lower 3500ms/);
+  assert.match(styles, /animation: schedule-loading-flip-upper 520ms/);
+  assert.match(styles, /animation: schedule-loading-flip-lower 520ms/);
   assert.match(styles, /animation-delay: var\(--loading-row-delay\)/);
   assert.match(
     styles,
-    /\.frontdeskM2A \.loadingBoardWrap\s*{[\s\S]*--loading-flip-front: rgba\(183, 215, 237, 0\.08\);[\s\S]*--loading-flip-back: rgba\(7, 17, 27, 0\.18\);/,
+    /\.frontdeskM2A \.loadingBoardWrap\s*{[\s\S]*--loading-page-a: rgba\(42, 69, 87, 0\.92\);[\s\S]*--loading-page-b: rgba\(10, 28, 41, 0\.95\);/,
   );
+  assert.match(styles, /\.loadingBoard\[data-loading-page="0"\]/);
+  assert.match(styles, /\.loadingBoard\[data-loading-page="1"\]/);
+  assert.match(styles, /--loading-flip-old: var\(--loading-page-a\)/);
+  assert.match(styles, /--loading-flip-new: var\(--loading-page-b\)/);
   assert.match(styles, /\.frontdeskM2A \.loadingBoard\s*{[^}]*opacity: 1;/);
-  assert.doesNotMatch(styles, /schedule-loading-flip-(?:upper|lower) 680ms/);
-  assert.match(upperFlip, /transform: rotateX\(-90deg\)/);
+  assert.doesNotMatch(styles, /schedule-loading-flip-(?:upper|lower) 3500ms/);
+  assert.doesNotMatch(styles, /schedule-loading-flip-(?:upper|lower)[^;]*infinite/);
+  assert.match(styles, /\.loadingTimeFace\[data-loading-page-face="old"\]/);
+  assert.match(styles, /\.loadingTimeFace\[data-loading-page-face="new"\]/);
+  assert.match(upperFlip, /transform: rotateX\(-92deg\)/);
   assert.match(lowerFlip, /transform: rotateX\(90deg\)/);
-  assert.match(upperFlip, /56\.25%/);
-  assert.match(upperFlip, /62\.5%/);
-  assert.match(lowerFlip, /50%/);
+  assert.match(upperFlip, /58%/);
+  assert.match(lowerFlip, /52%/);
+  assert.match(lowerFlip, /92%/);
   assert.doesNotMatch(upperFlip, /filter:|opacity:/);
   assert.doesNotMatch(lowerFlip, /filter:|opacity:/);
   assert.match(
     styles,
-    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.loadingFlipUpperFlap,[\s\S]*\.loadingFlipLowerFlap[\s\S]*animation: none/,
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.loadingFlipUpperFlap,[\s\S]*\.loadingFlipLowerFlap[\s\S]*animation: none[\s\S]*\.loadingFlipUpperFlap\s*{[\s\S]*rotateX\(-92deg\)[\s\S]*\.loadingFlipLowerFlap\s*{[\s\S]*rotateX\(0deg\)/,
   );
 });
 

@@ -1013,7 +1013,8 @@ function SignaturePad(props: { onChange: (dataUrl: string) => void }) {
 }
 
 const DAILY_SCHEDULE_LOADING_COACH_COUNT = 7;
-const DAILY_SCHEDULE_LOADING_ROW_STEP_MS = 70;
+const DAILY_SCHEDULE_LOADING_ROW_STEP_MS = 55;
+const DAILY_SCHEDULE_LOADING_PAGE_MS = 1900;
 const DAILY_SCHEDULE_LOADING_HOURS = Array.from(
   { length: 15 },
   (_, index) => index + 9,
@@ -1025,17 +1026,72 @@ function dailyScheduleLoadingRowStyle(rowIndex: number) {
   } as React.CSSProperties;
 }
 
-function LoadingFlipMechanism() {
+function dailyScheduleLoadingHourLabel(hour: number) {
+  const wrappedHour = ((hour % 24) + 24) % 24;
+  return `${String(wrappedHour).padStart(2, "0")}:00`;
+}
+
+function LoadingTimeFace({
+  value,
+  half,
+  pageFace,
+}: {
+  value: string;
+  half: "upper" | "lower";
+  pageFace: "old" | "new";
+}) {
+  return (
+    <span
+      className={styles.loadingTimeFace}
+      data-loading-half={half}
+      data-loading-page-face={pageFace}
+      aria-hidden="true"
+    >
+      <span>{value}</span>
+    </span>
+  );
+}
+
+function LoadingFlipMechanism({
+  oldValue,
+  newValue,
+}: {
+  oldValue?: string;
+  newValue?: string;
+}) {
   return (
     <>
-      <span className={styles.loadingFlipUpperFlap} aria-hidden="true" />
-      <span className={styles.loadingFlipLowerFlap} aria-hidden="true" />
+      {oldValue && newValue ? (
+        <>
+          <LoadingTimeFace value={newValue} half="upper" pageFace="new" />
+          <LoadingTimeFace value={oldValue} half="lower" pageFace="old" />
+        </>
+      ) : null}
+      <span className={styles.loadingFlipUpperFlap} aria-hidden="true">
+        {oldValue ? (
+          <LoadingTimeFace value={oldValue} half="upper" pageFace="old" />
+        ) : null}
+      </span>
+      <span className={styles.loadingFlipLowerFlap} aria-hidden="true">
+        {newValue ? (
+          <LoadingTimeFace value={newValue} half="lower" pageFace="new" />
+        ) : null}
+      </span>
       <span className={styles.loadingFlipHinge} aria-hidden="true" />
     </>
   );
 }
 
 function DailyScheduleLoadingBoard() {
+  const [loadingPage, setLoadingPage] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setLoadingPage((current) => current + 1);
+    }, DAILY_SCHEDULE_LOADING_PAGE_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
   return (
     <section
       className={`${styles.glass} ${styles.boardWrap} ${styles.loadingBoardWrap}`}
@@ -1053,6 +1109,7 @@ function DailyScheduleLoadingBoard() {
       <div
         className={`${styles.board} ${styles.loadingBoard}`}
         data-mobile-show-all="false"
+        data-loading-page={loadingPage % 2}
         aria-hidden="true"
         style={
           {
@@ -1069,7 +1126,7 @@ function DailyScheduleLoadingBoard() {
               data-loading-row="0"
               style={dailyScheduleLoadingRowStyle(0)}
             >
-              <LoadingFlipMechanism />
+              <LoadingFlipMechanism key={`time-head:${loadingPage}`} />
               <span className={styles.loadingTimeLabel}>時間</span>
             </div>
             <div
@@ -1078,7 +1135,7 @@ function DailyScheduleLoadingBoard() {
               data-loading-row="0"
               style={dailyScheduleLoadingRowStyle(0)}
             >
-              <LoadingFlipMechanism />
+              <LoadingFlipMechanism key={`coach-head:${loadingPage}`} />
               <span className={styles.loadingCoachMark} />
             </div>
           </Fragment>
@@ -1092,10 +1149,11 @@ function DailyScheduleLoadingBoard() {
                 data-loading-row={rowIndex + 1}
                 style={dailyScheduleLoadingRowStyle(rowIndex + 1)}
               >
-                <LoadingFlipMechanism />
-                <span className={styles.loadingTimeLabel}>
-                  {String(hour).padStart(2, "0")}:00
-                </span>
+                <LoadingFlipMechanism
+                  key={`time:${loadingPage}`}
+                  oldValue={dailyScheduleLoadingHourLabel(hour + loadingPage - 1)}
+                  newValue={dailyScheduleLoadingHourLabel(hour + loadingPage)}
+                />
               </div>
               <div
                 className={`${styles.slotCell} ${styles.loadingFlipCell}`}
@@ -1103,7 +1161,7 @@ function DailyScheduleLoadingBoard() {
                 data-loading-row={rowIndex + 1}
                 style={dailyScheduleLoadingRowStyle(rowIndex + 1)}
               >
-                <LoadingFlipMechanism />
+                <LoadingFlipMechanism key={`slot:${loadingPage}`} />
                 {(rowIndex * 3 + coachIndex * 2) % 7 === 0 ? (
                   <span className={styles.loadingBookingMark} />
                 ) : null}

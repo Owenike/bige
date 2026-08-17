@@ -320,8 +320,8 @@
 }
 
 .loadingBoardWrap {
-  --loading-flip-front: rgba(237, 244, 252, 0.94);
-  --loading-flip-back: rgba(210, 222, 236, 0.9);
+  --loading-page-a: rgba(237, 244, 252, 0.96);
+  --loading-page-b: rgba(210, 222, 236, 0.94);
   --loading-flip-line: rgba(85, 108, 137, 0.23);
   --loading-flip-glow: rgba(106, 145, 184, 0.18);
   position: relative;
@@ -331,17 +331,17 @@
 }
 
 .managerPage .loadingBoardWrap {
-  --loading-flip-front: rgba(30, 34, 40, 0.98);
-  --loading-flip-back: rgba(24, 28, 34, 0.98);
+  --loading-page-a: rgba(35, 40, 47, 0.98);
+  --loading-page-b: rgba(22, 27, 33, 0.98);
   --loading-flip-line: rgba(229, 198, 127, 0.24);
   --loading-flip-glow: rgba(220, 177, 79, 0.16);
 }
 
 .frontdeskM2A .loadingBoardWrap {
-  --loading-flip-front: rgba(183, 215, 237, 0.08);
-  --loading-flip-back: rgba(7, 17, 27, 0.18);
-  --loading-flip-line: rgba(180, 214, 237, 0.22);
-  --loading-flip-glow: rgba(101, 173, 220, 0.18);
+  --loading-page-a: rgba(42, 69, 87, 0.92);
+  --loading-page-b: rgba(10, 28, 41, 0.95);
+  --loading-flip-line: rgba(192, 220, 238, 0.34);
+  --loading-flip-glow: rgba(105, 181, 226, 0.24);
 }
 
 .frontdeskM2A .loadingBoard {
@@ -399,13 +399,23 @@
   opacity: 0.94;
 }
 
+.loadingBoard[data-loading-page="0"] {
+  --loading-flip-old: var(--loading-page-a);
+  --loading-flip-new: var(--loading-page-b);
+}
+
+.loadingBoard[data-loading-page="1"] {
+  --loading-flip-old: var(--loading-page-b);
+  --loading-flip-new: var(--loading-page-a);
+}
+
 .loadingFlipCell {
   position: relative;
   isolation: isolate;
   overflow: hidden;
   perspective: 520px;
   perspective-origin: 50% 50%;
-  background: var(--loading-flip-back);
+  background: var(--loading-flip-new);
 }
 
 .loadingFlipCell::before,
@@ -424,7 +434,7 @@
   top: 2px;
   border-bottom: 0;
   border-radius: 4px 4px 0 0;
-  background: var(--loading-flip-back);
+  background: var(--loading-flip-new);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
     inset 0 -8px 12px rgba(0, 0, 0, 0.08);
@@ -434,7 +444,7 @@
   bottom: 2px;
   border-top: 0;
   border-radius: 0 0 4px 4px;
-  background: var(--loading-flip-front);
+  background: var(--loading-flip-old);
   box-shadow:
     inset 0 1px 0 rgba(0, 0, 0, 0.34),
     inset 0 8px 12px rgba(255, 255, 255, 0.025);
@@ -461,13 +471,12 @@
   border-radius: 4px 4px 0 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 58%),
-    var(--loading-flip-front);
+    var(--loading-flip-old);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 7px 10px -4px rgba(0, 0, 0, 0.72);
-  animation: schedule-loading-flip-upper 3500ms cubic-bezier(0.55, 0.02, 0.2, 1) infinite;
+  animation: schedule-loading-flip-upper 520ms cubic-bezier(0.45, 0.02, 0.18, 1) both;
   animation-delay: var(--loading-row-delay);
-  animation-fill-mode: both;
 }
 
 .loadingFlipLowerFlap {
@@ -478,13 +487,12 @@
   border-radius: 0 0 4px 4px;
   background:
     linear-gradient(0deg, rgba(255, 255, 255, 0.045), transparent 58%),
-    var(--loading-flip-back);
+    var(--loading-flip-new);
   box-shadow:
     inset 0 -1px 0 rgba(255, 255, 255, 0.045),
     0 -7px 10px -4px rgba(0, 0, 0, 0.72);
-  animation: schedule-loading-flip-lower 3500ms cubic-bezier(0.55, 0.02, 0.2, 1) infinite;
+  animation: schedule-loading-flip-lower 520ms cubic-bezier(0.45, 0.02, 0.18, 1) both;
   animation-delay: var(--loading-row-delay);
-  animation-fill-mode: both;
 }
 
 .loadingFlipHinge {
@@ -535,6 +543,65 @@
   font-variant-numeric: tabular-nums;
 }
 
+.loadingTimeFace {
+  position: absolute;
+  z-index: 2;
+  right: 2px;
+  left: 2px;
+  height: 50%;
+  overflow: hidden;
+  color: rgba(215, 224, 232, 0.58);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 850;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.loadingTimeFace[data-loading-half="upper"] {
+  top: 0;
+}
+
+.loadingTimeFace[data-loading-half="lower"] {
+  bottom: 0;
+}
+
+.loadingTimeFace > span {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 200%;
+  display: grid;
+  place-items: center;
+}
+
+.loadingTimeFace[data-loading-half="upper"] > span {
+  top: 0;
+}
+
+.loadingTimeFace[data-loading-half="lower"] > span {
+  bottom: 0;
+}
+
+.loadingTimeFace[data-loading-page-face="old"] {
+  color: rgba(199, 214, 224, 0.5);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.loadingTimeFace[data-loading-page-face="new"] {
+  color: rgba(235, 211, 155, 0.86);
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.55),
+    0 0 8px rgba(225, 191, 112, 0.12);
+}
+
+.loadingFlipUpperFlap > .loadingTimeFace,
+.loadingFlipLowerFlap > .loadingTimeFace {
+  inset-inline: 0;
+  height: 100%;
+}
+
 .loadingCoachMark {
   width: min(82px, 58%);
   height: 10px;
@@ -558,31 +625,24 @@
 }
 
 @keyframes schedule-loading-flip-upper {
-  0% {
+  0%,
+  12% {
     transform: rotateX(0deg);
   }
-  6.25%,
-  56.25% {
-    transform: rotateX(-90deg);
-  }
-  62.5%,
+  58%,
   100% {
-    transform: rotateX(0deg);
+    transform: rotateX(-92deg);
   }
 }
 
 @keyframes schedule-loading-flip-lower {
   0%,
-  6.25% {
+  52% {
     transform: rotateX(90deg);
   }
-  12.5%,
-  50% {
-    transform: rotateX(0deg);
-  }
-  56.25%,
+  92%,
   100% {
-    transform: rotateX(90deg);
+    transform: rotateX(0deg);
   }
 }
 
@@ -602,7 +662,14 @@
   .loadingFlipLowerFlap,
   .loadingBoardDots > span {
     animation: none;
-    transform: none;
+  }
+
+  .loadingFlipUpperFlap {
+    transform: rotateX(-92deg);
+  }
+
+  .loadingFlipLowerFlap {
+    transform: rotateX(0deg);
   }
 }
 
