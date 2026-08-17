@@ -33,18 +33,65 @@ function Normalize-Location([object]$Location) {
 $devPort = 3000
 $devUrl = "http://localhost:$devPort"
 $proc = $null
+$startupTimeoutSeconds = 60
+$workspacePath = (Get-Location).Path
+$smokeLogDir = Join-Path $workspacePath ".tmp\smoke-test"
+$stdoutLog = Join-Path $smokeLogDir "dev-server.stdout.log"
+$stderrLog = Join-Path $smokeLogDir "dev-server.stderr.log"
+
+function Write-DevServerLogs {
+  if (Test-Path -LiteralPath $stdoutLog) {
+    Get-Content -LiteralPath $stdoutLog | Write-Host
+  }
+  if (Test-Path -LiteralPath $stderrLog) {
+    Get-Content -LiteralPath $stderrLog | Write-Host
+  }
+}
 
 try {
   Write-Host "Starting Next.js dev server..."
-  $proc = Start-Process -FilePath npm.cmd -ArgumentList "run", "dev", "--", "-p", "$devPort" -PassThru
+  New-Item -ItemType Directory -Path $smokeLogDir -Force | Out-Null
+  Remove-Item -LiteralPath $stdoutLog, $stderrLog -Force -ErrorAction SilentlyContinue
+  $proc = Start-Process -FilePath "$env:ComSpec" -ArgumentList "/d", "/s", "/c", "`"npm.cmd run dev -- -p $devPort`"" -WorkingDirectory $workspacePath -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -PassThru -WindowStyle Hidden
 
-  Start-Sleep -Seconds 10
+  $ready = $false
+  $deadline = (Get-Date).AddSeconds($startupTimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    if ($proc.HasExited) {
+      Write-DevServerLogs
+      throw "[FAIL] Next.js dev server exited before becoming ready (exit code: $($proc.ExitCode))"
+    }
+
+    try {
+      $probe = Invoke-WebRequest -Uri "$devUrl/api/health" -UseBasicParsing -TimeoutSec 2
+      if ([int]$probe.StatusCode -eq 200) {
+        $ready = $true
+        break
+      }
+    } catch {
+      Start-Sleep -Milliseconds 500
+    }
+  }
+
+  if (-not $ready) {
+    Write-DevServerLogs
+    throw "[FAIL] Next.js dev server did not become ready within $startupTimeoutSeconds seconds"
+  }
 
   $homeRes = Invoke-Status "$devUrl/"
   Assert-Status -Actual $homeRes.status -Allowed @(200) -Label "GET /"
 
   $login = Invoke-Status "$devUrl/login"
-  Assert-Status -Actual $login.status -Allowed @(200) -Label "GET /login"
+  Assert-Status -Actual $login.status -Allowed @(200, 307, 308) -Label "GET /login"
+
+  if ($login.status -eq 307 -or $login.status -eq 308) {
+    $loginLocation = Normalize-Location $login.location
+    $isStaffLoginRedirect = $loginLocation -eq "/login/staff" -or $loginLocation -like "*/login/staff"
+    if (-not $isStaffLoginRedirect) {
+      throw "[FAIL] /login redirect location is not /login/staff"
+    }
+    Write-Host ("[OK]   /login redirect location -> " + $loginLocation) -ForegroundColor Green
+  }
 
   $health = Invoke-Status "$devUrl/api/health"
   Assert-Status -Actual $health.status -Allowed @(200) -Label "GET /api/health"
@@ -84,7 +131,13 @@ try {
 } finally {
   if ($proc -and -not $proc.HasExited) {
     try {
-      Stop-Process -Id $proc.Id -Force
-    } catch {}
+      & "$env:SystemRoot\System32\taskkill.exe" /PID $proc.Id /T /F | Out-Null
+    } catch {
+      try {
+        Stop-Process -Id $proc.Id -Force
+      } catch {}
+    }
   }
+  Start-Sleep -Milliseconds 250
+  Remove-Item -LiteralPath $smokeLogDir -Recurse -Force -ErrorAction SilentlyContinue
 }

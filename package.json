@@ -8,6 +8,8 @@
         "start": "next start",
         "lint": "eslint .",
         "typecheck": "tsc --noEmit",
+        "schedule:august:dry-run": "node scripts/import-august-coach-schedule.mjs",
+        "schedule:august:validate": "node scripts/import-august-coach-schedule.mjs && node scripts/validate-august-coach-schedule.mjs",
         "db:migrate:apply": "powershell -ExecutionPolicy Bypass -File scripts/apply-migrations.ps1",
         "ui:check-cards": "powershell -ExecutionPolicy Bypass -File scripts/check-page-cards.ps1",
         "go-live:check": "powershell -ExecutionPolicy Bypass -File scripts/go-live-check.ps1",
@@ -327,10 +329,13 @@
     "dependencies": {
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/utilities": "^3.2.2",
+        "@simplewebauthn/browser": "13.3.0",
+        "@simplewebauthn/server": "13.3.2",
         "@supabase/ssr": "^0.8.0",
         "@supabase/supabase-js": "^2.95.3",
         "@tailwindcss/postcss": "^4.1.18",
         "@zxing/browser": "^0.1.5",
+        "exceljs": "^4.4.0",
         "jose": "^6.1.3",
         "jsqr": "^1.4.0",
         "lucide-react": "^1.27.0",
@@ -348,6 +353,7 @@
         "@types/react-dom": "^19.2.3",
         "eslint": "^9.39.2",
         "eslint-config-next": "^16.1.6",
+        "tsx": "^4.23.9",
         "typescript": "^5.9.3"
     }
 }
