@@ -424,10 +424,10 @@ export default function StudentCheckInsAdminPage() {
                 <div><dt>電話</dt><dd>{activeRequest.profile.phone}</dd></div>
                 <div><dt>Email</dt><dd>{activeRequest.profile.email || "-"}</dd></div>
                 <div><dt>生日</dt><dd>{formatBirthday(activeRequest.profile.birth_date)}</dd></div>
-                <div><dt>登入方式</dt><dd>手機與密碼</dd></div>
+                <div className="studentCheckInsApprovalMobileHidden"><dt>登入方式</dt><dd>手機與密碼</dd></div>
                 <div><dt>送出時間</dt><dd>{formatTaipeiDateTime(activeRequest.requested_at)}</dd></div>
-                <div><dt>開始日期</dt><dd>{formatBirthday(activeRequest.profile.membership_starts_on)}</dd></div>
-                <div><dt>結束日期</dt><dd>{formatBirthday(activeRequest.profile.membership_expires_on)}</dd></div>
+                <div className="studentCheckInsApprovalMobileHidden"><dt>開始日期</dt><dd>{formatBirthday(activeRequest.profile.membership_starts_on)}</dd></div>
+                <div className="studentCheckInsApprovalMobileHidden"><dt>結束日期</dt><dd>{formatBirthday(activeRequest.profile.membership_expires_on)}</dd></div>
               </dl>
               <p className="studentCheckInsApprovalHint">
                 {activeRequest.profile.photo_url ? "請核對現場本人與照片相符後再放行。" : "請先拍攝並確認本人照片，才能放行。"}
