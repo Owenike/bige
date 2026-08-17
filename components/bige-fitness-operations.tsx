@@ -1013,8 +1013,8 @@ function SignaturePad(props: { onChange: (dataUrl: string) => void }) {
 }
 
 const DAILY_SCHEDULE_LOADING_COACH_COUNT = 7;
-const DAILY_SCHEDULE_LOADING_ROW_STEP_MS = 55;
-const DAILY_SCHEDULE_LOADING_PAGE_MS = 1900;
+const DAILY_SCHEDULE_LOADING_ROW_STEP_MS = 65;
+const DAILY_SCHEDULE_LOADING_SECOND_TURN_MS = 1900;
 const DAILY_SCHEDULE_LOADING_HOURS = Array.from(
   { length: 15 },
   (_, index) => index + 9,
@@ -1083,10 +1083,10 @@ function DailyScheduleLoadingBoard() {
   const [loadingPage, setLoadingPage] = useState(0);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setLoadingPage((current) => current + 1);
-    }, DAILY_SCHEDULE_LOADING_PAGE_MS);
-    return () => window.clearInterval(timer);
+    const timer = window.setTimeout(() => {
+      setLoadingPage(1);
+    }, DAILY_SCHEDULE_LOADING_SECOND_TURN_MS);
+    return () => window.clearTimeout(timer);
   }, []);
 
   return (
@@ -1106,6 +1106,7 @@ function DailyScheduleLoadingBoard() {
       <div
         className={`${styles.board} ${styles.loadingBoard}`}
         data-mobile-show-all="false"
+        data-loading-turn={loadingPage === 0 ? "inverse" : "final"}
         aria-hidden="true"
         style={
           {
@@ -1119,6 +1120,7 @@ function DailyScheduleLoadingBoard() {
             <div
               className={`${styles.timeHead} ${styles.loadingFlipCell}`}
               data-mobile-active={String(coachIndex === 0)}
+              data-loading-coach={coachIndex}
               data-loading-row="0"
               style={dailyScheduleLoadingRowStyle(0)}
             >
@@ -1128,6 +1130,7 @@ function DailyScheduleLoadingBoard() {
             <div
               className={`${styles.coachHead} ${styles.loadingFlipCell}`}
               data-mobile-active={String(coachIndex === 0)}
+              data-loading-coach={coachIndex}
               data-loading-row="0"
               style={dailyScheduleLoadingRowStyle(0)}
             >
@@ -1142,6 +1145,7 @@ function DailyScheduleLoadingBoard() {
               <div
                 className={`${styles.timeCell} ${styles.loadingFlipCell}`}
                 data-mobile-active={String(coachIndex === 0)}
+                data-loading-coach={coachIndex}
                 data-loading-row={rowIndex + 1}
                 style={dailyScheduleLoadingRowStyle(rowIndex + 1)}
               >
@@ -1154,6 +1158,7 @@ function DailyScheduleLoadingBoard() {
               <div
                 className={`${styles.slotCell} ${styles.loadingFlipCell}`}
                 data-mobile-active={String(coachIndex === 0)}
+                data-loading-coach={coachIndex}
                 data-loading-row={rowIndex + 1}
                 style={dailyScheduleLoadingRowStyle(rowIndex + 1)}
               >
