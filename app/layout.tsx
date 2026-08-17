@@ -1,6 +1,7 @@
 import React from "react";
 import Script from "next/script";
 import "./globals.css";
+import "./student-autonomous-approval-mobile.css";
 import { I18nProvider } from "./i18n-provider";
 import LayoutChrome from "./layout-chrome";
 import { getLocaleFromCookies } from "../lib/i18n-server";
