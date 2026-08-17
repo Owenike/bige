@@ -24,13 +24,141 @@
   min-width: 0;
 }
 
-.header .toolbar {
+.dateToolbar {
   flex: 0 0 auto;
   flex-wrap: nowrap;
 }
 
-.header .toolbar .input {
+.dateToolbarDock {
+  position: relative;
+  z-index: 12;
+  flex: 0 0 auto;
+}
+
+.dateToolbar .input {
   width: 172px;
+}
+
+.successToast {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  width: max-content;
+  max-width: min(620px, calc(100vw - 32px));
+  min-height: 42px;
+  padding: 8px 9px 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transform: translateX(-50%);
+  color: #d8ffea;
+  border: 1px solid rgba(97, 218, 157, 0.48);
+  border-radius: 11px;
+  background:
+    linear-gradient(135deg, rgba(55, 160, 111, 0.28), rgba(12, 66, 47, 0.5)),
+    rgba(10, 36, 29, 0.78);
+  box-shadow:
+    0 16px 38px rgba(0, 0, 0, 0.3),
+    0 0 24px rgba(68, 210, 142, 0.13),
+    inset 0 1px 0 rgba(220, 255, 238, 0.18);
+  backdrop-filter: blur(22px) saturate(1.28);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.35;
+  white-space: nowrap;
+  animation: successToastIn 180ms ease-out both;
+}
+
+.successToastUndo {
+  min-height: 30px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: none;
+  color: #effff7;
+  border: 1px solid rgba(184, 244, 214, 0.48);
+  border-radius: 8px;
+  background: rgba(211, 255, 232, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.successToastUndo:hover {
+  border-color: rgba(211, 255, 232, 0.78);
+  background: rgba(211, 255, 232, 0.22);
+}
+
+.successToastUndo:disabled {
+  opacity: 0.58;
+  cursor: wait;
+}
+
+@keyframes successToastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 7px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.headerActions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.sessionActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sessionActions .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.sessionIdentity {
+  color: #526177;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.positionBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 10px;
+  border: 1px solid rgba(161, 119, 29, 0.3);
+  border-radius: 999px;
+  color: #735515;
+  background: linear-gradient(135deg, rgba(255, 248, 218, 0.94), rgba(239, 213, 142, 0.78));
+  box-shadow: 0 6px 18px rgba(112, 80, 15, 0.1);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.logoutButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
 }
 
 .eyebrow {
@@ -66,7 +194,6 @@
 }
 
 .tabs {
-  margin-bottom: 14px;
   padding: 5px;
   border: 1px solid rgba(255, 255, 255, 0.9);
   background: rgba(255, 255, 255, 0.42);
@@ -74,6 +201,14 @@
   backdrop-filter: blur(24px) saturate(1.4);
   border-radius: 8px;
   width: fit-content;
+}
+
+.navigationRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .button,
@@ -105,6 +240,21 @@
   padding: 0;
   display: inline-grid;
   place-items: center;
+}
+
+.weekdayBadge {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid rgba(160, 130, 45, 0.3);
+  border-radius: 7px;
+  background: rgba(255, 246, 209, 0.72);
+  color: #4f3e12;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .button:hover,
@@ -152,14 +302,318 @@
 }
 
 .boardWrap {
-  overflow: auto;
-  max-height: calc(100vh - 230px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-height: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.boardWrap::-webkit-scrollbar {
+  display: none;
 }
 
 .board {
   display: grid;
-  min-width: 860px;
-  grid-template-columns: 74px repeat(var(--coach-count), minmax(190px, 1fr));
+  min-width: max(860px, calc(var(--coach-count) * 200px));
+  grid-template-columns: repeat(var(--coach-count), 52px minmax(148px, 1fr));
+}
+
+.loadingBoardWrap {
+  --loading-flip-front: rgba(237, 244, 252, 0.94);
+  --loading-flip-back: rgba(210, 222, 236, 0.9);
+  --loading-flip-line: rgba(85, 108, 137, 0.23);
+  --loading-flip-glow: rgba(106, 145, 184, 0.18);
+  position: relative;
+  min-height: calc(44px + 15 * 46px);
+  padding: 0;
+  isolation: isolate;
+}
+
+.managerPage .loadingBoardWrap {
+  --loading-flip-front: rgba(30, 34, 40, 0.98);
+  --loading-flip-back: rgba(24, 28, 34, 0.98);
+  --loading-flip-line: rgba(229, 198, 127, 0.24);
+  --loading-flip-glow: rgba(220, 177, 79, 0.16);
+}
+
+.frontdeskM2A .loadingBoardWrap {
+  --loading-flip-front: rgba(183, 215, 237, 0.08);
+  --loading-flip-back: rgba(7, 17, 27, 0.18);
+  --loading-flip-line: rgba(180, 214, 237, 0.22);
+  --loading-flip-glow: rgba(101, 173, 220, 0.18);
+}
+
+.frontdeskM2A .loadingBoard {
+  opacity: 1;
+}
+
+.loadingBoardStatus {
+  position: absolute;
+  z-index: 12;
+  top: 12px;
+  left: 50%;
+  min-height: 34px;
+  padding: 7px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  color: rgba(242, 247, 251, 0.94);
+  border: 1px solid rgba(218, 229, 238, 0.25);
+  border-radius: 999px;
+  background: rgba(6, 14, 22, 0.78);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px) saturate(1.16);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.loadingBoardDots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.loadingBoardDots > span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #e4c77f;
+  animation: schedule-loading-dot 900ms ease-in-out infinite alternate;
+}
+
+.loadingBoardDots > span:nth-child(2) {
+  animation-delay: 150ms;
+}
+
+.loadingBoardDots > span:nth-child(3) {
+  animation-delay: 300ms;
+}
+
+.loadingBoard {
+  opacity: 0.94;
+}
+
+.loadingFlipCell {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  perspective: 520px;
+  perspective-origin: 50% 50%;
+  background: var(--loading-flip-back);
+}
+
+.loadingFlipCell::before,
+.loadingFlipCell::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: 2px;
+  left: 2px;
+  height: calc(50% - 2px);
+  border: 1px solid rgba(255, 255, 255, 0.035);
+  pointer-events: none;
+}
+
+.loadingFlipCell::before {
+  top: 2px;
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+  background: var(--loading-flip-back);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -8px 12px rgba(0, 0, 0, 0.08);
+}
+
+.loadingFlipCell::after {
+  bottom: 2px;
+  border-top: 0;
+  border-radius: 0 0 4px 4px;
+  background: var(--loading-flip-front);
+  box-shadow:
+    inset 0 1px 0 rgba(0, 0, 0, 0.34),
+    inset 0 8px 12px rgba(255, 255, 255, 0.025);
+}
+
+.loadingFlipUpperFlap,
+.loadingFlipLowerFlap {
+  position: absolute;
+  z-index: 4;
+  right: 2px;
+  left: 2px;
+  height: calc(50% - 2px);
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.loadingFlipUpperFlap {
+  top: 2px;
+  transform-origin: 50% 100%;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.54);
+  border-radius: 4px 4px 0 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 58%),
+    var(--loading-flip-front);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 7px 10px -4px rgba(0, 0, 0, 0.72);
+  animation: schedule-loading-flip-upper 3500ms cubic-bezier(0.55, 0.02, 0.2, 1) infinite;
+  animation-delay: var(--loading-row-delay);
+  animation-fill-mode: both;
+}
+
+.loadingFlipLowerFlap {
+  bottom: 2px;
+  transform: rotateX(90deg);
+  transform-origin: 50% 0%;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0 0 4px 4px;
+  background:
+    linear-gradient(0deg, rgba(255, 255, 255, 0.045), transparent 58%),
+    var(--loading-flip-back);
+  box-shadow:
+    inset 0 -1px 0 rgba(255, 255, 255, 0.045),
+    0 -7px 10px -4px rgba(0, 0, 0, 0.72);
+  animation: schedule-loading-flip-lower 3500ms cubic-bezier(0.55, 0.02, 0.2, 1) infinite;
+  animation-delay: var(--loading-row-delay);
+  animation-fill-mode: both;
+}
+
+.loadingFlipHinge {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  right: 4px;
+  left: 4px;
+  height: 2px;
+  background: var(--loading-flip-line);
+  box-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.44),
+    0 1px 0 rgba(255, 255, 255, 0.09),
+    0 0 8px var(--loading-flip-glow);
+  pointer-events: none;
+}
+
+.loadingFlipHinge::before,
+.loadingFlipHinge::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--loading-flip-line);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+}
+
+.loadingFlipHinge::before {
+  left: 0;
+}
+
+.loadingFlipHinge::after {
+  right: 0;
+}
+
+.loadingTimeLabel,
+.loadingCoachMark,
+.loadingBookingMark {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.loadingTimeLabel {
+  color: rgba(215, 224, 232, 0.56);
+  font-variant-numeric: tabular-nums;
+}
+
+.loadingCoachMark {
+  width: min(82px, 58%);
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(216, 228, 237, 0.19);
+  box-shadow: 0 0 13px var(--loading-flip-glow);
+}
+
+.loadingBookingMark {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 10px;
+  bottom: 8px;
+  left: 10px;
+  border: 1px solid rgba(169, 207, 232, 0.14);
+  border-left: 3px solid rgba(218, 188, 118, 0.42);
+  border-radius: 6px;
+  background: rgba(92, 145, 179, 0.12);
+  box-shadow: 0 0 14px var(--loading-flip-glow);
+}
+
+@keyframes schedule-loading-flip-upper {
+  0% {
+    transform: rotateX(0deg);
+  }
+  6.25%,
+  56.25% {
+    transform: rotateX(-90deg);
+  }
+  62.5%,
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+@keyframes schedule-loading-flip-lower {
+  0%,
+  6.25% {
+    transform: rotateX(90deg);
+  }
+  12.5%,
+  50% {
+    transform: rotateX(0deg);
+  }
+  56.25%,
+  100% {
+    transform: rotateX(90deg);
+  }
+}
+
+@keyframes schedule-loading-dot {
+  from {
+    opacity: 0.3;
+    transform: translateY(1px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingFlipUpperFlap,
+  .loadingFlipLowerFlap,
+  .loadingBoardDots > span {
+    animation: none;
+    transform: none;
+  }
+}
+
+@media (max-width: 780px) {
+  .loadingBoardStatus {
+    top: 8px;
+    max-width: calc(100vw - 48px);
+    min-height: 30px;
+    padding: 6px 11px;
+    font-size: 12px;
+  }
 }
 
 .timeHead,
@@ -175,8 +629,8 @@
   position: sticky;
   top: 0;
   z-index: 4;
-  min-height: 54px;
-  padding: 10px;
+  min-height: 44px;
+  padding: 7px 10px;
   display: grid;
   align-content: center;
   background: rgba(240, 245, 252, 0.9);
@@ -187,12 +641,135 @@
   font-weight: 850;
 }
 
+.coachHeadContent {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coachHeadContent .coachDragHandle {
+  flex: 1;
+}
+
+.coachStaticLabel,
+.coachIdentityLabel {
+  min-width: 0;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.coachName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coachTitleBadge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 2px 5px;
+  border: 1px solid rgba(83, 104, 135, 0.22);
+  border-radius: 999px;
+  color: #536477;
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.coachStatusBadge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border: 1px solid rgba(83, 104, 135, 0.22);
+  border-radius: 999px;
+  color: #536477;
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.coachStatusBadge[data-status="early"] {
+  color: #755a1d;
+  border-color: rgba(190, 145, 45, 0.32);
+  background: rgba(255, 243, 203, 0.9);
+}
+
+.coachStatusBadge[data-status="late"] {
+  color: #465c87;
+  border-color: rgba(91, 121, 178, 0.26);
+  background: rgba(226, 234, 252, 0.9);
+}
+
+.coachStatusBadge[data-status="off"] {
+  color: #87544c;
+  border-color: rgba(169, 91, 77, 0.28);
+  background: rgba(250, 229, 224, 0.9);
+}
+
+.coachDragHandle {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.coachDragHandle:active {
+  cursor: grabbing;
+}
+
+.coachDragHandle svg {
+  flex: none;
+  opacity: 0.58;
+}
+
+.coachDragHandle:focus-visible {
+  outline: 2px solid rgba(83, 104, 135, 0.7);
+  outline-offset: 2px;
+  border-radius: 5px;
+}
+
+.coachHead[data-coach-drag-over="true"] {
+  box-shadow: inset 0 0 0 2px rgba(76, 118, 151, 0.72);
+}
+
+.coachHead[data-coach-dragging="true"] {
+  opacity: 0.42;
+}
+
 .timeCell {
-  position: sticky;
-  left: 0;
-  z-index: 3;
-  min-height: 118px;
-  padding: 12px 8px;
+  position: relative;
+  z-index: 1;
+  min-height: 46px;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  text-align: center;
   background: rgba(241, 246, 252, 0.9);
   color: #68758a;
   font-variant-numeric: tabular-nums;
@@ -200,71 +777,491 @@
 }
 
 .slotCell {
-  min-height: 118px;
-  display: grid;
-  grid-template-rows: 1fr 1fr;
-  background: rgba(255, 255, 255, 0.22);
-}
-
-.halfSlot {
-  min-height: 58px;
-  padding: 5px;
   position: relative;
+  min-height: 46px;
+  background: rgba(255, 255, 255, 0.22);
+  overflow: hidden;
 }
 
-.halfSlot:first-child {
-  border-bottom: 1px dashed rgba(137, 150, 169, 0.2);
-}
-
-.slotAdd {
-  position: absolute;
-  inset: 4px;
-  border: 0;
-  border-radius: 5px;
-  color: transparent;
-  background: transparent;
-  cursor: pointer;
-}
-
-.quickAdd {
-  position: absolute;
+.slotCell[data-entry-start="true"] {
   z-index: 3;
+  overflow: visible;
+}
+
+.slotCell::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed rgba(137, 150, 169, 0.2);
+  pointer-events: none;
+}
+
+.slotCell[data-interactive="true"] {
+  cursor: pointer;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.slotCell[data-interactive="true"]:hover {
+  background: rgba(239, 245, 253, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(83, 104, 135, 0.24);
+}
+
+.slotCell[data-interactive="true"]:focus-visible {
+  outline: 2px solid #566f94;
+  outline-offset: -2px;
+}
+
+.scheduleNoteUndoButton {
+  position: absolute;
+  z-index: 9;
+  top: 50%;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 66px;
+  min-height: 30px;
+  padding: 4px 13px;
+  transform: translate(-50%, -50%);
+  border: 1px dashed rgba(218, 180, 91, 0.38);
+  border-radius: 999px;
+  background: rgba(33, 38, 45, 0.18);
+  box-shadow: 0 0 16px rgba(218, 180, 91, 0.08);
+  color: rgba(245, 222, 167, 0.86);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0.34;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition:
+    opacity 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.scheduleNoteUndoButton:hover,
+.scheduleNoteUndoButton:focus-visible {
+  border-color: rgba(239, 203, 119, 0.86);
+  outline: none;
+  background: rgba(48, 42, 29, 0.88);
+  box-shadow: 0 0 20px rgba(218, 180, 91, 0.2);
+  opacity: 0.96;
+}
+
+.scheduleNoteUndoButton:disabled {
+  opacity: 0.2;
+  cursor: wait;
+}
+
+.conflictBadgeStack {
+  position: absolute;
+  z-index: 8;
   top: 4px;
   right: 4px;
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(102, 119, 143, 0.24);
-  border-radius: 6px;
-  color: #55647a;
-  background: rgba(255, 255, 255, 0.82);
-  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  pointer-events: none;
 }
 
-.halfSlot:hover .slotAdd {
-  color: #66748a;
-  background: rgba(255, 255, 255, 0.35);
+.toConflictBadge,
+.classroomConflictBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 151, 133, 0.72);
+  border-radius: 999px;
+  background: rgba(102, 22, 24, 0.96);
+  box-shadow: 0 0 14px rgba(255, 91, 75, 0.32);
+  color: #fff1e9;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.classroomConflictBadge {
+  border-color: rgba(255, 210, 125, 0.78);
+  background: rgba(98, 60, 15, 0.96);
+  box-shadow: 0 0 14px rgba(255, 184, 77, 0.28);
+  color: #fff7df;
+}
+
+.scheduleDropZone {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  height: 50%;
+  pointer-events: none;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.scheduleDropZoneHour {
+  top: 0;
+}
+
+.scheduleDropZoneHalf {
+  bottom: 0;
+}
+
+.board[data-dragging="true"] .scheduleDropZone[data-valid-alignment="true"] {
+  background: rgba(67, 112, 147, 0.08);
+}
+
+.board[data-dragging="true"] .scheduleDropZone[data-valid-alignment="false"] {
+  background: rgba(166, 65, 65, 0.055);
+}
+
+.scheduleDropZone[data-drag-over="true"][data-valid-alignment="true"] {
+  z-index: 6;
+  background: rgba(81, 137, 177, 0.22);
+  box-shadow: inset 0 0 0 2px rgba(76, 118, 151, 0.68);
+}
+
+.scheduleDropZone[data-drag-over="true"][data-valid-alignment="false"] {
+  z-index: 6;
+  background: rgba(190, 57, 57, 0.2);
+  box-shadow: inset 0 0 0 2px rgba(190, 57, 57, 0.62);
+}
+
+.cellEntryFull,
+.cellEntryHalf {
+  position: absolute;
+  z-index: 2;
+  left: 3px;
+  right: 3px;
+}
+
+.cellEntryFull {
+  top: 3px;
+  bottom: auto;
+}
+
+.cellEntryHalf {
+  top: calc(50% + 2px);
+  bottom: auto;
 }
 
 .booking {
-  position: relative;
-  z-index: 2;
-  width: 100%;
-  min-height: 48px;
-  padding: 7px 8px;
-  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 19px;
+  padding: 3px 6px;
+  text-align: center;
   border: 1px solid rgba(96, 113, 139, 0.24);
-  border-radius: 6px;
+  border-radius: 4px;
   background: rgba(250, 252, 255, 0.78);
   color: #172236;
-  cursor: pointer;
   box-shadow: 0 5px 14px rgba(89, 105, 128, 0.09);
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.scheduleDraggable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.scheduleDraggable:active {
+  cursor: grabbing;
+}
+
+.scheduleDraggingSource {
+  opacity: 0.28;
+}
+
+.scheduleDeleteDropZone {
+  position: fixed;
+  z-index: 10020;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  width: min(360px, calc(100vw - 28px));
+  min-height: 72px;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #fff7f4;
+  border: 1px solid rgba(255, 154, 142, 0.72);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(130, 28, 34, 0.96), rgba(67, 13, 20, 0.96));
+  box-shadow:
+    0 18px 52px rgba(35, 3, 8, 0.42),
+    0 0 0 1px rgba(255, 223, 216, 0.1) inset;
+  backdrop-filter: blur(18px) saturate(1.15);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(-10px) scale(0.96);
+  transform-origin: center top;
+  transition:
+    opacity 120ms ease,
+    visibility 0s linear 120ms,
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.scheduleDeleteDropZone[data-active="true"] {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%);
+  animation: scheduleDeleteDropEnter 150ms ease-out both;
+  transition-delay: 0s;
+}
+
+.scheduleDeleteDropZone[data-drag-over="true"] {
+  color: #fff;
+  border-color: rgba(255, 232, 225, 0.94);
+  background:
+    linear-gradient(135deg, rgba(211, 48, 49, 0.98), rgba(118, 13, 25, 0.98));
+  box-shadow:
+    0 22px 58px rgba(72, 3, 12, 0.52),
+    0 0 28px rgba(255, 83, 72, 0.34),
+    0 0 0 2px rgba(255, 240, 235, 0.22) inset;
+  transform: translateX(-50%) scale(1.045);
+}
+
+.scheduleDeleteDropIcon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 224, 216, 0.32);
+  border-radius: 50%;
+  background: rgba(27, 4, 9, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.scheduleDeleteDropCopy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.scheduleDeleteDropCopy strong {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+}
+
+.scheduleDeleteDropCopy small {
+  color: rgba(255, 235, 230, 0.82);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@keyframes scheduleDeleteDropEnter {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+
+.scheduleDragOverlay {
+  width: max-content;
+  max-width: min(168px, 48vw);
+  padding: 6px 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  color: #172236;
+  border: 1px solid rgba(83, 104, 135, 0.42);
+  border-radius: 7px;
+  background: rgba(248, 251, 255, 0.76);
+  box-shadow: 0 8px 20px rgba(18, 28, 44, 0.2);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.scheduleDragOverlay strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coachDragOverlay {
+  min-width: 190px;
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #172236;
+  border: 1px solid rgba(83, 104, 135, 0.42);
+  border-radius: 8px;
+  background: rgba(248, 251, 255, 0.96);
+  box-shadow: 0 18px 45px rgba(18, 28, 44, 0.24);
+  backdrop-filter: blur(18px);
+  pointer-events: none;
+}
+
+.coachDragOverlay strong {
+  min-width: 0;
+  flex: 1;
+}
+
+.coachDragOverlay span {
+  flex: none;
+  color: #66748a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.scheduleMoveSummary,
+.scheduleMoveGroup {
+  display: grid;
+  gap: 10px;
+}
+
+.scheduleMoveRoute {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(90, 108, 134, 0.22);
+  border-radius: 10px;
+  background: rgba(247, 250, 254, 0.66);
+}
+
+.scheduleMoveRoute span:not(.scheduleMoveArrow) {
+  display: grid;
+  gap: 4px;
+  color: #68758a;
+  font-size: 13px;
+}
+
+.scheduleMoveRoute strong {
+  color: #1b2940;
+  font-size: 15px;
+}
+
+.scheduleMoveArrow {
+  color: #8d732d;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.scheduleMoveGroup {
+  margin-top: 12px;
+}
+
+.scheduleMoveItem {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(90, 108, 134, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.scheduleMoveItem strong {
+  font-variant-numeric: tabular-nums;
 }
 
 .bookingTrial {
+  align-items: flex-start;
+  padding: 5px 8px;
+  text-align: left;
   border-left: 4px solid #b9932f;
   background: rgba(255, 248, 221, 0.76);
+}
+
+.bookingTrialReminded {
+  border-left-color: #1c9b69;
+  background:
+    linear-gradient(135deg, rgba(211, 255, 235, 0.94), rgba(255, 248, 221, 0.86));
+  box-shadow:
+    inset 0 0 0 1px rgba(39, 163, 113, 0.34),
+    0 0 16px rgba(37, 172, 116, 0.2);
+}
+
+.bookingReminderBadge {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  overflow: hidden;
+  color: #f2fff9;
+  border: 1px solid rgba(113, 225, 176, 0.7);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #15764f, #249768);
+  box-shadow: 0 0 12px rgba(30, 151, 101, 0.25);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookingLegacy,
+.bookingFollowupBadge {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  overflow: hidden;
+  border: 1px solid rgba(185, 147, 47, 0.42);
+  border-radius: 999px;
+  color: #755915;
+  background: rgba(255, 247, 213, 0.7);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookingFollowupBadge {
+  color: #7c4e0f;
+  border-color: rgba(191, 126, 28, 0.45);
+  background: rgba(255, 229, 180, 0.84);
+}
+
+.reminderButton {
+  border-color: rgba(35, 157, 107, 0.46);
+  color: #12643f;
+  background: rgba(224, 251, 237, 0.86);
+}
+
+.reminderButtonDone,
+.reminderButtonDone:disabled {
+  opacity: 1;
+  color: #f2fff9;
+  border-color: rgba(111, 228, 178, 0.7);
+  background: linear-gradient(135deg, #15764f, #249768);
 }
 
 .bookingPt {
@@ -277,25 +1274,156 @@
 
 .bookingName {
   display: block;
+  max-width: 100%;
   font-weight: 850;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookingTrialNameLine {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.bookingTrialNameLine .bookingName {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.bookingBirthday {
+  flex: 0 0 auto;
+  color: #77684a;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.bookingPrimaryLine {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.bookingPrimaryLine .bookingName {
+  flex: 0 0 auto;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.bookingCourseType {
+  flex: 0 0 auto;
+  color: #526a78;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+  overflow: visible;
+  text-align: center;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.bookingStudentCode {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: #526677;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.entryTimeSummary {
+  display: none;
+}
+
+.entryBody {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.booking .entryBody {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.bookingTrial .entryBody {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.note .entryBody {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bookingMeta {
+  display: none;
+}
+
+.bookingEyebrow,
+.bookingPhone,
+.bookingCourse {
   display: block;
-  margin-top: 2px;
-  color: #69768a;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookingEyebrow {
+  color: #8a6817;
   font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.bookingPhone,
+.bookingCourse {
+  font-size: 12px;
+  line-height: 1.15;
 }
 
 .note {
-  position: relative;
-  z-index: 2;
-  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 5px 8px;
+  text-align: center;
   border: 1px dashed rgba(102, 88, 48, 0.35);
   border-radius: 6px;
   background: rgba(255, 250, 225, 0.58);
   color: #57491e;
-  font-size: 12px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.booking.cellEntryHalf,
+.note.cellEntryHalf {
+  padding-block: 1px;
+  font-size: 14px;
+  line-height: 1.15;
 }
 
 .section {
@@ -341,6 +1469,15 @@
 
 .field {
   min-width: 0;
+}
+
+.fieldHelp {
+  display: block;
+  margin-top: 6px;
+  color: rgba(209, 217, 226, 0.68);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.45;
 }
 
 .fieldFull {
@@ -434,6 +1571,96 @@
   color: #6b5014;
 }
 
+.bookingStatusPanel {
+  display: grid;
+  gap: 16px;
+}
+
+.bookingStatusSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bookingStatusSummaryItem {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(114, 130, 151, 0.2);
+  border-radius: 10px;
+  background: rgba(246, 249, 253, 0.72);
+}
+
+.bookingStatusSummaryItem span {
+  color: #6d788a;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.bookingStatusSummaryItem strong {
+  overflow-wrap: anywhere;
+  color: #1f2a3c;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.bookingStatusWindowNote,
+.bookingStatusGuidance {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 14px;
+  border-radius: 10px;
+}
+
+.bookingStatusWindowNote {
+  color: #6b5014;
+  border: 1px solid rgba(191, 135, 33, 0.24);
+  background: rgba(255, 245, 207, 0.52);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.bookingStatusWindowNote svg,
+.bookingStatusGuidance > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.bookingStatusGuidance {
+  align-items: center;
+  color: #334258;
+  border: 1px solid rgba(112, 132, 158, 0.2);
+  background: rgba(239, 244, 251, 0.66);
+}
+
+.bookingStatusGuidance div {
+  display: grid;
+  gap: 3px;
+}
+
+.bookingStatusGuidance strong {
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.bookingStatusGuidance span {
+  color: #68758a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.bookingStatusActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .error,
 .success {
   margin: 0 0 12px;
@@ -474,6 +1701,14 @@
   backdrop-filter: blur(32px) saturate(1.5);
 }
 
+.wideDialog {
+  width: min(1180px, 100%);
+}
+
+.compactDialog {
+  width: min(480px, 100%);
+}
+
 .dialogHeader {
   display: flex;
   justify-content: space-between;
@@ -486,6 +1721,348 @@
   margin: 0;
   font-size: 23px;
   letter-spacing: 0;
+}
+
+.timeChoiceGrid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.timeChoiceButton {
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid rgba(105, 119, 142, 0.28);
+  border-radius: 10px;
+  color: #1d2a3d;
+  background: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+  backdrop-filter: blur(18px) saturate(1.4);
+}
+
+.timeChoiceButton:hover {
+  border-color: rgba(139, 105, 25, 0.42);
+  background: rgba(255, 248, 221, 0.78);
+}
+
+.timeChoiceButton strong {
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeChoiceButton span {
+  color: #68758a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.processingDialog {
+  width: min(420px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.memberDetailDialog {
+  display: grid;
+  gap: 20px;
+}
+
+.memberDetailDialog > .sectionHeader {
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(118, 132, 153, 0.2);
+}
+
+.memberDetailDialog .contract {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.contractDisclosure {
+  overflow: hidden;
+}
+
+.contractSummary {
+  display: grid;
+  grid-template-columns:
+    minmax(120px, 0.95fr)
+    minmax(120px, 0.95fr)
+    minmax(130px, 1fr)
+    minmax(110px, 0.85fr)
+    minmax(210px, 1.35fr)
+    34px;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.contractSummary::-webkit-details-marker {
+  display: none;
+}
+
+.contractSummaryStat {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.contractSummaryStat > span {
+  color: #6d798c;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.contractSummaryStat > strong {
+  overflow: hidden;
+  color: #172236;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contractSummaryBalance > strong {
+  color: #a23c43;
+}
+
+.contractSummaryCourses {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.contractCourseChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid rgba(139, 105, 25, 0.22);
+  border-radius: 999px;
+  color: #6c5a29;
+  background: rgba(255, 245, 210, 0.54);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.contractSummaryChevron {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  justify-self: end;
+  border: 1px solid rgba(118, 132, 153, 0.22);
+  border-radius: 50%;
+  color: #66738a;
+  background: rgba(255, 255, 255, 0.28);
+  transition: transform 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.contractDisclosure[open] .contractSummaryChevron {
+  transform: rotate(180deg);
+}
+
+.contractSummary:hover .contractSummaryChevron {
+  border-color: rgba(139, 105, 25, 0.44);
+  color: #705a25;
+}
+
+.contractExpanded {
+  display: grid;
+  gap: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(118, 132, 153, 0.18);
+}
+
+@media (max-width: 1100px) {
+  .contractSummary {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) 34px;
+  }
+
+  .contractSummaryCourses {
+    grid-column: 1 / 5;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
+
+  .contractSummaryChevron {
+    grid-column: 5;
+    grid-row: 1 / 3;
+  }
+}
+
+.contractHeader {
+  margin-bottom: 0;
+}
+
+.contractHeading {
+  display: grid;
+  gap: 6px;
+}
+
+.contractEyebrow {
+  color: #7b6840;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.contractTitleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.contractNumber {
+  font-size: 18px;
+  letter-spacing: 0.01em;
+}
+
+.contractOverview {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.contractStat {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid rgba(118, 132, 153, 0.18);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.contractStat span,
+.courseAllocationCard small,
+.paymentMain small {
+  color: #6d798c;
+  font-size: 11px;
+}
+
+.contractStat strong {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.contractBalanceStat strong {
+  color: #a23c43;
+}
+
+.courseAllocationSection,
+.paymentSection {
+  display: grid;
+  gap: 10px;
+}
+
+.courseAllocationSection h4,
+.paymentSection h4 {
+  margin: 0;
+  color: #536077;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+}
+
+.courseAllocationGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.courseAllocationCard {
+  display: grid;
+  flex: 0 1 260px;
+  gap: 5px;
+  min-width: 210px;
+  padding: 14px;
+  border: 1px solid rgba(118, 132, 153, 0.2);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.courseAllocationCard > span {
+  color: #6c5a29;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.courseAllocationCard strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.paymentList {
+  display: grid;
+  gap: 8px;
+}
+
+.paymentItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid rgba(118, 132, 153, 0.18);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.paymentMain {
+  display: grid;
+  gap: 3px;
+}
+
+.paymentMain > span {
+  color: #667388;
+  font-size: 13px;
+}
+
+.paymentSide {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog > .processingDialog {
+  min-height: 180px;
+  margin: 0 auto;
+  align-content: center;
+}
+
+.processingIcon {
+  color: #4e5f78;
+  animation: processing-spin 900ms linear infinite;
+}
+
+@keyframes processing-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.staffManagerFrame {
+  display: block;
+  width: 100%;
+  height: min(72vh, 760px);
+  border: 1px solid rgba(116, 130, 152, 0.28);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.76);
 }
 
 .keypad {
@@ -527,6 +2104,20 @@
   display: none;
 }
 
+.scheduleActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.scheduleActions .button,
+.emptyState .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
 @media (max-width: 780px) {
   .page {
     padding: 12px;
@@ -538,14 +2129,46 @@
     flex-direction: column;
   }
 
-  .header .toolbar {
+  .dateToolbar {
     width: 100%;
     display: grid;
-    grid-template-columns: 40px minmax(0, 1fr) 40px 40px;
+    grid-template-columns: 40px minmax(0, 1fr) auto 40px 40px;
   }
 
-  .header .toolbar .input {
+  .dateToolbarDock {
     width: 100%;
+  }
+
+  .successToast {
+    width: min(100%, calc(100vw - 32px));
+    justify-content: space-between;
+    white-space: normal;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .sessionActions {
+    justify-content: space-between;
+  }
+
+  .sessionIdentity {
+    align-items: flex-start;
+    flex-direction: column;
+    white-space: normal;
+  }
+
+  .dateToolbar .input {
+    width: 100%;
+  }
+
+  .navigationRow {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
   }
 
   .tabs {
@@ -564,8 +2187,41 @@
     grid-template-columns: 1fr;
   }
 
-  .boardWrap {
-    max-height: calc(100vh - 285px);
+  .contractOverview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .contractSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 34px;
+    gap: 12px;
+  }
+
+  .contractSummaryCourses {
+    grid-column: 1 / 3;
+    grid-row: 3;
+  }
+
+  .contractSummaryChevron {
+    grid-column: 3;
+    grid-row: 1 / 4;
+  }
+
+  .courseAllocationCard {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .paymentItem {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .paymentSide {
+    justify-content: flex-start;
+  }
+
+  .timeChoiceGrid {
+    grid-template-columns: 1fr;
   }
 
   .board {
@@ -573,9 +2229,23 @@
     grid-template-columns: 62px minmax(0, 1fr);
   }
 
+  .board[data-mobile-show-all="true"] {
+    min-width: var(--all-board-width);
+    grid-template-columns: repeat(var(--coach-count), 62px minmax(190px, 1fr));
+  }
+
+  .timeHead:not([data-mobile-active="true"]),
+  .timeCell:not([data-mobile-active="true"]),
   .coachHead:not([data-mobile-active="true"]),
   .slotCell:not([data-mobile-active="true"]) {
     display: none;
+  }
+
+  .board[data-mobile-show-all="true"] .timeHead,
+  .board[data-mobile-show-all="true"] .timeCell,
+  .board[data-mobile-show-all="true"] .coachHead,
+  .board[data-mobile-show-all="true"] .slotCell {
+    display: grid;
   }
 
   .mobileCoach {
@@ -583,16 +2253,3527 @@
     margin-bottom: 10px;
   }
 
+  .scheduleActions .button {
+    width: 100%;
+  }
+
   .timeCell {
-    min-height: 112px;
+    min-height: 46px;
   }
 
   .slotCell {
-    min-height: 112px;
+    min-height: 46px;
   }
 
   .dialog {
     max-height: 94vh;
     padding: 16px;
+  }
+
+  .scheduleMoveRoute {
+    grid-template-columns: 1fr;
+  }
+
+  .scheduleMoveArrow {
+    transform: rotate(90deg);
+    justify-self: center;
+  }
+}
+
+/* Manager workspace — premium visual language shared with the public homepage. */
+.managerPage {
+  --manager-gold: #dfbd72;
+  --manager-gold-soft: rgba(223, 189, 114, 0.24);
+  --manager-gold-line: rgba(231, 204, 143, 0.42);
+  --manager-ink: #070b12;
+  --manager-panel: rgba(11, 17, 27, 0.82);
+  --manager-panel-strong: rgba(8, 13, 22, 0.94);
+  position: relative;
+  isolation: isolate;
+  color: #f5f1e8;
+  background:
+    radial-gradient(circle at 8% -8%, rgba(213, 178, 100, 0.2), transparent 30%),
+    radial-gradient(circle at 92% 5%, rgba(46, 101, 118, 0.18), transparent 28%),
+    radial-gradient(circle at 52% 76%, rgba(173, 126, 49, 0.1), transparent 34%),
+    linear-gradient(145deg, #04070c 0%, #0a101a 48%, #05080f 100%);
+}
+
+.managerPage::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.34;
+  background-image:
+    linear-gradient(rgba(222, 190, 119, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(222, 190, 119, 0.025) 1px, transparent 1px),
+    radial-gradient(circle at 50% 0%, rgba(255, 226, 159, 0.09), transparent 38%);
+  background-size: 72px 72px, 72px 72px, auto;
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.68) 58%, transparent 100%);
+}
+
+.managerPage .shell {
+  position: relative;
+  z-index: 1;
+  width: min(1760px, 100%);
+}
+
+.managerPage .header {
+  padding: 20px 22px;
+  border: 1px solid var(--manager-gold-line);
+  border-radius: 18px;
+  background:
+    linear-gradient(125deg, rgba(221, 188, 112, 0.1), transparent 34%),
+    rgba(9, 15, 24, 0.76);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.34),
+    0 0 38px rgba(212, 171, 82, 0.08),
+    inset 0 1px 0 rgba(255, 235, 186, 0.14);
+  backdrop-filter: blur(28px) saturate(1.28);
+}
+
+.managerPage .eyebrow,
+.managerPage .label {
+  color: #d9b96f;
+  letter-spacing: 0.1em;
+}
+
+.managerPage .title {
+  color: #fffaf0;
+  font-weight: 540;
+  text-shadow: 0 0 28px rgba(227, 190, 104, 0.13);
+}
+
+.managerPage .subtitle,
+.managerPage .muted,
+.managerPage .sessionIdentity {
+  color: rgba(224, 229, 238, 0.7);
+}
+
+.managerPage .positionBadge {
+  color: #1a1409;
+  border-color: rgba(250, 225, 166, 0.62);
+  background: linear-gradient(135deg, #f5e4b4, #c89e49);
+  box-shadow: 0 0 22px rgba(221, 179, 84, 0.24);
+}
+
+.managerPage .tabs {
+  padding: 6px;
+  border-color: rgba(226, 194, 122, 0.34);
+  border-radius: 14px;
+  background:
+    linear-gradient(110deg, rgba(219, 180, 92, 0.08), transparent 40%),
+    rgba(8, 13, 22, 0.76);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.3),
+    0 0 24px rgba(209, 166, 75, 0.07),
+    inset 0 1px 0 rgba(255, 239, 201, 0.09);
+}
+
+.managerPage .button,
+.managerPage .iconButton,
+.managerPage .tab {
+  color: rgba(247, 242, 230, 0.9);
+  border-color: rgba(224, 197, 136, 0.24);
+  background: rgba(16, 23, 34, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.managerPage .button:hover,
+.managerPage .iconButton:hover,
+.managerPage .tab:hover {
+  color: #fff8e8;
+  border-color: rgba(236, 204, 132, 0.62);
+  background: rgba(37, 31, 21, 0.86);
+  box-shadow: 0 0 24px rgba(218, 177, 85, 0.13);
+}
+
+.managerPage .primary,
+.managerPage .activeTab {
+  color: #171109;
+  border-color: rgba(255, 231, 175, 0.72);
+  background: linear-gradient(135deg, #f8e9bd 0%, #d5ae5d 56%, #b88939 100%);
+  box-shadow:
+    0 10px 30px rgba(196, 145, 48, 0.28),
+    0 0 24px rgba(236, 202, 126, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.66);
+}
+
+.managerPage .gold {
+  color: #f6dda1;
+  border-color: rgba(231, 197, 118, 0.5);
+  background: linear-gradient(135deg, rgba(101, 75, 28, 0.68), rgba(31, 27, 19, 0.86));
+  box-shadow: 0 0 20px rgba(211, 169, 75, 0.1);
+}
+
+.managerPage .weekdayBadge {
+  color: #f4dda8;
+  border-color: rgba(232, 199, 124, 0.42);
+  background: rgba(92, 68, 25, 0.36);
+  box-shadow: inset 0 1px 0 rgba(255, 237, 191, 0.1);
+}
+
+.managerPage .input,
+.managerPage .select,
+.managerPage .textarea {
+  color-scheme: dark;
+  color: #f4efe5;
+  border-color: rgba(224, 196, 132, 0.28);
+  background: rgba(8, 13, 22, 0.76);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.managerPage .input::placeholder,
+.managerPage .textarea::placeholder {
+  color: rgba(222, 226, 234, 0.42);
+}
+
+.managerPage .input:focus,
+.managerPage .select:focus,
+.managerPage .textarea:focus {
+  border-color: rgba(241, 209, 136, 0.76);
+  box-shadow:
+    0 0 0 3px rgba(220, 177, 83, 0.12),
+    0 0 22px rgba(220, 177, 83, 0.08);
+}
+
+.managerPage .glass,
+.managerPage .section {
+  color: #f4efe5;
+  border-color: rgba(224, 195, 128, 0.28);
+  background:
+    linear-gradient(135deg, rgba(216, 177, 88, 0.055), transparent 35%),
+    rgba(9, 15, 24, 0.82);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 236, 190, 0.08);
+}
+
+.managerPage .boardWrap {
+  border: 1px solid rgba(235, 203, 132, 0.42);
+  border-radius: 16px;
+  background: rgba(7, 12, 20, 0.9);
+  box-shadow:
+    0 28px 72px rgba(0, 0, 0, 0.4),
+    0 0 34px rgba(210, 165, 69, 0.09),
+    inset 0 1px 0 rgba(255, 237, 194, 0.11);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(214, 173, 82, 0.72) rgba(11, 17, 27, 0.8);
+}
+
+.managerPage .boardWrap::-webkit-scrollbar {
+  display: block;
+  height: 8px;
+}
+
+.managerPage .boardWrap::-webkit-scrollbar-track {
+  background: rgba(11, 17, 27, 0.82);
+}
+
+.managerPage .boardWrap::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #9a7130, #e2c176, #9a7130);
+}
+
+.managerPage .timeHead,
+.managerPage .coachHead {
+  min-height: 48px;
+  color: #f6e4b9;
+  border-color: rgba(212, 181, 111, 0.18);
+  border-bottom-color: rgba(226, 193, 118, 0.4);
+  background:
+    linear-gradient(180deg, rgba(55, 43, 25, 0.96), rgba(17, 22, 31, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 239, 197, 0.1);
+}
+
+.managerPage .timeHead {
+  justify-items: center;
+  text-align: center;
+  color: rgba(230, 205, 150, 0.78);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.managerPage .coachHead {
+  color: #fff8e9;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+
+.managerPage .coachDragHandle svg {
+  color: #e3c77f;
+  opacity: 0.82;
+}
+
+.managerPage .coachDragHandle:focus-visible {
+  outline-color: rgba(232, 199, 119, 0.9);
+}
+
+.managerPage .coachHead[data-coach-drag-over="true"] {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(222, 183, 91, 0.28), transparent 72%),
+    linear-gradient(180deg, rgba(71, 52, 24, 0.98), rgba(17, 22, 31, 0.98));
+  box-shadow:
+    inset 0 0 0 2px rgba(232, 199, 119, 0.88),
+    0 0 24px rgba(218, 176, 77, 0.25);
+}
+
+.managerPage .coachDragOverlay {
+  color: #fff8e9;
+  border-color: rgba(226, 193, 118, 0.72);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(224, 184, 91, 0.2), transparent 55%),
+    rgba(13, 18, 27, 0.96);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.46), 0 0 28px rgba(214, 173, 82, 0.2);
+}
+
+.managerPage .coachDragOverlay svg,
+.managerPage .coachDragOverlay span {
+  color: #dfbf72;
+}
+
+.managerPage .timeCell {
+  color: #d8c08c;
+  border-color: rgba(205, 176, 111, 0.15);
+  background: linear-gradient(90deg, rgba(41, 34, 23, 0.9), rgba(16, 22, 31, 0.96));
+  text-shadow: 0 0 14px rgba(221, 181, 90, 0.12);
+}
+
+.managerPage .slotCell {
+  border-color: rgba(191, 169, 119, 0.12);
+  background: rgba(10, 16, 25, 0.82);
+}
+
+.managerPage .slotCell::after {
+  border-top-color: rgba(223, 193, 125, 0.1);
+}
+
+.managerPage .slotCell[data-interactive="true"]:hover {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(218, 177, 87, 0.13), transparent 72%),
+    rgba(20, 25, 32, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(230, 199, 129, 0.3);
+}
+
+.managerPage .slotCell[data-interactive="true"]:focus-visible {
+  outline-color: var(--manager-gold);
+}
+
+.managerPage .board[data-dragging="true"] .scheduleDropZone[data-valid-alignment="true"] {
+  background: rgba(218, 177, 87, 0.08);
+}
+
+.managerPage .scheduleDropZone[data-drag-over="true"][data-valid-alignment="true"] {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(239, 204, 123, 0.28), transparent 72%),
+    rgba(91, 66, 27, 0.24);
+  box-shadow:
+    inset 0 0 0 2px rgba(233, 199, 119, 0.8),
+    0 0 20px rgba(220, 176, 75, 0.22);
+}
+
+.managerPage .booking,
+.managerPage .note {
+  left: calc(-52px + 3px);
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
+  text-align: left;
+  color: #fff8e9;
+  border-color: rgba(230, 198, 126, 0.42);
+  background:
+    linear-gradient(135deg, rgba(103, 77, 29, 0.56), rgba(20, 24, 30, 0.94));
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.32),
+    0 0 18px rgba(218, 174, 77, 0.1),
+    inset 0 1px 0 rgba(255, 235, 185, 0.1);
+}
+
+.managerPage .entryTimeSummary {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: stretch;
+  padding: 0;
+  color: #f4d991;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(234, 196, 111, 0.14), transparent 70%),
+    rgba(22, 21, 19, 0.86);
+  border-right: 1px solid rgba(231, 199, 126, 0.32);
+  box-shadow: inset -8px 0 18px rgba(0, 0, 0, 0.15);
+}
+
+.managerPage .entryTimeTick {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.managerPage .entryTimeTick + .entryTimeTick {
+  border-top: 1px solid rgba(231, 199, 126, 0.24);
+}
+
+.managerPage .booking.cellEntryHalf,
+.managerPage .note.cellEntryHalf {
+  left: 3px;
+  grid-template-columns: 64px minmax(0, 1fr);
+  padding: 0;
+}
+
+.managerPage .cellEntryHalf .entryTimeSummary {
+  margin: 3px;
+  border: 1px solid rgba(235, 202, 127, 0.36);
+  border-radius: 5px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(238, 201, 116, 0.18), transparent 76%),
+    rgba(42, 34, 22, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 187, 0.08),
+    0 0 12px rgba(218, 174, 77, 0.08);
+}
+
+.managerPage .cellEntryHalf .entryTimeTick {
+  font-size: 12px;
+}
+
+.managerPage .booking .entryBody,
+.managerPage .note .entryBody {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  padding: 4px 7px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  text-align: center;
+}
+
+.managerPage .bookingTrial .entryBody {
+  align-items: flex-start;
+  padding-inline: 8px;
+  text-align: left;
+}
+
+.managerPage .bookingTrial {
+  border-left-color: #e3bc63;
+  background:
+    linear-gradient(135deg, rgba(117, 84, 29, 0.74), rgba(28, 25, 20, 0.94));
+}
+
+.managerPage .bookingTrialReminded {
+  border-left-color: #68d6a6;
+  background:
+    radial-gradient(circle at 92% 10%, rgba(98, 226, 168, 0.18), transparent 44%),
+    linear-gradient(135deg, rgba(22, 91, 66, 0.86), rgba(26, 25, 20, 0.96));
+  box-shadow:
+    inset 0 0 0 1px rgba(104, 214, 166, 0.42),
+    0 0 18px rgba(65, 194, 139, 0.18);
+}
+
+.managerPage .reminderButton {
+  color: #eafff4;
+  border-color: rgba(102, 218, 167, 0.46);
+  background: rgba(17, 83, 59, 0.78);
+}
+
+.managerPage .reminderButton:hover {
+  border-color: rgba(127, 239, 190, 0.82);
+  background: rgba(24, 113, 80, 0.92);
+  box-shadow: 0 0 22px rgba(64, 202, 143, 0.18);
+}
+
+.managerPage .reminderButtonDone,
+.managerPage .reminderButtonDone:disabled {
+  opacity: 1;
+  color: #f2fff9;
+  border-color: rgba(127, 239, 190, 0.78);
+  background: linear-gradient(135deg, #176847, #259b6c);
+}
+
+.managerPage .bookingDone {
+  opacity: 0.82;
+}
+
+.managerPage .bookingPt {
+  border-left-color: #a9c4c8;
+  background:
+    linear-gradient(135deg, rgba(30, 65, 76, 0.72), rgba(17, 24, 31, 0.94));
+}
+
+.managerPage .bookingEyebrow {
+  color: #f0ca72;
+}
+
+.managerPage .bookingPhone,
+.managerPage .bookingCourse,
+.managerPage .bookingMeta {
+  color: rgba(241, 236, 225, 0.78);
+}
+
+.managerPage .bookingBirthday {
+  color: rgba(241, 236, 225, 0.64);
+}
+
+.managerPage .bookingLegacy,
+.managerPage .bookingFollowupBadge {
+  color: #f8df9f;
+  border-color: rgba(231, 190, 99, 0.46);
+  background: rgba(100, 69, 21, 0.5);
+}
+
+.managerPage .scheduleDragOverlay {
+  color: #fff8e9;
+  border-color: rgba(234, 202, 129, 0.62);
+  background:
+    linear-gradient(135deg, rgba(86, 62, 24, 0.78), rgba(12, 18, 27, 0.78));
+  box-shadow:
+    0 9px 22px rgba(0, 0, 0, 0.34),
+    0 0 14px rgba(220, 176, 75, 0.14),
+    inset 0 1px 0 rgba(255, 237, 194, 0.14);
+}
+
+.managerPage .scheduleMoveRoute,
+.managerPage .scheduleMoveItem {
+  color: #f4efe5;
+  border-color: rgba(230, 198, 126, 0.28);
+  background: rgba(8, 14, 23, 0.72);
+}
+
+.managerPage .scheduleMoveRoute span:not(.scheduleMoveArrow) {
+  color: rgba(235, 218, 180, 0.72);
+}
+
+.managerPage .scheduleMoveRoute strong {
+  color: #fff6e2;
+}
+
+.managerPage .scheduleMoveArrow,
+.managerPage .scheduleMoveItem strong {
+  color: #e4c476;
+}
+
+.managerPage .listItem,
+.managerPage .contract,
+.managerPage .plan,
+.managerPage .summary {
+  color: #f3eee4;
+  border-color: rgba(222, 191, 122, 0.24);
+  background: rgba(12, 19, 29, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 237, 194, 0.04);
+}
+
+.managerPage .badge {
+  color: #ebd49e;
+  background: rgba(111, 82, 30, 0.4);
+}
+
+.managerPage .overlay {
+  background: rgba(2, 5, 10, 0.72);
+  backdrop-filter: blur(22px) saturate(1.1);
+}
+
+.managerPage .dialog {
+  color: #f4efe5;
+  border-color: rgba(233, 202, 133, 0.44);
+  background:
+    radial-gradient(circle at 0 0, rgba(220, 177, 83, 0.12), transparent 34%),
+    rgba(8, 13, 21, 0.96);
+  box-shadow:
+    0 36px 100px rgba(0, 0, 0, 0.62),
+    0 0 42px rgba(213, 169, 72, 0.1),
+    inset 0 1px 0 rgba(255, 236, 190, 0.1);
+}
+
+.businessDayControls {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 5px 7px;
+  border: 1px solid rgba(215, 181, 102, 0.28);
+  border-radius: 9px;
+  background: rgba(8, 14, 23, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.frontdeskStatus {
+  padding: 0 7px;
+  color: rgba(242, 235, 219, 0.72);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.frontdeskStatus strong {
+  color: #f0d493;
+  font-weight: 850;
+}
+
+.scheduleLockButton {
+  min-height: 32px;
+  padding: 5px 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(210, 151, 83, 0.5);
+  border-radius: 7px;
+  color: #f2cf9b;
+  background: linear-gradient(135deg, rgba(92, 45, 29, 0.88), rgba(41, 25, 23, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 225, 176, 0.08),
+    0 0 15px rgba(173, 88, 46, 0.12);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.scheduleLockButton:hover {
+  border-color: rgba(239, 191, 116, 0.7);
+}
+
+.scheduleLockButton[data-unlocked="true"] {
+  color: #d6f6e2;
+  border-color: rgba(90, 203, 140, 0.56);
+  background: linear-gradient(135deg, rgba(27, 101, 65, 0.82), rgba(15, 59, 43, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(218, 255, 232, 0.1),
+    0 0 18px rgba(62, 185, 117, 0.2);
+}
+
+.businessDaySelect,
+.businessDayInput,
+.businessDaySave,
+.closureToggle {
+  min-height: 32px;
+  border: 1px solid rgba(215, 181, 102, 0.36);
+  border-radius: 7px;
+  color: #f5efe2;
+  background: rgba(19, 27, 39, 0.94);
+  font: inherit;
+  font-size: 13px;
+}
+
+.businessDaySelect {
+  max-width: 142px;
+  padding: 5px 28px 5px 9px;
+}
+
+.businessDaySelect option {
+  color: #151a22;
+  background: #f6f0e4;
+}
+
+.businessDayInput {
+  width: 132px;
+  padding: 5px 9px;
+  outline: none;
+}
+
+.businessDaySave,
+.closureToggle {
+  padding: 5px 10px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.businessDaySave {
+  color: #19130a;
+  background: linear-gradient(135deg, #f2d994, #c9973f);
+}
+
+.closureToggle {
+  color: #eec8c0;
+  border-color: rgba(197, 91, 75, 0.48);
+  background: rgba(76, 28, 23, 0.62);
+}
+
+.closureToggle.closureActive {
+  color: #1b1307;
+  border-color: rgba(239, 207, 129, 0.72);
+  background: linear-gradient(135deg, #f3d98e, #c99235);
+}
+
+.businessDaySave:disabled,
+.closureToggle:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.closureReadOnly {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 5px 11px;
+  border: 1px solid rgba(239, 207, 129, 0.62);
+  border-radius: 999px;
+  color: #f4d88f;
+  background: rgba(116, 76, 18, 0.34);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.closureBanner {
+  position: relative;
+  overflow: hidden;
+  margin: 0 0 14px;
+  padding: 18px 22px;
+  border: 1px solid rgba(239, 207, 129, 0.7);
+  border-radius: 12px;
+  color: #fff8e8;
+  background:
+    radial-gradient(circle at 92% 12%, rgba(242, 197, 92, 0.22), transparent 34%),
+    linear-gradient(125deg, rgba(69, 47, 15, 0.94), rgba(14, 19, 27, 0.98) 60%);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.3),
+    0 0 34px rgba(216, 175, 81, 0.12),
+    inset 0 1px 0 rgba(255, 245, 211, 0.15);
+}
+
+.closureKicker {
+  display: block;
+  margin-bottom: 5px;
+  color: #e5c374;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+}
+
+.closureBanner strong {
+  display: block;
+  font-size: clamp(24px, 3vw, 38px);
+  letter-spacing: 0.08em;
+}
+
+.closureBanner p {
+  margin: 7px 0 0;
+  color: rgba(248, 240, 222, 0.72);
+  font-size: 14px;
+}
+
+@media (max-width: 720px) {
+  .businessDayControls {
+    width: 100%;
+  }
+
+  .frontdeskStatus {
+    width: auto;
+    flex: 1 1 auto;
+  }
+
+  .businessDaySelect,
+  .businessDayInput {
+    flex: 1 1 120px;
+    max-width: none;
+  }
+}
+
+.managerPage .warning {
+  color: #f0d89e;
+  border-color: rgba(229, 191, 102, 0.34);
+  background: rgba(97, 69, 20, 0.34);
+}
+
+@media (max-width: 780px) {
+  .managerPage {
+    padding: 12px;
+  }
+
+  .managerPage .header {
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .managerPage .tabs {
+    border-radius: 12px;
+  }
+
+  .managerPage .boardWrap {
+    border-radius: 12px;
+  }
+}
+
+/* 2026 manager workspace refinement
+   Keep the interaction model intact while giving every tab, form and dialog
+   the same restrained black-and-gold visual hierarchy. */
+.managerPage {
+  --manager-gold: #d8b669;
+  --manager-gold-bright: #f0d493;
+  --manager-gold-muted: rgba(214, 183, 111, 0.72);
+  --manager-gold-line: rgba(221, 189, 118, 0.3);
+  --manager-line: rgba(172, 187, 207, 0.1);
+  --manager-line-strong: rgba(220, 190, 122, 0.23);
+  --manager-surface: rgba(8, 14, 23, 0.84);
+  --manager-surface-raised: rgba(13, 20, 31, 0.9);
+  --manager-text: #f5f0e6;
+  --manager-text-muted: rgba(218, 225, 235, 0.66);
+  color-scheme: dark;
+  padding: clamp(14px, 1.7vw, 28px);
+}
+
+.managerPage .shell {
+  width: min(1800px, 100%);
+}
+
+.managerPage .header {
+  gap: clamp(16px, 3vw, 44px);
+  margin-bottom: 14px;
+  padding: clamp(18px, 1.6vw, 26px) clamp(20px, 2vw, 30px);
+  border-color: var(--manager-gold-line);
+  background:
+    radial-gradient(circle at 0 0, rgba(229, 193, 108, 0.1), transparent 34%),
+    linear-gradient(115deg, rgba(255, 237, 193, 0.025), transparent 50%),
+    rgba(7, 13, 22, 0.86);
+  box-shadow:
+    0 24px 62px rgba(0, 0, 0, 0.34),
+    0 0 28px rgba(202, 159, 68, 0.055),
+    inset 0 1px 0 rgba(255, 239, 201, 0.1);
+}
+
+.managerPage .header > div:first-child {
+  max-width: 720px;
+}
+
+.managerPage .eyebrow {
+  margin-bottom: 8px;
+  color: var(--manager-gold-muted);
+  letter-spacing: 0.12em;
+}
+
+.managerPage .title {
+  font-size: clamp(30px, 3.6vw, 48px);
+  font-weight: 520;
+  letter-spacing: -0.035em;
+}
+
+.managerPage .subtitle {
+  margin-top: 10px;
+  color: var(--manager-text-muted);
+  line-height: 1.65;
+}
+
+.managerPage .headerActions {
+  gap: 12px;
+}
+
+.managerPage .sessionActions,
+.managerPage .toolbar,
+.managerPage .actions,
+.managerPage .formActions {
+  gap: 9px;
+}
+
+.managerPage .sessionIdentity {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.managerPage .positionBadge {
+  min-height: 28px;
+  padding-inline: 11px;
+  background: linear-gradient(135deg, #f1d995, #c89a42);
+  box-shadow:
+    0 8px 24px rgba(196, 144, 48, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.64);
+}
+
+.managerPage .tabs {
+  max-width: 100%;
+  padding: 5px;
+  gap: 4px;
+  border-color: var(--manager-gold-line);
+  background:
+    linear-gradient(110deg, rgba(213, 173, 82, 0.055), transparent 44%),
+    rgba(7, 13, 22, 0.88);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.27),
+    inset 0 1px 0 rgba(255, 241, 207, 0.065);
+}
+
+.managerPage .button,
+.managerPage .iconButton,
+.managerPage .tab,
+.managerPage .timeChoiceButton,
+.managerPage .key {
+  border-color: rgba(218, 193, 140, 0.22);
+  background: linear-gradient(180deg, rgba(22, 30, 42, 0.9), rgba(12, 19, 29, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 8px 20px rgba(0, 0, 0, 0.1);
+  transition:
+    transform 150ms ease,
+    color 150ms ease,
+    background 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.managerPage .tab {
+  color: rgba(239, 237, 231, 0.82);
+}
+
+.managerPage .button:hover,
+.managerPage .iconButton:hover,
+.managerPage .tab:hover,
+.managerPage .timeChoiceButton:hover,
+.managerPage .key:hover {
+  transform: translateY(-1px);
+  color: #fff8e9;
+  border-color: rgba(230, 199, 128, 0.52);
+  background: linear-gradient(180deg, rgba(43, 37, 27, 0.94), rgba(22, 24, 28, 0.94));
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.22),
+    0 0 18px rgba(213, 170, 76, 0.09);
+}
+
+.managerPage .button:focus-visible,
+.managerPage .iconButton:focus-visible,
+.managerPage .tab:focus-visible,
+.managerPage .timeChoiceButton:focus-visible,
+.managerPage .key:focus-visible,
+.managerPage .listItem:focus-visible {
+  outline: 2px solid rgba(241, 210, 139, 0.86);
+  outline-offset: 2px;
+}
+
+.managerPage .primary,
+.managerPage .activeTab {
+  color: #171107;
+  border-color: rgba(255, 230, 168, 0.78);
+  background: linear-gradient(135deg, #f6e4af 0%, #d9b45e 55%, #b98432 100%);
+  box-shadow:
+    0 9px 28px rgba(188, 135, 39, 0.24),
+    0 0 20px rgba(236, 202, 126, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68);
+}
+
+.managerPage .gold {
+  color: #edd69d;
+  border-color: rgba(224, 190, 111, 0.38);
+  background: linear-gradient(135deg, rgba(82, 59, 22, 0.58), rgba(24, 25, 25, 0.86));
+}
+
+.managerPage .danger {
+  color: #ffc3c9;
+  border-color: rgba(219, 91, 105, 0.36);
+  background: rgba(80, 23, 34, 0.56);
+}
+
+.managerPage .button:disabled,
+.managerPage .iconButton:disabled {
+  opacity: 0.42;
+  box-shadow: none;
+}
+
+.managerPage .weekdayBadge {
+  color: #f0d99e;
+  border-color: rgba(222, 188, 109, 0.34);
+  background: linear-gradient(180deg, rgba(82, 61, 24, 0.48), rgba(43, 35, 24, 0.4));
+}
+
+.managerPage .error,
+.managerPage .success {
+  border: 1px solid;
+  border-radius: 11px;
+  backdrop-filter: blur(16px);
+}
+
+.managerPage .error {
+  color: #ffc5cb;
+  border-color: rgba(220, 89, 106, 0.34);
+  background: rgba(92, 25, 38, 0.58);
+}
+
+.managerPage .success {
+  color: #c9f5dc;
+  border-color: rgba(85, 196, 139, 0.3);
+  background: rgba(17, 77, 53, 0.56);
+}
+
+.managerPage .scheduleActions {
+  margin: 2px 0 10px;
+}
+
+@media (min-width: 1101px) {
+  .managerPage .scheduleActions {
+    position: relative;
+    z-index: 2;
+    min-height: 46px;
+    margin: -58px 0 12px;
+    align-items: center;
+    pointer-events: none;
+  }
+
+  .managerPage .scheduleActions .button {
+    pointer-events: auto;
+  }
+}
+
+.managerPage .mobileCoach {
+  padding: 12px;
+  border: 1px solid var(--manager-line-strong);
+  border-radius: 12px;
+  background: var(--manager-surface);
+}
+
+.managerPage .boardWrap {
+  border-color: rgba(225, 193, 121, 0.3);
+  background: rgba(5, 10, 17, 0.94);
+  box-shadow:
+    0 26px 68px rgba(0, 0, 0, 0.38),
+    0 0 28px rgba(205, 161, 67, 0.055),
+    inset 0 1px 0 rgba(255, 237, 194, 0.08);
+}
+
+.managerPage .timeHead,
+.managerPage .coachHead {
+  min-height: 50px;
+  border-right-color: rgba(215, 183, 111, 0.14);
+  border-bottom-color: rgba(218, 185, 111, 0.27);
+  background:
+    linear-gradient(180deg, rgba(45, 35, 21, 0.9), rgba(14, 20, 29, 0.98));
+}
+
+.managerPage .timeHead {
+  color: rgba(216, 195, 151, 0.7);
+  font-size: 11px;
+}
+
+.managerPage .coachHead {
+  padding-inline: 12px;
+  color: var(--manager-text);
+  font-size: 17px;
+  font-weight: 780;
+}
+
+.managerPage .coachDragHandle {
+  gap: 7px;
+}
+
+.managerPage .coachDragHandle svg {
+  color: #d5b66b;
+  opacity: 0.42;
+}
+
+.managerPage .coachDragHandle:hover svg {
+  opacity: 0.84;
+}
+
+.managerPage .coachTitleBadge {
+  color: #f4d98d;
+  border-color: rgba(233, 193, 99, 0.34);
+  background: rgba(171, 120, 28, 0.18);
+}
+
+.managerPage .coachStatusBadge {
+  color: rgba(244, 233, 207, 0.86);
+  border-color: rgba(224, 194, 127, 0.24);
+  background: rgba(217, 179, 92, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 247, 224, 0.06);
+}
+
+.managerPage .coachStatusBadge[data-status="early"] {
+  color: #f4d98d;
+  border-color: rgba(233, 193, 99, 0.36);
+  background: rgba(171, 120, 28, 0.18);
+}
+
+.managerPage .coachStatusBadge[data-status="late"] {
+  color: #e0efff;
+  border-color: rgba(111, 168, 232, 0.58);
+  background: rgba(51, 101, 164, 0.42);
+  box-shadow:
+    0 0 14px rgba(77, 139, 211, 0.24),
+    inset 0 1px 0 rgba(227, 241, 255, 0.13);
+}
+
+.managerPage .coachStatusBadge[data-status="off"] {
+  color: #e8b3a5;
+  border-color: rgba(194, 104, 83, 0.34);
+  background: rgba(126, 53, 43, 0.22);
+}
+
+.managerPage .coachHead[data-coach-status="off"] {
+  background: linear-gradient(180deg, rgba(67, 36, 31, 0.82), rgba(20, 19, 24, 0.98));
+}
+
+.managerPage .coachHead[data-coach-status="late"] {
+  border-bottom-color: rgba(105, 157, 220, 0.4);
+  background:
+    radial-gradient(circle at 50% 0, rgba(75, 133, 205, 0.22), transparent 68%),
+    linear-gradient(180deg, rgba(31, 51, 79, 0.94), rgba(15, 20, 29, 0.98));
+  box-shadow:
+    inset 0 -2px 0 rgba(100, 156, 224, 0.34),
+    0 0 18px rgba(63, 119, 187, 0.12);
+}
+
+.managerPage .timeCell {
+  color: rgba(221, 199, 149, 0.76);
+  border-right-color: rgba(210, 179, 108, 0.12);
+  border-bottom-color: var(--manager-line);
+  background: linear-gradient(90deg, rgba(33, 28, 20, 0.78), rgba(13, 19, 28, 0.96));
+  font-size: 14px;
+  text-shadow: none;
+}
+
+.managerPage .slotCell {
+  border-right-color: rgba(165, 181, 202, 0.08);
+  border-bottom-color: rgba(165, 181, 202, 0.085);
+  background: rgba(7, 13, 21, 0.88);
+}
+
+.managerPage .timeCell[data-coach-status="off"] {
+  color: rgba(222, 169, 157, 0.78);
+  background: linear-gradient(90deg, rgba(64, 31, 27, 0.7), rgba(20, 17, 22, 0.96));
+}
+
+.managerPage .slotCell[data-coach-status="off"] {
+  background: linear-gradient(180deg, rgba(85, 38, 33, 0.1), rgba(7, 13, 21, 0.91));
+}
+
+.managerPage .timeCell[data-coach-status="late"] {
+  color: rgba(194, 220, 250, 0.92);
+  background: linear-gradient(90deg, rgba(36, 61, 94, 0.88), rgba(13, 22, 34, 0.97));
+}
+
+.managerPage .slotCell[data-coach-status="late"] {
+  background:
+    linear-gradient(180deg, rgba(52, 92, 139, 0.13), rgba(7, 13, 21, 0.91));
+}
+
+.managerPage .slotCell::after {
+  border-top-color: rgba(193, 178, 143, 0.075);
+}
+
+.managerPage .slotCell[data-interactive="true"]:hover {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(218, 177, 87, 0.09), transparent 74%),
+    rgba(13, 20, 29, 0.94);
+  box-shadow: inset 0 0 0 1px rgba(224, 193, 124, 0.2);
+}
+
+.managerPage .booking,
+.managerPage .note {
+  border-radius: 7px;
+  color: #fff8e9;
+  border-color: rgba(223, 191, 119, 0.32);
+  background:
+    linear-gradient(135deg, rgba(82, 62, 28, 0.58), rgba(20, 24, 30, 0.95));
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 237, 197, 0.08);
+}
+
+.managerPage .bookingPt {
+  border-left-color: #d5bc84;
+  background:
+    linear-gradient(135deg, rgba(67, 58, 42, 0.74), rgba(17, 23, 31, 0.96));
+}
+
+.managerPage .note {
+  color: #e4edf0;
+  border-color: rgba(130, 166, 173, 0.28);
+  background: linear-gradient(135deg, rgba(28, 57, 63, 0.7), rgba(14, 22, 29, 0.96));
+}
+
+.managerPage .bookingTrial {
+  border-left-color: #dcb051;
+  background:
+    radial-gradient(circle at 90% 0, rgba(222, 179, 84, 0.08), transparent 46%),
+    linear-gradient(135deg, rgba(91, 65, 24, 0.72), rgba(27, 24, 20, 0.96));
+}
+
+.managerPage .bookingTrialReminded {
+  border-color: rgba(101, 218, 166, 0.48);
+  border-left-color: #6be0ad;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(95, 226, 167, 0.18), transparent 46%),
+    linear-gradient(135deg, rgba(20, 83, 61, 0.9), rgba(20, 28, 25, 0.97));
+}
+
+.managerPage .entryTimeSummary {
+  color: #e7ce8f;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(230, 193, 105, 0.1), transparent 70%),
+    rgba(19, 19, 18, 0.88);
+  border-right-color: rgba(224, 190, 114, 0.24);
+}
+
+.managerPage .booking .entryBody,
+.managerPage .note .entryBody {
+  padding: 5px 8px;
+}
+
+.managerPage .bookingEyebrow {
+  color: #edc96f;
+}
+
+.managerPage .bookingPt {
+  border-color: rgba(118, 170, 184, 0.24);
+  border-left-color: #79aeba;
+  background: rgba(13, 22, 28, 0.94);
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(212, 241, 246, 0.04);
+}
+
+.managerPage .bookingPt .entryTimeSummary {
+  color: #c2dfe4;
+  border-right-color: rgba(125, 179, 192, 0.25);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(105, 172, 188, 0.12), transparent 70%),
+    rgba(13, 22, 27, 0.92);
+}
+
+.managerPage .bookingPrimaryLine {
+  gap: 5px;
+}
+
+.managerPage .bookingPrimaryLine .bookingName {
+  color: #f5f7f3;
+  font-size: 15px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.managerPage .bookingCourseType {
+  color: #b9d9df;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.managerPage .bookingStudentCode {
+  color: rgba(205, 225, 230, 0.82);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.managerPage .glass,
+.managerPage .section {
+  border-color: var(--manager-gold-line);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 0 0, rgba(219, 177, 83, 0.055), transparent 35%),
+    var(--manager-surface);
+  box-shadow:
+    0 22px 58px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 238, 197, 0.065);
+}
+
+.managerPage .glass.boardWrap {
+  padding: 0;
+  border-color: rgba(225, 193, 121, 0.3);
+  background: rgba(5, 10, 17, 0.94);
+  box-shadow:
+    0 26px 68px rgba(0, 0, 0, 0.38),
+    0 0 28px rgba(205, 161, 67, 0.055),
+    inset 0 1px 0 rgba(255, 237, 194, 0.08);
+}
+
+.managerPage .boardWrap[data-date-direction="previous"] .board {
+  animation: manager-board-date-previous 190ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.managerPage .boardWrap[data-date-direction="next"] .board {
+  animation: manager-board-date-next 190ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes manager-board-date-previous {
+  from {
+    opacity: 0.72;
+    transform: translateY(-7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes manager-board-date-next {
+  from {
+    opacity: 0.72;
+    transform: translateY(7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.managerPage .section {
+  padding: clamp(16px, 1.5vw, 24px);
+}
+
+.managerPage .sectionHeader {
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.managerPage .sectionTitle {
+  margin-bottom: 10px;
+  color: #fff8e9;
+  font-size: clamp(19px, 1.6vw, 23px);
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.managerPage .muted {
+  color: var(--manager-text-muted);
+  line-height: 1.55;
+}
+
+.managerPage .label {
+  color: rgba(224, 194, 126, 0.88);
+  font-size: 12px;
+  letter-spacing: 0.045em;
+}
+
+.managerPage .input,
+.managerPage .select,
+.managerPage .textarea {
+  min-height: 46px;
+  border-radius: 9px;
+  border-color: rgba(213, 187, 131, 0.24);
+  background: rgba(5, 11, 19, 0.78);
+}
+
+.managerPage .input:hover,
+.managerPage .select:hover,
+.managerPage .textarea:hover {
+  border-color: rgba(223, 194, 127, 0.4);
+}
+
+.managerPage .list {
+  gap: 10px;
+}
+
+.managerPage .listItem,
+.managerPage .contract,
+.managerPage .plan,
+.managerPage .summary {
+  padding: 15px;
+  border-color: rgba(218, 187, 120, 0.2);
+  border-radius: 11px;
+  background:
+    linear-gradient(135deg, rgba(230, 192, 104, 0.025), transparent 48%),
+    rgba(11, 18, 28, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 239, 200, 0.04),
+    0 10px 26px rgba(0, 0, 0, 0.12);
+}
+
+.managerPage button.listItem {
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.managerPage button.listItem:hover {
+  transform: translateY(-1px);
+  border-color: rgba(226, 195, 126, 0.44);
+  background: rgba(20, 26, 34, 0.92);
+}
+
+.managerPage div.listItem {
+  cursor: default;
+}
+
+.managerPage .plan h3,
+.managerPage .contract strong,
+.managerPage .summary strong {
+  color: #fff7e6;
+}
+
+.managerPage .memberDetailDialog .contract {
+  border-color: rgba(224, 190, 112, 0.3);
+  background:
+    radial-gradient(circle at 0 0, rgba(225, 185, 90, 0.09), transparent 34%),
+    rgba(8, 15, 24, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 239, 198, 0.05),
+    0 18px 46px rgba(0, 0, 0, 0.22);
+}
+
+.managerPage .contractEyebrow,
+.managerPage .courseAllocationCard > span,
+.managerPage .courseAllocationSection h4,
+.managerPage .paymentSection h4 {
+  color: #d7b96f;
+}
+
+.managerPage .contractNumber {
+  color: #fff9eb;
+}
+
+.managerPage .contractStat,
+.managerPage .courseAllocationCard,
+.managerPage .paymentItem {
+  border-color: rgba(222, 190, 118, 0.18);
+  background:
+    linear-gradient(135deg, rgba(229, 190, 99, 0.035), transparent 58%),
+    rgba(10, 17, 27, 0.82);
+}
+
+.managerPage .contractStat span,
+.managerPage .courseAllocationCard small,
+.managerPage .paymentMain small,
+.managerPage .paymentMain > span {
+  color: rgba(214, 218, 224, 0.7);
+}
+
+.managerPage .contractStat strong,
+.managerPage .courseAllocationCard strong,
+.managerPage .paymentMain strong {
+  color: #fff5de;
+}
+
+.managerPage .contractBalanceStat {
+  border-color: rgba(231, 192, 104, 0.42);
+  background:
+    linear-gradient(135deg, rgba(229, 190, 99, 0.12), transparent 65%),
+    rgba(25, 20, 13, 0.9);
+}
+
+.managerPage .contractBalanceStat strong {
+  color: #f3d17c;
+}
+
+.managerPage .contractSummaryStat > span {
+  color: rgba(214, 218, 224, 0.66);
+}
+
+.managerPage .contractSummaryStat > strong {
+  color: #fff5de;
+}
+
+.managerPage .contractSummaryBalance > strong {
+  color: #f3d17c;
+}
+
+.managerPage .contractCourseChip {
+  border-color: rgba(224, 190, 112, 0.3);
+  color: #efd28c;
+  background:
+    linear-gradient(135deg, rgba(229, 190, 99, 0.14), transparent 70%),
+    rgba(61, 45, 20, 0.48);
+}
+
+.managerPage .contractSummaryChevron {
+  border-color: rgba(224, 190, 112, 0.25);
+  color: #dfc17b;
+  background: rgba(25, 24, 21, 0.72);
+}
+
+.managerPage .contractSummary:hover .contractSummaryChevron {
+  border-color: rgba(239, 206, 128, 0.58);
+  color: #fff0c5;
+  box-shadow: 0 0 18px rgba(221, 181, 87, 0.14);
+}
+
+.managerPage .contractExpanded {
+  border-top-color: rgba(224, 190, 112, 0.18);
+}
+
+.managerPage .metric {
+  color: #f1d48b;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+}
+
+.managerPage .badge {
+  color: #edd7a4;
+  border: 1px solid rgba(222, 189, 113, 0.22);
+  background: rgba(84, 61, 22, 0.36);
+}
+
+.managerPage .warning {
+  border-radius: 10px;
+  color: #f0daa5;
+  border-color: rgba(224, 185, 95, 0.3);
+  background: rgba(88, 61, 17, 0.34);
+}
+
+.managerPage .bookingStatusSummaryItem {
+  border-color: rgba(226, 193, 116, 0.2);
+  background: linear-gradient(145deg, rgba(25, 34, 45, 0.84), rgba(10, 17, 27, 0.86));
+  box-shadow: inset 0 1px 0 rgba(255, 239, 201, 0.04);
+}
+
+.managerPage .bookingStatusSummaryItem span {
+  color: #bfa668;
+}
+
+.managerPage .bookingStatusSummaryItem strong {
+  color: #fff7e7;
+}
+
+.managerPage .bookingStatusWindowNote {
+  color: #dbc893;
+  border-color: rgba(214, 178, 92, 0.23);
+  background: rgba(67, 48, 17, 0.24);
+}
+
+.managerPage .bookingStatusGuidance {
+  color: #f3dfad;
+  border-color: rgba(154, 176, 201, 0.16);
+  background: rgba(20, 30, 43, 0.62);
+}
+
+.managerPage .bookingStatusGuidance span {
+  color: #aeb8c7;
+}
+
+.managerPage .overlay {
+  padding: clamp(12px, 2vw, 24px);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(197, 151, 57, 0.1), transparent 34%),
+    rgba(1, 4, 9, 0.88);
+  backdrop-filter: blur(28px) saturate(1.06);
+}
+
+.managerPage .dialog {
+  padding: clamp(18px, 2vw, 28px);
+  border-radius: 16px;
+  border: 1px solid rgba(246, 213, 139, 0.68);
+  background:
+    radial-gradient(circle at 0 0, rgba(232, 190, 96, 0.18), transparent 36%),
+    linear-gradient(145deg, rgba(17, 25, 36, 0.995), rgba(7, 13, 22, 0.995));
+  box-shadow:
+    0 42px 110px rgba(0, 0, 0, 0.76),
+    0 0 0 1px rgba(255, 229, 169, 0.08),
+    0 0 54px rgba(216, 171, 72, 0.16),
+    inset 0 1px 0 rgba(255, 242, 207, 0.14);
+}
+
+.managerPage .dialogHeader {
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(235, 204, 136, 0.26);
+}
+
+.managerPage .dialogTitle {
+  color: #fff8e9;
+  font-size: clamp(21px, 2vw, 27px);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.managerPage .dialog .formGrid {
+  gap: 16px 14px;
+}
+
+.managerPage .dialog .field {
+  position: relative;
+}
+
+.managerPage .dialog .label {
+  margin-bottom: 8px;
+  color: #f0d28d;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  transition: color 150ms ease, text-shadow 150ms ease;
+}
+
+.managerPage .dialog .field:focus-within .label {
+  color: #ffe5a5;
+  text-shadow: 0 0 16px rgba(231, 188, 91, 0.28);
+}
+
+.managerPage .dialog .input,
+.managerPage .dialog .select,
+.managerPage .dialog .textarea {
+  min-height: 54px;
+  padding-inline: 16px;
+  color: #fffaf0;
+  font-size: 16px;
+  font-weight: 560;
+  caret-color: #f4d083;
+  border: 1.5px solid rgba(244, 211, 141, 0.7);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(32, 42, 55, 0.99), rgba(17, 26, 38, 0.99));
+  box-shadow:
+    0 0 0 1px rgba(255, 232, 179, 0.055),
+    inset 0 1px 0 rgba(255, 245, 220, 0.13),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34),
+    0 8px 20px rgba(0, 0, 0, 0.24);
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.managerPage .dialog .textarea {
+  min-height: 104px;
+  padding-block: 13px;
+}
+
+.managerPage .dialog .input::placeholder,
+.managerPage .dialog .textarea::placeholder {
+  color: rgba(220, 224, 231, 0.65);
+}
+
+.managerPage .dialog .input:hover,
+.managerPage .dialog .select:hover,
+.managerPage .dialog .textarea:hover {
+  border-color: rgba(255, 224, 154, 0.96);
+  background: linear-gradient(180deg, rgba(39, 49, 62, 1), rgba(20, 29, 41, 1));
+  box-shadow:
+    0 0 0 1px rgba(255, 229, 166, 0.1),
+    0 0 20px rgba(220, 175, 75, 0.1),
+    inset 0 1px 0 rgba(255, 248, 228, 0.16);
+}
+
+.managerPage .dialog .input:focus,
+.managerPage .dialog .select:focus,
+.managerPage .dialog .textarea:focus {
+  border-color: #ffe29a;
+  background: linear-gradient(180deg, rgba(43, 52, 65, 1), rgba(20, 29, 41, 1));
+  box-shadow:
+    0 0 0 4px rgba(237, 191, 91, 0.24),
+    0 0 34px rgba(229, 181, 76, 0.22),
+    inset 0 1px 0 rgba(255, 249, 232, 0.18);
+}
+
+.managerPage .dialog .select,
+.managerPage .dialog input[type="date"] {
+  cursor: pointer;
+}
+
+/* iPadOS WebKit currently adds a date input's inline padding on top of its
+   declared 100% width. Compensate for the 16px padding on both sides so date
+   fields cannot overlap the adjacent payment-method column. */
+@supports (-webkit-touch-callout: none) {
+  .managerPage .dialog .input[type="date"] {
+    width: calc(100% - 32px);
+    max-width: calc(100% - 32px);
+  }
+}
+
+.managerPage .dialog .select option,
+.managerPage .dialog .select optgroup {
+  color: #f7f1e6;
+  background: #131c29;
+}
+
+.managerPage .dialog .select option:checked {
+  color: #171107;
+  background: #e2c371;
+}
+
+.managerPage .dialog .input:disabled,
+.managerPage .dialog .select:disabled,
+.managerPage .dialog .textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+  border-color: rgba(170, 174, 181, 0.22);
+  background: rgba(8, 13, 21, 0.72);
+}
+
+.managerPage .dialog input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-right: 7px;
+  accent-color: #d8ad52;
+  vertical-align: -3px;
+}
+
+.managerPage .dialog .button:not(.primary):not(.danger),
+.managerPage .dialog .iconButton {
+  min-height: 46px;
+  color: #f8f2e7;
+  border-color: rgba(226, 199, 139, 0.4);
+  background: linear-gradient(180deg, rgba(29, 38, 51, 0.98), rgba(13, 20, 30, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 222, 0.08),
+    0 8px 22px rgba(0, 0, 0, 0.22);
+}
+
+.managerPage .dialog .iconButton {
+  border-color: rgba(240, 207, 137, 0.58);
+  background: linear-gradient(180deg, rgba(38, 47, 60, 0.98), rgba(16, 24, 35, 0.98));
+}
+
+.managerPage .dialog .button:not(.primary):not(.danger):hover,
+.managerPage .dialog .iconButton:hover {
+  color: #fff8e9;
+  border-color: rgba(242, 211, 143, 0.72);
+  background: linear-gradient(180deg, rgba(48, 42, 31, 0.98), rgba(25, 27, 31, 0.98));
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.28),
+    0 0 20px rgba(218, 171, 68, 0.12);
+}
+
+.managerPage .dialog .primary {
+  min-width: 156px;
+  min-height: 54px;
+  padding-inline: 22px;
+  font-size: 16px;
+  font-weight: 850;
+  box-shadow:
+    0 14px 34px rgba(190, 135, 37, 0.38),
+    0 0 34px rgba(236, 202, 126, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.managerPage .timeChoiceButton {
+  color: #f5efe4;
+  border-radius: 12px;
+}
+
+.managerPage .timeChoiceButton strong {
+  color: #f1d48b;
+}
+
+.managerPage .timeChoiceButton span {
+  color: var(--manager-text-muted);
+}
+
+.managerPage .staffManagerFrame {
+  border-color: rgba(222, 191, 122, 0.3);
+  border-radius: 11px;
+  background: #090f18;
+}
+
+.managerPage .key {
+  color: #f4efe5;
+}
+
+.managerPage .pinDisplay {
+  color: #f0d28a;
+}
+
+.managerPage .signature {
+  border-color: rgba(218, 190, 131, 0.32);
+  background: rgba(239, 238, 232, 0.94);
+}
+
+@media (max-width: 1100px) {
+  .managerPage .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .managerPage .headerActions {
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .managerPage .sessionActions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 780px) {
+  .managerPage {
+    padding: 10px;
+  }
+
+  .managerPage .dateToolbar {
+    grid-template-columns: 40px minmax(0, 1fr) auto 40px 40px;
+  }
+
+  .managerPage .header {
+    gap: 16px;
+    margin-bottom: 10px;
+    padding: 17px;
+    border-radius: 15px;
+  }
+
+  .managerPage .title {
+    font-size: clamp(29px, 10vw, 39px);
+  }
+
+  .managerPage .subtitle {
+    margin-top: 8px;
+    font-size: 13px;
+  }
+
+  .managerPage .sessionActions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .managerPage .sessionIdentity {
+    grid-column: 1 / -1;
+  }
+
+  .managerPage .sessionActions .button {
+    width: 100%;
+  }
+
+  .managerPage .tabs {
+    padding: 4px;
+    scrollbar-width: none;
+  }
+
+  .managerPage .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .managerPage .tab {
+    min-height: 38px;
+    padding: 8px 12px;
+  }
+
+  .managerPage .section {
+    padding: 15px;
+    border-radius: 13px;
+  }
+
+  .managerPage .sectionHeader {
+    gap: 12px;
+  }
+
+  .managerPage .sectionHeader > .button,
+  .managerPage .sectionHeader > .actions {
+    width: 100%;
+  }
+
+  .managerPage .sectionHeader > .actions .button {
+    flex: 1;
+  }
+
+  .managerPage .boardWrap {
+    border-radius: 12px;
+  }
+
+  .managerPage .timeHead,
+  .managerPage .coachHead {
+    min-height: 46px;
+  }
+
+  .managerPage .coachHead {
+    font-size: 16px;
+  }
+
+  .managerPage .timeCell {
+    font-size: 13px;
+  }
+
+  .managerPage .dialog {
+    max-height: 94dvh;
+    padding: 17px;
+    border-radius: 14px;
+  }
+
+  .managerPage .dialogHeader {
+    margin-bottom: 14px;
+  }
+
+  .managerPage .listItem,
+  .managerPage .contract,
+  .managerPage .plan,
+  .managerPage .summary {
+    padding: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .managerPage *,
+  .managerPage *::before,
+  .managerPage *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Frontdesk M2-A theme: cool clear glass with a restrained champagne counterlight.
+   This layer intentionally changes presentation only; the schedule structure and
+   interaction selectors above remain untouched. */
+.frontdeskM2A {
+  --m2a-ice: rgba(154, 204, 238, 0.72);
+  --m2a-ice-line: rgba(177, 218, 244, 0.38);
+  --m2a-ice-line-soft: rgba(158, 199, 228, 0.2);
+  --m2a-champagne: rgba(224, 199, 157, 0.68);
+  --m2a-champagne-line: rgba(231, 207, 166, 0.3);
+  --m2a-glass: rgba(9, 20, 30, 0.34);
+  --m2a-glass-strong: rgba(8, 18, 28, 0.52);
+  --m2a-grid: rgba(7, 17, 27, 0.18);
+  --manager-gold-line: rgba(222, 195, 139, 0.28);
+  --manager-line: rgba(151, 181, 207, 0.11);
+  --manager-line-strong: rgba(174, 207, 231, 0.24);
+  --manager-surface: rgba(9, 20, 30, 0.38);
+  --manager-surface-raised: rgba(12, 25, 37, 0.52);
+  background:
+    radial-gradient(ellipse 72% 118% at -10% 38%, rgba(80, 145, 194, 0.36) 0%, rgba(55, 111, 154, 0.18) 34%, transparent 68%),
+    radial-gradient(ellipse 58% 88% at 108% 88%, rgba(190, 178, 158, 0.3) 0%, rgba(132, 119, 100, 0.14) 38%, transparent 70%),
+    linear-gradient(112deg, #183149 0%, #172b3c 45%, #202832 72%, #454542 100%);
+}
+
+.frontdeskM2A::before {
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 48% 86% at -4% 34%, rgba(112, 179, 225, 0.24), transparent 72%),
+    radial-gradient(ellipse 42% 72% at 104% 96%, rgba(214, 200, 179, 0.22), transparent 74%),
+    linear-gradient(112deg, rgba(34, 58, 82, 0.22), transparent 38%, transparent 68%, rgba(104, 101, 95, 0.16));
+  background-size: auto;
+  filter: blur(18px);
+  mask-image: none;
+  transform: scale(1.025);
+}
+
+.frontdeskM2A .header,
+.frontdeskM2A .navigationRow,
+.frontdeskM2A .glass,
+.frontdeskM2A .section,
+.frontdeskM2A .dialog {
+  border-color: var(--m2a-ice-line);
+  background:
+    linear-gradient(115deg, rgba(175, 218, 246, 0.11), transparent 34%, transparent 68%, rgba(235, 215, 181, 0.065)),
+    var(--m2a-glass);
+  box-shadow:
+    0 26px 70px rgba(0, 0, 0, 0.3),
+    -12px 0 36px rgba(64, 135, 187, 0.075),
+    12px 0 32px rgba(210, 181, 132, 0.05),
+    inset 0 1px 0 rgba(221, 239, 251, 0.21),
+    inset 0 -1px 0 rgba(239, 220, 187, 0.075);
+  backdrop-filter: blur(28px) saturate(1.18);
+}
+
+.trialOutcomePanel,
+.trialOutcomeChoice {
+  display: grid;
+  gap: 12px;
+}
+
+.trialOutcomeChoice {
+  padding: 13px;
+  border: 1px solid rgba(211, 169, 72, 0.36);
+  border-radius: 10px;
+  background: rgba(211, 169, 72, 0.08);
+}
+
+.trialConvertedNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  color: #dfffee;
+  border: 1px solid rgba(87, 224, 153, 0.46);
+  border-radius: 10px;
+  background: rgba(28, 122, 78, 0.34);
+  font-weight: 850;
+}
+
+.trialConvertedNotice > div {
+  display: grid;
+  gap: 3px;
+}
+
+.trialConvertedNotice strong {
+  font-weight: 900;
+}
+
+.trialConvertedNotice span {
+  color: rgba(223, 255, 238, 0.82);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.trialConversionEditor {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid rgba(110, 183, 230, 0.38);
+  border-radius: 10px;
+  background: rgba(37, 91, 133, 0.22);
+}
+
+.trialConversionEditor .field {
+  display: grid;
+  gap: 7px;
+}
+
+.trialConversionEditor .field > span {
+  color: #dbeaf5;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.trialPendingConversionNotice,
+.trialNotConvertedNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px 14px;
+  border-radius: 10px;
+}
+
+.trialPendingConversionNotice {
+  color: #fff2c8;
+  border: 1px solid rgba(226, 188, 93, 0.5);
+  background: rgba(142, 103, 28, 0.28);
+}
+
+.trialNotConvertedNotice {
+  color: #e2f2ff;
+  border: 1px solid rgba(98, 180, 231, 0.42);
+  background: rgba(35, 91, 137, 0.24);
+}
+
+.trialPendingConversionNotice div,
+.trialNotConvertedNotice div {
+  display: grid;
+  gap: 3px;
+}
+
+.trialPendingConversionNotice strong,
+.trialNotConvertedNotice strong {
+  font-weight: 850;
+}
+
+.trialPendingConversionNotice span,
+.trialNotConvertedNotice span {
+  color: inherit;
+  opacity: 0.78;
+  font-size: 13px;
+}
+
+.lockedIdentityNote {
+  margin: 0;
+  padding: 10px 12px;
+  color: #d9e2ec;
+  border: 1px solid rgba(136, 160, 183, 0.28);
+  border-radius: 9px;
+  background: rgba(27, 39, 53, 0.58);
+  font-size: 13px;
+}
+
+.studentPaymentSummary {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  color: #e8eef5;
+  border: 1px solid rgba(112, 153, 183, 0.34);
+  border-radius: 11px;
+  background:
+    linear-gradient(135deg, rgba(20, 47, 66, 0.78), rgba(8, 22, 34, 0.88)),
+    rgba(8, 18, 28, 0.88);
+}
+
+.studentPaymentHeader,
+.studentPaymentBalanceRow,
+.studentPaymentHistoryItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studentPaymentHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.studentPaymentHeader strong {
+  font-size: 17px;
+}
+
+.studentPaymentBalance {
+  display: grid;
+  gap: 2px;
+}
+
+.studentPaymentBalance small,
+.studentPaymentMeta,
+.studentPaymentHistoryItem > span:last-child {
+  color: #9fb1c2;
+  font-size: 12px;
+}
+
+.studentPaymentBalance strong {
+  color: #8ff0bd;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.studentPaymentBalanceDue strong {
+  color: #ff8790;
+}
+
+.studentPaymentHistory {
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(132, 157, 181, 0.22);
+}
+
+.studentCourseSessionSummary {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(132, 157, 181, 0.22);
+}
+
+.studentCourseSessionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studentCourseSessionHeader > div {
+  display: grid;
+  gap: 4px;
+}
+
+.studentCourseSessionHeader strong {
+  color: #fff1c9;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.studentCourseSessionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+}
+
+.studentCourseSessionItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(222, 190, 118, 0.2);
+  border-radius: 8px;
+  background: rgba(2, 11, 19, 0.42);
+}
+
+.studentCourseSessionItem span {
+  color: #c6d2de;
+  font-size: 12px;
+}
+
+.studentCourseSessionItem strong {
+  color: #8ff0bd;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.studentCourseSessionUnset {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed rgba(222, 190, 118, 0.34);
+  border-radius: 8px;
+  color: #e4c777;
+  background: rgba(155, 118, 38, 0.1);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.courseAllocationDialogSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.courseAllocationDialogSummary > span {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(222, 190, 118, 0.2);
+  border-radius: 8px;
+  color: #9fb1c2;
+  background: rgba(2, 11, 19, 0.42);
+  font-size: 12px;
+}
+
+.courseAllocationDialogSummary strong {
+  color: #fff1c9;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.studentPaymentHistoryItem {
+  align-items: baseline;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(2, 11, 19, 0.42);
+}
+
+.studentPaymentHistoryItem > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #e5edf5;
+  font-size: 13px;
+}
+
+.studentPaymentHistoryItem > span:last-child {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.contractCheckboxRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 24px;
+}
+
+.contractCheckbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-weight: 720;
+}
+
+.contractCheckbox input {
+  flex: 0 0 auto;
+  margin: 0 !important;
+}
+
+.contractPlanMode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.customPlanFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(225, 190, 112, 0.28);
+  border-radius: 12px;
+  background: rgba(15, 24, 35, 0.48);
+}
+
+.managerPage.frontdeskM2A .bookingTrialConverted,
+.bookingTrialConverted {
+  opacity: 1;
+  border-color: rgba(88, 235, 159, 0.88);
+  border-left-color: #5ff0a7;
+  background:
+    radial-gradient(circle at 82% 12%, rgba(113, 255, 183, 0.32), transparent 48%),
+    linear-gradient(145deg, rgba(25, 137, 84, 0.9), rgba(13, 75, 53, 0.94));
+  box-shadow:
+    0 0 24px rgba(54, 230, 142, 0.48),
+    0 0 44px rgba(54, 230, 142, 0.24),
+    inset 0 0 0 1px rgba(192, 255, 220, 0.32),
+    inset 0 0 24px rgba(92, 244, 166, 0.2);
+}
+
+.managerPage.frontdeskM2A .bookingTrialNotConverted,
+.bookingTrialNotConverted {
+  opacity: 1;
+  border-color: rgba(122, 218, 199, 0.76);
+  border-left-color: #62e5a4;
+  background: linear-gradient(
+    to bottom,
+    rgba(25, 137, 84, 0.92) 0%,
+    rgba(16, 102, 67, 0.92) 49.5%,
+    rgba(27, 95, 167, 0.94) 50.5%,
+    rgba(17, 58, 116, 0.96) 100%
+  );
+  box-shadow:
+    0 -9px 24px rgba(57, 230, 143, 0.4),
+    0 10px 26px rgba(57, 145, 244, 0.42),
+    inset 0 18px 26px rgba(93, 244, 165, 0.12),
+    inset 0 -18px 26px rgba(91, 169, 255, 0.16);
+}
+
+.managerPage.frontdeskM2A .bookingTrialPendingConversion,
+.bookingTrialPendingConversion {
+  opacity: 1;
+  border-color: rgba(238, 198, 99, 0.76);
+  border-left-color: #f0c75f;
+  box-shadow:
+    0 0 20px rgba(225, 176, 64, 0.2),
+    inset 0 0 0 1px rgba(255, 232, 172, 0.18);
+}
+
+.bookingCompleted,
+.managerPage .bookingCompleted,
+.frontdeskM2A .bookingCompleted {
+  opacity: 1;
+  border-color: rgba(104, 255, 173, 0.92);
+  border-left-color: #68ffad;
+  filter:
+    drop-shadow(0 0 6px rgba(104, 255, 173, 0.88))
+    drop-shadow(0 0 14px rgba(45, 219, 124, 0.5));
+}
+
+.bookingNoShow,
+.managerPage .bookingNoShow,
+.frontdeskM2A .bookingNoShow {
+  opacity: 1;
+  border-color: rgba(100, 190, 255, 0.92);
+  border-left-color: #64beff;
+  filter:
+    drop-shadow(0 0 6px rgba(100, 190, 255, 0.88))
+    drop-shadow(0 0 14px rgba(45, 135, 255, 0.5));
+}
+
+.bookingTrialConverted .entryTimeSummary,
+.bookingTrialNotConverted .entryTimeSummary,
+.bookingTrialConverted .entryBody,
+.bookingTrialNotConverted .entryBody {
+  position: relative;
+  z-index: 1;
+}
+
+.bookingRevenueBadge {
+  position: absolute;
+  z-index: 3;
+  top: 3px;
+  right: 3px;
+  max-width: calc(100% - 8px);
+  padding: 3px 7px;
+  overflow: hidden;
+  color: #fff;
+  border: 1px solid rgba(255, 190, 190, 0.7);
+  border-radius: 6px;
+  background: #c8172c;
+  box-shadow: 0 4px 12px rgba(125, 0, 16, 0.42);
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookingPendingConversionBadge {
+  position: absolute;
+  z-index: 3;
+  top: 3px;
+  right: 3px;
+  max-width: calc(100% - 8px);
+  padding: 3px 7px;
+  overflow: hidden;
+  color: #241a05;
+  border: 1px solid rgba(255, 236, 178, 0.82);
+  border-radius: 6px;
+  background: #e9bd50;
+  box-shadow: 0 4px 12px rgba(111, 76, 9, 0.32);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .customPlanFields,
+  .contractPlanMode {
+    grid-template-columns: 1fr;
+  }
+
+  .contractCheckboxRow {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.frontdeskM2A .header {
+  background:
+    radial-gradient(ellipse at 0 0, rgba(130, 190, 230, 0.2), transparent 48%),
+    linear-gradient(115deg, rgba(218, 238, 251, 0.09), transparent 54%, rgba(231, 207, 167, 0.065)),
+    rgba(10, 22, 33, 0.38);
+}
+
+.frontdeskM2A .navigationRow {
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 6px;
+  border: 1px solid var(--m2a-ice-line);
+  border-radius: 16px;
+}
+
+.frontdeskM2A .tabs {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.frontdeskM2A .button,
+.frontdeskM2A .iconButton,
+.frontdeskM2A .tab,
+.frontdeskM2A .timeChoiceButton,
+.frontdeskM2A .key,
+.frontdeskM2A .scheduleLockButton,
+.frontdeskM2A .closureToggle {
+  color: rgba(239, 245, 249, 0.9);
+  border-color: rgba(171, 205, 229, 0.24);
+  background:
+    linear-gradient(180deg, rgba(34, 50, 65, 0.64), rgba(10, 21, 31, 0.6));
+  box-shadow:
+    inset 0 1px 0 rgba(225, 241, 252, 0.075),
+    0 8px 22px rgba(0, 0, 0, 0.14);
+  backdrop-filter: blur(18px) saturate(1.05);
+}
+
+.frontdeskM2A .button:hover,
+.frontdeskM2A .iconButton:hover,
+.frontdeskM2A .tab:hover,
+.frontdeskM2A .timeChoiceButton:hover,
+.frontdeskM2A .key:hover,
+.frontdeskM2A .scheduleLockButton:hover,
+.frontdeskM2A .closureToggle:hover {
+  color: #f8fbfd;
+  border-color: rgba(185, 218, 240, 0.46);
+  background:
+    linear-gradient(180deg, rgba(32, 47, 63, 0.9), rgba(12, 21, 31, 0.9));
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.24),
+    0 0 18px rgba(94, 164, 211, 0.075),
+    inset 0 1px 0 rgba(230, 244, 253, 0.1);
+}
+
+.frontdeskM2A .button:focus-visible,
+.frontdeskM2A .iconButton:focus-visible,
+.frontdeskM2A .tab:focus-visible,
+.frontdeskM2A .timeChoiceButton:focus-visible,
+.frontdeskM2A .key:focus-visible,
+.frontdeskM2A .scheduleLockButton:focus-visible,
+.frontdeskM2A .closureToggle:focus-visible,
+.frontdeskM2A .listItem:focus-visible {
+  outline-color: rgba(169, 215, 246, 0.88);
+}
+
+.frontdeskM2A .primary,
+.frontdeskM2A .activeTab {
+  color: #17130b;
+  border-color: rgba(255, 232, 181, 0.8);
+  background: linear-gradient(135deg, #f4e2ae 0%, #d8b361 57%, #b98434 100%);
+  box-shadow:
+    0 9px 26px rgba(181, 131, 43, 0.24),
+    0 0 18px rgba(235, 201, 126, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68);
+}
+
+.frontdeskM2A .gold,
+.frontdeskM2A .weekdayBadge {
+  color: #ecd49b;
+  border-color: rgba(224, 194, 126, 0.34);
+  background: linear-gradient(180deg, rgba(69, 55, 29, 0.55), rgba(22, 22, 22, 0.66));
+}
+
+.frontdeskM2A .input,
+.frontdeskM2A .select,
+.frontdeskM2A .textarea,
+.frontdeskM2A .frontdeskStatus {
+  color: #edf4f8;
+  border-color: rgba(174, 208, 231, 0.24);
+  background: rgba(5, 11, 18, 0.66);
+  box-shadow: inset 0 1px 0 rgba(223, 240, 251, 0.055);
+  backdrop-filter: blur(16px);
+}
+
+.frontdeskM2A .frontdeskStatus strong {
+  color: #e7cf96;
+}
+
+.frontdeskM2A .glass.boardWrap,
+.frontdeskM2A .boardWrap {
+  border-color: rgba(190, 222, 243, 0.42);
+  background:
+    linear-gradient(105deg, rgba(108, 173, 216, 0.12), transparent 36%, transparent 70%, rgba(219, 203, 177, 0.1)),
+    rgba(7, 16, 25, 0.22);
+  box-shadow:
+    0 30px 76px rgba(0, 0, 0, 0.32),
+    -16px 0 38px rgba(56, 125, 175, 0.08),
+    14px 0 32px rgba(201, 169, 119, 0.055),
+    inset 0 1px 0 rgba(223, 240, 251, 0.22),
+    inset 0 -1px 0 rgba(235, 215, 181, 0.08);
+  backdrop-filter: blur(24px) saturate(1.16);
+}
+
+.frontdeskM2A .timeHead,
+.frontdeskM2A .coachHead {
+  color: #eef4f7;
+  border-right-color: rgba(158, 190, 214, 0.12);
+  border-bottom-color: rgba(181, 211, 232, 0.22);
+  background:
+    linear-gradient(180deg, rgba(44, 66, 83, 0.48), rgba(15, 29, 41, 0.44));
+  box-shadow: inset 0 1px 0 rgba(220, 239, 251, 0.16);
+  backdrop-filter: blur(20px) saturate(1.12);
+}
+
+.frontdeskM2A .timeHead {
+  color: rgba(213, 226, 234, 0.64);
+}
+
+.frontdeskM2A .coachDragHandle svg {
+  color: rgba(213, 187, 126, 0.86);
+}
+
+.frontdeskM2A .timeCell {
+  color: rgba(222, 200, 151, 0.8);
+  border-right-color: rgba(157, 181, 201, 0.1);
+  border-bottom-color: rgba(157, 181, 201, 0.085);
+  background:
+    linear-gradient(90deg, rgba(56, 65, 70, 0.28), rgba(14, 29, 41, 0.34));
+}
+
+.frontdeskM2A .slotCell {
+  border-right-color: rgba(151, 178, 199, 0.075);
+  border-bottom-color: rgba(151, 178, 199, 0.075);
+  background:
+    linear-gradient(180deg, rgba(183, 215, 237, 0.05), transparent 58%),
+    var(--m2a-grid);
+  box-shadow: inset 0 1px 0 rgba(205, 226, 241, 0.035);
+}
+
+.frontdeskM2A .slotCell::after {
+  border-top-color: rgba(181, 198, 209, 0.06);
+}
+
+.frontdeskM2A .slotCell[data-interactive="true"]:hover {
+  background:
+    radial-gradient(circle at 42% 45%, rgba(98, 162, 204, 0.085), transparent 72%),
+    rgba(8, 16, 25, 0.88);
+  box-shadow: inset 0 0 0 1px rgba(153, 202, 233, 0.17);
+}
+
+.frontdeskM2A .booking,
+.frontdeskM2A .note {
+  border-color: rgba(162, 207, 226, 0.42);
+  background:
+    linear-gradient(145deg, rgba(118, 179, 203, 0.16), rgba(28, 54, 67, 0.08) 46%, rgba(9, 22, 32, 0.24)),
+    rgba(8, 20, 29, 0.48);
+  box-shadow:
+    0 9px 22px rgba(0, 0, 0, 0.2),
+    0 0 16px rgba(84, 165, 195, 0.075),
+    inset 0 1px 0 rgba(230, 247, 253, 0.22),
+    inset 0 -1px 0 rgba(111, 174, 198, 0.12);
+  backdrop-filter: blur(18px) saturate(1.18) brightness(1.08);
+}
+
+.frontdeskM2A .bookingPt {
+  border-color: rgba(132, 198, 218, 0.44);
+  border-left-color: #90d4e4;
+  background:
+    linear-gradient(140deg, rgba(77, 143, 166, 0.26), rgba(24, 55, 69, 0.16) 52%, rgba(9, 23, 33, 0.26)),
+    rgba(8, 21, 30, 0.42);
+}
+
+.frontdeskM2A .bookingTrial {
+  border-color: rgba(226, 190, 111, 0.48);
+  border-left-color: #ebc45d;
+  background:
+    radial-gradient(circle at 92% 4%, rgba(241, 205, 121, 0.16), transparent 48%),
+    linear-gradient(140deg, rgba(119, 86, 31, 0.5), rgba(62, 50, 29, 0.34) 52%, rgba(24, 25, 24, 0.54));
+}
+
+.frontdeskM2A .entryTimeSummary {
+  border-right-color: rgba(218, 189, 124, 0.21);
+  background: rgba(20, 29, 34, 0.5);
+  box-shadow: inset 1px 0 0 rgba(235, 245, 248, 0.07);
+}
+
+.frontdeskM2A .overlay {
+  background:
+    radial-gradient(ellipse at 10% 20%, rgba(72, 141, 190, 0.12), transparent 52%),
+    rgba(2, 7, 12, 0.68);
+  backdrop-filter: blur(18px) saturate(1.03);
+}
+
+.frontdeskM2A .dialog {
+  background:
+    linear-gradient(125deg, rgba(111, 170, 211, 0.07), transparent 38%, rgba(224, 199, 158, 0.035)),
+    rgba(6, 12, 20, 0.9);
+}
+
+.operationAlert,
+.managerPage .operationAlert,
+.frontdeskM2A .operationAlert {
+  padding: 17px 18px;
+  color: #ffb8b8;
+  border-color: rgba(255, 74, 84, 0.72);
+  background:
+    linear-gradient(135deg, rgba(126, 19, 28, 0.48), rgba(66, 8, 15, 0.58)),
+    rgba(35, 7, 12, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 213, 216, 0.1),
+    0 0 22px rgba(255, 46, 59, 0.12);
+  font-size: 18px;
+  font-weight: 850;
+  line-height: 1.55;
+}
+
+.operationAlert svg,
+.managerPage .operationAlert svg,
+.frontdeskM2A .operationAlert svg {
+  width: 23px;
+  height: 23px;
+  color: #ff5964;
+  stroke-width: 2.5;
+}
+
+@media (max-width: 780px) {
+  .frontdeskM2A .navigationRow {
+    padding: 5px;
+    border-radius: 13px;
+  }
+
+  .bookingStatusSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .bookingStatusActions {
+    align-items: stretch;
+  }
+
+  .bookingStatusActions .button {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .studentPaymentHeader,
+  .studentPaymentBalanceRow,
+  .studentPaymentHistoryItem,
+  .studentCourseSessionHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .courseAllocationDialogSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .studentPaymentHistoryItem > span:last-child {
+    text-align: left;
+  }
+}
+
+.bookingCancelled,
+.managerPage .bookingCancelled,
+.frontdeskM2A .bookingCancelled {
+  opacity: 1 !important;
+  filter: grayscale(0.95) saturate(0.08);
+  color: #b9bec5 !important;
+  border-color: rgba(128, 136, 146, 0.3) !important;
+  border-left-color: #555d66 !important;
+  background: linear-gradient(135deg, rgba(14, 17, 21, 0.99), rgba(2, 4, 7, 0.995)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(147, 155, 164, 0.08),
+    0 5px 16px rgba(0, 0, 0, 0.56) !important;
+}
+
+.bookingCancelled .entryTimeSummary,
+.bookingCancelled .entryBody > :not(.bookingCancelledBadge) {
+  opacity: 0.18;
+}
+
+.bookingCancelledBadge {
+  position: absolute;
+  z-index: 5;
+  inset: 4px;
+  display: grid;
+  place-items: center;
+  color: #eceff2;
+  border: 1px solid rgba(158, 166, 176, 0.34);
+  border-radius: 5px;
+  background: rgba(3, 5, 8, 0.78);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.68);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  text-shadow: 0 1px 3px #000;
+}
+
+/* Monthly scheduling, coach visibility and manager activity tools */
+.scheduleToolButton {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  color: rgba(244, 239, 224, 0.88);
+  border: 1px solid rgba(206, 170, 92, 0.28);
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(31, 37, 43, 0.82), rgba(9, 15, 23, 0.9));
+  box-shadow: inset 0 1px 0 rgba(255, 244, 215, 0.04);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.scheduleToolButton:hover,
+.scheduleToolButton[data-active="true"] {
+  border-color: rgba(230, 192, 103, 0.62);
+  background: linear-gradient(180deg, rgba(83, 67, 34, 0.75), rgba(27, 24, 21, 0.92));
+  box-shadow: 0 0 18px rgba(214, 174, 78, 0.12), inset 0 1px 0 rgba(255, 244, 215, 0.08);
+}
+
+.monthlyMemberSearch,
+.monthlyWorkspace,
+.activityWorkspace {
+  display: grid;
+  gap: 18px;
+}
+
+.searchBox {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchBox svg {
+  position: absolute;
+  left: 14px;
+  color: rgba(221, 191, 120, 0.76);
+  pointer-events: none;
+}
+
+.searchBox .input {
+  padding-left: 43px;
+}
+
+.monthlyMemberResults {
+  display: grid;
+  gap: 9px;
+  max-height: 42vh;
+  overflow: auto;
+}
+
+.monthlyMemberResult {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 14px 16px;
+  color: inherit;
+  text-align: left;
+  border: 1px solid rgba(204, 174, 108, 0.24);
+  border-radius: 10px;
+  background: rgba(10, 17, 25, 0.78);
+  cursor: pointer;
+}
+
+.monthlyMemberResult:hover {
+  border-color: rgba(227, 190, 101, 0.58);
+  background: rgba(49, 42, 27, 0.62);
+}
+
+.monthlyMemberResult strong {
+  font-size: 17px;
+}
+
+.monthlyMemberResult span,
+.monthlyMemberHeader small {
+  color: rgba(214, 220, 228, 0.66);
+}
+
+.monthlyMemberHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(212, 177, 98, 0.24);
+  border-radius: 12px;
+  background: linear-gradient(120deg, rgba(69, 56, 29, 0.42), rgba(8, 15, 23, 0.72));
+}
+
+.monthlyMemberHeader > div {
+  display: grid;
+  gap: 4px;
+}
+
+.monthlyMemberHeader strong {
+  font-size: 21px;
+}
+
+.monthlyColumns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.monthlyPlanner,
+.monthlyBookingList,
+.activityWorkspace > section {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(203, 173, 106, 0.2);
+  border-radius: 12px;
+  background: rgba(7, 13, 21, 0.74);
+}
+
+.monthlyPlanner h3,
+.monthlyBookingList h3,
+.activityWorkspace h3 {
+  margin: 0;
+}
+
+.monthlyWeekdayTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  color: rgba(221, 224, 227, 0.7);
+}
+
+.miniButton {
+  min-height: 32px;
+  padding: 0 10px;
+  color: rgba(245, 240, 225, 0.86);
+  border: 1px solid rgba(203, 173, 106, 0.25);
+  border-radius: 7px;
+  background: rgba(26, 31, 37, 0.88);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.miniButton:hover {
+  border-color: rgba(226, 188, 98, 0.58);
+}
+
+.monthCalendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(42px, 1fr));
+  gap: 6px;
+}
+
+.monthDay {
+  min-height: 52px;
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  color: rgba(234, 235, 234, 0.72);
+  border: 1px solid rgba(152, 169, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(16, 23, 31, 0.78);
+  cursor: pointer;
+}
+
+.monthDay strong {
+  font-size: 16px;
+}
+
+.monthDay span {
+  font-size: 11px;
+  color: rgba(209, 215, 222, 0.58);
+}
+
+.monthDay[data-selected="true"] {
+  color: #111820;
+  border-color: rgba(255, 229, 162, 0.85);
+  background: linear-gradient(145deg, #f8e8b2, #d5a640);
+  box-shadow: 0 0 14px rgba(222, 176, 68, 0.2);
+}
+
+.monthDay[data-selected="true"] span {
+  color: rgba(17, 24, 32, 0.7);
+}
+
+.monthDay[data-conflict="true"] {
+  color: #fff2f0;
+  border-color: rgba(255, 118, 105, 0.92);
+  background: linear-gradient(145deg, rgba(151, 48, 44, 0.98), rgba(84, 24, 28, 0.98));
+  box-shadow: 0 0 16px rgba(228, 69, 60, 0.24);
+}
+
+.monthDay[data-conflict="true"] span {
+  color: rgba(255, 233, 229, 0.76);
+}
+
+.monthlyPreflightStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 9px 11px;
+  color: rgba(224, 229, 234, 0.76);
+  border: 1px solid rgba(167, 181, 194, 0.2);
+  border-radius: 8px;
+  background: rgba(17, 24, 32, 0.78);
+}
+
+.monthlyPreflightStatus span {
+  font-weight: 750;
+}
+
+.monthlyPreflightStatus span[data-tone="success"] {
+  color: #83d9ad;
+}
+
+.monthlyPreflightStatus span[data-tone="danger"] {
+  color: #ff9387;
+}
+
+.monthlyPreflightStatus small {
+  flex-basis: 100%;
+  color: rgba(225, 211, 206, 0.66);
+}
+
+.monthlyReview {
+  display: grid;
+  gap: 16px;
+}
+
+.monthlyReviewNotice {
+  display: grid;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 1px solid rgba(224, 183, 91, 0.42);
+  border-radius: 10px;
+  background: rgba(83, 64, 25, 0.35);
+}
+
+.monthlyReviewNotice[data-tone="danger"] {
+  border-color: rgba(255, 112, 100, 0.58);
+  background: rgba(115, 34, 32, 0.42);
+}
+
+.monthlyReviewNotice span {
+  color: rgba(225, 229, 232, 0.72);
+}
+
+.monthlyReviewSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.monthlyReviewSummary > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 13px;
+  border: 1px solid rgba(165, 178, 190, 0.2);
+  border-radius: 9px;
+  background: rgba(18, 25, 33, 0.82);
+}
+
+.monthlyReviewSummary span {
+  color: rgba(211, 218, 224, 0.62);
+  font-size: 12px;
+}
+
+.monthlyReviewSummary > div[data-tone="success"] strong {
+  color: #83d9ad;
+}
+
+.monthlyReviewSummary > div[data-tone="danger"] strong {
+  color: #ff9387;
+}
+
+.monthlyConflictSection,
+.monthlyResultSection {
+  display: grid;
+  gap: 10px;
+}
+
+.monthlyConflictSection h3,
+.monthlyResultSection h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.monthlyConflictList {
+  display: grid;
+  gap: 8px;
+  max-height: 34vh;
+  overflow: auto;
+}
+
+.monthlyConflictItem {
+  display: grid;
+  gap: 6px;
+  padding: 11px 13px;
+  border-left: 3px solid rgba(255, 103, 91, 0.88);
+  border-radius: 7px;
+  background: rgba(65, 27, 29, 0.55);
+}
+
+.monthlyConflictItem > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 14px;
+}
+
+.monthlyConflictItem time {
+  color: #ffb0a8;
+  font-variant-numeric: tabular-nums;
+}
+
+.monthlyConflictItem small {
+  color: rgba(225, 220, 218, 0.67);
+}
+
+.monthlyResultList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.monthlyResultList > div {
+  padding: 9px 11px;
+  color: #94ddb7;
+  border: 1px solid rgba(91, 197, 143, 0.3);
+  border-radius: 7px;
+  background: rgba(27, 69, 51, 0.38);
+  font-variant-numeric: tabular-nums;
+}
+
+.monthlyAllClear {
+  margin: 0;
+  padding: 13px 15px;
+  color: #91dcb6;
+  border: 1px solid rgba(91, 197, 143, 0.3);
+  border-radius: 9px;
+  background: rgba(27, 69, 51, 0.38);
+}
+
+.monthlyBookingList {
+  max-height: 65vh;
+  overflow: auto;
+}
+
+.monthlyBookingItem {
+  display: grid;
+  gap: 3px;
+  padding: 12px 13px;
+  border-left: 3px solid rgba(221, 180, 78, 0.78);
+  border-radius: 7px;
+  background: rgba(25, 31, 38, 0.84);
+}
+
+.monthlyBookingItem time,
+.monthlyBookingItem span {
+  color: rgba(214, 220, 227, 0.68);
+  font-size: 13px;
+}
+
+.activityWorkspace {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.activityTimeline {
+  display: grid;
+  gap: 9px;
+  max-height: 58vh;
+  overflow: auto;
+}
+
+.activityItem {
+  display: grid;
+  grid-template-columns: 58px minmax(130px, 0.55fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid rgba(178, 160, 117, 0.18);
+  border-radius: 9px;
+  background: rgba(13, 20, 29, 0.82);
+}
+
+.activityItem time {
+  color: #dfba65;
+  font-weight: 800;
+}
+
+.activityItem > div {
+  display: grid;
+  gap: 4px;
+}
+
+.activityItem span {
+  color: rgba(212, 219, 227, 0.64);
+  font-size: 12px;
+}
+
+.activityItem pre {
+  max-width: 100%;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  color: rgba(224, 229, 234, 0.72);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.24);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .monthlyColumns,
+  .activityWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .monthlyReviewSummary,
+  .monthlyResultList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .activityItem {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .activityItem pre {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .monthlyMemberHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .monthCalendar {
+    grid-template-columns: repeat(7, minmax(34px, 1fr));
+    gap: 4px;
+  }
+
+  .monthDay {
+    min-height: 46px;
+    padding: 2px;
+  }
+
+  .monthlyReviewSummary,
+  .monthlyResultList {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Wide desktop schedule: keep the daily action group on the same line, to the
+   right of the navigation and date controls. Narrower screens keep the
+   existing wrapping behavior instead of squeezing or hiding controls. */
+@media (min-width: 1280px) {
+  .frontdeskM2A[data-daily-schedule-active="true"] .navigationRow {
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .frontdeskM2A[data-daily-schedule-active="true"] .tabs {
+    min-width: 0;
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .frontdeskM2A[data-daily-schedule-active="true"] .tab {
+    min-height: 42px;
+    padding: 9px 11px;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .frontdeskM2A[data-daily-schedule-active="true"] .dateToolbarDock {
+    flex: 0 0 auto;
+  }
+
+  .frontdeskM2A[data-daily-schedule-active="true"] .dateToolbar {
+    gap: 4px;
+  }
+
+  .frontdeskM2A[data-daily-schedule-active="true"] .dateToolbar .input {
+    width: 158px;
+    min-height: 42px;
+    padding-inline: 10px;
+    font-size: 14px;
+  }
+
+  .frontdeskM2A[data-daily-schedule-active="true"] .iconButton {
+    width: 42px;
+    min-height: 42px;
+  }
+
+  .frontdeskM2A[data-daily-schedule-active="true"] .weekdayBadge {
+    min-height: 42px;
+    padding-inline: 9px;
+    font-size: 13px;
+  }
+
+  .frontdeskM2A[data-daily-schedule-active="true"] .businessDayControls {
+    min-width: 0;
+    min-height: 42px;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .frontdeskM2A[data-daily-schedule-active="true"] .frontdeskStatus {
+    padding-inline: 4px;
+    font-size: 12px;
+  }
+
+  .frontdeskM2A[data-daily-schedule-active="true"] .scheduleLockButton,
+  .frontdeskM2A[data-daily-schedule-active="true"] .scheduleToolButton,
+  .frontdeskM2A[data-daily-schedule-active="true"] .closureToggle {
+    min-height: 34px;
+    gap: 4px;
+    padding: 5px 8px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
+
+/*
+ * iPad daily schedule overview
+ *
+ * This is activated by an iPadOS-only data attribute in the schedule component,
+ * so desktop, phone, and non-iPad tablet layouts retain their existing behavior.
+ * Keep each coach lane comfortably readable and let compact iPads scroll horizontally.
+ * iPad Pro landscape gets a separate desktop-density overview below.
+ */
+.page[data-ipad-schedule-overview="true"] .mobileCoach {
+  display: none;
+}
+
+.page[data-ipad-schedule-overview="true"] .boardWrap {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.page[data-ipad-schedule-overview="true"] .boardWrap::-webkit-scrollbar {
+  display: block;
+  height: 8px;
+}
+
+.page[data-ipad-schedule-overview="true"] .board {
+  --ipad-time-column: 48px;
+  width: 100%;
+  min-width: max(100%, var(--all-board-width));
+  grid-template-columns: repeat(
+    var(--coach-count),
+    var(--ipad-time-column) minmax(180px, 1fr)
+  );
+}
+
+.page[data-ipad-schedule-overview="true"] .timeHead,
+.page[data-ipad-schedule-overview="true"] .timeCell,
+.page[data-ipad-schedule-overview="true"] .coachHead,
+.page[data-ipad-schedule-overview="true"] .slotCell {
+  display: grid;
+  min-width: 0;
+}
+
+.page[data-ipad-schedule-overview="true"] .timeHead,
+.page[data-ipad-schedule-overview="true"] .coachHead {
+  min-height: 58px;
+  padding: 7px 8px;
+}
+
+.page[data-ipad-schedule-overview="true"] .timeHead,
+.page[data-ipad-schedule-overview="true"] .timeCell {
+  padding-inline: 3px;
+  font-size: 12px;
+  letter-spacing: -0.02em;
+}
+
+.page[data-ipad-schedule-overview="true"] .coachHead {
+  overflow: hidden;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.page[data-ipad-schedule-overview="true"] .coachHeadContent {
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.page[data-ipad-schedule-overview="true"] .coachDragHandle {
+  min-height: 36px;
+  gap: 5px;
+}
+
+.page[data-ipad-schedule-overview="true"] .coachStaticLabel,
+.page[data-ipad-schedule-overview="true"] .coachIdentityLabel {
+  gap: 5px;
+}
+
+.page[data-ipad-schedule-overview="true"] .coachTitleBadge {
+  min-height: 18px;
+  padding: 2px 5px;
+  font-size: 10px;
+}
+
+.page[data-ipad-schedule-overview="true"] .coachStatusBadge {
+  min-height: 22px;
+  padding: 3px 7px;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.page.managerPage[data-ipad-schedule-overview="true"] .booking,
+.page.managerPage[data-ipad-schedule-overview="true"] .note {
+  left: calc(-1 * var(--ipad-time-column) + 3px);
+  grid-template-columns: var(--ipad-time-column) minmax(0, 1fr);
+}
+
+.page.managerPage[data-ipad-schedule-overview="true"] .booking.cellEntryHalf,
+.page.managerPage[data-ipad-schedule-overview="true"] .note.cellEntryHalf {
+  left: 3px;
+  grid-template-columns: var(--ipad-time-column) minmax(0, 1fr);
+}
+
+.page.managerPage[data-ipad-schedule-overview="true"] .booking .entryBody,
+.page.managerPage[data-ipad-schedule-overview="true"] .note .entryBody {
+  padding: 5px 7px;
+}
+
+.page.managerPage[data-ipad-schedule-overview="true"] .entryTimeTick {
+  padding-inline: 2px;
+  font-size: 11px;
+  letter-spacing: -0.02em;
+}
+
+.page.managerPage[data-ipad-schedule-overview="true"] .bookingPrimaryLine {
+  flex-wrap: wrap;
+  column-gap: 5px;
+  row-gap: 2px;
+  line-height: 1.1;
+}
+
+.page.managerPage[data-ipad-schedule-overview="true"] .bookingPrimaryLine .bookingName {
+  max-width: 100%;
+  font-size: 15px;
+}
+
+.page.managerPage[data-ipad-schedule-overview="true"] .bookingCourseType {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.page.managerPage[data-ipad-schedule-overview="true"] .bookingStudentCode {
+  flex: 1 0 100%;
+  font-size: 10px;
+  text-align: center;
+}
+
+.page[data-ipad-schedule-overview="true"] .bookingEyebrow,
+.page[data-ipad-schedule-overview="true"] .bookingPhone,
+.page[data-ipad-schedule-overview="true"] .bookingCourse {
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.page[data-ipad-schedule-overview="true"] .bookingBirthday {
+  font-size: 10px;
+}
+
+.page[data-ipad-schedule-overview="true"] .bookingReminderBadge,
+.page[data-ipad-schedule-overview="true"] .bookingPendingConversionBadge,
+.page[data-ipad-schedule-overview="true"] .bookingRevenueBadge,
+.page[data-ipad-schedule-overview="true"] .bookingCancelledBadge {
+  max-width: 100%;
+  padding: 2px 5px;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Match the desktop overview on iPad Pro landscape: keep every visible coach in
+   one board and preserve desktop-sized type. The expanded manager toolbar uses
+   two deliberate rows so navigation, date controls and daily actions stay
+   readable as new actions are added. */
+@media (orientation: landscape) and (min-width: 1024px) {
+  .page[data-ipad-pro-desktop-layout="true"][data-daily-schedule-active="true"] {
+    padding-bottom: 0;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .navigationRow {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 7px 10px;
+    padding: 7px;
+    overflow: visible;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .tabs {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 4px;
+    overflow: visible;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .tab {
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .dateToolbarDock {
+    grid-column: 1;
+    min-width: 0;
+    justify-self: start;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .dateToolbar {
+    gap: 4px;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .dateToolbar .input {
+    width: 142px;
+    min-height: 38px;
+    padding-inline: 9px;
+    font-size: 13px;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .iconButton {
+    width: 38px;
+    min-height: 38px;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .weekdayBadge {
+    min-height: 38px;
+    padding-inline: 9px;
+    font-size: 13px;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .businessDayControls {
+    grid-column: 2;
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    justify-self: stretch;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 5px;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .frontdeskStatus {
+    padding-inline: 4px;
+    font-size: 12px;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .scheduleLockButton,
+  .page[data-ipad-pro-desktop-layout="true"] .scheduleToolButton,
+  .page[data-ipad-pro-desktop-layout="true"] .closureToggle {
+    min-height: 30px;
+    gap: 4px;
+    padding: 4px 7px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .page.managerPage[data-ipad-pro-desktop-layout="true"] .scheduleActions {
+    position: static;
+    min-height: 0;
+    margin: 0 0 12px;
+    pointer-events: auto;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .boardWrap {
+    overflow-x: hidden;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .boardWrap::-webkit-scrollbar {
+    display: none;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .board {
+    --ipad-time-column: clamp(39px, 3.25vw, 46px);
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(
+      var(--coach-count),
+      var(--ipad-time-column) minmax(0, 1fr)
+    );
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"][data-daily-schedule-active="true"] .board {
+    --schedule-row-height: max(46px, calc((100dvh - 130px) / 15));
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"][data-daily-schedule-active="true"] .timeCell,
+  .page[data-ipad-pro-desktop-layout="true"][data-daily-schedule-active="true"] .slotCell {
+    min-height: var(--schedule-row-height);
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .timeHead,
+  .page[data-ipad-pro-desktop-layout="true"] .coachHead {
+    min-height: 50px;
+    padding: 6px 5px;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .timeHead,
+  .page[data-ipad-pro-desktop-layout="true"] .timeCell {
+    padding-inline: 2px;
+    font-size: 14px;
+    letter-spacing: 0;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .coachHead {
+    font-size: 16px;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .coachHeadContent {
+    gap: 4px;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .coachDragHandle {
+    min-height: 30px;
+    gap: 4px;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .bookingPrimaryLine {
+    flex-wrap: nowrap;
+    column-gap: 5px;
+    row-gap: 0;
+    line-height: 1.1;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .bookingPrimaryLine .bookingName {
+    max-width: none;
+    font-size: 15px;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .bookingCourseType {
+    max-width: none;
+    overflow: visible;
+    font-size: 12px;
+    text-overflow: clip;
+  }
+
+  .page[data-ipad-pro-desktop-layout="true"] .bookingStudentCode {
+    flex: 0 1 auto;
+    font-size: 10px;
+    text-align: left;
   }
 }

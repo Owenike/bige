@@ -209,7 +209,7 @@ export default async function Home() {
       badge: "燃脂紓壓",
       title: "拳擊體能訓練",
       description: t("home.calm_ui_desc"),
-      href: "/coach",
+      href: "/training/boxing",
       mediaClass: "homeLuxuryMediaS2C",
       cta: "Open",
       videoSrc: "/home-videos/card-boxing-showcase.mp4",
@@ -301,7 +301,7 @@ export default async function Home() {
       description: isEn
         ? "Personal and small-group coaching programs built around your goals and training pace."
         : "一對一教練課程，依你的目標與節奏安排進度。",
-      href: "/coach",
+      href: "/renwu-personal-training",
       mediaClass: "homeLuxuryMediaS6C",
       cta: "Open",
     },

@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n-provider";
 
 type MemberListItem = {
@@ -42,6 +43,9 @@ type MemberDetail = {
     id: string;
     fullName: string;
     phone: string | null;
+    email: string | null;
+    emailUnavailable: boolean;
+    birthDate: string | null;
     notes: string | null;
     photoUrl: string | null;
     storeId: string | null;
@@ -88,6 +92,10 @@ function fmtDate(value: string | null | undefined) {
 export default function ManagerMembersPage() {
   const { locale } = useI18n();
   const zh = locale !== "en";
+  const searchParams = useSearchParams();
+  const linkedMemberId = searchParams.get("memberId")?.trim() || "";
+  const shouldFocusPersonalData = searchParams.get("edit") === "personal-data";
+  const personalDataFormRef = useRef<HTMLFormElement | null>(null);
 
   const [items, setItems] = useState<MemberListItem[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState("");
@@ -107,6 +115,9 @@ export default function ManagerMembersPage() {
 
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editBirthDate, setEditBirthDate] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editEmailUnavailable, setEditEmailUnavailable] = useState(false);
   const [editStoreId, setEditStoreId] = useState("");
   const [editNotes, setEditNotes] = useState("");
 
@@ -122,7 +133,7 @@ export default function ManagerMembersPage() {
   const [adjustDelta, setAdjustDelta] = useState("1");
   const [adjustReason, setAdjustReason] = useState("");
 
-  async function loadMembers(nextQ?: string, nextLifecycle?: string) {
+  async function loadMembers(nextQ?: string, nextLifecycle?: string, preferredMemberId?: string) {
     setLoading(true);
     setError(null);
     try {
@@ -131,6 +142,7 @@ export default function ManagerMembersPage() {
       if (query) params.set("q", query);
       const life = (nextLifecycle ?? lifecycle).trim();
       if (life) params.set("lifecycle", life);
+      if (preferredMemberId) params.set("memberId", preferredMemberId);
       const res = await fetch(`/api/manager/members?${params.toString()}`);
       const payload = (await parseJsonSafe<ApiPayload>(res)) || null;
       if (!res.ok) {
@@ -141,6 +153,11 @@ export default function ManagerMembersPage() {
       }
       const nextItems = ((payload?.data?.items || payload?.items) as MemberListItem[] | undefined) || [];
       setItems(nextItems);
+
+      if (preferredMemberId && nextItems.some((item) => item.id === preferredMemberId)) {
+        setSelectedMemberId(preferredMemberId);
+        return;
+      }
 
       if (selectedMemberId && !nextItems.find((item) => item.id === selectedMemberId)) {
         setSelectedMemberId("");
@@ -182,12 +199,15 @@ export default function ManagerMembersPage() {
     });
     setEditName(member.fullName || "");
     setEditPhone(member.phone || "");
+    setEditBirthDate(member.birthDate || "");
+    setEditEmail(member.email || "");
+    setEditEmailUnavailable(member.emailUnavailable === true);
     setEditStoreId(member.storeId || "");
     setEditNotes(member.notes || "");
   }
 
   useEffect(() => {
-    void loadMembers("", "");
+    void loadMembers("", "", linkedMemberId || undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -196,6 +216,22 @@ export default function ManagerMembersPage() {
     void loadDetail(selectedMemberId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMemberId]);
+
+  useEffect(() => {
+    if (
+      !shouldFocusPersonalData ||
+      !linkedMemberId ||
+      selectedMemberId !== linkedMemberId ||
+      detail?.member.id !== linkedMemberId
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      personalDataFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      personalDataFormRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [detail?.member.id, linkedMemberId, selectedMemberId, shouldFocusPersonalData]);
 
   async function createMember(event: FormEvent) {
     event.preventDefault();
@@ -242,6 +278,9 @@ export default function ManagerMembersPage() {
       body: JSON.stringify({
         fullName: editName,
         phone: editPhone,
+        birthDate: editBirthDate || null,
+        email: editEmail || null,
+        emailUnavailable: editEmailUnavailable,
         storeId: editStoreId,
         notes: editNotes,
       }),
@@ -448,9 +487,25 @@ export default function ManagerMembersPage() {
                 <p className="sub">{zh ? "分館" : "branch"}: {detail.member.storeId || "-"}</p>
                 <p className="sub">{zh ? "備註" : "notes"}: {detail.member.notes || "-"}</p>
 
-                <form onSubmit={saveMember} style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                <form ref={personalDataFormRef} onSubmit={saveMember} style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                  {shouldFocusPersonalData && linkedMemberId === detail.member.id ? (
+                    <div className="ok">此學員的個資已由通知帶入，可直接修改後儲存。</div>
+                  ) : null}
                   <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder={zh ? "姓名" : "full name"} />
                   <input className="input" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder={zh ? "電話" : "phone"} />
+                  <input className="input" type="date" value={editBirthDate} onChange={(e) => setEditBirthDate(e.target.value)} aria-label={zh ? "生日" : "birth date"} />
+                  <input className="input" type="email" disabled={editEmailUnavailable} value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="Email" />
+                  <label className="sub">
+                    <input
+                      type="checkbox"
+                      checked={editEmailUnavailable}
+                      onChange={(e) => {
+                        setEditEmailUnavailable(e.target.checked);
+                        if (e.target.checked) setEditEmail("");
+                      }}
+                    />{" "}
+                    {zh ? "學員明確表示沒有 Email" : "Member has no email"}
+                  </label>
                   <input className="input" value={editStoreId} onChange={(e) => setEditStoreId(e.target.value)} placeholder={zh ? "分館 ID" : "branch id"} />
                   <input className="input" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder={zh ? "備註" : "notes"} />
                   <button type="submit" className="fdPillBtn" disabled={saving}>

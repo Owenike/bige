@@ -2340,8 +2340,8 @@ export default function FrontdeskPortalPage() {
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || t.posInvoiceFail);
-      setPosMessage(t.posInvoiceIssued);
-      const invoiceNo = String(payload?.invoiceEvent?.payload?.invoiceNo || posInvoiceNo || "");
+      setPosMessage(payload?.warning ? `${t.posInvoiceIssued} (${payload.warning})` : t.posInvoiceIssued);
+      const invoiceNo = String(payload?.invoiceNo || payload?.invoiceEvent?.payload?.invoiceNo || posInvoiceNo || "");
       if (invoiceNo) setPosInvoiceNo(invoiceNo);
       await loadPosInvoices(posOrderId);
       await loadPosAudit(posOrderId);

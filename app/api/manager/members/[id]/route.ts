@@ -27,7 +27,10 @@ function isMissingTableError(message: string | undefined, table: string) {
 }
 
 async function loadMember(params: { request: Request; memberId: string }) {
-  const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager"], params.request);
+  const auth = await requireProfile(
+    ["platform_admin", "manager", "supervisor", "branch_manager", "coach"],
+    params.request,
+  );
   if (!auth.ok) return auth;
   if (!auth.context.tenantId) {
     return { ok: false as const, response: apiError(400, "FORBIDDEN", "Missing tenant context") };
@@ -35,7 +38,7 @@ async function loadMember(params: { request: Request; memberId: string }) {
 
   const memberResult = await auth.supabase
     .from("members")
-    .select("id, full_name, phone, email, auth_user_id, notes, photo_url, store_id, created_at, updated_at")
+    .select("id, full_name, phone, email, email_unavailable, birth_date, auth_user_id, notes, photo_url, store_id, created_at, updated_at")
     .eq("tenant_id", auth.context.tenantId)
     .eq("id", params.memberId)
     .maybeSingle();
@@ -253,6 +256,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       fullName: scoped.member.full_name,
       phone: scoped.member.phone,
       email: "email" in scoped.member ? (scoped.member.email as string | null) : null,
+      emailUnavailable: scoped.member.email_unavailable === true,
+      birthDate: scoped.member.birth_date,
       notes: scoped.member.notes,
       photoUrl: scoped.member.photo_url,
       storeId: scoped.member.store_id,
@@ -286,6 +291,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const fullName = normalizeText(body?.fullName);
   const phone = normalizeText(body?.phone);
   const email = normalizeEmail(body?.email);
+  const birthDate = normalizeText(body?.birthDate);
+  const emailUnavailable = body?.emailUnavailable === true;
   const notes = normalizeText(body?.notes);
   const storeId = normalizeText(body?.storeId);
 
@@ -294,7 +301,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (!fullName) return apiError(400, "FORBIDDEN", "fullName cannot be empty");
     updatePayload.full_name = fullName;
   }
-  if ("phone" in (body || {})) updatePayload.phone = phone;
+  if ("phone" in (body || {})) {
+    updatePayload.phone = phone;
+    updatePayload.phone_normalized = phone ? phone.replace(/\D/g, "") : null;
+  }
+  if ("birthDate" in (body || {})) {
+    if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+      return apiError(400, "FORBIDDEN", "birthDate is invalid");
+    }
+    updatePayload.birth_date = birthDate;
+  }
+  if ("emailUnavailable" in (body || {})) {
+    updatePayload.email_unavailable = emailUnavailable;
+    if (emailUnavailable) updatePayload.email = null;
+  }
   if ("email" in (body || {})) {
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return apiError(400, "FORBIDDEN", "email is invalid");
@@ -321,6 +341,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
     }
     updatePayload.email = email;
+    if (email) updatePayload.email_unavailable = false;
   }
   if ("notes" in (body || {})) updatePayload.notes = notes;
   if ("storeId" in (body || {})) {
@@ -347,7 +368,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .update(updatePayload)
     .eq("tenant_id", scoped.auth.context.tenantId)
     .eq("id", id)
-    .select("id, full_name, phone, email, notes, store_id, updated_at")
+    .select("id, full_name, phone, email, email_unavailable, birth_date, notes, store_id, updated_at")
     .maybeSingle();
   if (result.error) return apiError(500, "INTERNAL_ERROR", result.error.message);
   if (!result.data) return apiError(404, "ENTITLEMENT_NOT_FOUND", "Member not found");
@@ -368,6 +389,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       fullName: result.data.full_name,
       phone: result.data.phone,
       email: "email" in result.data ? (result.data.email as string | null) : null,
+      emailUnavailable: result.data.email_unavailable === true,
+      birthDate: result.data.birth_date,
       notes: result.data.notes,
       storeId: result.data.store_id,
       updatedAt: result.data.updated_at,

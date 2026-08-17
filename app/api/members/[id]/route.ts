@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../lib/auth-context";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
+import { canManageMemberPersonalData } from "../../../../lib/staff-organization";
 
 type CustomFields = Record<string, string>;
 
@@ -53,6 +54,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const hasBirthDate = Object.prototype.hasOwnProperty.call(body, "birthDate");
   const hasStatus = Object.prototype.hasOwnProperty.call(body, "status");
   const hasCustomFields = Object.prototype.hasOwnProperty.call(body, "customFields");
+
+  const changesPersonalData = hasFullName || hasPhone || hasEmail || hasBirthDate;
+  if (changesPersonalData && !canManageMemberPersonalData(auth.context)) {
+    return NextResponse.json(
+      { error: "只有教練經理、副理或城市經理能修改會員姓名、電話、生日與 Email" },
+      { status: 403 },
+    );
+  }
 
   if (!hasFullName && !hasPhone && !hasEmail && !hasPhotoUrl && !hasBirthDate && !hasStatus && !hasCustomFields) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });

@@ -9,7 +9,10 @@ function normalizeOptionalText(value: unknown) {
 }
 
 async function resolveScope(request: Request) {
-  const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager"], request);
+  const auth = await requireProfile(
+    ["platform_admin", "manager", "supervisor", "branch_manager", "coach"],
+    request,
+  );
   if (!auth.ok) return auth;
   if (!auth.context.tenantId) {
     return { ok: false as const, response: apiError(400, "FORBIDDEN", "Missing tenant context") };
@@ -62,6 +65,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("q") || "").trim();
   const lifecycle = (searchParams.get("lifecycle") || "").trim().toLowerCase();
+  const memberId = (searchParams.get("memberId") || "").trim();
 
   let query = scoped.auth.supabase
     .from("members")
@@ -71,6 +75,7 @@ export async function GET(request: Request) {
     .limit(100);
 
   if (q) query = query.or(`full_name.ilike.%${q}%,phone.ilike.%${q}%`);
+  if (memberId) query = query.eq("id", memberId);
   if (scoped.auth.context.branchId) query = query.eq("store_id", scoped.auth.context.branchId);
 
   const memberResult = await query;
