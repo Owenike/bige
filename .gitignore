@@ -14,5 +14,11 @@ tsconfig.tsbuildinfo
 # local audit outputs
 commercial_audit.*
 
+# Local analysis outputs and temporary files must never enter Git.
+output/
+tmp/
+({value
+r.text())
+
 .vercel
 .env*.local

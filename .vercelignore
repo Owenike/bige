@@ -1,0 +1,9 @@
+# Repository-only material excluded from production deployment uploads.
+analysis/
+docs/
+tests/
+.tmp/
+output/
+tmp/
+({value
+r.text())
