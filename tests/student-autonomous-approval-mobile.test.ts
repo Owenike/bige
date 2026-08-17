@@ -12,12 +12,21 @@ test("loads the autonomous-training approval mobile stylesheet", () => {
   assert.match(layout, /import "\.\/student-autonomous-approval-mobile\.css";/);
 });
 
-test("keeps autonomous-training approval actions visible on mobile", () => {
+test("keeps a large autonomous-training identity photo on mobile", () => {
   assert.match(
     styles,
-    /\.studentCheckInsApprovalDialog:not\(\.studentDropInApprovalDialog\)[\s\S]*?\.studentCheckInsApprovalActions\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?bottom:/,
+    /grid-template-rows:\s*clamp\(230px, 36dvh, 320px\) minmax\(0, 1fr\)/,
   );
-  assert.match(styles, /padding:\s*14px 16px calc\(88px \+ env\(safe-area-inset-bottom\)\)/);
+  assert.match(styles, /grid-template-rows:\s*clamp\(200px, 32dvh, 230px\) minmax\(0, 1fr\)/);
+});
+
+test("keeps actions beside the approval details without a large spacer", () => {
+  assert.match(
+    styles,
+    /\.studentCheckInsApprovalDialog:not\(\.studentDropInApprovalDialog\)[\s\S]*?\.studentCheckInsApprovalActions\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?bottom:\s*0;/,
+  );
+  assert.match(styles, /padding:\s*14px 16px calc\(10px \+ env\(safe-area-inset-bottom\)\)/);
+  assert.doesNotMatch(styles, /calc\(88px \+ env\(safe-area-inset-bottom\)\)/);
 });
 
 test("excludes the NT$50 drop-in approval dialog from every mobile override", () => {
