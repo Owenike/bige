@@ -1106,7 +1106,6 @@ function DailyScheduleLoadingBoard() {
       <div
         className={`${styles.board} ${styles.loadingBoard}`}
         data-mobile-show-all="false"
-        data-loading-turn={loadingPage === 0 ? "inverse" : "final"}
         aria-hidden="true"
         style={
           {
@@ -1118,23 +1117,15 @@ function DailyScheduleLoadingBoard() {
         {Array.from({ length: DAILY_SCHEDULE_LOADING_COACH_COUNT }, (_, coachIndex) => (
           <Fragment key={`loading-head:${coachIndex}`}>
             <div
-              className={`${styles.timeHead} ${styles.loadingFlipCell}`}
+              className={styles.timeHead}
               data-mobile-active={String(coachIndex === 0)}
-              data-loading-coach={coachIndex}
-              data-loading-row="0"
-              style={dailyScheduleLoadingRowStyle(0)}
             >
-              <LoadingFlipMechanism key={`time-head:${loadingPage}`} />
               <span className={styles.loadingTimeLabel}>時間</span>
             </div>
             <div
-              className={`${styles.coachHead} ${styles.loadingFlipCell}`}
+              className={styles.coachHead}
               data-mobile-active={String(coachIndex === 0)}
-              data-loading-coach={coachIndex}
-              data-loading-row="0"
-              style={dailyScheduleLoadingRowStyle(0)}
             >
-              <LoadingFlipMechanism key={`coach-head:${loadingPage}`} />
               <span className={styles.loadingCoachMark} />
             </div>
           </Fragment>
@@ -1145,7 +1136,6 @@ function DailyScheduleLoadingBoard() {
               <div
                 className={`${styles.timeCell} ${styles.loadingFlipCell}`}
                 data-mobile-active={String(coachIndex === 0)}
-                data-loading-coach={coachIndex}
                 data-loading-row={rowIndex + 1}
                 style={dailyScheduleLoadingRowStyle(rowIndex + 1)}
               >
@@ -1156,13 +1146,9 @@ function DailyScheduleLoadingBoard() {
                 />
               </div>
               <div
-                className={`${styles.slotCell} ${styles.loadingFlipCell}`}
+                className={styles.slotCell}
                 data-mobile-active={String(coachIndex === 0)}
-                data-loading-coach={coachIndex}
-                data-loading-row={rowIndex + 1}
-                style={dailyScheduleLoadingRowStyle(rowIndex + 1)}
               >
-                <LoadingFlipMechanism key={`slot:${loadingPage}`} />
                 {(rowIndex * 3 + coachIndex * 2) % 7 === 0 ? (
                   <span className={styles.loadingBookingMark} />
                 ) : null}

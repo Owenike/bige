@@ -1425,7 +1425,7 @@ test("daily schedule prefetches nearest dates first and never starts more than t
   assert.deepEqual(queue.getState().pendingDates, [dates[4]]);
 });
 
-test("daily schedule loading turns to an inverse palette and then settles on the board palette", () => {
+test("daily schedule loading keeps the board palette and flips time cells only", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
   const loadingBoard = component.match(
@@ -1457,13 +1457,16 @@ test("daily schedule loading turns to an inverse palette and then settles on the
   assert.match(loadingBoard, /DAILY_SCHEDULE_LOADING_SECOND_TURN_MS/);
   assert.match(loadingBoard, /window\.clearTimeout\(timer\)/);
   assert.doesNotMatch(loadingBoard, /window\.setInterval|current \+ 1/);
-  assert.match(loadingBoard, /data-loading-turn=\{loadingPage === 0 \? "inverse" : "final"\}/);
-  assert.match(loadingBoard, /data-loading-coach=\{coachIndex\}/);
+  assert.doesNotMatch(loadingBoard, /data-loading-turn|data-loading-coach/);
   assert.match(loadingBoard, /<LoadingFlipMechanism/);
-  assert.match(loadingBoard, /data-loading-row="0"/);
   assert.match(loadingBoard, /data-loading-row=\{rowIndex \+ 1\}/);
-  assert.match(loadingBoard, /style=\{dailyScheduleLoadingRowStyle\(0\)\}/);
   assert.match(loadingBoard, /style=\{dailyScheduleLoadingRowStyle\(rowIndex \+ 1\)\}/);
+  assert.equal(loadingBoard.match(/<LoadingFlipMechanism/g)?.length, 1);
+  assert.match(loadingBoard, /className=\{`\$\{styles\.timeCell\} \$\{styles\.loadingFlipCell\}`\}/);
+  assert.doesNotMatch(
+    loadingBoard,
+    /className=\{`\$\{styles\.(?:timeHead|coachHead|slotCell)\} \$\{styles\.loadingFlipCell\}`\}/,
+  );
   assert.match(rowStyle, /--loading-row-delay/);
   assert.doesNotMatch(rowStyle, /coachIndex/);
   assert.match(component, /styles\.loadingFlipUpperFlap/);
@@ -1481,7 +1484,7 @@ test("daily schedule loading turns to an inverse palette and then settles on the
     /newValue=\{dailyScheduleLoadingHourLabel\(hour \+ loadingPage\)\}/,
   );
   assert.match(loadingBoard, /key=\{`time:\$\{loadingPage\}`\}/);
-  assert.match(loadingBoard, /key=\{`slot:\$\{loadingPage\}`\}/);
+  assert.doesNotMatch(loadingBoard, /key=\{`(?:slot|time-head|coach-head):\$\{loadingPage\}`\}/);
   assert.doesNotMatch(loadingBoard, /fetch\(|requestBoard|loadBoard|setLoading\(|setData|setDate/);
   assert.doesNotMatch(component, /dailyScheduleLoadingCellStyle|--loading-flip-delay|loadingFlipBlade/);
   assert.match(styles, /\.loadingFlipUpperFlap[\s\S]*transform-origin: 50% 100%/);
@@ -1489,17 +1492,12 @@ test("daily schedule loading turns to an inverse palette and then settles on the
   assert.match(styles, /animation: schedule-loading-flip-upper 720ms/);
   assert.match(styles, /animation: schedule-loading-flip-lower 720ms/);
   assert.match(styles, /animation-delay: var\(--loading-row-delay\)/);
-  assert.match(
-    styles,
-    /\.frontdeskM2A \.loadingBoardWrap\s*{[\s\S]*--loading-final-left: rgba\(30, 66, 88, 0\.96\);[\s\S]*--loading-final-center: rgba\(7, 20, 31, 0\.98\);[\s\S]*--loading-final-right: rgba\(66, 68, 64, 0\.96\);[\s\S]*--loading-inverse-left: rgba\(8, 22, 33, 0\.98\);[\s\S]*--loading-inverse-center: rgba\(48, 72, 87, 0\.96\);[\s\S]*--loading-inverse-right: rgba\(13, 27, 35, 0\.98\);/,
-  );
-  assert.match(styles, /\.loadingBoard\[data-loading-turn="inverse"\][\s\S]*--loading-page-old-surface: var\(--loading-page-final-surface\);[\s\S]*--loading-page-new-surface: var\(--loading-page-inverse-surface\);/);
-  assert.match(styles, /\.loadingBoard\[data-loading-turn="final"\][\s\S]*--loading-page-old-surface: var\(--loading-page-inverse-surface\);[\s\S]*--loading-page-new-surface: var\(--loading-page-final-surface\);/);
-  assert.match(styles, /\.loadingFlipCell\[data-loading-coach="6"\]/);
-  assert.match(styles, /\.loadingFlipCell\s*{[\s\S]*background: var\(--loading-page-new-surface\)/);
-  assert.match(styles, /\.frontdeskM2A \.loadingBoard \.loadingFlipCell\s*{[\s\S]*background: var\(--loading-page-new-surface\)/);
-  assert.match(styles, /\.loadingFlipUpperFlap\s*{[\s\S]*var\(--loading-page-old-surface\)/);
-  assert.match(styles, /\.loadingFlipLowerFlap\s*{[\s\S]*var\(--loading-page-new-surface\)/);
+  assert.doesNotMatch(styles, /--loading-(?:final|inverse)|data-loading-turn|data-loading-coach/);
+  assert.match(styles, /\.timeCell\s*{[\s\S]*--schedule-time-cell-surface: rgba\(241, 246, 252, 0\.9\);[\s\S]*background: var\(--schedule-time-cell-surface\)/);
+  assert.match(styles, /\.frontdeskM2A \.timeCell\s*{[\s\S]*--schedule-time-cell-surface:[\s\S]*linear-gradient\(90deg, rgba\(56, 65, 70, 0\.28\), rgba\(14, 29, 41, 0\.34\)\);[\s\S]*background: var\(--schedule-time-cell-surface\)/);
+  assert.match(styles, /\.loadingFlipCell\s*{[\s\S]*background: var\(--schedule-time-cell-surface\)/);
+  assert.match(styles, /\.loadingFlipUpperFlap\s*{[\s\S]*background: var\(--schedule-time-cell-surface\)/);
+  assert.match(styles, /\.loadingFlipLowerFlap\s*{[\s\S]*background: var\(--schedule-time-cell-surface\)/);
   assert.match(styles, /\.frontdeskM2A \.loadingBoard\s*{[^}]*opacity: 1;/);
   assert.doesNotMatch(styles, /schedule-loading-flip-(?:upper|lower) 3500ms/);
   assert.doesNotMatch(styles, /schedule-loading-flip-(?:upper|lower)[^;]*infinite/);
