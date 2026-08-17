@@ -3,6 +3,9 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { StudentCheckInHistory } from "../../../components/student-checkin-history";
+import { STUDENT_CHECKIN_ADMIN_PENDING_EVENT } from "../../../lib/student-checkin-entry";
 import {
   mergeMembershipPeriodDrafts,
   type MembershipPeriodDraft,
@@ -17,6 +20,8 @@ type StudentProfile = {
   membership_starts_on: string | null;
   membership_expires_on: string | null;
   photo_url: string | null;
+  autonomous_checkin_enabled: boolean;
+  autonomous_access_status: "blocked" | "formal_member" | "non_member";
 };
 
 type ManagedStudent = {
@@ -27,6 +32,8 @@ type ManagedStudent = {
   membership_starts_on: string | null;
   membership_expires_on: string | null;
   is_active: boolean;
+  autonomous_checkin_enabled: boolean;
+  autonomous_access_status: "blocked" | "formal_member" | "non_member";
 };
 
 type PendingRequest = {
@@ -55,6 +62,7 @@ type StudentCheckInsResponse = {
   checkInUrl?: string;
   date?: string;
   pending?: PendingRequest[];
+  dropInPending?: unknown[];
   today?: StudentCheckInRow[];
   students?: ManagedStudent[];
   error?: string;
@@ -62,15 +70,15 @@ type StudentCheckInsResponse = {
 
 const STUDENT_CHECK_INS_ADMIN_PATH = "/admin/student-check-ins";
 
-function redirectToStaffLogin() {
-  const loginUrl = new URL("/login/staff", window.location.origin);
+function redirectToAdminLogin() {
+  const loginUrl = new URL("/admin/student-check-ins/login", window.location.origin);
   loginUrl.searchParams.set("returnTo", STUDENT_CHECK_INS_ADMIN_PATH);
   window.location.replace(loginUrl.toString());
 }
 
 function handleAdminAuthFailure(response: Response) {
   if (response.status !== 401) return false;
-  redirectToStaffLogin();
+  redirectToAdminLogin();
   return true;
 }
 
@@ -102,6 +110,13 @@ function formatBirthday(value: string | null) {
 function formatMembershipPeriod(startsOn: string | null, expiresOn: string | null) {
   if (!startsOn || !expiresOn) return "未設定";
   return `${formatBirthday(startsOn)} 至 ${formatBirthday(expiresOn)}`;
+}
+
+function formatAutonomousAccess(student: Pick<StudentProfile, "autonomous_access_status" | "autonomous_checkin_enabled"> | null) {
+  if (!student) return "無法確認";
+  if (student.autonomous_access_status === "blocked") return "禁止入場（內部）";
+  if (student.autonomous_access_status === "non_member") return "非本館正式學員";
+  return student.autonomous_checkin_enabled ? "正式學員・可自主訓練" : "正式學員・未開放自主訓練";
 }
 
 async function compressPhoto(file: File) {
@@ -163,7 +178,10 @@ export default function StudentCheckInsAdminPage() {
     if (!quiet) setError("");
     try {
       const response = await fetch(`/api/admin/student-check-ins?date=${encodeURIComponent(date)}`, { cache: "no-store" });
-      if (handleAdminAuthFailure(response)) return;
+      if (handleAdminAuthFailure(response)) {
+        setIsDeciding(false);
+        return;
+      }
       const payload = (await response.json().catch(() => null)) as StudentCheckInsResponse | null;
       if (!response.ok || !payload?.ok) {
         setError(response.status === 403 ? "此帳號沒有報到管理權限。" : payload?.error || "無法載入報到資料。");
@@ -175,6 +193,7 @@ export default function StudentCheckInsAdminPage() {
       }
       setCheckInUrl(payload.checkInUrl || "");
       setPending(payload.pending || []);
+      window.dispatchEvent(new CustomEvent(STUDENT_CHECKIN_ADMIN_PENDING_EVENT, { detail: payload }));
       setToday(payload.today || []);
       const nextStudents = payload.students || [];
       setStudents(nextStudents);
@@ -301,7 +320,10 @@ export default function StudentCheckInsAdminPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ decision }),
     });
-    if (handleAdminAuthFailure(response)) return;
+    if (handleAdminAuthFailure(response)) {
+      setIsDeciding(false);
+      return;
+    }
     const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
     if (!response.ok || !payload?.ok) {
       setError(payload?.error || "無法更新報到狀態。");
@@ -332,12 +354,17 @@ export default function StudentCheckInsAdminPage() {
           </div>
         </header>
 
+        <nav className="studentCheckInsModeTabs" aria-label="報到類型">
+          <Link className="is-active" href="/admin/student-check-ins">自主運動</Link>
+          <Link href="/admin/student-check-ins/drop-in">50 元入場</Link>
+        </nav>
+
         <section className="studentCheckInsAdminGrid">
           <article className="studentCheckInsQrCard">
             <div>
               <p className="studentCheckInEyebrow">SCAN</p>
-              <h2>現場報到 QR Code</h2>
-              <p>學員掃描後，使用手機號碼與密碼登入，再由現場人員核對放行。</p>
+              <h2>學生自主訓練專用 QR Code</h2>
+              <p>只有學生掃描此入口；登入後只會送出自主訓練申請，再由現場人員核對放行。</p>
             </div>
             {qrUrl ? <img src={qrUrl} alt="BigE 自主運動報到 QR Code" /> : <div className="studentCheckInsQrEmpty">準備 QR Code</div>}
             <p className="studentCheckInsUrl">{checkInUrl || "-"}</p>
@@ -424,6 +451,7 @@ export default function StudentCheckInsAdminPage() {
                 <div><dt>電話</dt><dd>{activeRequest.profile.phone}</dd></div>
                 <div><dt>Email</dt><dd>{activeRequest.profile.email || "-"}</dd></div>
                 <div><dt>生日</dt><dd>{formatBirthday(activeRequest.profile.birth_date)}</dd></div>
+                <div><dt>入場資格</dt><dd>{formatAutonomousAccess(activeRequest.profile)}</dd></div>
                 <div className="studentCheckInsApprovalMobileHidden"><dt>登入方式</dt><dd>手機與密碼</dd></div>
                 <div><dt>送出時間</dt><dd>{formatTaipeiDateTime(activeRequest.requested_at)}</dd></div>
                 <div className="studentCheckInsApprovalMobileHidden"><dt>開始日期</dt><dd>{formatBirthday(activeRequest.profile.membership_starts_on)}</dd></div>
@@ -454,12 +482,19 @@ export default function StudentCheckInsAdminPage() {
                 <div><dt>電話</dt><dd>{selectedCheckIn.phone}</dd></div>
                 <div><dt>Email</dt><dd>{selectedStudent?.email || "-"}</dd></div>
                 <div><dt>生日</dt><dd>{formatBirthday(selectedCheckIn.birth_date)}</dd></div>
+                <div><dt>入場資格</dt><dd>{formatAutonomousAccess(selectedStudent)}</dd></div>
                 <div><dt>開始日期</dt><dd>{formatBirthday(selectedStudent?.membership_starts_on || null)}</dd></div>
                 <div><dt>結束日期</dt><dd>{formatBirthday(selectedStudent?.membership_expires_on || null)}</dd></div>
                 <div><dt>報到時間</dt><dd>{formatTaipeiDateTime(selectedCheckIn.checked_in_at)}</dd></div>
                 <div><dt>今日次數</dt><dd>第 {selectedCheckIn.daily_sequence} 次</dd></div>
                 <div><dt>本月次數</dt><dd>第 {selectedCheckIn.month_sequence} 次</dd></div>
               </dl>
+              <StudentCheckInHistory
+                key={selectedCheckIn.student_profile_id}
+                mode="autonomous"
+                studentId={selectedCheckIn.student_profile_id}
+                returnTo={STUDENT_CHECK_INS_ADMIN_PATH}
+              />
             </div>
           </section>
         </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../lib/auth-context";
+import { bigeFacilityClosedMessage, isBigeFacilityClosed } from "../../../../lib/bige-business-day";
 import { issueEntryToken } from "../../../../lib/entry-token";
 import { ENTRY_SCHEMA } from "../../../../lib/entry-schema";
 import { httpLogBase, logEvent } from "../../../../lib/observability";
@@ -81,6 +82,14 @@ export async function POST(request: Request) {
   if (requestedStoreId && typedMember.store_id && requestedStoreId !== typedMember.store_id) {
     logEvent("info", { type: "http", action: "entry_issue", ...base, userId, status: 403, durationMs: Date.now() - t0 });
     return NextResponse.json({ error: "Forbidden store_id" }, { status: 403 });
+  }
+
+  const facility = await isBigeFacilityClosed({ tenantId: typedMember.tenant_id });
+  if (facility.closed) {
+    return NextResponse.json(
+      { ok: false, code: "facility_closed", error: bigeFacilityClosedMessage(facility.setting) },
+      { status: 409 },
+    );
   }
 
   let token;

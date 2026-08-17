@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type StudentMembershipPeriodAuditOutcome =
   | "saved"
+  | "updated"
   | "invalid"
   | "already_locked"
   | "not_found"
@@ -24,7 +25,7 @@ export async function writeStudentMembershipPeriodAuditNonBlocking(params: {
   previous?: MembershipPeriodSnapshot | null;
   error?: string | null;
 }) {
-  const action = params.outcome === "saved"
+  const action = params.outcome === "saved" || params.outcome === "updated"
     ? "student_membership_period_saved"
     : params.outcome === "database_error"
       ? "student_membership_period_save_failed"

@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../../../lib/auth-context";
+import {
+  requireStudentCheckinAdmin,
+  studentCheckinAdminAuthFailure,
+} from "../../../../../../lib/student-checkin-admin-auth";
 import { createSupabaseAdminClient } from "../../../../../../lib/supabase/admin";
 import { STUDENT_PHOTO_BUCKET } from "../../../../../../lib/student-checkin";
 
@@ -10,15 +13,9 @@ const acceptedPhotoTypes = new Map([
   ["image/webp", "webp"],
 ]);
 
-function authFailureResponse(status: number) {
-  if (status === 401) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (status === 403) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  return NextResponse.json({ ok: false, error: "Unable to verify access" }, { status: status || 500 });
-}
-
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireProfile(["platform_admin", "manager", "frontdesk"], request);
-  if (!auth.ok) return authFailureResponse(auth.response.status);
+  const auth = await requireStudentCheckinAdmin(request);
+  if (!auth.ok) return studentCheckinAdminAuthFailure(auth.response.status);
 
   const form = await request.formData().catch(() => null);
   const photo = form?.get("photo");

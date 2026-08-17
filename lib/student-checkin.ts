@@ -3,6 +3,7 @@ import { promisify } from "util";
 import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "./supabase/admin";
+import { studentCheckInPath, type StudentCheckInEntryMode } from "./student-checkin-entry";
 import { isValidTaiwanMobile, normalizeStudentPhone } from "./student-phone";
 
 const STUDENT_LINE_SESSION_COOKIE = "bige_student_line_session";
@@ -13,7 +14,7 @@ export const STUDENT_PHOTO_BUCKET = "student-checkin-photos";
 const STUDENT_SESSION_MAX_AGE_SECONDS = 30 * 60;
 const scryptAsync = promisify(crypto.scrypt);
 
-export type StudentAuthMethod = "line" | "phone";
+export type StudentAuthMethod = "line" | "phone" | "passkey";
 
 type StudentAuthSession = {
   profileId: string;
@@ -32,9 +33,13 @@ export type StudentProfileRow = {
   birth_date: string | null;
   membership_starts_on: string | null;
   membership_expires_on: string | null;
+  autonomous_checkin_enabled: boolean;
   password_hash: string | null;
   photo_path: string | null;
   is_active: boolean;
+  must_complete_security_setup: boolean;
+  security_setup_requested_at: string | null;
+  email_verified_at: string | null;
   bound_at: string;
   last_checkin_at: string | null;
 };
@@ -97,7 +102,7 @@ export function createStudentAuthSessionCookie(profileId: string, authMethod: St
 export async function readStudentAuthSession() {
   const cookieStore = await cookies();
   const session = verifySignedCookie<StudentAuthSession>(cookieStore.get(STUDENT_AUTH_SESSION_COOKIE)?.value);
-  if (!session?.profileId || session.authMethod !== "phone") return null;
+  if (!session?.profileId || !["phone", "passkey"].includes(session.authMethod)) return null;
   return session;
 }
 
@@ -123,8 +128,8 @@ export function appOrigin(request: Request) {
   ).replace(/\/$/, "");
 }
 
-export function checkInUrl(request: Request) {
-  return `${appOrigin(request)}/check-in`;
+export function checkInUrl(request: Request, mode: StudentCheckInEntryMode = "autonomous") {
+  return `${appOrigin(request)}${studentCheckInPath(mode)}`;
 }
 
 export const normalizePhone = normalizeStudentPhone;
@@ -154,7 +159,7 @@ export function isCompleteStudentProfile(profile: StudentProfileRow | null): pro
 }
 
 const profileSelect =
-  "id, auth_user_id, line_user_id, line_display_name, full_name, phone, email, birth_date, membership_starts_on, membership_expires_on, password_hash, photo_path, is_active, bound_at, last_checkin_at";
+  "id, auth_user_id, line_user_id, line_display_name, full_name, phone, email, birth_date, membership_starts_on, membership_expires_on, autonomous_checkin_enabled, password_hash, photo_path, is_active, must_complete_security_setup, security_setup_requested_at, email_verified_at, bound_at, last_checkin_at";
 
 export function studentMembershipPeriodStatus(
   profile: Pick<StudentProfileRow, "membership_starts_on" | "membership_expires_on">,
@@ -234,6 +239,9 @@ export async function createCheckinRequest(input: {
     .maybeSingle();
   if (existing.error) throw new Error(existing.error.message);
   if (existing.data) return existing.data as StudentCheckinRequestRow;
+
+  const recentApproved = await loadRecentCheckinRequest(input.profileId);
+  if (recentApproved?.status === "approved") return recentApproved;
 
   const inserted = await admin
     .from("student_checkin_requests")

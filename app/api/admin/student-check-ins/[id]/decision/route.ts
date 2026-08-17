@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireProfile } from "../../../../../../lib/auth-context";
+import {
+  requireStudentCheckinAdmin,
+  studentCheckinAdminAuthFailure,
+} from "../../../../../../lib/student-checkin-admin-auth";
 import { createSupabaseAdminClient } from "../../../../../../lib/supabase/admin";
 import { studentMembershipPeriodStatus } from "../../../../../../lib/student-checkin";
+import {
+  evaluateStudentEntryAccess,
+  studentEntryAccessDatabaseCode,
+} from "../../../../../../lib/student-entry-access";
 
 const decisionSchema = z.object({ decision: z.enum(["approved", "rejected"]) });
 
-function authFailureResponse(status: number) {
-  if (status === 401) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (status === 403) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  return NextResponse.json({ ok: false, error: "Unable to verify access" }, { status: status || 500 });
-}
-
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireProfile(["platform_admin", "manager", "frontdesk"], request);
-  if (!auth.ok) return authFailureResponse(auth.response.status);
+  const auth = await requireStudentCheckinAdmin(request);
+  if (!auth.ok) return studentCheckinAdminAuthFailure(auth.response.status);
 
   const parsed = decisionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ ok: false, error: "報到處理方式不正確。" }, { status: 400 });
@@ -33,10 +34,31 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
     const profile = await admin
       .from("student_line_profiles")
-      .select("photo_path, membership_starts_on, membership_expires_on")
+      .select("photo_path, membership_starts_on, membership_expires_on, autonomous_checkin_enabled")
       .eq("id", requestRow.data.student_profile_id)
       .maybeSingle();
-    if (profile.error || !profile.data?.photo_path) {
+    if (profile.error || !profile.data) {
+      return NextResponse.json({ ok: false, error: "找不到學員資料。" }, { status: 409 });
+    }
+    const access = await evaluateStudentEntryAccess({
+      studentProfileId: requestRow.data.student_profile_id,
+      mode: "autonomous",
+      autonomousEnabled: profile.data.autonomous_checkin_enabled,
+    });
+    if (!access.allowed) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: access.code === "account_unavailable"
+            ? "此帳號已由內部設定為禁止入場。"
+            : access.code === "not_official_member"
+              ? "此帳號不是本館正式學員，無法核准自主訓練。"
+              : "此帳號沒有學生自主訓練資格。",
+        },
+        { status: 409 },
+      );
+    }
+    if (!profile.data.photo_path) {
       return NextResponse.json({ ok: false, error: "請先建立並確認本人照片，才能放行。" }, { status: 409 });
     }
     const periodStatus = studentMembershipPeriodStatus(profile.data);
@@ -53,8 +75,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const result = await admin.rpc("decide_student_checkin_request", {
     p_request_id: id,
     p_decision: parsed.data.decision,
-    p_reviewed_by: auth.context.userId,
+    p_reviewed_by: auth.context.role === "student_checkin_admin" ? null : auth.context.userId,
   });
-  if (result.error) return NextResponse.json({ ok: false, error: result.error.message }, { status: 409 });
+  if (result.error) {
+    const accessCode = studentEntryAccessDatabaseCode(result.error.message);
+    const error = accessCode === "account_unavailable"
+      ? "此帳號已由內部設定為禁止入場。"
+      : accessCode === "not_official_member"
+        ? "此帳號不是本館正式學員，無法核准自主訓練。"
+        : "無法更新自主訓練報到狀態。";
+    return NextResponse.json({ ok: false, error }, { status: 409 });
+  }
   return NextResponse.json({ ok: true, result: result.data?.[0] || null });
 }

@@ -28,13 +28,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "重設連結已失效，請重新寄送。" }, { status: 401, headers: { "Cache-Control": "no-store" } });
   }
 
-  const profile = await admin
+  const profileByAuth = await admin
     .from("student_line_profiles")
-    .select("id, password_hash")
+    .select("id, auth_user_id, password_hash")
     .eq("auth_user_id", verified.data.user.id)
     .eq("is_active", true)
     .maybeSingle();
-  if (profile.error || !profile.data) {
+  if (profileByAuth.error) {
+    return NextResponse.json({ ok: false, error: "目前無法確認學員資料，請稍後再試。" }, { status: 500, headers: { "Cache-Control": "no-store" } });
+  }
+
+  let profile = profileByAuth.data;
+  if (!profile) {
+    const verifiedEmail = verified.data.user.email?.trim().toLowerCase();
+    if (verifiedEmail) {
+      const profileByEmail = await admin
+        .from("student_line_profiles")
+        .select("id, auth_user_id, password_hash")
+        .eq("email", verifiedEmail)
+        .is("auth_user_id", null)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (profileByEmail.error) {
+        return NextResponse.json({ ok: false, error: "目前無法確認學員資料，請稍後再試。" }, { status: 500, headers: { "Cache-Control": "no-store" } });
+      }
+      profile = profileByEmail.data;
+    }
+  }
+
+  if (!profile) {
     return NextResponse.json({ ok: false, error: "找不到可重設的學員資料，請洽現場人員。" }, { status: 403, headers: { "Cache-Control": "no-store" } });
   }
 
@@ -42,15 +64,17 @@ export async function POST(request: Request) {
   const updatedProfile = await admin
     .from("student_line_profiles")
     .update({ password_hash: passwordHash, updated_at: new Date().toISOString() })
-    .eq("id", profile.data.id);
+    .eq("id", profile.id);
   if (updatedProfile.error) {
     return NextResponse.json({ ok: false, error: "密碼更新失敗，請稍後再試。" }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 
-  const updatedAuth = await admin.auth.admin.updateUserById(verified.data.user.id, { password: parsed.data.password });
-  if (updatedAuth.error) {
-    await admin.from("student_line_profiles").update({ password_hash: profile.data.password_hash }).eq("id", profile.data.id);
-    return NextResponse.json({ ok: false, error: "密碼更新失敗，請稍後再試。" }, { status: 500, headers: { "Cache-Control": "no-store" } });
+  if (profile.auth_user_id === verified.data.user.id) {
+    const updatedAuth = await admin.auth.admin.updateUserById(verified.data.user.id, { password: parsed.data.password });
+    if (updatedAuth.error) {
+      await admin.from("student_line_profiles").update({ password_hash: profile.password_hash }).eq("id", profile.id);
+      return NextResponse.json({ ok: false, error: "密碼更新失敗，請稍後再試。" }, { status: 500, headers: { "Cache-Control": "no-store" } });
+    }
   }
 
   return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });

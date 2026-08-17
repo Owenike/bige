@@ -1,17 +1,28 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { bigeFacilityClosedMessage, isBigeFacilityClosed } from "../../../../lib/bige-business-day";
 import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 import {
-  createCheckinRequest,
   hashStudentPassword,
   isValidTaiwanMobile,
   loadStudentProfileByEmail,
   loadStudentProfileByPhone,
   normalizePhone,
-  setStudentAuthSession,
 } from "../../../../lib/student-checkin";
+import {
+  cancelStudentEmailVerification,
+  createStudentEmailVerificationToken,
+  readPendingStudentRegistrationId,
+  sendStudentEmailVerification,
+  setPendingStudentRegistrationCookie,
+  studentEmailVerificationExpiry,
+} from "../../../../lib/student-checkin-email-verification";
+import {
+  findFormalMemberForIdentity,
+  STUDENT_NOT_OFFICIAL_MEMBER,
+} from "../../../../lib/student-entry-access";
 
 const registrationSchema = z.object({
   fullName: z.string().trim().min(2).max(40),
@@ -19,9 +30,18 @@ const registrationSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   password: z.string().min(6).max(100),
+  entryMode: z.enum(["autonomous", "drop_in"]).default("autonomous"),
 });
 
 export async function POST(request: Request) {
+  const facility = await isBigeFacilityClosed({});
+  if (facility.closed) {
+    return NextResponse.json(
+      { ok: false, code: "facility_closed", error: bigeFacilityClosedMessage(facility.setting) },
+      { status: 409 },
+    );
+  }
+
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const limit = rateLimitFixedWindow({ key: `student-checkin-register:${ip}`, limit: 8, windowMs: 60 * 60 * 1000 });
   if (!limit.ok) {
@@ -40,6 +60,7 @@ export async function POST(request: Request) {
     email: form.get("email"),
     birthDate: form.get("birthDate"),
     password: form.get("password"),
+    entryMode: form.get("entryMode") || undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "請完整填寫姓名、電話、Email、生日與至少 6 碼密碼。" }, { status: 400 });
@@ -72,56 +93,139 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "這個 Email 已建立學員資料，請使用原本的手機與密碼登入。" }, { status: 409 });
   }
 
-  const profileId = crypto.randomUUID();
+  if (parsed.data.entryMode === "autonomous") {
+    const formalMember = await findFormalMemberForIdentity({
+      fullName: parsed.data.fullName,
+      phone,
+      email,
+      birthDate: parsed.data.birthDate,
+    });
+    if (!formalMember) {
+      return NextResponse.json({ ok: false, ...STUDENT_NOT_OFFICIAL_MEMBER }, { status: 403 });
+    }
+  }
+
+  const currentRegistrationId = await readPendingStudentRegistrationId();
+  if (currentRegistrationId) {
+    await cancelStudentEmailVerification(currentRegistrationId).catch(() => null);
+  }
+
   const admin = createSupabaseAdminClient();
+  const now = new Date().toISOString();
+  const [pendingPhone, pendingEmail] = await Promise.all([
+    admin
+      .from("student_checkin_email_verifications")
+      .select("id, expires_at")
+      .eq("phone", phone)
+      .in("status", ["pending", "verifying"])
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("student_checkin_email_verifications")
+      .select("id, expires_at")
+      .eq("email", email)
+      .in("status", ["pending", "verifying"])
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (pendingPhone.error || pendingEmail.error) {
+    return NextResponse.json({ ok: false, error: "檢查待驗證資料失敗，請稍後再試。" }, { status: 500 });
+  }
+
+  const pendingRows = [pendingPhone.data, pendingEmail.data].filter(
+    (row, index, rows): row is { id: string; expires_at: string } =>
+      Boolean(row) && rows.findIndex((candidate) => candidate?.id === row?.id) === index,
+  );
+  for (const pending of pendingRows) {
+    if (pending.expires_at <= now) {
+      await cancelStudentEmailVerification(pending.id).catch(() => null);
+      continue;
+    }
+    return NextResponse.json(
+      { ok: false, error: "這支手機或 Email 已有一封驗證信等待確認，請回到原申請畫面重新寄送，或於 30 分鐘後再試。" },
+      { status: 409 },
+    );
+  }
+
+  const registrationId = crypto.randomUUID();
+  const profileId = crypto.randomUUID();
   const passwordHash = await hashStudentPassword(parsed.data.password);
-  let authUserId: string | null = null;
-  let createdAuthUserId: string | null = null;
+  const { token, tokenHash } = createStudentEmailVerificationToken();
+  const expiresAt = studentEmailVerificationExpiry();
 
   const createdAuth = await admin.auth.admin.createUser({
     email,
     password: parsed.data.password,
-    email_confirm: true,
-    app_metadata: { account_type: "student_checkin" },
+    email_confirm: false,
+    app_metadata: {
+      account_type: "student_checkin",
+      registration_id: registrationId,
+      entry_mode: parsed.data.entryMode,
+    },
   });
-  if (createdAuth.error || !createdAuth.data.user) {
-    const duplicate = createdAuth.error?.message.toLowerCase().includes("already") || createdAuth.error?.status === 422;
+  const duplicateAuthEmail =
+    createdAuth.error?.message.toLowerCase().includes("already") || createdAuth.error?.status === 422;
+  if (createdAuth.error && !duplicateAuthEmail) {
     return NextResponse.json(
-      { ok: false, error: duplicate ? "這個 Email 已被使用，請改用其他 Email 或洽現場人員。" : "Email 帳號建立失敗，請洽現場工作人員。" },
-      { status: duplicate ? 409 : 500 },
+      { ok: false, error: "Email 帳號建立失敗，請洽現場工作人員。" },
+      { status: 500 },
     );
   }
-  authUserId = createdAuth.data.user.id;
-  createdAuthUserId = authUserId;
 
-  const profilePayload = {
-    id: profileId,
-    auth_user_id: authUserId,
-    line_user_id: null,
-    line_display_name: null,
+  // A staff/admin account may already own this email. Student check-in uses its
+  // own phone/password authentication, so never attach that existing Auth user
+  // to the student profile or overwrite the employee account's credentials.
+  const createdAuthUserId = createdAuth.data.user?.id || null;
+  if (!duplicateAuthEmail && !createdAuthUserId) {
+    return NextResponse.json(
+      { ok: false, error: "Email 帳號建立失敗，請洽現場工作人員。" },
+      { status: 500 },
+    );
+  }
+
+  const saved = await admin.from("student_checkin_email_verifications").insert({
+    id: registrationId,
+    profile_id: profileId,
+    auth_user_id: createdAuthUserId,
     full_name: parsed.data.fullName,
     phone,
     email,
     birth_date: parsed.data.birthDate,
     password_hash: passwordHash,
-    is_active: true,
-    updated_at: new Date().toISOString(),
-  };
-
-  const saved = await admin.from("student_line_profiles").insert(profilePayload).select("id, full_name").single();
+    entry_mode: parsed.data.entryMode,
+    verification_token_hash: tokenHash,
+    expires_at: expiresAt,
+    last_email_sent_at: now,
+    updated_at: now,
+  });
 
   if (saved.error) {
     if (createdAuthUserId) await admin.auth.admin.deleteUser(createdAuthUserId).catch(() => null);
-    const message = saved.error.code === "23505" ? "這支手機或 Email 已建立資料。" : "學員資料建立失敗，請洽現場工作人員。";
+    const message = saved.error.code === "23505" ? "這支手機或 Email 已有待驗證資料。" : "待驗證資料建立失敗，請稍後再試。";
     return NextResponse.json({ ok: false, error: message }, { status: saved.error.code === "23505" ? 409 : 500 });
   }
 
-  const checkinRequest = await createCheckinRequest({ profileId, authMethod: "phone", request });
+  const emailResult = await sendStudentEmailVerification({
+    request,
+    email,
+    fullName: parsed.data.fullName,
+    token,
+    entryMode: parsed.data.entryMode,
+  });
+  if (!emailResult.ok) {
+    await cancelStudentEmailVerification(registrationId).catch(() => null);
+    return NextResponse.json(
+      { ok: false, error: "驗證信寄送失敗，請確認 Email 後再試，或洽現場工作人員。" },
+      { status: 502 },
+    );
+  }
+
   const response = NextResponse.json({
     ok: true,
-    profile: { id: profileId, fullName: parsed.data.fullName },
-    request: checkinRequest,
+    verificationRequired: true,
+    email,
+    expiresAt,
   });
-  setStudentAuthSession(response, profileId, "phone");
+  setPendingStudentRegistrationCookie(response, registrationId);
   return response;
 }

@@ -11,6 +11,7 @@ import { ENTRY_SCHEMA } from "../../../../lib/entry-schema";
 import { openGate } from "../../../../lib/integrations/gate";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 import { apiSuccess, requireOpenShift, requireProfile } from "../../../../lib/auth-context";
+import { bigeFacilityClosedMessage, isBigeFacilityClosed } from "../../../../lib/bige-business-day";
 import { checkMemberEligibility } from "../../../../lib/entitlement-eligibility";
 import { httpLogBase, logEvent } from "../../../../lib/observability";
 import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
@@ -261,6 +262,14 @@ export async function POST(request: Request) {
   if (auth.context.branchId && auth.context.branchId !== payload.storeId) {
     logEvent("info", { type: "http", action: "entry_verify", ...base, userId: auth.context.userId, status: 200, durationMs: Date.now() - t0, decision: "deny", reason: "token_invalid" });
     return apiSuccess(denyResponse("token_invalid"));
+  }
+
+  const facility = await isBigeFacilityClosed({ tenantId: payload.tenantId });
+  if (facility.closed) {
+    return NextResponse.json(
+      { ok: false, code: "facility_closed", error: bigeFacilityClosedMessage(facility.setting) },
+      { status: 409 },
+    );
   }
 
   const supabase = createSupabaseAdminClient();

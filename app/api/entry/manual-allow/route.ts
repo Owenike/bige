@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireOpenShift, requireProfile } from "../../../../lib/auth-context";
+import { bigeFacilityClosedMessage, isBigeFacilityClosed } from "../../../../lib/bige-business-day";
 import { insertShiftItem } from "../../../../lib/shift-reconciliation";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,14 @@ export async function POST(request: Request) {
   if (!memberId || !isUuid(memberId)) return jsonError(400, "invalid_member_id");
   if (!reason) return jsonError(400, "reason_required");
   if (!auth.context.tenantId) return jsonError(403, "Forbidden");
+
+  const facility = await isBigeFacilityClosed({ tenantId: auth.context.tenantId });
+  if (facility.closed) {
+    return NextResponse.json(
+      { ok: false, code: "facility_closed", error: bigeFacilityClosedMessage(facility.setting) },
+      { status: 409 },
+    );
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
