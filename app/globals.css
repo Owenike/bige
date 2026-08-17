@@ -48,6 +48,338 @@
   --home-image-card-s8-c-mobile: url("/home-images/card-map-guide-mobile.png");
 }
 
+/* Shared member check-in choices and NT$50 drop-in administration */
+.studentCheckInChoiceView{
+  display: grid;
+  gap: 24px;
+}
+.studentCheckInChoiceHeading{
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+.studentCheckInChoiceHeading .studentCheckInTextButton{
+  flex: 0 0 auto;
+  margin-top: 4px;
+}
+.studentCheckInChoiceGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.studentCheckInChoiceCard{
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(222, 190, 112, .14), transparent 46%),
+    rgba(255, 255, 255, .055);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 18px 42px rgba(0, 0, 0, .2);
+  color: #f8f4e9;
+  padding: 24px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+.studentCheckInChoiceCard.is-drop-in{
+  background:
+    radial-gradient(circle at 100% 0%, rgba(92, 196, 136, .16), transparent 46%),
+    rgba(255, 255, 255, .055);
+}
+.studentCheckInChoiceCard:hover:not(:disabled){
+  transform: translateY(-3px);
+  border-color: rgba(232, 207, 148, .52);
+  background-color: rgba(255, 255, 255, .085);
+}
+.studentCheckInChoiceCard:focus-visible{
+  outline: 2px solid #efd68f;
+  outline-offset: 3px;
+}
+.studentCheckInChoiceCard:disabled{
+  opacity: .48;
+  cursor: not-allowed;
+  filter: grayscale(.4);
+}
+.studentCheckInChoiceIndex{
+  color: #cdb77e;
+  font-size: 12px;
+  letter-spacing: .14em;
+}
+.studentCheckInChoiceCard strong{
+  color: #fff9ea;
+  font-size: clamp(24px, 4vw, 31px);
+  font-weight: 650;
+  line-height: 1.12;
+}
+.studentCheckInChoiceCard > span:not(.studentCheckInChoiceIndex){
+  color: rgba(245, 242, 234, .68);
+  font-size: 15px;
+  line-height: 1.65;
+}
+.studentCheckInChoiceCard em{
+  width: 100%;
+  margin-top: auto;
+  border-top: 1px solid rgba(255, 255, 255, .1);
+  color: #f1d88f;
+  font-size: 15px;
+  font-style: normal;
+  font-weight: 650;
+  padding-top: 14px;
+}
+.studentCheckInChoiceCard.is-drop-in em{
+  color: #a9edc4;
+}
+.studentCheckInChoiceNotice{
+  margin: 0;
+  border: 1px solid rgba(235, 205, 132, .2);
+  border-radius: 8px;
+  background: rgba(213, 174, 79, .08);
+  color: rgba(255, 235, 188, .86);
+  padding: 12px 14px;
+  font-size: 14px;
+}
+.studentCheckInsModeTabs{
+  display: inline-flex;
+  width: fit-content;
+  gap: 6px;
+  border: 1px solid var(--checkin-glass-border-soft);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  padding: 5px;
+}
+.studentCheckInsModeTabs a{
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: rgba(245, 242, 234, .66);
+  padding: 0 20px;
+  text-decoration: none;
+}
+.studentCheckInsModeTabs a.is-active{
+  border-color: rgba(232, 207, 148, .36);
+  background: rgba(216, 190, 126, .13);
+  color: #fff0c8;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+.studentDropInRecentList article{
+  grid-template-columns: 76px minmax(220px, 1fr) minmax(120px, .32fr) 104px;
+}
+.studentDropInRemaining{
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  border-left: 1px solid rgba(255, 255, 255, .09);
+  border-right: 1px solid rgba(255, 255, 255, .09);
+  color: rgba(245, 242, 234, .62);
+  padding: 8px 18px;
+}
+.studentDropInRemaining span{
+  align-self: center;
+  margin-right: 4px;
+}
+.studentDropInRemaining strong{
+  color: #a9edc4;
+  font-size: 32px;
+}
+.studentDropInRemaining em{
+  color: rgba(245, 242, 234, .48);
+  font-size: 14px;
+  font-style: normal;
+}
+.studentDropInReviewThumb{
+  position: relative;
+  width: 92px;
+  height: 76px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .15);
+  border-radius: 8px;
+  background: #080a0d;
+  padding: 0;
+  cursor: pointer;
+}
+.studentDropInReviewThumb img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.studentDropInReviewThumb span{
+  position: absolute;
+  inset: auto 4px 4px;
+  border-radius: 4px;
+  background: rgba(7, 9, 12, .78);
+  color: #ffe19a;
+  font-size: 10px;
+  padding: 3px 4px;
+}
+.studentDropInApprovalDialog{
+  width: min(1180px, 100%);
+  grid-template-columns: minmax(480px, 1.25fr) minmax(330px, .75fr);
+}
+.studentDropInEvidenceGrid{
+  min-height: 590px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: rgba(255, 255, 255, .09);
+}
+.studentDropInEvidenceGrid.is-single-evidence{
+  grid-template-columns: minmax(0, 1fr);
+}
+.studentDropInEvidenceCard{
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: rgba(5, 7, 9, .72);
+}
+.studentDropInEvidenceCard > span{
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+  color: #dbc98f;
+  font-size: 13px;
+  font-weight: 650;
+  padding: 14px 16px;
+}
+.studentDropInEvidenceCard > img,
+.studentDropInEvidenceCard > .studentCheckInsPhotoPreview,
+.studentDropInEvidenceCard > .studentCheckInsPhotoCapture{
+  width: 100%;
+  height: 100%;
+  min-height: 540px;
+}
+.studentDropInEvidenceCard > img,
+.studentDropInEvidenceCard .studentCheckInsPhotoPreview > img{
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #050608;
+}
+.studentDropInPlanNotice{
+  display: grid;
+  gap: 7px;
+  margin: 16px 0 2px;
+  border: 2px solid rgba(255, 190, 83, .82);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(174, 70, 24, .52), rgba(117, 47, 22, .32));
+  box-shadow: 0 0 0 4px rgba(255, 171, 56, .1), 0 16px 36px rgba(0, 0, 0, .24);
+  color: #fff4d6;
+  padding: 15px 17px;
+}
+.studentDropInPlanNotice strong{
+  color: #fff;
+  font-size: 21px;
+  letter-spacing: .02em;
+}
+.studentDropInPlanNotice span{
+  color: #ffe5b1;
+  font-size: 14px;
+  font-weight: 720;
+  line-height: 1.55;
+}
+.studentDropInProfileDialog{
+  width: min(1120px, 100%);
+  grid-template-columns: minmax(480px, 1.2fr) minmax(320px, .8fr);
+}
+.studentDropInProfilePhotos{
+  min-height: 540px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: rgba(255, 255, 255, .08);
+}
+.studentDropInProfilePhotos figure{
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  margin: 0;
+  background: #050608;
+}
+.studentDropInProfilePhotos img{
+  width: 100%;
+  height: 100%;
+  min-height: 490px;
+  object-fit: contain;
+}
+.studentDropInProfilePhotos figcaption{
+  border-top: 1px solid rgba(255, 255, 255, .1);
+  color: #dbc98f;
+  font-size: 13px;
+  padding: 12px 14px;
+}
+@media (max-width: 860px){
+  .studentDropInRecentList article{
+    grid-template-columns: 68px minmax(0, 1fr) 92px;
+  }
+  .studentDropInRemaining{
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+    padding: 12px 0 0;
+  }
+  .studentDropInReviewThumb{
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .studentDropInApprovalDialog,
+  .studentDropInProfileDialog{
+    grid-template-columns: 1fr;
+  }
+  .studentDropInEvidenceGrid,
+  .studentDropInProfilePhotos{
+    min-height: 0;
+  }
+}
+@media (max-width: 640px){
+  .studentCheckInChoiceHeading{
+    display: grid;
+  }
+  .studentCheckInChoiceGrid{
+    grid-template-columns: 1fr;
+  }
+  .studentCheckInChoiceCard{
+    min-height: 210px;
+  }
+  .studentCheckInsModeTabs{
+    width: 100%;
+  }
+  .studentCheckInsModeTabs a{
+    flex: 1;
+    padding: 0 12px;
+  }
+  .studentDropInRecentList article{
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+  .studentDropInReviewThumb{
+    grid-column: 1 / -1;
+    grid-row: auto;
+    width: 100%;
+    height: 120px;
+  }
+  .studentDropInRemaining{
+    grid-column: 1 / -1;
+  }
+  .studentDropInEvidenceGrid,
+  .studentDropInProfilePhotos{
+    grid-template-columns: 1fr;
+  }
+  .studentDropInEvidenceCard > img,
+  .studentDropInEvidenceCard > .studentCheckInsPhotoPreview,
+  .studentDropInEvidenceCard > .studentCheckInsPhotoCapture,
+  .studentDropInProfilePhotos img{
+    min-height: 320px;
+    max-height: 56vh;
+  }
+}
+
 *{ box-sizing: border-box; }
 html,body{ height:100%; }
 body{
@@ -438,6 +770,23 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
 }
 .studentAdminLoginFormSection{
   min-width: 0;
+}
+.studentAdminLoginCopy{
+  margin: 0 0 18px;
+  color: #c7c4bc;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.studentAdminLoginNotice{
+  margin-bottom: 16px;
+  border: 1px solid rgba(67, 184, 124, .36);
+  border-radius: 6px;
+  background: rgba(24, 91, 58, .26);
+  color: #c9f7dc;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.6;
+  padding: 12px 14px;
 }
 .studentAdminLoginForm{
   gap: 18px !important;
@@ -3129,6 +3478,41 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   font-family: "SF Pro Display", "SF Pro Text", "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif;
   transition: filter .32s cubic-bezier(.2,.7,.2,1), transform .32s cubic-bezier(.2,.7,.2,1);
   will-change: filter, transform;
+}
+.fdApprovalShell{
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  margin: 0 auto;
+  color: #eef4ff;
+}
+.fdApprovalHeader{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.fdApprovalHeader h1{
+  margin: 4px 0 8px;
+}
+.fdApprovalActions{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fdApprovalShell .fdInventorySummary{
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.fdApprovalShell .fdInventorySummaryItem{
+  color: #1f2a3d;
+}
+.fdApprovalShell .fdGlassSubPanel > p{
+  position: relative;
+  z-index: 1;
 }
 .fdSceneBlurred{
   filter: blur(18px) saturate(1.06) brightness(.96);
@@ -9359,6 +9743,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   background: rgba(244, 248, 255, .06);
   padding: 14px;
 }
+.trialAdminStatsSecondRowStart{
+  grid-column: 1;
+}
 .trialAdminStatsGrid span{
   color: rgba(218, 230, 248, .72);
   font-size: 12px;
@@ -9491,6 +9878,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .trialAdminColLine{ width: 120px; }
 .trialAdminColNote{ width: 180px; }
 .trialAdminColAction{ width: 150px; }
+.trialAdminColService{ width: 200px; }
+.trialAdminColPreferredTime{ width: 210px; }
+.trialAdminColContact{ width: auto; }
 .trialAdminTable th,
 .trialAdminTable td{
   padding: 12px 10px;
@@ -9558,6 +9948,14 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   line-height: 1.45;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+.trialAdminPaymentManagement{
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+.trialAdminPaymentManagement .trialAdminButton{
+  width: 100%;
 }
 .trialAdminBadge{
   display: inline-flex;
@@ -9669,6 +10067,243 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .trialAdminActions{
   min-width: 0;
 }
+.trialAdminLatestContact{
+  display: grid;
+  gap: 2px;
+  border: 1px solid rgba(133, 188, 240, .2);
+  border-radius: 8px;
+  background: rgba(59, 119, 184, .1);
+  padding: 6px 8px;
+  color: rgba(238, 247, 255, .9);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.trialAdminLatestContact strong{
+  color: #dceeff;
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+.trialAdminLatestContact span{
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow-wrap: anywhere;
+}
+.trialAdminLatestContact small{
+  color: rgba(196, 213, 237, .6);
+  font-size: 10px;
+}
+.trialAdminContactLatest{
+  grid-column: 1 / -1;
+}
+.trialAdminContactLatest > dd{
+  margin: 0;
+}
+.trialAdminContactLatest .trialAdminLatestContact{
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 3px;
+}
+.trialAdminContactLatest .trialAdminLatestContact strong,
+.trialAdminContactLatest .trialAdminLatestContact small{
+  white-space: nowrap;
+}
+.trialAdminContactLatest .trialAdminLatestContact span{
+  -webkit-line-clamp: 2;
+}
+.trialAdminRequestTable{
+  min-width: 1080px;
+}
+.trialAdminColumnNumber{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 24px;
+  margin-right: 8px;
+  border: 1px solid rgba(218, 196, 142, .28);
+  border-radius: 999px;
+  color: #f1d99f;
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+.trialAdminBookingSummaryRow{
+  cursor: pointer;
+  transition: background .18s ease;
+}
+.trialAdminBookingSummaryRow:focus-visible{
+  outline: none;
+}
+.trialAdminBookingSummaryRow:focus-visible td{
+  background: rgba(224, 194, 124, .08);
+  box-shadow: inset 0 0 0 1px rgba(224, 194, 124, .32);
+}
+.trialAdminBookingSummaryRow.is-expanded td{
+  border-bottom-color: transparent;
+}
+.trialAdminRequestValue{
+  display: grid;
+  gap: 12px;
+}
+.trialAdminRequestValue strong{
+  color: #fff7e6;
+  font-size: 17px;
+  font-weight: 620;
+  line-height: 1.45;
+}
+.trialAdminExpandHint{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(218, 196, 142, .66);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.trialAdminExpandChevron{
+  display: inline-block;
+  color: #e7cc8c;
+  font-size: 15px;
+  transition: transform .18s ease;
+}
+.trialAdminBookingSummaryRow.is-expanded .trialAdminExpandChevron{
+  transform: rotate(180deg);
+}
+.trialAdminContactGrid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 18px;
+  min-width: 0;
+  margin: 0;
+}
+.trialAdminContactGrid div{
+  min-width: 0;
+}
+.trialAdminContactGrid dt{
+  margin: 0 0 3px;
+  color: rgba(218, 196, 142, .68);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.trialAdminContactGrid dd{
+  margin: 0;
+  color: rgba(255, 250, 239, .94);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.trialAdminContactNote{
+  grid-column: 1 / -1;
+}
+.trialAdminContactNote .trialAdminNoteText{
+  max-height: 66px;
+  overflow: auto;
+}
+.trialAdminOperationCell{
+  cursor: default;
+}
+.trialAdminDetailsCell,
+.trialAdminTable th:last-child + .trialAdminDetailsCell{
+  position: static !important;
+  right: auto !important;
+  padding: 0 10px 10px !important;
+  background: rgba(13, 13, 14, .98) !important;
+  box-shadow: none !important;
+}
+.trialAdminDetailsGrid{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0;
+  border: 1px solid rgba(218, 196, 142, .16);
+  border-radius: 8px;
+  background: rgba(246, 242, 232, .035);
+  padding: 10px;
+}
+.trialAdminDetailPanel{
+  min-width: 0;
+  border-left: 1px solid rgba(218, 196, 142, .14);
+  padding: 0 10px;
+}
+.trialAdminDetailPanel:first-child{
+  border-left: 0;
+  padding-left: 0;
+}
+.trialAdminDetailPanel h3{
+  margin: 0 0 8px;
+  color: #ecd8a7;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: .04em;
+}
+.trialAdminDetailPanel > dl{
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.trialAdminDetailPanel > dl > div{
+  display: grid;
+  gap: 2px;
+}
+.trialAdminDetailPanel dt{
+  color: rgba(218, 196, 142, .62);
+  font-size: 11px;
+}
+.trialAdminDetailPanel dd{
+  min-width: 0;
+  margin: 0;
+  color: rgba(255, 250, 239, .9);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.trialAdminContactHistoryPanel{
+  grid-column: span 1;
+}
+.trialAdminContactHistoryEmpty{
+  margin: 0;
+  color: rgba(196, 213, 237, .58);
+  font-size: 12px;
+}
+.trialAdminContactHistoryList{
+  display: grid;
+  gap: 7px;
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.trialAdminContactHistoryList li{
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(133, 188, 240, .16);
+  border-radius: 12px;
+  background: rgba(59, 119, 184, .08);
+  padding: 7px 8px;
+}
+.trialAdminContactHistoryMeta{
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 12px;
+  color: rgba(196, 213, 237, .66);
+  font-size: 10px;
+}
+.trialAdminContactHistoryList .trialAdminNoteText{
+  color: rgba(246, 250, 255, .92);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.trialAdminDetailStatusLine{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.trialAdminDetailsRow:hover .trialAdminDetailsCell{
+  background: rgba(13, 13, 14, .98) !important;
+}
 .trialAdminModalBackdrop{
   position: fixed;
   inset: 0;
@@ -9710,6 +10345,138 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .trialAdminModalNote{
   grid-column: 1 / -1;
+}
+.trialAdminContactModal{
+  width: min(620px, 100%);
+}
+.trialAdminFaHistoryModal{
+  width: min(1120px, 100%);
+}
+.trialAdminFaHistoryHeader p:last-child{
+  max-width: 720px;
+  margin: 8px 0 0;
+  color: rgba(246, 242, 232, .68);
+  line-height: 1.55;
+}
+.trialAdminFaHistoryToolbar{
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+}
+.trialAdminFaHistorySummary{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  color: rgba(218, 196, 142, .74);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.trialAdminFaHistoryList{
+  display: grid;
+  gap: 14px;
+  max-height: min(64vh, 680px);
+  overflow: auto;
+  padding-right: 4px;
+}
+.trialAdminFaHistoryCard{
+  display: grid;
+  gap: 16px;
+  border: 1px solid rgba(218, 196, 142, .18);
+  border-radius: 10px;
+  background: rgba(246, 242, 232, .045);
+  padding: 16px;
+}
+.trialAdminFaHistoryCard > header{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.trialAdminFaHistoryCard > header > div{
+  display: grid;
+  gap: 5px;
+}
+.trialAdminFaHistoryCard > header span,
+.trialAdminFaHistoryDetails dt,
+.trialAdminFaHistoryNotes section > span{
+  color: rgba(218, 196, 142, .7);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.trialAdminFaHistoryCard > header strong{
+  color: #fff7e6;
+  font-size: 17px;
+  font-weight: 620;
+  line-height: 1.45;
+}
+.trialAdminFaHistoryOutcome{
+  flex: 0 0 auto;
+  border: 1px solid rgba(217, 122, 100, .38);
+  border-radius: 999px;
+  background: rgba(117, 42, 32, .24);
+  color: #ffd9cf !important;
+  padding: 6px 10px;
+  font-weight: 650;
+}
+.trialAdminFaHistoryDetails{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin: 0;
+}
+.trialAdminFaHistoryDetails div{
+  min-width: 0;
+}
+.trialAdminFaHistoryDetails dt{
+  margin-bottom: 4px;
+}
+.trialAdminFaHistoryDetails dd{
+  margin: 0;
+  color: rgba(255, 250, 239, .92);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.trialAdminFaHistoryNotes{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  border-top: 1px solid rgba(218, 196, 142, .12);
+  padding-top: 14px;
+}
+.trialAdminFaHistoryNotes section{
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid rgba(218, 196, 142, .12);
+  border-radius: 8px;
+  background: rgba(7, 8, 11, .38);
+  padding: 10px;
+}
+.trialAdminContactModalCustomer{
+  margin: 7px 0 0;
+  color: rgba(218, 196, 142, .76);
+  font-size: 13px;
+}
+.trialAdminContactOriginalNote{
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(218, 196, 142, .16);
+  border-radius: 14px;
+  background: rgba(218, 196, 142, .06);
+  padding: 12px 14px;
+}
+.trialAdminContactOriginalNote > span{
+  color: rgba(218, 196, 142, .7);
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+.trialAdminContactNoteCount{
+  justify-self: end;
+  color: rgba(196, 213, 237, .58);
+  font-size: 11px;
 }
 .trialAdminMobileList{
   display: none;
@@ -9765,6 +10532,62 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .trialAdminMobilePayment .trialAdminPaymentDetails{
   min-width: 0;
 }
+.trialAdminMobileRequestSummary{
+  display: grid;
+  gap: 16px;
+  cursor: pointer;
+  outline: none;
+}
+.trialAdminMobileRequestSummary:focus-visible{
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px rgba(224, 194, 124, .16);
+}
+.trialAdminMobileRequestSummary > div{
+  display: grid;
+  gap: 5px;
+}
+.trialAdminMobileRequestSummary > div > span{
+  color: rgba(218, 196, 142, .72);
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+.trialAdminMobileRequestSummary > div > strong{
+  color: #fff7e6;
+  font-size: 17px;
+  font-weight: 620;
+}
+.trialAdminMobileRequestSummary .trialAdminContactGrid{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin-top: 6px;
+}
+.trialAdminMobileRequestSummary .trialAdminContactNote{
+  grid-column: 1 / -1;
+}
+.trialAdminMobileActions{
+  margin-top: 16px;
+  border-top: 1px solid rgba(218, 196, 142, .12);
+  padding-top: 14px;
+}
+.trialAdminMobileDetails{
+  margin-top: 14px;
+  border-top: 1px solid rgba(218, 196, 142, .12);
+  padding-top: 14px;
+}
+@media (max-width: 1180px){
+  .trialAdminDetailsGrid{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .trialAdminDetailPanel:nth-child(odd){
+    border-left: 0;
+    padding-left: 0;
+  }
+  .trialAdminContactHistoryPanel{
+    grid-column: 1 / -1;
+    border-left: 0;
+    padding-left: 0;
+  }
+}
 @media (max-width: 900px){
   .trialAdminHeader{
     align-items: stretch;
@@ -9782,14 +10605,27 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .trialAdminStatsGrid{
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .trialAdminStatsSecondRowStart{
+    grid-column: auto;
+  }
   .trialAdminSectionHeader{
     align-items: stretch;
     flex-direction: column;
+  }
+  .trialAdminFaHistoryDetails{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 720px){
   .trialAdminPage{
     padding: 24px 14px 54px;
+  }
+  .trialAdminContactLatest .trialAdminLatestContact{
+    grid-template-columns: 1fr;
+  }
+  .trialAdminContactLatest .trialAdminLatestContact strong,
+  .trialAdminContactLatest .trialAdminLatestContact small{
+    white-space: normal;
   }
   .trialAdminFilters{
     grid-template-columns: 1fr;
@@ -9810,6 +10646,18 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .trialAdminModalHeader,
   .trialAdminModalFooter{
     align-items: stretch;
+    flex-direction: column;
+  }
+  .trialAdminFaHistoryToolbar,
+  .trialAdminFaHistoryDetails{
+    grid-template-columns: 1fr;
+  }
+  .trialAdminFaHistorySummary{
+    align-items: stretch;
+    flex-direction: column;
+    white-space: normal;
+  }
+  .trialAdminFaHistoryCard > header{
     flex-direction: column;
   }
   .trialAdminTableWrap{
@@ -10135,6 +10983,122 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   border-color: #cbb680;
   box-shadow: 0 0 0 3px rgba(203, 182, 128, .14);
 }
+.studentCheckInForm input[readonly]{
+  border-color: #292d33;
+  background: #12151a;
+  color: #aaa8a2;
+  cursor: default;
+}
+.studentDropInRegistrationHeading{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.studentDropInRegistrationHeading > span{
+  flex: 0 0 auto;
+  border: 1px solid rgba(203, 182, 128, .32);
+  border-radius: 999px;
+  background: rgba(203, 182, 128, .08);
+  color: #e7d39d;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 760;
+}
+.studentDropInFullField{
+  grid-column: 1 / -1;
+}
+.studentDropInChoiceFieldset{
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #34383f;
+  border-radius: 8px;
+  padding: 15px;
+}
+.studentDropInChoiceFieldset legend{
+  color: #cbb680;
+  padding: 0 7px;
+  font-size: 13px;
+}
+.studentDropInChoiceOptions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.studentDropInChoiceOptions.is-stacked{
+  display: grid;
+}
+.studentCheckInForm .studentDropInChoiceOptions label{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #34383f;
+  border-radius: 8px;
+  background: #181c22;
+  color: #f5f1e8;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.studentDropInChoiceOptions label:has(input:checked){
+  border-color: #cbb680;
+  background: rgba(203, 182, 128, .12);
+}
+.studentCheckInForm .studentDropInChoiceOptions input,
+.studentCheckInForm .studentDropInTermsAgreement input{
+  width: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  margin: 1px 0 0;
+  padding: 0;
+  accent-color: #d4bd83;
+}
+.studentDropInTerms{
+  max-height: min(52vh, 520px);
+  overflow-y: auto;
+  border: 1px solid #34383f;
+  border-radius: 8px;
+  background: #0c0f13;
+  padding: 20px;
+  scrollbar-color: #766746 #171a1f;
+}
+.studentDropInTerms:focus{
+  border-color: #cbb680;
+  outline: 3px solid rgba(203, 182, 128, .14);
+}
+.studentDropInTerms section + section{
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid #2a2e34;
+}
+.studentDropInTerms h2{
+  margin: 0 0 10px;
+  color: #f0d997;
+  font-size: 18px;
+  line-height: 1.45;
+}
+.studentDropInTerms p{
+  margin: 8px 0 0;
+  color: #cbc8c1;
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-line;
+}
+.studentCheckInForm .studentDropInTermsAgreement{
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid rgba(203, 182, 128, .35);
+  border-radius: 8px;
+  background: rgba(203, 182, 128, .08);
+  color: #fff3d1;
+  padding: 15px;
+  cursor: pointer;
+}
+.studentCheckInPrimary:disabled{
+  cursor: not-allowed;
+  filter: none;
+  opacity: .52;
+}
 .studentCheckInsDateField{
   position: relative;
   display: block;
@@ -10184,6 +11148,35 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   color: #d9c590;
   font: inherit;
   cursor: pointer;
+}
+.studentCheckInBiometricLogin{
+  min-height: 50px;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid rgba(223, 197, 132, .42);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .13), 0 12px 30px rgba(0, 0, 0, .2);
+  color: #fff8e8;
+  padding: 0 18px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(18px) saturate(145%);
+}
+.studentCheckInBiometricLogin span{
+  color: #e6c978;
+  font-size: 24px;
+  line-height: 1;
+}
+.studentCheckInBiometricLogin:disabled,
+.studentCheckInBiometricActions button:disabled{
+  cursor: wait;
+  opacity: .62;
 }
 .studentCheckInError,
 .studentCheckInsAdminError{
@@ -10246,6 +11239,57 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   color: #d4bd83;
   font-size: 30px;
   font-weight: 800;
+}
+.studentCheckInEmailMark{
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 18px;
+  border: 1px solid rgba(232, 207, 148, .48);
+  border-radius: 50%;
+  background: rgba(216, 190, 126, .12);
+  color: #f2d996;
+  font-size: 28px;
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 14px 34px rgba(0, 0, 0, .2);
+}
+.studentCheckInEmailAddress{
+  width: 100%;
+  margin-top: 22px;
+  border: 1px solid rgba(232, 207, 148, .42);
+  border-radius: 8px;
+  background: rgba(216, 190, 126, .12);
+  color: #fff1c8;
+  padding: 16px;
+  font-size: clamp(17px, 4vw, 22px);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.studentCheckInEmailExpiry{
+  margin: 12px 0 0;
+  color: rgba(245, 244, 239, .62);
+  font-size: 13px;
+}
+.studentCheckInEmailActions{
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.studentCheckInEmailActions .studentCheckInPrimary{
+  width: 100%;
+}
+.studentCheckInNotice{
+  width: 100%;
+  margin: 16px 0 0;
+  border: 1px solid rgba(113, 224, 157, .28);
+  border-radius: 8px;
+  background: rgba(35, 117, 71, .18);
+  color: #dcfce7;
+  padding: 12px 14px;
+  line-height: 1.55;
 }
 .studentCheckInApprovedMark{
   border-color: #54bc7d;
@@ -10603,6 +11647,374 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   font-weight: 650;
   overflow-wrap: anywhere;
 }
+.studentCheckInHistory{
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+.studentCheckInHistoryToggle{
+  width: 100%;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid rgba(221, 201, 143, .38);
+  border-radius: 8px;
+  background: rgba(216, 190, 126, .12);
+  color: #fff8e8;
+  font: inherit;
+  font-weight: 700;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+.studentCheckInHistoryToggle em{
+  color: #ddc98f;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 650;
+}
+.studentCheckInHistoryModalBackdrop{
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 7, 10, .76);
+  padding: 24px;
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  backdrop-filter: blur(18px) saturate(125%);
+}
+.studentCheckInHistoryPanel{
+  width: min(760px, 100%);
+  max-height: min(86vh, 860px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(221, 201, 143, .38);
+  border-radius: 14px;
+  background: #1b2027;
+  box-shadow: 0 34px 100px rgba(0, 0, 0, .62);
+  scrollbar-color: rgba(221, 201, 143, .52) transparent;
+}
+.studentCheckInHistoryPanel > header{
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(255, 255, 255, .035);
+  padding: 20px 22px;
+}
+.studentCheckInHistoryPanel h3{
+  margin: 0;
+  color: #fffdf7;
+  font-size: 21px;
+}
+.studentCheckInHistoryPanel header p{
+  margin: 5px 0 0;
+  color: rgba(245, 244, 239, .58);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.studentCheckInHistoryDialogActions{
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.studentCheckInHistoryDialogActions > strong{
+  border: 1px solid rgba(221, 201, 143, .3);
+  border-radius: 999px;
+  background: rgba(216, 190, 126, .1);
+  color: #f5dda4;
+  font-size: 12px;
+  padding: 5px 9px;
+}
+.studentCheckInHistoryDialogActions > button{
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .07);
+  color: #fffdf7;
+  font: inherit;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+.studentCheckInHistoryBody{
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 22px;
+}
+.studentCheckInHistoryMonths{
+  display: grid;
+  gap: 12px;
+}
+.studentCheckInHistoryMonth{
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 10px;
+  background: rgba(7, 9, 12, .34);
+}
+.studentCheckInHistoryMonthToggle{
+  width: 100%;
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 0;
+  background: rgba(255, 255, 255, .04);
+  color: #fffdf7;
+  padding: 13px 16px;
+  text-align: left;
+  cursor: pointer;
+}
+.studentCheckInHistoryMonthToggle > span{
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 16px;
+}
+.studentCheckInHistoryMonthToggle strong{
+  color: #fff8e8;
+  font-size: 19px;
+  font-weight: 780;
+  white-space: nowrap;
+}
+.studentCheckInHistoryMonthToggle em{
+  color: #ddc98f;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 700;
+}
+.studentCheckInHistoryMonthToggle > i{
+  flex: 0 0 auto;
+  color: rgba(245, 244, 239, .58);
+  font-size: 12px;
+  font-style: normal;
+}
+.studentCheckInHistoryMonthEntries{
+  border-top: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(0, 0, 0, .12);
+  padding: 14px;
+}
+.studentCheckInHistoryList{
+  display: grid;
+  gap: 12px;
+}
+.studentCheckInHistoryList > article{
+  content-visibility: auto;
+  contain-intrinsic-size: 150px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .045);
+}
+.studentCheckInHistoryList > article > header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, .09);
+  background: rgba(255, 255, 255, .035);
+  padding: 11px 13px;
+}
+.studentCheckInHistoryDate{
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+}
+.studentCheckInHistoryDate time{
+  color: #fff8e8;
+  font-size: 14px;
+  font-weight: 750;
+}
+.studentCheckInHistoryDate small{
+  color: rgba(245, 244, 239, .56);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.studentCheckInHistoryList > article > header span{
+  min-width: 0;
+  max-width: 52%;
+  color: #ddc98f;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: right;
+}
+.studentCheckInHistoryEvents{
+  display: grid;
+  gap: 0;
+  padding: 5px 13px;
+}
+.studentCheckInHistoryEvents > div{
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 10px;
+  padding: 10px 0;
+}
+.studentCheckInHistoryEvents > div + div{
+  border-top: 1px dashed rgba(255, 255, 255, .09);
+}
+.studentCheckInHistoryEvents i{
+  grid-row: 1 / span 2;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+.studentCheckInHistoryEvents i.is-request{
+  border: 1px solid rgba(221, 201, 143, .5);
+  background: rgba(157, 124, 48, .45);
+}
+.studentCheckInHistoryEvents i.is-approved{
+  border: 1px solid rgba(113, 224, 157, .48);
+  background: rgba(43, 139, 82, .48);
+}
+.studentCheckInHistoryEvents span{
+  grid-column: 2;
+  color: rgba(245, 244, 239, .66);
+  font-size: 12px;
+}
+.studentCheckInHistoryEvents time{
+  min-width: 0;
+  grid-column: 2;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  text-align: left;
+}
+.studentCheckInHistoryEvents time b{
+  color: rgba(245, 244, 239, .62);
+  font-size: 12px;
+  font-weight: 600;
+}
+.studentCheckInHistoryEvents time strong{
+  color: #fffdf7;
+  font-size: 15px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.studentCheckInHistoryMissing{
+  grid-column: 2;
+  color: rgba(245, 244, 239, .48);
+  font-size: 12px;
+}
+.studentCheckInHistoryStatus{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 72px;
+  color: rgba(245, 244, 239, .66);
+  font-size: 13px;
+  text-align: center;
+}
+.studentCheckInHistoryStatus.is-error{
+  color: #ffd9dc;
+}
+.studentCheckInHistoryStatus button{
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .08);
+  color: #fffdf7;
+  font: inherit;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.studentCheckInHistoryTimezone{
+  margin: 0;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(255, 255, 255, .025);
+  color: rgba(245, 244, 239, .42);
+  font-size: 11px;
+  padding: 11px 16px;
+  text-align: center;
+}
+@media (hover: hover) and (pointer: fine){
+  .studentCheckInHistoryToggle:hover{
+    border-color: rgba(239, 216, 163, .62);
+    background: rgba(216, 190, 126, .2);
+  }
+  .studentCheckInHistoryMonthToggle:hover{
+    background: rgba(216, 190, 126, .1);
+  }
+  .studentCheckInHistoryDialogActions > button:hover{
+    border-color: rgba(255, 255, 255, .34);
+    background: rgba(255, 255, 255, .12);
+  }
+}
+@media (max-width: 640px){
+  .studentCheckInHistoryModalBackdrop{
+    place-items: end stretch;
+    padding: 0;
+  }
+  .studentCheckInHistoryPanel{
+    width: 100%;
+    max-height: 92dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 16px 16px 0 0;
+  }
+  .studentCheckInHistoryPanel > header{
+    gap: 12px;
+    padding: 16px;
+  }
+  .studentCheckInHistoryPanel h3{
+    font-size: 19px;
+  }
+  .studentCheckInHistoryDialogActions{
+    gap: 7px;
+  }
+  .studentCheckInHistoryDialogActions > button{
+    width: 38px;
+    height: 38px;
+  }
+  .studentCheckInHistoryBody{
+    padding: 14px;
+  }
+  .studentCheckInHistoryMonthToggle{
+    min-height: 72px;
+    padding: 13px;
+  }
+  .studentCheckInHistoryMonthToggle > span{
+    display: grid;
+    gap: 4px;
+  }
+  .studentCheckInHistoryMonthEntries{
+    padding: 10px;
+  }
+  .studentCheckInHistoryList > article > header{
+    align-items: start;
+    flex-direction: column;
+  }
+  .studentCheckInHistoryList > article > header span{
+    text-align: left;
+  }
+  .studentCheckInHistoryEvents > div{
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+  .studentCheckInHistoryEvents time{
+    gap: 3px 8px;
+  }
+}
 .studentCheckInsApprovalBackdrop{
   position: fixed;
   inset: 0;
@@ -10740,6 +12152,29 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   gap: 12px;
   margin-top: auto;
   padding-top: 28px;
+}
+.studentDropInRejectOptions{
+  display: grid;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 24px;
+}
+.studentDropInRejectOptions > strong{
+  color: #fff6e4;
+  font-size: 18px;
+}
+.studentDropInRejectOptions > p{
+  margin: -4px 0 2px;
+  color: #b6b8bd;
+  line-height: 1.5;
+}
+.studentDropInRejectOptions .studentCheckInTextButton{
+  margin-top: 0;
+}
+.studentCheckInsRejectButton.studentDropInCorrectionRejectButton{
+  border-color: rgba(239, 194, 101, .4);
+  background: rgba(145, 99, 31, .24);
+  color: #ffe7b1;
 }
 .studentCheckInsRejectButton,
 .studentCheckInsApproveButton{
@@ -11007,6 +12442,51 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   max-width: 390px;
   font-size: clamp(19px, 4vw, 24px);
 }
+.studentCheckInBiometricDialog{
+  width: min(100%, 590px);
+  border-color: rgba(229, 201, 126, .42);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(213, 178, 91, .16), transparent 42%),
+    rgba(29, 33, 40, .72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    inset 0 -1px 0 rgba(0, 0, 0, .28),
+    0 34px 90px rgba(0, 0, 0, .52),
+    0 0 50px rgba(213, 178, 91, .09);
+}
+.studentCheckInBiometricDialog .studentCheckInEyebrow{
+  margin: 0;
+}
+.studentCheckInBiometricDialog h1{
+  max-width: 470px;
+  font-size: clamp(28px, 5vw, 38px);
+}
+.studentCheckInBiometricDialog .studentCheckInPraise{
+  max-width: 470px;
+  font-size: clamp(18px, 3.4vw, 21px);
+}
+.studentCheckInBiometricMark{
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(235, 208, 139, .56);
+  border-radius: 50%;
+  background: rgba(214, 180, 92, .13);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 0 34px rgba(222, 185, 94, .16);
+  color: #f0d78f;
+  font-size: 40px;
+}
+.studentCheckInBiometricActions{
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+.studentCheckInBiometricActions .studentCheckInPrimary{
+  width: 100%;
+  margin: 0;
+}
 .studentCheckInSuccessDialog{
   border-color: rgba(113, 224, 157, .34);
   box-shadow:
@@ -11063,6 +12543,7 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   color: #fffdf7;
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   backdrop-filter: blur(18px) saturate(150%);
+  touch-action: manipulation;
   transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 .studentCheckInPrimary{
@@ -11084,25 +12565,27 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   padding: 0 16px;
   text-decoration: none;
 }
-.studentCheckInPrimary:hover,
-.studentCheckInsAdminButton:hover,
-.studentCheckInTextButton:hover,
-.studentCheckInsRecentExpiry button:hover,
-.studentCheckInsPhotoActions button:hover,
-.studentCheckInsRejectButton:hover,
-.studentCheckInsApproveButton:hover{
-  border-color: rgba(255, 255, 255, .3);
-  background-color: rgba(255, 255, 255, .14);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .24),
-    0 14px 34px rgba(0, 0, 0, .22);
-  filter: none;
-  text-decoration: none;
-  transform: translateY(-1px);
-}
-.studentCheckInPrimary:hover{
-  border-color: rgba(239, 216, 163, .66);
-  background-color: rgba(216, 190, 126, .29);
+@media (hover: hover) and (pointer: fine){
+  .studentCheckInPrimary:hover,
+  .studentCheckInsAdminButton:hover,
+  .studentCheckInTextButton:hover,
+  .studentCheckInsRecentExpiry button:hover,
+  .studentCheckInsPhotoActions button:hover,
+  .studentCheckInsRejectButton:hover,
+  .studentCheckInsApproveButton:hover{
+    border-color: rgba(255, 255, 255, .3);
+    background-color: rgba(255, 255, 255, .14);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .24),
+      0 14px 34px rgba(0, 0, 0, .22);
+    filter: none;
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+  .studentCheckInPrimary:hover{
+    border-color: rgba(239, 216, 163, .66);
+    background-color: rgba(216, 190, 126, .29);
+  }
 }
 .studentCheckInPrimary:active,
 .studentCheckInsAdminButton:active,
@@ -11352,6 +12835,38 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .studentCheckInsApprovalDialog{
     background: rgba(27, 31, 38, .82);
   }
+  .studentDropInApprovalDialog{
+    height: auto;
+    max-height: 100dvh;
+    grid-template-rows: max-content max-content;
+    align-content: start;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .studentDropInApprovalDialog .studentDropInEvidenceGrid{
+    min-height: 0;
+    height: auto;
+    align-self: start;
+  }
+  .studentDropInApprovalDialog .studentCheckInsApprovalInfo{
+    min-height: 0;
+    padding-bottom: calc(30px + env(safe-area-inset-bottom));
+  }
+  .studentDropInApprovalDialog .studentCheckInsApprovalInfo dd{
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 640px){
+  .studentDropInApprovalDialog .studentDropInEvidenceCard > img,
+  .studentDropInApprovalDialog .studentDropInEvidenceCard > .studentCheckInsPhotoPreview,
+  .studentDropInApprovalDialog .studentDropInEvidenceCard > .studentCheckInsPhotoCapture{
+    height: min(46dvh, 380px);
+    min-height: 280px;
+    max-height: 380px;
+  }
 }
 
 .resetPasswordPage{
@@ -11466,4 +12981,23 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   .resetPasswordCard .btn{
     width: 100%;
   }
+}
+.studentCheckInsRequestMode {
+  align-self: flex-start;
+  display: inline-flex;
+  margin-bottom: 4px;
+  padding: 5px 10px;
+  border: 1px solid rgba(93, 211, 158, 0.42);
+  border-radius: 999px;
+  background: rgba(23, 103, 70, 0.18);
+  color: #9ce3c1;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.studentCheckInsRequestMode.is-drop-in {
+  border-color: rgba(224, 190, 116, 0.46);
+  background: rgba(126, 91, 28, 0.2);
+  color: #ead293;
 }

@@ -6,6 +6,7 @@ import { FloatingActionButtons } from "@/components/floating-line-button";
 import LangSwitch from "./lang-switch";
 import { useI18n } from "./i18n-provider";
 import StaffNotificationButton from "../components/staff-notification-button";
+import { StaffPageTelemetry } from "../components/staff-page-telemetry";
 
 export default function LayoutChrome({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
@@ -19,18 +20,41 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
   const isTrialBookingRoute = pathname?.startsWith("/trial-booking");
   const isStudentCheckInRoute = pathname?.startsWith("/check-in");
   const isStudentCheckInAdminRoute = pathname?.startsWith("/admin/student-check-ins");
+  const isTrialBookingAdminRoute = pathname?.startsWith("/admin/trial-bookings");
   const isLoginRoute = pathname === "/login" || pathname?.startsWith("/login/");
+  const isForbiddenRoute = pathname === "/forbidden";
   const isStaffSecurityRoute =
     pathname === "/staff/change-password" || pathname === "/staff/activate";
   const isStaffNotificationRoute = pathname === "/staff/notifications";
+  const isStaffScheduleRoute =
+    pathname === "/staff/schedule" ||
+    pathname === "/manager/staff-scheduling" ||
+    pathname === "/staff/attendance" ||
+    pathname === "/manager/staff-attendance";
+  const isStaffPayrollRoute = pathname === "/staff/payroll" || pathname === "/manager/staff-payroll";
+  const isStaffPerformanceRoute = pathname === "/staff/performance" || pathname === "/manager/staff-performance";
+  const isStaffLeaveRoute = pathname === "/staff/leave" || pathname === "/manager/staff-leave";
   const isFitnessOperationsRoute =
     pathname === "/manager/fitness" ||
     pathname === "/manager/staff" ||
+    pathname === "/manager/staff-scheduling" ||
+    pathname === "/manager/staff-attendance" ||
+    pathname === "/manager/staff-payroll" ||
+    pathname === "/manager/staff-performance" ||
+    pathname === "/manager/staff-leave" ||
     pathname === "/frontdesk/fitness" ||
     pathname === "/coach/fitness" ||
     pathname === "/dev/fitness-preview";
   const isStudentPasswordRecoveryRoute = pathname === "/reset-password" && searchParams.get("mode") === "student";
   const isAdminRoute = pathname?.startsWith("/admin");
+  const isAuthenticatedAccountRoute =
+    pathname?.startsWith("/manager") ||
+    pathname?.startsWith("/frontdesk") ||
+    pathname?.startsWith("/coach") ||
+    pathname?.startsWith("/staff") ||
+    pathname?.startsWith("/member") ||
+    pathname?.startsWith("/platform-admin") ||
+    pathname?.startsWith("/admin");
   const isAcpayResultRoute = pathname?.startsWith("/payment/acpay-result");
   const isCustomPaymentRoute = pathname?.startsWith("/custom-payment");
   const isTrainingRoute = pathname?.startsWith("/training");
@@ -49,37 +73,30 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
     isCoachRoute ||
     isFitnessOperationsRoute ||
     isStaffSecurityRoute ||
-    isStaffNotificationRoute;
+    isStaffNotificationRoute ||
+    isStaffScheduleRoute ||
+    isStaffPayrollRoute ||
+    isStaffPerformanceRoute ||
+    isStaffLeaveRoute;
   const showStaffNotifications =
     !isEmbedded &&
     !isLoginRoute &&
     !isStaffSecurityRoute &&
     !isMemberRoute &&
+    !isStudentCheckInAdminRoute &&
+    !isTrialBookingAdminRoute &&
     (pathname?.startsWith("/manager") ||
       pathname?.startsWith("/frontdesk") ||
       pathname?.startsWith("/coach") ||
+      pathname?.startsWith("/staff/schedule") ||
+      pathname?.startsWith("/staff/attendance") ||
+      pathname?.startsWith("/staff/payroll") ||
+      pathname?.startsWith("/staff/performance") ||
+      pathname?.startsWith("/staff/leave") ||
       pathname?.startsWith("/platform-admin") ||
       pathname?.startsWith("/admin") ||
       isStaffNotificationRoute);
-  const showTopbar =
-    !isEmbedded &&
-    !isLoginRoute &&
-    !isStudentCheckInAdminLogin &&
-    !isFitnessOperationsRoute &&
-    !isWorkspaceRoute &&
-    !isAdminRoute &&
-    !isHomeRoute &&
-    !isFaqRoute &&
-    !isPublicBookingRoute &&
-    !isTrialBookingRoute &&
-    !isStudentCheckInRoute &&
-    !isStudentPasswordRecoveryRoute &&
-    !isAcpayResultRoute &&
-    !isCustomPaymentRoute &&
-    !isRenwuPilatesRoute &&
-    !isRenwuPersonalTrainingRoute &&
-    !isRenwuSportsMassageRoute &&
-    !isTrainingRoute;
+  const showTopbar = false;
   const shellClassName = [
     "shell",
     isEmbedded ? "shellEmbedded" : "",
@@ -92,6 +109,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
 
   return (
     <div className={shellClassName}>
+      <StaffPageTelemetry />
       {showTopbar ? (
         <header className="topbar">
           <div className="container nav">
@@ -128,9 +146,9 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
 
       {showStaffNotifications ? <StaffNotificationButton /> : null}
 
-      {!isEmbedded && !isLoginRoute && !isFitnessOperationsRoute && !isStaffSecurityRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin ? <FloatingActionButtons /> : null}
+      {!isEmbedded && !isLoginRoute && !isForbiddenRoute && !isAuthenticatedAccountRoute && !isWorkspaceRoute && !isStaffSecurityRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isTrialBookingAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin ? <FloatingActionButtons /> : null}
 
-      {!isEmbedded && !isLoginRoute && !isFitnessOperationsRoute && !isStaffSecurityRoute && !isPublicBookingRoute && !isTrialBookingRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin && !isAcpayResultRoute && !isCustomPaymentRoute ? (
+      {!isEmbedded && !isLoginRoute && !isForbiddenRoute && !isFitnessOperationsRoute && !isStaffSecurityRoute && !isPublicBookingRoute && !isTrialBookingRoute && !isStudentCheckInRoute && !isStudentCheckInAdminRoute && !isStudentPasswordRecoveryRoute && !isStudentCheckInAdminLogin && !isAcpayResultRoute && !isCustomPaymentRoute ? (
         <footer className="footer">
           <div className="footerInner">
             <div>© {new Date().getFullYear()} BigE Fitness. All rights reserved.</div>
