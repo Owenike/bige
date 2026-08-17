@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../../../lib/auth-context";
+import { requireTrialBookingAdmin } from "../../../../../../lib/trial-booking-admin-auth";
+import { normalizeTrialBookingContactNote } from "../../../../../../lib/trial-booking-contact";
 import { createSupabaseAdminClient } from "../../../../../../lib/supabase/admin";
 
 const bookingStatuses = new Set(["new", "contacted", "scheduled", "completed", "cancelled", "no_show"]);
@@ -12,7 +13,7 @@ function authFailureResponse(status: number) {
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireProfile(["platform_admin", "manager"], request);
+  const auth = await requireTrialBookingAdmin(request);
   if (!auth.ok) return authFailureResponse(auth.response.status);
 
   const { id } = await context.params;
@@ -21,7 +22,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ ok: false, error: "Invalid booking id" }, { status: 400 });
   }
 
-  const body = (await request.json().catch(() => null)) as { bookingStatus?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as {
+    bookingStatus?: unknown;
+    contactNote?: unknown;
+  } | null;
   if (!body || !Object.prototype.hasOwnProperty.call(body, "bookingStatus")) {
     return NextResponse.json({ ok: false, error: "bookingStatus is required" }, { status: 400 });
   }
@@ -33,6 +37,35 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   try {
     const admin = createSupabaseAdminClient();
+
+    if (bookingStatus === "contacted") {
+      const contactNote = normalizeTrialBookingContactNote(body.contactNote);
+      if (!contactNote) {
+        return NextResponse.json(
+          { ok: false, error: "請填寫聯繫備註（最多 500 字）。" },
+          { status: 400 },
+        );
+      }
+
+      if (!auth.context.tenantId) {
+        return NextResponse.json({ ok: false, error: "Missing tenant context" }, { status: 400 });
+      }
+
+      const contactResult = await admin.rpc("record_trial_booking_contact", {
+        p_booking_id: bookingId,
+        p_tenant_id: auth.context.tenantId,
+        p_contacted_by: auth.context.userId,
+        p_note: contactNote,
+      });
+
+      if (contactResult.error) {
+        const status = contactResult.error.message.includes("booking_not_found") ? 404 : 500;
+        return NextResponse.json({ ok: false, error: contactResult.error.message }, { status });
+      }
+
+      return NextResponse.json({ ok: true, booking: contactResult.data });
+    }
+
     const result = await admin
       .from("trial_bookings")
       .update({

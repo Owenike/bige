@@ -69,10 +69,11 @@ async function loadResolvedSettings(params: {
 
 function readNotifyProviderEnv(channel: Exclude<ExternalChannel, "webhook">) {
   if (channel === "email") {
+    const resendApiKey = process.env.RESEND_API_KEY || "";
     return {
-      endpoint: process.env.EMAIL_NOTIFY_ENDPOINT || "",
-      token: process.env.EMAIL_NOTIFY_TOKEN || "",
-      provider: process.env.EMAIL_NOTIFY_PROVIDER || "",
+      endpoint: resendApiKey ? "https://api.resend.com/emails" : process.env.EMAIL_NOTIFY_ENDPOINT || "",
+      token: resendApiKey || process.env.EMAIL_NOTIFY_TOKEN || "",
+      provider: resendApiKey ? "resend" : process.env.EMAIL_NOTIFY_PROVIDER || "",
       timeoutMs: Number(process.env.EMAIL_NOTIFY_TIMEOUT_MS || 0) || null,
     };
   }

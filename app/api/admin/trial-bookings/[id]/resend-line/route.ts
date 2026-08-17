@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireProfile } from "../../../../../../lib/auth-context";
+import { requireTrialBookingAdmin } from "../../../../../../lib/trial-booking-admin-auth";
 import { sendLineScheduledTrialBookingNotification } from "../../../../../../lib/line-push";
 import { createSupabaseAdminClient } from "../../../../../../lib/supabase/admin";
+import { trialBookingSourceLabel } from "../../../../../../lib/trial-booking-sources";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -31,6 +32,7 @@ const TRIAL_BOOKING_SELECT = [
   "line_notified_at",
   "line_notification_error",
   "note",
+  "schedule_note",
   "updated_at",
 ].join(", ");
 
@@ -45,6 +47,7 @@ type TrialBookingRow = {
   executing_coach: string | null;
   source: string | null;
   note: string | null;
+  schedule_note: string | null;
 };
 
 function authFailureResponse(status: number) {
@@ -59,12 +62,6 @@ function serviceLabel(value: string | null | undefined) {
   if (value === "pilates") return "器械皮拉提斯";
   if (value === "sports_massage") return "運動按摩";
   return value || "-";
-}
-
-function sourceLabel(value: string | null | undefined) {
-  if (value === "official_line") return "官方 LINE";
-  if (value === "walk_in") return "現場";
-  return "網站";
 }
 
 function lineError(result: { error?: string; skipped?: boolean; status?: number }) {
@@ -85,7 +82,7 @@ function isReadyForLine(row: TrialBookingRow) {
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireProfile(["platform_admin", "manager"], request);
+  const auth = await requireTrialBookingAdmin(request);
   if (!auth.ok) return authFailureResponse(auth.response.status);
 
   const { id } = await context.params;
@@ -117,8 +114,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       phone: booking.phone!,
       bookingCoach: booking.booking_coach!,
       executingCoach: booking.executing_coach!,
-      source: sourceLabel(booking.source),
-      note: booking.note,
+      source: trialBookingSourceLabel(booking.source),
+      note: booking.schedule_note,
     });
 
     const lineOk = lineResult.ok && !lineResult.skipped;

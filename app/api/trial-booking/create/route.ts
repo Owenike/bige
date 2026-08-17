@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { bigeFacilityClosedMessage, isBigeFacilityClosed } from "../../../../lib/bige-business-day";
 import { sendLineTrialBookingNotification } from "../../../../lib/line-push";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
@@ -70,6 +71,14 @@ function trialAmount(value: (typeof serviceValues)[number]) {
 }
 
 export async function POST(request: Request) {
+  const facility = await isBigeFacilityClosed({});
+  if (facility.closed) {
+    return NextResponse.json(
+      { ok: false, code: "facility_closed", error: bigeFacilityClosedMessage(facility.setting) },
+      { status: 409 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();

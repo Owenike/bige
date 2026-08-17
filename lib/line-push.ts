@@ -146,19 +146,35 @@ function formatDisplayDate(value: string) {
   return `${Number(match[2])}/${Number(match[3])}`;
 }
 
-function buildScheduledTrialBookingNotificationText(input: LineScheduledTrialBookingNotificationInput) {
+export function buildScheduledTrialBookingNotificationText(
+  input: LineScheduledTrialBookingNotificationInput,
+) {
+  const note = input.note?.trim() || "無";
+
   return [
-    "BigE 體驗課程已安排",
+    "🔔 BIG E｜教練執行任務",
+    "【已完成排課】",
+    "━━━━━━━━━━━━━━",
     "",
-    `預約日期：${formatDisplayDate(input.appointmentDate)}`,
-    `預約時間：${input.appointmentTime}`,
-    `預約項目：${input.service}`,
-    `姓名：${input.name}`,
-    `電話：${input.phone}`,
-    `預約教練：${input.bookingCoach}`,
-    `執行教練：${input.executingCoach}`,
-    `來源：${input.source}`,
-    `備註：${input.note?.trim() || ""}`,
+    "01｜課程資訊",
+    `日期｜${formatDisplayDate(input.appointmentDate)}`,
+    `時間｜${input.appointmentTime}`,
+    `項目｜${input.service}`,
+    "",
+    "02｜體驗客戶",
+    `姓名｜${input.name}`,
+    `電話｜${input.phone}`,
+    `來源｜${input.source}`,
+    "",
+    "03｜負責人員",
+    `預約窗口｜${input.bookingCoach}`,
+    `執行教練｜${input.executingCoach}`,
+    "",
+    "04｜備註",
+    note,
+    "",
+    "📌 執行提醒",
+    "請執行教練於課前確認課表與客戶狀況。",
   ].join("\n");
 }
 

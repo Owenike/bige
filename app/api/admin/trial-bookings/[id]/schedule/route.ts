@@ -1,10 +1,26 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireProfile } from "../../../../../../lib/auth-context";
+import { normalizeBigeScheduleEndAt } from "../../../../../../lib/bige-fitness";
+import { requireTrialBookingAdmin } from "../../../../../../lib/trial-booking-admin-auth";
+import {
+  trialBookingCoachLabel,
+  type TrialBookingCoachProfile,
+} from "../../../../../../lib/trial-booking-coaches";
 import { sendLineScheduledTrialBookingNotification } from "../../../../../../lib/line-push";
 import { createSupabaseAdminClient } from "../../../../../../lib/supabase/admin";
+import {
+  createTrialBookingScheduleNotePatch,
+  TRIAL_BOOKING_SCHEDULE_NOTE_MAX_LENGTH,
+} from "../../../../../../lib/trial-booking-schedule-note";
+import { trialBookingSourceLabel } from "../../../../../../lib/trial-booking-sources";
 
-const serviceValues = ["weight_training", "boxing_fitness", "pilates", "sports_massage"] as const;
+const serviceValues = [
+  "weight_training",
+  "boxing_fitness",
+  "pilates",
+  "sports_massage",
+  "onsite_assessment",
+] as const;
 const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
 const timeInputPattern = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 const appointmentTimeValues = new Set(
@@ -24,8 +40,9 @@ const scheduleSchema = z.object({
   name: z.string().trim().min(1).max(50),
   phone: z.string().trim().min(1).max(30),
   bookingCoach: z.string().trim().min(1).max(50),
-  executingCoach: z.string().trim().min(1).max(50),
-  note: z.string().trim().max(500).optional().default(""),
+  executingCoachId: z.string().uuid(),
+  executingCoach: z.string().trim().max(50).optional().default(""),
+  scheduleNote: z.string().trim().max(TRIAL_BOOKING_SCHEDULE_NOTE_MAX_LENGTH).optional().default(""),
 });
 
 const TRIAL_BOOKING_SELECT = [
@@ -54,6 +71,7 @@ const TRIAL_BOOKING_SELECT = [
   "line_notified_at",
   "line_notification_error",
   "note",
+  "schedule_note",
   "updated_at",
 ].join(", ");
 
@@ -68,13 +86,8 @@ function serviceLabel(value: string) {
   if (value === "boxing_fitness") return "拳擊體能訓練";
   if (value === "pilates") return "器械皮拉提斯";
   if (value === "sports_massage") return "運動按摩";
+  if (value === "onsite_assessment") return "現場評估";
   return value;
-}
-
-function sourceLabel(value: string | null | undefined) {
-  if (value === "official_line") return "官方 LINE";
-  if (value === "walk_in") return "現場";
-  return "網站";
 }
 
 function lineError(result: { error?: string; skipped?: boolean; status?: number }) {
@@ -84,7 +97,7 @@ function lineError(result: { error?: string; skipped?: boolean; status?: number 
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireProfile(["platform_admin", "manager"], request);
+  const auth = await requireTrialBookingAdmin(request);
   if (!auth.ok) return authFailureResponse(auth.response.status);
 
   const { id } = await context.params;
@@ -123,12 +136,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (!tenantId) {
       return NextResponse.json({ ok: false, error: "Missing tenant context" }, { status: 400 });
     }
-    const coachResult = await auth.supabase
+    const coachResult = await admin
       .from("profiles")
-      .select("id, branch_id")
+      .select("id, branch_id, display_name, english_name")
       .eq("tenant_id", tenantId)
-      .in("role", ["coach", "therapist"])
-      .eq("display_name", data.executingCoach)
+      .eq("id", data.executingCoachId)
+      .or("role.in.(coach,therapist),department.eq.coaching")
       .eq("is_active", true)
       .limit(1)
       .maybeSingle();
@@ -137,19 +150,23 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
     if (!coachResult.data) {
       return NextResponse.json(
-        { ok: false, error: "請先為執行教練建立後台帳號，且教練姓名需與排課選項一致" },
+        { ok: false, error: "找不到所選教練帳號，請重新選擇執行教練。" },
         { status: 400 },
       );
     }
+    const selectedCoach = coachResult.data as TrialBookingCoachProfile;
+    const executingCoachLabel = trialBookingCoachLabel(selectedCoach);
 
     const startsAt = `${data.appointmentDate}T${data.appointmentTime}:00+08:00`;
-    const endsAt = new Date(new Date(startsAt).getTime() + 60 * 60_000).toISOString();
+    const endsAt = normalizeBigeScheduleEndAt("trial", startsAt, startsAt);
     const courseType =
       data.service === "pilates"
         ? "reformer_pilates"
         : data.service === "sports_massage"
           ? "relaxation"
-          : "weight_training";
+          : data.service === "onsite_assessment"
+            ? "onsite_assessment"
+            : "weight_training";
     const existingSchedule = await auth.supabase
       .from("bookings")
       .select("id")
@@ -165,16 +182,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
 
     const scheduleResult = existingSchedule.data
-      ? await auth.supabase.rpc("bige_reschedule_schedule_booking", {
+      ? await auth.supabase.rpc("bige_reschedule_schedule_booking_v2", {
           p_booking_id: existingSchedule.data.id,
           p_branch_id: coachResult.data.branch_id || auth.context.branchId,
           p_coach_id: coachResult.data.id,
           p_course_type: courseType,
           p_starts_at: startsAt,
           p_ends_at: endsAt,
-          p_note: data.note || null,
+          p_note: data.scheduleNote || null,
         })
-      : await auth.supabase.rpc("bige_create_schedule_booking", {
+      : await auth.supabase.rpc("bige_create_schedule_booking_v2", {
           p_tenant_id: tenantId,
           p_branch_id: coachResult.data.branch_id || auth.context.branchId,
           p_member_id: null,
@@ -184,7 +201,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           p_course_type: courseType,
           p_starts_at: startsAt,
           p_ends_at: endsAt,
-          p_note: data.note || null,
+          p_note: data.scheduleNote || null,
           p_group_id: null,
           p_idempotency_key: `trial-admin-schedule:${bookingId}`,
         });
@@ -194,6 +211,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         { status: 409 },
       );
     }
+    const scheduleWarnings = Array.isArray(
+      (scheduleResult.data as { warnings?: unknown } | null)?.warnings,
+    )
+      ? ((scheduleResult.data as { warnings: Array<{ code?: string }> }).warnings || [])
+      : [];
+    const hasClassroomConflict = scheduleWarnings.some(
+      (warning) => warning?.code === "classroom_conflict",
+    );
 
     const updateResult = await admin
       .from("trial_bookings")
@@ -201,13 +226,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         name: data.name,
         phone: data.phone,
         service: data.service,
-        note: data.note || null,
+        ...createTrialBookingScheduleNotePatch(data.scheduleNote),
         source: existingResult.data.source || "website",
         booking_status: "scheduled",
         appointment_date: data.appointmentDate,
         appointment_time: data.appointmentTime,
         booking_coach: data.bookingCoach,
-        executing_coach: data.executingCoach,
+        executing_coach: executingCoachLabel,
         line_notification_error: shouldSendLine ? null : undefined,
         updated_at: new Date().toISOString(),
       })
@@ -228,7 +253,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         ok: true,
         booking: updateResult.data,
         lineNotification: "not_sent",
-        message: "預約資料已更新。",
+        warnings: scheduleWarnings,
+        message: hasClassroomConflict
+          ? "預約資料已更新；此時段有教室衝突，請到課表確認。"
+          : "預約資料已更新。",
       });
     }
 
@@ -239,9 +267,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       name: data.name,
       phone: data.phone,
       bookingCoach: data.bookingCoach,
-      executingCoach: data.executingCoach,
-      source: sourceLabel(updatedBooking.source),
-      note: data.note,
+      executingCoach: executingCoachLabel,
+      source: trialBookingSourceLabel(updatedBooking.source),
+      note: data.scheduleNote,
     });
 
     const lineOk = lineResult.ok && !lineResult.skipped;
@@ -264,7 +292,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       ok: true,
       booking: lineUpdateResult.data || updateResult.data,
       lineNotification: lineOk ? "sent" : "failed",
-      message: lineOk ? "預約資料已更新並發送 LINE 通知。" : "資料已儲存，但 LINE 通知發送失敗。",
+      warnings: scheduleWarnings,
+      message: hasClassroomConflict
+        ? lineOk
+          ? "預約資料已更新並發送 LINE 通知；此時段有教室衝突，請到課表確認。"
+          : "資料已儲存；此時段有教室衝突，且 LINE 通知發送失敗。"
+        : lineOk
+          ? "預約資料已更新並發送 LINE 通知。"
+          : "資料已儲存，但 LINE 通知發送失敗。",
     });
   } catch (error) {
     return NextResponse.json(

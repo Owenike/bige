@@ -2,11 +2,10 @@ import { apiError, apiSuccess, requireOpenShift, requireProfile } from "../../..
 import { executePaymentRefund } from "../../../../../lib/high-risk-actions";
 import { notifyHighRiskRequestCreated } from "../../../../../lib/in-app-notifications";
 import { requirePermission } from "../../../../../lib/permissions";
-import { verifySensitiveOperator } from "../../../../../lib/sensitive-reauth";
 import { canApproveDepartmentMoney, type StaffDepartment } from "../../../../../lib/staff-organization";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireProfile(["manager", "frontdesk"], request);
+  const auth = await requireProfile(["platform_admin", "manager", "branch_manager", "frontdesk"], request);
   if (!auth.ok) return auth.response;
 
   if (!auth.context.tenantId) {
@@ -95,22 +94,17 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     });
   }
 
-  const reauth = await verifySensitiveOperator({
-    session: auth.context,
-    credentials: body?.reauth,
-  });
-  if (!reauth.ok) return apiError(401, "UNAUTHORIZED", reauth.message);
-  const permission = requirePermission(reauth.operator, "refunds.approve");
+  const permission = requirePermission(auth.context, "refunds.approve");
   if (!permission.ok) return permission.response;
 
-  if (!canApproveDepartmentMoney(reauth.operator, owningDepartment)) {
+  if (!canApproveDepartmentMoney(auth.context, owningDepartment)) {
     return apiError(403, "FORBIDDEN", "This payment belongs to another department");
   }
 
   const result = await executePaymentRefund({
     supabase: auth.supabase,
     tenantId: auth.context.tenantId,
-    actorId: reauth.operator.userId,
+    actorId: auth.context.userId,
     paymentId: id,
     reason,
   });
