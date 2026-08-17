@@ -1034,17 +1034,14 @@ function dailyScheduleLoadingHourLabel(hour: number) {
 function LoadingTimeFace({
   value,
   half,
-  pageFace,
 }: {
   value: string;
   half: "upper" | "lower";
-  pageFace: "old" | "new";
 }) {
   return (
     <span
       className={styles.loadingTimeFace}
       data-loading-half={half}
-      data-loading-page-face={pageFace}
       aria-hidden="true"
     >
       <span>{value}</span>
@@ -1063,18 +1060,18 @@ function LoadingFlipMechanism({
     <>
       {oldValue && newValue ? (
         <>
-          <LoadingTimeFace value={newValue} half="upper" pageFace="new" />
-          <LoadingTimeFace value={oldValue} half="lower" pageFace="old" />
+          <LoadingTimeFace value={newValue} half="upper" />
+          <LoadingTimeFace value={oldValue} half="lower" />
         </>
       ) : null}
       <span className={styles.loadingFlipUpperFlap} aria-hidden="true">
         {oldValue ? (
-          <LoadingTimeFace value={oldValue} half="upper" pageFace="old" />
+          <LoadingTimeFace value={oldValue} half="upper" />
         ) : null}
       </span>
       <span className={styles.loadingFlipLowerFlap} aria-hidden="true">
         {newValue ? (
-          <LoadingTimeFace value={newValue} half="lower" pageFace="new" />
+          <LoadingTimeFace value={newValue} half="lower" />
         ) : null}
       </span>
       <span className={styles.loadingFlipHinge} aria-hidden="true" />
@@ -1109,7 +1106,6 @@ function DailyScheduleLoadingBoard() {
       <div
         className={`${styles.board} ${styles.loadingBoard}`}
         data-mobile-show-all="false"
-        data-loading-page={loadingPage % 2}
         aria-hidden="true"
         style={
           {
