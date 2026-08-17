@@ -1,8 +1,8 @@
 -- Phase 10: clean booking notification template copy and normalize booking event variables.
 
-with template_seed as (
-  select *
-  from (
+create temporary table template_seed as
+select *
+from (
     values
       ('booking_created', 'email', 'zh-TW', '預約已建立', '{{customerName}}，您已成功預約 {{serviceName}}。時間：{{bookingDate}} {{bookingTime}}，預約編號：{{publicReference}}。', '預約成功通知'),
       ('booking_created', 'sms', 'zh-TW', '預約已建立', '{{customerName}} 您已預約 {{serviceName}}，時間 {{bookingDate}} {{bookingTime}}，編號 {{publicReference}}。', null),
@@ -22,8 +22,8 @@ with template_seed as (
       ('booking_deposit_pending', 'email', 'zh-TW', '尚有訂金待支付', '{{customerName}}，您的 {{serviceName}} 預約尚有 {{depositAmount}} 訂金待支付。預約編號：{{publicReference}}。', '訂金付款提醒'),
       ('booking_deposit_pending', 'sms', 'zh-TW', '尚有訂金待支付', '{{customerName}} 您的預約尚有 {{depositAmount}} 訂金待支付。', null),
       ('booking_deposit_pending', 'line', 'zh-TW', '尚有訂金待支付', '{{customerName}} 您的預約尚有 {{depositAmount}} 訂金待支付。', null)
-  ) as seed(event_type, channel, locale, title_template, message_template, email_subject)
-)
+  ) as seed(event_type, channel, locale, title_template, message_template, email_subject);
+
 update public.notification_templates as templates
 set title_template = seed.title_template,
     message_template = seed.message_template,

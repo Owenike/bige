@@ -105,6 +105,42 @@ select
     where table_schema = 'public' and table_name = 'frontdesk_shifts' and column_name = 'expected_cash'
   ) as ok;
 
+select
+  'col.member_plan_contracts.course_allocations_configured_at' as check_name,
+  exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'member_plan_contracts'
+      and column_name = 'course_allocations_configured_at'
+  ) as ok;
+
+select
+  'col.member_plan_contracts.course_allocation_legacy_snapshot' as check_name,
+  exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'member_plan_contracts'
+      and column_name = 'course_allocation_legacy_snapshot'
+  ) as ok;
+
+select
+  'fn.bige_configure_contract_course_allocations' as check_name,
+  to_regprocedure('public.bige_configure_contract_course_allocations(uuid,jsonb)') is not null as ok;
+
+select
+  'trigger.member_plan_contracts_course_allocation_guard' as check_name,
+  exists (
+    select 1
+    from pg_trigger
+    where tgrelid = 'public.member_plan_contracts'::regclass
+      and tgname = 'member_plan_contracts_course_allocation_guard'
+      and not tgisinternal
+  ) as ok;
+
+select
+  'idx.member_plan_contracts_course_allocations_configured_by_idx' as check_name,
+  to_regclass('public.member_plan_contracts_course_allocations_configured_by_idx') is not null as ok;
+
 -- 4) RLS enabled checks
 select 'rls.members' as check_name, relrowsecurity as ok
 from pg_class

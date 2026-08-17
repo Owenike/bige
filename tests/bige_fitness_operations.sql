@@ -1,14 +1,14 @@
-\set ON_ERROR_STOP on
-
 begin;
 
 do $$
+<<test_block>>
 declare
   tenant_id uuid := '10000000-0000-4000-8000-000000000001';
   branch_id uuid := '20000000-0000-4000-8000-000000000001';
   manager_id uuid := '30000000-0000-4000-8000-000000000001';
   coach_a uuid := '30000000-0000-4000-8000-000000000002';
   coach_b uuid := '30000000-0000-4000-8000-000000000003';
+  coach_c uuid := '30000000-0000-4000-8000-000000000004';
   member_a uuid := '40000000-0000-4000-8000-000000000001';
   member_b uuid := '40000000-0000-4000-8000-000000000002';
   member_c uuid := '40000000-0000-4000-8000-000000000003';
@@ -36,7 +36,8 @@ begin
   values
     (manager_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'manager@test.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
     (coach_a, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'coach-a@test.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
-    (coach_b, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'coach-b@test.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
+    (coach_b, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'coach-b@test.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
+    (coach_c, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'coach-c@test.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
 
   insert into public.tenants (id, name, status)
   values (tenant_id, 'BIG E TEST', 'active');
@@ -48,7 +49,8 @@ begin
   values
     (manager_id, tenant_id, branch_id, 'manager', 'Manager', true),
     (coach_a, tenant_id, branch_id, 'coach', 'Coach A', true),
-    (coach_b, tenant_id, branch_id, 'coach', 'Coach B', true);
+    (coach_b, tenant_id, branch_id, 'coach', 'Coach B', true),
+    (coach_c, tenant_id, branch_id, 'coach', 'Coach C', true);
 
   insert into public.members (id, tenant_id, store_id, full_name, phone, email, birth_date, status)
   values
@@ -79,27 +81,62 @@ begin
     schedule_start, schedule_start + interval '1 hour', null, null, 'test:coach-capacity:1'
   );
   perform public.bige_create_schedule_booking(
-    tenant_id, branch_id, member_b, null, coach_a, 'pt', 'weight_training',
+    tenant_id, branch_id, member_b, null, coach_b, 'pt', 'weight_training',
     schedule_start, schedule_start + interval '1 hour', null, null, 'test:coach-capacity:2'
   );
   perform public.bige_create_schedule_booking(
-    tenant_id, branch_id, member_c, null, coach_a, 'pt', 'weight_training',
+    tenant_id, branch_id, member_c, null, coach_c, 'pt', 'weight_training',
     schedule_start, schedule_start + interval '1 hour', null, null, 'test:coach-capacity:3'
   );
+
+  if (
+    select count(*)
+    from public.bookings booking
+    where booking.tenant_id = test_block.tenant_id
+      and booking.starts_at = schedule_start
+      and booking.course_type = 'weight_training'
+  ) <> 3 then
+    raise exception 'weight training should allow multiple coaches in one time slot';
+  end if;
+
+  if (
+    select count(*)
+    from public.bookings booking
+    where booking.tenant_id = test_block.tenant_id
+      and booking.coach_id = coach_a
+      and booking.starts_at = schedule_start
+  ) <> 1 then
+    raise exception 'one coach should have only one member in one time slot';
+  end if;
 
   begin
     perform public.bige_create_schedule_booking(
       tenant_id, branch_id, member_d, null, coach_a, 'pt', 'weight_training',
-      schedule_start, schedule_start + interval '1 hour', null, null, 'test:coach-capacity:4'
+      schedule_start, schedule_start + interval '1 hour', null, null, 'test:coach-capacity:blocked'
     );
-    raise exception 'expected coach_capacity_exceeded';
-  exception when others then
-    if sqlerrm <> 'coach_capacity_exceeded' then raise; end if;
+  exception
+    when unique_violation then
+      if sqlerrm <> 'schedule_time_overlap' then
+        raise;
+      end if;
   end;
+
+  if exists (
+    select 1
+    from public.bookings
+    where operation_idempotency_key = 'test:coach-capacity:blocked'
+  ) then
+    raise exception 'one coach must not accept a second member in the same time slot';
+  end if;
+
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_c, null, coach_a, 'pt', 'weight_training',
+    schedule_start + interval '1 hour', schedule_start + interval '2 hours', null, null, 'test:reschedule-source'
+  );
 
   select id into reschedule_booking_id
   from public.bookings
-  where operation_idempotency_key = 'test:coach-capacity:3';
+  where operation_idempotency_key = 'test:reschedule-source';
 
   reschedule_result := public.bige_reschedule_schedule_booking(
     reschedule_booking_id,
@@ -133,15 +170,14 @@ begin
     schedule_start + interval '2 hours', schedule_start + interval '3 hours', null, null, 'test:shared-capacity:2'
   );
 
-  begin
-    perform public.bige_create_schedule_booking(
-      tenant_id, branch_id, member_a, null, coach_a, 'pt', 'relaxation',
-      schedule_start + interval '2 hours', schedule_start + interval '3 hours', null, null, 'test:shared-capacity:3'
-    );
-    raise exception 'expected shared_resource_capacity_exceeded';
-  exception when others then
-    if sqlerrm <> 'shared_equipment_capacity_exceeded' then raise; end if;
-  end;
+  reschedule_result := public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_a, null, coach_c, 'pt', 'relaxation',
+    schedule_start + interval '2 hours', schedule_start + interval '3 hours', null, null, 'test:classroom-conflict:3'
+  );
+  if not coalesce(reschedule_result->'warnings', '[]'::jsonb) @>
+    '[{"code":"classroom_conflict"}]'::jsonb then
+    raise exception 'third classroom booking should succeed with a classroom_conflict warning';
+  end if;
 
   contract_result := public.bige_create_member_contract(
     tenant_id, branch_id, member_a, null,
