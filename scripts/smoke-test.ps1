@@ -38,6 +38,17 @@ $workspacePath = (Get-Location).Path
 $smokeLogDir = Join-Path $workspacePath ".tmp\smoke-test"
 $stdoutLog = Join-Path $smokeLogDir "dev-server.stdout.log"
 $stderrLog = Join-Path $smokeLogDir "dev-server.stderr.log"
+$generatedConfigPaths = @(
+  (Join-Path $workspacePath "next-env.d.ts"),
+  (Join-Path $workspacePath "tsconfig.json")
+)
+$generatedConfigSnapshots = @{}
+
+foreach ($configPath in $generatedConfigPaths) {
+  if (Test-Path -LiteralPath $configPath) {
+    $generatedConfigSnapshots[$configPath] = [System.IO.File]::ReadAllBytes($configPath)
+  }
+}
 
 function Write-DevServerLogs {
   if (Test-Path -LiteralPath $stdoutLog) {
@@ -140,4 +151,7 @@ try {
   }
   Start-Sleep -Milliseconds 250
   Remove-Item -LiteralPath $smokeLogDir -Recurse -Force -ErrorAction SilentlyContinue
+  foreach ($configPath in $generatedConfigSnapshots.Keys) {
+    [System.IO.File]::WriteAllBytes($configPath, $generatedConfigSnapshots[$configPath])
+  }
 }

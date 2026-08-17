@@ -8,6 +8,7 @@
         "start": "next start",
         "lint": "eslint .",
         "typecheck": "tsc --noEmit",
+        "repo:hygiene": "powershell -ExecutionPolicy Bypass -File scripts/repo-hygiene-check.ps1",
         "schedule:august:dry-run": "node scripts/import-august-coach-schedule.mjs",
         "schedule:august:validate": "node scripts/import-august-coach-schedule.mjs && node scripts/validate-august-coach-schedule.mjs",
         "db:migrate:apply": "powershell -ExecutionPolicy Bypass -File scripts/apply-migrations.ps1",

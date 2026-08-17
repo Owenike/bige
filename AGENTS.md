@@ -21,6 +21,16 @@
 - After deployment, repeat the critical end-to-end flow on the production domain and inspect production errors. If any requested or related flow fails, keep working and do not report completion.
 - The final handoff must list the exact checks and flows run, their results, the production deployment status, and test-data cleanup. Never claim "fixed" or "no problem" based only on code inspection, compilation, or a single happy-path check.
 
+## Mandatory Repository Hygiene and Commit Discipline
+- At the start of every task, run `git status --short --branch` and record every pre-existing modified, deleted, and untracked path. Treat those paths as user-owned unless the current task explicitly includes them.
+- Keep each task traceable. After implementation and verification, stage only the exact task-scoped paths, inspect `git diff --cached --check` and `git diff --cached --stat`, then create one or more purpose-specific commits before deployment or final handoff.
+- A task is not complete while its work remains only in the working tree. Do not allow completed work from separate requests to accumulate as uncommitted changes.
+- Run `npm run repo:hygiene` after the final commit. The handoff must show a clean working tree; if pre-existing user changes make that impossible, list every remaining path and its owner instead of silently carrying it forward.
+- Store generated previews, screenshots, exports, downloaded production data, rendered documents, logs, and disposable test files only under ignored locations such as `.tmp/`, `tmp/`, or `output/`. Never place them at the repository root or commit them.
+- `next-env.d.ts`, `tsconfig.json`, line-ending-only diffs, and similar tool-generated changes must be reviewed and restored when they do not represent an intentional product change.
+- When a migration is created or applied, reconcile `npx supabase migration list --linked`, commit the exact migration and its regression tests in the same task, and leave local and remote migration versions aligned.
+- Before starting a new user request in the same thread, finish the previous request's test, commit, deployment, cleanup, and `repo:hygiene` steps. If the user interrupts or changes direction, first preserve or explicitly classify the incomplete work before continuing.
+
 ## Protected UX and Performance Baselines
 - The BIG E daily schedule must prefetch the ten dates before and the ten dates after the selected date, and its in-memory LRU must retain at least 61 daily boards so rapid navigation and late background responses cannot evict nearby dates.
 - Do not reduce, delay, serialize, or disable that warm window; shrink its cache headroom; or add automatic refetches for already-cached dates without the user's explicit approval.

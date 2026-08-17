@@ -26,10 +26,18 @@ if ($st -match "^\s*[MADRCU\?]{1,2}\s") {
     Warn "Working tree not clean in CI run (likely generated artifacts during checks)."
   } else {
     Fail "Working tree not clean (has M/??/etc)."
+    exit 1
   }
 } else {
   Ok "Working tree clean."
 }
+
+npm run repo:hygiene | Out-Host
+if ($LASTEXITCODE -ne 0) {
+  Fail "Repository hygiene failed before go-live checks."
+  exit 1
+}
+Ok "Repository hygiene passed before go-live checks."
 
 Header "Node Gate (typecheck/lint/build)"
 try { npm run typecheck | Out-Host; Ok "typecheck passed" } catch { Fail "typecheck failed"; throw }
@@ -180,6 +188,14 @@ if (-not (Test-Path $proxyPath)) {
     Warn "proxy.ts role/auth enforcement markers not fully detected; review manually."
   }
 }
+
+Header "Repository Hygiene (post-check)"
+npm run repo:hygiene | Out-Host
+if ($LASTEXITCODE -ne 0) {
+  Fail "Repository hygiene failed after go-live checks."
+  exit 1
+}
+Ok "Repository hygiene passed after go-live checks."
 
 Header "Done"
 Write-Host "If you see any [FAIL], do not go-live until resolved. For multi-branch, review the WARN lists one-by-one."
