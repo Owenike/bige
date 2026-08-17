@@ -3,15 +3,29 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { sanitizedRecoveryUrl } from "@/lib/recovery-url";
 
 type ViewState = "loading" | "ready" | "invalid" | "submitting" | "done";
 
 type RecoveryStatus = {
   state: ViewState;
   message: string;
+  accessToken?: string;
 };
 
 const invalidLinkMessage = "此重設密碼連結已失效或不完整，請重新寄送密碼重設信。";
+const SAFE_ACCOUNT_RETURN_PATHS = new Set([
+  "/login",
+  "/login/staff",
+  "/login/member",
+  "/admin/student-check-ins/login",
+]);
+
+function safeAccountReturnPath(value: string | null) {
+  if (!value) return "/login";
+  const [pathname] = value.split("?");
+  return SAFE_ACCOUNT_RETURN_PATHS.has(pathname) ? value : "/login";
+}
 
 function createBrowserSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -41,37 +55,49 @@ async function resolveRecoverySession(client: SupabaseClient): Promise<RecoveryS
 
   const code = query.get("code");
   if (code) {
-    const { error } = await client.auth.exchangeCodeForSession(code);
+    const { data, error } = await client.auth.exchangeCodeForSession(code);
     if (error) return { state: "invalid", message: invalidLinkMessage };
 
-    window.history.replaceState(null, "", window.location.pathname);
-    return { state: "ready", message: "請輸入新的登入密碼，完成後即可使用新密碼登入。" };
+    window.history.replaceState(
+      null,
+      "",
+      sanitizedRecoveryUrl(window.location.pathname, window.location.search),
+    );
+    return { state: "ready", message: "請輸入新的登入密碼，完成後即可使用新密碼登入。", accessToken: data.session?.access_token };
   }
 
   const accessToken = hash.get("access_token");
   const refreshToken = hash.get("refresh_token");
   if (accessToken && refreshToken) {
-    const { error } = await client.auth.setSession({
+    const { data, error } = await client.auth.setSession({
       access_token: accessToken,
       refresh_token: refreshToken,
     });
     if (error) return { state: "invalid", message: invalidLinkMessage };
 
-    window.history.replaceState(null, "", window.location.pathname);
-    return { state: "ready", message: "請輸入新的登入密碼，完成後即可使用新密碼登入。" };
+    window.history.replaceState(
+      null,
+      "",
+      sanitizedRecoveryUrl(window.location.pathname, window.location.search),
+    );
+    return { state: "ready", message: "請輸入新的登入密碼，完成後即可使用新密碼登入。", accessToken: data.session?.access_token };
   }
 
   const tokenHash = query.get("token_hash");
   const type = query.get("type");
   if (tokenHash && type === "recovery") {
-    const { error } = await client.auth.verifyOtp({
+    const { data, error } = await client.auth.verifyOtp({
       token_hash: tokenHash,
       type: "recovery",
     });
     if (error) return { state: "invalid", message: invalidLinkMessage };
 
-    window.history.replaceState(null, "", window.location.pathname);
-    return { state: "ready", message: "請輸入新的登入密碼，完成後即可使用新密碼登入。" };
+    window.history.replaceState(
+      null,
+      "",
+      sanitizedRecoveryUrl(window.location.pathname, window.location.search),
+    );
+    return { state: "ready", message: "請輸入新的登入密碼，完成後即可使用新密碼登入。", accessToken: data.session?.access_token };
   }
 
   const { data, error } = await client.auth.getSession();
@@ -79,11 +105,13 @@ async function resolveRecoverySession(client: SupabaseClient): Promise<RecoveryS
     return { state: "invalid", message: invalidLinkMessage };
   }
 
-  return { state: "ready", message: "請輸入新的登入密碼，完成後即可使用新密碼登入。" };
+  return { state: "ready", message: "請輸入新的登入密碼，完成後即可使用新密碼登入。", accessToken: data.session.access_token };
 }
 
 export default function ResetPasswordPage() {
   const [client, setClient] = useState<SupabaseClient | null>(null);
+  const [recoveryAccessToken, setRecoveryAccessToken] = useState("");
+  const [accountReturnTo, setAccountReturnTo] = useState("/login");
   const [recoveryMode, setRecoveryMode] = useState<"account" | "student">("account");
   const [state, setState] = useState<ViewState>("loading");
   const [message, setMessage] = useState("正在驗證重設密碼連結...");
@@ -101,8 +129,10 @@ export default function ResetPasswordPage() {
     let cancelled = false;
 
     async function bootstrap() {
-      const isStudentRecovery = new URLSearchParams(window.location.search).get("mode") === "student";
+      const recoveryQuery = new URLSearchParams(window.location.search);
+      const isStudentRecovery = recoveryQuery.get("mode") === "student";
       if (!cancelled && isStudentRecovery) setRecoveryMode("student");
+      if (!cancelled) setAccountReturnTo(safeAccountReturnPath(recoveryQuery.get("returnTo")));
       let supabase: SupabaseClient;
       try {
         supabase = createBrowserSupabaseClient();
@@ -116,12 +146,13 @@ export default function ResetPasswordPage() {
 
       if (!cancelled) setClient(supabase);
 
-      const result = await resolveRecoverySession(supabase).catch(() => ({
+      const result: RecoveryStatus = await resolveRecoverySession(supabase).catch(() => ({
         state: "invalid" as const,
         message: invalidLinkMessage,
       }));
 
       if (cancelled) return;
+      setRecoveryAccessToken(result.accessToken || "");
       setState(result.state);
       setMessage(result.message);
     }
@@ -134,7 +165,7 @@ export default function ResetPasswordPage() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!client || state !== "ready") return;
+    if (!client || !recoveryAccessToken || state !== "ready") return;
 
     setFieldError(null);
 
@@ -163,22 +194,21 @@ export default function ResetPasswordPage() {
 
     let updateError = "";
     if (recoveryMode === "student") {
-      const session = await client.auth.getSession();
-      const accessToken = session.data.session?.access_token;
-      if (!accessToken) {
-        updateError = "重設連結已失效，請重新寄送。";
-      } else {
-        const response = await fetch("/api/student-checkin/password-reset/confirm", {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ password }),
-        });
-        const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-        if (!response.ok || !payload?.ok) updateError = payload?.error || "密碼更新失敗，請稍後再試。";
-      }
+      const response = await fetch("/api/student-checkin/password-reset/confirm", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${recoveryAccessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !payload?.ok) updateError = payload?.error || "密碼更新失敗，請稍後再試。";
     } else {
-      const result = await client.auth.updateUser({ password });
-      updateError = result.error?.message || "";
+      const response = await fetch("/api/auth/recovery-password", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${recoveryAccessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !payload?.ok) updateError = payload?.error || "密碼更新失敗，請稍後再試。";
     }
 
     if (updateError) {
@@ -188,7 +218,7 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    await client.auth.signOut().catch(() => null);
+    await client.auth.signOut({ scope: "local" }).catch(() => null);
     setPassword("");
     setConfirmPassword("");
     setFieldError(null);
@@ -250,7 +280,7 @@ export default function ResetPasswordPage() {
               <button className="resetPasswordButton" type="submit" disabled={!canSubmit || state === "submitting"}>
                 {state === "submitting" ? "更新中..." : "更新密碼"}
               </button>
-              <Link className="btn" href={recoveryMode === "student" ? "/check-in" : "/login"}>
+              <Link className="btn" href={recoveryMode === "student" ? "/check-in" : accountReturnTo}>
                 {recoveryMode === "student" ? "返回報到登入" : "前往登入"}
               </Link>
             </div>
@@ -259,11 +289,18 @@ export default function ResetPasswordPage() {
 
         {(state === "invalid" || state === "done") && (
           <div className="actions">
-            <Link className="resetPasswordButton" href={recoveryMode === "student" ? "/check-in" : "/login"}>
+            <Link className="resetPasswordButton" href={recoveryMode === "student" ? "/check-in" : accountReturnTo}>
               {recoveryMode === "student" ? "返回報到登入" : "前往登入"}
             </Link>
             {state === "invalid" ? (
-              <Link className="btn" href={recoveryMode === "student" ? "/check-in/forgot-password" : "/forgot-password"}>
+              <Link
+                className="btn"
+                href={
+                  recoveryMode === "student"
+                    ? "/check-in/forgot-password"
+                    : `/forgot-password?returnTo=${encodeURIComponent(accountReturnTo)}`
+                }
+              >
                 重新寄送密碼重設信
               </Link>
             ) : null}

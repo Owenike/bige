@@ -3,8 +3,11 @@
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { normalizeEmployeeNumber } from "../../lib/staff-credentials";
 import { useI18n } from "../i18n-provider";
 import LangSwitch from "../lang-switch";
+import StaffAuthBackdrop from "./staff-auth-backdrop";
+import styles from "./login-portal.module.css";
 
 type Role = "platform_admin" | "manager" | "supervisor" | "branch_manager" | "frontdesk" | "coach" | "sales" | "member";
 
@@ -60,15 +63,15 @@ function formatActivationDeliveryMessage(params: {
 function roleHome(role: Role) {
   switch (role) {
     case "platform_admin":
-      return "/platform-admin";
+      return "/manager/fitness";
     case "manager":
     case "supervisor":
     case "branch_manager":
-      return "/manager";
+      return "/manager/fitness";
     case "frontdesk":
-      return "/frontdesk";
+      return "/frontdesk/fitness";
     case "coach":
-      return "/coach";
+      return "/coach/fitness";
     case "sales":
       return "/";
     case "member":
@@ -94,8 +97,8 @@ function staffLoginErrorMessage(message: unknown, zh: boolean) {
   const normalized = typeof message === "string" ? message.trim() : "";
   if (normalized === "Invalid credentials") {
     return zh
-      ? "員工編號、正式密碼或一次性啟用碼不正確。"
-      : "The employee number, password, or activation code is incorrect.";
+      ? "Email、員工編號、正式密碼或一次性啟用碼不正確。"
+      : "The email, employee number, password, or activation code is incorrect.";
   }
   return normalized || (zh ? "員工登入失敗，請稍後再試。" : "Staff sign-in failed. Please try again.");
 }
@@ -157,9 +160,7 @@ function resolveLoginEntryCopy(panel: LoginPanel, returnTo: string | null, zh: b
   return {
     eyebrow: zh ? "員工登入入口" : "Staff Login Entry",
     title: zh ? "員工後台登入" : "Staff Sign In",
-    description: zh
-      ? "首次登入使用員工編號與一次性啟用碼；完成啟用後改用員工編號與正式密碼。"
-      : "Use employee number and a one-time activation code first, then employee number and permanent password.",
+    description: "",
   };
 }
 
@@ -226,10 +227,14 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
     setError(null);
 
     try {
+      const normalizedAccount = employeeNumber.includes("@")
+        ? employeeNumber.trim().toLowerCase()
+        : normalizeEmployeeNumber(employeeNumber);
+      setEmployeeNumber(normalizedAccount);
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeNumber, password }),
+        body: JSON.stringify({ employeeNumber: normalizedAccount, password }),
       });
       const payload = await res.json().catch(() => null);
       if (!res.ok) throw new Error(staffLoginErrorMessage(payload?.error, zh));
@@ -317,29 +322,54 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
 
   return (
     <main
-      className={isStudentCheckInAdminEntry ? "studentAdminLoginPage" : "container"}
+      className={
+        isStudentCheckInAdminEntry
+          ? "studentAdminLoginPage"
+          : portal === "staff"
+            ? styles.staffLoginPage
+            : "container"
+      }
       style={
         isStudentCheckInAdminEntry
           ? undefined
           : portal === "staff"
-            ? {
-                alignItems: "center",
-                display: "grid",
-                minHeight: "100dvh",
-                paddingBottom: 24,
-                paddingTop: 24,
-              }
+            ? undefined
             : { paddingTop: 28, paddingBottom: 48 }
       }
     >
+      {!isStudentCheckInAdminEntry && portal === "staff" ? <StaffAuthBackdrop /> : null}
+
       <section
-        className={isStudentCheckInAdminEntry ? "studentAdminLoginPanel" : "card formCard"}
-        style={isStudentCheckInAdminEntry ? undefined : { display: "grid", gap: 16, maxWidth: 640, margin: "0 auto" }}
+        className={
+          isStudentCheckInAdminEntry
+            ? "studentAdminLoginPanel"
+            : portal === "staff"
+              ? styles.staffLoginPanel
+              : "card formCard"
+        }
+        style={
+          isStudentCheckInAdminEntry || portal === "staff"
+            ? undefined
+            : { display: "grid", gap: 16, maxWidth: 640, margin: "0 auto" }
+        }
       >
         {!isStudentCheckInAdminEntry ? (
-          <div style={{ alignItems: "center", display: "flex", gap: 16, justifyContent: "space-between" }}>
-            <Link href="/" aria-label={zh ? "返回 BigE Fitness 首頁" : "Back to BigE Fitness home"} style={{ color: "inherit", textDecoration: "none" }}>
-              <strong style={{ fontSize: "1.15rem" }}>BIGE</strong>
+          <div
+            className={portal === "staff" ? styles.staffLoginHeader : undefined}
+            style={
+              portal === "staff"
+                ? undefined
+                : { alignItems: "center", display: "flex", gap: 16, justifyContent: "space-between" }
+            }
+          >
+            <Link
+              className={portal === "staff" ? styles.staffLoginBrand : undefined}
+              href="/"
+              aria-label={zh ? "返回 BigE Fitness 首頁" : "Back to BigE Fitness home"}
+              style={portal === "staff" ? undefined : { color: "inherit", textDecoration: "none" }}
+            >
+              <strong style={portal === "staff" ? undefined : { fontSize: "1.15rem" }}>BIGE</strong>
+              {portal === "staff" ? <span>FITNESS</span> : null}
             </Link>
             <LangSwitch />
           </div>
@@ -352,15 +382,26 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
           </Link>
         ) : null}
 
-        {isStudentCheckInAdminEntry || portal === "member" ? (
-          <div className={isStudentCheckInAdminEntry ? "studentAdminLoginHeading" : undefined} style={{ display: "grid", gap: 8 }}>
+        {isStudentCheckInAdminEntry || portal === "member" || portal === "staff" ? (
+          <div
+            className={
+              isStudentCheckInAdminEntry
+                ? "studentAdminLoginHeading"
+                : portal === "staff"
+                  ? styles.staffLoginHeading
+                  : undefined
+            }
+            style={portal === "staff" ? undefined : { display: "grid", gap: 8 }}
+          >
             <div className={isStudentCheckInAdminEntry ? "studentAdminLoginEyebrow" : "kvLabel"}>
               {isStudentCheckInAdminEntry ? "STAFF SIGN IN" : entryCopy.eyebrow}
             </div>
             <h1 className={isStudentCheckInAdminEntry ? "studentAdminLoginTitle" : "sectionTitle"}>
               {isStudentCheckInAdminEntry ? (zh ? "自主運動報到管理" : "Student Check-in Admin") : entryCopy.title}
             </h1>
-            {!isStudentCheckInAdminEntry ? <p className="sub">{entryCopy.description}</p> : null}
+                {!isStudentCheckInAdminEntry && entryCopy.description ? (
+                  <p className="sub">{entryCopy.description}</p>
+                ) : null}
             {!isStudentCheckInAdminEntry && entryCopy.badge ? (
               <div
                 className="pill"
@@ -406,9 +447,15 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
         {activePanel === "staff" ? (
           <section
             id="staff-login"
-            className={isStudentCheckInAdminEntry ? "studentAdminLoginFormSection" : undefined}
+            className={
+              isStudentCheckInAdminEntry
+                ? "studentAdminLoginFormSection"
+                : portal === "staff"
+                  ? styles.staffLoginFormSection
+                  : undefined
+            }
             role={isStudentCheckInAdminEntry ? undefined : "tabpanel"}
-            style={{ display: "grid", gap: 12 }}
+            style={portal === "staff" ? undefined : { display: "grid", gap: 12 }}
           >
             {error ? <div className="error">{error}</div> : null}
 
@@ -419,15 +466,20 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
             >
               <label className="field">
                 <span className={isStudentCheckInAdminEntry ? "studentAdminLoginLabel" : "kvLabel"} style={{ textTransform: "none" }}>
-                  {zh ? "員工編號" : "Employee number"}
+                  {zh ? "Email 或員工編號" : "Email or employee number"}
                 </span>
                 <input
                   autoComplete="username"
                   autoCapitalize="characters"
                   autoFocus={activePanel === "staff"}
                   className="input"
-                  onChange={(e) => setEmployeeNumber(e.target.value.toUpperCase())}
-                  placeholder="E000001"
+                  onChange={(e) => setEmployeeNumber(e.target.value)}
+                  onBlur={() => {
+                    if (!employeeNumber.includes("@")) {
+                      setEmployeeNumber(normalizeEmployeeNumber(employeeNumber));
+                    }
+                  }}
+                  placeholder="you@example.com / 01 / E000001"
                   required
                   type="text"
                   value={employeeNumber}

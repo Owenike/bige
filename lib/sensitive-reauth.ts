@@ -13,6 +13,7 @@ export type SensitiveCredentials = {
 export type SensitiveOperator = {
   userId: string;
   role: ProfileContext["role"];
+  employeeNumber: string;
   department: NonNullable<ProfileContext["department"]> | null;
   position: NonNullable<ProfileContext["position"]> | null;
   tenantId: string | null;
@@ -90,9 +91,18 @@ export async function verifySensitiveOperator(params: {
     };
   }
 
+  if (signedIn.data.user.id !== params.session.userId) {
+    await isolated.auth.signOut().catch(() => null);
+    return {
+      ok: false as const,
+      code: "SENSITIVE_REAUTH_FAILED",
+      message: "只能驗證目前登入帳號，不能代入其他員工的帳號或密碼",
+    };
+  }
+
   const profile = await admin
     .from("profiles")
-    .select("id, role, department, position, tenant_id, branch_id, is_active")
+    .select("id, role, employee_number, department, position, tenant_id, branch_id, is_active")
     .eq("id", signedIn.data.user.id)
     .maybeSingle();
 
@@ -122,6 +132,7 @@ export async function verifySensitiveOperator(params: {
   const operator: SensitiveOperator = {
     userId: profile.data.id,
     role: profile.data.role as ProfileContext["role"],
+    employeeNumber: normalizeEmployeeNumber(profile.data.employee_number),
     department: normalizeStaffDepartment(profile.data.department),
     position: normalizeStaffPosition(profile.data.position),
     tenantId: profile.data.tenant_id,

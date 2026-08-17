@@ -2,6 +2,8 @@ import { apiError, apiSuccess, requireProfile } from "../../../../lib/auth-conte
 import { isStaffPlaceholderEmail } from "../../../../lib/staff-credentials";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
+const STAFF_PASSWORD_MIN_LENGTH = 6;
+
 export async function POST(request: Request) {
   const auth = await requireProfile(
     ["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales"],
@@ -11,8 +13,10 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);
-  const passwordChanged = body?.passwordChanged === true;
-  if (!passwordChanged) return apiError(400, "FORBIDDEN", "passwordChanged confirmation is required");
+  const password = typeof body?.password === "string" ? body.password : "";
+  if (password.length < STAFF_PASSWORD_MIN_LENGTH) {
+    return apiError(400, "FORBIDDEN", `新密碼至少需要 ${STAFF_PASSWORD_MIN_LENGTH} 個字元`);
+  }
 
   const admin = createSupabaseAdminClient();
   const userResult = await admin.auth.admin.getUserById(auth.context.userId);
@@ -37,6 +41,16 @@ export async function POST(request: Request) {
     profileResult.data.staff_activation_status !== "completed"
   ) {
     return apiError(403, "FORBIDDEN", "請先完成本人確認");
+  }
+
+  // The authenticated bearer token determines the only user whose password may
+  // be changed. Never update through the browser's shared Supabase cookie state:
+  // another signed-in tab can replace that state during a recovery flow.
+  const passwordResult = await admin.auth.admin.updateUserById(auth.context.userId, {
+    password,
+  });
+  if (passwordResult.error) {
+    return apiError(500, "INTERNAL_ERROR", passwordResult.error.message);
   }
 
   const now = new Date().toISOString();
@@ -65,11 +79,11 @@ export async function POST(request: Request) {
 
   const home =
     auth.context.role === "platform_admin"
-      ? "/platform-admin"
+      ? "/manager/fitness"
       : auth.context.role === "frontdesk"
         ? "/frontdesk/fitness"
         : auth.context.role === "coach"
           ? "/coach/fitness"
           : "/manager/fitness";
-  return apiSuccess({ home });
+  return apiSuccess({ home, next: "/login/staff?passwordChanged=1" });
 }

@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "./supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "./supabase/admin";
 import { evaluateTenantAccess, type TenantStatus, type TenantSubscriptionSnapshot } from "./tenant-subscription";
+import { readAuthCapabilities, type AuthCapability } from "./auth-capabilities";
 import {
   normalizeStaffDepartment,
   normalizeStaffPosition,
@@ -95,6 +96,8 @@ function roleMatchesAllowed(role: AppRole, allowedRoles: AppRole[]) {
 export interface ProfileContext {
   userId: string;
   role: AppRole;
+  employeeNumber?: string | null;
+  authCapabilities?: AuthCapability[];
   department?: StaffDepartment | null;
   position?: StaffPosition | null;
   tenantId: string | null;
@@ -115,6 +118,7 @@ export const TEMP_DISABLE_ROLE_GUARD = false;
 interface ProfileRow {
   id: string;
   role: string;
+  employee_number: string | null;
   department: string | null;
   position: string | null;
   tenant_id: string | null;
@@ -241,7 +245,7 @@ export async function requireProfile(
 
   const profileResult = await supabase
     .from("profiles")
-    .select("id, role, department, position, tenant_id, branch_id, is_active, staff_activation_status")
+    .select("id, role, employee_number, department, position, tenant_id, branch_id, is_active, staff_activation_status")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -399,6 +403,8 @@ export async function requireProfile(
   const context: ProfileContext = {
     userId: profile.id,
     role,
+    employeeNumber: profile.employee_number,
+    authCapabilities: readAuthCapabilities(user.app_metadata),
     department: normalizeStaffDepartment(profile.department),
     position: normalizeStaffPosition(profile.position),
     tenantId: profile.tenant_id,

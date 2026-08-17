@@ -4,7 +4,11 @@ import { requireProfile } from "../../../../../lib/auth-context";
 import { sendNotification } from "../../../../../lib/integrations/notify";
 import { httpLogBase, logEvent } from "../../../../../lib/observability";
 import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
-import { isStaffPlaceholderEmail } from "../../../../../lib/staff-credentials";
+import { verifyStaffCurrentPassword } from "../../../../../lib/staff-account-security";
+import {
+  canUseStaffAccountSettings,
+  isStaffPlaceholderEmail,
+} from "../../../../../lib/staff-credentials";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 
 const STAFF_ROLES = [
@@ -68,6 +72,8 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const email = normalizeEmail(body?.email);
+  const currentPassword =
+    typeof body?.currentPassword === "string" ? body.currentPassword : "";
   if (!isValidEmail(email) || isStaffPlaceholderEmail(email)) {
     return NextResponse.json({ error: "請輸入可正常收信的本人 Email" }, { status: 400 });
   }
@@ -101,11 +107,36 @@ export async function POST(request: Request) {
   if (!profile.is_active || profile.staff_deleted_at) {
     return NextResponse.json({ error: "員工帳號已停用" }, { status: 403 });
   }
-  if (profile.staff_activation_status !== "identity_confirmed") {
+  const isAccountEmailChange = profile.staff_activation_status === "completed";
+  if (!isAccountEmailChange && profile.staff_activation_status !== "identity_confirmed") {
     return NextResponse.json({ error: "請先完成本人確認" }, { status: 403 });
   }
-  if (profile.staff_email_verified_at) {
-    return NextResponse.json({ error: "此員工帳號已完成 Email 驗證" }, { status: 409 });
+  if (isAccountEmailChange && !canUseStaffAccountSettings(profile.employee_number)) {
+    return NextResponse.json(
+      { error: "此帳號不提供信箱變更功能" },
+      { status: 403 },
+    );
+  }
+
+  const currentUserResult = await admin.auth.admin.getUserById(auth.context.userId);
+  const currentEmail = currentUserResult.data.user?.email?.trim().toLowerCase() || "";
+  if (currentUserResult.error || !currentEmail) {
+    return NextResponse.json(
+      { error: currentUserResult.error?.message || "找不到目前登入信箱" },
+      { status: 500 },
+    );
+  }
+  if (isAccountEmailChange) {
+    if (!currentPassword) {
+      return NextResponse.json({ error: "請輸入目前密碼" }, { status: 400 });
+    }
+    if (currentEmail === email) {
+      return NextResponse.json({ error: "新信箱不可與目前信箱相同" }, { status: 409 });
+    }
+    const verified = await verifyStaffCurrentPassword(currentEmail, currentPassword);
+    if (!verified.ok) {
+      return NextResponse.json({ error: verified.error }, { status: 401 });
+    }
   }
 
   try {
@@ -143,13 +174,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: tokenResult.error.message }, { status: 500 });
   }
 
-  const verifyUrl = new URL("/staff/change-password", resolveCanonicalAppUrl(request));
+  const verifyUrl = new URL(
+    isAccountEmailChange ? "/staff/account" : "/staff/change-password",
+    resolveCanonicalAppUrl(request),
+  );
   verifyUrl.searchParams.set("token", rawToken);
   const recipientName = profile.english_name || profile.display_name || profile.employee_number || "BIG E 員工";
   const message = [
     `${recipientName} 您好：`,
     "",
-    "請點選以下連結，完成 BIG E 員工帳號的 Email 驗證：",
+    isAccountEmailChange
+      ? "請點選以下連結，完成 BIG E 員工帳號的新信箱驗證："
+      : "請點選以下連結，完成 BIG E 員工帳號的 Email 驗證：",
     verifyUrl.toString(),
     "",
     "此 Email 將用於忘記密碼及重要帳號安全通知。",
@@ -159,7 +195,7 @@ export async function POST(request: Request) {
   const notifyResult = await sendNotification({
     channel: "email",
     target: email,
-    templateKey: "BIG E 員工 Email 驗證",
+    templateKey: isAccountEmailChange ? "BIG E 員工信箱變更驗證" : "BIG E 員工 Email 驗證",
     message,
   });
   if (!notifyResult.ok) {
@@ -176,7 +212,7 @@ export async function POST(request: Request) {
       error: notifyResult.error || "notify_failed",
     });
     return NextResponse.json(
-      { error: notifyResult.error || "驗證信寄送失敗，請稍後再試" },
+      { error: "驗證信寄送失敗，請稍後再試" },
       { status: 502 },
     );
   }
@@ -184,7 +220,9 @@ export async function POST(request: Request) {
   await admin.from("audit_logs").insert({
     tenant_id: profile.tenant_id,
     actor_id: auth.context.userId,
-    action: "staff_email_verification_requested",
+    action: isAccountEmailChange
+      ? "staff_email_change_requested"
+      : "staff_email_verification_requested",
     target_type: "profile",
     target_id: auth.context.userId,
     reason: null,
@@ -193,6 +231,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     accepted: true,
+    mode: isAccountEmailChange ? "email_change" : "activation",
     maskedEmail: maskEmail(email),
     expiresAt,
   });

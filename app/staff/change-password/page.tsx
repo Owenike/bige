@@ -7,7 +7,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 type Phase = "loading" | "email" | "password" | "verified_without_session" | "done";
 
+const STAFF_PASSWORD_MIN_LENGTH = 6;
+
 type MePayload = {
+  role?: string | null;
   displayName?: string | null;
   englishName?: string | null;
   employeeNumber?: string | null;
@@ -72,8 +75,15 @@ const inputStyle = {
   background: "rgba(255,255,255,.7)",
 } as const;
 
+function roleHome(role: string | null | undefined) {
+  if (role === "frontdesk") return "/frontdesk/fitness";
+  if (role === "coach") return "/coach/fitness";
+  return "/manager/fitness";
+}
+
 export default function StaffChangePasswordPage() {
   const [client, setClient] = useState<SupabaseClient | null>(null);
+  const [authAccessToken, setAuthAccessToken] = useState("");
   const [phase, setPhase] = useState<Phase>("loading");
   const [busy, setBusy] = useState(false);
   const [profile, setProfile] = useState<MePayload>({});
@@ -93,9 +103,14 @@ export default function StaffChangePasswordPage() {
 
         const query = new URLSearchParams(window.location.search);
         const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const isRecoveryFlow =
+          query.get("recovery") === "1" ||
+          query.has("code") ||
+          hash.get("type") === "recovery";
         const linkError = query.get("error_description") || hash.get("error_description");
         if (linkError) throw new Error(linkError);
 
+        let resolvedAccessToken = "";
         const staffEmailToken = query.get("token");
         if (staffEmailToken) {
           const response = await fetch("/api/auth/staff-email/confirm", {
@@ -117,6 +132,7 @@ export default function StaffChangePasswordPage() {
           if (code) {
             const result = await supabase.auth.exchangeCodeForSession(code);
             if (result.error) throw result.error;
+            resolvedAccessToken = result.data.session?.access_token || "";
             window.history.replaceState(null, "", window.location.pathname);
           } else if (accessToken && refreshToken) {
             const result = await supabase.auth.setSession({
@@ -124,13 +140,17 @@ export default function StaffChangePasswordPage() {
               refresh_token: refreshToken,
             });
             if (result.error) throw result.error;
+            resolvedAccessToken = result.data.session?.access_token || "";
             window.history.replaceState(null, "", window.location.pathname);
           }
         }
 
-        const sessionResult = await supabase.auth.getSession();
-        if (sessionResult.error) throw sessionResult.error;
-        if (!sessionResult.data.session) {
+        if (!resolvedAccessToken) {
+          const sessionResult = await supabase.auth.getSession();
+          if (sessionResult.error) throw sessionResult.error;
+          resolvedAccessToken = sessionResult.data.session?.access_token || "";
+        }
+        if (!resolvedAccessToken) {
           if (staffEmailToken) {
             if (active) setPhase("verified_without_session");
             return;
@@ -141,7 +161,7 @@ export default function StaffChangePasswordPage() {
         const meResponse = await fetch("/api/auth/me", {
           cache: "no-store",
           headers: {
-            Authorization: `Bearer ${sessionResult.data.session.access_token}`,
+            Authorization: `Bearer ${resolvedAccessToken}`,
           },
         });
         const mePayload = (await meResponse.json().catch(() => null)) as MePayload | null;
@@ -157,6 +177,15 @@ export default function StaffChangePasswordPage() {
           window.location.replace("/staff/activate");
           return;
         }
+        if (
+          mePayload.staffActivationStatus === "completed" &&
+          !mePayload.mustChangePassword &&
+          !isRecoveryFlow
+        ) {
+          window.location.replace(roleHome(mePayload.role));
+          return;
+        }
+        setAuthAccessToken(resolvedAccessToken);
         setProfile(mePayload);
         setPhase(mePayload.staffEmailVerifiedAt || staffEmailToken ? "password" : "email");
       } catch (caught) {
@@ -172,7 +201,7 @@ export default function StaffChangePasswordPage() {
   }, []);
 
   const passwordValid = useMemo(
-    () => password.length >= 10 && password === confirm && phase === "password" && !busy,
+    () => password.length >= STAFF_PASSWORD_MIN_LENGTH && password === confirm && phase === "password" && !busy,
     [busy, confirm, password, phase],
   );
 
@@ -205,26 +234,16 @@ export default function StaffChangePasswordPage() {
 
   async function submitPassword(event: FormEvent) {
     event.preventDefault();
-    if (!client || !passwordValid) return;
+    if (!client || !authAccessToken || !passwordValid) return;
     setBusy(true);
     setError("");
-    const update = await client.auth.updateUser({ password });
-    if (update.error) {
-      setError(update.error.message);
-      setBusy(false);
-      return;
-    }
-
-    const session = await client.auth.getSession();
     const response = await fetch("/api/auth/staff-password", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(session.data.session?.access_token
-          ? { Authorization: `Bearer ${session.data.session.access_token}` }
-          : {}),
+        Authorization: `Bearer ${authAccessToken}`,
       },
-      body: JSON.stringify({ passwordChanged: true }),
+      body: JSON.stringify({ password }),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
@@ -232,9 +251,10 @@ export default function StaffChangePasswordPage() {
       setBusy(false);
       return;
     }
+    await client.auth.signOut({ scope: "local" }).catch(() => null);
     setPhase("done");
     window.setTimeout(() => {
-      window.location.assign(payload?.data?.home || payload?.home || "/login/staff");
+      window.location.assign(payload?.data?.next || payload?.next || "/login/staff?passwordChanged=1");
     }, 900);
   }
 
@@ -335,7 +355,7 @@ export default function StaffChangePasswordPage() {
                 style={inputStyle}
                 type="password"
                 autoComplete="new-password"
-                minLength={10}
+                minLength={STAFF_PASSWORD_MIN_LENGTH}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
@@ -347,13 +367,13 @@ export default function StaffChangePasswordPage() {
                 style={inputStyle}
                 type="password"
                 autoComplete="new-password"
-                minLength={10}
+                minLength={STAFF_PASSWORD_MIN_LENGTH}
                 value={confirm}
                 onChange={(event) => setConfirm(event.target.value)}
                 required
               />
             </label>
-            <span style={{ color: "#667287", fontSize: 13 }}>密碼至少 10 位。</span>
+            <span style={{ color: "#667287", fontSize: 13 }}>密碼至少 {STAFF_PASSWORD_MIN_LENGTH} 位。</span>
             {confirm && password !== confirm ? <span style={{ color: "#942d3b" }}>兩次密碼不一致</span> : null}
             <button
               type="submit"
@@ -368,7 +388,7 @@ export default function StaffChangePasswordPage() {
                 opacity: passwordValid ? 1 : 0.5,
               }}
             >
-              {busy ? "設定中..." : "完成設定並進入後台"}
+              {busy ? "設定中..." : "完成設定並重新登入"}
             </button>
           </form>
         ) : null}

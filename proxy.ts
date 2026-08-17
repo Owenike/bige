@@ -2,10 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createSupabaseAdminClient } from "./lib/supabase/admin";
 import { evaluateTenantAccess, type TenantStatus, type TenantSubscriptionSnapshot } from "./lib/tenant-subscription";
+import { hasAuthCapability } from "./lib/auth-capabilities";
 
 const REQUEST_ID_HEADER = "x-request-id";
 
-type RouteScope = "platform_admin" | "manager" | "frontdesk" | "coach" | "member" | null;
+type RouteScope = "platform_admin" | "manager" | "frontdesk" | "student_checkin_admin" | "coach" | "member" | null;
 
 type SessionContext = {
   userId: string;
@@ -16,12 +17,14 @@ type SessionContext = {
   tenantStatus: TenantStatus;
   subscription: TenantSubscriptionSnapshot | null;
   mustChangePassword: boolean;
+  isStudentCheckinAdmin: boolean;
 };
 
 function normalizePathScope(pathname: string): RouteScope {
   if (pathname === "/platform-admin" || pathname.startsWith("/platform-admin/")) return "platform_admin";
   if (pathname === "/manager" || pathname.startsWith("/manager/")) return "manager";
-  if (pathname === "/admin/student-check-ins" || pathname.startsWith("/admin/student-check-ins/")) return "frontdesk";
+  if (pathname === "/admin/student-check-ins/login" || pathname.startsWith("/admin/student-check-ins/login/")) return null;
+  if (pathname === "/admin/student-check-ins" || pathname.startsWith("/admin/student-check-ins/")) return "student_checkin_admin";
   if (pathname === "/frontdesk" || pathname.startsWith("/frontdesk/")) return "frontdesk";
   if (pathname === "/coach" || pathname.startsWith("/coach/")) return "coach";
   if (pathname === "/member/bookings") return null;
@@ -29,7 +32,7 @@ function normalizePathScope(pathname: string): RouteScope {
   return null;
 }
 
-function isRouteAllowed(scope: RouteScope, role: string) {
+function isRouteAllowed(scope: RouteScope, role: string, isStudentCheckinAdmin: boolean) {
   const roleSet = new Set([role]);
   if (scope === "platform_admin") return roleSet.has("platform_admin");
   if (scope === "manager") {
@@ -48,6 +51,9 @@ function isRouteAllowed(scope: RouteScope, role: string) {
       roleSet.has("branch_manager") ||
       roleSet.has("frontdesk")
     );
+  }
+  if (scope === "student_checkin_admin") {
+    return isStudentCheckinAdmin || roleSet.has("student_checkin_admin");
   }
   if (scope === "coach") return roleSet.has("platform_admin") || roleSet.has("coach");
   if (scope === "member") return roleSet.has("member") || roleSet.has("platform_admin");
@@ -70,9 +76,16 @@ function withRequestId(response: NextResponse, requestId: string) {
 
 function redirectToLogin(request: NextRequest, requestId: string) {
   const url = request.nextUrl.clone();
-  url.pathname = request.nextUrl.pathname === "/member" || request.nextUrl.pathname.startsWith("/member/")
-    ? "/login/member"
-    : "/login/staff";
+  if (request.nextUrl.pathname === "/member" || request.nextUrl.pathname.startsWith("/member/")) {
+    url.pathname = "/login/member";
+  } else if (
+    request.nextUrl.pathname === "/admin/student-check-ins" ||
+    request.nextUrl.pathname.startsWith("/admin/student-check-ins/")
+  ) {
+    url.pathname = "/admin/student-check-ins/login";
+  } else {
+    url.pathname = "/login/staff";
+  }
   url.searchParams.set("redirect", `${request.nextUrl.pathname}${request.nextUrl.search}`);
   return withRequestId(NextResponse.redirect(url), requestId);
 }
@@ -105,6 +118,8 @@ async function loadSessionContext(request: NextRequest, response: NextResponse):
   const user = authResult.data.user;
   if (authResult.error || !user) return null;
 
+  const isStudentCheckinAdmin = hasAuthCapability(user.app_metadata, "student_checkin_admin");
+
   const profileResult = await supabase
     .from("profiles")
     .select("id, role, is_active, tenant_id, branch_id, must_change_password")
@@ -112,6 +127,19 @@ async function loadSessionContext(request: NextRequest, response: NextResponse):
     .maybeSingle();
 
   if (profileResult.error || !profileResult.data) {
+    if (isStudentCheckinAdmin) {
+      return {
+        userId: user.id,
+        role: "student_checkin_admin",
+        isActive: true,
+        tenantId: null,
+        branchId: null,
+        tenantStatus: null,
+        subscription: null,
+        mustChangePassword: false,
+        isStudentCheckinAdmin: true,
+      };
+    }
     return {
       userId: user.id,
       role: null,
@@ -121,6 +149,7 @@ async function loadSessionContext(request: NextRequest, response: NextResponse):
       tenantStatus: null,
       subscription: null,
       mustChangePassword: false,
+      isStudentCheckinAdmin: false,
     };
   }
 
@@ -189,6 +218,7 @@ async function loadSessionContext(request: NextRequest, response: NextResponse):
     tenantStatus,
     subscription,
     mustChangePassword: profile.must_change_password === true,
+    isStudentCheckinAdmin: Boolean(isStudentCheckinAdmin),
   };
 }
 
@@ -196,6 +226,13 @@ export async function proxy(request: NextRequest) {
   const requestId = request.headers.get(REQUEST_ID_HEADER) || crypto.randomUUID();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(REQUEST_ID_HEADER, requestId);
+
+  if (request.nextUrl.pathname === "/frontdesk" || request.nextUrl.pathname === "/frontdesk/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/frontdesk/fitness";
+    url.search = "";
+    return withRequestId(NextResponse.redirect(url), requestId);
+  }
 
   const response = NextResponse.next({
     request: { headers: requestHeaders },
@@ -228,7 +265,7 @@ export async function proxy(request: NextRequest) {
     return withRequestId(NextResponse.redirect(url), requestId);
   }
 
-  if (!isRouteAllowed(scope, session.role)) {
+  if (!isRouteAllowed(scope, session.role, session.isStudentCheckinAdmin)) {
     if (scope === "member") {
       return redirectToLogin(request, requestId);
     }
@@ -242,7 +279,7 @@ export async function proxy(request: NextRequest) {
     return redirectBlocked(request, requestId, "BRANCH_SCOPE_DENIED");
   }
 
-  if (session.role !== "platform_admin") {
+  if (session.role !== "platform_admin" && session.role !== "student_checkin_admin") {
     const access = evaluateTenantAccess({
       tenantStatus: session.tenantStatus,
       subscription: session.subscription,

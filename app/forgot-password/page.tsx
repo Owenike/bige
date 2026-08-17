@@ -1,117 +1,136 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import { useI18n } from "../i18n-provider";
+
+const SAFE_LOGIN_PATHS = new Set([
+  "/login",
+  "/login/staff",
+  "/login/member",
+  "/admin/student-check-ins/login",
+]);
 
 function resolveAppOrigin() {
   const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
-  if (configured) {
-    return configured.replace(/\/+$/, "");
-  }
-
+  if (configured) return configured.replace(/\/+$/, "");
   if (typeof window !== "undefined" && window.location?.origin) {
     return window.location.origin.replace(/\/+$/, "");
   }
-
   return "http://localhost:3000";
 }
 
-export default function ForgotPasswordPage() {
-  const { locale } = useI18n();
-  const zh = locale !== "en";
+function safeReturnPath(value: string | null) {
+  if (!value) return "/login";
+  const [pathname] = value.split("?");
+  return SAFE_LOGIN_PATHS.has(pathname) ? value : "/login";
+}
+
+function ForgotPasswordContent() {
+  const searchParams = useSearchParams();
+  const returnTo = useMemo(() => safeReturnPath(searchParams.get("returnTo")), [searchParams]);
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
-    setError(null);
-    setMessage(null);
+    setError("");
+    setMessage("");
 
     try {
       if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error(zh ? "缺少 Supabase 環境設定。" : "Missing Supabase environment variables.");
+        throw new Error("目前無法使用密碼重設，請稍後再試。");
       }
 
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
+        auth: { persistSession: false, autoRefreshToken: false },
       });
 
-      const appUrl = resolveAppOrigin();
-
-      const { error: recoverError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${appUrl}/reset-password`,
+      const resetUrl = new URL("/reset-password", resolveAppOrigin());
+      resetUrl.searchParams.set("returnTo", returnTo);
+      const { error: recoverError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: resetUrl.toString(),
       });
 
-      if (recoverError) throw recoverError;
-      setMessage(
-        zh
-          ? "重設密碼連結已寄出。這是共用 Email recovery 入口，適用於員工與會員帳號。"
-          : "Password reset link sent. This shared email recovery flow can be used by both staff and member accounts.",
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : zh ? "送出失敗" : "Request failed");
+      if (recoverError) {
+        if (recoverError.status === 429) throw new Error("寄送次數過多，請稍後再試。");
+        throw new Error("目前無法寄送重設信，請稍後再試。");
+      }
+
+      setMessage("如果這個 Email 已建立帳號，重設密碼連結會寄到信箱。請一併確認垃圾郵件。");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "目前無法寄送重設信。");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <main className="container">
-      <div className="card formCard" style={{ maxWidth: 560, margin: "0 auto" }}>
-        <div className="kvLabel">{zh ? "共用帳號復原" : "Shared Account Recovery"}</div>
-        <h1 className="sectionTitle" style={{ marginTop: 10 }}>
-          {zh ? "忘記密碼 / 寄送重設信" : "Forgot Password / Send Reset Link"}
-        </h1>
-        <p style={{ opacity: 0.85, marginTop: 8 }}>
-          {zh
-            ? "這是共用的 Email-based recovery 入口，不只會員可用。請輸入帳號 Email，我們會寄送重設密碼連結。"
-            : "This is a shared email-based recovery page, not member-only. Enter the account email and we will send a password reset link."}
-        </p>
+    <main className="studentAdminLoginPage">
+      <section className="studentAdminLoginPanel">
+        <Link className="studentAdminLoginBrand" href="/" aria-label="返回 BigE Fitness 首頁">
+          <strong>BIGE</strong>
+          <span>FITNESS</span>
+        </Link>
 
-        {message ? <div style={{ marginTop: 12, color: "#2b7a6b", fontWeight: 600 }}>{message}</div> : null}
-        {error ? (
-          <div className="error" style={{ marginTop: 12 }}>
-            {error}
-          </div>
-        ) : null}
+        <div className="studentAdminLoginHeading">
+          <div className="studentAdminLoginEyebrow">ACCOUNT RECOVERY</div>
+          <h1 className="studentAdminLoginTitle">忘記密碼</h1>
+        </div>
 
-        <form onSubmit={submit} style={{ marginTop: 12 }}>
-          <label className="field">
-            <span className="kvLabel" style={{ textTransform: "none" }}>
-              {zh ? "Email" : "Email"}
-            </span>
-            <input
-              className="input"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </label>
+        <section className="studentAdminLoginFormSection">
+          <p className="studentAdminLoginCopy">
+            輸入登入帳號的 Email，我們會寄送一次性重設密碼連結。
+          </p>
 
-          <div className="actions" style={{ marginTop: 14 }}>
-            <button type="submit" className={`btn ${busy ? "" : "btnPrimary"}`} disabled={busy}>
-              {busy ? (zh ? "送出中..." : "Submitting...") : zh ? "寄送重設連結" : "Send Reset Link"}
-            </button>
-            <Link href="/login" className="btn">
-              {zh ? "返回登入" : "Back to Login"}
-            </Link>
-          </div>
-        </form>
-      </div>
+          {message ? <div className="studentAdminLoginNotice" role="status">{message}</div> : null}
+          {error ? <div className="error" role="alert">{error}</div> : null}
+
+          <form className="studentAdminLoginForm" onSubmit={submit}>
+            <label className="field">
+              <span className="studentAdminLoginLabel">Email</span>
+              <input
+                autoComplete="email"
+                autoFocus
+                className="input"
+                inputMode="email"
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                required
+                type="email"
+                value={email}
+              />
+            </label>
+
+            <div className="studentAdminLoginActions">
+              <button className="studentAdminLoginSubmit" disabled={busy} type="submit">
+                {busy ? "寄送中..." : "寄送重設連結"}
+              </button>
+              <Link className="studentAdminLoginLink" href={returnTo}>
+                返回登入
+              </Link>
+              <Link className="studentAdminLoginLink" href="/">
+                返回首頁
+              </Link>
+            </div>
+          </form>
+        </section>
+      </section>
     </main>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={<main className="studentAdminLoginPage" />}>
+      <ForgotPasswordContent />
+    </Suspense>
   );
 }

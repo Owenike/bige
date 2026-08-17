@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { httpLogBase } from "../../../../../lib/observability";
 import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { canUseStaffAccountSettings } from "../../../../../lib/staff-credentials";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
 
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
   const tokenRow = claimResult.data;
   const profileResult = await admin
     .from("profiles")
-    .select("id, is_active, staff_deleted_at")
+    .select("id, employee_number, is_active, staff_deleted_at, staff_activation_status")
     .eq("id", tokenRow.profile_id)
     .maybeSingle();
   if (
@@ -84,6 +85,25 @@ export async function POST(request: Request) {
   ) {
     return NextResponse.json({ error: "員工帳號不存在或已停用" }, { status: 403 });
   }
+  const isAccountEmailChange = profileResult.data.staff_activation_status === "completed";
+  if (
+    isAccountEmailChange &&
+    !canUseStaffAccountSettings(profileResult.data.employee_number)
+  ) {
+    return NextResponse.json(
+      { error: "此帳號不提供信箱變更功能" },
+      { status: 403 },
+    );
+  }
+
+  const currentUserResult = await admin.auth.admin.getUserById(tokenRow.profile_id);
+  if (currentUserResult.error || !currentUserResult.data.user) {
+    return NextResponse.json(
+      { error: currentUserResult.error?.message || "找不到登入帳號" },
+      { status: 500 },
+    );
+  }
+  const previousEmail = currentUserResult.data.user.email?.trim().toLowerCase() || null;
 
   try {
     if (await emailBelongsToAnotherUser(tokenRow.email, tokenRow.profile_id)) {
@@ -153,12 +173,22 @@ export async function POST(request: Request) {
   await admin.from("audit_logs").insert({
     tenant_id: tokenRow.tenant_id,
     actor_id: tokenRow.profile_id,
-    action: "staff_email_verified",
+    action: isAccountEmailChange ? "staff_email_changed" : "staff_email_verified",
     target_type: "profile",
     target_id: tokenRow.profile_id,
-    reason: null,
-    payload: { verifiedAt: now },
+    reason: isAccountEmailChange ? "self_service" : null,
+    payload: isAccountEmailChange
+      ? {
+          previousEmail,
+          newEmail: tokenRow.email,
+          changedAt: now,
+        }
+      : { verifiedAt: now },
   });
 
-  return NextResponse.json({ verified: true, sessionReady: true });
+  return NextResponse.json({
+    verified: true,
+    sessionReady: true,
+    mode: isAccountEmailChange ? "email_change" : "activation",
+  });
 }

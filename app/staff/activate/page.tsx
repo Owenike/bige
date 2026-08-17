@@ -21,7 +21,7 @@ type MePayload = {
 };
 
 function roleHome(role: string | undefined) {
-  if (role === "platform_admin") return "/platform-admin";
+  if (role === "platform_admin") return "/manager/fitness";
   if (role === "frontdesk") return "/frontdesk/fitness";
   if (role === "coach" || role === "therapist") return "/coach/fitness";
   return "/manager/fitness";

@@ -13,6 +13,7 @@ import {
   staffActivationSecret,
 } from "../../../../lib/staff-activation";
 import { createInAppNotifications } from "../../../../lib/in-app-notifications";
+import { recordSystemAuditEvent, type SystemAuditOutcome } from "../../../../lib/system-audit";
 
 function normalizePhone(input: string) {
   return input.replace(/\D/g, "");
@@ -30,10 +31,57 @@ function tableMissing(message: string | undefined, tableName: string) {
 
 const MAX_ACTIVE_DEVICE_SESSIONS = 5;
 
+type LoginAuditContext = {
+  tenantId: string | null;
+  branchId: string | null;
+  actorId: string | null;
+  actorRole: string | null;
+  accountType: "staff" | "member" | "unknown";
+  accountIdentifier: string | null;
+};
+
+function loginAuditOutcome(status: number): SystemAuditOutcome {
+  if (status === 429) return "rate_limited";
+  if (status === 403 || status === 423) return "denied";
+  return "failure";
+}
+
 export async function POST(request: Request) {
   const t0 = Date.now();
   const base = httpLogBase(request);
   const ip = base.ip || "unknown";
+  const auditContext: LoginAuditContext = {
+    tenantId: null,
+    branchId: null,
+    actorId: null,
+    actorRole: null,
+    accountType: "unknown",
+    accountIdentifier: null,
+  };
+  const recordLoginAudit = async (status: number, reason: string) =>
+    recordSystemAuditEvent({
+      request,
+      tenantId: auditContext.tenantId,
+      branchId: auditContext.branchId,
+      actorId: auditContext.actorId,
+      actorRole: auditContext.actorRole,
+      accountType: auditContext.accountType,
+      accountIdentifier: auditContext.accountIdentifier,
+      eventCategory: "authentication",
+      action: "auth.login",
+      outcome: loginAuditOutcome(status),
+      reason,
+      metadata: { statusCode: status },
+    });
+  const rejectLogin = async (
+    status: number,
+    error: string,
+    reason: string,
+    headers?: HeadersInit,
+  ) => {
+    await recordLoginAudit(status, reason);
+    return NextResponse.json({ error }, { status, headers });
+  };
 
   const rl = rateLimitFixedWindow({
     key: `login:${ip}`,
@@ -49,28 +97,30 @@ export async function POST(request: Request) {
       durationMs: Date.now() - t0,
       retryAfterSec: rl.retryAfterSec,
     });
-    return NextResponse.json(
-      { error: "Too many requests" },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(rl.retryAfterSec),
-          "X-RateLimit-Limit": String(rl.limit),
-          "X-RateLimit-Remaining": String(rl.remaining),
-        },
-      },
-    );
+    return rejectLogin(429, "Too many requests", "rate_limit_exceeded", {
+      "Retry-After": String(rl.retryAfterSec),
+      "X-RateLimit-Limit": String(rl.limit),
+      "X-RateLimit-Remaining": String(rl.remaining),
+    });
   }
 
   const body = await request.json().catch(() => null);
-  const employeeNumber = normalizeEmployeeNumber(body?.employeeNumber);
+  const credentialRaw = typeof body?.employeeNumber === "string" ? body.employeeNumber.trim() : "";
+  const emailCredential = credentialRaw.includes("@") ? credentialRaw.toLowerCase() : "";
+  const employeeNumber = emailCredential ? "" : normalizeEmployeeNumber(credentialRaw);
   const phoneRaw = typeof body?.phone === "string" ? body.phone.trim() : "";
   const phone = normalizePhone(phoneRaw);
   const password = typeof body?.password === "string" ? body.password : "";
+  auditContext.accountType = phone ? "member" : employeeNumber || emailCredential ? "staff" : "unknown";
+  auditContext.accountIdentifier = phone || employeeNumber || emailCredential || null;
 
-  if ((!employeeNumber && !phone) || !password) {
+  if ((!employeeNumber && !emailCredential && !phone) || !password) {
     logEvent("info", { type: "http", action: "login", ...base, status: 400, durationMs: Date.now() - t0 });
-    return NextResponse.json({ error: "employee number/phone and password are required" }, { status: 400 });
+    return rejectLogin(
+      400,
+      "email/employee number/phone and password are required",
+      "credentials_required",
+    );
   }
 
   const admin = createSupabaseAdminClient();
@@ -81,6 +131,7 @@ export async function POST(request: Request) {
         id: string;
         tenant_id: string | null;
         branch_id: string | null;
+        role: string | null;
         display_name: string | null;
         employee_number: string | null;
         is_active: boolean;
@@ -88,14 +139,51 @@ export async function POST(request: Request) {
         staff_activation_status: string | null;
       }
     | null = null;
-  if (employeeNumber) {
-    if (!isEmployeeNumber(employeeNumber)) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+  if (emailCredential) {
+    const users = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (users.error) {
+      return rejectLogin(500, users.error.message, "auth_user_lookup_failed");
+    }
+
+    const authUser = (users.data.users || []).find((user) => (user.email || "").toLowerCase() === emailCredential);
+    if (!authUser?.id) {
+      return rejectLogin(401, "Invalid credentials", "account_not_found");
     }
 
     const profileResult = await admin
       .from("profiles")
-      .select("id, tenant_id, branch_id, display_name, employee_number, is_active, staff_deleted_at, staff_activation_status")
+      .select("id, tenant_id, branch_id, role, display_name, employee_number, is_active, staff_deleted_at, staff_activation_status")
+      .eq("id", authUser.id)
+      .maybeSingle();
+
+    if (
+      profileResult.error ||
+      !profileResult.data ||
+      profileResult.data.is_active !== true ||
+      profileResult.data.staff_deleted_at
+    ) {
+      return rejectLogin(401, "Invalid credentials", "account_inactive_or_missing");
+    }
+
+    staffProfile = profileResult.data;
+    Object.assign(auditContext, {
+      tenantId: staffProfile.tenant_id,
+      branchId: staffProfile.branch_id,
+      actorId: staffProfile.id,
+      actorRole: staffProfile.role,
+    });
+    if (!isStaffActivationComplete(staffProfile.staff_activation_status)) {
+      return rejectLogin(401, "Invalid credentials", "staff_activation_incomplete");
+    }
+    emailToLogin = emailCredential;
+  } else if (employeeNumber) {
+    if (!isEmployeeNumber(employeeNumber)) {
+      return rejectLogin(401, "Invalid credentials", "invalid_employee_number");
+    }
+
+    const profileResult = await admin
+      .from("profiles")
+      .select("id, tenant_id, branch_id, role, display_name, employee_number, is_active, staff_deleted_at, staff_activation_status")
       .eq("employee_number", employeeNumber)
       .maybeSingle();
 
@@ -105,14 +193,34 @@ export async function POST(request: Request) {
       profileResult.data.is_active !== true ||
       profileResult.data.staff_deleted_at
     ) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      return rejectLogin(401, "Invalid credentials", "account_inactive_or_missing");
     }
     staffProfile = profileResult.data;
+    Object.assign(auditContext, {
+      tenantId: staffProfile.tenant_id,
+      branchId: staffProfile.branch_id,
+      actorId: staffProfile.id,
+      actorRole: staffProfile.role,
+    });
 
     if (
       staffProfile.staff_activation_status === "denied" ||
       staffProfile.staff_activation_status === "locked"
     ) {
+      await recordSystemAuditEvent({
+        request,
+        tenantId: auditContext.tenantId,
+        branchId: auditContext.branchId,
+        actorId: auditContext.actorId,
+        actorRole: auditContext.actorRole,
+        accountType: auditContext.accountType,
+        accountIdentifier: auditContext.accountIdentifier,
+        eventCategory: "authentication",
+        action: "auth.login",
+        outcome: "denied",
+        reason: "staff_activation_locked_or_denied",
+        metadata: { statusCode: 423 },
+      });
       return NextResponse.json(
         { error: "首次啟用已中斷，請聯絡主管重新產生啟用碼" },
         { status: 423 },
@@ -122,41 +230,64 @@ export async function POST(request: Request) {
     const authUserResult = await admin.auth.admin.getUserById(staffProfile.id);
     const staffEmail = authUserResult.data.user?.email?.trim().toLowerCase() || "";
     if (authUserResult.error || !staffEmail) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      return rejectLogin(401, "Invalid credentials", "staff_auth_identity_missing");
     }
     emailToLogin = staffEmail;
     activationLogin = !isStaffActivationComplete(staffProfile.staff_activation_status);
   } else if (phone) {
     const memberByPhoneWithPortal = await admin
       .from("members")
-      .select("id, email, portal_status")
+      .select("id, tenant_id, auth_user_id, email, portal_status")
       .eq("phone", phone)
       .limit(2);
 
     const memberByPhone =
       memberByPhoneWithPortal.error && memberByPhoneWithPortal.error.message.includes("portal_status")
-        ? await admin.from("members").select("id, email").eq("phone", phone).limit(2)
+        ? await admin.from("members").select("id, tenant_id, auth_user_id, email").eq("phone", phone).limit(2)
         : memberByPhoneWithPortal;
 
     if (memberByPhone.error) {
       logEvent("error", { type: "http", action: "login", ...base, status: 500, durationMs: Date.now() - t0, error: memberByPhone.error.message });
-      return NextResponse.json({ error: memberByPhone.error.message }, { status: 500 });
+      return rejectLogin(500, memberByPhone.error.message, "member_lookup_failed");
     }
 
-    const members = (memberByPhone.data || []) as Array<{ id: string; email: string | null; portal_status?: string | null }>;
+    const members = (memberByPhone.data || []) as Array<{
+      id: string;
+      tenant_id: string | null;
+      auth_user_id: string | null;
+      email: string | null;
+      portal_status?: string | null;
+    }>;
     if (members.length === 0) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      return rejectLogin(401, "Invalid credentials", "member_not_found");
     }
     if (members.length > 1) {
-      return NextResponse.json({ error: "Phone is bound to multiple tenants. Please contact frontdesk." }, { status: 409 });
+      return rejectLogin(
+        409,
+        "Phone is bound to multiple tenants. Please contact frontdesk.",
+        "member_phone_ambiguous",
+      );
     }
 
     const member = members[0];
+    Object.assign(auditContext, {
+      tenantId: member.tenant_id,
+      actorId: member.auth_user_id,
+      actorRole: "member",
+    });
     if (!member.email) {
-      return NextResponse.json({ error: "Member email is missing. Please contact frontdesk." }, { status: 400 });
+      return rejectLogin(
+        400,
+        "Member email is missing. Please contact frontdesk.",
+        "member_email_missing",
+      );
     }
     if (member.portal_status && member.portal_status !== "active") {
-      return NextResponse.json({ error: "Member portal is not activated. Please request activation email first." }, { status: 403 });
+      return rejectLogin(
+        403,
+        "Member portal is not activated. Please request activation email first.",
+        "member_portal_inactive",
+      );
     }
 
     emailToLogin = member.email.toLowerCase();
@@ -167,6 +298,7 @@ export async function POST(request: Request) {
   if (activationLogin && staffProfile) {
     const activationCode = normalizeStaffActivationCode(password);
     if (!isStaffActivationCode(activationCode)) {
+      await recordLoginAudit(401, "invalid_staff_activation_code_format");
       return NextResponse.json({ error: "員工編號或一次性啟用碼錯誤" }, { status: 401 });
     }
 
@@ -181,9 +313,10 @@ export async function POST(request: Request) {
       .limit(1)
       .maybeSingle();
     if (tokenResult.error) {
-      return NextResponse.json({ error: tokenResult.error.message }, { status: 500 });
+      return rejectLogin(500, tokenResult.error.message, "staff_activation_token_lookup_failed");
     }
     if (!tokenResult.data || tokenResult.data.expires_at <= nowIso) {
+      await recordLoginAudit(410, "staff_activation_token_expired");
       return NextResponse.json(
         { error: "一次性啟用碼已失效，請聯絡主管重新產生" },
         { status: 410 },
@@ -198,6 +331,7 @@ export async function POST(request: Request) {
         secret: staffActivationSecret(),
       });
     } catch (error) {
+      await recordLoginAudit(500, "staff_activation_code_verification_failed");
       return NextResponse.json(
         { error: error instanceof Error ? error.message : "啟用碼驗證設定錯誤" },
         { status: 500 },
@@ -235,6 +369,7 @@ export async function POST(request: Request) {
           dedupeKey: `staff-activation-locked:${staffProfile.id}:${tokenResult.data.id}`,
         }).catch(() => null);
       }
+      await recordLoginAudit(401, "staff_activation_code_mismatch");
       return NextResponse.json({ error: "員工編號或一次性啟用碼錯誤" }, { status: 401 });
     }
 
@@ -247,6 +382,7 @@ export async function POST(request: Request) {
       .select("id")
       .maybeSingle();
     if (claimed.error || !claimed.data) {
+      await recordLoginAudit(409, "staff_activation_token_claim_failed");
       return NextResponse.json(
         { error: "一次性啟用碼已使用，請聯絡主管重新產生" },
         { status: 409 },
@@ -262,6 +398,7 @@ export async function POST(request: Request) {
         .from("staff_activation_tokens")
         .update({ used_at: null })
         .eq("id", tokenResult.data.id);
+      await recordLoginAudit(500, "staff_activation_session_link_failed");
       return NextResponse.json(
         { error: linkResult.error?.message || "建立首次啟用工作階段失敗" },
         { status: 500 },
@@ -284,7 +421,7 @@ export async function POST(request: Request) {
 
   if (result.error || !result.data.user) {
     logEvent("info", { type: "http", action: "login", ...base, status: 401, durationMs: Date.now() - t0 });
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    return rejectLogin(401, "Invalid credentials", "invalid_credentials");
   }
 
   const authUser = result.data.user;
@@ -297,7 +434,43 @@ export async function POST(request: Request) {
     .update({ last_login_at: nowIso, updated_at: nowIso })
     .eq("id", authUser.id);
 
-  const profileResult = await admin.from("profiles").select("role, tenant_id").eq("id", authUser.id).maybeSingle();
+  const profileResult = await admin
+    .from("profiles")
+    .select("role, tenant_id, branch_id, employee_number")
+    .eq("id", authUser.id)
+    .maybeSingle();
+  Object.assign(auditContext, {
+    tenantId: profileResult.data?.tenant_id || auditContext.tenantId,
+    branchId: profileResult.data?.branch_id || auditContext.branchId,
+    actorId: authUser.id,
+    actorRole: profileResult.data?.role || auditContext.actorRole,
+    accountType: profileResult.data?.role === "member" ? "member" : "staff",
+  });
+  if (
+    !profileResult.error &&
+    profileResult.data?.tenant_id &&
+    profileResult.data.role !== "member"
+  ) {
+    const loginInsert = await admin.from("staff_login_events").insert({
+      tenant_id: profileResult.data.tenant_id,
+      profile_id: authUser.id,
+      employee_number: profileResult.data.employee_number || staffProfile?.employee_number || null,
+      event_type: "login",
+      user_agent: userAgent,
+      ip_address: base.ip || null,
+      created_at: nowIso,
+    });
+    if (loginInsert.error && !tableMissing(loginInsert.error.message, "staff_login_events")) {
+      logEvent("warn", {
+        type: "http",
+        action: "staff_login_event_insert_failed",
+        ...base,
+        status: 500,
+        userId: authUser.id,
+        error: loginInsert.error.message,
+      });
+    }
+  }
   if (!profileResult.error && profileResult.data?.role === "member" && profileResult.data.tenant_id) {
     const memberResult = await admin
       .from("members")
@@ -376,6 +549,26 @@ export async function POST(request: Request) {
     }
   }
 
+  await recordSystemAuditEvent({
+    request,
+    tenantId: auditContext.tenantId,
+    branchId: auditContext.branchId,
+    actorId: authUser.id,
+    actorRole: auditContext.actorRole,
+    accountType: auditContext.accountType,
+    accountIdentifier: auditContext.accountIdentifier,
+    eventCategory: "authentication",
+    action: "auth.login",
+    outcome: "success",
+    targetType: "auth_user",
+    targetId: authUser.id,
+    reason: activationLogin ? "staff_activation_login" : "password_login",
+    metadata: {
+      statusCode: 200,
+      platform,
+      memberDeviceSessionTracked: profileResult.data?.role === "member",
+    },
+  });
   logEvent("info", {
     type: "http",
     action: "login",

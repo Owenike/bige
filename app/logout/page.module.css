@@ -1,0 +1,168 @@
+.page {
+  min-height: 100svh;
+}
+
+.hero {
+  min-height: min(820px, 94svh);
+  align-items: center;
+  --training-hero-position: center 22%;
+  --training-hero-mobile-position: center 28%;
+}
+
+.heroInner {
+  padding-top: clamp(76px, 12vw, 128px);
+  padding-bottom: clamp(56px, 8vw, 84px);
+}
+
+.statusCard {
+  width: min(100%, 560px);
+  margin-top: 28px;
+  padding: 18px;
+  border: 1px solid var(--training-accent-line);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(214, 184, 116, .13), rgba(255, 255, 255, .035)),
+    rgba(5, 7, 10, .52);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .2);
+  backdrop-filter: blur(18px);
+}
+
+.statusCardError {
+  border-color: rgba(231, 172, 130, .52);
+  background:
+    linear-gradient(135deg, rgba(182, 82, 54, .15), rgba(255, 255, 255, .035)),
+    rgba(5, 7, 10, .58);
+}
+
+.statusHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.statusHeader > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.statusHeader strong {
+  color: #fff;
+  font-size: 17px;
+  font-weight: 560;
+  letter-spacing: .01em;
+}
+
+.statusEyebrow {
+  color: rgba(245, 225, 176, .92);
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.spinner,
+.errorMark {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 999px;
+}
+
+.spinner {
+  border: 1px solid rgba(245, 225, 176, .25);
+  border-top-color: #f5e1b0;
+  border-right-color: #d6b874;
+  animation: spin 1s linear infinite;
+}
+
+.errorMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(244, 188, 146, .58);
+  background: rgba(184, 79, 50, .18);
+  color: #f4bc92;
+  font-weight: 700;
+}
+
+.statusMessage {
+  margin: 14px 0 0;
+  color: rgba(238, 243, 250, .74);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.progressTrack {
+  height: 2px;
+  margin-top: 17px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .12);
+}
+
+.progressBar {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(214, 184, 116, .15), #f5e1b0, rgba(214, 184, 116, .15));
+  animation: progress 1.45s ease-in-out infinite;
+}
+
+.retryButton {
+  margin-top: 18px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.securityNote {
+  max-width: 560px;
+  margin: 18px 0 0;
+  color: rgba(238, 243, 250, .5);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes progress {
+  0% {
+    transform: translateX(-115%);
+  }
+
+  100% {
+    transform: translateX(340%);
+  }
+}
+
+@media (max-width: 680px) {
+  .hero {
+    min-height: calc(100svh - 74px);
+    align-items: flex-end;
+  }
+
+  .heroInner {
+    padding-top: 108px;
+    padding-bottom: 48px;
+  }
+
+  .statusCard {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .securityNote {
+    margin-top: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .progressBar {
+    animation-duration: 2.5s;
+  }
+}
