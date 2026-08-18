@@ -34,6 +34,8 @@ npx tsc `
   tests/staff-scheduling.test.ts `
   tests/staff-attendance.test.ts `
   tests/staff-payroll.test.ts `
+  tests/staff-performance-settlement.test.ts `
+  tests/staff-performance-workflow.test.ts `
   tests/student-membership-period.test.ts `
   tests/student-password-recovery-url.test.ts `
   tests/student-checkin-entry.test.ts `
@@ -75,6 +77,7 @@ npx tsc `
   lib/staff-attendance.ts `
   lib/staff-payroll.ts `
   lib/staff-performance.ts `
+  lib/staff-performance-settlement.ts `
   lib/student-membership-period.ts `
   lib/recovery-url.ts `
   lib/student-checkin-entry.ts `

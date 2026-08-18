@@ -345,7 +345,7 @@ export async function POST(request: Request) {
       if (employeesResult.error) throw new Error(employeesResult.error.message);
       const employees = employeesResult.data || [];
       const ids = employees.map((item) => item.id);
-      await syncBigePaymentPerformanceSources(admin, tenantId, body.month);
+      await syncBigePaymentPerformanceSources(admin, tenantId, body.month, user.id);
       const [
         termsResult,
         scheduleResult,
@@ -393,7 +393,7 @@ export async function POST(request: Request) {
         admin.from("staff_holiday_calendar").select("holiday_date").or(`tenant_id.is.null,tenant_id.eq.${tenantId}`).gte("holiday_date", dateRange.start).lte("holiday_date", dateRange.end),
         admin.from("staff_statutory_rate_versions").select("rate_type, configuration, effective_from").or(`tenant_id.is.null,tenant_id.eq.${tenantId}`).lte("effective_from", dateRange.end).or(`effective_to.is.null,effective_to.gte.${dateRange.start}`).order("effective_from", { ascending: false }),
         admin.from("staff_payroll_bonus_entries").select("*").eq("payroll_period_id", payrollPeriod.id).eq("status", "approved"),
-        admin.from("staff_sales_events").select("employee_id:assigned_employee_id, amount").eq("tenant_id", tenantId).eq("status", "daily_confirmed").gte("business_date", dateRange.start).lte("business_date", dateRange.end).in("assigned_employee_id", ids),
+        admin.from("staff_sales_allocations").select("employee_id, amount, staff_sales_events!inner(business_date)").eq("tenant_id", tenantId).eq("status", "daily_confirmed").gte("staff_sales_events.business_date", dateRange.start).lte("staff_sales_events.business_date", dateRange.end).in("employee_id", ids),
         admin.from("staff_sales_events").select("id", { count: "exact" }).eq("tenant_id", tenantId).gte("business_date", dateRange.start).lte("business_date", dateRange.end).in("status", ["unassigned", "pending_manager", "approved"]),
         admin.from("staff_epo_awards").select("id", { count: "exact" }).eq("tenant_id", tenantId).gte("business_date", dateRange.start).lte("business_date", dateRange.end).in("status", ["assistant_proposed", "manager_approved"]),
         admin.from("bookings").select("id, coach_id").eq("tenant_id", tenantId).eq("is_bige_schedule", true).eq("operation_kind", "pt").eq("status", "completed").gte("starts_at", `${dateRange.start}T00:00:00+08:00`).lt("starts_at", `${dateRange.end}T23:59:59.999+08:00`).in("coach_id", ids),

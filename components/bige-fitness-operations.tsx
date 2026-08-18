@@ -386,6 +386,7 @@ export type BoardData = {
   canChangeTrialConversion?: boolean;
   canRestoreTrialConversion?: boolean;
   canManageDailyReports?: boolean;
+  canConfirmDailyReports?: boolean;
   businessDay?: null | {
     id: string;
     branch_id: string | null;
@@ -4452,41 +4453,6 @@ export default function BigeFitnessOperations({
     }
   };
 
-  const confirmDay = async () => {
-    if ((data?.legacyPurchaseDateReminders || []).length > 0) {
-      showOperationAlert(
-        `尚有 ${data?.legacyPurchaseDateReminders?.length || 0} 份舊合約未輸入購買日`,
-        "請先完成日報提醒",
-      );
-      return;
-    }
-    try {
-      await post({ action: "confirm_day", businessDate: date });
-      setSuccess("日報已由主管確認");
-      await loadBoard();
-    } catch (caught) {
-      showOperationAlert(
-        caught instanceof Error ? caught.message : "日報確認失敗",
-        "無法確認日報",
-      );
-    }
-  };
-
-  const reopenDay = async () => {
-    const reason = window.prompt("請輸入重開日報的原因");
-    if (!reason?.trim()) return;
-    try {
-      await post({ action: "reopen_day", businessDate: date, reason: reason.trim() });
-      setSuccess("日報已重開並保留原因紀錄");
-      await loadBoard();
-    } catch (caught) {
-      showOperationAlert(
-        caught instanceof Error ? caught.message : "日報重開失敗",
-        "無法重開日報",
-      );
-    }
-  };
-
   const hours = useMemo(() => Array.from({ length: 15 }, (_, index) => index + 9), []);
   const scheduleOutstandingContracts = useMemo(
     () =>
@@ -5372,15 +5338,10 @@ export default function BigeFitnessOperations({
                 <h2 className={styles.sectionTitle}>{date} 每日報表</h2>
                 <span className={styles.badge}>{data.closure?.status || "尚未產生"}</span>
               </div>
-              {data.closure?.status === "confirmed" ? (
-                <button className={styles.button} onClick={() => void reopenDay()}>
-                  <RotateCcw size={17} /> 輸入原因重開
-                </button>
-              ) : (
-                <button className={`${styles.button} ${styles.primary}`} onClick={() => void confirmDay()}>
-                  <ClipboardCheck size={17} /> 主管確認
-                </button>
-              )}
+              <a className={`${styles.button} ${data.closure?.status === "confirmed" ? "" : styles.primary}`} href={`/manager/staff-performance?month=${date.slice(0, 7)}&date=${date}`}>
+                {data.closure?.status === "confirmed" ? <RotateCcw size={17} /> : <ClipboardCheck size={17} />}
+                {data.closure?.status === "confirmed" ? "前往今日結算／重開" : data.canConfirmDailyReports ? "前往正式結算課程與業績" : "完成初審並送經理"}
+              </a>
             </div>
             {(data.legacyPurchaseDateReminders || []).length > 0 ? (
               <div className={styles.list} style={{ marginBottom: 20 }}>

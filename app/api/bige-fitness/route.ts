@@ -395,6 +395,9 @@ function normalizeErrorMessage(message: string) {
     fa_conversion_has_additional_payments: "此合約已有後續付款，請先處理後再復原",
     invalid_contract_plan_mode: "請選擇內建方案或自訂方案",
     custom_plan_invalid: "自訂方案的價格、堂數、有效期限或課別分配不完整",
+    sales_origin_kind_invalid: "成交來源類型不正確",
+    sales_origin_coach_invalid: "原成交教練已停用或不屬於目前場館",
+    contract_sales_origin_update_failed: "合約已建立但成交教練快照失敗，請重新操作",
   };
   return messages[key] || key;
 }
@@ -1608,6 +1611,7 @@ export async function GET(request: Request) {
     canChangeTrialConversion: canRecordBigeContractPayment(auth.context),
     canRestoreTrialConversion: canDirectlyApproveBigeContractRisk(auth.context),
     canManageDailyReports: canManageBigePlansAndDailyReports(auth.context),
+    canConfirmDailyReports: canDirectlyApproveBigeContractRisk(auth.context),
     legacyPurchaseDateReminders,
     expiringContracts,
     rules: {
@@ -2599,6 +2603,7 @@ export async function POST(request: Request) {
     let trustedEmail: string | null = input.email || null;
     let trustedEmailUnavailable = input.emailUnavailable;
     let trustedMemberId = input.memberId || null;
+    let trustedSalesOriginCoachId: string | null = null;
     let sourceMissingProfileFields: string[] = [];
     if (input.sourceBookingId && input.sourceMemberBookingId) {
       return apiError(400, "FORBIDDEN", "同一筆合約不能同時指定 FA 成交與學員付款來源");
@@ -2610,7 +2615,7 @@ export async function POST(request: Request) {
       const admin = createSupabaseAdminClient();
       const sourceBookingResult = await admin
         .from("bookings")
-        .select("id, member_id, operation_kind")
+        .select("id, member_id, coach_id, operation_kind")
         .eq("id", input.sourceMemberBookingId)
         .eq("tenant_id", tenantId)
         .eq("is_bige_schedule", true)
@@ -2626,7 +2631,7 @@ export async function POST(request: Request) {
       }
       const sourceMemberResult = await admin
         .from("members")
-        .select("id, full_name, phone, birth_date, email, email_unavailable")
+        .select("id, full_name, phone, birth_date, email, email_unavailable, primary_coach_id")
         .eq("id", sourceBookingResult.data.member_id)
         .eq("tenant_id", tenantId)
         .maybeSingle();
@@ -2639,6 +2644,7 @@ export async function POST(request: Request) {
       trustedBirthDate = sourceMemberResult.data.birth_date || null;
       trustedEmail = sourceMemberResult.data.email || null;
       trustedEmailUnavailable = Boolean(sourceMemberResult.data.email_unavailable);
+      trustedSalesOriginCoachId = sourceBookingResult.data.coach_id || sourceMemberResult.data.primary_coach_id || null;
       if (!trustedFullName || !trustedPhone) {
         return apiError(400, "FORBIDDEN", "學員姓名或電話資料不完整，請先由主管補齊");
       }
@@ -2650,7 +2656,7 @@ export async function POST(request: Request) {
       const admin = createSupabaseAdminClient();
       const sourceBookingResult = await admin
         .from("bookings")
-        .select("id, member_id, trial_booking_id")
+        .select("id, member_id, coach_id, trial_booking_id")
         .eq("id", input.sourceBookingId)
         .eq("tenant_id", tenantId)
         .eq("operation_kind", "trial")
@@ -2688,10 +2694,11 @@ export async function POST(request: Request) {
       trustedFullName = identity.fullName;
       trustedPhone = identity.phone;
       trustedBirthDate = identity.birthDate || null;
+      trustedSalesOriginCoachId = sourceBookingResult.data.coach_id || null;
     }
 
     const trustedSignedOn = input.sourceBookingId ? toTaipeiDateString() : input.signedOn;
-    const result = await operationSupabase.rpc("bige_create_member_contract_v4", {
+    const result = await operationSupabase.rpc("bige_create_member_contract_v5", {
       p_tenant_id: tenantId,
       p_branch_id: input.branchId || auth.context.branchId,
       p_member_id: trustedMemberId,
@@ -2715,6 +2722,8 @@ export async function POST(request: Request) {
       p_future_trial_action: input.futureTrialAction || "none",
       p_fa_fee_recipient_profile_id: input.faFeeRecipientProfileId || null,
       p_fa_fee_recipient_name: input.faFeeRecipientName || null,
+      p_sales_origin_coach_id: trustedSalesOriginCoachId,
+      p_sales_origin_kind: input.sourceBookingId ? "fa" : input.sourceMemberBookingId ? "renewal" : "manual",
     });
     if (result.error) return handleDatabaseError(result.error, "建立正式會員失敗");
 
@@ -3511,8 +3520,8 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "confirm_day" || input.action === "reopen_day") {
-    if (!canManageBigePlansAndDailyReports(operationContext)) {
-      return apiError(403, "FORBIDDEN", "只有教練經理、副理或城市經理能確認或重開日報");
+    if (!canDirectlyApproveBigeContractRisk(operationContext)) {
+      return apiError(403, "FORBIDDEN", "副理可先完成初審；只有教練經理或城市經理能正式結算或重開日報");
     }
     if (input.action === "reopen_day" && !input.reason) {
       return apiError(400, "FORBIDDEN", "重開日報必須填寫原因");

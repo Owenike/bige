@@ -996,7 +996,7 @@ test("FA schedule payments are fixed to New while member payments keep renewal a
     submitContract,
     /sourceMemberBookingId:[\s\S]*studentPaymentContext\?\.paymentType === "renewal"[\s\S]*\? studentPaymentContext\.bookingId[\s\S]*: null/,
   );
-  assert.match(route, /select\("id, member_id, operation_kind"\)/);
+  assert.match(route, /select\("id, member_id, coach_id, operation_kind"\)/);
   assert.match(
     route,
     /sourceBookingResult\.data\.operation_kind === "trial"[\s\S]*FA 付款的款項類型固定為新單 New/,
@@ -1169,7 +1169,9 @@ test("FA payment and not-converted actions capture one atomic fee recipient", ()
   assert.match(component, /list="fa-fee-recipient-options"/);
   assert.match(component, /選擇員工或自行輸入/);
   assert.match(component, /\/api\/bige-fitness\?faFeeRecipients=1/);
-  assert.match(route, /bige_create_member_contract_v4/);
+  assert.match(route, /bige_create_member_contract_v5/);
+  assert.match(route, /p_sales_origin_coach_id: trustedSalesOriginCoachId/);
+  assert.match(route, /p_sales_origin_kind: input\.sourceBookingId \? "fa" : input\.sourceMemberBookingId \? "renewal" : "manual"/);
   assert.match(route, /bige_complete_trial_outcome_v2/);
   assert.match(migration, /trial_service = 'sports_massage' then 1500 else 880/);
   assert.match(migration, /contract_result := public\.bige_create_member_contract_v3/);
@@ -1884,7 +1886,7 @@ test("FA signing date is locked to today and ECPay installments require a stored
     component,
     /selectedBooking\?\.operation_kind === "trial"[\s\S]*\? localDate\(\)[\s\S]*: contractDraft\.signedOn/,
   );
-  assert.match(route, /rpc\("bige_create_member_contract_v4"/);
+  assert.match(route, /rpc\("bige_create_member_contract_v5"/);
   assert.match(route, /const trustedSignedOn = input\.sourceBookingId \? toTaipeiDateString\(\) : input\.signedOn/);
   assert.match(route, /rpc\("bige_record_contract_payment_v2"/);
   assert.match(route, /p_installment_count: input\.installmentCount \|\| null/);
