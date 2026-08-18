@@ -918,7 +918,7 @@ function scheduleCourseLabel(courseType: BigeCourseType) {
     : BIGE_COURSE_LABELS[courseType];
 }
 
-const DIALOG_CLOSE_ANIMATION_MS = 420;
+const DIALOG_CLOSE_ANIMATION_MS = 360;
 const DIALOG_CLOSE_FALLBACK_MS = DIALOG_CLOSE_ANIMATION_MS + 120;
 
 function Dialog(props: {
@@ -953,7 +953,15 @@ function Dialog(props: {
     const element = dialogRef.current;
     if (element) {
       const bounds = element.getBoundingClientRect();
-      const dockOffsetY = Math.max(0, window.innerHeight - bounds.bottom - 6);
+      const dockInset = 16;
+      const finalScaleX = 0.04;
+      const dialogCenterX = bounds.left + bounds.width / 2;
+      const dockCenterX = dockInset + (bounds.width * finalScaleX) / 2;
+      const dockOffsetX = dockCenterX - dialogCenterX;
+      const dockOffsetY = Math.max(0, window.innerHeight - bounds.bottom - dockInset);
+      element.style.setProperty("--dialog-dock-offset-x-early", `${dockOffsetX * 0.18}px`);
+      element.style.setProperty("--dialog-dock-offset-x-late", `${dockOffsetX * 0.72}px`);
+      element.style.setProperty("--dialog-dock-offset-x", `${dockOffsetX}px`);
       element.style.setProperty("--dialog-dock-offset-y-early", `${dockOffsetY * 0.18}px`);
       element.style.setProperty("--dialog-dock-offset-y-late", `${dockOffsetY * 0.72}px`);
       element.style.setProperty("--dialog-dock-offset-y", `${dockOffsetY}px`);

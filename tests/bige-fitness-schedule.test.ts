@@ -1069,7 +1069,7 @@ test("every FA result path shares server and database payment barriers", () => {
   assert.match(migration, /bige_contract_payment_amount_integrity/);
 });
 
-test("daily schedule dialogs animate manual dismissals toward the viewport dock", () => {
+test("daily schedule dialogs animate manual dismissals toward the lower-left viewport dock", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
   const dialog = component.slice(
@@ -1081,12 +1081,15 @@ test("daily schedule dialogs animate manual dismissals toward the viewport dock"
   assert.match(dialog, /onMouseDown=\{requestAnimatedClose\}/);
   assert.match(dialog, /onClick=\{requestAnimatedClose\}/);
   assert.match(dialog, /onAnimationEnd=\{completeAnimatedClose\}/);
+  assert.match(component, /const DIALOG_CLOSE_ANIMATION_MS = 360/);
+  assert.match(dialog, /const dockInset = 16/);
+  assert.match(dialog, /--dialog-dock-offset-x/);
   assert.match(dialog, /--dialog-dock-offset-y/);
-  assert.match(styles, /\.overlayClosing \{[\s\S]*animation: dialogOverlayClose 420ms/);
-  assert.match(styles, /\.dialogClosing \{[\s\S]*animation: dialogGenieClose 420ms/);
+  assert.match(styles, /\.overlayClosing \{[\s\S]*animation: dialogOverlayClose 360ms/);
+  assert.match(styles, /\.dialogClosing \{[\s\S]*animation: dialogGenieClose 360ms/);
   assert.match(
     styles,
-    /@keyframes dialogGenieClose[\s\S]*translate3d\(0, var\(--dialog-dock-offset-y, 0px\), 0\)[\s\S]*scaleX\(0\.04\)[\s\S]*scaleY\(0\.02\)/,
+    /@keyframes dialogGenieClose[\s\S]*translate3d\(var\(--dialog-dock-offset-x, 0px\), var\(--dialog-dock-offset-y, 0px\), 0\)[\s\S]*scaleX\(0\.04\)[\s\S]*scaleY\(0\.02\)/,
   );
   assert.match(
     styles,
