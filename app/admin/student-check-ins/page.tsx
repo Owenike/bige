@@ -60,6 +60,8 @@ type StudentCheckInRow = {
   local_month: string;
   daily_sequence: number;
   month_sequence: number;
+  locker_key_taken: boolean | null;
+  locker_key_number: number | null;
 };
 
 type StudentCheckInsResponse = {
@@ -413,6 +415,7 @@ export default function StudentCheckInsAdminPage() {
               const isExpired = Boolean(student?.membership_expires_on && student.membership_expires_on < todayDateInputValue());
               return (
                 <article key={item.id}>
+                  {item.locker_key_taken && item.locker_key_number ? <span className="studentCheckInsLockerKeyBadge is-autonomous">{item.locker_key_number}號鑰匙</span> : null}
                   {item.photo_url ? (
                     <button className="studentCheckInsRecentPhotoButton" type="button" onClick={() => setSelectedCheckIn(item)} aria-label={`查看 ${item.full_name} 的資料`}>
                       <img src={item.photo_url} alt={`${item.full_name} 的本人照片`} />

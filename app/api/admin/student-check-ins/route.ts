@@ -102,7 +102,7 @@ async function getStudentCheckInResponse(request: Request) {
       .limit(50),
     admin
       .from("student_check_ins")
-      .select("id, request_id, student_profile_id, full_name, phone, birth_date, photo_path, checked_in_at, local_date, local_month, daily_sequence, month_sequence")
+      .select("id, request_id, student_profile_id, full_name, phone, birth_date, photo_path, checked_in_at, local_date, local_month, daily_sequence, month_sequence, locker_key_taken, locker_key_number")
       .eq("local_date", date)
       .order("checked_in_at", { ascending: false })
       .limit(200),
@@ -124,7 +124,7 @@ async function getStudentCheckInResponse(request: Request) {
       .limit(50),
     admin
       .from("student_drop_ins")
-      .select("id, request_id, student_profile_id, full_name, phone, birth_date, photo_path, review_photo_path, checked_in_at, local_date, use_sequence, remaining_uses, price_twd, entry_plan")
+      .select("id, request_id, student_profile_id, full_name, phone, birth_date, photo_path, review_photo_path, checked_in_at, local_date, use_sequence, remaining_uses, price_twd, entry_plan, locker_key_taken, locker_key_number")
       .eq("local_date", date)
       .order("checked_in_at", { ascending: false })
       .limit(200),

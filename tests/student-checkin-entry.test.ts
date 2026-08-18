@@ -186,3 +186,18 @@ test("approval APIs and atomic database functions require and store the locker-k
   assert.equal((migration.match(/p_locker_key_taken/g) || []).length > 8, true);
   assert.equal((migration.match(/p_locker_key_number/g) || []).length > 8, true);
 });
+
+test("admin summary cards show small locker-key labels only for entries that took a key", () => {
+  const adminRoute = readFileSync(resolve(process.cwd(), "app/api/admin/student-check-ins/route.ts"), "utf8");
+  const autonomousPage = readFileSync(resolve(process.cwd(), "app/admin/student-check-ins/page.tsx"), "utf8");
+  const dropInPage = readFileSync(resolve(process.cwd(), "app/admin/student-check-ins/drop-in/page.tsx"), "utf8");
+  const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+
+  assert.equal((adminRoute.match(/locker_key_taken, locker_key_number/g) || []).length, 2);
+  assert.match(autonomousPage, /item\.locker_key_taken && item\.locker_key_number \? <span className="studentCheckInsLockerKeyBadge is-autonomous">\{item\.locker_key_number\}號鑰匙<\/span> : null/);
+  assert.match(dropInPage, /item\.locker_key_taken && item\.locker_key_number \? <span className="studentCheckInsLockerKeyBadge is-drop-in">\{item\.locker_key_number\}號鑰匙<\/span> : null/);
+  assert.match(globalStyles, /\.studentCheckInsRecentList article\s*\{[^}]*position:\s*relative/i);
+  assert.match(globalStyles, /\.studentCheckInsRecentList \.studentCheckInsLockerKeyBadge\s*\{[^}]*position:\s*absolute[^}]*font-size:\s*10px/i);
+  assert.match(globalStyles, /\.studentCheckInsLockerKeyBadge\.is-autonomous\s*\{[^}]*top:\s*4px/i);
+  assert.match(globalStyles, /\.studentCheckInsLockerKeyBadge\.is-drop-in\s*\{[^}]*bottom:\s*4px/i);
+});

@@ -70,6 +70,8 @@ type DropInRow = {
   remaining_uses: number | null;
   price_twd: number;
   entry_plan: StudentDropInEntryPlan;
+  locker_key_taken: boolean | null;
+  locker_key_number: number | null;
 };
 
 type DropInAdminResponse = {
@@ -411,6 +413,7 @@ export default function StudentDropInAdminPage() {
             {today.length === 0 ? <p className="studentCheckInsEmpty">{isLoading ? "正在載入報到資料" : "所選日期尚無 50 元入場紀錄。"}</p> : null}
             {today.map((item) => (
               <article key={item.id}>
+                {item.locker_key_taken && item.locker_key_number ? <span className="studentCheckInsLockerKeyBadge is-drop-in">{item.locker_key_number}號鑰匙</span> : null}
                 {item.photo_url ? (
                   <button className="studentCheckInsRecentPhotoButton" type="button" onClick={() => setSelectedCheckIn(item)} aria-label={`查看 ${item.full_name} 的資料`}>
                     <img src={item.photo_url} alt={`${item.full_name} 的本人照片`} />

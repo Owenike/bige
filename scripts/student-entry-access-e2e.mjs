@@ -188,6 +188,17 @@ assert.ifError(storedEntry.error);
 assert.equal(storedEntry.data.locker_key_taken, true);
 assert.equal(storedEntry.data.locker_key_number, 27);
 
+adminQueue = await jsonRequest("/api/admin/student-check-ins", {
+  headers: { authorization: `Bearer ${token}` },
+});
+assert.equal(adminQueue.response.status, 200);
+const autonomousSummaryEntry = adminQueue.payload.today.find((item) => item.request_id === formalRequestId);
+const dropInSummaryEntry = adminQueue.payload.dropInToday.find((item) => item.request_id === approvedDropInId);
+assert.equal(autonomousSummaryEntry?.locker_key_taken, false);
+assert.equal(autonomousSummaryEntry?.locker_key_number, null);
+assert.equal(dropInSummaryEntry?.locker_key_taken, true);
+assert.equal(dropInSummaryEntry?.locker_key_number, 27);
+
 const blockedCookie = await studentLogin("0900000204");
 result = await jsonRequest("/api/student-checkin/session", { headers: { cookie: blockedCookie } });
 assert.equal(result.payload.autonomous.accessCode, "account_unavailable");
@@ -212,6 +223,7 @@ console.log(JSON.stringify({
     nonMemberRedirected: true,
     adminPagesRendered: true,
     lockerKeyAnswersStored: true,
+    lockerKeySummaryReturned: true,
     rawHtmlErrors: false,
   },
 }));
