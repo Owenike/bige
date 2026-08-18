@@ -355,7 +355,7 @@ type StudentPaymentContext = {
   bookingId: string;
   memberId: string;
   paymentType: "new" | "renewal" | "balance";
-  amount: number;
+  amount: string;
   contractId: string;
 };
 type CoachDayStatus = {
@@ -4025,7 +4025,7 @@ export default function BigeFitnessOperations({
           : outstandingContracts.length
             ? "balance"
             : "renewal",
-      amount: 0,
+      amount: "",
       contractId: outstandingContracts[0]?.contract.id || "",
     });
   };
@@ -6874,7 +6874,7 @@ export default function BigeFitnessOperations({
                       setStudentPaymentContext({
                         ...studentPaymentContext,
                         paymentType,
-                        amount: 0,
+                        amount: "",
                         contractId:
                           paymentType === "balance"
                             ? studentPaymentContext.contractId ||
@@ -6916,7 +6916,7 @@ export default function BigeFitnessOperations({
                     onChange={(event) =>
                       setStudentPaymentContext({
                         ...studentPaymentContext,
-                        amount: Number(event.target.value),
+                        amount: event.target.value,
                       })
                     }
                   />
@@ -6931,7 +6931,7 @@ export default function BigeFitnessOperations({
                         setStudentPaymentContext({
                           ...studentPaymentContext,
                           contractId: event.target.value,
-                          amount: 0,
+                          amount: "",
                         })
                       }
                     >

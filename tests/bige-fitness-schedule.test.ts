@@ -1003,6 +1003,33 @@ test("FA schedule payments are fixed to New while member payments keep renewal a
   );
 });
 
+test("schedule payment amounts can stay empty while the user replaces the value", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const paymentContextType = component.slice(
+    component.indexOf("type StudentPaymentContext ="),
+    component.indexOf("type CoachDayStatus ="),
+  );
+  const openStudentPayment = component.slice(
+    component.indexOf("const openStudentPayment ="),
+    component.indexOf("const submitContract ="),
+  );
+  const paymentAmountField = component.slice(
+    component.indexOf('<span className={styles.label}>金額</span>'),
+    component.indexOf(
+      'studentPaymentContext.paymentType === "balance" ? (',
+      component.indexOf('<span className={styles.label}>金額</span>'),
+    ),
+  );
+
+  assert.match(paymentContextType, /amount: string;/);
+  assert.match(openStudentPayment, /amount: ""/);
+  assert.match(paymentAmountField, /value=\{studentPaymentContext\.amount\}/);
+  assert.match(paymentAmountField, /amount: event\.target\.value/);
+  assert.doesNotMatch(paymentAmountField, /amount: Number\(event\.target\.value\)/);
+  assert.ok((component.match(/amount: ""/g) || []).length >= 3);
+  assert.match(component, /Number\(studentPaymentContext\.amount\)/);
+});
+
 test("paid active FA conversions complete attendance automatically", () => {
   const migration = readFileSync(
     "supabase/migrations/20260815203109_allow_active_fa_conversion_and_auto_complete_paid_fa.sql",
