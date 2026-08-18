@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { readFile } from "node:fs/promises";
 
 const mode = process.argv[2];
 if (!new Set(["setup", "cleanup"]).has(mode)) {
@@ -27,6 +28,13 @@ const fixture = {
 };
 
 const studentProfileIds = [fixture.formalProfileId, fixture.nonMemberProfileId, fixture.blockedProfileId];
+const fixturePhotoPaths = [
+  "codex-fixtures/formal-profile.jpg",
+  "codex-fixtures/nonmember-profile.jpg",
+  "codex-fixtures/blocked-profile.jpg",
+  `codex-fixtures/${fixture.nonMemberProfileId}-review.jpg`,
+  `codex-fixtures/${fixture.blockedProfileId}-review.jpg`,
+];
 
 async function requireSuccess(result, label) {
   if (result.error) throw new Error(`${label}: ${result.error.message}`);
@@ -46,6 +54,10 @@ async function findFixtureAdmin() {
 
 async function cleanup() {
   await requireSuccess(
+    await admin.storage.from("student-checkin-photos").remove(fixturePhotoPaths),
+    "delete student entry fixture photos",
+  );
+  await requireSuccess(
     await admin.from("student_line_profiles").delete().in("id", studentProfileIds),
     "delete student entry fixtures",
   );
@@ -61,6 +73,18 @@ async function cleanup() {
 
 async function setup() {
   await cleanup();
+
+  const fixturePhoto = await readFile(new URL("../public/LOGO.jpg", import.meta.url));
+  for (const path of fixturePhotoPaths) {
+    await requireSuccess(
+      await admin.storage.from("student-checkin-photos").upload(path, fixturePhoto, {
+        contentType: "image/jpeg",
+        cacheControl: "60",
+        upsert: true,
+      }),
+      `upload student entry fixture photo ${path}`,
+    );
+  }
 
   const authResult = await admin.auth.admin.createUser({
     email: fixture.adminEmail,
