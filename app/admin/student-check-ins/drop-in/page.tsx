@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StudentCheckInHistory } from "../../../../components/student-checkin-history";
+import { StudentCheckInLockerKeyDialog } from "../../../../components/student-checkin-locker-key-dialog";
 import {
   studentDropInActivityInterestLabel,
   studentDropInGenderLabel,
@@ -12,7 +13,11 @@ import {
   type StudentDropInGender,
 } from "../../../../lib/student-drop-in-registration";
 import { userFacingErrorMessage } from "../../../../lib/user-facing-error";
-import { STUDENT_CHECKIN_ADMIN_PENDING_EVENT } from "../../../../lib/student-checkin-entry";
+import {
+  STUDENT_CHECKIN_ADMIN_PENDING_EVENT,
+  studentCheckInAdminDecisionRequest,
+  type StudentCheckInLockerKeySelection,
+} from "../../../../lib/student-checkin-entry";
 import {
   studentDropInPlanDetails,
   type StudentDropInEntryPlan,
@@ -164,6 +169,7 @@ export default function StudentDropInAdminPage() {
   const [capturedReviewPhoto, setCapturedReviewPhoto] = useState<CapturedPhoto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeciding, setIsDeciding] = useState(false);
+  const [lockerPromptRequestId, setLockerPromptRequestId] = useState("");
   const [rejectOptionsRequestId, setRejectOptionsRequestId] = useState("");
   const [uploadingKind, setUploadingKind] = useState<"profile" | "review" | "">("");
   const [error, setError] = useState("");
@@ -305,14 +311,16 @@ export default function StudentDropInAdminPage() {
     requestId: string,
     decision: "approved" | "rejected",
     rejectionAction?: DropInRejectionAction,
+    lockerKey?: StudentCheckInLockerKeySelection,
   ) {
     setIsDeciding(true);
     setError("");
     setNotice("");
-    const response = await fetch(`/api/admin/student-check-ins/drop-in/${requestId}/decision`, {
+    const decisionRequest = studentCheckInAdminDecisionRequest("drop_in", requestId, decision, rejectionAction, lockerKey);
+    const response = await fetch(decisionRequest.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision, ...(rejectionAction ? { rejectionAction } : {}) }),
+      body: JSON.stringify(decisionRequest.body),
     });
     if (handleAdminAuthFailure(response)) {
       setIsDeciding(false);
@@ -327,6 +335,7 @@ export default function StudentDropInAdminPage() {
     setPending((current) => current.filter((item) => item.id !== requestId));
     setCapturedProfilePhoto(null);
     setCapturedReviewPhoto(null);
+    setLockerPromptRequestId("");
     setRejectOptionsRequestId("");
     setIsDeciding(false);
     await loadCheckIns(true);
@@ -419,7 +428,7 @@ export default function StudentDropInAdminPage() {
         </section>
       </section>
 
-      {activeRequest ? (
+      {activeRequest && lockerPromptRequestId !== activeRequest.id ? (
         <div className="studentCheckInsApprovalBackdrop" role="presentation">
           <section className="studentCheckInsApprovalDialog studentDropInApprovalDialog" role="dialog" aria-modal="true" aria-labelledby="drop-in-approval-title">
             <div className={activePlan.reviewPhotoRequired ? "studentDropInEvidenceGrid" : "studentDropInEvidenceGrid is-single-evidence"}>
@@ -491,13 +500,24 @@ export default function StudentDropInAdminPage() {
               ) : (
                 <div className="studentCheckInsApprovalActions">
                   <button className="studentCheckInsRejectButton" type="button" disabled={isDeciding || Boolean(uploadingKind)} onClick={() => setRejectOptionsRequestId(activeRequest.id)}>拒絕</button>
-                  <button className="studentCheckInsApproveButton" type="button" disabled={isDeciding || Boolean(uploadingKind) || !canApprove} onClick={() => void decide(activeRequest.id, "approved")}>{isDeciding ? "處理中" : activePlan.unlimitedUses ? "收 NT$100 後放行" : "放行並扣 1 次"}</button>
+                  <button className="studentCheckInsApproveButton" type="button" disabled={isDeciding || Boolean(uploadingKind) || !canApprove} onClick={() => { setError(""); setLockerPromptRequestId(activeRequest.id); }}>{activePlan.unlimitedUses ? "收 NT$100 後放行" : "放行並扣 1 次"}</button>
                 </div>
               )}
               {pending.length > 1 ? <p className="studentCheckInsQueueNote">後面還有 {pending.length - 1} 位等待確認</p> : null}
             </div>
           </section>
         </div>
+      ) : null}
+
+      {activeRequest && lockerPromptRequestId === activeRequest.id ? (
+        <StudentCheckInLockerKeyDialog
+          key={activeRequest.id}
+          memberName={activeRequest.profile.full_name}
+          isSubmitting={isDeciding}
+          error={error}
+          onCancel={() => { setError(""); setLockerPromptRequestId(""); }}
+          onConfirm={(lockerKey) => void decide(activeRequest.id, "approved", undefined, lockerKey)}
+        />
       ) : null}
 
       {selectedCheckIn?.photo_url ? (

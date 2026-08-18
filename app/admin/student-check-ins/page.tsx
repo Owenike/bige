@@ -5,7 +5,12 @@
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { StudentCheckInHistory } from "../../../components/student-checkin-history";
-import { STUDENT_CHECKIN_ADMIN_PENDING_EVENT } from "../../../lib/student-checkin-entry";
+import { StudentCheckInLockerKeyDialog } from "../../../components/student-checkin-locker-key-dialog";
+import {
+  STUDENT_CHECKIN_ADMIN_PENDING_EVENT,
+  studentCheckInAdminDecisionRequest,
+  type StudentCheckInLockerKeySelection,
+} from "../../../lib/student-checkin-entry";
 import {
   mergeMembershipPeriodDrafts,
   type MembershipPeriodDraft,
@@ -156,6 +161,7 @@ export default function StudentCheckInsAdminPage() {
   const [selectedCheckIn, setSelectedCheckIn] = useState<StudentCheckInRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeciding, setIsDeciding] = useState(false);
+  const [lockerPromptRequestId, setLockerPromptRequestId] = useState("");
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<{ requestId: string; file: File; preview: string } | null>(null);
   const [error, setError] = useState("");
@@ -312,13 +318,18 @@ export default function StudentCheckInsAdminPage() {
     setIsUploadingPhoto(false);
   }
 
-  async function decide(requestId: string, decision: "approved" | "rejected") {
+  async function decide(
+    requestId: string,
+    decision: "approved" | "rejected",
+    lockerKey?: StudentCheckInLockerKeySelection,
+  ) {
     setIsDeciding(true);
     setError("");
-    const response = await fetch(`/api/admin/student-check-ins/${requestId}/decision`, {
+    const decisionRequest = studentCheckInAdminDecisionRequest("autonomous", requestId, decision, undefined, lockerKey);
+    const response = await fetch(decisionRequest.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify(decisionRequest.body),
     });
     if (handleAdminAuthFailure(response)) {
       setIsDeciding(false);
@@ -331,6 +342,7 @@ export default function StudentCheckInsAdminPage() {
       return;
     }
     setPending((current) => current.filter((item) => item.id !== requestId));
+    setLockerPromptRequestId("");
     setIsDeciding(false);
     await loadCheckIns(true);
   }
@@ -420,7 +432,7 @@ export default function StudentCheckInsAdminPage() {
         </section>
       </section>
 
-      {activeRequest ? (
+      {activeRequest && lockerPromptRequestId !== activeRequest.id ? (
         <div className="studentCheckInsApprovalBackdrop" role="presentation">
           <section className="studentCheckInsApprovalDialog" role="dialog" aria-modal="true" aria-labelledby="student-approval-title">
             <div className="studentCheckInsApprovalPhoto">
@@ -462,12 +474,23 @@ export default function StudentCheckInsAdminPage() {
               </p>
               <div className="studentCheckInsApprovalActions">
                 <button className="studentCheckInsRejectButton" type="button" disabled={isDeciding || isUploadingPhoto} onClick={() => void decide(activeRequest.id, "rejected")}>拒絕</button>
-                <button className="studentCheckInsApproveButton" type="button" disabled={isDeciding || isUploadingPhoto || !activeRequest.profile.photo_url} onClick={() => void decide(activeRequest.id, "approved")}>{isDeciding ? "處理中" : "放行"}</button>
+                <button className="studentCheckInsApproveButton" type="button" disabled={isDeciding || isUploadingPhoto || !activeRequest.profile.photo_url} onClick={() => { setError(""); setLockerPromptRequestId(activeRequest.id); }}>放行</button>
               </div>
               {pending.length > 1 ? <p className="studentCheckInsQueueNote">後面還有 {pending.length - 1} 位等待確認</p> : null}
             </div>
           </section>
         </div>
+      ) : null}
+
+      {activeRequest && lockerPromptRequestId === activeRequest.id ? (
+        <StudentCheckInLockerKeyDialog
+          key={activeRequest.id}
+          memberName={activeRequest.profile.full_name}
+          isSubmitting={isDeciding}
+          error={error}
+          onCancel={() => { setError(""); setLockerPromptRequestId(""); }}
+          onConfirm={(lockerKey) => void decide(activeRequest.id, "approved", lockerKey)}
+        />
       ) : null}
 
       {selectedCheckIn?.photo_url ? (

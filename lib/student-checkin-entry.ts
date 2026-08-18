@@ -2,6 +2,9 @@ export type StudentCheckInEntryMode = "autonomous" | "drop_in";
 export type StudentCheckInAdminDecision = "approved" | "rejected";
 export type StudentDropInRejectionAction = "general" | "data_correction";
 export type StudentCheckInAdminAlertScope = "none" | "autonomous" | "drop_in" | "all";
+export type StudentCheckInLockerKeySelection =
+  | { lockerKeyTaken: false; lockerKeyNumber: null }
+  | { lockerKeyTaken: true; lockerKeyNumber: number };
 
 export const STUDENT_CHECKIN_ADMIN_PENDING_EVENT = "student-checkin-admin-pending-loaded";
 
@@ -37,18 +40,24 @@ export function studentCheckInAdminDecisionRequest(
   requestId: string,
   decision: StudentCheckInAdminDecision,
   rejectionAction?: StudentDropInRejectionAction,
+  lockerKey?: StudentCheckInLockerKeySelection,
 ) {
   if (mode === "drop_in" && decision === "rejected" && !rejectionAction) {
     throw new Error("DROP_IN_REJECTION_ACTION_REQUIRED");
+  }
+  if (decision === "approved" && !lockerKey) {
+    throw new Error("LOCKER_KEY_SELECTION_REQUIRED");
   }
 
   return {
     endpoint: mode === "drop_in"
       ? `/api/admin/student-check-ins/drop-in/${encodeURIComponent(requestId)}/decision`
       : `/api/admin/student-check-ins/${encodeURIComponent(requestId)}/decision`,
-    body: mode === "drop_in" && decision === "rejected"
-      ? { decision, rejectionAction }
-      : { decision },
+    body: decision === "approved"
+      ? { decision, ...lockerKey }
+      : mode === "drop_in"
+        ? { decision, rejectionAction }
+        : { decision },
   };
 }
 

@@ -11,7 +11,19 @@ import {
   studentEntryAccessDatabaseCode,
 } from "../../../../../../lib/student-entry-access";
 
-const decisionSchema = z.object({ decision: z.enum(["approved", "rejected"]) });
+const decisionSchema = z.union([
+  z.object({
+    decision: z.literal("approved"),
+    lockerKeyTaken: z.literal(false),
+    lockerKeyNumber: z.null().optional(),
+  }).strict(),
+  z.object({
+    decision: z.literal("approved"),
+    lockerKeyTaken: z.literal(true),
+    lockerKeyNumber: z.number().int().min(1).max(9999),
+  }).strict(),
+  z.object({ decision: z.literal("rejected") }).strict(),
+]);
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireStudentCheckinAdmin(request);
@@ -72,10 +84,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
   }
 
-  const result = await admin.rpc("decide_student_checkin_request", {
+  const result = await admin.rpc("decide_student_checkin_request_v2", {
     p_request_id: id,
     p_decision: parsed.data.decision,
     p_reviewed_by: auth.context.role === "student_checkin_admin" ? null : auth.context.userId,
+    p_locker_key_taken: parsed.data.decision === "approved" ? parsed.data.lockerKeyTaken : null,
+    p_locker_key_number: parsed.data.decision === "approved" && parsed.data.lockerKeyTaken
+      ? parsed.data.lockerKeyNumber
+      : null,
   });
   if (result.error) {
     const accessCode = studentEntryAccessDatabaseCode(result.error.message);

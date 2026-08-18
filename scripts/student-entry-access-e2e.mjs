@@ -60,13 +60,15 @@ async function adminLoginCookie() {
   return result.cookie;
 }
 
-async function adminDecision(mode, requestId, decision, token) {
+async function adminDecision(mode, requestId, decision, token, lockerKey) {
   const path = mode === "autonomous"
     ? `/api/admin/student-check-ins/${requestId}/decision`
     : `/api/admin/student-check-ins/drop-in/${requestId}/decision`;
   const body = mode === "drop_in" && decision === "rejected"
     ? { decision, rejectionAction: "general" }
-    : { decision };
+    : decision === "approved"
+      ? { decision, ...lockerKey }
+      : { decision };
   const result = await jsonRequest(path, {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -78,6 +80,11 @@ async function adminDecision(mode, requestId, decision, token) {
 
 const token = await adminToken();
 const adminCookie = await adminLoginCookie();
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+assert.ok(process.env.NEXT_PUBLIC_SUPABASE_URL && serviceRoleKey);
+const adminDatabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, serviceRoleKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
 
 for (const path of ["/check-in", "/check-in/drop-in"]) {
   const response = await fetch(`${baseUrl}${path}`, { redirect: "manual" });
@@ -105,10 +112,32 @@ assert.equal(adminQueue.response.status, 200);
 assert.equal(adminQueue.payload.pending.filter((item) => item.id === formalRequestId).length, 1);
 assert.equal(adminQueue.payload.pending.find((item) => item.id === formalRequestId).profile.autonomous_access_status, "formal_member");
 
-await adminDecision("autonomous", formalRequestId, "approved", token);
+result = await jsonRequest(`/api/admin/student-check-ins/${formalRequestId}/decision`, {
+  method: "POST",
+  headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+  body: JSON.stringify({ decision: "approved" }),
+});
+assert.equal(result.response.status, 400);
+assert.equal(result.payload.ok, false);
+
+await adminDecision(
+  "autonomous",
+  formalRequestId,
+  "approved",
+  token,
+  { lockerKeyTaken: false, lockerKeyNumber: null },
+);
 result = await jsonRequest("/api/student-checkin/request", { headers: { cookie: formalCookie }, cache: "no-store" });
 assert.equal(result.payload.request.status, "approved");
 assert.ok(result.payload.checkIn);
+let storedEntry = await adminDatabase
+  .from("student_check_ins")
+  .select("locker_key_taken, locker_key_number")
+  .eq("request_id", formalRequestId)
+  .single();
+assert.ifError(storedEntry.error);
+assert.equal(storedEntry.data.locker_key_taken, false);
+assert.equal(storedEntry.data.locker_key_number, null);
 
 const nonMemberCookie = await studentLogin("0900000203");
 result = await jsonRequest("/api/student-checkin/session", { headers: { cookie: nonMemberCookie } });
@@ -139,11 +168,25 @@ result = await jsonRequest("/api/student-checkin/drop-in/request", { method: "PO
 assert.equal(result.response.status, 200);
 assert.equal(result.payload.request.status, "pending");
 const approvedDropInId = result.payload.request.id;
-await adminDecision("drop_in", approvedDropInId, "approved", token);
+await adminDecision(
+  "drop_in",
+  approvedDropInId,
+  "approved",
+  token,
+  { lockerKeyTaken: true, lockerKeyNumber: 27 },
+);
 result = await jsonRequest("/api/student-checkin/drop-in/request", { headers: { cookie: nonMemberCookie }, cache: "no-store" });
 assert.equal(result.payload.request.status, "approved");
 assert.equal(result.payload.dropInCheckIn.price_twd, 50);
 assert.equal(result.payload.dropInCheckIn.remaining_uses, 9);
+storedEntry = await adminDatabase
+  .from("student_drop_ins")
+  .select("locker_key_taken, locker_key_number")
+  .eq("request_id", approvedDropInId)
+  .single();
+assert.ifError(storedEntry.error);
+assert.equal(storedEntry.data.locker_key_taken, true);
+assert.equal(storedEntry.data.locker_key_number, 27);
 
 const blockedCookie = await studentLogin("0900000204");
 result = await jsonRequest("/api/student-checkin/session", { headers: { cookie: blockedCookie } });
@@ -168,6 +211,7 @@ console.log(JSON.stringify({
     blockedBothModes: true,
     nonMemberRedirected: true,
     adminPagesRendered: true,
+    lockerKeyAnswersStored: true,
     rawHtmlErrors: false,
   },
 }));

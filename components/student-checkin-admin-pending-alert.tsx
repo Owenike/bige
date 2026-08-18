@@ -4,6 +4,7 @@
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { StudentCheckInLockerKeyDialog } from "./student-checkin-locker-key-dialog";
 import {
   STUDENT_CHECKIN_ADMIN_PENDING_EVENT,
   sortStudentCheckInPendingQueue,
@@ -11,6 +12,7 @@ import {
   studentCheckInAdminDecisionRequest,
   type StudentCheckInAdminDecision,
   type StudentCheckInEntryMode,
+  type StudentCheckInLockerKeySelection,
   type StudentDropInRejectionAction,
 } from "../lib/student-checkin-entry";
 import { userFacingErrorMessage } from "../lib/user-facing-error";
@@ -120,6 +122,7 @@ export function StudentCheckInAdminPendingAlert() {
   const [capturedReviewPhoto, setCapturedReviewPhoto] = useState<CapturedPhoto | null>(null);
   const [uploadingKind, setUploadingKind] = useState<PhotoKind | "">("");
   const [isDeciding, setIsDeciding] = useState(false);
+  const [lockerPromptRequestId, setLockerPromptRequestId] = useState("");
   const [rejectOptionsRequestId, setRejectOptionsRequestId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -278,6 +281,7 @@ export function StudentCheckInAdminPendingAlert() {
   async function decide(
     decision: StudentCheckInAdminDecision,
     rejectionAction?: StudentDropInRejectionAction,
+    lockerKey?: StudentCheckInLockerKeySelection,
   ) {
     if (!activeRequest) return;
     setIsDeciding(true);
@@ -289,6 +293,7 @@ export function StudentCheckInAdminPendingAlert() {
         activeRequest.id,
         decision,
         rejectionAction,
+        lockerKey,
       );
       const response = await fetch(decisionRequest.endpoint, {
         method: "POST",
@@ -307,6 +312,7 @@ export function StudentCheckInAdminPendingAlert() {
       setPending((current) => current.filter((item) => item.id !== activeRequest.id || item.mode !== activeRequest.mode));
       setCapturedProfilePhoto(null);
       setCapturedReviewPhoto(null);
+      setLockerPromptRequestId("");
       setRejectOptionsRequestId("");
       if (decision === "rejected") {
         setNotice(
@@ -334,6 +340,19 @@ export function StudentCheckInAdminPendingAlert() {
   }, [pending]);
 
   if (!isEnabled || !activeRequest) return null;
+
+  if (lockerPromptRequestId === activeRequest.id) {
+    return (
+      <StudentCheckInLockerKeyDialog
+        key={activeRequest.id}
+        memberName={activeRequest.profile.full_name}
+        isSubmitting={isDeciding}
+        error={error}
+        onCancel={() => { setError(""); setLockerPromptRequestId(""); }}
+        onConfirm={(lockerKey) => void decide("approved", undefined, lockerKey)}
+      />
+    );
+  }
 
   return (
     <div className="studentCheckInsApprovalBackdrop studentCheckInsGlobalApprovalBackdrop" role="presentation">
@@ -458,7 +477,7 @@ export function StudentCheckInAdminPendingAlert() {
                   else void decide("rejected");
                 }}
               >拒絕</button>
-              <button className="studentCheckInsApproveButton" type="button" disabled={isDeciding || Boolean(uploadingKind) || !canApprove} onClick={() => void decide("approved")}>{isDeciding ? "處理中" : isDropIn ? activePlan.unlimitedUses ? "收 NT$100 後放行" : "放行並扣 1 次" : "放行"}</button>
+              <button className="studentCheckInsApproveButton" type="button" disabled={isDeciding || Boolean(uploadingKind) || !canApprove} onClick={() => { setError(""); setLockerPromptRequestId(activeRequest.id); }}>{isDropIn ? activePlan.unlimitedUses ? "收 NT$100 後放行" : "放行並扣 1 次" : "放行"}</button>
             </div>
           )}
           <p className="studentCheckInsQueueNote">全部待確認：{queueSummary}{pending.length > 1 ? `，後面還有 ${pending.length - 1} 位` : ""}</p>

@@ -54,6 +54,32 @@ test("the shared admin queue is chronological across both check-in types", () =>
 
 test("shared admin alert sends each check-in type to the correct decision API", () => {
   assert.deepEqual(
+    studentCheckInAdminDecisionRequest(
+      "autonomous",
+      "student-request",
+      "approved",
+      undefined,
+      { lockerKeyTaken: false, lockerKeyNumber: null },
+    ),
+    {
+      endpoint: "/api/admin/student-check-ins/student-request/decision",
+      body: { decision: "approved", lockerKeyTaken: false, lockerKeyNumber: null },
+    },
+  );
+  assert.deepEqual(
+    studentCheckInAdminDecisionRequest(
+      "drop_in",
+      "drop-in-request",
+      "approved",
+      undefined,
+      { lockerKeyTaken: true, lockerKeyNumber: 27 },
+    ),
+    {
+      endpoint: "/api/admin/student-check-ins/drop-in/drop-in-request/decision",
+      body: { decision: "approved", lockerKeyTaken: true, lockerKeyNumber: 27 },
+    },
+  );
+  assert.deepEqual(
     studentCheckInAdminDecisionRequest("autonomous", "student-request", "rejected"),
     {
       endpoint: "/api/admin/student-check-ins/student-request/decision",
@@ -78,4 +104,46 @@ test("shared admin alert sends each check-in type to the correct decision API", 
     () => studentCheckInAdminDecisionRequest("drop_in", "drop-in-request", "rejected"),
     /DROP_IN_REJECTION_ACTION_REQUIRED/,
   );
+  assert.throws(
+    () => studentCheckInAdminDecisionRequest("autonomous", "student-request", "approved"),
+    /LOCKER_KEY_SELECTION_REQUIRED/,
+  );
+});
+
+test("all three approval surfaces use one shared locker-key confirmation dialog", () => {
+  const dialog = readFileSync(resolve(process.cwd(), "components/student-checkin-locker-key-dialog.tsx"), "utf8");
+  const autonomousPage = readFileSync(resolve(process.cwd(), "app/admin/student-check-ins/page.tsx"), "utf8");
+  const dropInPage = readFileSync(resolve(process.cwd(), "app/admin/student-check-ins/drop-in/page.tsx"), "utf8");
+  const globalAlert = readFileSync(resolve(process.cwd(), "components/student-checkin-admin-pending-alert.tsx"), "utf8");
+
+  assert.match(dialog, /是否有拿置物櫃鑰匙？/);
+  assert.match(dialog, /拿幾號鑰匙？/);
+  assert.match(dialog, /lockerKeyTaken === true[\s\S]*type="number"/);
+  assert.equal((autonomousPage.match(/<StudentCheckInLockerKeyDialog/g) || []).length, 1);
+  assert.equal((dropInPage.match(/<StudentCheckInLockerKeyDialog/g) || []).length, 1);
+  assert.equal((globalAlert.match(/<StudentCheckInLockerKeyDialog/g) || []).length, 1);
+  assert.match(autonomousPage, /activeRequest && lockerPromptRequestId !== activeRequest\.id/);
+  assert.match(dropInPage, /activeRequest && lockerPromptRequestId !== activeRequest\.id/);
+  assert.match(globalAlert, /if \(lockerPromptRequestId === activeRequest\.id\)/);
+});
+
+test("approval APIs and atomic database functions require and store the locker-key answer", () => {
+  const autonomousRoute = readFileSync(resolve(process.cwd(), "app/api/admin/student-check-ins/[id]/decision/route.ts"), "utf8");
+  const dropInRoute = readFileSync(resolve(process.cwd(), "app/api/admin/student-check-ins/drop-in/[id]/decision/route.ts"), "utf8");
+  const migration = readFileSync(
+    resolve(process.cwd(), "supabase/migrations/20260818112816_add_locker_key_to_student_entries.sql"),
+    "utf8",
+  );
+
+  for (const route of [autonomousRoute, dropInRoute]) {
+    assert.match(route, /lockerKeyTaken: z\.literal\(false\)/);
+    assert.match(route, /lockerKeyTaken: z\.literal\(true\)/);
+    assert.match(route, /lockerKeyNumber: z\.number\(\)\.int\(\)\.min\(1\)\.max\(9999\)/);
+  }
+  assert.match(autonomousRoute, /decide_student_checkin_request_v2/);
+  assert.match(dropInRoute, /decide_student_drop_in_request_v3/);
+  assert.match(migration, /student_check_ins_locker_key_check/);
+  assert.match(migration, /student_drop_ins_locker_key_check/);
+  assert.equal((migration.match(/p_locker_key_taken/g) || []).length > 8, true);
+  assert.equal((migration.match(/p_locker_key_number/g) || []).length > 8, true);
 });

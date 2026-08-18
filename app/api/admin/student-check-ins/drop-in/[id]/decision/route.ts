@@ -7,12 +7,21 @@ import {
 } from "../../../../../../../lib/student-checkin-admin-auth";
 import { createSupabaseAdminClient } from "../../../../../../../lib/supabase/admin";
 
-const decisionSchema = z.discriminatedUnion("decision", [
-  z.object({ decision: z.literal("approved") }),
+const decisionSchema = z.union([
   z.object({
     decision: z.literal("rejected"),
     rejectionAction: z.enum(["general", "data_correction"]),
-  }),
+  }).strict(),
+  z.object({
+    decision: z.literal("approved"),
+    lockerKeyTaken: z.literal(false),
+    lockerKeyNumber: z.null().optional(),
+  }).strict(),
+  z.object({
+    decision: z.literal("approved"),
+    lockerKeyTaken: z.literal(true),
+    lockerKeyNumber: z.number().int().min(1).max(9999),
+  }).strict(),
 ]);
 
 function decisionError(message: string) {
@@ -45,11 +54,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   const { id } = await context.params;
-  const result = await createSupabaseAdminClient().rpc("decide_student_drop_in_request_v2", {
+  const result = await createSupabaseAdminClient().rpc("decide_student_drop_in_request_v3", {
     p_request_id: id,
     p_decision: parsed.data.decision,
     p_reviewed_by: auth.context.userId,
     p_rejection_action: parsed.data.decision === "rejected" ? parsed.data.rejectionAction : null,
+    p_locker_key_taken: parsed.data.decision === "approved" ? parsed.data.lockerKeyTaken : null,
+    p_locker_key_number: parsed.data.decision === "approved" && parsed.data.lockerKeyTaken
+      ? parsed.data.lockerKeyNumber
+      : null,
   });
   if (result.error) {
     return NextResponse.json({ ok: false, error: decisionError(result.error.message) }, { status: 409 });
