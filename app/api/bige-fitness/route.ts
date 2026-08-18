@@ -134,6 +134,20 @@ function canSeeTrialRevenue(
   );
 }
 
+function faFeeRecipientLabel(profile: {
+  english_name?: string | null;
+  display_name?: string | null;
+  employee_number?: string | null;
+}) {
+  const employeeNumber = profile.employee_number?.trim() || "";
+  const name =
+    profile.english_name?.trim() ||
+    profile.display_name?.trim() ||
+    employeeNumber;
+  if (!name) return "";
+  return employeeNumber && name !== employeeNumber ? `${name}｜${employeeNumber}` : name;
+}
+
 function addDays(date: string, days: number) {
   const [year, month, day] = date.split("-").map(Number);
   const value = new Date(Date.UTC(year, month - 1, day + days));
@@ -365,6 +379,9 @@ function normalizeErrorMessage(message: string) {
     email_or_unavailable_required: "請填寫有效 Email，或明確勾選沒有 Email",
     invalid_trial_conversion_outcome: "無效的 FA 成交結果",
     trial_booking_not_found: "找不到這筆 FA 預約",
+    fa_fee_recipient_invalid: "請選擇或輸入 1 至 80 字的 FA 收款人",
+    fa_fee_recipient_profile_invalid: "所選員工已停用或不屬於目前場館，請重新選擇",
+    fa_fee_recipient_not_allowed: "這個操作不能記錄 FA 收款人",
     fa_conversion_not_found: "這筆 FA 目前沒有可操作的成交紀錄",
     fa_conversion_contract_not_editable: "這筆 FA 的合約目前不能變更",
     fa_conversion_payment_amount_invalid: "成交金額必須大於 0，且不能超過合約總額",
@@ -698,6 +715,34 @@ export async function GET(request: Request) {
   const branchId = hasAllCoachScheduleAccess
     ? requestedBranchId
     : requestedBranchId || auth.context.branchId;
+  if (url.searchParams.get("faFeeRecipients") === "1") {
+    const recipientsResult = await auth.supabase
+      .from("profiles")
+      .select("id, branch_id, display_name, english_name, employee_number")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true)
+      .order("employee_number", { ascending: true, nullsFirst: false })
+      .limit(500);
+    if (recipientsResult.error) {
+      return apiError(500, "INTERNAL_ERROR", recipientsResult.error.message);
+    }
+    return apiSuccess({
+      options: (recipientsResult.data || [])
+        .map((profile: {
+          id: string;
+          branch_id: string | null;
+          display_name: string | null;
+          english_name: string | null;
+          employee_number: string | null;
+        }) => ({
+          id: String(profile.id),
+          label: faFeeRecipientLabel(profile),
+          employeeNumber: profile.employee_number || null,
+          branchId: profile.branch_id || null,
+        }))
+        .filter((profile: { label: string }) => profile.label),
+    });
+  }
   const search = (url.searchParams.get("search") || "").trim().slice(0, 60);
   const formalMembersOnly = url.searchParams.get("memberScope") === "formal";
   if (search) {
@@ -1156,7 +1201,7 @@ export async function GET(request: Request) {
   let bookingsQuery = scheduleSupabase
     .from("bookings")
     .select(
-      "id, branch_id, member_id, coach_id, service_name, starts_at, ends_at, status, status_reason, note, operation_kind, course_type, trial_stage, operation_result, trial_conversion_outcome, trial_booking_id, group_id, reminder_status, converted_at, converted_contract_id, member_plan_contract_id, requires_contract_followup, import_batch_id, import_row_key",
+      "id, branch_id, member_id, coach_id, service_name, starts_at, ends_at, status, status_reason, note, operation_kind, course_type, trial_stage, operation_result, trial_conversion_outcome, trial_booking_id, group_id, reminder_status, converted_at, converted_contract_id, member_plan_contract_id, requires_contract_followup, import_batch_id, import_row_key, fa_fee_amount, fa_fee_recipient_profile_id, fa_fee_recipient_name, fa_fee_recorded_at",
     )
     .eq("tenant_id", tenantId)
     .eq("is_bige_schedule", true)
@@ -2646,7 +2691,7 @@ export async function POST(request: Request) {
     }
 
     const trustedSignedOn = input.sourceBookingId ? toTaipeiDateString() : input.signedOn;
-    const result = await operationSupabase.rpc("bige_create_member_contract_v3", {
+    const result = await operationSupabase.rpc("bige_create_member_contract_v4", {
       p_tenant_id: tenantId,
       p_branch_id: input.branchId || auth.context.branchId,
       p_member_id: trustedMemberId,
@@ -2668,6 +2713,8 @@ export async function POST(request: Request) {
       p_installment_count: input.installmentCount || null,
       p_payment_schedule: input.paymentSchedule,
       p_future_trial_action: input.futureTrialAction || "none",
+      p_fa_fee_recipient_profile_id: input.faFeeRecipientProfileId || null,
+      p_fa_fee_recipient_name: input.faFeeRecipientName || null,
     });
     if (result.error) return handleDatabaseError(result.error, "建立正式會員失敗");
 
@@ -2972,9 +3019,11 @@ export async function POST(request: Request) {
     if (!canCompleteBigeTrialOutcome(auth.context, bookingResult.data.coach_id)) {
       return apiError(403, "FORBIDDEN", "一般教練只能處理自己的 FA 結果");
     }
-    const result = await auth.supabase.rpc("bige_complete_trial_outcome", {
+    const result = await auth.supabase.rpc("bige_complete_trial_outcome_v2", {
       p_booking_id: input.bookingId,
       p_outcome: input.outcome,
+      p_fa_fee_recipient_profile_id: input.faFeeRecipientProfileId || null,
+      p_fa_fee_recipient_name: input.faFeeRecipientName || null,
     });
     if (result.error) return handleDatabaseError(result.error, "更新 FA 成交結果失敗");
     return apiSuccess({ item: result.data });

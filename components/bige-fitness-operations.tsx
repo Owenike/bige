@@ -66,6 +66,7 @@ import {
   calculateContractTerms,
   calculateLegacyContractExpiryDate,
   calculateMinimumDeposit,
+  getBigeFaFeeAmount,
   getBigeStudentPaymentBalanceState,
   getBigeTrialContractMissingProfileFields,
   getBigeTrialBookingActionVisibility,
@@ -191,6 +192,21 @@ type Booking = {
   requires_contract_followup?: boolean;
   import_batch_id?: string | null;
   import_row_key?: string | null;
+  fa_fee_amount?: number | null;
+  fa_fee_recipient_profile_id?: string | null;
+  fa_fee_recipient_name?: string | null;
+  fa_fee_recorded_at?: string | null;
+};
+type FaFeeRecipientOption = {
+  id: string;
+  label: string;
+  employeeNumber: string | null;
+  branchId: string | null;
+};
+type FaFeeRecipientPrompt = {
+  action: "confirm_payment" | "not_converted";
+  bookingId: string;
+  amount: 880 | 1500;
 };
 type TrialBookingSummary = {
   id: string;
@@ -1392,6 +1408,15 @@ export default function BigeFitnessOperations({
   const [trialOutcomeSubmitting, setTrialOutcomeSubmitting] = useState<
     "pending_conversion" | "not_converted" | null
   >(null);
+  const [faFeeRecipientPrompt, setFaFeeRecipientPrompt] =
+    useState<FaFeeRecipientPrompt | null>(null);
+  const [faFeeRecipientName, setFaFeeRecipientName] = useState("");
+  const [faFeeRecipientOptions, setFaFeeRecipientOptions] = useState<
+    FaFeeRecipientOption[]
+  >([]);
+  const [faFeeRecipientOptionsLoaded, setFaFeeRecipientOptionsLoaded] = useState(false);
+  const [faFeeRecipientOptionsLoading, setFaFeeRecipientOptionsLoading] = useState(false);
+  const [faFeeRecipientOptionsError, setFaFeeRecipientOptionsError] = useState("");
   const [trialConversionEditing, setTrialConversionEditing] = useState(false);
   const [trialConversionAmount, setTrialConversionAmount] = useState(0);
   const [trialConversionOutcomeDraft, setTrialConversionOutcomeDraft] = useState<
@@ -1994,6 +2019,30 @@ export default function BigeFitnessOperations({
     }
     return payload.data || payload;
   };
+
+  const loadFaFeeRecipientOptions = useCallback(async () => {
+    if (previewData || faFeeRecipientOptionsLoaded || faFeeRecipientOptionsLoading) return;
+    setFaFeeRecipientOptionsLoading(true);
+    setFaFeeRecipientOptionsError("");
+    try {
+      const response = await fetch("/api/bige-fitness?faFeeRecipients=1", {
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(apiMessage(payload, "讀取員工名單失敗"));
+      }
+      const result = (payload.data || payload) as { options?: FaFeeRecipientOption[] };
+      setFaFeeRecipientOptions(result.options || []);
+      setFaFeeRecipientOptionsLoaded(true);
+    } catch (caught) {
+      setFaFeeRecipientOptionsError(
+        caught instanceof Error ? caught.message : "讀取員工名單失敗",
+      );
+    } finally {
+      setFaFeeRecipientOptionsLoading(false);
+    }
+  }, [faFeeRecipientOptionsLoaded, faFeeRecipientOptionsLoading, previewData]);
 
   const loadMonthlyMemberSchedule = useCallback(async (member: Member, month: string) => {
     setMonthlyLoading(true);
@@ -3551,8 +3600,27 @@ export default function BigeFitnessOperations({
     }).catch(() => undefined);
   };
 
+  const openFaFeeRecipientPrompt = (
+    action: FaFeeRecipientPrompt["action"],
+    booking = selectedBooking,
+  ) => {
+    if (!booking || booking.operation_kind !== "trial") return;
+    const trialService = booking.trial_booking_id
+      ? trialBookings.get(booking.trial_booking_id)?.service
+      : null;
+    setFaFeeRecipientPrompt({
+      action,
+      bookingId: booking.id,
+      amount: getBigeFaFeeAmount(trialService),
+    });
+    setFaFeeRecipientName(booking.fa_fee_recipient_name || "");
+    setFaFeeRecipientOptionsError("");
+    void loadFaFeeRecipientOptions();
+  };
+
   const completeTrialOutcome = async (
     outcome: "pending_conversion" | "not_converted",
+    faFeeRecipient?: { profileId: string | null; name: string },
   ) => {
     if (!selectedBooking || trialOutcomeSubmitting) return;
     const booking = selectedBooking;
@@ -3562,6 +3630,8 @@ export default function BigeFitnessOperations({
         action: "complete_trial_outcome",
         bookingId: booking.id,
         outcome,
+        faFeeRecipientProfileId: faFeeRecipient?.profileId || null,
+        faFeeRecipientName: faFeeRecipient?.name || null,
       });
       const completedBooking: Booking = {
         ...booking,
@@ -3960,8 +4030,11 @@ export default function BigeFitnessOperations({
     });
   };
 
-  const submitContract = async (event: FormEvent) => {
-    event.preventDefault();
+  const submitContract = async (
+    event?: FormEvent<HTMLFormElement>,
+    faFeeRecipient?: { profileId: string | null; name: string },
+  ) => {
+    event?.preventDefault();
     if (contractSubmitting) return;
     setContractError("");
     if (
@@ -4064,6 +4137,10 @@ export default function BigeFitnessOperations({
       setContractError(message);
       return;
     }
+    if (selectedBooking?.operation_kind === "trial" && !faFeeRecipient) {
+      openFaFeeRecipientPrompt("confirm_payment", selectedBooking);
+      return;
+    }
     setContractSubmitting(true);
     try {
       const created = (await post(
@@ -4099,6 +4176,8 @@ export default function BigeFitnessOperations({
           initialPayment,
           email: contractDraft.email || null,
           paymentSchedule: [],
+          faFeeRecipientProfileId: faFeeRecipient?.profileId || null,
+          faFeeRecipientName: faFeeRecipient?.name || null,
         },
         {
           errorPresentation: "inline",
@@ -4139,6 +4218,43 @@ export default function BigeFitnessOperations({
     } finally {
       setContractSubmitting(false);
     }
+  };
+
+  const submitFaFeeRecipient = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!faFeeRecipientPrompt) return;
+    const recipientName = faFeeRecipientName.trim();
+    if (!recipientName) {
+      setFaFeeRecipientOptionsError("請選擇員工或自行輸入收款人");
+      return;
+    }
+    if (
+      !selectedBooking ||
+      selectedBooking.id !== faFeeRecipientPrompt.bookingId ||
+      selectedBooking.operation_kind !== "trial"
+    ) {
+      setFaFeeRecipientPrompt(null);
+      showOperationAlert("FA 資料已變更，請重新開啟後再操作", "無法確認收款人");
+      return;
+    }
+
+    const normalizedName = recipientName.toLocaleLowerCase("zh-TW");
+    const selectedEmployee = faFeeRecipientOptions.find(
+      (option) => option.label.toLocaleLowerCase("zh-TW") === normalizedName,
+    );
+    const recipient = {
+      profileId: selectedEmployee?.id || null,
+      name: recipientName,
+    };
+    const action = faFeeRecipientPrompt.action;
+    setFaFeeRecipientPrompt(null);
+    setFaFeeRecipientOptionsError("");
+
+    if (action === "not_converted") {
+      await completeTrialOutcome("not_converted", recipient);
+      return;
+    }
+    await submitContract(undefined, recipient);
   };
 
   const [planDraft, setPlanDraft] = useState({
@@ -6316,7 +6432,10 @@ export default function BigeFitnessOperations({
 
       {(dialog === "booking" || showCourseAllocationBookingBehind) && selectedBooking ? (
         <Dialog
-          background={showCourseAllocationBookingBehind}
+          background={
+            showCourseAllocationBookingBehind ||
+            faFeeRecipientPrompt?.bookingId === selectedBooking.id
+          }
           title={`${selectedBooking.operation_kind === "trial" ? "FA 體驗" : "課程操作"}｜${members.get(selectedBooking.member_id)?.full_name || "學員"}`}
           onClose={() => {
             if (bookingActionSubmitting || trialConversionSubmitting) return;
@@ -6461,6 +6580,15 @@ export default function BigeFitnessOperations({
               </>
             ) : (
               <div className={styles.trialOutcomePanel}>
+                {selectedBooking.fa_fee_recipient_name ? (
+                  <div className={styles.bookingStatusWindowNote}>
+                    <CircleDollarSign size={17} />
+                    <span>
+                      FA 費用 {formatMoney(selectedBooking.fa_fee_amount || 880)}｜收款人：
+                      {selectedBooking.fa_fee_recipient_name}
+                    </span>
+                  </div>
+                ) : null}
                 {selectedBooking.converted_at ? (
                   <>
                     <div className={styles.trialConvertedNotice}>
@@ -6589,7 +6717,7 @@ export default function BigeFitnessOperations({
                         type="button"
                         className={styles.button}
                         disabled={!canOperateSelectedBooking || trialOutcomeSubmitting !== null}
-                        onClick={() => void completeTrialOutcome("not_converted")}
+                        onClick={() => openFaFeeRecipientPrompt("not_converted")}
                       >
                         {trialOutcomeSubmitting === "not_converted" ? "處理中…" : "未成交"}
                       </button>
@@ -6620,7 +6748,7 @@ export default function BigeFitnessOperations({
                         type="button"
                         disabled={!canOperateSelectedBooking || trialOutcomeSubmitting !== null}
                         className={styles.button}
-                        onClick={() => void completeTrialOutcome("not_converted")}
+                        onClick={() => openFaFeeRecipientPrompt("not_converted")}
                       >
                         {trialOutcomeSubmitting === "not_converted" ? "處理中…" : "未成交"}
                       </button>
@@ -6659,6 +6787,7 @@ export default function BigeFitnessOperations({
 
       {dialog === "contract" && data ? (
         <Dialog
+          background={faFeeRecipientPrompt?.action === "confirm_payment"}
           title={
             selectedBooking?.operation_kind === "trial" && !studentPaymentContext
               ? "FA 成交"
@@ -7368,6 +7497,90 @@ export default function BigeFitnessOperations({
       {staffManagerOpen ? (
         <Dialog title="員工帳號管理" onClose={() => setStaffManagerOpen(false)} wide>
           <iframe className={styles.staffManagerFrame} src="/manager/staff" title="員工帳號管理" />
+        </Dialog>
+      ) : null}
+
+      {faFeeRecipientPrompt ? (
+        <Dialog
+          title={`$${faFeeRecipientPrompt.amount.toLocaleString("en-US")} 收款人`}
+          compact
+          onClose={() => {
+            if (contractSubmitting || trialOutcomeSubmitting) return;
+            setFaFeeRecipientPrompt(null);
+            setFaFeeRecipientOptionsError("");
+          }}
+        >
+          <form className={styles.formGrid} onSubmit={submitFaFeeRecipient}>
+            <p className={`${styles.muted} ${styles.fieldFull}`}>
+              請從下拉選單點選員工，或直接輸入其他收款人姓名。
+            </p>
+            <label className={`${styles.field} ${styles.fieldFull}`}>
+              <span className={styles.label}>收款人</span>
+              <input
+                className={styles.input}
+                autoFocus
+                required
+                maxLength={80}
+                list="fa-fee-recipient-options"
+                placeholder="選擇員工或自行輸入"
+                value={faFeeRecipientName}
+                onChange={(event) => {
+                  setFaFeeRecipientName(event.target.value);
+                  setFaFeeRecipientOptionsError("");
+                }}
+              />
+              <datalist id="fa-fee-recipient-options">
+                {faFeeRecipientOptions.map((option) => (
+                  <option key={option.id} value={option.label} />
+                ))}
+              </datalist>
+              {faFeeRecipientOptionsLoading ? (
+                <small className={styles.fieldHelp}>員工名單載入中…</small>
+              ) : faFeeRecipientOptionsLoaded ? (
+                <small className={styles.fieldHelp}>
+                  已載入 {faFeeRecipientOptions.length} 位員工；仍可自行輸入文字。
+                </small>
+              ) : null}
+            </label>
+            {faFeeRecipientOptionsError ? (
+              <p className={`${styles.error} ${styles.fieldFull}`} role="alert">
+                {faFeeRecipientOptionsError}
+              </p>
+            ) : null}
+            <div className={`${styles.formActions} ${styles.fieldFull}`}>
+              {!faFeeRecipientOptionsLoaded && faFeeRecipientOptionsError ? (
+                <button
+                  className={styles.button}
+                  type="button"
+                  disabled={faFeeRecipientOptionsLoading}
+                  onClick={() => void loadFaFeeRecipientOptions()}
+                >
+                  重新載入員工
+                </button>
+              ) : null}
+              <button
+                className={styles.button}
+                type="button"
+                disabled={contractSubmitting || trialOutcomeSubmitting !== null}
+                onClick={() => {
+                  setFaFeeRecipientPrompt(null);
+                  setFaFeeRecipientOptionsError("");
+                }}
+              >
+                取消
+              </button>
+              <button
+                className={`${styles.button} ${styles.primary}`}
+                type="submit"
+                disabled={contractSubmitting || trialOutcomeSubmitting !== null}
+              >
+                <Check size={17} />
+                {faFeeRecipientPrompt.action === "confirm_payment"
+                  ? "確認並付款"
+                  : "確認未成交"}
+              </button>
+            </div>
+          </form>
         </Dialog>
       ) : null}
 

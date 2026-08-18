@@ -49,8 +49,16 @@ export const BIGE_COURSE_LABELS: Record<BigeCourseType, string> = {
 export const BIGE_OPERATION_KINDS = ["pt", "trial"] as const;
 export const BIGE_TRIAL_REMINDER_PENDING_STATUS = "pending" as const;
 export const BIGE_TRIAL_REMINDER_CONFIRMED_STATUS = "reached" as const;
+export const BIGE_FA_DEFAULT_FEE_AMOUNT = 880 as const;
+export const BIGE_FA_SPORTS_MASSAGE_FEE_AMOUNT = 1500 as const;
 export const BIGE_COMPLETED_BOOKING_EDIT_MESSAGE =
   "本堂已完成並扣課，請先到「課程狀態操作」復原為未扣課，再修改時間、時長、教練或課別。";
+
+export function getBigeFaFeeAmount(service: unknown) {
+  return service === "sports_massage"
+    ? BIGE_FA_SPORTS_MASSAGE_FEE_AMOUNT
+    : BIGE_FA_DEFAULT_FEE_AMOUNT;
+}
 
 export function canEditBigeScheduleBooking(status: string | null | undefined) {
   return status !== "completed";
@@ -566,6 +574,8 @@ export const createContractSchema = z.object({
     )
     .default([]),
   futureTrialAction: z.enum(["convert_to_pt", "cancel"]).nullable().optional(),
+  faFeeRecipientProfileId: z.string().uuid().nullable().optional(),
+  faFeeRecipientName: z.string().trim().min(1).max(80).nullable().optional(),
 }).superRefine((input, context) => {
   if (input.paymentMethod === "ecpay_installment" && input.installmentCount == null) {
     context.addIssue({
@@ -586,6 +596,23 @@ export const createContractSchema = z.object({
       code: "custom",
       path: ["initialPayment"],
       message: "課程成交或續約必須輸入符合方案最低限制的付款金額",
+    });
+  }
+  if (input.sourceBookingId && !input.faFeeRecipientName) {
+    context.addIssue({
+      code: "custom",
+      path: ["faFeeRecipientName"],
+      message: "請先選擇或輸入 FA 收款人",
+    });
+  }
+  if (
+    !input.sourceBookingId &&
+    (input.faFeeRecipientProfileId != null || input.faFeeRecipientName != null)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["faFeeRecipientName"],
+      message: "只有 FA 首次付款可以記錄 FA 收款人",
     });
   }
 });
@@ -628,6 +655,26 @@ export const completeTrialOutcomeSchema = z.object({
   action: z.literal("complete_trial_outcome"),
   bookingId: z.string().uuid(),
   outcome: z.enum(["pending_conversion", "not_converted"]),
+  faFeeRecipientProfileId: z.string().uuid().nullable().optional(),
+  faFeeRecipientName: z.string().trim().min(1).max(80).nullable().optional(),
+}).superRefine((input, context) => {
+  if (input.outcome === "not_converted" && !input.faFeeRecipientName) {
+    context.addIssue({
+      code: "custom",
+      path: ["faFeeRecipientName"],
+      message: "請先選擇或輸入 FA 收款人",
+    });
+  }
+  if (
+    input.outcome !== "not_converted" &&
+    (input.faFeeRecipientProfileId != null || input.faFeeRecipientName != null)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["faFeeRecipientName"],
+      message: "此 FA 結果不應包含收款人",
+    });
+  }
 });
 
 export const changeTrialConversionPaymentSchema = z.object({

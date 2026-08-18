@@ -14,6 +14,7 @@ import {
   calculateLegacyContractExpiryDate,
   flattenBigeMemberPaymentRelations,
   getBigeStudentPaymentBalanceState,
+  getBigeFaFeeAmount,
   isBigeAssistantToContent,
   isBigeContractPaymentAmountAllowed,
   isBigeScheduleNoteUndoAvailable,
@@ -392,6 +393,8 @@ test("FA contracts may be created before a missing birthday is completed", () =>
     signedOn: "2026-08-09",
     initialPayment: 1488,
     paymentSchedule: [],
+    faFeeRecipientProfileId: "00000000-0000-4000-8000-000000000004",
+    faFeeRecipientName: "Miffy｜E000004",
   });
 
   assert.equal(result.success, true);
@@ -421,6 +424,15 @@ test("FA completion requires an explicit converted or not-converted path", () =>
       bookingId,
       outcome: "not_converted",
     }).success,
+    false,
+  );
+  assert.equal(
+    completeTrialOutcomeSchema.safeParse({
+      action: "complete_trial_outcome",
+      bookingId,
+      outcome: "not_converted",
+      faFeeRecipientName: "臨時收款人",
+    }).success,
     true,
   );
   assert.equal(
@@ -428,6 +440,51 @@ test("FA completion requires an explicit converted or not-converted path", () =>
       action: "complete_trial_outcome",
       bookingId,
       outcome: "unknown",
+    }).success,
+    false,
+  );
+});
+
+test("FA fee amount follows the original trial service instead of the normalized course type", () => {
+  assert.equal(getBigeFaFeeAmount("sports_massage"), 1500);
+  assert.equal(getBigeFaFeeAmount("weight_training"), 880);
+  assert.equal(getBigeFaFeeAmount("pilates"), 880);
+  assert.equal(getBigeFaFeeAmount(null), 880);
+});
+
+test("FA contract creation requires a recipient while ordinary contracts reject one", () => {
+  const baseInput = {
+    action: "create_contract" as const,
+    fullName: "測試會員",
+    phone: "0912345678",
+    birthDate: "1990-01-01",
+    email: "member@example.com",
+    emailUnavailable: false,
+    planId: "00000000-0000-4000-8000-000000000001",
+    signedOn: "2026-08-18",
+    initialPayment: 1488,
+    paymentMethod: "cash" as const,
+    paymentSchedule: [],
+  };
+  const sourceBookingId = "00000000-0000-4000-8000-000000000002";
+
+  assert.equal(
+    createContractSchema.safeParse({ ...baseInput, sourceBookingId }).success,
+    false,
+  );
+  assert.equal(
+    createContractSchema.safeParse({
+      ...baseInput,
+      sourceBookingId,
+      faFeeRecipientProfileId: "00000000-0000-4000-8000-000000000003",
+      faFeeRecipientName: "Annie｜E000003",
+    }).success,
+    true,
+  );
+  assert.equal(
+    createContractSchema.safeParse({
+      ...baseInput,
+      faFeeRecipientName: "不應出現在一般合約",
     }).success,
     false,
   );
@@ -738,7 +795,7 @@ test("active FA exposes not-converted directly instead of an FA-completed choose
   assert.doesNotMatch(actionSection, /FA 已完成/);
   assert.match(
     actionSection,
-    /selectedBooking\.status !== "completed"[\s\S]*completeTrialOutcome\("not_converted"\)[\s\S]*"未成交"/,
+    /selectedBooking\.status !== "completed"[\s\S]*openFaFeeRecipientPrompt\("not_converted"\)[\s\S]*"未成交"/,
   );
   assert.match(
     actionSection,
@@ -1067,6 +1124,31 @@ test("every FA result path shares server and database payment barriers", () => {
   assert.match(migration, /fa_initial_payment_required/);
   assert.match(migration, /payment_amount_exceeds_contract_balance/);
   assert.match(migration, /bige_contract_payment_amount_integrity/);
+});
+
+test("FA payment and not-converted actions capture one atomic fee recipient", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260818121947_add_fa_fee_recipient_tracking.sql",
+    "utf8",
+  );
+
+  assert.match(component, /openFaFeeRecipientPrompt\("confirm_payment"/);
+  assert.equal(
+    (component.match(/openFaFeeRecipientPrompt\("not_converted"\)/g) || []).length,
+    2,
+  );
+  assert.match(component, /list="fa-fee-recipient-options"/);
+  assert.match(component, /選擇員工或自行輸入/);
+  assert.match(component, /\/api\/bige-fitness\?faFeeRecipients=1/);
+  assert.match(route, /bige_create_member_contract_v4/);
+  assert.match(route, /bige_complete_trial_outcome_v2/);
+  assert.match(migration, /trial_service = 'sports_massage' then 1500 else 880/);
+  assert.match(migration, /contract_result := public\.bige_create_member_contract_v3/);
+  assert.match(migration, /outcome_result := public\.bige_complete_trial_outcome/);
+  assert.match(migration, /bige_store_fa_fee_recipient_internal/);
+  assert.match(migration, /revoke all on function public\.bige_store_fa_fee_recipient_internal[\s\S]*authenticated/);
 });
 
 test("daily schedule dialogs use a sliced macOS-style genie dismissal toward the lower-left dock", () => {
@@ -1733,7 +1815,7 @@ test("FA signing date is locked to today and ECPay installments require a stored
     component,
     /selectedBooking\?\.operation_kind === "trial"[\s\S]*\? localDate\(\)[\s\S]*: contractDraft\.signedOn/,
   );
-  assert.match(route, /rpc\("bige_create_member_contract_v3"/);
+  assert.match(route, /rpc\("bige_create_member_contract_v4"/);
   assert.match(route, /const trustedSignedOn = input\.sourceBookingId \? toTaipeiDateString\(\) : input\.signedOn/);
   assert.match(route, /rpc\("bige_record_contract_payment_v2"/);
   assert.match(route, /p_installment_count: input\.installmentCount \|\| null/);
