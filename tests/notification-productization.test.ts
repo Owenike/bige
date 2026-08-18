@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   appRoleSchema,
@@ -4420,5 +4421,23 @@ test("runtime readiness view-model and formatter helpers produce stable output",
     formatDeliveryPlanningSkeletonPreview({ in_app: {}, email: {} }).includes("in_app"),
     true,
   );
+});
+
+test("notification dedupe upserts have a matching non-partial unique index", () => {
+  const notificationSource = readFileSync("lib/in-app-notifications.ts", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260818200338_fix_notification_dedupe_upsert_constraint.sql",
+    "utf8",
+  );
+
+  assert.match(
+    notificationSource,
+    /onConflict: "recipient_user_id,dedupe_key"/,
+  );
+  assert.match(
+    migration,
+    /create unique index in_app_notifications_recipient_dedupe_idx\s+on public\.in_app_notifications\(recipient_user_id, dedupe_key\);/i,
+  );
+  assert.doesNotMatch(migration, /where\s+dedupe_key\s+is\s+not\s+null/i);
 });
 
