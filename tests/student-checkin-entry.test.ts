@@ -28,24 +28,39 @@ test("the main check-in pages never hide their approval dialog in CSS", () => {
   );
 });
 
-test("a rejected student entry stays centered and returns to login without resubmitting", () => {
+test("every student check-in card uses the shared centered page layout", () => {
   const checkInPage = readFileSync(resolve(process.cwd(), "app/check-in/page.tsx"), "utf8");
   const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+  const auxiliaryPages = [
+    "app/check-in/forgot-password/page.tsx",
+    "app/check-in/verify/page.tsx",
+    "app/check-in/security-setup/verify/page.tsx",
+  ].map((path) => readFileSync(resolve(process.cwd(), path), "utf8"));
+
+  assert.match(checkInPage, /<main className="studentCheckInPage">/);
+  for (const page of auxiliaryPages) {
+    assert.match(page, /<main className="studentCheckInPage">/);
+  }
+  assert.match(
+    globalStyles,
+    /\.studentCheckInPage\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center/i,
+  );
+  assert.doesNotMatch(globalStyles, /\.studentCheckInPage\s*\{[^}]*align-items:\s*start/i);
+  assert.match(
+    globalStyles,
+    /\.studentCheckInPendingBackdrop\s*\{[^}]*place-items:\s*center/i,
+  );
+});
+
+test("a rejected student entry returns to login without resubmitting", () => {
+  const checkInPage = readFileSync(resolve(process.cwd(), "app/check-in/page.tsx"), "utf8");
   const rejectedView = checkInPage.slice(
     checkInPage.indexOf('{view === "rejected" ? ('),
     checkInPage.indexOf('{view === "expired" ? ('),
   );
 
-  assert.match(
-    checkInPage,
-    /<main className=\{view === "rejected" \? "studentCheckInPage studentCheckInPageCentered" : "studentCheckInPage"\}>/,
-  );
   assert.match(rejectedView, /returnToLogin\(\)\}>返回登入/);
   assert.doesNotMatch(rejectedView, /returnToChoices|重新送出|activeMode === "drop_in"/);
-  assert.match(
-    globalStyles,
-    /\.studentCheckInPage\.studentCheckInPageCentered\s*\{[^}]*align-items:\s*center/i,
-  );
 });
 
 test("student and NT$50 entries use separate URLs while retaining stable labels", () => {

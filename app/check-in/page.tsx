@@ -761,7 +761,7 @@ export function StudentCheckInExperience({ entryMode }: { entryMode: StudentChec
   }
 
   return (
-    <main className={view === "rejected" ? "studentCheckInPage studentCheckInPageCentered" : "studentCheckInPage"}>
+    <main className="studentCheckInPage">
       <section className="studentCheckInCard">
         <p className="studentCheckInEyebrow">BIGE {entryMode === "drop_in" ? "NT$50 DROP-IN" : "STUDENT CHECK-IN"}</p>
 
