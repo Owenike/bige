@@ -5674,7 +5674,7 @@
   text-overflow: ellipsis;
 }
 
-.page.managerPage[data-ipad-schedule-overview="true"] .bookingStudentCode {
+.page.managerPage[data-ipad-schedule-overview="true"] .bookingPrimaryLine .bookingStudentCode {
   flex: 1 0 100%;
   font-size: 10px;
   text-align: center;
