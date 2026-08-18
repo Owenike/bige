@@ -926,19 +926,27 @@ const DIALOG_GENIE_KEYFRAME_TIMES = [0, 0.18, 0.38, 0.58, 0.78, 0.9, 1] as const
 function Dialog(props: {
   title: string;
   onClose: () => void;
+  onCloseStart?: () => void;
   children: React.ReactNode;
   wide?: boolean;
   compact?: boolean;
+  background?: boolean;
+  revealBackgroundOnClose?: boolean;
 }) {
   const [isClosing, setIsClosing] = useState(false);
   const dialogRef = useRef<HTMLElement | null>(null);
   const genieLayerRef = useRef<HTMLDivElement | null>(null);
   const closeCompletedRef = useRef(false);
   const onCloseRef = useRef(props.onClose);
+  const onCloseStartRef = useRef(props.onCloseStart);
 
   useEffect(() => {
     onCloseRef.current = props.onClose;
   }, [props.onClose]);
+
+  useEffect(() => {
+    onCloseStartRef.current = props.onCloseStart;
+  }, [props.onCloseStart]);
 
   const completeAnimatedClose = useCallback(
     (event?: ReactAnimationEvent<HTMLElement>) => {
@@ -1052,6 +1060,7 @@ function Dialog(props: {
       }
     }
 
+    onCloseStartRef.current?.();
     setIsClosing(true);
   }, [isClosing]);
 
@@ -1071,8 +1080,10 @@ function Dialog(props: {
 
   return (
     <div
-      className={`${styles.overlay} ${isClosing ? styles.overlayClosing : ""}`}
+      className={`${styles.overlay} ${props.background ? styles.overlayBackground : ""} ${isClosing ? styles.overlayClosing : ""} ${isClosing && props.revealBackgroundOnClose ? styles.overlayRevealBehind : ""}`}
       role="presentation"
+      aria-hidden={props.background ? true : undefined}
+      inert={props.background ? true : undefined}
       onMouseDown={requestAnimatedClose}
       onAnimationEnd={completeAnimatedClose}
     >
@@ -1473,6 +1484,7 @@ export default function BigeFitnessOperations({
   const [courseAllocationError, setCourseAllocationError] = useState("");
   const [courseAllocationReturnDialog, setCourseAllocationReturnDialog] =
     useState<DialogName>(null);
+  const [courseAllocationReturnVisible, setCourseAllocationReturnVisible] = useState(false);
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<{ members: Member[]; trials: any[] }>({
     members: [],
@@ -4391,6 +4403,14 @@ export default function BigeFitnessOperations({
   const selectedCourseAllocationContract = scheduleCourseAllocationContracts.find(
     (contract) => contract.id === courseAllocationContractId,
   ) || null;
+  const showCourseAllocationScheduleBehind =
+    dialog === "course-allocations" &&
+    courseAllocationReturnVisible &&
+    courseAllocationReturnDialog === "schedule";
+  const showCourseAllocationBookingBehind =
+    dialog === "course-allocations" &&
+    courseAllocationReturnVisible &&
+    courseAllocationReturnDialog === "booking";
   const courseAllocationDraftTotal = BIGE_CONTRACT_COURSE_TYPES.reduce(
     (sum, course) => sum + Number(courseAllocationDraft[course] || 0),
     0,
@@ -4480,6 +4500,7 @@ export default function BigeFitnessOperations({
         ? courseAllocationReturnDialog
         : null,
     );
+    setCourseAllocationReturnVisible(false);
     setCourseAllocationError("");
   };
 
@@ -4490,6 +4511,7 @@ export default function BigeFitnessOperations({
       ) || scheduleCourseAllocationContracts[0];
     if (!target) return;
     setCourseAllocationReturnDialog(dialog);
+    setCourseAllocationReturnVisible(false);
     setCourseAllocationContractId(target.id);
     setCourseAllocationDraft(courseAllocationDraftFrom(target));
     setCourseAllocationError("");
@@ -5590,6 +5612,8 @@ export default function BigeFitnessOperations({
         <Dialog
           title={`設定專項堂數｜${scheduleMemberDetail?.member.full_name || "學員"}`}
           onClose={closeCourseAllocationDialog}
+          onCloseStart={() => setCourseAllocationReturnVisible(true)}
+          revealBackgroundOnClose
         >
           <form className={styles.formGrid} onSubmit={submitCourseAllocations}>
             {courseAllocationError ? (
@@ -6065,8 +6089,9 @@ export default function BigeFitnessOperations({
         </Dialog>
       ) : null}
 
-      {dialog === "schedule" && data ? (
+      {(dialog === "schedule" || showCourseAllocationScheduleBehind) && data ? (
         <Dialog
+          background={showCourseAllocationScheduleBehind}
           title={
             editingSchedule?.kind === "note"
               ? "編輯自由文字"
@@ -6289,8 +6314,9 @@ export default function BigeFitnessOperations({
         </Dialog>
       ) : null}
 
-      {dialog === "booking" && selectedBooking ? (
+      {(dialog === "booking" || showCourseAllocationBookingBehind) && selectedBooking ? (
         <Dialog
+          background={showCourseAllocationBookingBehind}
           title={`${selectedBooking.operation_kind === "trial" ? "FA 體驗" : "課程操作"}｜${members.get(selectedBooking.member_id)?.full_name || "學員"}`}
           onClose={() => {
             if (bookingActionSubmitting || trialConversionSubmitting) return;

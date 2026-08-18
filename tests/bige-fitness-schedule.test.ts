@@ -1599,6 +1599,36 @@ test("daily course dialogs expose manager-controlled specialty session quotas", 
   assert.match(migration, /member_plan_contracts_course_allocation_insert_guard/);
 });
 
+test("specialty allocation genie dismissal reveals its parent dialog from the first frame", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+  const dialogComponent = component.slice(
+    component.indexOf("function Dialog("),
+    component.indexOf("function SignaturePad("),
+  );
+  const allocationDialog = component.slice(
+    component.indexOf('{dialog === "course-allocations"'),
+    component.indexOf('{dialog === "monthly-schedule"'),
+  );
+
+  assert.match(dialogComponent, /onCloseStart\?: \(\) => void/);
+  assert.match(dialogComponent, /revealBackgroundOnClose\?: boolean/);
+  assert.match(dialogComponent, /onCloseStartRef\.current\?\.\(\)/);
+  assert.match(dialogComponent, /styles\.overlayRevealBehind/);
+  assert.match(dialogComponent, /styles\.overlayBackground/);
+  assert.match(component, /const \[courseAllocationReturnVisible, setCourseAllocationReturnVisible\]/);
+  assert.match(component, /setCourseAllocationReturnVisible\(true\)/);
+  assert.match(component, /showCourseAllocationBookingBehind/);
+  assert.match(component, /showCourseAllocationScheduleBehind/);
+  assert.match(allocationDialog, /onCloseStart=\{\(\) => setCourseAllocationReturnVisible\(true\)\}/);
+  assert.match(allocationDialog, /revealBackgroundOnClose/);
+  assert.match(styles, /\.overlayBackground \{[\s\S]*z-index: 99;[\s\S]*pointer-events: none/);
+  assert.match(
+    styles,
+    /\.overlayRevealBehind \{[\s\S]*background: transparent !important;[\s\S]*backdrop-filter: none !important/,
+  );
+});
+
 test("generated assistant TO markers warn without blocking real schedule mutations", () => {
   const migration = readFileSync(
     "supabase/migrations/20260815211445_allow_generated_to_conflict_warning_only.sql",
