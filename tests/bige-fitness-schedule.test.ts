@@ -1211,6 +1211,36 @@ test("daily schedule dialogs use a sliced macOS-style genie dismissal toward the
   );
 });
 
+test("existing schedule edits keep payment context and primary actions above the desktop fold", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+
+  assert.match(
+    component,
+    /editingSchedule\?\.kind === "booking"[\s\S]*?styles\.scheduleEditDialog/,
+  );
+  assert.match(
+    component,
+    /styles\.scheduleEditNoteField[\s\S]*?styles\.scheduleEditActions/,
+  );
+  assert.match(
+    styles,
+    /\.managerPage \.scheduleEditDialog \.studentPaymentSummary \{[\s\S]*?grid-template-columns:/,
+  );
+  assert.match(
+    styles,
+    /\.managerPage \.scheduleEditDialog \.scheduleEditNoteField \{[\s\S]*?grid-column: 1;/,
+  );
+  assert.match(
+    styles,
+    /\.managerPage \.scheduleEditDialog \.scheduleEditActions \{[\s\S]*?grid-column: 2;/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 780px\)[\s\S]*?\.managerPage \.scheduleEditDialog \.scheduleEditActions \{[\s\S]*?grid-column: 1 \/ -1;/,
+  );
+});
+
 test("iPad Pro landscape keeps the desktop schedule overview and fills the viewport vertically", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");

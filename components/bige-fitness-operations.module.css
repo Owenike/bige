@@ -4378,7 +4378,7 @@
   gap: 12px;
 }
 
-.studentPaymentHeader > div {
+.studentPaymentHeader > div:first-child {
   display: grid;
   gap: 3px;
 }
@@ -4520,6 +4520,129 @@
 .studentPaymentHistoryItem > span:last-child {
   flex: 0 0 auto;
   text-align: right;
+}
+
+/* Existing schedule edits keep their payment context visible without pushing
+   the save and course-status actions below a desktop viewport. */
+.managerPage .scheduleEditDialog {
+  width: min(760px, 100%);
+  max-height: min(94dvh, 940px);
+}
+
+.managerPage .scheduleEditDialog .formGrid {
+  gap: 10px 14px;
+}
+
+.managerPage .scheduleEditDialog .studentPaymentSummary {
+  grid-template-columns: minmax(160px, 0.62fr) minmax(0, 1.38fr);
+  gap: 8px 12px;
+  padding: 10px 12px;
+}
+
+.managerPage .scheduleEditDialog .studentPaymentHeader {
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+
+.managerPage .scheduleEditDialog .studentPaymentHeader > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.managerPage .scheduleEditDialog .studentPaymentHeader .label {
+  margin: 0;
+}
+
+.managerPage .scheduleEditDialog .studentPaymentHeader .bookingStatusActions {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.managerPage .scheduleEditDialog .studentPaymentHeader .button,
+.managerPage .scheduleEditDialog .studentCourseSessionHeader .button {
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.managerPage .scheduleEditDialog .studentPaymentBalanceRow {
+  grid-column: 1;
+  align-items: flex-start;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 12px;
+  border-right: 1px solid rgba(132, 157, 181, 0.22);
+}
+
+.managerPage .scheduleEditDialog .studentPaymentBalance strong {
+  font-size: 19px;
+}
+
+.managerPage .scheduleEditDialog .studentCourseSessionSummary {
+  grid-column: 2;
+  gap: 6px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.managerPage .scheduleEditDialog .studentCourseSessionHeader {
+  gap: 8px;
+}
+
+.managerPage .scheduleEditDialog .studentCourseSessionHeader > div {
+  gap: 2px;
+}
+
+.managerPage .scheduleEditDialog .studentCourseSessionHeader strong {
+  font-size: 16px;
+}
+
+.managerPage .scheduleEditDialog .studentCourseSessionGrid {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 5px;
+  max-height: 78px;
+  overflow: auto;
+}
+
+.managerPage .scheduleEditDialog .studentCourseSessionItem {
+  padding: 6px 8px;
+}
+
+.managerPage .scheduleEditDialog .studentCourseSessionUnset {
+  padding: 6px 8px;
+}
+
+.managerPage .scheduleEditDialog .studentPaymentHistory {
+  grid-column: 1 / -1;
+  gap: 5px;
+  max-height: 90px;
+  padding-top: 7px;
+  overflow: auto;
+}
+
+.managerPage .scheduleEditDialog .studentPaymentHistoryItem {
+  padding: 5px 8px;
+}
+
+.managerPage .scheduleEditDialog .scheduleEditNoteField {
+  grid-column: 1;
+}
+
+.managerPage .scheduleEditDialog .scheduleEditNoteField .textarea {
+  min-height: 72px;
+}
+
+.managerPage .scheduleEditDialog .scheduleEditActions {
+  grid-column: 2;
+  align-self: end;
+  justify-content: flex-end;
+}
+
+.managerPage .scheduleEditDialog .scheduleEditActions .button {
+  flex: 1 1 138px;
+  justify-content: center;
 }
 
 .contractCheckboxRow {
@@ -4956,6 +5079,34 @@
 
   .studentPaymentHistoryItem > span:last-child {
     text-align: left;
+  }
+
+  .managerPage .scheduleEditDialog .studentPaymentSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .managerPage .scheduleEditDialog .studentPaymentHeader,
+  .managerPage .scheduleEditDialog .studentPaymentBalanceRow,
+  .managerPage .scheduleEditDialog .studentCourseSessionSummary,
+  .managerPage .scheduleEditDialog .studentPaymentHistory,
+  .managerPage .scheduleEditDialog .scheduleEditNoteField,
+  .managerPage .scheduleEditDialog .scheduleEditActions {
+    grid-column: 1 / -1;
+  }
+
+  .managerPage .scheduleEditDialog .studentPaymentHeader .bookingStatusActions {
+    flex-wrap: wrap;
+  }
+
+  .managerPage .scheduleEditDialog .studentPaymentBalanceRow {
+    padding-right: 0;
+    padding-bottom: 8px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(132, 157, 181, 0.22);
+  }
+
+  .managerPage .scheduleEditDialog .studentCourseSessionSummary {
+    padding-top: 8px;
   }
 }
 

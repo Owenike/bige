@@ -944,6 +944,7 @@ function Dialog(props: {
   onClose: () => void;
   onCloseStart?: () => void;
   children: React.ReactNode;
+  className?: string;
   wide?: boolean;
   compact?: boolean;
   background?: boolean;
@@ -1105,7 +1106,7 @@ function Dialog(props: {
     >
       <section
         ref={dialogRef}
-        className={`${styles.dialog} ${props.wide ? styles.wideDialog : ""} ${props.compact ? styles.compactDialog : ""} ${isClosing ? styles.dialogClosing : ""}`}
+        className={`${styles.dialog} ${props.className || ""} ${props.wide ? styles.wideDialog : ""} ${props.compact ? styles.compactDialog : ""} ${isClosing ? styles.dialogClosing : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={props.title}
@@ -6208,6 +6209,11 @@ export default function BigeFitnessOperations({
       {(dialog === "schedule" || showCourseAllocationScheduleBehind) && data ? (
         <Dialog
           background={showCourseAllocationScheduleBehind}
+          className={
+            editingSchedule?.kind === "booking"
+              ? styles.scheduleEditDialog
+              : undefined
+          }
           title={
             editingSchedule?.kind === "note"
               ? "編輯自由文字"
@@ -6363,7 +6369,13 @@ export default function BigeFitnessOperations({
             {editingSchedule?.kind === "booking"
               ? renderStudentPaymentSummary(editingSchedule.item)
               : null}
-            <label className={`${styles.field} ${styles.fieldFull}`}>
+            <label
+              className={`${styles.field} ${styles.fieldFull} ${
+                editingSchedule?.kind === "booking"
+                  ? styles.scheduleEditNoteField
+                  : ""
+              }`}
+            >
               <span className={styles.label}>自由文字</span>
               <textarea
                 className={styles.textarea}
@@ -6373,7 +6385,13 @@ export default function BigeFitnessOperations({
                 onChange={(event) => setScheduleDraft({ ...scheduleDraft, note: event.target.value })}
               />
             </label>
-            <div className={`${styles.formActions} ${styles.fieldFull}`}>
+            <div
+              className={`${styles.formActions} ${styles.fieldFull} ${
+                editingSchedule?.kind === "booking"
+                  ? styles.scheduleEditActions
+                  : ""
+              }`}
+            >
               <button className={`${styles.button} ${styles.primary}`} type="submit">
                 <Check size={17} /> {editingSchedule ? "儲存變更" : "建立排課"}
               </button>
