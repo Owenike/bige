@@ -760,23 +760,8 @@ export function StudentCheckInExperience({ entryMode }: { entryMode: StudentChec
     setView("login");
   }
 
-  async function returnToChoices() {
-    setError("");
-    setNotice("");
-    setRequestId("");
-    setSuccess(null);
-    setView("loading");
-    try {
-      const authenticated = await loadAuthenticatedOptions();
-      if (!authenticated) setView("login");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "無法載入報到選擇。");
-      setView("error");
-    }
-  }
-
   return (
-    <main className="studentCheckInPage">
+    <main className={view === "rejected" ? "studentCheckInPage studentCheckInPageCentered" : "studentCheckInPage"}>
       <section className="studentCheckInCard">
         <p className="studentCheckInEyebrow">BIGE {entryMode === "drop_in" ? "NT$50 DROP-IN" : "STUDENT CHECK-IN"}</p>
 
@@ -1113,11 +1098,7 @@ export function StudentCheckInExperience({ entryMode }: { entryMode: StudentChec
           <div className="studentCheckInCentered">
             <h1>請洽現場人員</h1>
             <p className="studentCheckInLead">這次報到尚未通過，請由櫃檯協助確認資料。</p>
-            {activeMode === "drop_in" ? (
-              <button className="studentCheckInPrimary" type="button" onClick={() => void returnToLogin()}>返回登入</button>
-            ) : (
-              <button className="studentCheckInPrimary" type="button" onClick={() => void returnToChoices()}>重新送出「{entryLabel}」申請</button>
-            )}
+            <button className="studentCheckInPrimary" type="button" onClick={() => void returnToLogin()}>返回登入</button>
           </div>
         ) : null}
 

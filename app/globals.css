@@ -10885,6 +10885,9 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   place-items: center;
   padding: 28px 16px;
 }
+.studentCheckInPage.studentCheckInPageCentered{
+  align-items: center;
+}
 .studentCheckInCard{
   width: min(100%, 680px);
   border: 1px solid rgba(218, 196, 142, .24);

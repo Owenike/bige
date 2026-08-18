@@ -28,6 +28,26 @@ test("the main check-in pages never hide their approval dialog in CSS", () => {
   );
 });
 
+test("a rejected student entry stays centered and returns to login without resubmitting", () => {
+  const checkInPage = readFileSync(resolve(process.cwd(), "app/check-in/page.tsx"), "utf8");
+  const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+  const rejectedView = checkInPage.slice(
+    checkInPage.indexOf('{view === "rejected" ? ('),
+    checkInPage.indexOf('{view === "expired" ? ('),
+  );
+
+  assert.match(
+    checkInPage,
+    /<main className=\{view === "rejected" \? "studentCheckInPage studentCheckInPageCentered" : "studentCheckInPage"\}>/,
+  );
+  assert.match(rejectedView, /returnToLogin\(\)\}>返回登入/);
+  assert.doesNotMatch(rejectedView, /returnToChoices|重新送出|activeMode === "drop_in"/);
+  assert.match(
+    globalStyles,
+    /\.studentCheckInPage\.studentCheckInPageCentered\s*\{[^}]*align-items:\s*center/i,
+  );
+});
+
 test("student and NT$50 entries use separate URLs while retaining stable labels", () => {
   assert.equal(studentCheckInPath("autonomous"), "/check-in");
   assert.equal(studentCheckInPath("drop_in"), "/check-in/drop-in");
