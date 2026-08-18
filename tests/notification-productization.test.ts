@@ -4425,8 +4425,13 @@ test("runtime readiness view-model and formatter helpers produce stable output",
 
 test("notification dedupe upserts have a matching non-partial unique index", () => {
   const notificationSource = readFileSync("lib/in-app-notifications.ts", "utf8");
+  const deliverySource = readFileSync("lib/notification-ops.ts", "utf8");
   const migration = readFileSync(
     "supabase/migrations/20260818200338_fix_notification_dedupe_upsert_constraint.sql",
+    "utf8",
+  );
+  const deliveryMigration = readFileSync(
+    "supabase/migrations/20260818201312_fix_notification_delivery_dedupe_upsert_constraint.sql",
     "utf8",
   );
 
@@ -4439,5 +4444,14 @@ test("notification dedupe upserts have a matching non-partial unique index", () 
     /create unique index in_app_notifications_recipient_dedupe_idx\s+on public\.in_app_notifications\(recipient_user_id, dedupe_key\);/i,
   );
   assert.doesNotMatch(migration, /where\s+dedupe_key\s+is\s+not\s+null/i);
+  assert.match(deliverySource, /onConflict: "channel,dedupe_key"/);
+  assert.match(
+    deliveryMigration,
+    /create unique index notification_deliveries_dedupe_idx\s+on public\.notification_deliveries\(channel, dedupe_key\);/i,
+  );
+  assert.doesNotMatch(
+    deliveryMigration,
+    /where\s+dedupe_key\s+is\s+not\s+null/i,
+  );
 });
 
