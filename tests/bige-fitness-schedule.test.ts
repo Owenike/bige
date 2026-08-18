@@ -1069,7 +1069,7 @@ test("every FA result path shares server and database payment barriers", () => {
   assert.match(migration, /bige_contract_payment_amount_integrity/);
 });
 
-test("daily schedule dialogs animate manual dismissals toward the lower-left viewport dock", () => {
+test("daily schedule dialogs use a sliced macOS-style genie dismissal toward the lower-left dock", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
   const dialog = component.slice(
@@ -1082,18 +1082,23 @@ test("daily schedule dialogs animate manual dismissals toward the lower-left vie
   assert.match(dialog, /onClick=\{requestAnimatedClose\}/);
   assert.match(dialog, /onAnimationEnd=\{completeAnimatedClose\}/);
   assert.match(component, /const DIALOG_CLOSE_ANIMATION_MS = 360/);
+  assert.match(component, /const DIALOG_GENIE_SLICE_COUNT = 30/);
   assert.match(dialog, /const dockInset = 16/);
-  assert.match(dialog, /--dialog-dock-offset-x/);
-  assert.match(dialog, /--dialog-dock-offset-y/);
+  assert.match(dialog, /cloneNode\(true\)/);
+  assert.match(dialog, /styles\.dialogGenieLayer/);
+  assert.match(dialog, /styles\.dialogGenieSlice/);
+  assert.match(dialog, /Math\.pow\(time, 3\.2\)/);
+  assert.match(dialog, /Math\.sin\(Math\.PI \* time\)/);
+  assert.match(dialog, /Math\.pow\(verticalProgress, 1\.55\)/);
+  assert.match(dialog, /slice\.animate\(keyframes/);
+  assert.match(dialog, /window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches/);
   assert.match(styles, /\.overlayClosing \{[\s\S]*animation: dialogOverlayClose 360ms/);
-  assert.match(styles, /\.dialogClosing \{[\s\S]*animation: dialogGenieClose 360ms/);
+  assert.match(styles, /\.dialogClosing \{[\s\S]*visibility: hidden/);
+  assert.match(styles, /\.dialogGenieLayer \{[\s\S]*position: fixed;[\s\S]*pointer-events: none/);
+  assert.match(styles, /\.dialogGenieSlice \{[\s\S]*overflow: hidden;[\s\S]*transform-origin: 0 50%/);
   assert.match(
     styles,
-    /@keyframes dialogGenieClose[\s\S]*translate3d\(var\(--dialog-dock-offset-x, 0px\), var\(--dialog-dock-offset-y, 0px\), 0\)[\s\S]*scaleX\(0\.04\)[\s\S]*scaleY\(0\.02\)/,
-  );
-  assert.match(
-    styles,
-    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.overlayClosing,[\s\S]*\.dialogClosing[\s\S]*animation-duration: 0\.01ms !important/,
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.overlayClosing[\s\S]*animation-duration: 0\.01ms !important/,
   );
 });
 

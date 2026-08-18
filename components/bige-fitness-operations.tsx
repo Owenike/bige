@@ -920,6 +920,8 @@ function scheduleCourseLabel(courseType: BigeCourseType) {
 
 const DIALOG_CLOSE_ANIMATION_MS = 360;
 const DIALOG_CLOSE_FALLBACK_MS = DIALOG_CLOSE_ANIMATION_MS + 120;
+const DIALOG_GENIE_SLICE_COUNT = 30;
+const DIALOG_GENIE_KEYFRAME_TIMES = [0, 0.18, 0.38, 0.58, 0.78, 0.9, 1] as const;
 
 function Dialog(props: {
   title: string;
@@ -930,6 +932,7 @@ function Dialog(props: {
 }) {
   const [isClosing, setIsClosing] = useState(false);
   const dialogRef = useRef<HTMLElement | null>(null);
+  const genieLayerRef = useRef<HTMLDivElement | null>(null);
   const closeCompletedRef = useRef(false);
   const onCloseRef = useRef(props.onClose);
 
@@ -942,6 +945,8 @@ function Dialog(props: {
       if (event && event.currentTarget !== event.target) return;
       if (closeCompletedRef.current) return;
       closeCompletedRef.current = true;
+      genieLayerRef.current?.remove();
+      genieLayerRef.current = null;
       onCloseRef.current();
     },
     [],
@@ -951,20 +956,100 @@ function Dialog(props: {
     if (isClosing || closeCompletedRef.current) return;
 
     const element = dialogRef.current;
-    if (element) {
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (element && !prefersReducedMotion) {
       const bounds = element.getBoundingClientRect();
       const dockInset = 16;
-      const finalScaleX = 0.04;
-      const dialogCenterX = bounds.left + bounds.width / 2;
-      const dockCenterX = dockInset + (bounds.width * finalScaleX) / 2;
-      const dockOffsetX = dockCenterX - dialogCenterX;
-      const dockOffsetY = Math.max(0, window.innerHeight - bounds.bottom - dockInset);
-      element.style.setProperty("--dialog-dock-offset-x-early", `${dockOffsetX * 0.18}px`);
-      element.style.setProperty("--dialog-dock-offset-x-late", `${dockOffsetX * 0.72}px`);
-      element.style.setProperty("--dialog-dock-offset-x", `${dockOffsetX}px`);
-      element.style.setProperty("--dialog-dock-offset-y-early", `${dockOffsetY * 0.18}px`);
-      element.style.setProperty("--dialog-dock-offset-y-late", `${dockOffsetY * 0.72}px`);
-      element.style.setProperty("--dialog-dock-offset-y", `${dockOffsetY}px`);
+      const targetX = dockInset;
+      const targetY = window.innerHeight - dockInset;
+      const layer = document.createElement("div");
+      layer.className = styles.dialogGenieLayer;
+      layer.setAttribute("aria-hidden", "true");
+      layer.inert = true;
+      element.parentElement?.appendChild(layer);
+      genieLayerRef.current?.remove();
+      genieLayerRef.current = layer;
+
+      const progressAt = (time: number, verticalProgress: number) => {
+        const delayedUpperEdge = Math.pow(time, 3.2);
+        const lowerEdgeLead =
+          0.75 * Math.sin(Math.PI * time) * Math.pow(verticalProgress, 1.55);
+        return Math.min(1, delayedUpperEdge + lowerEdgeLead);
+      };
+      const mappedY = (originalY: number, time: number) => {
+        const verticalProgress = Math.max(
+          0,
+          Math.min(1, (originalY - bounds.top) / bounds.height),
+        );
+        const progress = progressAt(time, verticalProgress);
+        return originalY + (targetY - originalY) * progress;
+      };
+
+      for (let index = 0; index < DIALOG_GENIE_SLICE_COUNT; index += 1) {
+        const sliceStart = (bounds.height * index) / DIALOG_GENIE_SLICE_COUNT;
+        const sliceEnd = (bounds.height * (index + 1)) / DIALOG_GENIE_SLICE_COUNT;
+        const overlap = 0.75;
+        const visibleStart = Math.max(0, sliceStart - overlap);
+        const visibleEnd = Math.min(bounds.height, sliceEnd + overlap);
+        const sliceHeight = visibleEnd - visibleStart;
+        const originalCenterY = bounds.top + visibleStart + sliceHeight / 2;
+        const verticalProgress = (sliceStart + sliceEnd) / 2 / bounds.height;
+        const slice = document.createElement("div");
+        slice.className = styles.dialogGenieSlice;
+        slice.dataset.genieSlice = String(index);
+        slice.style.left = `${bounds.left}px`;
+        slice.style.top = `${bounds.top + visibleStart}px`;
+        slice.style.width = `${bounds.width}px`;
+        slice.style.height = `${sliceHeight}px`;
+
+        const clone = element.cloneNode(true) as HTMLElement;
+        clone.classList.remove(styles.dialogClosing);
+        clone.removeAttribute("role");
+        clone.removeAttribute("aria-modal");
+        clone.setAttribute("aria-hidden", "true");
+        clone.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
+        clone.querySelectorAll("iframe").forEach((frame) => frame.removeAttribute("src"));
+        clone.style.position = "absolute";
+        clone.style.left = "0";
+        clone.style.top = `${-visibleStart}px`;
+        clone.style.width = `${bounds.width}px`;
+        clone.style.height = `${bounds.height}px`;
+        clone.style.maxHeight = "none";
+        clone.style.margin = "0";
+        clone.style.overflow = "hidden";
+        clone.style.animation = "none";
+        clone.style.setProperty("backdrop-filter", "none");
+        clone.style.setProperty("-webkit-backdrop-filter", "none");
+        slice.appendChild(clone);
+        layer.appendChild(slice);
+        clone.scrollTop = element.scrollTop;
+        clone.scrollLeft = element.scrollLeft;
+
+        const keyframes = DIALOG_GENIE_KEYFRAME_TIMES.map((time) => {
+          const progress = progressAt(time, verticalProgress);
+          const mappedTop = mappedY(bounds.top + visibleStart, time);
+          const mappedBottom = mappedY(bounds.top + visibleEnd, time);
+          const mappedCenter = (mappedTop + mappedBottom) / 2;
+          const translatedX = (targetX - bounds.left) * progress;
+          const translatedY = mappedCenter - originalCenterY;
+          const scaleX = Math.max(0.022, 1 - 0.978 * Math.pow(progress, 1.5));
+          const scaleY = Math.max(0.018, (mappedBottom - mappedTop) / sliceHeight);
+          const fadeProgress = Math.max(0, (time - 0.84) / 0.16);
+
+          return {
+            offset: time,
+            opacity: String(1 - fadeProgress),
+            filter: `blur(${fadeProgress * 1.8}px)`,
+            transform: `translate3d(${translatedX}px, ${translatedY}px, 0) scaleX(${scaleX}) scaleY(${scaleY})`,
+          };
+        });
+
+        slice.animate(keyframes, {
+          duration: DIALOG_CLOSE_ANIMATION_MS,
+          easing: "linear",
+          fill: "forwards",
+        });
+      }
     }
 
     setIsClosing(true);
@@ -976,11 +1061,20 @@ function Dialog(props: {
     return () => window.clearTimeout(fallback);
   }, [completeAnimatedClose, isClosing]);
 
+  useEffect(
+    () => () => {
+      genieLayerRef.current?.remove();
+      genieLayerRef.current = null;
+    },
+    [],
+  );
+
   return (
     <div
       className={`${styles.overlay} ${isClosing ? styles.overlayClosing : ""}`}
       role="presentation"
       onMouseDown={requestAnimatedClose}
+      onAnimationEnd={completeAnimatedClose}
     >
       <section
         ref={dialogRef}
@@ -989,7 +1083,6 @@ function Dialog(props: {
         aria-modal="true"
         aria-label={props.title}
         onMouseDown={(event) => event.stopPropagation()}
-        onAnimationEnd={completeAnimatedClose}
       >
         <div className={styles.dialogHeader}>
           <h2 className={styles.dialogTitle}>{props.title}</h2>
