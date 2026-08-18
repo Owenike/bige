@@ -485,10 +485,8 @@ export default function StudentCheckInsAdminPage() {
       {activeRequest && lockerPromptRequestId === activeRequest.id ? (
         <StudentCheckInLockerKeyDialog
           key={activeRequest.id}
-          memberName={activeRequest.profile.full_name}
           isSubmitting={isDeciding}
           error={error}
-          onCancel={() => { setError(""); setLockerPromptRequestId(""); }}
           onConfirm={(lockerKey) => void decide(activeRequest.id, "approved", lockerKey)}
         />
       ) : null}

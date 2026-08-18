@@ -345,10 +345,8 @@ export function StudentCheckInAdminPendingAlert() {
     return (
       <StudentCheckInLockerKeyDialog
         key={activeRequest.id}
-        memberName={activeRequest.profile.full_name}
         isSubmitting={isDeciding}
         error={error}
-        onCancel={() => { setError(""); setLockerPromptRequestId(""); }}
         onConfirm={(lockerKey) => void decide("approved", undefined, lockerKey)}
       />
     );

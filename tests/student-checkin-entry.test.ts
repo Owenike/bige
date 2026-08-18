@@ -119,6 +119,10 @@ test("all three approval surfaces use one shared locker-key confirmation dialog"
   assert.match(dialog, /是否有拿置物櫃鑰匙？/);
   assert.match(dialog, /拿幾號鑰匙？/);
   assert.match(dialog, /lockerKeyTaken === true[\s\S]*type="number"/);
+  assert.match(dialog, /onConfirm\(\{ lockerKeyTaken: false, lockerKeyNumber: null \}\)/);
+  assert.match(dialog, /type="submit"[\s\S]*是/);
+  assert.doesNotMatch(dialog, />返回</);
+  assert.doesNotMatch(dialog, /確認放行/);
   assert.equal((autonomousPage.match(/<StudentCheckInLockerKeyDialog/g) || []).length, 1);
   assert.equal((dropInPage.match(/<StudentCheckInLockerKeyDialog/g) || []).length, 1);
   assert.equal((globalAlert.match(/<StudentCheckInLockerKeyDialog/g) || []).length, 1);

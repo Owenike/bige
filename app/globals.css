@@ -12037,9 +12037,15 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .studentLockerKeyBackdrop{
   z-index: 1010;
+  place-items: center;
+  padding: 20px;
+  background: rgba(7, 9, 12, .52);
+  -webkit-backdrop-filter: blur(24px) saturate(130%);
+  backdrop-filter: blur(24px) saturate(130%);
 }
 .studentLockerKeyDialog{
-  width: min(520px, 100%);
+  width: min(400px, 100%);
+  height: auto;
   max-height: calc(100dvh - 40px);
   overflow: auto;
   border: 1px solid rgba(226, 199, 132, .48);
@@ -12054,14 +12060,15 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 }
 .studentLockerKeyDialog form{
   display: grid;
-  gap: 18px;
-  padding: 34px;
+  gap: 20px;
+  padding: 28px;
 }
 .studentLockerKeyDialog h2{
   margin: 0;
   color: #fffdf7;
-  font-size: clamp(26px, 5vw, 34px);
+  font-size: clamp(24px, 5vw, 30px);
   line-height: 1.2;
+  text-align: center;
 }
 .studentLockerKeyDialog p{
   margin: 0;
@@ -12074,24 +12081,18 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   gap: 12px;
 }
 .studentLockerKeyChoices > button{
-  min-height: 96px;
+  min-height: 68px;
   display: grid;
   place-items: center;
-  align-content: center;
-  gap: 5px;
   border: 1px solid rgba(255, 255, 255, .18);
   border-radius: 14px;
   background: rgba(255, 255, 255, .06);
-  color: rgba(255, 255, 255, .72);
-  font: inherit;
-  cursor: pointer;
-}
-.studentLockerKeyChoices > button strong{
   color: #fffdf7;
+  font-family: inherit;
   font-size: 24px;
-}
-.studentLockerKeyChoices > button span{
-  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
 }
 .studentLockerKeyChoices > button.is-selected{
   border-color: rgba(229, 204, 146, .72);
@@ -12132,11 +12133,6 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
 .studentLockerKeyNumberField small{
   color: #ffb0b5;
   font-weight: 600;
-}
-.studentLockerKeyActions{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
 }
 .studentCheckInsApprovalPhoto{
   display: grid;
@@ -12840,6 +12836,25 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   background: rgba(7, 9, 12, .48);
   -webkit-backdrop-filter: blur(20px) saturate(125%);
   backdrop-filter: blur(20px) saturate(125%);
+}
+@media (max-width: 820px){
+  .studentCheckInsApprovalBackdrop.studentLockerKeyBackdrop{
+    place-items: center;
+    padding: 16px;
+  }
+  .studentLockerKeyDialog{
+    width: min(400px, 100%);
+    height: auto;
+    max-height: calc(100dvh - 32px);
+    border-radius: 18px;
+  }
+  .studentLockerKeyDialog form{
+    gap: 18px;
+    padding: 24px 18px calc(20px + env(safe-area-inset-bottom));
+  }
+  .studentLockerKeyChoices > button{
+    min-height: 64px;
+  }
 }
 .studentCheckInsProfileDialog,
 .studentCheckInsApprovalDialog{

@@ -4,18 +4,14 @@ import { FormEvent, useState } from "react";
 import type { StudentCheckInLockerKeySelection } from "../lib/student-checkin-entry";
 
 type StudentCheckInLockerKeyDialogProps = {
-  memberName: string;
   isSubmitting: boolean;
   error?: string;
-  onCancel: () => void;
   onConfirm: (selection: StudentCheckInLockerKeySelection) => void;
 };
 
 export function StudentCheckInLockerKeyDialog({
-  memberName,
   isSubmitting,
   error = "",
-  onCancel,
   onConfirm,
 }: StudentCheckInLockerKeyDialogProps) {
   const [lockerKeyTaken, setLockerKeyTaken] = useState<boolean | null>(null);
@@ -24,14 +20,16 @@ export function StudentCheckInLockerKeyDialog({
   const hasValidLockerKeyNumber = Number.isInteger(parsedLockerKeyNumber)
     && parsedLockerKeyNumber >= 1
     && parsedLockerKeyNumber <= 9999;
-  const canConfirm = lockerKeyTaken === false || (lockerKeyTaken === true && hasValidLockerKeyNumber);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canConfirm || lockerKeyTaken === null) return;
-    onConfirm(lockerKeyTaken
-      ? { lockerKeyTaken: true, lockerKeyNumber: parsedLockerKeyNumber }
-      : { lockerKeyTaken: false, lockerKeyNumber: null });
+    if (isSubmitting) return;
+    if (lockerKeyTaken !== true) {
+      setLockerKeyTaken(true);
+      return;
+    }
+    if (!hasValidLockerKeyNumber) return;
+    onConfirm({ lockerKeyTaken: true, lockerKeyNumber: parsedLockerKeyNumber });
   }
 
   return (
@@ -41,38 +39,27 @@ export function StudentCheckInLockerKeyDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="student-locker-key-title"
-        aria-describedby="student-locker-key-description"
       >
         <form onSubmit={submit}>
-          <p className="studentCheckInEyebrow">LOCKER KEY</p>
           <h2 id="student-locker-key-title">是否有拿置物櫃鑰匙？</h2>
-          <p id="student-locker-key-description">請確認 {memberName} 本次入場是否領取鑰匙，再完成放行。</p>
 
-          <div className="studentLockerKeyChoices" role="radiogroup" aria-label="是否領取置物櫃鑰匙">
+          <div className="studentLockerKeyChoices" aria-label="是否領取置物櫃鑰匙">
             <button
-              className={lockerKeyTaken === false ? "is-selected" : ""}
               type="button"
-              role="radio"
-              aria-checked={lockerKeyTaken === false}
               disabled={isSubmitting}
               onClick={() => {
-                setLockerKeyTaken(false);
-                setLockerKeyNumber("");
+                onConfirm({ lockerKeyTaken: false, lockerKeyNumber: null });
               }}
             >
-              <strong>否</strong>
-              <span>沒有拿鑰匙</span>
+              否
             </button>
             <button
               className={lockerKeyTaken === true ? "is-selected" : ""}
-              type="button"
-              role="radio"
-              aria-checked={lockerKeyTaken === true}
+              type="submit"
+              aria-pressed={lockerKeyTaken === true}
               disabled={isSubmitting}
-              onClick={() => setLockerKeyTaken(true)}
             >
-              <strong>是</strong>
-              <span>有拿鑰匙</span>
+              是
             </button>
           </div>
 
@@ -97,13 +84,6 @@ export function StudentCheckInLockerKeyDialog({
           ) : null}
 
           {error ? <div className="studentCheckInsAdminError" role="alert">{error}</div> : null}
-
-          <div className="studentLockerKeyActions">
-            <button className="studentCheckInsRejectButton" type="button" disabled={isSubmitting} onClick={onCancel}>返回</button>
-            <button className="studentCheckInsApproveButton" type="submit" disabled={isSubmitting || !canConfirm}>
-              {isSubmitting ? "處理中" : "確認放行"}
-            </button>
-          </div>
         </form>
       </section>
     </div>
