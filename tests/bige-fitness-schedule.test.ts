@@ -1220,6 +1220,10 @@ test("iPad Pro landscape keeps the desktop schedule overview and fills the viewp
     styles,
     /data-ipad-pro-desktop-layout="true"\] \.businessDayControls \{[\s\S]*grid-column: 2;[\s\S]*justify-content: flex-end;[\s\S]*flex-wrap: wrap;/,
   );
+  assert.match(
+    styles,
+    /data-ipad-schedule-overview="true"\] \.bookingTrial\.cellEntryHalf \{[\s\S]*left: calc\(-1 \* var\(--ipad-time-column\) \+ 3px\);/,
+  );
   assert.ok(assistanceButtonIndex >= 0);
   assert.ok(addCoachButtonIndex > assistanceButtonIndex);
   assert.ok(addCoachButtonIndex < navigationEndIndex);

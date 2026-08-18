@@ -5637,6 +5637,13 @@
   grid-template-columns: var(--ipad-time-column) minmax(0, 1fr);
 }
 
+/* Half-hour FA cards still render their own time rail. Let that rail occupy the
+   paired iPad time column so the student details keep the same width as an
+   hour-start FA instead of losing another full time column. */
+.page.managerPage[data-ipad-schedule-overview="true"] .bookingTrial.cellEntryHalf {
+  left: calc(-1 * var(--ipad-time-column) + 3px);
+}
+
 .page.managerPage[data-ipad-schedule-overview="true"] .booking .entryBody,
 .page.managerPage[data-ipad-schedule-overview="true"] .note .entryBody {
   padding: 5px 7px;
