@@ -41,6 +41,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  AnimationEvent as ReactAnimationEvent,
   FormEvent,
   Fragment,
   PointerEvent as ReactPointerEvent,
@@ -917,6 +918,9 @@ function scheduleCourseLabel(courseType: BigeCourseType) {
     : BIGE_COURSE_LABELS[courseType];
 }
 
+const DIALOG_CLOSE_ANIMATION_MS = 420;
+const DIALOG_CLOSE_FALLBACK_MS = DIALOG_CLOSE_ANIMATION_MS + 120;
+
 function Dialog(props: {
   title: string;
   onClose: () => void;
@@ -924,18 +928,71 @@ function Dialog(props: {
   wide?: boolean;
   compact?: boolean;
 }) {
+  const [isClosing, setIsClosing] = useState(false);
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const closeCompletedRef = useRef(false);
+  const onCloseRef = useRef(props.onClose);
+
+  useEffect(() => {
+    onCloseRef.current = props.onClose;
+  }, [props.onClose]);
+
+  const completeAnimatedClose = useCallback(
+    (event?: ReactAnimationEvent<HTMLElement>) => {
+      if (event && event.currentTarget !== event.target) return;
+      if (closeCompletedRef.current) return;
+      closeCompletedRef.current = true;
+      onCloseRef.current();
+    },
+    [],
+  );
+
+  const requestAnimatedClose = useCallback(() => {
+    if (isClosing || closeCompletedRef.current) return;
+
+    const element = dialogRef.current;
+    if (element) {
+      const bounds = element.getBoundingClientRect();
+      const dockOffsetY = Math.max(0, window.innerHeight - bounds.bottom - 6);
+      element.style.setProperty("--dialog-dock-offset-y-early", `${dockOffsetY * 0.18}px`);
+      element.style.setProperty("--dialog-dock-offset-y-late", `${dockOffsetY * 0.72}px`);
+      element.style.setProperty("--dialog-dock-offset-y", `${dockOffsetY}px`);
+    }
+
+    setIsClosing(true);
+  }, [isClosing]);
+
+  useEffect(() => {
+    if (!isClosing) return;
+    const fallback = window.setTimeout(completeAnimatedClose, DIALOG_CLOSE_FALLBACK_MS);
+    return () => window.clearTimeout(fallback);
+  }, [completeAnimatedClose, isClosing]);
+
   return (
-    <div className={styles.overlay} role="presentation" onMouseDown={props.onClose}>
+    <div
+      className={`${styles.overlay} ${isClosing ? styles.overlayClosing : ""}`}
+      role="presentation"
+      onMouseDown={requestAnimatedClose}
+    >
       <section
-        className={`${styles.dialog} ${props.wide ? styles.wideDialog : ""} ${props.compact ? styles.compactDialog : ""}`}
+        ref={dialogRef}
+        className={`${styles.dialog} ${props.wide ? styles.wideDialog : ""} ${props.compact ? styles.compactDialog : ""} ${isClosing ? styles.dialogClosing : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={props.title}
         onMouseDown={(event) => event.stopPropagation()}
+        onAnimationEnd={completeAnimatedClose}
       >
         <div className={styles.dialogHeader}>
           <h2 className={styles.dialogTitle}>{props.title}</h2>
-          <button className={styles.iconButton} type="button" onClick={props.onClose} title="關閉">
+          <button
+            className={styles.iconButton}
+            type="button"
+            onClick={requestAnimatedClose}
+            title="關閉"
+            aria-label="關閉視窗"
+            disabled={isClosing}
+          >
             <X size={19} />
           </button>
         </div>

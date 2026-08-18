@@ -1069,6 +1069,31 @@ test("every FA result path shares server and database payment barriers", () => {
   assert.match(migration, /bige_contract_payment_amount_integrity/);
 });
 
+test("daily schedule dialogs animate manual dismissals toward the viewport dock", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+  const dialog = component.slice(
+    component.indexOf("function Dialog("),
+    component.indexOf("function SignaturePad("),
+  );
+
+  assert.match(dialog, /const \[isClosing, setIsClosing\] = useState\(false\)/);
+  assert.match(dialog, /onMouseDown=\{requestAnimatedClose\}/);
+  assert.match(dialog, /onClick=\{requestAnimatedClose\}/);
+  assert.match(dialog, /onAnimationEnd=\{completeAnimatedClose\}/);
+  assert.match(dialog, /--dialog-dock-offset-y/);
+  assert.match(styles, /\.overlayClosing \{[\s\S]*animation: dialogOverlayClose 420ms/);
+  assert.match(styles, /\.dialogClosing \{[\s\S]*animation: dialogGenieClose 420ms/);
+  assert.match(
+    styles,
+    /@keyframes dialogGenieClose[\s\S]*translate3d\(0, var\(--dialog-dock-offset-y, 0px\), 0\)[\s\S]*scaleX\(0\.04\)[\s\S]*scaleY\(0\.02\)/,
+  );
+  assert.match(
+    styles,
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.overlayClosing,[\s\S]*\.dialogClosing[\s\S]*animation-duration: 0\.01ms !important/,
+  );
+});
+
 test("iPad Pro landscape keeps the desktop schedule overview and fills the viewport vertically", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
