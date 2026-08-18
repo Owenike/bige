@@ -61,7 +61,24 @@ const COURSE_OVERRIDES = new Map([
   ["2026-08-18|Una|11:00|盧謝秋月", "weight_training"],
   ["2026-08-25|Una|10:00|盧薇安", "weight_training"],
   ["2026-08-25|Una|11:00|盧謝秋月", "weight_training"],
+  ["2026-08-22|Becky|13:00|林建宇", "weight_training"],
 ]);
+const CELL_CONTENT_OVERRIDES = new Map([
+  ["2026-08-22|13:00|Becky|FA1", {
+    content: "林建宇0980120570",
+    reason: "User supplied the missing FA1 cell on 2026-08-19",
+  }],
+]);
+
+export function resolveAugustScheduleCellContent({ date, time, coach, marker, content }) {
+  const sourceContent = clean(content);
+  const cellOverride = CELL_CONTENT_OVERRIDES.get(`${date}|${time}|${coach}|${marker}`) || null;
+  return {
+    content: cellOverride?.content || sourceContent,
+    sourceContent,
+    sourceOverride: cellOverride?.reason || null,
+  };
+}
 
 const clean = (value) => String(value ?? "").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
 const compact = (value) => clean(value).replace(/\s+/g, "");
@@ -149,8 +166,15 @@ async function readWorkbook(sourcePath) {
       for (let hour = 6; hour <= 23; hour += 1) {
         const excelRow = headerRow + 1 + (hour - 6);
         const marker = compact(sheet.getRow(excelRow).getCell(markerColumn).text).toUpperCase();
-        const content = clean(sheet.getRow(excelRow).getCell(contentColumn).text);
         const time = `${String(hour).padStart(2, "0")}:00`;
+        const resolvedContent = resolveAugustScheduleCellContent({
+          date,
+          time,
+          coach,
+          marker,
+          content: sheet.getRow(excelRow).getCell(contentColumn).text,
+        });
+        const { content, sourceContent, sourceOverride } = resolvedContent;
         if (KNOWN_MARKERS.has(marker)) {
           let continuation = null;
           if (hour < 23) {
@@ -165,6 +189,8 @@ async function readWorkbook(sourcePath) {
             operationKind: marker === "PT" ? "pt" : "trial",
             trialStage: marker === "PT" ? null : marker,
             rawContent: content,
+            sourceContent,
+            sourceOverride,
             continuation,
             name: parsed.name || null,
             phone: parsed.phone || null,

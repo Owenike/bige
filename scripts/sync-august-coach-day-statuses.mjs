@@ -230,6 +230,29 @@ async function main() {
     if (removed.error) throw new Error(`清除過時每日班別：${removed.error.message}`);
   }
   console.log(JSON.stringify({ applied: rows.length, inserted: inserts.length, updated: updates.length, removed: obsolete.length }, null, 2));
+  const live = await requireData(
+    supabase
+      .from("bige_schedule_notes")
+      .select("id, coach_id, starts_at, ends_at, content, import_row_key")
+      .eq("tenant_id", context.tenantId)
+      .gte("starts_at", "2026-08-01T00:00:00+08:00")
+      .lt("starts_at", "2026-09-01T00:00:00+08:00")
+      .like("import_row_key", "coach-day-status:%"),
+    "驗證每日班別",
+  );
+  const desiredByKey = new Map(rows.map((row) => [row.import_row_key, row]));
+  const errors = (live || []).filter((row) => {
+    const desired = desiredByKey.get(row.import_row_key);
+    return !desired
+      || row.coach_id !== desired.coach_id
+      || row.content !== desired.content
+      || new Date(row.starts_at).toISOString() !== new Date(desired.starts_at).toISOString()
+      || new Date(row.ends_at).toISOString() !== new Date(desired.ends_at).toISOString();
+  });
+  if ((live || []).length !== rows.length || errors.length > 0) {
+    throw new Error(`每日班別驗證失敗：live=${live?.length || 0}, desired=${rows.length}, errors=${errors.length}`);
+  }
+  console.log(JSON.stringify({ verification: { ok: true, desired: rows.length, live: live.length, errors: 0 } }, null, 2));
 }
 
 main().catch((error) => {
