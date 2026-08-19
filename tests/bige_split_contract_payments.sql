@@ -102,19 +102,19 @@ begin
   );
 
   if (result->>'totalAmount')::bigint <> 8000
-     or (select count(*) from public.bige_contract_payments where contract_id = split_payment_test.contract_id) <> 2
-     or (select sum(amount) from public.bige_contract_payments where contract_id = split_payment_test.contract_id and status = 'recorded') <> 8000
+     or (select count(*) from public.bige_contract_payments payment where payment.contract_id = split_payment_test.contract_id) <> 2
+     or (select sum(payment.amount) from public.bige_contract_payments payment where payment.contract_id = split_payment_test.contract_id and payment.status = 'recorded') <> 8000
      or not exists (
-       select 1 from public.bige_contract_payments
-       where contract_id = split_payment_test.contract_id
-         and source_booking_id = split_payment_test.booking_id
-         and amount = 3000 and method = 'cash'
+       select 1 from public.bige_contract_payments payment
+       where payment.contract_id = split_payment_test.contract_id
+         and payment.source_booking_id = split_payment_test.booking_id
+         and payment.amount = 3000 and payment.method = 'cash'
      )
      or not exists (
-       select 1 from public.bige_contract_payments
-       where contract_id = split_payment_test.contract_id
-         and source_booking_id = split_payment_test.booking_id
-         and amount = 5000 and method = 'ecpay_installment' and installment_count = 6
+       select 1 from public.bige_contract_payments payment
+       where payment.contract_id = split_payment_test.contract_id
+         and payment.source_booking_id = split_payment_test.booking_id
+         and payment.amount = 5000 and payment.method = 'ecpay_installment' and payment.installment_count = 6
      )
      or not exists (
        select 1 from public.member_plan_contracts
@@ -122,7 +122,7 @@ begin
          and unlocked_sessions = 8 and remaining_sessions = 8
          and payment_status = 'deposit_paid' and status = 'active'
      )
-     or (select count(*) from public.member_plan_ledger where contract_id = split_payment_test.contract_id and source_type = 'grant') <> 1
+     or (select count(*) from public.member_plan_ledger ledger where ledger.contract_id = split_payment_test.contract_id and ledger.source_type = 'grant') <> 1
   then
     raise exception 'split payment did not preserve rows, source booking, or one aggregate unlock';
   end if;
@@ -142,8 +142,8 @@ begin
   );
 
   if coalesce((replay->>'replayed')::boolean, false) is not true
-     or (select count(*) from public.bige_contract_payments where contract_id = split_payment_test.contract_id) <> 2
-     or (select count(*) from public.member_plan_ledger where contract_id = split_payment_test.contract_id and source_type = 'grant') <> 1
+     or (select count(*) from public.bige_contract_payments payment where payment.contract_id = split_payment_test.contract_id) <> 2
+     or (select count(*) from public.member_plan_ledger ledger where ledger.contract_id = split_payment_test.contract_id and ledger.source_type = 'grant') <> 1
   then
     raise exception 'split payment replay created duplicate rows or unlocks';
   end if;
@@ -186,19 +186,19 @@ begin
   );
   created_contract_id := (create_result->>'contractId')::uuid;
 
-  if (select count(*) from public.bige_contract_payments where contract_id = created_contract_id) <> 2
-     or (select sum(amount) from public.bige_contract_payments where contract_id = created_contract_id and status = 'recorded') <> 8000
+  if (select count(*) from public.bige_contract_payments payment where payment.contract_id = created_contract_id) <> 2
+     or (select sum(payment.amount) from public.bige_contract_payments payment where payment.contract_id = created_contract_id and payment.status = 'recorded') <> 8000
      or not exists (
-       select 1 from public.bige_contract_payments
-       where contract_id = created_contract_id
-         and source_booking_id = create_booking_id
-         and amount = 3000 and method = 'cash'
+       select 1 from public.bige_contract_payments payment
+       where payment.contract_id = created_contract_id
+         and payment.source_booking_id = create_booking_id
+         and payment.amount = 3000 and payment.method = 'cash'
      )
      or not exists (
-       select 1 from public.bige_contract_payments
-       where contract_id = created_contract_id
-         and source_booking_id = create_booking_id
-         and amount = 5000 and method = 'bank_transfer'
+       select 1 from public.bige_contract_payments payment
+       where payment.contract_id = created_contract_id
+         and payment.source_booking_id = create_booking_id
+         and payment.amount = 5000 and payment.method = 'bank_transfer'
      )
      or not exists (
        select 1 from public.member_plan_contracts
@@ -206,7 +206,7 @@ begin
          and unlocked_sessions = 8 and remaining_sessions = 8
          and payment_status = 'deposit_paid' and status = 'active'
      )
-     or (select count(*) from public.member_plan_ledger where contract_id = created_contract_id and source_type = 'grant') <> 1
+     or (select count(*) from public.member_plan_ledger ledger where ledger.contract_id = created_contract_id and ledger.source_type = 'grant') <> 1
   then
     raise exception 'contract creation did not preserve split tenders or one aggregate unlock';
   end if;
