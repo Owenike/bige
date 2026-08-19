@@ -76,12 +76,14 @@ test("daily settlement follows daily-board duty markers and lists each working c
   assert.match(route, /\["pt", "trial"\]\.includes/);
   assert.match(route, /salesNeedsConfirmation/);
   assert.match(dashboard, /今日上班教練/);
-  assert.match(dashboard, /完成上課/);
-  assert.match(dashboard, /當日已分配業績/);
-  assert.match(dashboard, /依日排課表列出/);
-  assert.match(dashboard, /上課數不含取消與請假／未到/);
+  assert.match(dashboard, /完成／排課（堂）/);
+  assert.match(dashboard, /當日業績/);
   assert.match(dashboard, /沒有教練上班/);
+  assert.doesNotMatch(dashboard, /日排課表上班/);
+  assert.doesNotMatch(dashboard, /本日沒有分配業績/);
+  assert.doesNotMatch(dashboard, /完成：正式 PT/);
   assert.match(dashboardStyles, /\.dailyCoachList/);
+  assert.match(dashboardStyles, /\.dailyCoachTableHeader/);
 });
 
 test("new contracts snapshot the original coach for default allocation and EPO evidence", () => {
