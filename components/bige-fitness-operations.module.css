@@ -6030,3 +6030,403 @@
     text-align: left;
   }
 }
+
+/* Daily schedule noir-gold palette — color-only overrides. */
+.frontdeskM2A[data-daily-schedule-active="true"] {
+  --schedule-noir: #080a0c;
+  --schedule-charcoal: #0d1114;
+  --schedule-raised: #11171b;
+  --schedule-gold: #c9a55c;
+  --schedule-gold-bright: #e4c77a;
+  --schedule-gold-dark: #8c713d;
+  --schedule-gold-line: rgba(201, 165, 92, 0.3);
+  --schedule-gold-line-soft: rgba(201, 165, 92, 0.14);
+  --schedule-text: #f4f1e9;
+  --schedule-text-muted: rgba(218, 218, 211, 0.68);
+  color: var(--schedule-text);
+  background:
+    radial-gradient(ellipse 58% 48% at 18% 0%, rgba(201, 165, 92, 0.09), transparent 68%),
+    radial-gradient(ellipse 34% 42% at 100% 100%, rgba(140, 113, 61, 0.05), transparent 72%),
+    linear-gradient(135deg, #080a0c 0%, #0a0d0f 46%, #070809 100%);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"]::before {
+  background:
+    radial-gradient(ellipse 42% 34% at 12% 0%, rgba(228, 199, 122, 0.12), transparent 74%),
+    radial-gradient(ellipse 28% 30% at 92% 100%, rgba(140, 113, 61, 0.055), transparent 76%),
+    linear-gradient(112deg, rgba(201, 165, 92, 0.025), transparent 42%, transparent 72%, rgba(140, 113, 61, 0.018));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .header,
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow,
+.frontdeskM2A[data-daily-schedule-active="true"] .glass,
+.frontdeskM2A[data-daily-schedule-active="true"] .section,
+.frontdeskM2A[data-daily-schedule-active="true"] .dialog {
+  color: var(--schedule-text);
+  border-color: var(--schedule-gold-line);
+  background:
+    linear-gradient(115deg, rgba(201, 165, 92, 0.055), transparent 34%, transparent 74%),
+    rgba(10, 12, 13, 0.9);
+  box-shadow:
+    0 24px 62px rgba(0, 0, 0, 0.4),
+    0 0 26px rgba(201, 165, 92, 0.045),
+    inset 0 1px 0 rgba(228, 199, 122, 0.08),
+    inset 0 -1px 0 rgba(140, 113, 61, 0.04);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow {
+  border-color: rgba(201, 165, 92, 0.34);
+  background:
+    radial-gradient(ellipse 26% 150% at 5% 0%, rgba(228, 199, 122, 0.09), transparent 72%),
+    rgba(8, 10, 11, 0.92);
+  box-shadow:
+    0 16px 38px rgba(0, 0, 0, 0.34),
+    0 0 22px rgba(201, 165, 92, 0.055),
+    inset 0 1px 0 rgba(228, 199, 122, 0.08);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .button,
+.frontdeskM2A[data-daily-schedule-active="true"] .iconButton,
+.frontdeskM2A[data-daily-schedule-active="true"] .tab,
+.frontdeskM2A[data-daily-schedule-active="true"] .timeChoiceButton,
+.frontdeskM2A[data-daily-schedule-active="true"] .key,
+.frontdeskM2A[data-daily-schedule-active="true"] .scheduleLockButton,
+.frontdeskM2A[data-daily-schedule-active="true"] .scheduleToolButton,
+.frontdeskM2A[data-daily-schedule-active="true"] .closureToggle {
+  color: rgba(244, 241, 233, 0.9);
+  border-color: rgba(201, 165, 92, 0.28);
+  background: linear-gradient(180deg, rgba(27, 27, 24, 0.9), rgba(8, 10, 11, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(228, 199, 122, 0.055),
+    0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .button:hover,
+.frontdeskM2A[data-daily-schedule-active="true"] .iconButton:hover,
+.frontdeskM2A[data-daily-schedule-active="true"] .tab:hover,
+.frontdeskM2A[data-daily-schedule-active="true"] .timeChoiceButton:hover,
+.frontdeskM2A[data-daily-schedule-active="true"] .key:hover,
+.frontdeskM2A[data-daily-schedule-active="true"] .scheduleLockButton:hover,
+.frontdeskM2A[data-daily-schedule-active="true"] .scheduleToolButton:hover,
+.frontdeskM2A[data-daily-schedule-active="true"] .scheduleToolButton[data-active="true"],
+.frontdeskM2A[data-daily-schedule-active="true"] .closureToggle:hover {
+  color: #fff8e9;
+  border-color: rgba(228, 199, 122, 0.58);
+  background: linear-gradient(180deg, rgba(55, 45, 27, 0.88), rgba(18, 17, 15, 0.96));
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.28),
+    0 0 16px rgba(201, 165, 92, 0.1),
+    inset 0 1px 0 rgba(228, 199, 122, 0.1);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .button:focus-visible,
+.frontdeskM2A[data-daily-schedule-active="true"] .iconButton:focus-visible,
+.frontdeskM2A[data-daily-schedule-active="true"] .tab:focus-visible,
+.frontdeskM2A[data-daily-schedule-active="true"] .timeChoiceButton:focus-visible,
+.frontdeskM2A[data-daily-schedule-active="true"] .key:focus-visible,
+.frontdeskM2A[data-daily-schedule-active="true"] .scheduleLockButton:focus-visible,
+.frontdeskM2A[data-daily-schedule-active="true"] .scheduleToolButton:focus-visible,
+.frontdeskM2A[data-daily-schedule-active="true"] .closureToggle:focus-visible,
+.frontdeskM2A[data-daily-schedule-active="true"] .listItem:focus-visible {
+  outline-color: rgba(228, 199, 122, 0.9);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .primary,
+.frontdeskM2A[data-daily-schedule-active="true"] .activeTab {
+  color: #171109;
+  border-color: rgba(255, 232, 179, 0.8);
+  background: linear-gradient(135deg, #e4c77a 0%, #c9a55c 58%, #8c713d 100%);
+  box-shadow:
+    0 9px 26px rgba(164, 118, 34, 0.3),
+    0 0 24px rgba(228, 199, 122, 0.2),
+    inset 0 1px 0 rgba(255, 246, 214, 0.64);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .tabs .primary:not(.activeTab) {
+  color: rgba(244, 241, 233, 0.9);
+  border-color: rgba(201, 165, 92, 0.32);
+  background: linear-gradient(180deg, rgba(38, 34, 25, 0.9), rgba(10, 11, 11, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(228, 199, 122, 0.065),
+    0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .gold,
+.frontdeskM2A[data-daily-schedule-active="true"] .weekdayBadge {
+  color: #e4c77a;
+  border-color: rgba(201, 165, 92, 0.42);
+  background: linear-gradient(180deg, rgba(55, 45, 27, 0.58), rgba(12, 12, 11, 0.92));
+  box-shadow: inset 0 1px 0 rgba(228, 199, 122, 0.08);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .input,
+.frontdeskM2A[data-daily-schedule-active="true"] .select,
+.frontdeskM2A[data-daily-schedule-active="true"] .textarea,
+.frontdeskM2A[data-daily-schedule-active="true"] .frontdeskStatus,
+.frontdeskM2A[data-daily-schedule-active="true"] .businessDayControls {
+  color: var(--schedule-text);
+  border-color: rgba(201, 165, 92, 0.3);
+  background: rgba(7, 9, 10, 0.9);
+  box-shadow: inset 0 1px 0 rgba(228, 199, 122, 0.05);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .frontdeskStatus strong {
+  color: #e4c77a;
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .scheduleLockButton[data-unlocked="true"] {
+  color: #d9f7e5;
+  border-color: rgba(90, 203, 140, 0.56);
+  background: linear-gradient(135deg, rgba(27, 101, 65, 0.82), rgba(15, 59, 43, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(218, 255, 232, 0.1),
+    0 0 18px rgba(62, 185, 117, 0.2);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .closureToggle.closureActive {
+  color: #1b1307;
+  border-color: rgba(228, 199, 122, 0.76);
+  background: linear-gradient(135deg, #e4c77a, #a47f35);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .loadingBoardWrap {
+  --loading-flip-line: rgba(201, 165, 92, 0.3);
+  --loading-flip-glow: rgba(201, 165, 92, 0.16);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .loadingBookingMark {
+  border-color: rgba(201, 165, 92, 0.24);
+  border-left-color: rgba(228, 199, 122, 0.56);
+  background: rgba(201, 165, 92, 0.07);
+  box-shadow: 0 0 14px var(--loading-flip-glow);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .glass.boardWrap,
+.frontdeskM2A[data-daily-schedule-active="true"] .boardWrap {
+  border-color: rgba(201, 165, 92, 0.42);
+  background:
+    linear-gradient(110deg, rgba(201, 165, 92, 0.035), transparent 32%, transparent 74%),
+    rgba(6, 8, 9, 0.96);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.44),
+    0 0 26px rgba(201, 165, 92, 0.065),
+    inset 0 1px 0 rgba(228, 199, 122, 0.1),
+    inset 0 -1px 0 rgba(140, 113, 61, 0.05);
+  scrollbar-color: rgba(201, 165, 92, 0.72) rgba(8, 10, 11, 0.92);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .boardWrap::-webkit-scrollbar-track {
+  background: rgba(8, 10, 11, 0.92);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .boardWrap::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #8c713d, #c9a55c, #8c713d);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .timeHead,
+.frontdeskM2A[data-daily-schedule-active="true"] .coachHead {
+  color: var(--schedule-text);
+  border-right-color: rgba(201, 165, 92, 0.16);
+  border-bottom-color: rgba(201, 165, 92, 0.32);
+  background: linear-gradient(180deg, rgba(35, 30, 21, 0.94), rgba(11, 14, 16, 0.98));
+  box-shadow: inset 0 1px 0 rgba(228, 199, 122, 0.08);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .timeHead {
+  color: rgba(218, 204, 174, 0.66);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .coachDragHandle svg {
+  color: rgba(201, 165, 92, 0.66);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .coachTitleBadge,
+.frontdeskM2A[data-daily-schedule-active="true"] .coachStatusBadge {
+  color: #e4c77a;
+  border-color: rgba(201, 165, 92, 0.38);
+  background: rgba(140, 113, 61, 0.18);
+  box-shadow: inset 0 1px 0 rgba(228, 199, 122, 0.06);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .coachStatusBadge[data-status="late"] {
+  color: #dcecff;
+  border-color: rgba(99, 144, 202, 0.52);
+  background: rgba(34, 68, 112, 0.42);
+  box-shadow: 0 0 12px rgba(62, 113, 177, 0.16);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .coachStatusBadge[data-status="off"] {
+  color: #e8b3a5;
+  border-color: rgba(194, 104, 83, 0.4);
+  background: rgba(105, 45, 38, 0.28);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .coachHead[data-coach-status="off"] {
+  background: linear-gradient(180deg, rgba(64, 31, 27, 0.86), rgba(16, 15, 16, 0.98));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .coachHead[data-coach-status="late"] {
+  border-bottom-color: rgba(99, 144, 202, 0.42);
+  background:
+    radial-gradient(circle at 50% 0, rgba(54, 99, 157, 0.18), transparent 70%),
+    linear-gradient(180deg, rgba(24, 42, 66, 0.94), rgba(11, 15, 20, 0.98));
+  box-shadow: inset 0 -2px 0 rgba(83, 132, 194, 0.24);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .timeCell {
+  --schedule-time-cell-surface: linear-gradient(90deg, rgba(37, 31, 22, 0.86), rgba(11, 14, 16, 0.98));
+  color: rgba(228, 199, 122, 0.86);
+  border-right-color: rgba(201, 165, 92, 0.14);
+  border-bottom-color: rgba(177, 176, 168, 0.09);
+  background: var(--schedule-time-cell-surface);
+  text-shadow: 0 0 12px rgba(201, 165, 92, 0.08);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .slotCell {
+  border-right-color: rgba(201, 165, 92, 0.1);
+  border-bottom-color: rgba(177, 176, 168, 0.085);
+  background:
+    linear-gradient(180deg, rgba(228, 199, 122, 0.018), transparent 60%),
+    rgba(9, 12, 14, 0.94);
+  box-shadow: inset 0 1px 0 rgba(228, 199, 122, 0.018);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .slotCell::after {
+  border-top-color: rgba(201, 165, 92, 0.06);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .slotCell[data-interactive="true"]:hover {
+  background:
+    radial-gradient(circle at 46% 48%, rgba(201, 165, 92, 0.09), transparent 72%),
+    rgba(12, 15, 16, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(201, 165, 92, 0.2);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .timeCell[data-coach-status="off"] {
+  color: rgba(226, 169, 154, 0.82);
+  background: linear-gradient(90deg, rgba(58, 28, 25, 0.78), rgba(16, 14, 15, 0.98));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .slotCell[data-coach-status="off"] {
+  background: linear-gradient(180deg, rgba(85, 38, 33, 0.11), rgba(9, 12, 14, 0.95));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .timeCell[data-coach-status="late"] {
+  color: rgba(194, 220, 250, 0.92);
+  background: linear-gradient(90deg, rgba(31, 54, 84, 0.84), rgba(10, 16, 24, 0.98));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .slotCell[data-coach-status="late"] {
+  background: linear-gradient(180deg, rgba(48, 84, 128, 0.12), rgba(9, 12, 14, 0.95));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .booking,
+.frontdeskM2A[data-daily-schedule-active="true"] .note {
+  color: var(--schedule-text);
+  border-color: rgba(201, 165, 92, 0.36);
+  border-left-color: var(--schedule-gold-bright);
+  background:
+    linear-gradient(135deg, rgba(73, 59, 30, 0.34), rgba(15, 17, 18, 0.97)),
+    rgba(10, 12, 13, 0.96);
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.34),
+    0 0 12px rgba(201, 165, 92, 0.055),
+    inset 0 1px 0 rgba(228, 199, 122, 0.07);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingPt {
+  border-color: rgba(201, 165, 92, 0.34);
+  border-left-color: var(--schedule-gold-bright);
+  background: linear-gradient(135deg, rgba(60, 52, 36, 0.54), rgba(13, 16, 18, 0.98));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .note {
+  color: #e6e8e5;
+  border-color: rgba(201, 165, 92, 0.3);
+  background: linear-gradient(135deg, rgba(54, 47, 32, 0.46), rgba(12, 15, 17, 0.98));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingTrial {
+  border-color: rgba(228, 199, 122, 0.48);
+  border-left-color: var(--schedule-gold-bright);
+  background:
+    radial-gradient(circle at 92% 4%, rgba(228, 199, 122, 0.12), transparent 48%),
+    linear-gradient(140deg, rgba(89, 65, 27, 0.58), rgba(26, 23, 18, 0.96));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .entryTimeSummary {
+  color: #e4c77a;
+  border-right-color: rgba(201, 165, 92, 0.28);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(228, 199, 122, 0.08), transparent 70%),
+    rgba(15, 16, 15, 0.94);
+  box-shadow: inset -7px 0 16px rgba(0, 0, 0, 0.18);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingName {
+  color: #f4f1e9;
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingCourseType {
+  color: rgba(218, 207, 184, 0.78);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingStudentCode,
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingPhone,
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingCourse,
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingMeta,
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingBirthday {
+  color: var(--schedule-text-muted);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingTrialReminded,
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingTrialConverted {
+  border-color: rgba(95, 226, 167, 0.58);
+  border-left-color: #68ffad;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(95, 226, 167, 0.16), transparent 46%),
+    linear-gradient(135deg, rgba(18, 79, 58, 0.9), rgba(16, 23, 20, 0.98));
+  box-shadow:
+    0 0 22px rgba(54, 230, 142, 0.3),
+    inset 0 0 0 1px rgba(192, 255, 220, 0.16);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingTrialNotConverted {
+  border-color: rgba(122, 218, 199, 0.76);
+  border-left-color: #62e5a4;
+  background: linear-gradient(
+    to bottom,
+    rgba(25, 137, 84, 0.92) 0%,
+    rgba(16, 102, 67, 0.92) 49.5%,
+    rgba(27, 95, 167, 0.94) 50.5%,
+    rgba(17, 58, 116, 0.96) 100%
+  );
+  box-shadow:
+    0 -8px 22px rgba(57, 230, 143, 0.34),
+    0 9px 24px rgba(57, 145, 244, 0.34);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingTrialPendingConversion {
+  border-color: rgba(238, 198, 99, 0.76);
+  border-left-color: #f0c75f;
+  box-shadow:
+    0 0 20px rgba(225, 176, 64, 0.2),
+    inset 0 0 0 1px rgba(255, 232, 172, 0.18);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingCompleted {
+  border-color: rgba(104, 255, 173, 0.92);
+  border-left-color: #68ffad;
+  filter:
+    drop-shadow(0 0 6px rgba(104, 255, 173, 0.88))
+    drop-shadow(0 0 14px rgba(45, 219, 124, 0.5));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .bookingNoShow {
+  border-color: rgba(100, 190, 255, 0.92);
+  border-left-color: #64beff;
+  filter:
+    drop-shadow(0 0 6px rgba(100, 190, 255, 0.88))
+    drop-shadow(0 0 14px rgba(45, 135, 255, 0.5));
+}
+/* End daily schedule noir-gold palette. */

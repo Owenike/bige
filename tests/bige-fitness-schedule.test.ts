@@ -1314,6 +1314,36 @@ test("wide desktop schedule keeps daily controls to the right on one row", () =>
   );
 });
 
+test("daily schedule noir-gold palette is color-only and scoped to the active schedule", () => {
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+  const startMarker = "/* Daily schedule noir-gold palette — color-only overrides. */";
+  const endMarker = "/* End daily schedule noir-gold palette. */";
+  const paletteStart = styles.indexOf(startMarker);
+  const paletteEnd = styles.indexOf(endMarker);
+
+  assert.ok(paletteStart >= 0);
+  assert.ok(paletteEnd > paletteStart);
+
+  const palette = styles.slice(paletteStart, paletteEnd + endMarker.length);
+
+  assert.match(palette, /\.frontdeskM2A\[data-daily-schedule-active="true"\]/);
+  assert.match(palette, /--schedule-noir: #080a0c/);
+  assert.match(palette, /--schedule-charcoal: #0d1114/);
+  assert.match(palette, /--schedule-gold: #c9a55c/);
+  assert.match(palette, /--schedule-gold-bright: #e4c77a/);
+  assert.match(palette, /\.activeTab[\s\S]*0 0 24px rgba\(228, 199, 122, 0\.2\)/);
+  assert.match(palette, /\.tabs \.primary:not\(\.activeTab\)[\s\S]*rgba\(38, 34, 25, 0\.9\)/);
+  assert.match(palette, /\.glass\.boardWrap[\s\S]*rgba\(6, 8, 9, 0\.96\)/);
+  assert.match(palette, /\.bookingCompleted[\s\S]*#68ffad/);
+  assert.match(palette, /\.bookingNoShow[\s\S]*#64beff/);
+  assert.match(palette, /\.coachStatusBadge\[data-status="off"\][\s\S]*rgba\(105, 45, 38, 0\.28\)/);
+  assert.match(palette, /\.coachStatusBadge\[data-status="late"\][\s\S]*rgba\(34, 68, 112, 0\.42\)/);
+  assert.doesNotMatch(
+    palette,
+    /(?:^|[;{]\s*)(?:display|position|inset|top|right|bottom|left|width|height|min-width|max-width|min-height|max-height|padding|margin|gap|grid-template(?:-columns|-rows)?|overflow(?:-x|-y)?|transform|border-radius|font-size|line-height|letter-spacing|white-space)\s*:/m,
+  );
+});
+
 test("iPadOS Safari date inputs stay inside the contract form grid", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
