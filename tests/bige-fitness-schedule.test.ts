@@ -1005,11 +1005,11 @@ test("one receipt can contain multiple validated payment methods", () => {
 
 test("split payments unlock once and remain linked to their schedule booking", () => {
   const migration = readFileSync(
-    "supabase/migrations/20260819161710_add_split_contract_payments_and_booking_badges.sql",
+    "supabase/migrations/20260819163735_add_split_contract_payments_and_booking_badges.sql",
     "utf8",
   );
   const sourceIndexMigration = readFileSync(
-    "supabase/migrations/20260820004134_index_split_payment_source_booking_fk.sql",
+    "supabase/migrations/20260819164234_index_split_payment_source_booking_fk.sql",
     "utf8",
   );
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
