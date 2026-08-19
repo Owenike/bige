@@ -70,6 +70,24 @@ type DailyTopState = {
 
 type ManagerModal = "coaches" | "epo" | "sales" | "rules";
 
+type DailyCoachSummary = {
+  employeeId: string;
+  shiftLabel: string | null;
+  shiftStartsAt: string | null;
+  shiftEndsAt: string | null;
+  completedSessions: number;
+  scheduledSessions: number;
+  pendingSessions: number;
+  ptCompletedSessions: number;
+  trialCompletedSessions: number;
+  cancelledSessions: number;
+  noShowSessions: number;
+  salesAmount: number;
+  confirmedSalesAmount: number;
+  salesAllocationCount: number;
+  salesNeedsConfirmation: boolean;
+};
+
 type PerformanceState = {
   actor: {
     id: string;
@@ -87,6 +105,7 @@ type PerformanceState = {
   dailyReports: Array<{ id: string; business_date: string; status: string; confirmed_at: string | null; prepared_at: string | null; prepared_by: string | null; reopen_reason: string | null }>;
   dailyTopStates: DailyTopState[];
   sessionEpoEvidence: Array<{ employeeId: string; employmentType: "full_time" | "part_time"; scheduleReady: boolean; inside: number; outside: number; boundary: number; eligible: boolean; requiredInside: number; requiredOutside: number }>;
+  dailyCoachSummaries: DailyCoachSummary[];
   courseSettlement: null | {
     summary: { total: number; completed: number; cancelled: number; noShow: number; pending: number; ptCompleted: number; trialCompleted: number };
     closure: null | { status: string; confirmed_at: string | null; reopened_at: string | null };
@@ -124,6 +143,13 @@ const EPO_TYPE_LABELS: Record<string, string> = {
 
 function money(value: number | string | null | undefined) {
   return new Intl.NumberFormat("zh-TW", { style: "currency", currency: "TWD", maximumFractionDigits: 0 }).format(Number(value || 0));
+}
+
+function shiftSummary(item: DailyCoachSummary) {
+  const time = item.shiftStartsAt && item.shiftEndsAt
+    ? `${item.shiftStartsAt.slice(0, 5)}–${item.shiftEndsAt.slice(0, 5)}`
+    : "";
+  return [item.shiftLabel, time].filter(Boolean).join(" · ") || "日排課表上班";
 }
 
 function monthLabel(value: string) {
@@ -384,6 +410,24 @@ export default function StaffPerformanceDashboard() {
 
           <section className={styles.workbenchGrid}>
             <div className={styles.mainColumn}>
+              <section className={`${styles.panel} ${styles.dailyCoachPanel}`}>
+                <div className={styles.panelHeading}>
+                  <div><p className={styles.eyebrow}>今日日結數字</p><h2>今日上班教練</h2><p>依日排課表列出 {date} 當天上班的教練，已標示休假的教練不列入；上課數不含取消與請假／未到。</p></div>
+                  <div className={styles.headingActions}><span>{data.dailyCoachSummaries.length} 人</span></div>
+                </div>
+                {data.dailyCoachSummaries.length ? <div className={styles.dailyCoachList}>{data.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}>
+                  <div className={styles.dailyCoachIdentity}>
+                    <strong>{coachName(coach.employeeId)}</strong>
+                    <span>{shiftSummary(coach)}</span>
+                    <small>完成：正式 PT {coach.ptCompletedSessions} 堂 · 體驗 {coach.trialCompletedSessions} 堂{coach.cancelledSessions || coach.noShowSessions ? ` · 取消 ${coach.cancelledSessions}／請假未到 ${coach.noShowSessions}` : ""}</small>
+                  </div>
+                  <dl className={styles.dailyCoachMetrics}>
+                    <div><dt>完成上課</dt><dd>{coach.completedSessions} 堂</dd><small>今日排課 {coach.scheduledSessions} · 待處理 {coach.pendingSessions}</small></div>
+                    <div><dt>當日已分配業績</dt><dd className={coach.salesAmount < 0 ? styles.negative : ""}>{money(coach.salesAmount)}</dd><small className={coach.salesNeedsConfirmation ? styles.pending : styles.confirmedText}>{coach.salesAllocationCount === 0 ? "本日沒有分配業績" : coach.salesNeedsConfirmation ? "含待經理／日結確認" : "已正式確認"}</small></div>
+                  </dl>
+                </article>)}</div> : <div className={styles.empty}>這一天沒有教練上班，請先確認日排課表的人員與休假標示。</div>}
+              </section>
+
               <section className={`${styles.panel} ${styles.salesPanel}`}>
                 <div className={styles.panelHeading}>
                   <div><p className={styles.eyebrow}>今日待處理</p><h2>實收業績分配</h2><p>先處理標示待確認的項目；點進單筆視窗查看或調整完整分配。</p></div>

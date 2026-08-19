@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { apiError, apiSuccess, requireProfile, type ProfileContext } from "../../../lib/auth-context";
+import { collectCoachDayStatuses } from "../../../lib/bige-coach-day-status";
 import { createInAppNotifications } from "../../../lib/in-app-notifications";
 import { hasStaffPermission, requireStaffPermission } from "../../../lib/staff-operation-permissions";
 import { performanceMonthRange, resolveCourseFeeTier, taiwanBusinessDate } from "../../../lib/staff-performance";
@@ -97,7 +98,13 @@ async function state(admin: AdminClient, user: ProfileRow, context: ProfileConte
   }
   const coaches = await coachDirectory(admin, tenantId);
   const coachIds = coaches.map((item) => String(item.id));
-  const [eventResult, allocationResult, epoResult, reportResult, bookingResult, topStateResult, courseResult, courseClosureResult] = await Promise.all([
+  let coachDayNotesQuery = admin.from("bige_schedule_notes")
+    .select("coach_id, content")
+    .eq("tenant_id", tenantId)
+    .gte("starts_at", `${selectedDate}T00:00:00+08:00`)
+    .lte("starts_at", `${selectedDate}T23:59:59.999+08:00`);
+  if (user.branch_id) coachDayNotesQuery = coachDayNotesQuery.eq("branch_id", user.branch_id);
+  const [eventResult, allocationResult, epoResult, reportResult, bookingResult, topStateResult, courseResult, courseClosureResult, coachDayNotesResult] = await Promise.all([
     admin.from("staff_sales_events").select("*").eq("tenant_id", tenantId).gte("business_date", range.start).lte("business_date", range.end).order("source_occurred_at", { ascending: false }),
     admin.from("staff_sales_allocations").select("*, staff_sales_events!inner(business_date)").eq("tenant_id", tenantId).gte("staff_sales_events.business_date", range.start).lte("staff_sales_events.business_date", range.end),
     admin.from("staff_epo_awards").select("*").eq("tenant_id", tenantId).gte("business_date", range.start).lte("business_date", range.end).order("created_at", { ascending: false }),
@@ -106,11 +113,12 @@ async function state(admin: AdminClient, user: ProfileRow, context: ProfileConte
       ? admin.from("bookings").select("id, coach_id, starts_at, course_type").eq("tenant_id", tenantId).eq("is_bige_schedule", true).eq("operation_kind", "pt").eq("status", "completed").gte("starts_at", range.startIso).lt("starts_at", range.nextIso).in("coach_id", coachIds)
       : Promise.resolve({ data: [], error: null }),
     admin.from("staff_epo_daily_top_states").select("*").eq("tenant_id", tenantId).or(`business_date.eq.${selectedDate},adjustment_business_date.eq.${selectedDate}`).order("business_date"),
-    admin.from("bookings").select("id, operation_kind, status, operation_result").eq("tenant_id", tenantId).eq("is_bige_schedule", true).gte("starts_at", `${selectedDate}T00:00:00+08:00`).lte("starts_at", `${selectedDate}T23:59:59.999+08:00`),
+    admin.from("bookings").select("id, coach_id, operation_kind, status, operation_result").eq("tenant_id", tenantId).eq("is_bige_schedule", true).gte("starts_at", `${selectedDate}T00:00:00+08:00`).lte("starts_at", `${selectedDate}T23:59:59.999+08:00`),
     admin.from("bige_daily_closures").select("id, status, snapshot, confirmed_at, reopened_at, reopen_reason").eq("tenant_id", tenantId).eq("business_date", selectedDate).maybeSingle(),
+    coachDayNotesQuery,
   ]);
-  if (eventResult.error || allocationResult.error || epoResult.error || reportResult.error || bookingResult.error || topStateResult.error || courseResult.error || courseClosureResult.error) {
-    throw new Error(eventResult.error?.message || allocationResult.error?.message || epoResult.error?.message || reportResult.error?.message || bookingResult.error?.message || topStateResult.error?.message || courseResult.error?.message || courseClosureResult.error?.message || "業績資料讀取失敗");
+  if (eventResult.error || allocationResult.error || epoResult.error || reportResult.error || bookingResult.error || topStateResult.error || courseResult.error || courseClosureResult.error || coachDayNotesResult.error) {
+    throw new Error(eventResult.error?.message || allocationResult.error?.message || epoResult.error?.message || reportResult.error?.message || bookingResult.error?.message || topStateResult.error?.message || courseResult.error?.message || courseClosureResult.error?.message || coachDayNotesResult.error?.message || "業績資料讀取失敗");
   }
   const allEvents = eventResult.data || [];
   const allAllocations = allocationResult.data || [];
@@ -150,6 +158,38 @@ async function state(admin: AdminClient, user: ProfileRow, context: ProfileConte
     ptCompleted: courseRows.filter((row) => row.operation_kind === "pt" && row.status === "completed").length,
     trialCompleted: courseRows.filter((row) => row.operation_kind === "trial" && row.status === "completed").length,
   };
+  const dayAllocations = eventsWithAllocations
+    .filter((event) => String(event.business_date) === selectedDate)
+    .flatMap((event) => event.allocations);
+  const coachDayStatusByEmployee = new Map(
+    collectCoachDayStatuses(coachDayNotesResult.data || [], new Set(coachIds))
+      .map((status) => [status.coach_id, status]),
+  );
+  const dailyCoachSummaries = coaches.filter((coach) => coachDayStatusByEmployee.get(String(coach.id))?.status !== "off").map((coach) => {
+    const employeeId = String(coach.id);
+    const dayStatus = coachDayStatusByEmployee.get(employeeId);
+    const coachCourses = courseRows.filter((row) => String(row.coach_id || "") === employeeId && ["pt", "trial"].includes(String(row.operation_kind)));
+    const activeCourses = coachCourses.filter((row) => ["completed", "pending", "confirmed", "booked", "checked_in"].includes(String(row.status)));
+    const completedCourses = coachCourses.filter((row) => row.status === "completed");
+    const allocations = dayAllocations.filter((row) => String(row.employee_id || "") === employeeId);
+    return {
+      employeeId,
+      shiftLabel: dayStatus?.label || null,
+      shiftStartsAt: null,
+      shiftEndsAt: null,
+      completedSessions: completedCourses.length,
+      scheduledSessions: activeCourses.length,
+      pendingSessions: activeCourses.filter((row) => row.status !== "completed").length,
+      ptCompletedSessions: completedCourses.filter((row) => row.operation_kind === "pt").length,
+      trialCompletedSessions: completedCourses.filter((row) => row.operation_kind === "trial").length,
+      cancelledSessions: coachCourses.filter((row) => row.status === "cancelled").length,
+      noShowSessions: coachCourses.filter((row) => row.status === "no_show").length,
+      salesAmount: allocations.reduce((sum, row) => sum + Number(row.amount), 0),
+      confirmedSalesAmount: allocations.filter((row) => row.status === "daily_confirmed").reduce((sum, row) => sum + Number(row.amount), 0),
+      salesAllocationCount: allocations.length,
+      salesNeedsConfirmation: allocations.some((row) => row.status !== "daily_confirmed"),
+    };
+  });
   const selfOnly = !actor.canManage;
   const selfEvents = eventsWithAllocations
     .map((event) => {
@@ -165,6 +205,7 @@ async function state(admin: AdminClient, user: ProfileRow, context: ProfileConte
     dailyReports: selfOnly ? [] : reportResult.data || [],
     dailyTopStates: selfOnly ? [] : topStateResult.data || automaticEpo.dailyTopStates,
     sessionEpoEvidence: selfOnly ? [] : automaticEpo.sessionEvidence,
+    dailyCoachSummaries: selfOnly ? [] : dailyCoachSummaries,
     courseSettlement: selfOnly ? null : { summary: courseSummary, closure: courseClosureResult.data || null },
   };
 }

@@ -67,6 +67,23 @@ test("coach overview explicitly labels its figures as selected-month totals", ()
   assert.doesNotMatch(dashboard, /<dt>目前 EPO<\/dt>/);
 });
 
+test("daily settlement follows daily-board duty markers and lists each working coach's lessons and sales", () => {
+  assert.match(route, /collectCoachDayStatuses/);
+  assert.match(route, /from\("bige_schedule_notes"\)[\s\S]*select\("coach_id, content"\)/);
+  assert.match(route, /status !== "off"/);
+  assert.match(route, /select\("id, coach_id, operation_kind, status, operation_result"\)/);
+  assert.match(route, /dailyCoachSummaries/);
+  assert.match(route, /\["pt", "trial"\]\.includes/);
+  assert.match(route, /salesNeedsConfirmation/);
+  assert.match(dashboard, /今日上班教練/);
+  assert.match(dashboard, /完成上課/);
+  assert.match(dashboard, /當日已分配業績/);
+  assert.match(dashboard, /依日排課表列出/);
+  assert.match(dashboard, /上課數不含取消與請假／未到/);
+  assert.match(dashboard, /沒有教練上班/);
+  assert.match(dashboardStyles, /\.dailyCoachList/);
+});
+
 test("new contracts snapshot the original coach for default allocation and EPO evidence", () => {
   assert.match(contractRoute, /bige_create_member_contract_v5/);
   assert.match(contractRoute, /p_sales_origin_coach_id: trustedSalesOriginCoachId/);
