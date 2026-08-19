@@ -1008,6 +1008,10 @@ test("split payments unlock once and remain linked to their schedule booking", (
     "supabase/migrations/20260819161710_add_split_contract_payments_and_booking_badges.sql",
     "utf8",
   );
+  const sourceIndexMigration = readFileSync(
+    "supabase/migrations/20260820004134_index_split_payment_source_booking_fk.sql",
+    "utf8",
+  );
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
 
@@ -1016,6 +1020,7 @@ test("split payments unlock once and remain linked to their schedule booking", (
   assert.equal((migration.match(/base_result := public\.bige_record_contract_payment_v2/g) || []).length, 1);
   assert.match(migration, /payment_entries_total_mismatch/);
   assert.match(migration, /source_booking_id = p_source_booking_id/);
+  assert.match(sourceIndexMigration, /on public\.bige_contract_payments\(source_booking_id\)/);
   assert.match(route, /rpc\("bige_record_contract_payments_v1"/);
   assert.match(route, /p_payment_source_booking_id: input\.sourceBookingId \|\| input\.sourceMemberBookingId \|\| null/);
   assert.match(route, /amountByBookingId[\s\S]*booking_payment_amount: paymentAmount/);
