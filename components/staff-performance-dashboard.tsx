@@ -126,6 +126,11 @@ function money(value: number | string | null | undefined) {
   return new Intl.NumberFormat("zh-TW", { style: "currency", currency: "TWD", maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 
+function monthLabel(value: string) {
+  const [year, monthNumber] = value.split("-");
+  return `${year} 年 ${Number(monthNumber)} 月`;
+}
+
 function todayTaiwan() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
@@ -418,7 +423,7 @@ export default function StaffPerformanceDashboard() {
               </section>
 
               <button className={styles.launchCard} type="button" onClick={() => setActiveModal("coaches")}>
-                <span><b>教練績效總覽</b><small>本月業績、EPO、完課與堂費</small></span><strong>{data.coaches.length} 人 ›</strong>
+                <span><b>教練月績效總覽</b><small>{monthLabel(month)}累計業績、EPO、完課與堂費</small></span><strong>{data.coaches.length} 人 ›</strong>
               </button>
               <button className={`${styles.launchCard} ${pendingEpoCount ? styles.launchPending : ""}`} type="button" onClick={() => setActiveModal("epo")}>
                 <span><b>EPO 判定與紀錄</b><small>每日最高、班內外堂數、人工 EPO</small></span><strong>{pendingEpoCount ? `${pendingEpoCount} 待確認` : "查看 ›"}</strong>
@@ -431,15 +436,15 @@ export default function StaffPerformanceDashboard() {
           {activeModal ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.currentTarget === event.target) closeModal(); }}>
             <section className={`${styles.modal} ${activeModal === "sales" ? styles.salesModal : ""}`} role="dialog" aria-modal="true" aria-labelledby="performance-modal-title">
               <header className={styles.modalHeader}>
-                <div><p>日結工作台 · {date}</p><h2 id="performance-modal-title">{activeModal === "coaches" ? "教練績效總覽" : activeModal === "epo" ? "EPO 判定與紀錄" : activeModal === "rules" ? "日結規則說明" : selectedEvent?.label || "業績分配明細"}</h2></div>
+                <div><p>{activeModal === "coaches" ? `月結數字 · ${monthLabel(month)}` : `日結工作台 · ${date}`}</p><h2 id="performance-modal-title">{activeModal === "coaches" ? "教練月績效總覽" : activeModal === "epo" ? "EPO 判定與紀錄" : activeModal === "rules" ? "日結規則說明" : selectedEvent?.label || "業績分配明細"}</h2></div>
                 <button type="button" aria-label="關閉視窗" onClick={() => closeModal()}>×</button>
               </header>
               <div className={styles.modalBody}>
-                {activeModal === "coaches" ? <div className={styles.coachOverviewList}>{data.coaches.map((coach) => <article key={coach.id}>
+                {activeModal === "coaches" ? <><div className={styles.monthScopeNote}><strong>{monthLabel(month)}月累計</strong><span>以下是所選月份的累計數字，不是 {date} 單日數字；待日報確認的業績與 EPO 會另外標示。</span></div><div className={styles.coachOverviewList}>{data.coaches.map((coach) => <article key={coach.id}>
                   <div className={styles.coachIdentity}><strong>{coachName(coach.id)}</strong><small>{!coach.employment_configured ? "正／兼職待設定" : coach.employment_type === "part_time" ? "兼職" : "正職"}</small></div>
-                  <dl><div><dt>目前業績</dt><dd>{money(coach.projectedSales)}</dd></div><div><dt>目前 EPO</dt><dd>{coach.projectedEpo}</dd></div><div><dt>已完課</dt><dd>{coach.completedSessions} 堂</dd></div><div><dt>已確認堂費</dt><dd>{coach.employment_configured ? `${money(coach.sessionRate)}／堂` : "待設定"}</dd></div></dl>
+                  <dl><div><dt>本月業績</dt><dd>{money(coach.projectedSales)}</dd></div><div><dt>本月 EPO</dt><dd>{coach.projectedEpo}</dd></div><div><dt>本月已完課</dt><dd>{coach.completedSessions} 堂</dd></div><div><dt>本月堂費級距</dt><dd>{coach.employment_configured ? `${money(coach.sessionRate)}／堂` : "待設定"}</dd></div></dl>
                   {coach.projectedSales !== coach.confirmedSales || coach.projectedEpo !== coach.confirmedEpo ? <small className={styles.pending}>含尚待當日報表確認的分配</small> : <small className={styles.confirmedText}>皆為已確認數字</small>}
-                </article>)}</div> : null}
+                </article>)}</div></> : null}
 
                 {activeModal === "rules" ? <div className={styles.rulesList}>
                   <article><strong>FA／續約分配</strong><p>原成交教練預設取得 50%，副理可調整並送經理覆核；經理可直接調整。</p></article>
@@ -461,7 +466,7 @@ export default function StaffPerformanceDashboard() {
                 {activeModal === "epo" ? <div className={styles.epoWorkspace}>
                   <div className={styles.modalIntro}><div><strong>本日共 {dayEpo.reduce((sum, row) => sum + Number(row.quantity), 0)} EPO</strong><small>{pendingEpoCount ? `尚有 ${pendingEpoCount} 項需要確認` : "目前沒有待確認項目"}</small></div>{data.actor.canManageEpo && !reportConfirmed ? <button type="button" onClick={() => setShowEpoForm((current) => !current)}>{showEpoForm ? "收起新增表單" : "＋新增人工 EPO"}</button> : null}</div>
                   {showEpoForm && data.actor.canManageEpo && !reportConfirmed ? <div className={styles.epoForm}>
-                    <select value={epoEmployeeId} onChange={(event) => setEpoEmployeeId(event.target.value)}><option value="">選擇教練</option>{data.coaches.map((coach) => <option key={coach.id} value={coach.id}>{coachName(coach.id)}｜目前 EPO {coach.projectedEpo}｜業績 {money(coach.projectedSales)}</option>)}</select>
+                    <select value={epoEmployeeId} onChange={(event) => setEpoEmployeeId(event.target.value)}><option value="">選擇教練</option>{data.coaches.map((coach) => <option key={coach.id} value={coach.id}>{coachName(coach.id)}｜本月 EPO {coach.projectedEpo}｜本月業績 {money(coach.projectedSales)}</option>)}</select>
                     <input type="number" min="1" max="100" value={epoQuantity} onChange={(event) => setEpoQuantity(Number(event.target.value))} aria-label="EPO 數量" />
                     <input value={epoReason} onChange={(event) => setEpoReason(event.target.value)} placeholder="符合 EPO 的原因（必填）" />
                     <button className={styles.primary} disabled={busy || !epoEmployeeId || !epoReason.trim()} onClick={() => void addEpo()}>加入 EPO</button>
@@ -503,9 +508,9 @@ export default function StaffPerformanceDashboard() {
         <>
           <section className={styles.selfHero}>
             <div><span>{month} 已確認業績</span><strong>{money(self.confirmedSales)}</strong><small>退款已按退款日期扣在本月</small></div>
-            <div><span>目前 EPO</span><strong>{self.confirmedEpo}</strong><small>只顯示經理已確認的 EPO</small></div>
+            <div><span>本月已確認 EPO</span><strong>{self.confirmedEpo}</strong><small>只顯示經理已確認的 EPO</small></div>
             <div><span>本月已完課</span><strong>{self.completedSessions} 堂</strong><small>完成狀態的 PT 課程</small></div>
-            <div><span>目前每堂課費</span><strong>{self.employment_configured ? money(self.sessionRate) : "待主管設定"}</strong><small>{self.employment_configured ? `本月預估課費 ${money(self.courseFeeAmount)}` : "尚未設定正職或兼職，不會猜測堂費"}</small></div>
+            <div><span>本月堂費級距</span><strong>{self.employment_configured ? money(self.sessionRate) : "待主管設定"}</strong><small>{self.employment_configured ? `本月預估課費 ${money(self.courseFeeAmount)}` : "尚未設定正職或兼職，不會猜測堂費"}</small></div>
           </section>
           <section className={styles.target}>
             <h2>{!self.employment_configured ? "請主管先設定正職／兼職" : self.nextTier ? `下一級：每堂 ${money(self.nextTier.sessionRate)}` : "已達最高課費級距"}</h2>

@@ -55,6 +55,18 @@ test("manager settlement workbench keeps primary actions visible and moves secon
   assert.doesNotMatch(dashboard, /className=\{styles\.tableWrap\}/);
 });
 
+test("coach overview explicitly labels its figures as selected-month totals", () => {
+  assert.match(dashboard, /月結數字 · \$\{monthLabel\(month\)\}/);
+  assert.match(dashboard, /以下是所選月份的累計數字，不是 \{date\} 單日數字/);
+  assert.match(dashboard, /本月業績/);
+  assert.match(dashboard, /本月 EPO/);
+  assert.match(dashboard, /本月已完課/);
+  assert.match(dashboard, /本月堂費級距/);
+  assert.match(dashboardStyles, /\.monthScopeNote/);
+  assert.doesNotMatch(dashboard, /<dt>目前業績<\/dt>/);
+  assert.doesNotMatch(dashboard, /<dt>目前 EPO<\/dt>/);
+});
+
 test("new contracts snapshot the original coach for default allocation and EPO evidence", () => {
   assert.match(contractRoute, /bige_create_member_contract_v5/);
   assert.match(contractRoute, /p_sales_origin_coach_id: trustedSalesOriginCoachId/);
