@@ -1871,6 +1871,31 @@ test("schedule swaps can roundtrip without stale occupancy or duplicate error di
   );
 });
 
+test("schedule drag ignores a booking hidden by the schedule trash action", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260819140550_fix_schedule_drag_deleted_slot.sql",
+    "utf8",
+  );
+  const regression = readFileSync("tests/bige_schedule_drag_roundtrip.sql", "utf8");
+
+  assert.match(
+    migration,
+    /replace\([\s\S]*booking\.is_bige_schedule = true[\s\S]*booking\.status <> 'cancelled'[\s\S]*booking\.status_reason is distinct from 'schedule_trash_deleted'/,
+  );
+  assert.match(
+    migration,
+    /replace\([\s\S]*existing\.is_bige_schedule = true[\s\S]*existing\.status <> 'cancelled'[\s\S]*existing\.status_reason is distinct from 'schedule_trash_deleted'/,
+  );
+  assert.match(
+    regression,
+    /status_reason = 'schedule_trash_deleted'[\s\S]*bige_drag_schedule_booking\([\s\S]*'move'[\s\S]*booking did not move into the trash-deleted slot/,
+  );
+  assert.match(
+    regression,
+    /bige_restore_cancelled_schedule_booking\(booking_b_id\)[\s\S]*restoring into the newly occupied slot should remain blocked/,
+  );
+});
+
 test("FA ECPay conversion and restore remove only conversion-created formal identity", () => {
   const migration = readFileSync(
     "supabase/migrations/20260815221634_fix_fa_payment_and_restore_member.sql",

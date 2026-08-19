@@ -17,6 +17,7 @@ declare
   first_swap jsonb;
   second_swap jsonb;
   undo_swap jsonb;
+  deleted_slot_move jsonb;
 begin
   insert into auth.users (
     id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -127,9 +128,62 @@ begin
     raise exception 'drag or undo result metadata is incomplete';
   end if;
 
+  -- Match the schedule trash flow: the row remains available for history and
+  -- restore, but disappears from the board and must no longer occupy its slot.
+  update public.bookings
+  set status = 'cancelled',
+      operation_result = 'cancelled',
+      status_reason = 'schedule_trash_deleted',
+      cancelled_at = now(),
+      status_updated_at = now(),
+      updated_at = now()
+  where id = booking_b_id;
+
+  deleted_slot_move := public.bige_drag_schedule_booking(
+    tenant_id, booking_a_id, coach_a_id, slot_a, 'move'
+  );
+
+  if not exists (
+    select 1 from public.bookings
+    where id = booking_a_id
+      and coach_id = coach_a_id
+      and starts_at = slot_a
+      and status = 'booked'
+      and is_bige_schedule = true
+  ) then
+    raise exception 'booking did not move into the trash-deleted slot';
+  end if;
+
+  if not exists (
+    select 1 from public.bookings
+    where id = booking_b_id
+      and coach_id = coach_a_id
+      and starts_at = slot_a
+      and status = 'cancelled'
+      and status_reason = 'schedule_trash_deleted'
+      and is_bige_schedule = true
+  ) then
+    raise exception 'trash-deleted booking history was not preserved';
+  end if;
+
+  if deleted_slot_move ->> 'mode' <> 'move'
+     or (deleted_slot_move ->> 'movedCount')::integer <> 1 then
+    raise exception 'deleted-slot move result metadata is incomplete';
+  end if;
+
+  begin
+    perform public.bige_restore_cancelled_schedule_booking(booking_b_id);
+    raise exception 'restoring into the newly occupied slot should remain blocked';
+  exception
+    when unique_violation then
+      if sqlerrm not in ('schedule_time_overlap', 'schedule_cell_occupied') then
+        raise;
+      end if;
+  end;
+
   begin
     perform public.bige_create_schedule_booking(
-      tenant_id, branch_id, member_a_id, null, coach_a_id,
+      tenant_id, branch_id, member_b_id, null, coach_a_id,
       'pt', 'weight_training', slot_a, slot_a + interval '1 hour',
       null, null, 'test:drag-roundtrip:true-conflict'
     );
