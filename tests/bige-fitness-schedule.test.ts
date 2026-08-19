@@ -1953,6 +1953,20 @@ test("FA signing date is locked to today and ECPay installments require a stored
   assert.match(route, /p_installment_count: input\.installmentCount \|\| null/);
 });
 
+test("FA conversion preserves an imported shared contact without weakening direct member phone uniqueness", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260819151501_preserve_shared_fa_contact_on_conversion.sql",
+    "utf8",
+  );
+  const regression = readFileSync("tests/bige_fa_shared_contact_payment.sql", "utf8");
+
+  assert.match(migration, /p_source_booking_id is not null[\s\S]*other_member\.phone_normalized = normalized_phone/);
+  assert.match(migration, /then member_row\.phone[\s\S]*then member_row\.phone_normalized/);
+  assert.match(regression, /bige_create_member_contract_v5/);
+  assert.match(regression, /phone is null[\s\S]*phone_normalized is null/);
+  assert.match(regression, /when unique_violation then[\s\S]*unique_phone_blocked := true/);
+});
+
 test("authorized schedule users see the daily settlement link immediately after refresh", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
