@@ -327,10 +327,9 @@
 
 @media (max-width: 520px) {
   .managerHeader h1 { font-size: 24px; }
-  .summaryGrid { grid-template-columns: 1fr; }
-  .summaryGrid article { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.1); }
-  .summaryGrid article:last-child { border-bottom: 0; }
-  .summaryGrid strong { white-space: normal; }
+  .summaryGrid article { padding: 12px; }
+  .summaryGrid strong { font-size: 18px; white-space: normal; }
+  .summaryGrid small { font-size: 11px; line-height: 1.4; }
   .panelHeading { align-items: flex-start; flex-direction: column; }
   .headingActions { width: 100%; justify-content: space-between; }
   .salesEventList > article { grid-template-columns: 1fr; gap: 12px; padding: 15px; }
