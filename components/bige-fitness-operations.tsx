@@ -5765,6 +5765,7 @@ export default function BigeFitnessOperations({
                   const contractPayments = memberDetail.payments.filter(
                     (payment) => payment.contract_id === contract.id,
                   );
+                  const isVoidedContract = contract.status === "canceled";
                   const outstandingBalance = calculateBigeContractOutstandingBalance(
                     contract.total_amount,
                     contractPayments,
@@ -5777,7 +5778,9 @@ export default function BigeFitnessOperations({
 
                   return (
                   <details
-                    className={`${styles.contract} ${styles.contractDisclosure}`}
+                    className={`${styles.contract} ${styles.contractDisclosure} ${
+                      isVoidedContract ? styles.contractVoided : ""
+                    }`}
                     key={contract.id}
                   >
                     <summary className={styles.contractSummary}>
@@ -5815,6 +5818,14 @@ export default function BigeFitnessOperations({
                           </span>
                         ))}
                       </span>
+                      {isVoidedContract ? (
+                        <span
+                          className={styles.contractVoidedStamp}
+                          aria-label="此合約已作廢"
+                        >
+                          已作廢
+                        </span>
+                      ) : null}
                       <span className={styles.contractSummaryChevron} aria-hidden="true">
                         <ChevronDown size={19} />
                       </span>

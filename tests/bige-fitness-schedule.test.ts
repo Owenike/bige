@@ -2159,3 +2159,14 @@ test("manager and assistant manager payment edits recalculate money and session 
   assert.match(component, /memberDetail\.canEditContractPayment[\s\S]*openPaymentEditor\(payment, contract\)/);
   assert.match(component, /title="修改付款資料"[\s\S]*付款狀態[\s\S]*付款方式[\s\S]*修改原因/);
 });
+
+test("voided member contracts render with a strike line and red voided stamp", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+
+  assert.match(component, /const isVoidedContract = contract\.status === "canceled"/);
+  assert.match(component, /isVoidedContract \? styles\.contractVoided : ""/);
+  assert.match(component, /className=\{styles\.contractVoidedStamp\}[\s\S]*已作廢/);
+  assert.match(styles, /\.contractVoided > \.contractSummary::after[\s\S]*background: rgba\(196, 39, 39/);
+  assert.match(styles, /\.contractVoidedStamp[\s\S]*border: 3px double #d03838/);
+});
