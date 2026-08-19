@@ -4,6 +4,7 @@ import test from "node:test";
 
 const route = readFileSync("app/api/staff-performance/route.ts", "utf8");
 const dashboard = readFileSync("components/staff-performance-dashboard.tsx", "utf8");
+const dashboardStyles = readFileSync("app/staff/performance/page.module.css", "utf8");
 const payrollRoute = readFileSync("app/api/staff-payroll/route.ts", "utf8");
 const contractRoute = readFileSync("app/api/bige-fitness/route.ts", "utf8");
 const migration = readFileSync(
@@ -37,6 +38,21 @@ test("manager and assistant flows expose split allocation, tie choice, preparati
   assert.match(dashboard, /正式結算今日課程與業績/);
   assert.match(route, /body\.action === "prepare_day"/);
   assert.match(route, /body\.action === "select_daily_top"/);
+});
+
+test("manager settlement workbench keeps primary actions visible and moves secondary detail into dialogs", () => {
+  assert.match(dashboard, /今日待處理/);
+  assert.match(dashboard, /setActiveModal\("coaches"\)/);
+  assert.match(dashboard, /setActiveModal\("epo"\)/);
+  assert.match(dashboard, /setActiveModal\("rules"\)/);
+  assert.match(dashboard, /role="dialog"/);
+  assert.match(dashboard, /aria-modal="true"/);
+  assert.match(dashboard, /mobileSettlementBar/);
+  assert.match(dashboard, /儲存分配/);
+  assert.match(dashboardStyles, /\.modalFooter[\s\S]*border-top/);
+  assert.match(dashboardStyles, /\.mobileSettlementBar[\s\S]*position:\s*fixed/);
+  assert.doesNotMatch(dashboard, /className=\{styles\.coachGrid\}/);
+  assert.doesNotMatch(dashboard, /className=\{styles\.tableWrap\}/);
 });
 
 test("new contracts snapshot the original coach for default allocation and EPO evidence", () => {
