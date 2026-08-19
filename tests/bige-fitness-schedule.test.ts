@@ -1390,20 +1390,36 @@ test("iPad Pro landscape keeps the desktop schedule overview and fills the viewp
   assert.doesNotMatch(component, /className=\{styles\.scheduleActions\}/);
 });
 
-test("wide desktop schedule keeps daily controls to the right on one row", () => {
+test("wide desktop schedule separates navigation from date and daily controls", () => {
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+  const desktopStart = styles.indexOf("/* Wide desktop schedule:");
+  const desktopEnd = styles.indexOf("/*\n * iPad daily schedule overview", desktopStart);
+
+  assert.ok(desktopStart >= 0);
+  assert.ok(desktopEnd > desktopStart);
+
+  const desktopLayout = styles.slice(desktopStart, desktopEnd);
 
   assert.match(
-    styles,
-    /@media \(min-width: 1280px\)[\s\S]*data-daily-schedule-active="true"\] \.navigationRow \{[\s\S]*flex-wrap: nowrap;[\s\S]*overflow-x: auto;/,
+    desktopLayout,
+    /@media \(min-width: 1280px\)[\s\S]*data-daily-schedule-active="true"\] \.navigationRow \{[\s\S]*display: grid;[\s\S]*grid-template-columns: max-content minmax\(0, 1fr\);[\s\S]*overflow: visible;/,
   );
   assert.match(
-    styles,
-    /data-daily-schedule-active="true"\] \.businessDayControls \{[\s\S]*flex: 1 1 auto;[\s\S]*flex-wrap: nowrap;[\s\S]*justify-content: flex-end;/,
+    desktopLayout,
+    /data-daily-schedule-active="true"\] \.tabs \{[\s\S]*grid-column: 1 \/ -1;[\s\S]*width: 100%;[\s\S]*flex-wrap: wrap;/,
   );
   assert.match(
-    styles,
-    /Wide desktop schedule:[\s\S]*Narrower screens keep the[\s\S]*existing wrapping behavior/,
+    desktopLayout,
+    /data-daily-schedule-active="true"\] \.dateToolbarDock \{[\s\S]*grid-column: 1;[\s\S]*justify-self: start;/,
+  );
+  assert.match(
+    desktopLayout,
+    /data-daily-schedule-active="true"\] \.businessDayControls \{[\s\S]*grid-column: 2;[\s\S]*width: 100%;[\s\S]*justify-content: flex-end;[\s\S]*flex-wrap: wrap;/,
+  );
+  assert.doesNotMatch(desktopLayout, /overflow-x: auto|flex-wrap: nowrap/);
+  assert.match(
+    desktopLayout,
+    /Wide desktop schedule:[\s\S]*two deliberate rows[\s\S]*without horizontal scrolling/,
   );
 });
 

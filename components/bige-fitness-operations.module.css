@@ -5746,21 +5746,23 @@
   }
 }
 
-/* Wide desktop schedule: keep the daily action group on the same line, to the
-   right of the navigation and date controls. Narrower screens keep the
-   existing wrapping behavior instead of squeezing or hiding controls. */
+/* Wide desktop schedule: use two deliberate rows so the growing navigation,
+   date controls and daily actions stay readable without horizontal scrolling. */
 @media (min-width: 1280px) {
   .frontdeskM2A[data-daily-schedule-active="true"] .navigationRow {
-    flex-wrap: nowrap;
-    gap: 6px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 7px 10px;
+    overflow: visible;
   }
 
   .frontdeskM2A[data-daily-schedule-active="true"] .tabs {
+    grid-column: 1 / -1;
+    width: 100%;
     min-width: 0;
-    flex: 0 1 auto;
-    flex-wrap: nowrap;
+    justify-content: flex-start;
+    flex-wrap: wrap;
     gap: 4px;
   }
 
@@ -5772,7 +5774,9 @@
   }
 
   .frontdeskM2A[data-daily-schedule-active="true"] .dateToolbarDock {
-    flex: 0 0 auto;
+    grid-column: 1;
+    min-width: 0;
+    justify-self: start;
   }
 
   .frontdeskM2A[data-daily-schedule-active="true"] .dateToolbar {
@@ -5798,11 +5802,13 @@
   }
 
   .frontdeskM2A[data-daily-schedule-active="true"] .businessDayControls {
+    grid-column: 2;
+    width: 100%;
     min-width: 0;
     min-height: 42px;
-    flex: 1 1 auto;
-    flex-wrap: nowrap;
+    justify-self: stretch;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 4px;
     padding: 4px;
   }
