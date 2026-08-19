@@ -20,7 +20,7 @@ const decisionSchema = z.union([
   z.object({
     decision: z.literal("approved"),
     lockerKeyTaken: z.literal(true),
-    lockerKeyNumber: z.number().int().min(1).max(9999),
+    lockerKeyNumber: z.number().int().min(1).max(12),
   }).strict(),
 ]);
 

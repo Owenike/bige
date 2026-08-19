@@ -107,11 +107,11 @@ test("shared admin alert sends each check-in type to the correct decision API", 
       "drop-in-request",
       "approved",
       undefined,
-      { lockerKeyTaken: true, lockerKeyNumber: 27 },
+      { lockerKeyTaken: true, lockerKeyNumber: 12 },
     ),
     {
       endpoint: "/api/admin/student-check-ins/drop-in/drop-in-request/decision",
-      body: { decision: "approved", lockerKeyTaken: true, lockerKeyNumber: 27 },
+      body: { decision: "approved", lockerKeyTaken: true, lockerKeyNumber: 12 },
     },
   );
   assert.deepEqual(
@@ -147,6 +147,7 @@ test("shared admin alert sends each check-in type to the correct decision API", 
 
 test("all three approval surfaces use one shared locker-key confirmation dialog", () => {
   const dialog = readFileSync(resolve(process.cwd(), "components/student-checkin-locker-key-dialog.tsx"), "utf8");
+  const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
   const autonomousPage = readFileSync(resolve(process.cwd(), "app/admin/student-check-ins/page.tsx"), "utf8");
   const dropInPage = readFileSync(resolve(process.cwd(), "app/admin/student-check-ins/drop-in/page.tsx"), "utf8");
   const globalAlert = readFileSync(resolve(process.cwd(), "components/student-checkin-admin-pending-alert.tsx"), "utf8");
@@ -155,9 +156,13 @@ test("all three approval surfaces use one shared locker-key confirmation dialog"
   assert.match(dialog, /拿幾號鑰匙？/);
   assert.match(dialog, /lockerKeyTaken === true[\s\S]*type="number"/);
   assert.match(dialog, /onConfirm\(\{ lockerKeyTaken: false, lockerKeyNumber: null \}\)/);
-  assert.match(dialog, /type="submit"[\s\S]*是/);
+  assert.match(dialog, /parsedLockerKeyNumber <= 12/);
+  assert.match(dialog, /max=\{12\}/);
+  assert.match(dialog, /請輸入 1–12 的整數號碼/);
+  assert.match(dialog, /type="button"[\s\S]*onClick=\{\(\) => setLockerKeyTaken\(true\)\}[\s\S]*是/);
+  assert.match(dialog, /className="studentLockerKeyConfirm"[\s\S]*type="submit"[\s\S]*disabled=\{isSubmitting \|\| !hasValidLockerKeyNumber\}[\s\S]*確認放行/);
+  assert.match(globalStyles, /\.studentLockerKeyConfirm\s*\{/);
   assert.doesNotMatch(dialog, />返回</);
-  assert.doesNotMatch(dialog, /確認放行/);
   assert.equal((autonomousPage.match(/<StudentCheckInLockerKeyDialog/g) || []).length, 1);
   assert.equal((dropInPage.match(/<StudentCheckInLockerKeyDialog/g) || []).length, 1);
   assert.equal((globalAlert.match(/<StudentCheckInLockerKeyDialog/g) || []).length, 1);
@@ -173,11 +178,15 @@ test("approval APIs and atomic database functions require and store the locker-k
     resolve(process.cwd(), "supabase/migrations/20260818112816_add_locker_key_to_student_entries.sql"),
     "utf8",
   );
+  const lockerKeyLimitMigration = readFileSync(
+    resolve(process.cwd(), "supabase/migrations/20260819201800_limit_student_locker_keys_to_12.sql"),
+    "utf8",
+  );
 
   for (const route of [autonomousRoute, dropInRoute]) {
     assert.match(route, /lockerKeyTaken: z\.literal\(false\)/);
     assert.match(route, /lockerKeyTaken: z\.literal\(true\)/);
-    assert.match(route, /lockerKeyNumber: z\.number\(\)\.int\(\)\.min\(1\)\.max\(9999\)/);
+    assert.match(route, /lockerKeyNumber: z\.number\(\)\.int\(\)\.min\(1\)\.max\(12\)/);
   }
   assert.match(autonomousRoute, /decide_student_checkin_request_v2/);
   assert.match(dropInRoute, /decide_student_drop_in_request_v3/);
@@ -185,6 +194,9 @@ test("approval APIs and atomic database functions require and store the locker-k
   assert.match(migration, /student_drop_ins_locker_key_check/);
   assert.equal((migration.match(/p_locker_key_taken/g) || []).length > 8, true);
   assert.equal((migration.match(/p_locker_key_number/g) || []).length > 8, true);
+  assert.equal((lockerKeyLimitMigration.match(/locker_key_number between 1 and 12/g) || []).length, 2);
+  assert.match(lockerKeyLimitMigration, /student_check_ins_locker_key_check/);
+  assert.match(lockerKeyLimitMigration, /student_drop_ins_locker_key_check/);
 });
 
 test("admin summary cards show small locker-key labels only for entries that took a key", () => {

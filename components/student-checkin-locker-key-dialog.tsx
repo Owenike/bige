@@ -19,15 +19,12 @@ export function StudentCheckInLockerKeyDialog({
   const parsedLockerKeyNumber = Number(lockerKeyNumber);
   const hasValidLockerKeyNumber = Number.isInteger(parsedLockerKeyNumber)
     && parsedLockerKeyNumber >= 1
-    && parsedLockerKeyNumber <= 9999;
+    && parsedLockerKeyNumber <= 12;
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isSubmitting) return;
-    if (lockerKeyTaken !== true) {
-      setLockerKeyTaken(true);
-      return;
-    }
+    if (lockerKeyTaken !== true) return;
     if (!hasValidLockerKeyNumber) return;
     onConfirm({ lockerKeyTaken: true, lockerKeyNumber: parsedLockerKeyNumber });
   }
@@ -55,9 +52,10 @@ export function StudentCheckInLockerKeyDialog({
             </button>
             <button
               className={lockerKeyTaken === true ? "is-selected" : ""}
-              type="submit"
+              type="button"
               aria-pressed={lockerKeyTaken === true}
               disabled={isSubmitting}
+              onClick={() => setLockerKeyTaken(true)}
             >
               是
             </button>
@@ -70,7 +68,7 @@ export function StudentCheckInLockerKeyDialog({
                 type="number"
                 inputMode="numeric"
                 min={1}
-                max={9999}
+                max={12}
                 step={1}
                 value={lockerKeyNumber}
                 autoFocus
@@ -79,8 +77,18 @@ export function StudentCheckInLockerKeyDialog({
                 placeholder="請輸入鑰匙號碼"
                 onChange={(event) => setLockerKeyNumber(event.target.value)}
               />
-              {lockerKeyNumber && !hasValidLockerKeyNumber ? <small>請輸入 1–9999 的整數號碼。</small> : null}
+              {lockerKeyNumber && !hasValidLockerKeyNumber ? <small>請輸入 1–12 的整數號碼。</small> : null}
             </label>
+          ) : null}
+
+          {lockerKeyTaken === true ? (
+            <button
+              className="studentLockerKeyConfirm"
+              type="submit"
+              disabled={isSubmitting || !hasValidLockerKeyNumber}
+            >
+              {isSubmitting ? "放行中…" : "確認放行"}
+            </button>
           ) : null}
 
           {error ? <div className="studentCheckInsAdminError" role="alert">{error}</div> : null}
