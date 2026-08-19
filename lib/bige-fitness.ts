@@ -189,6 +189,7 @@ export function buildBigeMemberPaymentDetailMap(
   permissions: {
     canViewDetailedPaymentDates: boolean;
     canRecordContractPayment: boolean;
+    canEditContractPayment?: boolean;
     canManageCourseAllocations: boolean;
   },
 ) {
@@ -202,6 +203,7 @@ export function buildBigeMemberPaymentDetailMap(
       extensions: never[];
       canViewDetailedPaymentDates: boolean;
       canRecordContractPayment: boolean;
+      canEditContractPayment: boolean;
       canManageCourseAllocations: boolean;
     }
   > = {};
@@ -217,6 +219,7 @@ export function buildBigeMemberPaymentDetailMap(
       payments: detail.payments,
       extensions: [],
       ...permissions,
+      canEditContractPayment: permissions.canEditContractPayment ?? false,
     };
   }
 
@@ -646,6 +649,33 @@ export const recordPaymentSchema = z.object({
   }
 });
 
+export const updatePaymentSchema = z.object({
+  action: z.literal("update_payment"),
+  paymentId: z.string().uuid(),
+  paymentKind: z.enum(["deposit", "balance", "installment"]),
+  amount: z.coerce.number().int().positive(),
+  method: z.enum(["cash", "bank_transfer", "card_terminal", "ecpay", "ecpay_installment", "acpay", "other"]),
+  installmentCount: z.coerce.number().int().min(2).max(60).nullable().optional(),
+  status: z.enum(["recorded", "voided", "refunded"]),
+  note: z.string().trim().max(300).nullable().optional(),
+  reason: z.string().trim().min(3).max(500),
+}).superRefine((input, context) => {
+  if (input.method === "ecpay_installment" && input.installmentCount == null) {
+    context.addIssue({
+      code: "custom",
+      path: ["installmentCount"],
+      message: "請輸入綠界分期期數",
+    });
+  }
+  if (input.method !== "ecpay_installment" && input.installmentCount != null) {
+    context.addIssue({
+      code: "custom",
+      path: ["installmentCount"],
+      message: "只有綠界分期可以填寫分期期數",
+    });
+  }
+});
+
 export const completeBookingSchema = z.object({
   action: z.literal("complete_booking"),
   bookingId: z.string().uuid(),
@@ -770,6 +800,7 @@ export const bigeFitnessActionSchema = z.discriminatedUnion("action", [
   updateCourseAllocationsSchema,
   createContractSchema,
   recordPaymentSchema,
+  updatePaymentSchema,
   completeBookingSchema,
   completeTrialOutcomeSchema,
   changeTrialConversionPaymentSchema,

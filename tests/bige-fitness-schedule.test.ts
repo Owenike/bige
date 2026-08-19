@@ -38,6 +38,7 @@ import {
   changeTrialConversionOutcomeSchema,
   restoreTrialConversionSchema,
   recordPaymentSchema,
+  updatePaymentSchema,
   updateLegacyContractPurchaseDateSchema,
   updateCourseAllocationsSchema,
   validateCourseAllocationTotal,
@@ -1992,4 +1993,77 @@ test("authorized schedule users see the daily settlement link immediately after 
     styles,
     /\.dateToolbar \.settlementButton \{[\s\S]*grid-column: 1 \/ -1;[\s\S]*width: 100%;/,
   );
+});
+
+test("completed PT mutations reject stale board responses without shrinking the warm cache", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+
+  assert.match(
+    component,
+    /const requestedRevision = readBigeBoardRevision\(boardRevisionRef\.current, targetDate\)/,
+  );
+  assert.match(
+    component,
+    /isBigeBoardRevisionCurrent\(boardRevisionRef\.current, targetDate, requestedRevision\)[\s\S]*storeBoardCache/,
+  );
+  assert.match(
+    component,
+    /boardRequestsRef\.current\.get\(targetDate\) === request[\s\S]*boardRequestsRef\.current\.delete\(targetDate\)/,
+  );
+  assert.match(
+    component,
+    /const completePt = async[\s\S]*bumpBigeBoardRevision\(boardRevisionRef\.current, operationDate\)[\s\S]*boardRequestsRef\.current\.delete\(operationDate\)/,
+  );
+  assert.match(component, /const BOARD_CACHE_LIMIT = BIGE_BOARD_PREFETCH_RADIUS \* 6 \+ 1;/);
+  assert.equal(BIGE_BOARD_PREFETCH_RADIUS, 10);
+});
+
+test("payment edit schema requires a reason and valid ECPay installments", () => {
+  const valid = updatePaymentSchema.safeParse({
+    action: "update_payment",
+    paymentId: "00000000-0000-4000-8000-000000000001",
+    paymentKind: "deposit",
+    amount: 20000,
+    method: "bank_transfer",
+    installmentCount: null,
+    status: "recorded",
+    note: "corrected import",
+    reason: "correct legacy amount",
+  });
+  const invalid = updatePaymentSchema.safeParse({
+    action: "update_payment",
+    paymentId: "00000000-0000-4000-8000-000000000001",
+    paymentKind: "installment",
+    amount: 20000,
+    method: "ecpay_installment",
+    installmentCount: null,
+    status: "recorded",
+    reason: "ok",
+  });
+
+  assert.equal(valid.success, true);
+  assert.equal(invalid.success, false);
+});
+
+test("manager and assistant manager payment edits recalculate money and session state", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260819153837_add_contract_payment_editing.sql",
+    "utf8",
+  );
+  const regression = readFileSync("tests/bige_contract_payment_edit.sql", "utf8");
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+
+  assert.match(migration, /actor\.position in \([\s\S]*'coach_assistant_manager'[\s\S]*'coach_manager'/);
+  assert.match(migration, /total_paid > contract_row\.total_amount[\s\S]*payment_total_exceeds_contract_amount/);
+  assert.match(migration, /unlocked_sessions = next_unlocked[\s\S]*remaining_sessions = greatest/);
+  assert.match(migration, /fitness_contract_payment_updated/);
+  assert.match(regression, /outstandingBalance'\)::bigint <> 46624/);
+  assert.match(regression, /frontdesk unexpectedly edited an existing payment/);
+  assert.match(
+    route,
+    /input\.action === "update_payment"[\s\S]*isBigeContractRiskRequester\(operationContext\)[\s\S]*rpc\("bige_update_contract_payment"/,
+  );
+  assert.match(component, /memberDetail\.canEditContractPayment[\s\S]*openPaymentEditor\(payment, contract\)/);
+  assert.match(component, /title="修改付款資料"[\s\S]*付款狀態[\s\S]*付款方式[\s\S]*修改原因/);
 });

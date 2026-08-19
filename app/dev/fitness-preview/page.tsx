@@ -9,6 +9,7 @@ const preview: BoardData = {
   canSeeTrialRevenue: true,
   canViewDetailedPaymentDates: true,
   canRecordContractPayment: true,
+  canEditContractPayment: true,
   canManageCourseAllocations: true,
   canCreateContract: true,
   canChangeTrialConversion: true,
@@ -116,6 +117,7 @@ const preview: BoardData = {
       extensions: [],
       canViewDetailedPaymentDates: true,
       canRecordContractPayment: true,
+      canEditContractPayment: true,
       canManageCourseAllocations: true,
     },
     "20000000-0000-4000-8000-000000000002": {
@@ -135,6 +137,7 @@ const preview: BoardData = {
       extensions: [],
       canViewDetailedPaymentDates: true,
       canRecordContractPayment: true,
+      canEditContractPayment: true,
     },
     "20000000-0000-4000-8000-000000000003": {
       member: {
@@ -195,6 +198,7 @@ const preview: BoardData = {
       extensions: [],
       canViewDetailedPaymentDates: true,
       canRecordContractPayment: true,
+      canEditContractPayment: true,
       canManageCourseAllocations: true,
     },
   },

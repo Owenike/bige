@@ -120,6 +120,11 @@ import {
   BigeBoardPrefetchQueue,
   buildBigeBoardPrefetchDates,
 } from "../lib/bige-board-prefetch";
+import {
+  bumpBigeBoardRevision,
+  isBigeBoardRevisionCurrent,
+  readBigeBoardRevision,
+} from "../lib/bige-board-freshness";
 import AdministrativeAssistanceBoard from "./administrative-assistance-board";
 import styles from "./bige-fitness-operations.module.css";
 
@@ -133,6 +138,7 @@ type DialogName =
   | "contract"
   | "plan"
   | "payment"
+  | "edit-payment"
   | "course-allocations"
   | "extension"
   | "monthly-schedule"
@@ -330,6 +336,18 @@ type Contract = {
   extension_limit_days: number;
   extension_used_days: number;
 };
+type PaymentRecord = {
+  id: string;
+  contract_id: string;
+  schedule_item_id?: string | null;
+  payment_kind: string;
+  amount: number;
+  method: string;
+  installment_count?: number | null;
+  status: string;
+  paid_at: string;
+  note?: string | null;
+};
 type LegacyPurchaseDateReminder = {
   id: string;
   member_id: string;
@@ -345,10 +363,11 @@ type MemberDetail = {
   member: Member;
   contracts: Contract[];
   paymentSchedule: any[];
-  payments: any[];
+  payments: PaymentRecord[];
   extensions: any[];
   canViewDetailedPaymentDates?: boolean;
   canRecordContractPayment?: boolean;
+  canEditContractPayment?: boolean;
   canManageCourseAllocations?: boolean;
 };
 type StudentPaymentContext = {
@@ -381,6 +400,7 @@ export type BoardData = {
   canSeeTrialRevenue?: boolean;
   canViewDetailedPaymentDates?: boolean;
   canRecordContractPayment?: boolean;
+  canEditContractPayment?: boolean;
   canManageCourseAllocations?: boolean;
   canCreateContract?: boolean;
   canChangeTrialConversion?: boolean;
@@ -1478,6 +1498,7 @@ export default function BigeFitnessOperations({
   const hasBoardRef = useRef(Boolean(previewData));
   const boardCacheRef = useRef<Map<string, BoardData>>(new Map());
   const boardRequestsRef = useRef<Map<string, Promise<BoardData>>>(new Map());
+  const boardRevisionRef = useRef(new Map<string, number>());
   const boardPrefetchQueueRef = useRef<BigeBoardPrefetchQueue | null>(null);
   if (!boardPrefetchQueueRef.current) {
     boardPrefetchQueueRef.current = new BigeBoardPrefetchQueue();
@@ -1633,6 +1654,8 @@ export default function BigeFitnessOperations({
   const requestBoard = useCallback(async (targetDate: string, preferCache = false) => {
     if (previewData) return previewData;
 
+    const requestedRevision = readBigeBoardRevision(boardRevisionRef.current, targetDate);
+
     if (preferCache) {
       const cached = readBoardCache(boardCacheRef.current, targetDate);
       if (cached) return cached;
@@ -1660,7 +1683,9 @@ export default function BigeFitnessOperations({
       const next = orderedCoachIds
         ? { ...fetched, coaches: applyCoachIdOrder(fetched.coaches, orderedCoachIds) }
         : fetched;
-      storeBoardCache(boardCacheRef.current, targetDate, next);
+      if (isBigeBoardRevisionCurrent(boardRevisionRef.current, targetDate, requestedRevision)) {
+        storeBoardCache(boardCacheRef.current, targetDate, next);
+      }
       return next;
     })();
 
@@ -1668,7 +1693,9 @@ export default function BigeFitnessOperations({
     try {
       return await request;
     } finally {
-      boardRequestsRef.current.delete(targetDate);
+      if (boardRequestsRef.current.get(targetDate) === request) {
+        boardRequestsRef.current.delete(targetDate);
+      }
     }
   }, [previewData]);
 
@@ -1694,6 +1721,7 @@ export default function BigeFitnessOperations({
     preferCache?: boolean;
   } = {}) => {
     const targetDate = options.targetDate || boardDateRef.current;
+    const requestedRevision = readBigeBoardRevision(boardRevisionRef.current, targetDate);
     boardPrefetchQueueRef.current?.prioritize(targetDate);
     if (!options.silent) setError("");
     if (!hasBoardRef.current) setLoading(true);
@@ -1701,6 +1729,9 @@ export default function BigeFitnessOperations({
     try {
       const next = await requestBoard(targetDate, options.preferCache);
       if (boardDateRef.current !== targetDate) return;
+      if (!isBigeBoardRevisionCurrent(boardRevisionRef.current, targetDate, requestedRevision)) {
+        return;
+      }
       applyBoardData(next);
       prefetchBoardWindow(targetDate);
     } catch (caught) {
@@ -3502,6 +3533,8 @@ export default function BigeFitnessOperations({
     setBookingActionSubmitting(true);
     void runOptimisticScheduleMutation({
       apply: () => {
+        bumpBigeBoardRevision(boardRevisionRef.current, operationDate);
+        boardRequestsRef.current.delete(operationDate);
         setDialog(null);
         setSelectedBooking({
           ...booking,
@@ -4315,6 +4348,18 @@ export default function BigeFitnessOperations({
     note: "",
   });
   const [paymentError, setPaymentError] = useState("");
+  const [selectedPayment, setSelectedPayment] = useState<PaymentRecord | null>(null);
+  const [paymentEditDraft, setPaymentEditDraft] = useState({
+    paymentKind: "installment",
+    amount: 0,
+    method: "cash",
+    installmentCount: null as number | null,
+    status: "recorded",
+    note: "",
+    reason: "",
+  });
+  const [paymentEditError, setPaymentEditError] = useState("");
+  const [paymentEditSubmitting, setPaymentEditSubmitting] = useState(false);
   const selectedContractOutstandingBalance =
     selectedContract && memberDetail
       ? calculateBigeContractOutstandingBalance(
@@ -4363,6 +4408,109 @@ export default function BigeFitnessOperations({
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "付款失敗";
       setPaymentError(message);
+    }
+  };
+
+  const paymentEditMaximumAmount =
+    selectedPayment && selectedContract && memberDetail
+      ? Math.max(
+          0,
+          selectedContract.total_amount -
+            memberDetail.payments.reduce((sum, payment) => {
+              if (
+                payment.id === selectedPayment.id ||
+                payment.contract_id !== selectedContract.id ||
+                payment.status !== "recorded"
+              ) {
+                return sum;
+              }
+              return sum + Number(payment.amount || 0);
+            }, 0),
+        )
+      : 0;
+
+  const openPaymentEditor = (payment: PaymentRecord, contract: Contract) => {
+    const paymentKind =
+      payment.payment_kind === "full"
+        ? "balance"
+        : ["deposit", "installment", "balance"].includes(payment.payment_kind)
+          ? payment.payment_kind
+          : "installment";
+    const method = [
+      "cash",
+      "bank_transfer",
+      "card_terminal",
+      "ecpay",
+      "ecpay_installment",
+      "acpay",
+      "other",
+    ].includes(payment.method)
+      ? payment.method
+      : "other";
+    const status = ["recorded", "refunded", "voided"].includes(payment.status)
+      ? payment.status
+      : "recorded";
+    setSelectedContract(contract);
+    setSelectedPayment(payment);
+    setPaymentEditDraft({
+      paymentKind,
+      amount: Number(payment.amount || 0),
+      method,
+      installmentCount: payment.installment_count || null,
+      status,
+      note: payment.note || "",
+      reason: "",
+    });
+    setPaymentEditError("");
+    setDialog("edit-payment");
+  };
+
+  const submitPaymentEdit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedPayment || !selectedContract || !selectedMember || paymentEditSubmitting) return;
+    setPaymentEditError("");
+    if (paymentEditDraft.method === "ecpay_installment" && !paymentEditDraft.installmentCount) {
+      setPaymentEditError("請先輸入綠界分期期數");
+      return;
+    }
+    if (paymentEditDraft.reason.trim().length < 3) {
+      setPaymentEditError("請填寫至少 3 個字的修改原因");
+      return;
+    }
+    if (
+      paymentEditDraft.status === "recorded" &&
+      !isBigeContractPaymentAmountAllowed(
+        Number(paymentEditDraft.amount),
+        paymentEditMaximumAmount,
+      )
+    ) {
+      setPaymentEditError(
+        `修改後的累積已收金額不能超過合約總額；本筆最高可設 ${formatMoney(paymentEditMaximumAmount)}`,
+      );
+      return;
+    }
+
+    setPaymentEditSubmitting(true);
+    try {
+      await post(
+        {
+          action: "update_payment",
+          paymentId: selectedPayment.id,
+          ...paymentEditDraft,
+          amount: Number(paymentEditDraft.amount),
+          note: paymentEditDraft.note || null,
+          reason: paymentEditDraft.reason.trim(),
+        },
+        { errorPresentation: "inline" },
+      );
+      setSelectedPayment(null);
+      setDialog("member");
+      setSuccess("付款資料已更新，尾款與可用堂數已重新計算");
+      await loadMember(selectedMember, { force: true });
+    } catch (caught) {
+      setPaymentEditError(caught instanceof Error ? caught.message : "修改付款資料失敗");
+    } finally {
+      setPaymentEditSubmitting(false);
     }
   };
 
@@ -5675,6 +5823,15 @@ export default function BigeFitnessOperations({
                                 <span className={styles.badge}>
                                   {labelOrValue(PAYMENT_RECORD_STATUS_LABELS, payment.status)}
                                 </span>
+                                {managerView && memberDetail.canEditContractPayment ? (
+                                  <button
+                                    className={styles.button}
+                                    type="button"
+                                    onClick={() => openPaymentEditor(payment, contract)}
+                                  >
+                                    <Settings2 size={16} /> 修改
+                                  </button>
+                                ) : null}
                                 {managerView && payment.status === "recorded" ? (
                                   <div className={styles.actions}>
                                   <button className={styles.button} type="button" onClick={() => void reversePayment(payment.id, "void")}>
@@ -7090,6 +7247,7 @@ export default function BigeFitnessOperations({
               >
                 <option value="cash">現金</option>
                 <option value="bank_transfer">轉帳</option>
+                <option value="card_terminal">刷卡機</option>
                 <option value="ecpay">綠界</option>
                 <option value="ecpay_installment">綠界分期</option>
                 <option value="acpay">ACPay</option>
@@ -7278,6 +7436,114 @@ export default function BigeFitnessOperations({
             <div className={`${styles.formActions} ${styles.fieldFull}`}>
               <button className={`${styles.button} ${styles.primary}`} type="submit" disabled={selectedContractOutstandingBalance <= 0}>
                 儲存付款
+              </button>
+            </div>
+          </form>
+        </Dialog>
+      ) : null}
+
+      {dialog === "edit-payment" && selectedPayment && selectedContract ? (
+        <Dialog title="修改付款資料" onClose={() => setDialog("member")}>
+          <form className={styles.formGrid} onSubmit={submitPaymentEdit}>
+            {paymentEditError ? (
+              <p className={`${styles.error} ${styles.fieldFull}`} role="alert">
+                {paymentEditError}
+              </p>
+            ) : null}
+            <p className={`${styles.warning} ${styles.fieldFull}`}>
+              修改後會立即重算合約尾款、付款狀態與可用堂數，並保留完整稽核紀錄。
+              本筆在「已登記」狀態下最高可設 {formatMoney(paymentEditMaximumAmount)}。
+            </p>
+            <label className={styles.field}>
+              <span className={styles.label}>付款狀態</span>
+              <select
+                className={styles.select}
+                value={paymentEditDraft.status}
+                onChange={(event) => setPaymentEditDraft({ ...paymentEditDraft, status: event.target.value })}
+              >
+                <option value="recorded">已登記</option>
+                <option value="voided">已作廢</option>
+                <option value="refunded">已退款</option>
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span className={styles.label}>付款類型</span>
+              <select
+                className={styles.select}
+                value={paymentEditDraft.paymentKind}
+                onChange={(event) => setPaymentEditDraft({ ...paymentEditDraft, paymentKind: event.target.value })}
+              >
+                <option value="deposit">訂金</option>
+                <option value="installment">分期</option>
+                <option value="balance">尾款</option>
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span className={styles.label}>金額</span>
+              <input
+                className={styles.input}
+                type="number"
+                min="1"
+                max={selectedContract.total_amount}
+                required
+                value={paymentEditDraft.amount}
+                onChange={(event) => setPaymentEditDraft({ ...paymentEditDraft, amount: Number(event.target.value) })}
+              />
+            </label>
+            <label className={styles.field}>
+              <span className={styles.label}>付款方式</span>
+              <select
+                className={styles.select}
+                value={paymentEditDraft.method}
+                onChange={(event) => {
+                  const method = event.target.value;
+                  if (method === "ecpay_installment") {
+                    const installmentCount = promptEcpayInstallmentCount(
+                      paymentEditDraft.installmentCount,
+                    );
+                    if (installmentCount === null) return;
+                    setPaymentEditDraft({ ...paymentEditDraft, method, installmentCount });
+                    return;
+                  }
+                  setPaymentEditDraft({ ...paymentEditDraft, method, installmentCount: null });
+                }}
+              >
+                <option value="cash">現金</option>
+                <option value="bank_transfer">轉帳</option>
+                <option value="card_terminal">刷卡機</option>
+                <option value="ecpay">綠界</option>
+                <option value="ecpay_installment">綠界分期</option>
+                <option value="acpay">ACPay</option>
+                <option value="other">其他</option>
+              </select>
+              {paymentEditDraft.method === "ecpay_installment" && paymentEditDraft.installmentCount ? (
+                <small className={styles.fieldHelp}>已設定 {paymentEditDraft.installmentCount} 期</small>
+              ) : null}
+            </label>
+            <label className={`${styles.field} ${styles.fieldFull}`}>
+              <span className={styles.label}>備註</span>
+              <textarea
+                className={styles.textarea}
+                value={paymentEditDraft.note}
+                onChange={(event) => setPaymentEditDraft({ ...paymentEditDraft, note: event.target.value })}
+              />
+            </label>
+            <label className={`${styles.field} ${styles.fieldFull}`}>
+              <span className={styles.label}>修改原因</span>
+              <textarea
+                className={styles.textarea}
+                minLength={3}
+                required
+                value={paymentEditDraft.reason}
+                onChange={(event) => setPaymentEditDraft({ ...paymentEditDraft, reason: event.target.value })}
+              />
+            </label>
+            <div className={`${styles.formActions} ${styles.fieldFull}`}>
+              <button className={styles.button} type="button" onClick={() => setDialog("member")}>
+                返回
+              </button>
+              <button className={`${styles.button} ${styles.primary}`} type="submit" disabled={paymentEditSubmitting}>
+                {paymentEditSubmitting ? "更新中…" : "儲存修改"}
               </button>
             </div>
           </form>

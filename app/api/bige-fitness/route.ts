@@ -355,6 +355,11 @@ function normalizeErrorMessage(message: string) {
     payment_schedule_total_mismatch: "付款排程加總必須等於合約總價",
     invalid_payment_method: "付款方式無效，請重新選擇後再試一次",
     payment_method_invalid: "付款方式無效，請重新選擇後再試一次",
+    payment_kind_invalid: "付款類型無效，請重新選擇後再試一次",
+    payment_status_invalid: "付款狀態無效，請重新選擇後再試一次",
+    payment_not_found: "找不到這筆付款紀錄",
+    payment_edit_reason_required: "修改付款資料必須填寫原因",
+    payment_total_exceeds_contract_amount: "修改後的累積已收金額不能超過合約總額",
     invalid_installment_count: "綠界分期期數必須是 2 至 60 期",
     installment_count_not_allowed: "只有綠界分期可以填寫分期期數",
     payment_reversal_reason_required: "退款或作廢必須填寫原因",
@@ -1057,6 +1062,7 @@ export async function GET(request: Request) {
       extensions: [],
       canViewDetailedPaymentDates: isBigeContractRiskRequester(auth.context),
       canRecordContractPayment: canRecordBigeContractPayment(auth.context),
+      canEditContractPayment: isBigeContractRiskRequester(auth.context),
       canManageCourseAllocations: canManageBigeCourseAllocations(auth.context),
     });
   }
@@ -1157,6 +1163,7 @@ export async function GET(request: Request) {
       extensions: extensionsResult.data || [],
       canViewDetailedPaymentDates: isBigeContractRiskRequester(auth.context),
       canRecordContractPayment: canRecordBigeContractPayment(auth.context),
+      canEditContractPayment: isBigeContractRiskRequester(auth.context),
       canManageCourseAllocations: canManageBigeCourseAllocations(auth.context),
     });
   }
@@ -1558,6 +1565,7 @@ export async function GET(request: Request) {
     {
       canViewDetailedPaymentDates: isBigeContractRiskRequester(auth.context),
       canRecordContractPayment: canRecordBigeContractPayment(auth.context),
+      canEditContractPayment: isBigeContractRiskRequester(auth.context),
       canManageCourseAllocations: canManageBigeCourseAllocations(auth.context),
     },
   );
@@ -1606,6 +1614,7 @@ export async function GET(request: Request) {
     canSeeTrialRevenue: showTrialRevenue,
     canViewDetailedPaymentDates: isBigeContractRiskRequester(auth.context),
     canRecordContractPayment: canRecordBigeContractPayment(auth.context),
+    canEditContractPayment: isBigeContractRiskRequester(auth.context),
     canManageCourseAllocations: canManageBigeCourseAllocations(auth.context),
     canCreateContract: canCreateBigeContract(auth.context.employeeNumber),
     canChangeTrialConversion: canRecordBigeContractPayment(auth.context),
@@ -2834,6 +2843,24 @@ export async function POST(request: Request) {
       p_note: input.note || null,
     });
     if (result.error) return handleDatabaseError(result.error, "付款紀錄失敗");
+    return apiSuccess({ item: result.data });
+  }
+
+  if (input.action === "update_payment") {
+    if (!isBigeContractRiskRequester(operationContext)) {
+      return apiError(403, "FORBIDDEN", "只有教練經理或教練副理能修改付款資料");
+    }
+    const result = await auth.supabase.rpc("bige_update_contract_payment", {
+      p_payment_id: input.paymentId,
+      p_payment_kind: input.paymentKind,
+      p_amount: input.amount,
+      p_method: input.method,
+      p_installment_count: input.installmentCount || null,
+      p_status: input.status,
+      p_note: input.note || null,
+      p_reason: input.reason,
+    });
+    if (result.error) return handleDatabaseError(result.error, "修改付款資料失敗");
     return apiSuccess({ item: result.data });
   }
 
