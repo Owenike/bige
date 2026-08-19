@@ -15,6 +15,7 @@ npx tsc `
   --outDir $outDir `
   tests/auth-capabilities.test.ts `
   tests/bige-member-search.test.ts `
+  tests/bige-shared-contract.test.ts `
   tests/bige-fitness-schedule.test.ts `
   tests/bige-course-status-window.test.ts `
   tests/bige-coach-order.test.ts `
