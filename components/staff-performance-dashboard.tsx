@@ -405,7 +405,7 @@ export default function StaffPerformanceDashboard() {
             <div className={styles.mainColumn}>
               <section className={`${styles.panel} ${styles.dailyCoachPanel}`}>
                 <div className={`${styles.panelHeading} ${styles.dailyCoachHeading}`}>
-                  <div><h2>今日上班教練</h2><p>{date} · 休假不列入</p></div>
+                  <div><h2>上班教練</h2></div>
                   <div className={styles.headingActions}><span>{data.dailyCoachSummaries.length} 人</span></div>
                 </div>
                 {data.dailyCoachSummaries.length ? <><div className={styles.dailyCoachTableHeader} aria-hidden="true"><span>教練</span><span>完成／排課（堂）</span><span>當日業績</span></div><div className={styles.dailyCoachList}>{data.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}>

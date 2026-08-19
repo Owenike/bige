@@ -75,7 +75,8 @@ test("daily settlement follows daily-board duty markers and lists each working c
   assert.match(route, /dailyCoachSummaries/);
   assert.match(route, /\["pt", "trial"\]\.includes/);
   assert.match(route, /salesNeedsConfirmation/);
-  assert.match(dashboard, /今日上班教練/);
+  assert.match(dashboard, />上班教練</);
+  assert.doesNotMatch(dashboard, /休假不列入/);
   assert.match(dashboard, /完成／排課（堂）/);
   assert.match(dashboard, /當日業績/);
   assert.match(dashboard, /沒有教練上班/);
