@@ -530,6 +530,39 @@ export const updateCourseAllocationsSchema = z.object({
   allocations: courseAllocationsSchema,
 });
 
+const bigePaymentMethodSchema = z.enum([
+  "cash",
+  "bank_transfer",
+  "card_terminal",
+  "ecpay",
+  "ecpay_installment",
+  "acpay",
+  "other",
+]);
+
+export const bigePaymentEntrySchema = z
+  .object({
+    amount: z.coerce.number().int().positive(),
+    method: bigePaymentMethodSchema,
+    installmentCount: z.coerce.number().int().min(2).max(60).nullable().optional(),
+  })
+  .superRefine((input, context) => {
+    if (input.method === "ecpay_installment" && input.installmentCount == null) {
+      context.addIssue({
+        code: "custom",
+        path: ["installmentCount"],
+        message: "請輸入綠界分期期數",
+      });
+    }
+    if (input.method !== "ecpay_installment" && input.installmentCount != null) {
+      context.addIssue({
+        code: "custom",
+        path: ["installmentCount"],
+        message: "只有綠界分期可以填寫分期期數",
+      });
+    }
+  });
+
 export const createContractSchema = z.object({
   action: z.literal("create_contract"),
   branchId: z.string().uuid().nullable().optional(),
@@ -561,11 +594,9 @@ export const createContractSchema = z.object({
     .optional(),
   signedOn: z.string().date(),
   initialPayment: z.coerce.number().int().min(0).default(0),
-  paymentMethod: z
-    .enum(["cash", "bank_transfer", "card_terminal", "ecpay", "ecpay_installment", "acpay", "other"])
-    .nullable()
-    .optional(),
+  paymentMethod: bigePaymentMethodSchema.nullable().optional(),
   installmentCount: z.coerce.number().int().min(2).max(60).nullable().optional(),
+  payments: z.array(bigePaymentEntrySchema).max(10).optional(),
   paymentSchedule: z
     .array(
       z.object({
@@ -601,6 +632,23 @@ export const createContractSchema = z.object({
       message: "課程成交或續約必須輸入符合方案最低限制的付款金額",
     });
   }
+  if (input.payments) {
+    const paymentTotal = input.payments.reduce((sum, payment) => sum + payment.amount, 0);
+    if (paymentTotal !== input.initialPayment) {
+      context.addIssue({
+        code: "custom",
+        path: ["payments"],
+        message: "多筆付款合計必須等於本次付款金額",
+      });
+    }
+    if (input.initialPayment > 0 && input.payments.length === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["payments"],
+        message: "有付款金額時至少要有一筆付款方式",
+      });
+    }
+  }
   if (input.sourceBookingId && !input.faFeeRecipientName) {
     context.addIssue({
       code: "custom",
@@ -627,7 +675,7 @@ export const recordPaymentSchema = z.object({
   scheduleItemId: z.string().uuid().nullable().optional(),
   paymentKind: z.enum(["deposit", "balance", "installment"]),
   amount: z.coerce.number().int().positive(),
-  method: z.enum(["cash", "bank_transfer", "card_terminal", "ecpay", "ecpay_installment", "acpay", "other"]),
+  method: bigePaymentMethodSchema,
   installmentCount: z.coerce.number().int().min(2).max(60).nullable().optional(),
   paidAt: z.string().datetime({ offset: true }).optional(),
   idempotencyKey: z.string().trim().min(8).max(180),
@@ -649,12 +697,24 @@ export const recordPaymentSchema = z.object({
   }
 });
 
+export const recordPaymentsSchema = z.object({
+  action: z.literal("record_payments"),
+  contractId: z.string().uuid(),
+  sourceBookingId: z.string().uuid().nullable().optional(),
+  scheduleItemId: z.string().uuid().nullable().optional(),
+  paymentKind: z.enum(["deposit", "balance", "installment"]),
+  payments: z.array(bigePaymentEntrySchema).min(1).max(10),
+  paidAt: z.string().datetime({ offset: true }).optional(),
+  idempotencyKey: z.string().trim().min(8).max(160),
+  note: z.string().trim().max(300).nullable().optional(),
+});
+
 export const updatePaymentSchema = z.object({
   action: z.literal("update_payment"),
   paymentId: z.string().uuid(),
   paymentKind: z.enum(["deposit", "balance", "installment"]),
   amount: z.coerce.number().int().positive(),
-  method: z.enum(["cash", "bank_transfer", "card_terminal", "ecpay", "ecpay_installment", "acpay", "other"]),
+  method: bigePaymentMethodSchema,
   installmentCount: z.coerce.number().int().min(2).max(60).nullable().optional(),
   status: z.enum(["recorded", "voided", "refunded"]),
   note: z.string().trim().max(300).nullable().optional(),
@@ -800,6 +860,7 @@ export const bigeFitnessActionSchema = z.discriminatedUnion("action", [
   updateCourseAllocationsSchema,
   createContractSchema,
   recordPaymentSchema,
+  recordPaymentsSchema,
   updatePaymentSchema,
   completeBookingSchema,
   completeTrialOutcomeSchema,

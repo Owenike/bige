@@ -4696,6 +4696,53 @@
   background: rgba(15, 24, 35, 0.48);
 }
 
+.paymentSplitSection {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(225, 190, 112, 0.28);
+  border-radius: 12px;
+  background: rgba(15, 24, 35, 0.48);
+}
+
+.paymentSplitHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.paymentSplitHeader small {
+  display: block;
+  color: rgba(209, 217, 226, 0.68);
+  font-size: 12px;
+}
+
+.paymentSplitHeader strong {
+  color: #f0c96a;
+  white-space: nowrap;
+}
+
+.paymentSplitList {
+  display: grid;
+  gap: 10px;
+}
+
+.paymentSplitRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  background: rgba(5, 12, 20, 0.3);
+}
+
+.paymentSplitRemove {
+  min-height: 44px;
+}
+
 .managerPage.frontdeskM2A .bookingTrialConverted,
 .bookingTrialConverted {
   opacity: 1;
@@ -4812,8 +4859,13 @@
 
 @media (max-width: 760px) {
   .customPlanFields,
-  .contractPlanMode {
+  .contractPlanMode,
+  .paymentSplitRow {
     grid-template-columns: 1fr;
+  }
+
+  .paymentSplitHeader {
+    flex-direction: column;
   }
 
   .contractCheckboxRow {

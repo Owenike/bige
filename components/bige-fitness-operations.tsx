@@ -44,6 +44,7 @@ import {
   AnimationEvent as ReactAnimationEvent,
   FormEvent,
   Fragment,
+  type InputHTMLAttributes,
   PointerEvent as ReactPointerEvent,
   startTransition,
   useCallback,
@@ -193,6 +194,7 @@ type Booking = {
   reminder_status: string;
   converted_at: string | null;
   converted_payment_amount?: number | null;
+  booking_payment_amount?: number | null;
   future_trial_booking_count?: number;
   trial_booking_id?: string | null;
   requires_contract_followup?: boolean;
@@ -377,6 +379,12 @@ type StudentPaymentContext = {
   amount: string;
   contractId: string;
 };
+type PaymentEntryDraft = {
+  id: string;
+  amount: string;
+  method: string;
+  installmentCount: number | null;
+};
 type CoachDayStatus = {
   coach_id: string;
   status: "early" | "late" | "off";
@@ -438,6 +446,49 @@ export type BoardData = {
   expiringContracts: Contract[];
   legacyPurchaseDateReminders?: LegacyPurchaseDateReminder[];
 };
+
+function createPaymentEntryDraft(amount = ""): PaymentEntryDraft {
+  return {
+    id: globalThis.crypto?.randomUUID?.() || `payment-entry-${Date.now()}-${Math.random()}`,
+    amount,
+    method: "cash",
+    installmentCount: null,
+  };
+}
+
+function paymentEntryTotal(entries: PaymentEntryDraft[]) {
+  return entries.reduce((sum, entry) => {
+    const amount = Number(entry.amount);
+    return Number.isFinite(amount) && amount > 0 ? sum + amount : sum;
+  }, 0);
+}
+
+function normalizedPaymentEntries(entries: PaymentEntryDraft[]) {
+  return entries
+    .filter((entry) => Number(entry.amount) > 0)
+    .map((entry) => ({
+      amount: Number(entry.amount),
+      method: entry.method,
+      installmentCount:
+        entry.method === "ecpay_installment" ? entry.installmentCount : null,
+    }));
+}
+
+function paymentEntryError(entries: PaymentEntryDraft[], required: boolean) {
+  const nonEmpty = entries.filter((entry) => entry.amount.trim() !== "");
+  if (required && nonEmpty.length === 0) return "請輸入付款金額";
+  if (nonEmpty.some((entry) => !Number.isInteger(Number(entry.amount)) || Number(entry.amount) <= 0)) {
+    return "每一筆付款金額都必須是大於 0 的整數";
+  }
+  if (
+    nonEmpty.some(
+      (entry) => entry.method === "ecpay_installment" && !entry.installmentCount,
+    )
+  ) {
+    return "請先輸入每筆綠界分期的期數";
+  }
+  return "";
+}
 
 function customContractPlanFrom(plan?: Plan): CustomContractPlanDraft {
   const totalSessions = plan?.total_sessions || 12;
@@ -959,6 +1010,54 @@ const DIALOG_CLOSE_ANIMATION_MS = 360;
 const DIALOG_CLOSE_FALLBACK_MS = DIALOG_CLOSE_ANIMATION_MS + 120;
 const DIALOG_GENIE_SLICE_COUNT = 30;
 const DIALOG_GENIE_KEYFRAME_TIMES = [0, 0.18, 0.38, 0.58, 0.78, 0.9, 1] as const;
+
+function StableNumberInput({
+  value,
+  onValueChange,
+  fallbackValue = 0,
+  onFocus,
+  onBlur,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange"> & {
+  value: number;
+  onValueChange: (value: number) => void;
+  fallbackValue?: number;
+}) {
+  const [draft, setDraft] = useState(() => String(value));
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusedRef.current) setDraft(String(value));
+  }, [value]);
+
+  return (
+    <input
+      {...props}
+      type="number"
+      value={draft}
+      onFocus={(event) => {
+        focusedRef.current = true;
+        onFocus?.(event);
+      }}
+      onChange={(event) => {
+        const nextDraft = event.target.value;
+        setDraft(nextDraft);
+        if (nextDraft === "") return;
+        const nextValue = Number(nextDraft);
+        if (Number.isFinite(nextValue)) onValueChange(nextValue);
+      }}
+      onBlur={(event) => {
+        focusedRef.current = false;
+        const nextValue = draft === "" || !Number.isFinite(Number(draft))
+          ? fallbackValue
+          : Number(draft);
+        setDraft(String(nextValue));
+        onValueChange(nextValue);
+        onBlur?.(event);
+      }}
+    />
+  );
+}
 
 function Dialog(props: {
   title: string;
@@ -3983,6 +4082,9 @@ export default function BigeFitnessOperations({
   const [customContractPlan, setCustomContractPlan] = useState<CustomContractPlanDraft>(() =>
     customContractPlanFrom(),
   );
+  const [contractPaymentEntries, setContractPaymentEntries] = useState<PaymentEntryDraft[]>(
+    () => [createPaymentEntryDraft()],
+  );
   const [contractSubmitting, setContractSubmitting] = useState(false);
   const [contractError, setContractError] = useState("");
   const [studentPaymentContext, setStudentPaymentContext] =
@@ -3999,6 +4101,10 @@ export default function BigeFitnessOperations({
   const minimumInitialPayment = calculateMinimumDeposit(
     maximumInitialPayment,
     contractPlanTotalSessions,
+  );
+  const contractPaymentTotal = paymentEntryTotal(contractPaymentEntries);
+  const contractPaymentRequired = Boolean(
+    studentPaymentContext || selectedBooking?.operation_kind === "trial",
   );
 
   const openContract = (booking?: Booking, member?: Member) => {
@@ -4030,6 +4136,7 @@ export default function BigeFitnessOperations({
       paymentMethod: "cash",
       installmentCount: null,
     }));
+    setContractPaymentEntries([createPaymentEntryDraft()]);
     setCustomContractPlan(customContractPlanFrom(data?.plans[0]));
     setContractError("");
     setContractSubmitting(false);
@@ -4072,13 +4179,16 @@ export default function BigeFitnessOperations({
     event?.preventDefault();
     if (contractSubmitting) return;
     setContractError("");
-    if (
-      contractDraft.paymentMethod === "ecpay_installment" &&
-      !contractDraft.installmentCount
-    ) {
-      setContractError("請先輸入綠界分期期數");
+    const requiresInitialPayment = Boolean(
+      studentPaymentContext || selectedBooking?.operation_kind === "trial",
+    );
+    const entryError = paymentEntryError(contractPaymentEntries, requiresInitialPayment);
+    if (entryError) {
+      setContractError(entryError);
       return;
     }
+    const payments = normalizedPaymentEntries(contractPaymentEntries);
+    const initialPayment = paymentEntryTotal(contractPaymentEntries);
     if (studentPaymentContext?.paymentType === "balance") {
       const targetContract = scheduleMemberDetail?.contracts.find(
         (contract) => contract.id === studentPaymentContext.contractId,
@@ -4094,7 +4204,7 @@ export default function BigeFitnessOperations({
       if (
         !targetContract ||
         !isBigeContractPaymentAmountAllowed(
-          Number(studentPaymentContext.amount),
+          initialPayment,
           outstandingBalance,
         )
       ) {
@@ -4109,13 +4219,11 @@ export default function BigeFitnessOperations({
       try {
         await post(
           {
-            action: "record_payment",
+            action: "record_payments",
             contractId: targetContract.id,
             sourceBookingId: studentPaymentContext.bookingId,
             paymentKind: "balance",
-            amount: Number(studentPaymentContext.amount),
-            method: contractDraft.paymentMethod,
-            installmentCount: contractDraft.installmentCount,
+            payments,
             idempotencyKey: `student-payment:${studentPaymentContext.bookingId}:${crypto.randomUUID()}`,
             note: "學員課程付款｜尾款 PTP",
           },
@@ -4133,12 +4241,6 @@ export default function BigeFitnessOperations({
       }
       return;
     }
-    const initialPayment = studentPaymentContext
-      ? Number(studentPaymentContext.amount)
-      : Number(contractDraft.initialPayment);
-    const requiresInitialPayment = Boolean(
-      studentPaymentContext || selectedBooking?.operation_kind === "trial",
-    );
     if (
       (contractDraft.planMode === "builtin" && !selectedPlan) ||
       (contractDraft.planMode === "custom" &&
@@ -4209,6 +4311,9 @@ export default function BigeFitnessOperations({
                 }
               : null,
           initialPayment,
+          paymentMethod: payments[0]?.method || null,
+          installmentCount: payments[0]?.installmentCount || null,
+          payments,
           email: contractDraft.email || null,
           paymentSchedule: [],
           faFeeRecipientProfileId: faFeeRecipient?.profileId || null,
@@ -4342,9 +4447,7 @@ export default function BigeFitnessOperations({
 
   const [paymentDraft, setPaymentDraft] = useState({
     paymentKind: "installment",
-    amount: 0,
-    method: "cash",
-    installmentCount: null as number | null,
+    entries: [createPaymentEntryDraft()] as PaymentEntryDraft[],
     note: "",
   });
   const [paymentError, setPaymentError] = useState("");
@@ -4373,13 +4476,16 @@ export default function BigeFitnessOperations({
     event.preventDefault();
     if (!selectedContract || !selectedMember) return;
     setPaymentError("");
-    if (paymentDraft.method === "ecpay_installment" && !paymentDraft.installmentCount) {
-      setPaymentError("請先輸入綠界分期期數");
+    const entryError = paymentEntryError(paymentDraft.entries, true);
+    if (entryError) {
+      setPaymentError(entryError);
       return;
     }
+    const payments = normalizedPaymentEntries(paymentDraft.entries);
+    const paymentTotal = paymentEntryTotal(paymentDraft.entries);
     if (
       !isBigeContractPaymentAmountAllowed(
-        Number(paymentDraft.amount),
+        paymentTotal,
         selectedContractOutstandingBalance,
       )
     ) {
@@ -4392,10 +4498,11 @@ export default function BigeFitnessOperations({
     try {
       await post(
         {
-          action: "record_payment",
+          action: "record_payments",
           contractId: selectedContract.id,
-          ...paymentDraft,
-          amount: Number(paymentDraft.amount),
+          paymentKind: paymentDraft.paymentKind,
+          payments,
+          note: paymentDraft.note,
           idempotencyKey: `payment:${crypto.randomUUID()}`,
         },
         {
@@ -5735,7 +5842,11 @@ export default function BigeFitnessOperations({
                           }
                           onClick={() => {
                             setSelectedContract(contract);
-                            setPaymentDraft({ paymentKind: "installment", amount: 0, method: "cash", installmentCount: null, note: "" });
+                            setPaymentDraft({
+                              paymentKind: "installment",
+                              entries: [createPaymentEntryDraft()],
+                              note: "",
+                            });
                             setPaymentError("");
                             setDialog("payment");
                           }}
@@ -5923,17 +6034,17 @@ export default function BigeFitnessOperations({
               return (
                 <label className={styles.field} key={course}>
                   <span className={styles.label}>{BIGE_COURSE_LABELS[course]}</span>
-                  <input
+                  <StableNumberInput
                     className={styles.input}
-                    type="number"
                     min={used}
                     max={selectedCourseAllocationContract.total_sessions}
                     required
                     value={courseAllocationDraft[course]}
-                    onChange={(event) =>
+                    fallbackValue={used}
+                    onValueChange={(value) =>
                       setCourseAllocationDraft((current) => ({
                         ...current,
-                        [course]: Math.max(0, Number(event.target.value) || 0),
+                        [course]: Math.max(used, value),
                       }))
                     }
                   />
@@ -6782,16 +6893,14 @@ export default function BigeFitnessOperations({
                           {trialConversionOutcomeDraft === "converted" ? (
                             <label className={styles.field}>
                               <span>變更成交金額</span>
-                              <input
+                              <StableNumberInput
                                 className={styles.input}
-                                type="number"
                                 inputMode="numeric"
                                 min="1"
                                 required
                                 value={trialConversionAmount}
-                                onChange={(event) =>
-                                  setTrialConversionAmount(Number(event.target.value))
-                                }
+                                fallbackValue={1}
+                                onValueChange={setTrialConversionAmount}
                               />
                             </label>
                           ) : (
@@ -7034,6 +7143,7 @@ export default function BigeFitnessOperations({
                               ""
                             : studentPaymentContext.contractId,
                       });
+                      setContractPaymentEntries([createPaymentEntryDraft()]);
                       setContractError("");
                     }}
                   >
@@ -7047,32 +7157,6 @@ export default function BigeFitnessOperations({
                     )}
                   </select>
                 </label>
-                <label className={styles.field}>
-                  <span className={styles.label}>金額</span>
-                  <input
-                    className={styles.input}
-                    type="number"
-                    inputMode="numeric"
-                    min={
-                      studentPaymentContext.paymentType === "balance"
-                        ? 1
-                        : minimumInitialPayment || 1
-                    }
-                    max={
-                      studentPaymentContext.paymentType === "balance"
-                        ? studentPaymentTarget?.outstanding || undefined
-                        : maximumInitialPayment || undefined
-                    }
-                    required
-                    value={studentPaymentContext.amount}
-                    onChange={(event) =>
-                      setStudentPaymentContext({
-                        ...studentPaymentContext,
-                        amount: event.target.value,
-                      })
-                    }
-                  />
-                </label>
                 {studentPaymentContext.paymentType === "balance" ? (
                   <label className={`${styles.field} ${styles.fieldFull}`}>
                     <span className={styles.label}>尾款合約</span>
@@ -7080,11 +7164,14 @@ export default function BigeFitnessOperations({
                       className={styles.select}
                       value={studentPaymentContext.contractId}
                       onChange={(event) =>
-                        setStudentPaymentContext({
-                          ...studentPaymentContext,
-                          contractId: event.target.value,
-                          amount: "",
-                        })
+                        {
+                          setStudentPaymentContext({
+                            ...studentPaymentContext,
+                            contractId: event.target.value,
+                            amount: "",
+                          });
+                          setContractPaymentEntries([createPaymentEntryDraft()]);
+                        }
                       }
                     >
                       {scheduleOutstandingContracts.length ? (
@@ -7149,35 +7236,54 @@ export default function BigeFitnessOperations({
                 </label>
                 <label className={styles.field}>
                   <span className={styles.label}>總價</span>
-                  <input className={styles.input} type="number" min="1" required value={customContractPlan.totalAmount} onChange={(event) => setCustomContractPlan({ ...customContractPlan, totalAmount: Number(event.target.value) })} />
+                  <StableNumberInput className={styles.input} min="1" required value={customContractPlan.totalAmount} fallbackValue={1} onValueChange={(totalAmount) => setCustomContractPlan({ ...customContractPlan, totalAmount })} />
                 </label>
                 <label className={styles.field}>
                   <span className={styles.label}>總堂數</span>
-                  <input className={styles.input} type="number" min="1" required value={customContractPlan.totalSessions} onChange={(event) => setCustomContractPlan({ ...customContractPlan, totalSessions: Number(event.target.value) })} />
+                  <StableNumberInput
+                    className={styles.input}
+                    min="1"
+                    required
+                    value={customContractPlan.totalSessions}
+                    fallbackValue={1}
+                    onValueChange={(totalSessions) => {
+                      const normalizedSessions = Math.max(1, Math.trunc(totalSessions));
+                      const terms = calculateContractTerms(normalizedSessions);
+                      setCustomContractPlan({
+                        ...customContractPlan,
+                        totalSessions: normalizedSessions,
+                        validityDays: terms.validityDays,
+                        extensionLimitDays: terms.extensionLimitDays,
+                      });
+                    }}
+                  />
                 </label>
                 <label className={styles.field}>
                   <span className={styles.label}>有效天數</span>
-                  <input className={styles.input} type="number" min="1" required value={customContractPlan.validityDays} onChange={(event) => setCustomContractPlan({ ...customContractPlan, validityDays: Number(event.target.value) })} />
+                  <StableNumberInput className={styles.input} min="1" required value={customContractPlan.validityDays} fallbackValue={1} onValueChange={(validityDays) => setCustomContractPlan({ ...customContractPlan, validityDays })} />
+                  <small className={styles.fieldHelp}>
+                    堂數 × 3.5 天向上取整，再加 30 天；變更堂數時自動更新。
+                    預計到期日 {shiftDate(contractDraft.signedOn, customContractPlan.validityDays)}。
+                  </small>
                 </label>
                 <label className={styles.field}>
                   <span className={styles.label}>最多延期天數</span>
-                  <input className={styles.input} type="number" min="0" required value={customContractPlan.extensionLimitDays} onChange={(event) => setCustomContractPlan({ ...customContractPlan, extensionLimitDays: Number(event.target.value) })} />
+                  <StableNumberInput className={styles.input} min="0" required value={customContractPlan.extensionLimitDays} onValueChange={(extensionLimitDays) => setCustomContractPlan({ ...customContractPlan, extensionLimitDays })} />
                 </label>
                 {BIGE_CONTRACT_COURSE_TYPES.map((course) => (
                   <label className={styles.field} key={course}>
                     <span className={styles.label}>{BIGE_COURSE_LABELS[course]}堂數</span>
-                    <input
+                    <StableNumberInput
                       className={styles.input}
-                      type="number"
                       min="0"
                       required
                       value={customContractPlan.allocations[course]}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         setCustomContractPlan({
                           ...customContractPlan,
                           allocations: {
                             ...customContractPlan.allocations,
-                            [course]: Number(event.target.value),
+                            [course]: value,
                           },
                         })
                       }
@@ -7213,53 +7319,111 @@ export default function BigeFitnessOperations({
               />
             </label>
             ) : null}
-            {!studentPaymentContext ? (
-            <label className={styles.field}>
-              <span className={styles.label}>首次付款</span>
-              <input className={styles.input} type="number" min={selectedBooking?.operation_kind === "trial" ? minimumInitialPayment || 1 : 0} max={maximumInitialPayment || undefined} required={selectedBooking?.operation_kind === "trial"} value={contractDraft.initialPayment} onChange={(event) => setContractDraft({ ...contractDraft, initialPayment: Number(event.target.value) })} />
-            </label>
-            ) : null}
-            <label className={styles.field}>
-              <span className={styles.label}>付款方式</span>
-              <select
-                className={styles.select}
-                value={contractDraft.paymentMethod}
-                onChange={(event) => {
-                  const paymentMethod = event.target.value;
-                  if (paymentMethod === "ecpay_installment") {
-                    const installmentCount = promptEcpayInstallmentCount(
-                      contractDraft.installmentCount,
-                    );
-                    if (installmentCount === null) return;
-                    setContractDraft({
-                      ...contractDraft,
-                      paymentMethod,
-                      installmentCount,
-                    });
-                    return;
-                  }
-                  setContractDraft({
-                    ...contractDraft,
-                    paymentMethod,
-                    installmentCount: null,
-                  });
-                }}
+            <section className={`${styles.paymentSplitSection} ${styles.fieldFull}`}>
+              <div className={styles.paymentSplitHeader}>
+                <div>
+                  <span className={styles.label}>
+                    {studentPaymentContext || selectedBooking?.operation_kind === "trial"
+                      ? "本次付款"
+                      : "首次付款"}
+                  </span>
+                  <small>同一天可用不同付款方式拆成多筆。</small>
+                </div>
+                <strong>合計 {formatMoney(contractPaymentTotal)}</strong>
+              </div>
+              <div className={styles.paymentSplitList}>
+                {contractPaymentEntries.map((entry, index) => (
+                  <div className={styles.paymentSplitRow} key={entry.id}>
+                    <label className={styles.field}>
+                      <span className={styles.label}>第 {index + 1} 筆金額</span>
+                      <input
+                        className={styles.input}
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        max={
+                          studentPaymentContext?.paymentType === "balance"
+                            ? studentPaymentTarget?.outstanding || undefined
+                            : maximumInitialPayment || undefined
+                        }
+                        required={contractPaymentRequired || contractPaymentEntries.length > 1}
+                        value={entry.amount}
+                        onChange={(event) => {
+                          const amount = event.target.value;
+                          setContractPaymentEntries((current) =>
+                            current.map((item) => item.id === entry.id ? { ...item, amount } : item),
+                          );
+                          if (studentPaymentContext) {
+                            const nextEntries = contractPaymentEntries.map((item) =>
+                              item.id === entry.id ? { ...item, amount } : item,
+                            );
+                            setStudentPaymentContext({
+                              ...studentPaymentContext,
+                              amount: String(paymentEntryTotal(nextEntries) || ""),
+                            });
+                          }
+                        }}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span className={styles.label}>付款方式</span>
+                      <select
+                        className={styles.select}
+                        value={entry.method}
+                        onChange={(event) => {
+                          const method = event.target.value;
+                          let installmentCount: number | null = null;
+                          if (method === "ecpay_installment") {
+                            installmentCount = promptEcpayInstallmentCount(entry.installmentCount);
+                            if (installmentCount === null) return;
+                          }
+                          setContractPaymentEntries((current) =>
+                            current.map((item) =>
+                              item.id === entry.id ? { ...item, method, installmentCount } : item,
+                            ),
+                          );
+                        }}
+                      >
+                        <option value="cash">現金</option>
+                        <option value="bank_transfer">轉帳</option>
+                        <option value="card_terminal">刷卡機</option>
+                        <option value="ecpay">綠界</option>
+                        <option value="ecpay_installment">綠界分期</option>
+                        <option value="acpay">ACPay</option>
+                        <option value="other">其他</option>
+                      </select>
+                      {entry.method === "ecpay_installment" && entry.installmentCount ? (
+                        <small className={styles.fieldHelp}>已設定 {entry.installmentCount} 期</small>
+                      ) : null}
+                    </label>
+                    {contractPaymentEntries.length > 1 ? (
+                      <button
+                        className={`${styles.button} ${styles.danger} ${styles.paymentSplitRemove}`}
+                        type="button"
+                        onClick={() =>
+                          setContractPaymentEntries((current) =>
+                            current.filter((item) => item.id !== entry.id),
+                          )
+                        }
+                        aria-label={`刪除第 ${index + 1} 筆付款`}
+                      >
+                        <Trash2 size={16} /> 刪除
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              <button
+                className={styles.button}
+                type="button"
+                disabled={contractPaymentEntries.length >= 10}
+                onClick={() =>
+                  setContractPaymentEntries((current) => [...current, createPaymentEntryDraft()])
+                }
               >
-                <option value="cash">現金</option>
-                <option value="bank_transfer">轉帳</option>
-                <option value="card_terminal">刷卡機</option>
-                <option value="ecpay">綠界</option>
-                <option value="ecpay_installment">綠界分期</option>
-                <option value="acpay">ACPay</option>
-                <option value="other">其他</option>
-              </select>
-              {contractDraft.paymentMethod === "ecpay_installment" &&
-              contractDraft.installmentCount ? (
-                <small className={styles.fieldHelp}>
-                  已設定 {contractDraft.installmentCount} 期
-                </small>
-              ) : null}
-            </label>
+                ＋ 新增一筆付款方式
+              </button>
+            </section>
             {selectedBooking?.operation_kind === "trial" && Number(selectedBooking.future_trial_booking_count || 0) > 0 ? (
               <label className={styles.field}>
                 <span className={styles.label}>
@@ -7287,7 +7451,7 @@ export default function BigeFitnessOperations({
                     maximumInitialPayment,
                     contractPlanTotalSessions,
                   ),
-                )}
+                )}；目前合計 {formatMoney(contractPaymentTotal)}
               </p>
             ) : null}
             <div className={`${styles.formActions} ${styles.fieldFull}`}>
@@ -7301,14 +7465,12 @@ export default function BigeFitnessOperations({
                     (!scheduleMemberDetail?.canRecordContractPayment ||
                       !studentPaymentTarget ||
                       !isBigeContractPaymentAmountAllowed(
-                        Number(studentPaymentContext.amount),
+                        contractPaymentTotal,
                         studentPaymentTarget.outstanding,
                       ))) ||
                   (studentPaymentContext?.paymentType !== "balance" &&
                     !isBigeContractPaymentAmountAllowed(
-                      studentPaymentContext
-                        ? Number(studentPaymentContext.amount)
-                        : Number(contractDraft.initialPayment),
+                      contractPaymentTotal,
                       maximumInitialPayment,
                       {
                         minimumAmount:
@@ -7350,16 +7512,16 @@ export default function BigeFitnessOperations({
             </label>
             <label className={styles.field}>
               <span className={styles.label}>總堂數</span>
-              <input className={styles.input} type="number" min="1" required value={planDraft.totalSessions} onChange={(event) => setPlanDraft({ ...planDraft, totalSessions: Number(event.target.value) })} />
+              <StableNumberInput className={styles.input} min="1" required value={planDraft.totalSessions} fallbackValue={1} onValueChange={(totalSessions) => setPlanDraft({ ...planDraft, totalSessions })} />
             </label>
             <label className={styles.field}>
               <span className={styles.label}>總價</span>
-              <input className={styles.input} type="number" min="1" required value={planDraft.totalAmount} onChange={(event) => setPlanDraft({ ...planDraft, totalAmount: Number(event.target.value) })} />
+              <StableNumberInput className={styles.input} min="1" required value={planDraft.totalAmount} fallbackValue={1} onValueChange={(totalAmount) => setPlanDraft({ ...planDraft, totalAmount })} />
             </label>
             {BIGE_CONTRACT_COURSE_TYPES.map((course) => (
               <label className={styles.field} key={course}>
                 <span className={styles.label}>{BIGE_COURSE_LABELS[course]}堂數</span>
-                <input className={styles.input} type="number" min="0" required value={planDraft[course]} onChange={(event) => setPlanDraft({ ...planDraft, [course]: Number(event.target.value) })} />
+                <StableNumberInput className={styles.input} min="0" required value={planDraft[course]} onValueChange={(value) => setPlanDraft({ ...planDraft, [course]: value })} />
               </label>
             ))}
             <p className={`${styles.warning} ${styles.fieldFull}`}>
@@ -7394,47 +7556,118 @@ export default function BigeFitnessOperations({
                 <option value="balance">尾款</option>
               </select>
             </label>
-            <label className={styles.field}>
-              <span className={styles.label}>金額</span>
-              <input className={styles.input} type="number" min="1" max={selectedContractOutstandingBalance || undefined} required disabled={selectedContractOutstandingBalance <= 0} value={paymentDraft.amount} onChange={(event) => setPaymentDraft({ ...paymentDraft, amount: Number(event.target.value) })} />
-            </label>
-            <label className={styles.field}>
-              <span className={styles.label}>方式</span>
-              <select
-                className={styles.select}
-                value={paymentDraft.method}
-                onChange={(event) => {
-                  const method = event.target.value;
-                  if (method === "ecpay_installment") {
-                    const installmentCount = promptEcpayInstallmentCount(
-                      paymentDraft.installmentCount,
-                    );
-                    if (installmentCount === null) return;
-                    setPaymentDraft({ ...paymentDraft, method, installmentCount });
-                    return;
-                  }
-                  setPaymentDraft({ ...paymentDraft, method, installmentCount: null });
-                }}
+            <section className={`${styles.paymentSplitSection} ${styles.fieldFull}`}>
+              <div className={styles.paymentSplitHeader}>
+                <div>
+                  <span className={styles.label}>付款明細</span>
+                  <small>同一天可新增多筆不同付款方式。</small>
+                </div>
+                <strong>合計 {formatMoney(paymentEntryTotal(paymentDraft.entries))}</strong>
+              </div>
+              <div className={styles.paymentSplitList}>
+                {paymentDraft.entries.map((entry, index) => (
+                  <div className={styles.paymentSplitRow} key={entry.id}>
+                    <label className={styles.field}>
+                      <span className={styles.label}>第 {index + 1} 筆金額</span>
+                      <input
+                        className={styles.input}
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        max={selectedContractOutstandingBalance || undefined}
+                        required
+                        disabled={selectedContractOutstandingBalance <= 0}
+                        value={entry.amount}
+                        onChange={(event) => {
+                          const amount = event.target.value;
+                          setPaymentDraft((current) => ({
+                            ...current,
+                            entries: current.entries.map((item) =>
+                              item.id === entry.id ? { ...item, amount } : item,
+                            ),
+                          }));
+                        }}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span className={styles.label}>方式</span>
+                      <select
+                        className={styles.select}
+                        value={entry.method}
+                        onChange={(event) => {
+                          const method = event.target.value;
+                          let installmentCount: number | null = null;
+                          if (method === "ecpay_installment") {
+                            installmentCount = promptEcpayInstallmentCount(entry.installmentCount);
+                            if (installmentCount === null) return;
+                          }
+                          setPaymentDraft((current) => ({
+                            ...current,
+                            entries: current.entries.map((item) =>
+                              item.id === entry.id ? { ...item, method, installmentCount } : item,
+                            ),
+                          }));
+                        }}
+                      >
+                        <option value="cash">現金</option>
+                        <option value="bank_transfer">轉帳</option>
+                        <option value="card_terminal">刷卡機</option>
+                        <option value="ecpay">綠界</option>
+                        <option value="ecpay_installment">綠界分期</option>
+                        <option value="acpay">ACPay</option>
+                        <option value="other">其他</option>
+                      </select>
+                      {entry.method === "ecpay_installment" && entry.installmentCount ? (
+                        <small className={styles.fieldHelp}>已設定 {entry.installmentCount} 期</small>
+                      ) : null}
+                    </label>
+                    {paymentDraft.entries.length > 1 ? (
+                      <button
+                        className={`${styles.button} ${styles.danger} ${styles.paymentSplitRemove}`}
+                        type="button"
+                        onClick={() =>
+                          setPaymentDraft((current) => ({
+                            ...current,
+                            entries: current.entries.filter((item) => item.id !== entry.id),
+                          }))
+                        }
+                      >
+                        <Trash2 size={16} /> 刪除
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              <button
+                className={styles.button}
+                type="button"
+                disabled={paymentDraft.entries.length >= 10}
+                onClick={() =>
+                  setPaymentDraft((current) => ({
+                    ...current,
+                    entries: [...current.entries, createPaymentEntryDraft()],
+                  }))
+                }
               >
-                <option value="cash">現金</option>
-                <option value="bank_transfer">轉帳</option>
-                <option value="ecpay">綠界</option>
-                <option value="ecpay_installment">綠界分期</option>
-                <option value="acpay">ACPay</option>
-                <option value="other">其他</option>
-              </select>
-              {paymentDraft.method === "ecpay_installment" && paymentDraft.installmentCount ? (
-                <small className={styles.fieldHelp}>
-                  已設定 {paymentDraft.installmentCount} 期
-                </small>
-              ) : null}
-            </label>
+                ＋ 新增一筆付款方式
+              </button>
+            </section>
             <label className={`${styles.field} ${styles.fieldFull}`}>
               <span className={styles.label}>備註</span>
               <textarea className={styles.textarea} value={paymentDraft.note} onChange={(event) => setPaymentDraft({ ...paymentDraft, note: event.target.value })} />
             </label>
             <div className={`${styles.formActions} ${styles.fieldFull}`}>
-              <button className={`${styles.button} ${styles.primary}`} type="submit" disabled={selectedContractOutstandingBalance <= 0}>
+              <button
+                className={`${styles.button} ${styles.primary}`}
+                type="submit"
+                disabled={
+                  selectedContractOutstandingBalance <= 0 ||
+                  !isBigeContractPaymentAmountAllowed(
+                    paymentEntryTotal(paymentDraft.entries),
+                    selectedContractOutstandingBalance,
+                  )
+                }
+              >
                 儲存付款
               </button>
             </div>
@@ -7480,14 +7713,14 @@ export default function BigeFitnessOperations({
             </label>
             <label className={styles.field}>
               <span className={styles.label}>金額</span>
-              <input
+              <StableNumberInput
                 className={styles.input}
-                type="number"
                 min="1"
                 max={selectedContract.total_amount}
                 required
                 value={paymentEditDraft.amount}
-                onChange={(event) => setPaymentEditDraft({ ...paymentEditDraft, amount: Number(event.target.value) })}
+                fallbackValue={1}
+                onValueChange={(amount) => setPaymentEditDraft({ ...paymentEditDraft, amount })}
               />
             </label>
             <label className={styles.field}>
@@ -7558,7 +7791,7 @@ export default function BigeFitnessOperations({
             </p>
             <label className={styles.field}>
               <span className={styles.label}>本次延期天數</span>
-              <input className={styles.input} type="number" min="1" max={selectedContract.extension_limit_days - selectedContract.extension_used_days} required value={extensionDraft.days} onChange={(event) => setExtensionDraft({ ...extensionDraft, days: Number(event.target.value) })} />
+              <StableNumberInput className={styles.input} min="1" max={selectedContract.extension_limit_days - selectedContract.extension_used_days} required value={extensionDraft.days} fallbackValue={1} onValueChange={(days) => setExtensionDraft({ ...extensionDraft, days })} />
             </label>
             <label className={styles.field}>
               <span className={styles.label}>學員姓名</span>
@@ -8293,11 +8526,9 @@ function HourRow(props: {
                   </div>
                   <div className={styles.entryBody}>
                     {props.showTrialRevenue &&
-                    booking.operation_kind === "trial" &&
-                    booking.converted_at &&
-                    typeof booking.converted_payment_amount === "number" ? (
+                    typeof booking.booking_payment_amount === "number" ? (
                       <span className={styles.bookingRevenueBadge}>
-                        {formatFaRevenueAmount(booking.converted_payment_amount)}
+                        {formatFaRevenueAmount(booking.booking_payment_amount)}
                       </span>
                     ) : null}
                     {booking.operation_kind === "trial" &&

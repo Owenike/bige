@@ -11,6 +11,7 @@ import {
   canReviseBigeTrialOutcome,
   canEditBigeScheduleBooking,
   calculateBigeContractOutstandingBalance,
+  calculateContractTerms,
   calculateLegacyContractExpiryDate,
   flattenBigeMemberPaymentRelations,
   getBigeStudentPaymentBalanceState,
@@ -38,6 +39,7 @@ import {
   changeTrialConversionOutcomeSchema,
   restoreTrialConversionSchema,
   recordPaymentSchema,
+  recordPaymentsSchema,
   updatePaymentSchema,
   updateLegacyContractPurchaseDateSchema,
   updateCourseAllocationsSchema,
@@ -321,6 +323,19 @@ test("legacy contract expiry adds 3.5 days per session and the 30 day bonus", ()
   assert.equal(calculateLegacyContractExpiryDate("2026-08-14", 48), "2027-02-28");
   assert.equal(calculateLegacyContractExpiryDate("2026-08-14", 30), "2026-12-27");
   assert.equal(calculateLegacyContractExpiryDate("2026-08-14", 26), "2026-12-13");
+});
+
+test("custom contract terms reuse the same session formula", () => {
+  assert.deepEqual(calculateContractTerms(10), {
+    baseDays: 35,
+    validityDays: 65,
+    extensionLimitDays: 18,
+  });
+  assert.deepEqual(calculateContractTerms(11), {
+    baseDays: 39,
+    validityDays: 69,
+    extensionLimitDays: 20,
+  });
 });
 
 test("legacy purchase-date updates require a contract id and a real date", () => {
@@ -931,6 +946,83 @@ test("contract payment records accept the new ECPay methods and legacy card term
   assert.equal(recordPaymentSchema.safeParse({ ...baseInput, method: "card_terminal" }).success, true);
 });
 
+test("one receipt can contain multiple validated payment methods", () => {
+  const input = {
+    action: "record_payments" as const,
+    contractId: "00000000-0000-4000-8000-000000000001",
+    sourceBookingId: "00000000-0000-4000-8000-000000000002",
+    paymentKind: "balance" as const,
+    payments: [
+      { amount: 3000, method: "cash" as const },
+      { amount: 5000, method: "ecpay_installment" as const, installmentCount: 6 },
+    ],
+    idempotencyKey: "split-payment-test-20260820",
+  };
+
+  assert.equal(recordPaymentsSchema.safeParse(input).success, true);
+  assert.equal(
+    recordPaymentsSchema.safeParse({
+      ...input,
+      payments: [{ amount: 5000, method: "ecpay_installment" }],
+    }).success,
+    false,
+  );
+  assert.equal(
+    createContractSchema.safeParse({
+      action: "create_contract",
+      fullName: "多元付款會員",
+      phone: "0912345678",
+      birthDate: "1990-01-01",
+      email: "split@example.com",
+      emailUnavailable: false,
+      planId: "00000000-0000-4000-8000-000000000003",
+      signedOn: "2026-08-20",
+      initialPayment: 8000,
+      paymentMethod: "cash",
+      payments: input.payments,
+      paymentSchedule: [],
+    }).success,
+    true,
+  );
+  assert.equal(
+    createContractSchema.safeParse({
+      action: "create_contract",
+      fullName: "合計錯誤會員",
+      phone: "0912345678",
+      birthDate: "1990-01-01",
+      email: "mismatch@example.com",
+      emailUnavailable: false,
+      planId: "00000000-0000-4000-8000-000000000003",
+      signedOn: "2026-08-20",
+      initialPayment: 9000,
+      paymentMethod: "cash",
+      payments: input.payments,
+      paymentSchedule: [],
+    }).success,
+    false,
+  );
+});
+
+test("split payments unlock once and remain linked to their schedule booking", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260819161710_add_split_contract_payments_and_booking_badges.sql",
+    "utf8",
+  );
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+
+  assert.match(migration, /add column if not exists source_booking_id uuid references public\.bookings/);
+  assert.match(migration, /bige_record_contract_payment_v2\([\s\S]*total_amount[\s\S]*'other'/);
+  assert.equal((migration.match(/base_result := public\.bige_record_contract_payment_v2/g) || []).length, 1);
+  assert.match(migration, /payment_entries_total_mismatch/);
+  assert.match(migration, /source_booking_id = p_source_booking_id/);
+  assert.match(route, /rpc\("bige_record_contract_payments_v1"/);
+  assert.match(route, /p_payment_source_booking_id: input\.sourceBookingId \|\| input\.sourceMemberBookingId \|\| null/);
+  assert.match(route, /amountByBookingId[\s\S]*booking_payment_amount: paymentAmount/);
+  assert.match(component, /typeof booking\.booking_payment_amount === "number"/);
+  assert.match(component, /新增一筆付款方式/);
+});
+
 test("schedule student payments carry the source booking for server-side identity checks", () => {
   const sourceBookingId = "00000000-0000-4000-8000-000000000009";
   assert.equal(
@@ -1004,31 +1096,26 @@ test("FA schedule payments are fixed to New while member payments keep renewal a
   );
 });
 
-test("schedule payment amounts can stay empty while the user replaces the value", () => {
+test("tablet payment and plan number inputs preserve the in-progress text value", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
-  const paymentContextType = component.slice(
-    component.indexOf("type StudentPaymentContext ="),
+  const paymentEntryType = component.slice(
+    component.indexOf("type PaymentEntryDraft ="),
     component.indexOf("type CoachDayStatus ="),
   );
-  const openStudentPayment = component.slice(
-    component.indexOf("const openStudentPayment ="),
-    component.indexOf("const submitContract ="),
-  );
-  const paymentAmountField = component.slice(
-    component.indexOf('<span className={styles.label}>金額</span>'),
-    component.indexOf(
-      'studentPaymentContext.paymentType === "balance" ? (',
-      component.indexOf('<span className={styles.label}>金額</span>'),
-    ),
+  const stableNumberInput = component.slice(
+    component.indexOf("function StableNumberInput("),
+    component.indexOf("function Dialog("),
   );
 
-  assert.match(paymentContextType, /amount: string;/);
-  assert.match(openStudentPayment, /amount: ""/);
-  assert.match(paymentAmountField, /value=\{studentPaymentContext\.amount\}/);
-  assert.match(paymentAmountField, /amount: event\.target\.value/);
-  assert.doesNotMatch(paymentAmountField, /amount: Number\(event\.target\.value\)/);
-  assert.ok((component.match(/amount: ""/g) || []).length >= 3);
-  assert.match(component, /Number\(studentPaymentContext\.amount\)/);
+  assert.match(paymentEntryType, /amount: string;/);
+  assert.match(component, /value=\{entry\.amount\}/);
+  assert.match(component, /const amount = event\.target\.value/);
+  assert.doesNotMatch(component, /amount: Number\(event\.target\.value\)/);
+  assert.match(stableNumberInput, /if \(nextDraft === ""\) return/);
+  assert.match(stableNumberInput, /if \(!focusedRef\.current\) setDraft\(String\(value\)\)/);
+  assert.match(component, /const terms = calculateContractTerms\(normalizedSessions\)/);
+  assert.match(component, /validityDays: terms\.validityDays/);
+  assert.match(component, /extensionLimitDays: terms\.extensionLimitDays/);
 });
 
 test("paid active FA conversions complete attendance automatically", () => {
@@ -1170,7 +1257,7 @@ test("FA payment and not-converted actions capture one atomic fee recipient", ()
   assert.match(component, /list="fa-fee-recipient-options"/);
   assert.match(component, /選擇員工或自行輸入/);
   assert.match(component, /\/api\/bige-fitness\?faFeeRecipients=1/);
-  assert.match(route, /bige_create_member_contract_v5/);
+  assert.match(route, /bige_create_member_contract_v6/);
   assert.match(route, /p_sales_origin_coach_id: trustedSalesOriginCoachId/);
   assert.match(route, /p_sales_origin_kind: input\.sourceBookingId \? "fa" : input\.sourceMemberBookingId \? "renewal" : "manual"/);
   assert.match(route, /bige_complete_trial_outcome_v2/);
@@ -1948,7 +2035,7 @@ test("FA signing date is locked to today and ECPay installments require a stored
     component,
     /selectedBooking\?\.operation_kind === "trial"[\s\S]*\? localDate\(\)[\s\S]*: contractDraft\.signedOn/,
   );
-  assert.match(route, /rpc\("bige_create_member_contract_v5"/);
+  assert.match(route, /rpc\("bige_create_member_contract_v6"/);
   assert.match(route, /const trustedSignedOn = input\.sourceBookingId \? toTaipeiDateString\(\) : input\.signedOn/);
   assert.match(route, /rpc\("bige_record_contract_payment_v2"/);
   assert.match(route, /p_installment_count: input\.installmentCount \|\| null/);

@@ -87,7 +87,7 @@ test("daily settlement follows daily-board duty markers and lists each working c
 });
 
 test("new contracts snapshot the original coach for default allocation and EPO evidence", () => {
-  assert.match(contractRoute, /bige_create_member_contract_v5/);
+  assert.match(contractRoute, /bige_create_member_contract_v6/);
   assert.match(contractRoute, /p_sales_origin_coach_id: trustedSalesOriginCoachId/);
   assert.match(migration, /sales_origin_coach_id uuid references public\.profiles/);
   assert.match(migration, /Immutable source coach snapshot/);

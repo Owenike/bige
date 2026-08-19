@@ -352,6 +352,9 @@ function normalizeErrorMessage(message: string) {
     minimum_deposit_not_met: "首次付款不得低於此方案一堂課的金額",
     payment_amount_invalid: "付款金額不可小於 0",
     payment_amount_exceeds_contract_balance: "付款金額不能超過合約尚有尾款",
+    payment_entries_invalid: "付款明細格式不正確，請重新確認每一筆金額與方式",
+    payment_entries_total_mismatch: "多筆付款合計與本次付款金額不一致",
+    payment_source_booking_invalid: "付款來源課程與學員或合約不一致",
     payment_schedule_total_mismatch: "付款排程加總必須等於合約總價",
     invalid_payment_method: "付款方式無效，請重新選擇後再試一次",
     payment_method_invalid: "付款方式無效，請重新選擇後再試一次",
@@ -1329,6 +1332,7 @@ export async function GET(request: Request) {
   );
   const showTrialRevenue = canSeeTrialRevenue(auth.context);
   if (showTrialRevenue) {
+    const sourceBookingIds = bookings.map((booking: any) => String(booking.id));
     const convertedContractIds = [
       ...new Set(
         bookings
@@ -1336,32 +1340,65 @@ export async function GET(request: Request) {
           .filter((value: unknown): value is string => typeof value === "string" && value.length > 0),
       ),
     ];
-    if (convertedContractIds.length > 0) {
-      const convertedPaymentsResult = await scheduleSupabase
-        .from("bige_contract_payments")
-        .select("id, contract_id, amount, status, paid_at, idempotency_key")
-        .eq("tenant_id", tenantId)
-        .in("contract_id", convertedContractIds)
-        .eq("status", "recorded")
-        .order("paid_at", { ascending: true });
-      if (convertedPaymentsResult.error) {
-        return apiError(500, "INTERNAL_ERROR", convertedPaymentsResult.error.message);
-      }
-      const amountByContractId = new Map<string, number>();
-      for (const payment of convertedPaymentsResult.data || []) {
-        const contractId = String(payment.contract_id);
-        const isInitialPayment = payment.idempotency_key === `contract-create:${contractId}`;
-        if (isInitialPayment || !amountByContractId.has(contractId)) {
-          amountByContractId.set(contractId, Number(payment.amount || 0));
-        }
-      }
-      bookings = bookings.map((booking: any) => ({
-        ...booking,
-        converted_payment_amount: booking.converted_contract_id
-          ? amountByContractId.get(String(booking.converted_contract_id)) || null
-          : null,
-      }));
+    const [sourcePaymentsResult, convertedPaymentsResult] = await Promise.all([
+      sourceBookingIds.length
+        ? scheduleSupabase
+            .from("bige_contract_payments")
+            .select("id, source_booking_id, amount, status, paid_at")
+            .eq("tenant_id", tenantId)
+            .in("source_booking_id", sourceBookingIds)
+            .eq("status", "recorded")
+        : Promise.resolve({ data: [], error: null }),
+      convertedContractIds.length
+        ? scheduleSupabase
+            .from("bige_contract_payments")
+            .select("id, contract_id, source_booking_id, amount, status, paid_at, idempotency_key")
+            .eq("tenant_id", tenantId)
+            .in("contract_id", convertedContractIds)
+            .eq("status", "recorded")
+            .order("paid_at", { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (sourcePaymentsResult.error || convertedPaymentsResult.error) {
+      return apiError(
+        500,
+        "INTERNAL_ERROR",
+        sourcePaymentsResult.error?.message ||
+          convertedPaymentsResult.error?.message ||
+          "付款角標讀取失敗",
+      );
     }
+    const amountByBookingId = new Map<string, number>();
+    for (const payment of sourcePaymentsResult.data || []) {
+      const bookingId = String(payment.source_booking_id || "");
+      if (!bookingId) continue;
+      amountByBookingId.set(
+        bookingId,
+        (amountByBookingId.get(bookingId) || 0) + Number(payment.amount || 0),
+      );
+    }
+    const amountByContractId = new Map<string, number>();
+    for (const payment of convertedPaymentsResult.data || []) {
+      if (payment.source_booking_id) continue;
+      const contractId = String(payment.contract_id);
+      const isInitialPayment = payment.idempotency_key === `contract-create:${contractId}`;
+      if (isInitialPayment || !amountByContractId.has(contractId)) {
+        amountByContractId.set(contractId, Number(payment.amount || 0));
+      }
+    }
+    bookings = bookings.map((booking: any) => {
+      const linkedAmount = amountByBookingId.get(String(booking.id));
+      const legacyConvertedAmount = booking.converted_contract_id
+        ? amountByContractId.get(String(booking.converted_contract_id))
+        : undefined;
+      const paymentAmount = linkedAmount ?? legacyConvertedAmount ?? null;
+      return {
+        ...booking,
+        booking_payment_amount: paymentAmount,
+        converted_payment_amount:
+          booking.operation_kind === "trial" ? paymentAmount : null,
+      };
+    });
   }
   const activeCoachIds = new Set(orderedCoaches.map((coach: any) => coach.id));
   const coachDayStatuses = collectCoachDayStatuses(rawNotes, activeCoachIds);
@@ -2707,7 +2744,16 @@ export async function POST(request: Request) {
     }
 
     const trustedSignedOn = input.sourceBookingId ? toTaipeiDateString() : input.signedOn;
-    const result = await operationSupabase.rpc("bige_create_member_contract_v5", {
+    const paymentEntries = input.payments ?? (
+      input.initialPayment > 0 && input.paymentMethod
+        ? [{
+            amount: input.initialPayment,
+            method: input.paymentMethod,
+            installmentCount: input.installmentCount || null,
+          }]
+        : []
+    );
+    const result = await operationSupabase.rpc("bige_create_member_contract_v6", {
       p_tenant_id: tenantId,
       p_branch_id: input.branchId || auth.context.branchId,
       p_member_id: trustedMemberId,
@@ -2725,14 +2771,14 @@ export async function POST(request: Request) {
       // the user-facing attendance PIN feature remains removed.
       p_pin: String(randomInt(0, 1_000_000)).padStart(6, "0"),
       p_initial_payment: input.initialPayment,
-      p_payment_method: input.paymentMethod || null,
-      p_installment_count: input.installmentCount || null,
+      p_payments: paymentEntries,
       p_payment_schedule: input.paymentSchedule,
       p_future_trial_action: input.futureTrialAction || "none",
       p_fa_fee_recipient_profile_id: input.faFeeRecipientProfileId || null,
       p_fa_fee_recipient_name: input.faFeeRecipientName || null,
       p_sales_origin_coach_id: trustedSalesOriginCoachId,
       p_sales_origin_kind: input.sourceBookingId ? "fa" : input.sourceMemberBookingId ? "renewal" : "manual",
+      p_payment_source_booking_id: input.sourceBookingId || input.sourceMemberBookingId || null,
     });
     if (result.error) return handleDatabaseError(result.error, "建立正式會員失敗");
 
@@ -2838,6 +2884,53 @@ export async function POST(request: Request) {
       p_amount: input.amount,
       p_method: input.method,
       p_installment_count: input.installmentCount || null,
+      p_paid_at: input.paidAt || new Date().toISOString(),
+      p_idempotency_key: input.idempotencyKey,
+      p_note: input.note || null,
+    });
+    if (result.error) return handleDatabaseError(result.error, "付款紀錄失敗");
+    return apiSuccess({ item: result.data });
+  }
+
+  if (input.action === "record_payments") {
+    if (!canRecordBigeContractPayment(operationContext)) {
+      return apiError(403, "FORBIDDEN", "只有櫃台、教練副理或經理能登記付款");
+    }
+    if (input.sourceBookingId) {
+      const admin = createSupabaseAdminClient();
+      const [sourceBookingResult, contractResult] = await Promise.all([
+        admin
+          .from("bookings")
+          .select("id, member_id")
+          .eq("id", input.sourceBookingId)
+          .eq("tenant_id", tenantId)
+          .eq("is_bige_schedule", true)
+          .maybeSingle(),
+        admin
+          .from("member_plan_contracts")
+          .select("id, member_id")
+          .eq("id", input.contractId)
+          .eq("tenant_id", tenantId)
+          .maybeSingle(),
+      ]);
+      if (
+        sourceBookingResult.error ||
+        contractResult.error ||
+        !sourceBookingResult.data?.member_id ||
+        !contractResult.data?.member_id
+      ) {
+        return apiError(404, "FORBIDDEN", "找不到課程學員或付款合約");
+      }
+      if (sourceBookingResult.data.member_id !== contractResult.data.member_id) {
+        return apiError(400, "FORBIDDEN", "課程學員與付款合約不一致");
+      }
+    }
+    const result = await operationSupabase.rpc("bige_record_contract_payments_v1", {
+      p_contract_id: input.contractId,
+      p_source_booking_id: input.sourceBookingId || null,
+      p_schedule_item_id: input.scheduleItemId || null,
+      p_payment_kind: input.paymentKind,
+      p_payments: input.payments,
       p_paid_at: input.paidAt || new Date().toISOString(),
       p_idempotency_key: input.idempotencyKey,
       p_note: input.note || null,
