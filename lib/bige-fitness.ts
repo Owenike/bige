@@ -80,6 +80,18 @@ export function calculateBigeContractOutstandingBalance(
   return Math.max(0, normalizedTotal - recordedTotal);
 }
 
+export function isBigeContractVoidedForDisplay(input: {
+  contractStatus?: string | null;
+  payments?: Array<{ status?: string | null }> | null;
+}) {
+  const payments = input.payments || [];
+
+  return (
+    input.contractStatus === "canceled" ||
+    (payments.length > 0 && payments.every((payment) => payment.status === "voided"))
+  );
+}
+
 export function getBigeStudentPaymentBalanceState(input: {
   contractCount: number;
   outstandingBalance: number;

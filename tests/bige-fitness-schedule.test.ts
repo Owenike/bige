@@ -18,6 +18,7 @@ import {
   getBigeFaFeeAmount,
   isBigeAssistantToContent,
   isBigeContractPaymentAmountAllowed,
+  isBigeContractVoidedForDisplay,
   isBigeScheduleNoteUndoAvailable,
   isBigeTrialReminderConfirmed,
   getBigeTrialOutcomeVisualState,
@@ -2180,7 +2181,43 @@ test("voided member contracts render with a strike line and red voided stamp", (
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
 
-  assert.match(component, /const isVoidedContract = contract\.status === "canceled"/);
+  assert.equal(
+    isBigeContractVoidedForDisplay({ contractStatus: "canceled", payments: [] }),
+    true,
+  );
+  assert.equal(
+    isBigeContractVoidedForDisplay({
+      contractStatus: "pending",
+      payments: [{ status: "voided" }],
+    }),
+    true,
+  );
+  assert.equal(
+    isBigeContractVoidedForDisplay({
+      contractStatus: "frozen",
+      payments: [{ status: "voided" }, { status: "voided" }],
+    }),
+    true,
+  );
+  assert.equal(
+    isBigeContractVoidedForDisplay({
+      contractStatus: "active",
+      payments: [{ status: "recorded" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isBigeContractVoidedForDisplay({
+      contractStatus: "active",
+      payments: [{ status: "voided" }, { status: "recorded" }],
+    }),
+    false,
+  );
+
+  assert.match(
+    component,
+    /isBigeContractVoidedForDisplay\(\{[\s\S]*contractStatus: contract\.status,[\s\S]*payments: contractPayments/,
+  );
   assert.match(component, /isVoidedContract \? styles\.contractVoided : ""/);
   assert.match(component, /className=\{styles\.contractVoidedStamp\}[\s\S]*已作廢/);
   assert.match(styles, /\.contractVoided > \.contractSummary::after[\s\S]*background: rgba\(196, 39, 39/);

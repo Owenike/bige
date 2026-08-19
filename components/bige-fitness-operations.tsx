@@ -72,6 +72,7 @@ import {
   getBigeTrialContractMissingProfileFields,
   getBigeTrialBookingActionVisibility,
   getBigeTrialOutcomeVisualState,
+  isBigeContractVoidedForDisplay,
   isBigeContractPaymentAmountAllowed,
   isBigeTrialReminderConfirmed,
   nextBigeTrialReminderStatus,
@@ -5765,7 +5766,10 @@ export default function BigeFitnessOperations({
                   const contractPayments = memberDetail.payments.filter(
                     (payment) => payment.contract_id === contract.id,
                   );
-                  const isVoidedContract = contract.status === "canceled";
+                  const isVoidedContract = isBigeContractVoidedForDisplay({
+                    contractStatus: contract.status,
+                    payments: contractPayments,
+                  });
                   const outstandingBalance = calculateBigeContractOutstandingBalance(
                     contract.total_amount,
                     contractPayments,
