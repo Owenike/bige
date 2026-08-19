@@ -4956,6 +4956,22 @@ export default function BigeFitnessOperations({
               <button className={styles.iconButton} onClick={() => void loadBoard({ silent: true })} title="重新整理">
                 <RefreshCw size={18} />
               </button>
+              {tab === "schedule" && data?.canManageDailyReports ? (
+                <a
+                  className={`${styles.button} ${styles.primary} ${styles.settlementButton}`}
+                  href={`/manager/staff-performance?month=${date.slice(0, 7)}&date=${date}`}
+                  title={
+                    data.closure?.status === "confirmed"
+                      ? "前往今日結算／重新開啟更正"
+                      : data.canConfirmDailyReports
+                        ? "前往正式結算今日課程與業績"
+                        : "前往完成日結初審並送經理"
+                  }
+                >
+                  <ClipboardCheck size={17} aria-hidden="true" />
+                  日結
+                </a>
+              ) : null}
             </div>
           </div>
           {data ? (

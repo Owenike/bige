@@ -1927,3 +1927,30 @@ test("FA signing date is locked to today and ECPay installments require a stored
   assert.match(route, /rpc\("bige_record_contract_payment_v2"/);
   assert.match(route, /p_installment_count: input\.installmentCount \|\| null/);
 });
+
+test("authorized schedule users see the daily settlement link immediately after refresh", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+  const toolbarStart = component.indexOf('title="重新整理"');
+  const toolbarEnd = component.indexOf("</div>", toolbarStart);
+  const refreshAndSettlement = component.slice(toolbarStart, toolbarEnd);
+
+  assert.ok(toolbarStart >= 0);
+  assert.match(
+    refreshAndSettlement,
+    /重新整理[\s\S]*RefreshCw[\s\S]*tab === "schedule" && data\?\.canManageDailyReports/,
+  );
+  assert.match(
+    refreshAndSettlement,
+    /href=\{`\/manager\/staff-performance\?month=\$\{date\.slice\(0, 7\)\}&date=\$\{date\}`\}/,
+  );
+  assert.match(refreshAndSettlement, /ClipboardCheck[\s\S]*日結/);
+  assert.match(
+    styles,
+    /\.settlementButton \{[\s\S]*display: inline-flex;[\s\S]*white-space: nowrap;/,
+  );
+  assert.match(
+    styles,
+    /\.dateToolbar \.settlementButton \{[\s\S]*grid-column: 1 \/ -1;[\s\S]*width: 100%;/,
+  );
+});

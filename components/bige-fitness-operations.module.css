@@ -242,6 +242,16 @@
   place-items: center;
 }
 
+.settlementButton {
+  min-height: 40px;
+  padding-inline: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 .weekdayBadge {
   display: inline-flex;
   min-height: 40px;
@@ -2227,6 +2237,11 @@
     width: 100%;
     display: grid;
     grid-template-columns: 40px minmax(0, 1fr) auto 40px 40px;
+  }
+
+  .dateToolbar .settlementButton {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .dateToolbarDock {

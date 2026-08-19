@@ -13,6 +13,8 @@ const preview: BoardData = {
   canCreateContract: true,
   canChangeTrialConversion: true,
   canRestoreTrialConversion: true,
+  canManageDailyReports: true,
+  canConfirmDailyReports: true,
   coaches: [
     { id: "10000000-0000-4000-8000-000000000001", display_name: "林", english_name: "Becky" },
     { id: "10000000-0000-4000-8000-000000000002", display_name: "杜于薇", english_name: "Wiwi" },
