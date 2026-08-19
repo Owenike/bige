@@ -55,13 +55,73 @@ function taipeiParts(value) {
   return { date: `${pick("year")}-${pick("month")}-${pick("day")}`, time: `${pick("hour")}:${pick("minute")}` };
 }
 
+function currentTaipeiDate() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function resolveSyncStart(value) {
+  const resolved = value === "today" ? currentTaipeiDate() : value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(resolved || "")) throw new Error("--sync-from 必須是 today 或 YYYY-MM-DD");
+  if (resolved < PERIOD_START || resolved > PERIOD_END) throw new Error(`--sync-from 必須介於 ${PERIOD_START} 與 ${PERIOD_END}`);
+  return resolved;
+}
+
+export function filterAugustPlanFromDate(plan, syncStart) {
+  const schedules = plan.schedules.filter((row) => row.date >= syncStart);
+  const memberKeys = new Set(schedules.map((row) => row.memberKey));
+  return {
+    ...plan,
+    schedules,
+    notes: plan.notes.filter((row) => row.date >= syncStart),
+    businessDays: plan.businessDays.filter((row) => row.date >= syncStart),
+    members: plan.members.filter((row) => memberKeys.has(row.memberKey)),
+    closureConflicts: plan.closureConflicts.filter((row) => row.date >= syncStart),
+  };
+}
+
+export function hasSpreadsheetImportKey(row) {
+  return Boolean(row?.import_row_key);
+}
+
+export function countBusinessDayChanges(desiredRows, currentRows) {
+  const currentByDate = new Map(currentRows.map((row) => [row.business_date, row]));
+  return desiredRows.filter((row) => {
+    const current = currentByDate.get(row.date);
+    return !current
+      || current.is_closed !== row.isClosed
+      || clean(current.closure_label) !== clean(row.closureLabel)
+      || clean(current.frontdesk_name) !== clean(row.frontdeskName);
+  }).length;
+}
+
+export function hasMaterialSyncChanges(summary, memberChanges) {
+  return [
+    summary.insertBookings,
+    summary.cancelBookings,
+    summary.releaseHistoricalKeys,
+    summary.updateBookings,
+    summary.insertNotes,
+    summary.deleteNotes,
+    summary.updateNotes,
+    summary.businessDayChanges,
+    memberChanges.create,
+    memberChanges.promote,
+  ].some((count) => count > 0);
+}
+
 function parseArgs(argv) {
-  const args = { apply: false, verifyOnly: false, source: DEFAULT_SOURCE, confirm: null };
+  const args = { apply: false, verifyOnly: false, source: DEFAULT_SOURCE, confirm: null, syncFrom: PERIOD_START };
   for (const arg of argv) {
     if (arg === "--apply") args.apply = true;
     else if (arg === "--verify-only") args.verifyOnly = true;
     else if (arg.startsWith("--source=")) args.source = path.resolve(arg.slice("--source=".length));
     else if (arg.startsWith("--confirm-sync-august=")) args.confirm = arg.slice("--confirm-sync-august=".length);
+    else if (arg.startsWith("--sync-from=")) args.syncFrom = arg.slice("--sync-from=".length);
   }
   return args;
 }
@@ -117,7 +177,7 @@ async function insertWithFallback(supabase, table, items, selectColumns, chunkSi
   return inserted;
 }
 
-async function loadContext(supabase) {
+async function loadContext(supabase, syncStart = PERIOD_START) {
   const profileMatches = await requireData(
     supabase.from("profiles").select("id, tenant_id, english_name, display_name, employee_number, branch_id, is_active").eq("is_active", true),
     "讀取教練",
@@ -146,10 +206,10 @@ async function loadContext(supabase) {
   const branchId = EXPECTED_COACHES.map((name) => coachByName.get(name.toLowerCase())?.branch_id).find(Boolean) || null;
 
   const [bookings, notes, trials, businessDays, members, legacyNumbers] = await Promise.all([
-    requireData(supabase.from("bookings").select("*").eq("tenant_id", tenantId).eq("is_bige_schedule", true).gte("starts_at", `${PERIOD_START}T00:00:00+08:00`).lt("starts_at", `${PERIOD_END_EXCLUSIVE}T00:00:00+08:00`), "讀取 8 月排課"),
-    requireData(supabase.from("bige_schedule_notes").select("*").eq("tenant_id", tenantId).gte("starts_at", `${PERIOD_START}T00:00:00+08:00`).lt("starts_at", `${PERIOD_END_EXCLUSIVE}T00:00:00+08:00`), "讀取 8 月自由文字"),
-    requireData(supabase.from("trial_bookings").select("*").gte("appointment_date", PERIOD_START).lte("appointment_date", PERIOD_END), "讀取 8 月體驗預約"),
-    requireData(supabase.from("bige_business_day_settings").select("*").eq("tenant_id", tenantId).gte("business_date", PERIOD_START).lte("business_date", PERIOD_END), "讀取 8 月營業日"),
+    requireData(supabase.from("bookings").select("*").eq("tenant_id", tenantId).eq("is_bige_schedule", true).gte("starts_at", `${syncStart}T00:00:00+08:00`).lt("starts_at", `${PERIOD_END_EXCLUSIVE}T00:00:00+08:00`), "讀取 8 月排課"),
+    requireData(supabase.from("bige_schedule_notes").select("*").eq("tenant_id", tenantId).gte("starts_at", `${syncStart}T00:00:00+08:00`).lt("starts_at", `${PERIOD_END_EXCLUSIVE}T00:00:00+08:00`), "讀取 8 月自由文字"),
+    requireData(supabase.from("trial_bookings").select("*").gte("appointment_date", syncStart).lte("appointment_date", PERIOD_END), "讀取 8 月體驗預約"),
+    requireData(supabase.from("bige_business_day_settings").select("*").eq("tenant_id", tenantId).gte("business_date", syncStart).lte("business_date", PERIOD_END), "讀取 8 月營業日"),
     requireData(supabase.from("members").select("id, full_name, phone, member_code, is_prospect").eq("tenant_id", tenantId), "讀取會員"),
     requireData(supabase.from("bige_member_legacy_numbers").select("*").eq("tenant_id", tenantId), "讀取會員舊編號"),
   ]);
@@ -196,7 +256,11 @@ function buildReconciliation(plan, context) {
     }
   }
   const selectedIds = new Set([...selectedBookings.values()].map((row) => row.id));
-  const cancelBookings = context.bookings.filter((row) => ACTIVE_STATUSES.has(row.status) && !selectedIds.has(row.id));
+  const cancelBookings = context.bookings.filter((row) =>
+    ACTIVE_STATUSES.has(row.status)
+      && hasSpreadsheetImportKey(row)
+      && !selectedIds.has(row.id),
+  );
   const desiredKeys = new Set(plan.schedules.map((row) => row.sourceRowKey));
   const releaseHistoricalKeys = context.bookings.filter((row) =>
     row.status === "cancelled" && row.import_row_key && desiredKeys.has(row.import_row_key) && !selectedIds.has(row.id),
@@ -242,7 +306,25 @@ function buildReconciliation(plan, context) {
     else insertNotes.push(row);
   }
   const selectedNoteIds = new Set([...selectedNotes.values()].map((row) => row.id));
-  const deleteNotes = ordinaryNotes(context.notes).filter((row) => !selectedNoteIds.has(row.id));
+  const deleteNotes = ordinaryNotes(context.notes).filter((row) =>
+    hasSpreadsheetImportKey(row) && !selectedNoteIds.has(row.id),
+  );
+  const updateBookings = plan.schedules.filter((row) => {
+    const existing = selectedBookings.get(row.sourceRowKey);
+    if (!existing) return false;
+    return existing.import_row_key !== row.sourceRowKey
+      || existing.service_name !== COURSE_LABELS[row.courseType]
+      || !existing.ends_at
+      || new Date(existing.ends_at).toISOString() !== toIso(row.date, row.time, row.durationMinutes)
+      || existing.trial_stage !== row.trialStage
+      || Boolean(existing.requires_contract_followup) !== (row.operationKind === "pt")
+      || (row.operationKind === "trial" && !existing.trial_booking_id);
+  });
+  const updateNotes = plan.notes.filter((row) => {
+    const existing = selectedNotes.get(row.sourceRowKey);
+    return existing?.source === "legacy_schedule_import" && existing.import_row_key !== row.sourceRowKey;
+  });
+  const businessDayChanges = countBusinessDayChanges(plan.businessDays, context.businessDays);
 
   return {
     selectedBookings,
@@ -262,10 +344,13 @@ function buildReconciliation(plan, context) {
       insertBookings: insertBookings.length,
       cancelBookings: cancelBookings.length,
       releaseHistoricalKeys: releaseHistoricalKeys.length,
+      updateBookings: updateBookings.length,
       desiredNotes: plan.notes.length,
       preserveNotes: selectedNotes.size,
       insertNotes: insertNotes.length,
       deleteNotes: deleteNotes.length,
+      updateNotes: updateNotes.length,
+      businessDayChanges,
       preservedCompleted: [...selectedBookings.values()].filter((row) => row.status === "completed").length,
       preservedNoShow: [...selectedBookings.values()].filter((row) => row.status === "no_show").length,
       protectedMismatches: protectedMismatches.length,
@@ -581,8 +666,8 @@ async function writeAuditRows(supabase, plan, context, batchId, memberIdByKey, b
   return rows.length;
 }
 
-async function verifyLive(supabase, plan, contextBefore = null) {
-  const context = await loadContext(supabase);
+async function verifyLive(supabase, plan, contextBefore = null, syncStart = PERIOD_START) {
+  const context = await loadContext(supabase, syncStart);
   const memberById = new Map(context.members.map((row) => [row.id, row]));
   const visible = context.bookings.filter((row) => row.status !== "cancelled");
   const liveByCell = new Map();
@@ -608,6 +693,7 @@ async function verifyLive(supabase, plan, contextBefore = null) {
   }
   const desiredCells = new Set(plan.schedules.map((row) => cellKey(row.date, row.time, row.coach)));
   const extraBookings = visible.filter((booking) => {
+    if (!hasSpreadsheetImportKey(booking)) return false;
     const local = taipeiParts(booking.starts_at);
     return !desiredCells.has(cellKey(local.date, local.time, context.coachNameById.get(booking.coach_id)));
   });
@@ -629,7 +715,9 @@ async function verifyLive(supabase, plan, contextBefore = null) {
     if (exact) usedNoteIds.add(exact.id);
     else noteErrors.push({ key, desired: 1, live: 0 });
   }
-  const extraOrdinaryNotes = ordinaryNotes(context.notes).filter((note) => !usedNoteIds.has(note.id));
+  const extraOrdinaryNotes = ordinaryNotes(context.notes).filter((note) =>
+    hasSpreadsheetImportKey(note) && !usedNoteIds.has(note.id),
+  );
   for (const note of extraOrdinaryNotes) {
     const local = taipeiParts(note.starts_at);
     noteErrors.push({ key: noteKey(local.date, local.time, context.coachNameById.get(note.coach_id), note.content), desired: 0, live: 1 });
@@ -646,13 +734,15 @@ async function verifyLive(supabase, plan, contextBefore = null) {
   const targetBooking = (liveByCell.get("2026-08-22|13:00|Becky") || [])[0];
   const targetMember = targetBooking ? memberById.get(targetBooking.member_id) : null;
   const targetTrial = targetBooking ? context.trials.find((row) => row.id === targetBooking.trial_booking_id) : null;
-  const targetOkay = target?.name === "林建宇"
-    && target?.phone === "0980120570"
-    && target?.courseType === "weight_training"
-    && targetBooking?.trial_stage === "FA1"
-    && targetMember?.full_name === "林建宇"
-    && normalizePhone(targetTrial?.phone) === "0980120570"
-    && targetTrial?.service === "weight_training";
+  const targetOkay = !target || (
+    target.name === "林建宇"
+      && target.phone === "0980120570"
+      && target.courseType === "weight_training"
+      && targetBooking?.trial_stage === "FA1"
+      && targetMember?.full_name === "林建宇"
+      && normalizePhone(targetTrial?.phone) === "0980120570"
+      && targetTrial?.service === "weight_training"
+  );
 
   const preservedErrors = [];
   if (contextBefore) {
@@ -680,7 +770,7 @@ async function verifyLive(supabase, plan, contextBefore = null) {
   return result;
 }
 
-async function applySync(supabase, sourcePath, sourceSha256, plan, context, reconciliation) {
+async function applySync(supabase, sourcePath, sourceSha256, plan, context, reconciliation, syncStart = PERIOD_START) {
   if (reconciliation.protectedMismatches.length || reconciliation.duplicateVisibleCells.length || reconciliation.importKeyConflicts.length) {
     throw new Error("偵測到不可自動取代的已完成/未出席、重複可見格或匯入鍵衝突");
   }
@@ -690,7 +780,7 @@ async function applySync(supabase, sourcePath, sourceSha256, plan, context, reco
     branch_id: context.branchId,
     source_filename: path.basename(sourcePath),
     source_sha256: sourceSha256,
-    source_period_start: PERIOD_START,
+    source_period_start: syncStart,
     source_period_end: PERIOD_END,
     status: "running",
     total_rows: totalRows,
@@ -704,6 +794,7 @@ async function applySync(supabase, sourcePath, sourceSha256, plan, context, reco
     },
     metadata: {
       sourcePath,
+      syncStart,
       mode: "incremental_history_preserving_sync",
       rulesVersion: 2,
       userSuppliedCell: "2026-08-22|13:00|Becky|FA1|林建宇|0980120570|weight_training",
@@ -761,24 +852,33 @@ async function applySync(supabase, sourcePath, sourceSha256, plan, context, reco
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const { sourcePath, sourceSha256, plan } = await buildAugustImportPlan(args.source);
+  const { sourcePath, sourceSha256, plan: fullPlan } = await buildAugustImportPlan(args.source);
+  const syncStart = resolveSyncStart(args.syncFrom);
+  const plan = filterAugustPlanFromDate(fullPlan, syncStart);
   const supabase = await createAdminClient();
   if (args.verifyOnly) {
-    console.log(JSON.stringify({ mode: "verify_only", sourcePath, sourceSha256, verification: await verifyLive(supabase, plan) }, null, 2));
+    console.log(JSON.stringify({ mode: "verify_only", sourcePath, sourceSha256, syncStart, verification: await verifyLive(supabase, plan, null, syncStart) }, null, 2));
     return;
   }
-  const context = await loadContext(supabase);
+  const context = await loadContext(supabase, syncStart);
   const reconciliation = buildReconciliation(plan, context);
   const memberChanges = previewMemberResolution(plan, context);
-  console.log(JSON.stringify({ mode: args.apply ? "apply" : "dry_run", sourcePath, sourceSha256, ...reconciliation.summary, memberChanges }, null, 2));
+  console.log(JSON.stringify({ mode: args.apply ? "apply" : "dry_run", sourcePath, sourceSha256, syncStart, ...reconciliation.summary, memberChanges }, null, 2));
   if (!args.apply) return;
   if (args.confirm !== APPLY_CONFIRMATION) throw new Error(`正式同步必須提供 --confirm-sync-august=${APPLY_CONFIRMATION}`);
-  const applied = await applySync(supabase, sourcePath, sourceSha256, plan, context, reconciliation);
-  const verification = await verifyLive(supabase, plan, context);
+  if (!hasMaterialSyncChanges(reconciliation.summary, memberChanges)) {
+    const verification = await verifyLive(supabase, plan, null, syncStart);
+    console.log(JSON.stringify({ applied: null, noOp: true, verification }, null, 2));
+    return;
+  }
+  const applied = await applySync(supabase, sourcePath, sourceSha256, plan, context, reconciliation, syncStart);
+  const verification = await verifyLive(supabase, plan, context, syncStart);
   console.log(JSON.stringify({ applied, verification }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack || error.message : error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, "$1"))) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack || error.message : error);
+    process.exitCode = 1;
+  });
+}

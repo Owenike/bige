@@ -53,7 +53,12 @@ const PHONE_OVERRIDES = new Map([
 const NAME_ALIASES = new Map([
   ["黃玥禔", "黃玥褆"],
   ["徐佩璇", "徐珮璇"],
+  ["林怡杉", "凌怡杉"],
 ]);
+
+export function normalizeAugustMemberName(value) {
+  return NAME_ALIASES.get(value) || value;
+}
 const COURSE_OVERRIDES = new Map([
   ["2026-08-07|Becky|11:00|蘇玉艷", "onsite_assessment"],
   ["2026-08-11|Owen|20:00|林鈺堯", "sports_cupping"],
@@ -218,7 +223,7 @@ async function readWorkbook(sourcePath) {
 function normalizeImport(raw) {
   const schedules = raw.schedules.map((row) => ({
     ...row,
-    name: NAME_ALIASES.get(row.name) || row.name,
+    name: normalizeAugustMemberName(row.name),
     issues: [],
   }));
   const ptNumbersByName = new Map();

@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { resolveAugustScheduleCellContent } from "./import-august-coach-schedule.mjs";
+import {
+  normalizeAugustMemberName,
+  resolveAugustScheduleCellContent,
+} from "./import-august-coach-schedule.mjs";
 
 const supplied = resolveAugustScheduleCellContent({
   date: "2026-08-22",
@@ -24,5 +27,8 @@ const untouched = resolveAugustScheduleCellContent({
 assert.equal(untouched.content, "TO");
 assert.equal(untouched.sourceContent, "TO");
 assert.equal(untouched.sourceOverride, null);
+
+assert.equal(normalizeAugustMemberName("林怡杉"), "凌怡杉");
+assert.equal(normalizeAugustMemberName("彭華怡"), "彭華怡");
 
 console.log(JSON.stringify({ ok: true, supplied, untouched }, null, 2));
