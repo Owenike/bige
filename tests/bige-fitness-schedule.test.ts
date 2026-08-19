@@ -1333,6 +1333,12 @@ test("daily schedule noir-gold palette is color-only and scoped to the active sc
   assert.match(palette, /--schedule-gold-bright: #e4c77a/);
   assert.match(palette, /\.activeTab[\s\S]*0 0 24px rgba\(228, 199, 122, 0\.2\)/);
   assert.match(palette, /\.tabs \.primary:not\(\.activeTab\)[\s\S]*rgba\(38, 34, 25, 0\.9\)/);
+  assert.match(palette, /\.navigationRow \.tab:not\(\.activeTab\)[\s\S]*rgba\(201, 165, 92, 0\.38\)/);
+  assert.match(palette, /\.navigationRow \.dateToolbar \.input[\s\S]*rgba\(228, 199, 122, 0\.52\)[\s\S]*0 0 18px rgba\(201, 165, 92, 0\.13\)/);
+  assert.match(palette, /\.navigationRow \.dateToolbar \.iconButton[\s\S]*rgba\(201, 165, 92, 0\.46\)[\s\S]*0 0 15px rgba\(201, 165, 92, 0\.1\)/);
+  assert.match(palette, /\.navigationRow \.dateToolbar \.weekdayBadge[\s\S]*rgba\(228, 199, 122, 0\.58\)[\s\S]*0 0 18px rgba\(228, 199, 122, 0\.15\)/);
+  assert.match(palette, /\.navigationRow \.businessDayControls[\s\S]*rgba\(201, 165, 92, 0\.4\)/);
+  assert.match(palette, /\.navigationRow \.tab:not\(\.activeTab\):hover[\s\S]*0 0 18px rgba\(228, 199, 122, 0\.16\)/);
   assert.match(palette, /\.glass\.boardWrap[\s\S]*rgba\(6, 8, 9, 0\.96\)/);
   assert.match(palette, /\.bookingCompleted[\s\S]*#68ffad/);
   assert.match(palette, /\.bookingNoShow[\s\S]*#64beff/);

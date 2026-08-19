@@ -6170,6 +6170,95 @@
   box-shadow: inset 0 1px 0 rgba(228, 199, 122, 0.05);
 }
 
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .tab:not(.activeTab) {
+  color: rgba(250, 246, 235, 0.94);
+  border-color: rgba(201, 165, 92, 0.38);
+  background: linear-gradient(180deg, rgba(47, 40, 26, 0.72), rgba(9, 11, 12, 0.96));
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.22),
+    0 0 12px rgba(201, 165, 92, 0.06),
+    inset 0 1px 0 rgba(228, 199, 122, 0.1);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .tabs .gold:not(.activeTab),
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .tabs .primary:not(.activeTab) {
+  color: #ead79d;
+  border-color: rgba(228, 199, 122, 0.48);
+  background: linear-gradient(180deg, rgba(66, 52, 26, 0.78), rgba(12, 12, 11, 0.96));
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.24),
+    0 0 14px rgba(201, 165, 92, 0.085),
+    inset 0 1px 0 rgba(255, 235, 181, 0.13);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .dateToolbar .input {
+  color: #fff8e9;
+  border-color: rgba(228, 199, 122, 0.52);
+  background:
+    radial-gradient(circle at 82% 12%, rgba(228, 199, 122, 0.12), transparent 52%),
+    linear-gradient(180deg, rgba(39, 33, 22, 0.82), rgba(7, 9, 10, 0.98));
+  box-shadow:
+    0 0 18px rgba(201, 165, 92, 0.13),
+    inset 0 1px 0 rgba(255, 239, 197, 0.13),
+    inset 0 0 18px rgba(201, 165, 92, 0.035);
+  text-shadow: 0 0 10px rgba(228, 199, 122, 0.12);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .dateToolbar .iconButton {
+  color: #f3dfaa;
+  border-color: rgba(201, 165, 92, 0.46);
+  background: linear-gradient(180deg, rgba(56, 46, 27, 0.78), rgba(8, 10, 11, 0.98));
+  box-shadow:
+    0 0 15px rgba(201, 165, 92, 0.1),
+    inset 0 1px 0 rgba(255, 235, 181, 0.12);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .dateToolbar .weekdayBadge {
+  color: #f0d382;
+  border-color: rgba(228, 199, 122, 0.58);
+  background: linear-gradient(180deg, rgba(82, 59, 23, 0.78), rgba(17, 15, 12, 0.96));
+  box-shadow:
+    0 0 18px rgba(228, 199, 122, 0.15),
+    inset 0 1px 0 rgba(255, 239, 197, 0.18);
+  text-shadow: 0 0 12px rgba(228, 199, 122, 0.18);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .businessDayControls {
+  border-color: rgba(201, 165, 92, 0.4);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(228, 199, 122, 0.07), transparent 44%),
+    rgba(7, 9, 10, 0.94);
+  box-shadow:
+    0 0 18px rgba(201, 165, 92, 0.07),
+    inset 0 1px 0 rgba(228, 199, 122, 0.09);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .scheduleLockButton,
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .scheduleToolButton,
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .closureToggle {
+  color: rgba(250, 246, 235, 0.94);
+  border-color: rgba(201, 165, 92, 0.36);
+  background: linear-gradient(180deg, rgba(41, 35, 24, 0.72), rgba(8, 10, 11, 0.97));
+  box-shadow:
+    0 0 12px rgba(201, 165, 92, 0.055),
+    inset 0 1px 0 rgba(228, 199, 122, 0.09);
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .tab:not(.activeTab):hover,
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .dateToolbar .iconButton:hover,
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .scheduleLockButton:hover,
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .scheduleToolButton:hover,
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .scheduleToolButton[data-active="true"],
+.frontdeskM2A[data-daily-schedule-active="true"] .navigationRow .closureToggle:hover {
+  color: #fff6de;
+  border-color: rgba(255, 223, 151, 0.68);
+  background: linear-gradient(180deg, rgba(76, 58, 27, 0.88), rgba(16, 14, 12, 0.98));
+  box-shadow:
+    0 9px 24px rgba(0, 0, 0, 0.28),
+    0 0 18px rgba(228, 199, 122, 0.16),
+    inset 0 1px 0 rgba(255, 239, 197, 0.17);
+}
+
 .frontdeskM2A[data-daily-schedule-active="true"] .frontdeskStatus strong {
   color: #e4c77a;
 }
