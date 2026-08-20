@@ -100,6 +100,7 @@ type PerformanceState = {
   };
   month: string;
   selectedDate: string;
+  scope?: "daily" | "month";
   coaches: CoachSummary[];
   events: SalesEvent[];
   epoAwards: EpoAward[];
@@ -195,12 +196,24 @@ async function fetchPerformanceState(url: string, timeoutMs: number, timeoutMess
   }
 }
 
-export default function StaffPerformanceDashboard() {
+export default function StaffPerformanceDashboard({
+  managerMode = false,
+  initialData = null,
+  initialMonth,
+  initialDate,
+}: {
+  managerMode?: boolean;
+  initialData?: PerformanceState | null;
+  initialMonth?: string;
+  initialDate?: string;
+}) {
   const initialToday = todayTaiwan();
-  const [month, setMonth] = useState(initialToday.slice(0, 7));
-  const [date, setDate] = useState(initialToday);
-  const [data, setData] = useState<PerformanceState | null>(null);
-  const [loading, setLoading] = useState(true);
+  const requestedDate = initialDate || initialToday;
+  const requestedMonth = initialMonth || requestedDate.slice(0, 7);
+  const [month, setMonth] = useState(requestedMonth);
+  const [date, setDate] = useState(requestedDate);
+  const [data, setData] = useState<PerformanceState | null>(initialData);
+  const [loading, setLoading] = useState(!initialData);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -212,7 +225,7 @@ export default function StaffPerformanceDashboard() {
   const [activeModal, setActiveModal] = useState<ManagerModal | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [showEpoForm, setShowEpoForm] = useState(false);
-  const [historyDate, setHistoryDate] = useState(initialToday);
+  const [historyDate, setHistoryDate] = useState(requestedDate);
   const [historyData, setHistoryData] = useState<PerformanceState | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -224,6 +237,7 @@ export default function StaffPerformanceDashboard() {
   const [refreshError, setRefreshError] = useState("");
   const activeViewKeyRef = useRef(`${month}:${date}`);
   const refreshedViewKeyRef = useRef("");
+  const initialSnapshotHandledRef = useRef(false);
 
   const closeModal = useCallback((force = false) => {
     if (!force && activeModal === "sales" && editingEventId && !window.confirm("尚未儲存分配內容，確定關閉？")) return;
@@ -248,14 +262,6 @@ export default function StaffPerformanceDashboard() {
     };
   }, [activeModal, closeModal]);
 
-  useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    const requestedMonth = query.get("month");
-    const requestedDate = query.get("date");
-    if (requestedMonth && /^\d{4}-\d{2}$/.test(requestedMonth)) setMonth(requestedMonth);
-    if (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) setDate(requestedDate);
-  }, []);
-
   const refreshSources = useCallback(async (snapshot: PerformanceState, viewKey: string, force = false) => {
     if (!snapshot.actor.canManage || (!force && refreshedViewKeyRef.current === viewKey)) return;
     refreshedViewKeyRef.current = viewKey;
@@ -269,7 +275,7 @@ export default function StaffPerformanceDashboard() {
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "refresh_sources", month: snapshot.month, date: snapshot.selectedDate }),
+          body: JSON.stringify({ action: "refresh_sources", month: snapshot.month, date: snapshot.selectedDate, scope: managerMode ? "daily" : "month" }),
         },
       );
       if (activeViewKeyRef.current === viewKey) setData(refreshed);
@@ -280,7 +286,7 @@ export default function StaffPerformanceDashboard() {
     } finally {
       if (activeViewKeyRef.current === viewKey) setRefreshing(false);
     }
-  }, []);
+  }, [managerMode]);
 
   const load = useCallback(async () => {
     const viewKey = `${month}:${date}`;
@@ -290,7 +296,7 @@ export default function StaffPerformanceDashboard() {
     setRefreshError("");
     try {
       const snapshot = await fetchPerformanceState(
-        `/api/staff-performance?month=${month}&date=${date}`,
+        `/api/staff-performance?month=${month}&date=${date}&scope=${managerMode ? "daily" : "month"}`,
         8_000,
         "今日工作台讀取超過 8 秒，請重試。",
       );
@@ -303,9 +309,21 @@ export default function StaffPerformanceDashboard() {
     } finally {
       if (activeViewKeyRef.current === viewKey) setLoading(false);
     }
-  }, [date, month, refreshSources]);
+  }, [date, managerMode, month, refreshSources]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const viewKey = `${month}:${date}`;
+    if (!initialSnapshotHandledRef.current) {
+      initialSnapshotHandledRef.current = true;
+      if (initialData?.month === month && initialData.selectedDate === date) {
+        activeViewKeyRef.current = viewKey;
+        setLoading(false);
+        void refreshSources(initialData, viewKey);
+        return;
+      }
+    }
+    void load();
+  }, [date, initialData, load, month, refreshSources]);
 
   useEffect(() => {
     if (activeModal !== "dates" || !historyDate) return;
@@ -313,7 +331,7 @@ export default function StaffPerformanceDashboard() {
     const controller = new AbortController();
     setHistoryLoading(true);
     setHistoryError("");
-    void fetch(`/api/staff-performance?month=${historyDate.slice(0, 7)}&date=${historyDate}`, { cache: "no-store", signal: controller.signal })
+    void fetch(`/api/staff-performance?month=${historyDate.slice(0, 7)}&date=${historyDate}&scope=daily`, { cache: "no-store", signal: controller.signal })
       .then(parse)
       .then(setHistoryData)
       .catch((caught) => {
@@ -333,7 +351,7 @@ export default function StaffPerformanceDashboard() {
     const overviewDate = date.startsWith(`${overviewMonth}-`) ? date : `${overviewMonth}-01`;
     setOverviewLoading(true);
     setOverviewError("");
-    void fetch(`/api/staff-performance?month=${overviewMonth}&date=${overviewDate}`, { cache: "no-store", signal: controller.signal })
+    void fetch(`/api/staff-performance?month=${overviewMonth}&date=${overviewDate}&scope=month`, { cache: "no-store", signal: controller.signal })
       .then(parse)
       .then(setOverviewData)
       .catch((caught) => {
@@ -354,7 +372,7 @@ export default function StaffPerformanceDashboard() {
       const nextData = await parse(await fetch("/api/staff-performance", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, month, date, ...values }),
+        body: JSON.stringify({ action, month, date, scope: managerMode ? "daily" : "month", ...values }),
       }));
       setData((current) => current && current.selectedDate === nextData.selectedDate && !nextData.sessionEpoEvidence.length
         ? { ...nextData, sessionEpoEvidence: current.sessionEpoEvidence }
@@ -429,7 +447,7 @@ export default function StaffPerformanceDashboard() {
 
   function openMonthOverview() {
     setOverviewMonth(month);
-    setOverviewData(data);
+    setOverviewData(data?.scope === "month" ? data : null);
     setOverviewError("");
     setActiveModal("coaches");
   }
@@ -724,7 +742,7 @@ export default function StaffPerformanceDashboard() {
                 {activeModal === "epo" ? <div className={styles.epoWorkspace}>
                   <div className={styles.modalIntro}><div><strong>本日共 {dayEpo.reduce((sum, row) => sum + Number(row.quantity), 0)} EPO</strong><small>{pendingEpoCount ? `尚有 ${pendingEpoCount} 項需要確認` : "目前沒有待確認項目"}</small></div>{data.actor.canManageEpo && !reportConfirmed ? <button type="button" onClick={() => setShowEpoForm((current) => !current)}>{showEpoForm ? "收起新增表單" : "＋新增人工 EPO"}</button> : null}</div>
                   {showEpoForm && data.actor.canManageEpo && !reportConfirmed ? <div className={styles.epoForm}>
-                    <select value={epoEmployeeId} onChange={(event) => setEpoEmployeeId(event.target.value)}><option value="">選擇教練</option>{data.coaches.map((coach) => <option key={coach.id} value={coach.id}>{coachName(coach.id)}｜本月 EPO {coach.projectedEpo}｜本月業績 {money(coach.projectedSales)}</option>)}</select>
+                    <select value={epoEmployeeId} onChange={(event) => setEpoEmployeeId(event.target.value)}><option value="">選擇教練</option>{data.coaches.map((coach) => <option key={coach.id} value={coach.id}>{coachName(coach.id)}</option>)}</select>
                     <input type="number" min="1" max="100" value={epoQuantity} onChange={(event) => setEpoQuantity(Number(event.target.value))} aria-label="EPO 數量" />
                     <input value={epoReason} onChange={(event) => setEpoReason(event.target.value)} placeholder="符合 EPO 的原因（必填）" />
                     <button className={styles.primary} disabled={busy || !epoEmployeeId || !epoReason.trim()} onClick={() => void addEpo()}>加入 EPO</button>
