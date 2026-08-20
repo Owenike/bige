@@ -292,25 +292,12 @@
 .modalBackdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgba(9, 18, 13, .66); backdrop-filter: blur(5px); }
 .modal { display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(100%, 980px); max-height: min(88vh, 880px); overflow: hidden; border: 1px solid #cfd9d1; border-radius: 20px; background: #f7f9f6; box-shadow: 0 30px 90px rgba(0,0,0,.36); }
 .salesModal { width: min(100%, 860px); grid-template-rows: auto minmax(0, 1fr) auto; }
-.manualModal { width: min(100%, 640px); grid-template-rows: auto minmax(0, 1fr) auto; }
 .modalHeader { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 17px 20px; border-bottom: 1px solid #dfe6e0; background: #fff; }
 .modalHeader p { margin: 0 0 3px; color: #6f7e75; font-size: 12px; font-weight: 800; }
 .modalHeader h2 { margin: 0; font-size: 22px; }
 .modalHeader > button { min-width: 44px; padding: 5px; font-size: 27px; line-height: 1; }
 .modalBody { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 20px 24px; }
 .modalFooter { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; padding: 13px 20px; border-top: 1px solid #dfe6e0; background: #fff; box-shadow: 0 -10px 30px rgba(32, 55, 42, .06); }
-.manualEventForm { display: grid; gap: 16px; }
-.manualEventNotice { padding: 14px 15px; border: 1px solid #e1cd96; border-radius: 12px; color: #6f531b; background: #fff8e5; }
-.manualEventNotice strong { display: block; font-size: 15px; }
-.manualEventNotice p { margin: 5px 0 0; color: #755f32; font-size: 13px; line-height: 1.6; }
-.manualEventFields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.manualEventFields label { display: grid; gap: 7px; min-width: 0; }
-.manualEventFields label > span { color: #405148; font-size: 13px; font-weight: 850; }
-.manualEventFields input, .manualEventFields select { width: 100%; }
-.manualEventWide { grid-column: 1 / -1; }
-.manualEventSummary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px; border-radius: 12px; color: #28503a; background: #e8f1eb; }
-.manualEventSummary span { font-size: 13px; font-weight: 750; }
-.manualEventSummary strong { font-size: 20px; }
 .monthOverview, .dateBrowser { display: grid; gap: 14px; }
 .monthOverviewToolbar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #d9e2db; border-radius: 12px; background: #fff; }
 .monthOverviewToolbar label { font-weight: 850; }
@@ -414,8 +401,6 @@
   .salesModal .allocationEditor { grid-template-columns: 1fr; }
   .decisionList article { grid-template-columns: 1fr; }
   .historyPreviewGrid { grid-template-columns: 1fr 1fr; }
-  .manualEventFields { grid-template-columns: 1fr; }
-  .manualEventWide { grid-column: auto; }
 }
 
 @media (max-width: 520px) {

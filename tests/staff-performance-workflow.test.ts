@@ -62,21 +62,14 @@ test("manager settlement workbench keeps primary actions visible and moves secon
   assert.doesNotMatch(dashboard, /className=\{styles\.tableWrap\}/);
 });
 
-test("manual performance entry uses a clear Chinese form instead of browser prompts and internal IDs", () => {
-  assert.match(dashboard, /＋補登業績/);
-  assert.match(dashboard, /id="manual-event-form"/);
-  assert.match(dashboard, /只補登業績，不會建立收款/);
-  assert.match(dashboard, /其他人工調整/);
-  assert.match(dashboard, /請選擇教練/);
-  assert.match(dashboard, /確認補登/);
-  assert.match(dashboard, /"create_manual_event"/);
-  assert.match(dashboardStyles, /\.manualEventForm/);
-  assert.match(dashboardStyles, /\.manualModal/);
+test("manager dashboard does not expose manual performance entry controls", () => {
   assert.match(route, /body\.action === "create_manual_event"/);
   assert.match(route, /z\.coerce\.number\(\)\.positive\(\)/);
   assert.match(route, /permission: "approve_sales_performance"/);
-  assert.doesNotMatch(dashboard, /window\.prompt\("類型：/);
-  assert.doesNotMatch(dashboard, /教練 ID：/);
+  assert.doesNotMatch(dashboard, /補登業績/);
+  assert.doesNotMatch(dashboard, /manual-event-form/);
+  assert.doesNotMatch(dashboard, /setActiveModal\("manual"\)/);
+  assert.doesNotMatch(dashboardStyles, /\.manualModal/);
 });
 
 test("coach overview explicitly labels its figures as selected-month totals", () => {
