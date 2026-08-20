@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import styles from "../app/staff/performance/page.module.css";
+import { normalizeStaffPosition, positionLabel } from "../lib/staff-organization";
 
 type CoachSummary = {
   id: string;
   display_name: string | null;
   english_name: string | null;
   employee_number: string | null;
+  position: string | null;
   employment_type: "full_time" | "part_time" | null;
   employment_configured: boolean;
   confirmedSales: number;
@@ -174,6 +176,21 @@ function MetricBreakdown({ items, empty = "0" }: { items: MetricCount[]; empty?:
   return <div className={styles.metricBreakdown}>{items.map((item) => (
     <span key={item.label}><b>{item.label}</b><strong>{item.count}</strong></span>
   ))}</div>;
+}
+
+function coachIdentityLabel(coach: CoachSummary | null | undefined) {
+  if (!coach) return "尚未分配";
+  const parts: string[] = [];
+  for (const value of [coach.display_name, coach.english_name]) {
+    const label = value?.trim();
+    if (label && !parts.some((part) => part.toLocaleLowerCase("zh-TW") === label.toLocaleLowerCase("zh-TW"))) {
+      parts.push(label);
+    }
+  }
+  if (!parts.length && coach.employee_number?.trim()) parts.push(coach.employee_number.trim());
+  const position = normalizeStaffPosition(coach.position);
+  if (position) parts.push(positionLabel(position));
+  return parts.join("｜") || "尚未分配";
 }
 
 function monthLabel(value: string) {
@@ -769,7 +786,7 @@ export default function StaffPerformanceDashboard({
                     <span>教練</span><span>完成／排課（堂）</span><span>正式課完成</span><span>FA 完成</span><span>FA 預約成功</span><span>BB</span><span>當日業績</span>
                   </div>
                   <div className={styles.dailyCoachList}>{data.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}>
-                    <div className={styles.dailyCoachIdentity}><strong>{coachName(coach.employeeId)}</strong>{coach.shiftLabel ? <span>{coach.shiftLabel}</span> : null}</div>
+                    <div className={styles.dailyCoachIdentity}><strong>{coachIdentityLabel(coachMap.get(coach.employeeId))}</strong>{coach.shiftLabel ? <span>{coach.shiftLabel}</span> : null}</div>
                     <div className={styles.dailyCoachCourse}><strong>{coach.completedSessions}<span>／{coach.scheduledSessions}</span></strong>{coach.pendingSessions ? <small>{coach.pendingSessions} 堂待處理</small> : null}</div>
                     <div className={styles.dailyCoachMetric}><label>正式課完成</label><MetricBreakdown items={coach.formalCourseCounts || []} /></div>
                     <div className={styles.dailyCoachMetric}><label>FA 完成</label><MetricBreakdown items={coach.faExecutionCounts || []} /></div>
@@ -804,7 +821,7 @@ export default function StaffPerformanceDashboard({
                   {monthOverview ? <>
                     <div className={styles.coachOverviewList}>{monthOverview.coaches.map((coach) => <article key={coach.id}>
                       <div className={styles.coachOverviewTopline}>
-                        <div className={styles.coachIdentity}><strong>{coachName(coach.id)}</strong><small>{!coach.employment_configured ? "正／兼職待設定" : coach.employment_type === "part_time" ? "兼職" : "正職"}</small></div>
+                        <div className={styles.coachIdentity}><strong>{coachIdentityLabel(coach)}</strong><small>{!coach.employment_configured ? "正／兼職待設定" : coach.employment_type === "part_time" ? "兼職" : "正職"}</small></div>
                         {coach.projectedSales !== coach.confirmedSales || coach.projectedEpo !== coach.confirmedEpo ? <small className={styles.pending}>含未結算業績／EPO</small> : <small className={styles.confirmedText}>已正式結算</small>}
                       </div>
                       <dl className={styles.coachOverviewPrimary}><div><dt>本月業績</dt><dd>{money(coach.projectedSales)}</dd></div><div><dt>本月 EPO</dt><dd>{coach.projectedEpo}</dd></div><div><dt>本月已完正式課</dt><dd>{coach.completedSessions} 堂</dd></div><div><dt>本月堂費級距</dt><dd>{coach.employment_configured ? `${money(coach.sessionRate)}／堂` : "待設定"}</dd></div></dl>
@@ -841,7 +858,7 @@ export default function StaffPerformanceDashboard({
                     </div>
                     <section className={styles.historySection}>
                       <div><h3>上班教練</h3><span>{historyData.dailyCoachSummaries.length} 人</span></div>
-                      {historyData.dailyCoachSummaries.length ? <div className={styles.historyCoachList}>{historyData.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}><strong>{coachName(coach.employeeId)}</strong><span>{coach.completedSessions}／{coach.scheduledSessions} 堂</span><b>{money(coach.salesAmount)}</b></article>)}</div> : <p>沒有上班教練</p>}
+                      {historyData.dailyCoachSummaries.length ? <div className={styles.historyCoachList}>{historyData.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}><strong>{coachIdentityLabel(historyData.coaches.find((item) => item.id === coach.employeeId))}</strong><span>{coach.completedSessions}／{coach.scheduledSessions} 堂</span><b>{money(coach.salesAmount)}</b></article>)}</div> : <p>沒有上班教練</p>}
                     </section>
                     <section className={styles.historySection}>
                       <div><h3>實收紀錄</h3><span>{historyEvents.length} 筆</span></div>

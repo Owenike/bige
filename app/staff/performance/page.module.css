@@ -292,7 +292,7 @@
 .dailyCoachList > article { min-height: 66px; padding-top: 11px; padding-bottom: 11px; border-bottom: 1px solid #e6ebe7; }
 .dailyCoachList > article:last-child { border-bottom: 0; }
 .dailyCoachIdentity { display: flex; align-items: center; min-width: 0; gap: 8px; }
-.dailyCoachIdentity strong { overflow: hidden; font-size: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.dailyCoachIdentity strong { font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; }
 .dailyCoachIdentity span { width: fit-content; padding: 4px 8px; border-radius: 999px; color: #315740; background: #eaf3ec; font-size: 12px; font-weight: 800; }
 .dailyCoachCourse, .dailyCoachSales { display: flex; align-items: baseline; min-width: 0; gap: 8px; }
 .dailyCoachCourse strong, .dailyCoachSales strong { overflow: hidden; font-size: 20px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
@@ -414,6 +414,7 @@
 .historyCoachList, .historyRecordList { display: grid; }
 .historyCoachList article, .historyRecordList article { display: grid; grid-template-columns: minmax(140px, 1fr) 120px 140px; align-items: center; gap: 14px; padding: 12px 14px; border-bottom: 1px solid #e8ece9; }
 .historyCoachList article:last-child, .historyRecordList article:last-child { border-bottom: 0; }
+.historyCoachList article > strong { line-height: 1.35; overflow-wrap: anywhere; }
 .historyCoachList article > span { color: #6a7770; }
 .historyCoachList article > b, .historyRecordList article > b { text-align: right; }
 .historyRecordList article { grid-template-columns: minmax(0, 1fr) 140px; }
@@ -424,7 +425,7 @@
 .coachOverviewList article { display: grid; gap: 13px; padding: 15px; border: 1px solid #dce4de; border-radius: 14px; background: #fff; }
 .coachOverviewTopline { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .coachIdentity { display: grid; gap: 3px; }
-.coachIdentity strong { font-size: 17px; }
+.coachIdentity strong { font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
 .coachIdentity small, .coachOverviewTopline > small { color: #6b7871; }
 .coachOverviewList dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
 .coachOverviewList dl div { min-width: 0; }

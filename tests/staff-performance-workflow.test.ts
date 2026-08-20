@@ -214,6 +214,19 @@ test("daily and monthly summaries show exact PT, FA, appointment, and BB figures
   assert.match(route, /filter\(\(row\) => \["pt", "trial"\]\.includes\(String\(row\.operation_kind\)\)\)/);
 });
 
+test("daily, history, and monthly coach identities show Chinese, English, and configured position", () => {
+  const component = readFileSync("components/staff-performance-dashboard.tsx", "utf8");
+  const styles = readFileSync("app/staff/performance/page.module.css", "utf8");
+  assert.match(component, /\[coach\.display_name, coach\.english_name\]/);
+  assert.match(component, /normalizeStaffPosition\(coach\.position\)/);
+  assert.match(component, /parts\.push\(positionLabel\(position\)\)/);
+  assert.match(component, /dailyCoachIdentity[\s\S]*coachIdentityLabel\(coachMap\.get\(coach\.employeeId\)\)/);
+  assert.match(component, /coachOverviewTopline[\s\S]*coachIdentityLabel\(coach\)/);
+  assert.match(component, /historyCoachList[\s\S]*coachIdentityLabel\(historyData\.coaches\.find/);
+  assert.match(styles, /\.dailyCoachIdentity strong \{[^}]*overflow-wrap: anywhere/);
+  assert.match(styles, /\.coachIdentity strong \{[^}]*overflow-wrap: anywhere/);
+});
+
 test("new contracts snapshot the original coach for default allocation and EPO evidence", () => {
   assert.match(contractRoute, /bige_create_member_contract_v6/);
   assert.match(contractRoute, /p_sales_origin_coach_id: trustedSalesOriginCoachId/);
