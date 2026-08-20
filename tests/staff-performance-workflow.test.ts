@@ -41,30 +41,47 @@ test("manager and assistant flows expose split allocation, tie choice, preparati
 });
 
 test("manager settlement workbench keeps primary actions visible and moves secondary detail into dialogs", () => {
-  assert.match(dashboard, /今日待處理/);
-  assert.match(dashboard, /setActiveModal\("coaches"\)/);
+  assert.match(dashboard, /今日工作台/);
+  assert.match(dashboard, /查看其他日期/);
+  assert.match(dashboard, /openMonthOverview/);
+  assert.match(dashboard, /setActiveModal\("dates"\)/);
   assert.match(dashboard, /setActiveModal\("epo"\)/);
   assert.match(dashboard, /setActiveModal\("rules"\)/);
   assert.match(dashboard, /role="dialog"/);
   assert.match(dashboard, /aria-modal="true"/);
   assert.match(dashboard, /mobileSettlementBar/);
   assert.match(dashboard, /儲存分配/);
+  assert.match(dashboard, /taskList/);
+  assert.match(dashboard, /completedGroup/);
   assert.match(dashboardStyles, /\.modalFooter[\s\S]*border-top/);
   assert.match(dashboardStyles, /\.mobileSettlementBar[\s\S]*position:\s*fixed/);
+  assert.doesNotMatch(dashboard, /className=\{styles\.readinessCard\}/);
   assert.doesNotMatch(dashboard, /className=\{styles\.coachGrid\}/);
   assert.doesNotMatch(dashboard, /className=\{styles\.tableWrap\}/);
 });
 
 test("coach overview explicitly labels its figures as selected-month totals", () => {
-  assert.match(dashboard, /月結數字 · \$\{monthLabel\(month\)\}/);
-  assert.match(dashboard, /以下是所選月份的累計數字，不是 \{date\} 單日數字/);
+  assert.match(dashboard, /monthLabel\(overviewMonth\)/);
+  assert.match(dashboard, /id="overview-month" type="month"/);
+  assert.match(dashboard, /monthOverview\.coaches\.map/);
   assert.match(dashboard, /本月業績/);
   assert.match(dashboard, /本月 EPO/);
   assert.match(dashboard, /本月已完課/);
   assert.match(dashboard, /本月堂費級距/);
-  assert.match(dashboardStyles, /\.monthScopeNote/);
+  assert.match(dashboardStyles, /\.monthOverviewToolbar/);
   assert.doesNotMatch(dashboard, /<dt>目前業績<\/dt>/);
   assert.doesNotMatch(dashboard, /<dt>目前 EPO<\/dt>/);
+});
+
+test("manager daily view defaults to the requested day and keeps history browsing separate", () => {
+  assert.match(dashboard, /requestedDate/);
+  assert.match(dashboard, /openDateBrowser/);
+  assert.match(dashboard, /setHistoryDate\(date\)/);
+  assert.match(dashboard, /historyData\?\.selectedDate === historyDate/);
+  assert.match(dashboard, /進入該日日結/);
+  assert.match(dashboard, /回到今天/);
+  assert.match(dashboard, /window\.history\.replaceState/);
+  assert.doesNotMatch(dashboard, /副理可完成初審並送出/);
 });
 
 test("daily settlement follows daily-board duty markers and lists each working coach's lessons and sales", () => {
@@ -75,7 +92,7 @@ test("daily settlement follows daily-board duty markers and lists each working c
   assert.match(route, /dailyCoachSummaries/);
   assert.match(route, /\["pt", "trial"\]\.includes/);
   assert.match(route, /salesNeedsConfirmation/);
-  assert.match(dashboard, />上班教練</);
+  assert.match(dashboard, /今日上班教練/);
   assert.doesNotMatch(dashboard, /休假不列入/);
   assert.match(dashboard, /完成／排課（堂）/);
   assert.match(dashboard, /當日業績/);
