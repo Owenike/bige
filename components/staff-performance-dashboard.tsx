@@ -69,7 +69,8 @@ type DailyTopState = {
   status: string;
 };
 
-type ManagerModal = "coaches" | "dates" | "epo" | "sales" | "rules";
+type ManualSourceType = "fa" | "renewal" | "final_payment" | "manual_adjustment";
+type ManagerModal = "coaches" | "dates" | "epo" | "sales" | "rules" | "manual";
 
 type DailyCoachSummary = {
   employeeId: string;
@@ -225,6 +226,10 @@ export default function StaffPerformanceDashboard({
   const [activeModal, setActiveModal] = useState<ManagerModal | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [showEpoForm, setShowEpoForm] = useState(false);
+  const [manualSourceType, setManualSourceType] = useState<ManualSourceType>("manual_adjustment");
+  const [manualLabel, setManualLabel] = useState("");
+  const [manualAmount, setManualAmount] = useState("");
+  const [manualEmployeeId, setManualEmployeeId] = useState("");
   const [historyDate, setHistoryDate] = useState(requestedDate);
   const [historyData, setHistoryData] = useState<PerformanceState | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -246,6 +251,10 @@ export default function StaffPerformanceDashboard({
     setEditingEventId(null);
     setAllocationDraft({});
     setShowEpoForm(false);
+    setManualSourceType("manual_adjustment");
+    setManualLabel("");
+    setManualAmount("");
+    setManualEmployeeId("");
   }, [activeModal, editingEventId]);
 
   useEffect(() => {
@@ -485,16 +494,23 @@ export default function StaffPerformanceDashboard({
   }
 
   async function createManualEvent() {
-    const sourceType = window.prompt("類型：fa、renewal、final_payment、manual_adjustment", "manual_adjustment");
-    if (!sourceType || !["fa", "renewal", "final_payment", "manual_adjustment"].includes(sourceType)) return;
-    const label = window.prompt("項目名稱（請寫明會員或原因）");
-    if (!label) return;
-    const rawAmount = window.prompt("業績金額");
-    if (!rawAmount || !Number(rawAmount)) return;
-    const employeeId = window.prompt(`教練 ID：\n${(data?.coaches || []).map((coach) => `${coachName(coach.id)}：${coach.id}`).join("\n")}`);
-    if (!employeeId || !coachMap.has(employeeId)) return;
-    if (!window.confirm(`確認新增 ${label}，${money(Number(rawAmount))}，分配給 ${coachName(employeeId)}？`)) return;
-    await act("create_manual_event", { sourceType, label, amount: Number(rawAmount), employeeId }, "人工業績項目已加入，待今日報表確認");
+    const amount = Number(manualAmount);
+    const label = manualLabel.trim();
+    if (label.length < 2 || !Number.isFinite(amount) || amount <= 0 || !manualEmployeeId || !coachMap.has(manualEmployeeId)) return;
+    const ok = await act(
+      "create_manual_event",
+      { sourceType: manualSourceType, label, amount, employeeId: manualEmployeeId },
+      "補登業績已加入，待今日報表確認",
+    );
+    if (ok) closeModal(true);
+  }
+
+  function openManualEvent() {
+    setManualSourceType("manual_adjustment");
+    setManualLabel("");
+    setManualAmount("");
+    setManualEmployeeId("");
+    setActiveModal("manual");
   }
 
   function beginAllocation(event: SalesEvent) {
@@ -606,7 +622,7 @@ export default function StaffPerformanceDashboard({
               <div className={styles.workbenchActions}>
                 <button type="button" onClick={openDateBrowser}>查看其他日期</button>
                 <button type="button" onClick={openMonthOverview}>本月總覽</button>
-                {data.actor.canApprove && !reportConfirmed ? <button type="button" disabled={busy} onClick={() => void createManualEvent()}>＋人工補登</button> : null}
+                {data.actor.canApprove && !reportConfirmed ? <button type="button" disabled={busy} onClick={openManualEvent}>＋補登業績</button> : null}
                 {settlementAction()}
               </div>
             </div>
@@ -670,9 +686,9 @@ export default function StaffPerformanceDashboard({
           <div className={styles.mobileSettlementBar}>{settlementAction(true)}</div>
 
           {activeModal ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.currentTarget === event.target) closeModal(); }}>
-            <section className={`${styles.modal} ${activeModal === "sales" ? styles.salesModal : ""}`} role="dialog" aria-modal="true" aria-labelledby="performance-modal-title">
+            <section className={`${styles.modal} ${activeModal === "sales" ? styles.salesModal : activeModal === "manual" ? styles.manualModal : ""}`} role="dialog" aria-modal="true" aria-labelledby="performance-modal-title">
               <header className={styles.modalHeader}>
-                <div><p>{activeModal === "coaches" ? monthLabel(overviewMonth) : activeModal === "dates" ? historyDate : date}</p><h2 id="performance-modal-title">{activeModal === "coaches" ? "本月總覽" : activeModal === "dates" ? "查看其他日期" : activeModal === "epo" ? "EPO 判定與紀錄" : activeModal === "rules" ? "日結規則" : selectedEvent?.label || "業績分配明細"}</h2></div>
+                <div><p>{activeModal === "coaches" ? monthLabel(overviewMonth) : activeModal === "dates" ? historyDate : date}</p><h2 id="performance-modal-title">{activeModal === "coaches" ? "本月總覽" : activeModal === "dates" ? "查看其他日期" : activeModal === "epo" ? "EPO 判定與紀錄" : activeModal === "rules" ? "日結規則" : activeModal === "manual" ? "補登業績" : selectedEvent?.label || "業績分配明細"}</h2></div>
                 <button type="button" aria-label="關閉視窗" onClick={() => closeModal()}>×</button>
               </header>
               <div className={styles.modalBody}>
@@ -729,6 +745,20 @@ export default function StaffPerformanceDashboard({
                   <article><strong>不計入項目</strong><p>體驗課、取消與請假不列入堂數 EPO；班內外時段依已發布班表判定。</p></article>
                 </div> : null}
 
+                {activeModal === "manual" ? <form id="manual-event-form" className={styles.manualEventForm} onSubmit={(event) => { event.preventDefault(); void createManualEvent(); }}>
+                  <div className={styles.manualEventNotice}>
+                    <strong>只補登業績，不會建立收款</strong>
+                    <p>請先確認款項已實際收取，而且系統沒有自動帶入。補登後不會修改合約、付款紀錄或 EPO。</p>
+                  </div>
+                  <div className={styles.manualEventFields}>
+                    <label><span>業績類型</span><select value={manualSourceType} onChange={(event) => setManualSourceType(event.target.value as ManualSourceType)}><option value="fa">FA 成交</option><option value="renewal">續約</option><option value="final_payment">繳交尾款</option><option value="manual_adjustment">其他人工調整</option></select></label>
+                    <label><span>分配教練</span><select value={manualEmployeeId} onChange={(event) => setManualEmployeeId(event.target.value)}><option value="">請選擇教練</option>{data.coaches.map((coach) => <option key={coach.id} value={coach.id}>{coachName(coach.id)}</option>)}</select></label>
+                    <label className={styles.manualEventWide}><span>項目名稱</span><input value={manualLabel} onChange={(event) => setManualLabel(event.target.value)} maxLength={200} placeholder="例如：王小明續約補登" autoFocus /></label>
+                    <label className={styles.manualEventWide}><span>業績金額</span><input type="number" min="1" step="1" inputMode="decimal" value={manualAmount} onChange={(event) => setManualAmount(event.target.value)} placeholder="輸入實際收款金額" /></label>
+                  </div>
+                  {manualEmployeeId && Number(manualAmount) > 0 ? <div className={styles.manualEventSummary}><span>將補登給 {coachName(manualEmployeeId)}</span><strong>{money(Number(manualAmount))}</strong></div> : null}
+                </form> : null}
+
                 {activeModal === "sales" && selectedEvent ? <div className={styles.salesDetail}>
                   <div className={styles.modalEventSummary}><div><span className={styles.sourceTag}>{SOURCE_LABELS[selectedEvent.source_type] || selectedEvent.source_type}</span><strong>{STATUS_LABELS[selectedEvent.status] || selectedEvent.status}</strong></div><b className={selectedEvent.amount < 0 ? styles.negative : ""}>{money(selectedEvent.amount)}</b></div>
                   {editingEventId === selectedEvent.id ? <div className={styles.allocationEditor}>
@@ -776,6 +806,10 @@ export default function StaffPerformanceDashboard({
                   {data.actor.canAllocate && !reportConfirmed && !["daily_confirmed", "ignored"].includes(selectedEvent.status) && selectedEvent.source_type !== "refund" ? <button type="button" disabled={busy} onClick={() => beginAllocation(selectedEvent)}>{selectedEvent.allocations.length ? "調整分配" : "開始分配"}</button> : null}
                   {data.actor.canApprove && selectedEvent.status === "pending_manager" && !reportConfirmed ? <><button type="button" disabled={busy} onClick={() => void reviewEvent(selectedEvent.id, "reject")}>駁回</button><button className={styles.primary} type="button" disabled={busy} onClick={() => void reviewEvent(selectedEvent.id, "approve")}>同意分配</button></> : null}
                 </>}
+              </footer> : null}
+              {activeModal === "manual" ? <footer className={styles.modalFooter}>
+                <button type="button" disabled={busy} onClick={() => closeModal()}>取消</button>
+                <button className={styles.primary} type="submit" form="manual-event-form" disabled={busy || manualLabel.trim().length < 2 || !Number.isFinite(Number(manualAmount)) || Number(manualAmount) <= 0 || !manualEmployeeId}>{busy ? "補登中…" : "確認補登"}</button>
               </footer> : null}
             </section>
           </div> : null}
