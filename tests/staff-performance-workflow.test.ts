@@ -42,21 +42,26 @@ test("manager and assistant flows expose split allocation, tie choice, preparati
   assert.match(route, /body\.action === "select_daily_top"/);
 });
 
-test("manager settlement workbench keeps primary actions visible and moves secondary detail into dialogs", () => {
+test("manager settlement workbench keeps the daily flow visible and moves sales work into one large dialog", () => {
   assert.match(dashboard, /今日工作台/);
   assert.match(dashboard, /查看其他日期/);
   assert.match(dashboard, /openMonthOverview/);
   assert.match(dashboard, /setActiveModal\("dates"\)/);
   assert.match(dashboard, /setActiveModal\("epo"\)/);
-  assert.match(dashboard, /setActiveModal\("rules"\)/);
+  assert.match(dashboard, /openSalesWorkspace/);
   assert.match(dashboard, /role="dialog"/);
   assert.match(dashboard, /aria-modal="true"/);
   assert.match(dashboard, /mobileSettlementBar/);
   assert.match(dashboard, /儲存分配/);
   assert.match(dashboard, /taskList/);
-  assert.match(dashboard, /completedGroup/);
+  assert.match(dashboard, /salesWorkspace/);
+  assert.match(dashboard, /salesQueueTabs/);
   assert.match(dashboardStyles, /\.modalFooter[\s\S]*border-top/);
+  assert.match(dashboardStyles, /\.salesModal \{[^}]*1380px[^}]*90vh/);
   assert.match(dashboardStyles, /\.mobileSettlementBar[\s\S]*position:\s*fixed/);
+  assert.doesNotMatch(dashboard, /id="sales-tasks"/);
+  assert.doesNotMatch(dashboard, /className=\{`\$\{styles\.panel\} \$\{styles\.salesPanel\}`\}/);
+  assert.doesNotMatch(dashboard, /completedGroup/);
   assert.doesNotMatch(dashboard, /className=\{styles\.readinessCard\}/);
   assert.doesNotMatch(dashboard, /className=\{styles\.coachGrid\}/);
   assert.doesNotMatch(dashboard, /className=\{styles\.tableWrap\}/);
@@ -139,6 +144,21 @@ test("daily workbench presents one four-step flow and a consolidated allocation 
   assert.match(dashboardStyles, /\.taskList \{[^}]*repeat\(4/);
   assert.match(dashboardStyles, /\.salesProgressSummary/);
   assert.match(dashboardStyles, /@media \(max-width: 780px\)[\s\S]*\.taskList \{ grid-template-columns: 1fr; \}/);
+});
+
+test("sales workspace supports queue navigation, in-place allocation, manager review, and responsive full-screen use", () => {
+  assert.match(dashboard, /const \[salesListMode, setSalesListMode\] = useState<SalesListMode>\("pending"\)/);
+  assert.match(dashboard, /待處理 <b>\{actionableSalesEvents\.length\}<\/b>/);
+  assert.match(dashboard, /已完成／待覆核 <b>\{completedSalesEvents\.length\}<\/b>/);
+  assert.match(dashboard, /selectSalesEvent\(firstEvent, hasPending\)/);
+  assert.match(dashboard, /儲存並處理下一筆/);
+  assert.match(dashboard, /advanceSalesWorkspace\(event\.id\)/);
+  assert.match(dashboard, /reviewEvent\(selectedEvent\.id, "approve"\)/);
+  assert.match(dashboard, /目前分配內容尚未儲存，確定切換到其他業績/);
+  assert.match(dashboard, /退款分配已鎖定/);
+  assert.match(dashboardStyles, /\.salesWorkspaceGrid \{[^}]*grid-template-columns/);
+  assert.match(dashboardStyles, /@media \(max-width: 780px\)[\s\S]*\.salesModal \{[^}]*100dvh/);
+  assert.match(dashboardStyles, /@media \(max-width: 780px\)[\s\S]*\.salesWorkspaceGrid \{[^}]*grid-template-columns: 1fr/);
 });
 
 test("monthly overview labels unsettled projections in operational language", () => {

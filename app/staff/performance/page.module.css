@@ -268,16 +268,6 @@
 .taskDone { color: #1c673b !important; background: #e7f4ea; }
 .taskWaiting { color: #6d7a72 !important; background: #eef1ef; }
 .settlementBlocked:disabled { opacity: 1 !important; border-color: #dce3de !important; color: #6e7b73 !important; background: #eef1ef !important; }
-.readyMessage { padding: 13px 18px; color: #1c673b; background: #edf7f0; font-weight: 800; }
-.completedGroup { border-top: 1px solid #e2e8e3; background: #fbfcfb; }
-.completedGroup > summary { padding: 13px 18px; cursor: pointer; color: #51645a; font-size: 13px; font-weight: 850; list-style: none; }
-.completedGroup > summary::-webkit-details-marker { display: none; }
-.completedGroup > summary::after { content: "＋"; float: right; font-size: 17px; }
-.completedGroup[open] > summary::after { content: "−"; }
-.salesPanel { margin: 0; }
-.sourceCheckingPanel { display: grid; place-items: center; gap: 5px; min-height: 150px; padding: 26px; color: #637269; background: #fafbf9; text-align: center; }
-.sourceCheckingPanel strong { color: #31493a; font-size: 17px; }
-.sourceCheckingPanel span { max-width: 500px; line-height: 1.55; }
 .salesProgressSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(220px, 1.35fr); gap: 1px; border-bottom: 1px solid #e2e8e3; background: #e2e8e3; }
 .salesProgressSummary > div { min-width: 0; padding: 13px 18px; background: #f8faf8; }
 .salesProgressSummary > div > span, .allocationProgress > span { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #6a7870; font-size: 12px; font-weight: 800; }
@@ -309,29 +299,84 @@
 .dailyCoachSales .inlineChecking { color: #7b8880; font-size: 14px; }
 .dailyCoachCourse strong span { color: #738078; font-size: 15px; font-weight: 750; }
 .dailyCoachCourse small, .dailyCoachSales small { color: #95621e; font-size: 12px; font-weight: 800; white-space: nowrap; }
-.salesEventList { display: grid; }
-.salesEventList > article { display: grid; grid-template-columns: minmax(260px, 1.4fr) minmax(170px, .65fr) auto; gap: 18px; align-items: center; min-width: 0; padding: 16px 20px; border-bottom: 1px solid #e6ebe7; }
-.salesEventList > article:last-child { border-bottom: 0; }
-.salesEventList > article:hover { background: #fafbf9; }
-.salesEventList > article.eventNeedsAttention { background: linear-gradient(90deg, #fffaf0 0, #fff 36%); box-shadow: inset 4px 0 0 #d7a841; }
 .eventIdentity, .eventAllocation { display: grid; min-width: 0; gap: 5px; }
 .eventIdentity > div { display: flex; flex-wrap: wrap; gap: 6px; }
-.eventIdentity > strong { overflow: hidden; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.eventIdentity > strong { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 .eventIdentity small, .eventAllocation span, .eventAllocation small { color: #6e7b74; }
 .eventAllocation { text-align: right; }
-.eventAllocation strong { font-size: 20px; }
+.eventAllocation strong { font-size: 17px; }
 .sourceTag, .attentionTag { display: inline-flex; width: fit-content; padding: 4px 7px; border-radius: 999px; background: #edf2ee; color: #435a4c; font-size: 11px; font-weight: 850; }
 .attentionTag { background: #fff0ce; color: #8d5b12; }
+.queueStatus { display: inline-flex; width: fit-content; padding: 4px 7px; border-radius: 999px; color: #287044; background: #e7f4ea; font-size: 11px; font-weight: 850; }
 
 .modalBackdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgba(9, 18, 13, .66); backdrop-filter: blur(5px); }
 .modal { display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(100%, 980px); max-height: min(88vh, 880px); overflow: hidden; border: 1px solid #cfd9d1; border-radius: 20px; background: #f7f9f6; box-shadow: 0 30px 90px rgba(0,0,0,.36); }
-.salesModal { width: min(100%, 860px); grid-template-rows: auto minmax(0, 1fr) auto; }
+.salesModal { grid-template-rows: auto minmax(0, 1fr) auto; width: min(calc(100vw - 48px), 1380px); height: min(90vh, 900px); max-height: min(90vh, 900px); }
 .modalHeader { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 17px 20px; border-bottom: 1px solid #dfe6e0; background: #fff; }
 .modalHeader p { margin: 0 0 3px; color: #6f7e75; font-size: 12px; font-weight: 800; }
 .modalHeader h2 { margin: 0; font-size: 22px; }
 .modalHeader > button { min-width: 44px; padding: 5px; font-size: 27px; line-height: 1; }
+.salesModalHeader { padding: 14px 18px; }
+.salesModalHeaderActions { display: flex; align-items: center; gap: 8px; }
+.salesModalHeaderActions > button:first-child { min-height: 38px; padding: 7px 12px; }
+.salesModalHeaderActions > button:last-child { min-width: 42px; min-height: 38px; padding: 4px; font-size: 26px; line-height: 1; }
 .modalBody { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 20px 24px; }
+.salesModalBody { overflow: hidden; padding: 0; }
 .modalFooter { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; padding: 13px 20px; border-top: 1px solid #dfe6e0; background: #fff; box-shadow: 0 -10px 30px rgba(32, 55, 42, .06); }
+.salesWorkspace { display: flex; flex-direction: column; height: 100%; min-height: 0; background: #f4f7f4; }
+.salesWorkspace > .salesProgressSummary { border-bottom: 1px solid #dce4de; }
+.salesWorkspaceMessage { padding: 8px 12px 0; }
+.salesWorkspaceMessage > span { display: block; margin: 0; }
+.salesRulesPanel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #dce4de; background: #fff9ea; }
+.salesRulesPanel article { display: grid; gap: 3px; padding: 9px 11px; border: 1px solid #ead8aa; border-radius: 10px; background: #fff; }
+.salesRulesPanel article strong { color: #6e5117; font-size: 13px; }
+.salesRulesPanel article span { color: #6b685e; font-size: 12px; line-height: 1.5; }
+.salesWorkspaceGrid { display: grid; grid-template-columns: minmax(280px, .75fr) minmax(0, 2fr); flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.salesQueue { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; border-right: 1px solid #dce4de; background: #f8faf8; }
+.salesQueueTabs { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 10px; border-bottom: 1px solid #dce4de; background: #fff; }
+.salesQueueTabs button { min-width: 0; min-height: 38px; padding: 7px 8px; border-color: transparent; color: #647269; background: transparent; font-size: 12px; }
+.salesQueueTabs button b { margin-left: 3px; }
+.salesQueueTabs .salesQueueTabActive { border-color: #cbd8ce; color: #234c33; background: #edf4ee; }
+.salesQueueList { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 9px; }
+.salesQueueItem { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; width: 100%; min-height: 0; gap: 10px; margin-bottom: 7px; padding: 12px; border: 1px solid #dce4de; border-radius: 12px; color: #17251f; background: #fff; text-align: left; }
+.salesQueueItem:hover { border-color: #aebfb2; background: #fbfcfb; }
+.salesQueueItemSelected { border-color: #6c9b79; background: #f1f7f2; box-shadow: 0 0 0 2px rgba(76,139,98,.13); }
+.salesQueueItemPending { box-shadow: inset 3px 0 0 #d7a841; }
+.salesQueueItemSelected.salesQueueItemPending { box-shadow: inset 3px 0 0 #d7a841, 0 0 0 2px rgba(76,139,98,.13); }
+.salesQueueEmpty { display: grid; place-items: center; min-height: 150px; padding: 20px; color: #718078; font-size: 13px; text-align: center; }
+.salesDetail { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px 22px 28px; background: #fff; }
+.selectedEventHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding-bottom: 16px; border-bottom: 1px solid #e2e8e3; }
+.selectedEventHeader > div:first-child { display: grid; min-width: 0; gap: 6px; }
+.selectedEventHeader > div:first-child > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.selectedEventHeader h3 { margin: 0; font-size: 22px; line-height: 1.3; }
+.selectedEventHeader small, .selectedEventHeader > div:last-child span { color: #6b7971; }
+.selectedEventHeader > div:last-child { display: grid; flex: 0 0 auto; gap: 4px; text-align: right; }
+.selectedEventHeader > div:last-child strong { font-size: 25px; }
+.selectedAllocationSummary { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 14px 0; }
+.selectedAllocationSummary article { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid #dfe6e1; border-radius: 11px; background: #f8faf8; }
+.selectedAllocationSummary span { color: #6b7971; font-size: 12px; font-weight: 800; }
+.selectedAllocationSummary strong { font-size: 20px; }
+.selectedAllocationPending { border-color: #ebd194 !important; background: #fff9eb !important; }
+.selectedAllocationPending strong { color: #a56309; }
+.salesEditorHeading { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin: 18px 0 10px; }
+.salesEditorHeading > strong { font-size: 17px; }
+.salesEditorHeading > span { color: #6b7971; font-size: 12px; text-align: right; }
+.salesModal .allocationEditor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; gap: 9px; }
+.salesModal .allocationEditor label { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, .7fr); align-items: center; min-width: 0; gap: 10px; padding: 11px 12px; border: 1px solid #dce4de; border-radius: 11px; background: #fafbfa; }
+.salesModal .allocationEditor label > span { display: flex; align-items: center; min-width: 0; gap: 6px; font-weight: 800; }
+.salesModal .allocationEditor label > span b { padding: 3px 6px; border-radius: 999px; color: #6f5217; background: #fff0ca; font-size: 10px; white-space: nowrap; }
+.salesModal .allocationEditor label > div { display: flex; align-items: center; overflow: hidden; border: 1px solid #cdd8d0; border-radius: 9px; background: #fff; }
+.salesModal .allocationEditor label > div > span { padding-left: 9px; color: #77847c; font-size: 11px; }
+.salesModal .allocationEditor input { min-width: 0; border: 0; background: transparent; text-align: right; box-shadow: none; }
+.salesModal .allocationList { display: grid; gap: 8px; }
+.salesModal .allocationList > span { align-items: center; padding: 11px 13px; border: 1px solid #e0e7e2; background: #f8faf8; }
+.salesDetailEmpty { display: grid; place-items: center; align-content: center; min-height: 300px; gap: 5px; color: #6c7a72; text-align: center; }
+.salesDetailEmpty strong { color: #2c4435; font-size: 18px; }
+.salesModalFooter { align-items: center; justify-content: space-between; flex-wrap: nowrap; min-height: 68px; }
+.salesFooterStatus { display: grid; min-width: 0; gap: 2px; }
+.salesFooterStatus span { color: #6a7870; font-size: 11px; font-weight: 800; }
+.salesFooterStatus strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.salesFooterActions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .monthOverview, .dateBrowser { display: grid; gap: 14px; }
 .monthOverviewToolbar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #d9e2db; border-radius: 12px; background: #fff; }
 .monthOverviewToolbar label { font-weight: 850; }
@@ -373,16 +418,6 @@
 .coachOverviewList dt { color: #718078; font-size: 11px; }
 .coachOverviewList dd { overflow: hidden; margin: 3px 0 0; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
 .confirmedText { color: #287044 !important; }
-.rulesList { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.rulesList article { padding: 16px; border: 1px solid #dbe3dc; border-radius: 13px; background: #fff; }
-.rulesList p { margin: 7px 0 0; color: #5f6e66; line-height: 1.65; }
-.salesDetail { display: grid; gap: 14px; }
-.modalEventSummary { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 15px; border-radius: 13px; background: #eaf0eb; }
-.modalEventSummary > div { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
-.modalEventSummary > b { font-size: 24px; }
-.salesModal .allocationEditor { min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.salesModal .allocationList { gap: 8px; }
-.salesModal .allocationList > span { align-items: center; padding: 10px 12px; }
 .infoBox { padding: 12px 13px; border: 1px solid #ddcfaa; border-radius: 10px; color: #6f5520; background: #fff8e8; }
 .modalIntro { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px solid #d8e1da; border-radius: 13px; background: #fff; }
 .modalIntro > div { display: grid; gap: 3px; }
@@ -410,9 +445,8 @@
   .workbenchGrid { grid-template-columns: minmax(0, 1fr); }
   .taskList { grid-template-columns: 1fr 1fr; }
   .salesProgressSummary { grid-template-columns: 1fr 1fr; }
-  .salesEventList > article { grid-template-columns: minmax(0, 1fr) auto; }
-  .eventAllocation { text-align: left; }
-  .salesEventList > article > button { grid-column: 1 / -1; justify-self: stretch; }
+  .salesWorkspaceGrid { grid-template-columns: minmax(250px, .75fr) minmax(0, 1.6fr); }
+  .salesModal .allocationEditor { grid-template-columns: 1fr; }
   .coachOverviewList article { grid-template-columns: 150px minmax(0, 1fr); }
   .coachOverviewList article > small { grid-column: 1 / -1; }
 }
@@ -428,13 +462,23 @@
   .mobileSettlementBar { position: fixed; right: 0; bottom: 0; left: 0; z-index: 900; display: block; padding: 10px 12px max(10px, env(safe-area-inset-bottom)); border-top: 1px solid #cfd8d1; background: rgba(247,249,246,.96); box-shadow: 0 -12px 35px rgba(24,45,32,.16); backdrop-filter: blur(8px); }
   .modalBackdrop { align-items: end; padding: 12px 8px 0; }
   .modal { width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; }
+  .salesModal { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; }
   .modalBody { padding: 14px 14px 20px; }
+  .salesModalBody { overflow-y: auto; padding: 0; }
   .modalHeader, .modalFooter { padding-right: 14px; padding-left: 14px; }
+  .salesWorkspace { display: block; height: auto; min-height: 100%; }
+  .salesRulesPanel { grid-template-columns: 1fr; }
+  .salesWorkspaceGrid { display: grid; grid-template-columns: 1fr; overflow: visible; }
+  .salesQueue { max-height: 250px; border-right: 0; border-bottom: 1px solid #dce4de; }
+  .salesQueueList { max-height: 190px; }
+  .salesDetail { overflow: visible; padding: 17px 15px 24px; }
+  .salesModalFooter { align-items: stretch; flex-direction: column; }
+  .salesFooterActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .salesFooterActions button { width: 100%; }
+  .salesFooterActions > .primary:last-child:nth-child(3) { grid-column: 1 / -1; }
   .coachOverviewList article { grid-template-columns: 1fr; gap: 11px; }
   .coachOverviewList article > small { grid-column: auto; }
-  .rulesList { grid-template-columns: 1fr; }
   .epoWorkspace .epoForm { grid-template-columns: 1fr 72px; }
-  .salesModal .allocationEditor { grid-template-columns: 1fr; }
   .decisionList article { grid-template-columns: 1fr; }
   .historyPreviewGrid { grid-template-columns: 1fr 1fr; }
 }
@@ -450,15 +494,26 @@
   .summaryGrid article { padding: 12px; }
   .summaryGrid strong { font-size: 18px; white-space: normal; }
   .summaryGrid small { font-size: 11px; line-height: 1.4; }
-  .salesProgressSummary { grid-template-columns: 1fr; }
+  .salesProgressSummary { grid-template-columns: 1fr 1fr; }
+  .salesProgressSummary > div { padding: 10px 12px; }
+  .salesProgressSummary > div > strong { font-size: 17px; }
   .panelHeading { align-items: flex-start; flex-direction: column; }
   .headingActions { width: 100%; justify-content: space-between; }
-  .salesEventList > article { grid-template-columns: 1fr; gap: 12px; padding: 15px; }
-  .salesEventList > article > button { grid-column: auto; }
   .eventIdentity > strong { white-space: normal; }
   .coachOverviewList dl { grid-template-columns: 1fr 1fr; }
-  .modalEventSummary { align-items: flex-start; flex-direction: column; }
   .modalFooter > button { flex: 1 1 auto; }
+  .salesModalHeader { gap: 10px; }
+  .salesModalHeaderActions > button:first-child { padding-right: 8px; padding-left: 8px; font-size: 12px; }
+  .salesQueueTabs { padding: 7px; }
+  .salesQueueItem { padding: 10px; }
+  .selectedEventHeader { align-items: stretch; flex-direction: column; gap: 12px; }
+  .selectedEventHeader > div:last-child { text-align: left; }
+  .selectedAllocationSummary { gap: 6px; }
+  .selectedAllocationSummary article { padding: 10px 11px; }
+  .salesEditorHeading { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .salesEditorHeading > span { text-align: left; }
+  .salesModal .allocationEditor label { grid-template-columns: 1fr; }
+  .salesFooterStatus strong { white-space: normal; }
   .modalIntro { align-items: stretch; flex-direction: column; }
   .dailyCoachHeading { align-items: center; flex-direction: row; }
   .dailyCoachTableHeader, .dailyCoachList > article { grid-template-columns: minmax(92px, 1fr) 94px 104px; gap: 8px; padding-right: 12px; padding-left: 12px; }

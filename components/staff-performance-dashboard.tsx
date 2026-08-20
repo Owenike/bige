@@ -69,7 +69,8 @@ type DailyTopState = {
   status: string;
 };
 
-type ManagerModal = "coaches" | "dates" | "epo" | "sales" | "rules";
+type ManagerModal = "coaches" | "dates" | "epo" | "sales";
+type SalesListMode = "pending" | "completed";
 
 type DailyCoachSummary = {
   employeeId: string;
@@ -228,6 +229,8 @@ export default function StaffPerformanceDashboard({
   const [allocationDraft, setAllocationDraft] = useState<Record<string, string>>({});
   const [activeModal, setActiveModal] = useState<ManagerModal | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [salesListMode, setSalesListMode] = useState<SalesListMode>("pending");
+  const [showSalesRules, setShowSalesRules] = useState(false);
   const [showEpoForm, setShowEpoForm] = useState(false);
   const [historyDate, setHistoryDate] = useState(requestedDate);
   const [historyData, setHistoryData] = useState<PerformanceState | null>(null);
@@ -249,6 +252,7 @@ export default function StaffPerformanceDashboard({
     setSelectedEventId(null);
     setEditingEventId(null);
     setAllocationDraft({});
+    setShowSalesRules(false);
     setShowEpoForm(false);
   }, [activeModal, editingEventId]);
 
@@ -413,7 +417,6 @@ export default function StaffPerformanceDashboard({
   }, 0);
   const allocationProgress = allocationBase > 0 ? Math.max(0, Math.min(100, Math.round(((allocationBase - unallocatedSalesTotal) / allocationBase) * 100))) : 0;
   const pendingDayEvents = dayEvents.filter(eventNeedsAttention);
-  const completedDayEvents = dayEvents.filter((event) => !eventNeedsAttention(event));
   const pendingSalesCount = pendingDayEvents.length;
   const pendingEpoCount = dayEpo.filter((item) => item.status === "assistant_proposed").length
     + topStates.filter((item) => item.status === "tie_pending" || item.status === "assistant_selected").length;
@@ -432,6 +435,18 @@ export default function StaffPerformanceDashboard({
   const sourceDataReady = viewDataReady && !refreshing && !refreshError;
   const unavailableSourceLabel = refreshError ? "待重試" : refreshing ? "核對中…" : "讀取中…";
   const dayEpoTotal = dayEpo.reduce((sum, row) => sum + Number(row.quantity), 0);
+  const actionableSalesEvents = dayEvents.filter((event) => data?.actor.canConfirm ? eventNeedsAttention(event) : eventNeedsAllocation(event));
+  const completedSalesEvents = dayEvents.filter((event) => !actionableSalesEvents.some((pendingEvent) => pendingEvent.id === event.id));
+  const visibleSalesEvents = salesListMode === "pending" ? actionableSalesEvents : completedSalesEvents;
+  const selectedAllocatedTotal = selectedEvent?.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0) || 0;
+  const draftAllocatedTotal = Object.values(allocationDraft).reduce((sum, value) => sum + Number(value || 0), 0);
+  const selectedDisplayedAllocated = editingEventId === selectedEvent?.id ? draftAllocatedTotal : selectedAllocatedTotal;
+  const selectedRemaining = selectedEvent ? Number(selectedEvent.amount) - selectedDisplayedAllocated : 0;
+  const salesActionLabel = salesTaskCount
+    ? data?.actor.canConfirm && !dayEvents.some(eventNeedsAllocation) && dayEvents.some((event) => event.status === "pending_manager")
+      ? "覆核業績"
+      : "處理業績"
+    : "查看業績紀錄";
 
   const historyEvents = (historyData?.events || []).filter((item) => item.business_date === historyDate);
   const historyEpo = (historyData?.epoAwards || []).filter((item) => item.business_date === historyDate);
@@ -483,7 +498,8 @@ export default function StaffPerformanceDashboard({
       if (!note) return;
     }
     if (!window.confirm(decision === "approve" ? "確認此筆業績分配正確？" : "確認此筆不列入業績？")) return;
-    await act("review_event", { eventId, decision, note }, decision === "approve" ? "業績已覆核" : "業績已標記不列入");
+    const ok = await act("review_event", { eventId, decision, note }, decision === "approve" ? "業績已覆核" : "業績已標記不列入");
+    if (ok && activeModal === "sales") advanceSalesWorkspace(eventId);
   }
 
   async function reviewEpo(epoId: string, decision: "approve" | "reject") {
@@ -513,29 +529,76 @@ export default function StaffPerformanceDashboard({
     setAllocationDraft(Object.fromEntries(event.allocations.map((allocation) => [allocation.employee_id, String(allocation.amount)])));
   }
 
-  function openSalesEvent(event: SalesEvent) {
-    setSelectedEventId(event.id);
-    setActiveModal("sales");
+  function salesEventEditable(event: SalesEvent) {
+    return Boolean(data?.actor.canAllocate) && !reportConfirmed && !["daily_confirmed", "ignored"].includes(event.status) && event.source_type !== "refund";
   }
 
-  function renderSalesEvent(event: SalesEvent) {
+  function selectSalesEvent(event: SalesEvent, startEditing = false, force = false) {
+    if (!force && editingEventId && editingEventId !== event.id && !window.confirm("目前分配內容尚未儲存，確定切換到其他業績？")) return;
+    setSelectedEventId(event.id);
+    setEditingEventId(null);
+    setAllocationDraft({});
+    if (startEditing && eventNeedsAllocation(event) && salesEventEditable(event)) beginAllocation(event);
+  }
+
+  function switchSalesListMode(nextMode: SalesListMode) {
+    const targetEvents = nextMode === "pending" ? actionableSalesEvents : completedSalesEvents;
+    if (selectedEventId && targetEvents.some((event) => event.id === selectedEventId)) {
+      setSalesListMode(nextMode);
+      return;
+    }
+    if (editingEventId && !window.confirm("目前分配內容尚未儲存，確定切換到其他業績？")) return;
+    setSalesListMode(nextMode);
+    const firstEvent = targetEvents[0] || null;
+    if (firstEvent) selectSalesEvent(firstEvent, nextMode === "pending", true);
+    else {
+      setSelectedEventId(null);
+      setEditingEventId(null);
+      setAllocationDraft({});
+    }
+  }
+
+  function openSalesWorkspace() {
+    const hasPending = actionableSalesEvents.length > 0;
+    const firstEvent = (hasPending ? actionableSalesEvents : completedSalesEvents)[0] || null;
+    setSalesListMode(hasPending ? "pending" : "completed");
+    setShowSalesRules(false);
+    setError("");
+    setNotice("");
+    setActiveModal("sales");
+    if (firstEvent) selectSalesEvent(firstEvent, hasPending);
+    else setSelectedEventId(null);
+  }
+
+  function advanceSalesWorkspace(currentEventId: string) {
+    const nextEvent = actionableSalesEvents.find((event) => event.id !== currentEventId) || null;
+    if (nextEvent) {
+      setSalesListMode("pending");
+      selectSalesEvent(nextEvent, true, true);
+      return;
+    }
+    setSalesListMode("completed");
+    setSelectedEventId(currentEventId);
+    setEditingEventId(null);
+    setAllocationDraft({});
+  }
+
+  function renderSalesQueueItem(event: SalesEvent) {
     const allocated = event.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0);
     const remaining = Number(event.amount) - allocated;
     const needsAttention = eventNeedsAttention(event);
-    const editable = Boolean(data?.actor.canAllocate) && !reportConfirmed && !["daily_confirmed", "ignored"].includes(event.status) && event.source_type !== "refund";
-    return <article key={event.id} className={needsAttention ? styles.eventNeedsAttention : ""}>
+    const actionStatus = eventNeedsAllocation(event) ? "待分配" : event.status === "pending_manager" && data?.actor.canConfirm ? "待覆核" : STATUS_LABELS[event.status] || event.status;
+    return <button key={event.id} className={`${styles.salesQueueItem} ${selectedEventId === event.id ? styles.salesQueueItemSelected : ""} ${needsAttention ? styles.salesQueueItemPending : ""}`} type="button" aria-pressed={selectedEventId === event.id} onClick={() => selectSalesEvent(event, eventNeedsAllocation(event))}>
       <div className={styles.eventIdentity}>
-        <div><span className={styles.sourceTag}>{SOURCE_LABELS[event.source_type] || event.source_type}</span>{needsAttention ? <span className={styles.attentionTag}>待處理</span> : null}</div>
+        <div><span className={styles.sourceTag}>{SOURCE_LABELS[event.source_type] || event.source_type}</span><span className={needsAttention ? styles.attentionTag : styles.queueStatus}>{actionStatus}</span></div>
         <strong>{event.label}</strong>
-        <small>{event.contract_sessions ? `${event.contract_sessions} 堂｜` : ""}{STATUS_LABELS[event.status] || event.status}</small>
+        <small>{event.contract_sessions ? `${event.contract_sessions} 堂｜` : ""}{event.allocations.length ? `已分配 ${money(allocated)}` : "尚無分配"}</small>
       </div>
       <div className={styles.eventAllocation}>
-        <span>已分配 {money(allocated)}</span>
         <strong className={event.amount < 0 ? styles.negative : ""}>{money(event.amount)}</strong>
-        {event.source_type !== "refund" && Math.abs(remaining) > 0.001 ? <small className={styles.pending}>尚差 {money(remaining)}</small> : event.allocations.length ? <small>{event.allocations.length} 位教練</small> : <small>尚無分配</small>}
+        {event.source_type !== "refund" && Math.abs(remaining) > 0.001 ? <small className={styles.pending}>尚差 {money(remaining)}</small> : <small>{event.allocations.length ? `${event.allocations.length} 位教練` : "查看明細"}</small>}
       </div>
-      <button type="button" disabled={busy} onClick={() => openSalesEvent(event)}>{editable ? event.allocations.length ? "查看／調整" : "開始分配" : "查看明細"}</button>
-    </article>;
+    </button>;
   }
 
   function settlementAction(compact = false) {
@@ -562,7 +625,7 @@ export default function StaffPerformanceDashboard({
     return null;
   }
 
-  async function saveAllocations(event: SalesEvent) {
+  async function saveAllocations(event: SalesEvent, advance = false) {
     const allocations = Object.entries(allocationDraft)
       .map(([employeeId, rawAmount]) => ({ employeeId, amount: Number(rawAmount) }))
       .filter((item) => Number.isFinite(item.amount) && item.amount > 0);
@@ -577,6 +640,7 @@ export default function StaffPerformanceDashboard({
     if (ok) {
       setEditingEventId(null);
       setAllocationDraft({});
+      if (advance) advanceSalesWorkspace(event.id);
     }
   }
 
@@ -652,7 +716,7 @@ export default function StaffPerformanceDashboard({
                   <article className={!sourceDataReady ? styles.taskChecking : salesTaskCount ? styles.taskPending : styles.taskReady}>
                     <b className={styles.taskStepNumber}>{sourceDataReady && !salesTaskCount ? "✓" : "2"}</b>
                     <div><strong>業績分配</strong><span>{sourceDataReady ? salesTaskStatus : refreshError ? "最新資料核對失敗" : "正在核對最新收款"}</span></div>
-                    {!sourceDataReady ? <button type="button" disabled>{refreshError ? "請先重試" : "核對中"}</button> : salesTaskCount ? <button type="button" onClick={() => document.getElementById("sales-tasks")?.scrollIntoView({ behavior: "smooth", block: "start" })}>處理業績</button> : <span className={styles.taskDone}>完成</span>}
+                    <button type="button" disabled={!sourceDataReady} onClick={openSalesWorkspace}>{!sourceDataReady ? refreshError ? "請先重試" : "核對中" : salesActionLabel}</button>
                   </article>
                   <article className={!sourceDataReady ? styles.taskChecking : epoTaskCount ? styles.taskPending : styles.taskReady}>
                     <b className={styles.taskStepNumber}>{sourceDataReady && !epoTaskCount ? "✓" : "3"}</b>
@@ -665,26 +729,6 @@ export default function StaffPerformanceDashboard({
                     {settlementAction()}
                   </article>
                 </div>
-              </section>
-
-              <section id="sales-tasks" className={`${styles.panel} ${styles.salesPanel}`}>
-                <div className={styles.panelHeading}>
-                  <div><p className={styles.eyebrow}>最新核對結果</p><h2>業績分配</h2></div>
-                  <div className={styles.headingActions}><button type="button" onClick={() => setActiveModal("rules")}>規則</button><span>{sourceDataReady ? `${dayEvents.length} 筆` : unavailableSourceLabel}</span></div>
-                </div>
-                {!sourceDataReady ? <div className={styles.sourceCheckingPanel}><strong>{refreshError ? "最新收款尚未完成核對" : "正在核對最新收款資料"}</strong><span>{refreshError ? "請從上方重新核對後再處理業績。" : "完成後才會顯示實收、已分配與未分配金額。"}</span></div> : <>
-                  <div className={styles.salesProgressSummary}>
-                    <div><span>實收淨額</span><strong className={daySalesTotal < 0 ? styles.negative : ""}>{money(daySalesTotal)}</strong></div>
-                    <div><span>已分配</span><strong className={allocatedSalesTotal < 0 ? styles.negative : ""}>{money(allocatedSalesTotal)}</strong></div>
-                    <div><span>尚未分配</span><strong className={unallocatedSalesTotal > 0 ? styles.pendingAmount : ""}>{money(unallocatedSalesTotal)}</strong></div>
-                    <div className={styles.allocationProgress}><span><b>分配進度</b><strong>{allocationProgress}%</strong></span><progress max="100" value={allocationProgress} aria-label={`業績分配進度 ${allocationProgress}%`} /></div>
-                  </div>
-                  {pendingDayEvents.length ? <div className={styles.salesEventList}>{pendingDayEvents.map(renderSalesEvent)}</div> : dayEvents.length ? <div className={styles.readyMessage}>本日業績皆已完成分配</div> : <div className={styles.empty}>這一天沒有收款或退款資料。</div>}
-                  {completedDayEvents.length ? <details className={styles.completedGroup} open={!pendingDayEvents.length}>
-                    <summary>已完成 {completedDayEvents.length} 筆</summary>
-                    <div className={styles.salesEventList}>{completedDayEvents.map(renderSalesEvent)}</div>
-                  </details> : null}
-                </>}
               </section>
 
               <section className={`${styles.panel} ${styles.dailyCoachPanel}`}>
@@ -706,11 +750,11 @@ export default function StaffPerformanceDashboard({
 
           {activeModal ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.currentTarget === event.target) closeModal(); }}>
             <section className={`${styles.modal} ${activeModal === "sales" ? styles.salesModal : ""}`} role="dialog" aria-modal="true" aria-labelledby="performance-modal-title">
-              <header className={styles.modalHeader}>
-                <div><p>{activeModal === "coaches" ? monthLabel(overviewMonth) : activeModal === "dates" ? historyDate : date}</p><h2 id="performance-modal-title">{activeModal === "coaches" ? "本月總覽" : activeModal === "dates" ? "查看其他日期" : activeModal === "epo" ? "EPO 判定與紀錄" : activeModal === "rules" ? "日結規則" : selectedEvent?.label || "業績分配明細"}</h2></div>
-                <button type="button" aria-label="關閉視窗" onClick={() => closeModal()}>×</button>
+              <header className={`${styles.modalHeader} ${activeModal === "sales" ? styles.salesModalHeader : ""}`}>
+                <div><p>{activeModal === "coaches" ? monthLabel(overviewMonth) : activeModal === "dates" ? historyDate : activeModal === "sales" ? `${date}｜待處理 ${actionableSalesEvents.length} 筆` : date}</p><h2 id="performance-modal-title">{activeModal === "coaches" ? "本月總覽" : activeModal === "dates" ? "查看其他日期" : activeModal === "epo" ? "EPO 判定與紀錄" : "業績分配"}</h2></div>
+                {activeModal === "sales" ? <div className={styles.salesModalHeaderActions}><button type="button" aria-expanded={showSalesRules} onClick={() => setShowSalesRules((current) => !current)}>{showSalesRules ? "收起規則" : "分配規則"}</button><button type="button" aria-label="關閉視窗" onClick={() => closeModal()}>×</button></div> : <button type="button" aria-label="關閉視窗" onClick={() => closeModal()}>×</button>}
               </header>
-              <div className={styles.modalBody}>
+              <div className={`${styles.modalBody} ${activeModal === "sales" ? styles.salesModalBody : ""}`}>
                 {activeModal === "coaches" ? <div className={styles.monthOverview}>
                   <div className={styles.monthOverviewToolbar}>
                     <label htmlFor="overview-month">月份</label>
@@ -757,21 +801,42 @@ export default function StaffPerformanceDashboard({
                   </> : null}
                 </div> : null}
 
-                {activeModal === "rules" ? <div className={styles.rulesList}>
-                  <article><strong>FA／續約分配</strong><p>原成交教練預設取得 50%，副理可調整並送經理覆核；經理可直接調整。</p></article>
-                  <article><strong>退款扣回</strong><p>退款只能依原正式分配精準反沖，當初分給誰多少，就由該教練扣回多少。</p></article>
-                  <article><strong>每日最高 EPO</strong><p>依當日實際收款的原始成交數字判定；同額第一由副理或經理決定，退款後回到原收款日重算。</p></article>
-                  <article><strong>不計入項目</strong><p>體驗課、取消與請假不列入堂數 EPO；班內外時段依已發布班表判定。</p></article>
-                </div> : null}
-
-                {activeModal === "sales" && selectedEvent ? <div className={styles.salesDetail}>
-                  <div className={styles.modalEventSummary}><div><span className={styles.sourceTag}>{SOURCE_LABELS[selectedEvent.source_type] || selectedEvent.source_type}</span><strong>{STATUS_LABELS[selectedEvent.status] || selectedEvent.status}</strong></div><b className={selectedEvent.amount < 0 ? styles.negative : ""}>{money(selectedEvent.amount)}</b></div>
-                  {editingEventId === selectedEvent.id ? <div className={styles.allocationEditor}>
-                    {data.coaches.map((coach) => <label key={coach.id}><span>{coachName(coach.id)}{selectedEvent.origin_employee_id === coach.id ? "（原成交）" : ""}</span><input type="number" min="0" step="1" value={allocationDraft[coach.id] || ""} onChange={(change) => setAllocationDraft((current) => ({ ...current, [coach.id]: change.target.value }))} placeholder="0" /></label>)}
-                    <div className={styles.allocationTotal}><span>已分配 {money(Object.values(allocationDraft).reduce((sum, value) => sum + Number(value || 0), 0))}</span><span>應等於 {money(selectedEvent.amount)}</span></div>
-                  </div> : selectedEvent.allocations.length ? <div className={styles.allocationList}>{selectedEvent.allocations.map((allocation) => <span key={allocation.id}><b>{coachName(allocation.employee_id)}</b><span>{money(allocation.amount)}{allocation.allocation_kind === "origin_default" ? "（預設 50%）" : allocation.allocation_kind === "refund_reversal" ? "（原分配扣回）" : ""}</span></span>)}</div> : <div className={styles.empty}>這筆業績尚未分配。</div>}
-                  {selectedEvent.source_type === "refund" ? <div className={styles.infoBox}>退款分配已鎖定，只能按原正式分配扣回，不可改給其他人。</div> : selectedEvent.allocation_note ? <div className={styles.infoBox}>{selectedEvent.allocation_note}</div> : null}
-                  {selectedEvent.review_note ? <div className={styles.infoBox}>覆核備註：{selectedEvent.review_note}</div> : null}
+                {activeModal === "sales" ? <div className={styles.salesWorkspace}>
+                  <div className={styles.salesProgressSummary}>
+                    <div><span>實收淨額</span><strong className={daySalesTotal < 0 ? styles.negative : ""}>{money(daySalesTotal)}</strong></div>
+                    <div><span>已分配</span><strong className={allocatedSalesTotal < 0 ? styles.negative : ""}>{money(allocatedSalesTotal)}</strong></div>
+                    <div><span>尚未分配</span><strong className={unallocatedSalesTotal > 0 ? styles.pendingAmount : ""}>{money(unallocatedSalesTotal)}</strong></div>
+                    <div className={styles.allocationProgress}><span><b>分配進度</b><strong>{allocationProgress}%</strong></span><progress max="100" value={allocationProgress} aria-label={`業績分配進度 ${allocationProgress}%`} /></div>
+                  </div>
+                  {error ? <div className={styles.salesWorkspaceMessage}><span className={styles.error}>{error}</span></div> : notice ? <div className={styles.salesWorkspaceMessage}><span className={styles.notice}>{notice}</span></div> : null}
+                  {showSalesRules ? <div className={styles.salesRulesPanel}><article><strong>FA／續約</strong><span>原成交教練預設取得 50%，完成分配後由副理送經理覆核，經理可直接核准。</span></article><article><strong>退款扣回</strong><span>退款只能依原正式分配扣回，不可改配給其他教練。</span></article></div> : null}
+                  <div className={styles.salesWorkspaceGrid}>
+                    <aside className={styles.salesQueue} aria-label="業績收款清單">
+                      <div className={styles.salesQueueTabs} role="tablist" aria-label="業績狀態">
+                        <button className={salesListMode === "pending" ? styles.salesQueueTabActive : ""} type="button" role="tab" aria-selected={salesListMode === "pending"} onClick={() => switchSalesListMode("pending")}>待處理 <b>{actionableSalesEvents.length}</b></button>
+                        <button className={salesListMode === "completed" ? styles.salesQueueTabActive : ""} type="button" role="tab" aria-selected={salesListMode === "completed"} onClick={() => switchSalesListMode("completed")}>已完成／待覆核 <b>{completedSalesEvents.length}</b></button>
+                      </div>
+                      <div className={styles.salesQueueList}>{visibleSalesEvents.length ? visibleSalesEvents.map(renderSalesQueueItem) : <div className={styles.salesQueueEmpty}>{salesListMode === "pending" ? "目前沒有待處理業績" : "目前沒有其他業績紀錄"}</div>}</div>
+                    </aside>
+                    <section className={styles.salesDetail} aria-label="業績分配內容">
+                      {selectedEvent ? <>
+                        <header className={styles.selectedEventHeader}>
+                          <div><div><span className={styles.sourceTag}>{SOURCE_LABELS[selectedEvent.source_type] || selectedEvent.source_type}</span><span className={eventNeedsAttention(selectedEvent) ? styles.attentionTag : styles.queueStatus}>{STATUS_LABELS[selectedEvent.status] || selectedEvent.status}</span></div><h3>{selectedEvent.label}</h3><small>{selectedEvent.contract_sessions ? `${selectedEvent.contract_sessions} 堂課程` : "收款紀錄"}</small></div>
+                          <div><span>實收金額</span><strong className={selectedEvent.amount < 0 ? styles.negative : ""}>{money(selectedEvent.amount)}</strong></div>
+                        </header>
+                        <div className={styles.selectedAllocationSummary}>
+                          <article><span>已分配</span><strong>{money(selectedDisplayedAllocated)}</strong></article>
+                          <article className={Math.abs(selectedRemaining) > 0.001 ? styles.selectedAllocationPending : ""}><span>尚未分配</span><strong>{money(selectedRemaining)}</strong></article>
+                        </div>
+                        <div className={styles.salesEditorHeading}><strong>{editingEventId === selectedEvent.id ? "分配給教練" : "分配明細"}</strong><span>{editingEventId === selectedEvent.id ? "輸入各教練分配金額，合計必須等於實收金額。" : selectedEvent.allocations.length ? `${selectedEvent.allocations.length} 位教練` : "尚未建立分配"}</span></div>
+                        {editingEventId === selectedEvent.id ? <div className={styles.allocationEditor}>
+                          {data.coaches.map((coach) => <label key={coach.id}><span>{coachName(coach.id)}{selectedEvent.origin_employee_id === coach.id ? <b>原成交</b> : null}</span><div><span>NT$</span><input type="number" min="0" step="1" value={allocationDraft[coach.id] || ""} onChange={(change) => setAllocationDraft((current) => ({ ...current, [coach.id]: change.target.value }))} placeholder="0" /></div></label>)}
+                        </div> : selectedEvent.allocations.length ? <div className={styles.allocationList}>{selectedEvent.allocations.map((allocation) => <span key={allocation.id}><b>{coachName(allocation.employee_id)}</b><span>{money(allocation.amount)}{allocation.allocation_kind === "origin_default" ? "（預設 50%）" : allocation.allocation_kind === "refund_reversal" ? "（原分配扣回）" : ""}</span></span>)}</div> : <div className={styles.empty}>這筆業績尚未分配。</div>}
+                        {selectedEvent.source_type === "refund" ? <div className={styles.infoBox}>退款分配已鎖定，只能按原正式分配扣回，不可改給其他人。</div> : selectedEvent.allocation_note ? <div className={styles.infoBox}>{selectedEvent.allocation_note}</div> : null}
+                        {selectedEvent.review_note ? <div className={styles.infoBox}>覆核備註：{selectedEvent.review_note}</div> : null}
+                      </> : <div className={styles.salesDetailEmpty}><strong>這一天沒有業績紀錄</strong><span>有新收款或退款後會出現在這裡。</span></div>}
+                    </section>
+                  </div>
                 </div> : null}
 
                 {activeModal === "epo" ? <div className={styles.epoWorkspace}>
@@ -805,12 +870,15 @@ export default function StaffPerformanceDashboard({
                 </div> : null}
               </div>
 
-              {activeModal === "sales" && selectedEvent ? <footer className={styles.modalFooter}>
-                {editingEventId === selectedEvent.id ? <><button type="button" disabled={busy} onClick={() => { setEditingEventId(null); setAllocationDraft({}); }}>取消調整</button><button className={styles.primary} type="button" disabled={busy} onClick={() => void saveAllocations(selectedEvent)}>儲存分配</button></> : <>
+              {activeModal === "sales" ? <footer className={`${styles.modalFooter} ${styles.salesModalFooter}`}>
+                <div className={styles.salesFooterStatus}>{selectedEvent ? <><span>{editingEventId === selectedEvent.id ? "目前這筆" : STATUS_LABELS[selectedEvent.status] || selectedEvent.status}</span><strong className={Math.abs(selectedRemaining) > 0.001 ? styles.pending : ""}>{Math.abs(selectedRemaining) > 0.001 ? `尚有 ${money(selectedRemaining)} 未分配` : "分配金額已完整"}</strong></> : <strong>這一天沒有業績紀錄</strong>}</div>
+                <div className={styles.salesFooterActions}>
                   <button type="button" onClick={() => closeModal()}>關閉</button>
-                  {data.actor.canAllocate && !reportConfirmed && !["daily_confirmed", "ignored"].includes(selectedEvent.status) && selectedEvent.source_type !== "refund" ? <button type="button" disabled={busy} onClick={() => beginAllocation(selectedEvent)}>{selectedEvent.allocations.length ? "調整分配" : "開始分配"}</button> : null}
-                  {data.actor.canApprove && selectedEvent.status === "pending_manager" && !reportConfirmed ? <><button type="button" disabled={busy} onClick={() => void reviewEvent(selectedEvent.id, "reject")}>駁回</button><button className={styles.primary} type="button" disabled={busy} onClick={() => void reviewEvent(selectedEvent.id, "approve")}>同意分配</button></> : null}
-                </>}
+                  {selectedEvent && editingEventId === selectedEvent.id ? <><button type="button" disabled={busy} onClick={() => { setEditingEventId(null); setAllocationDraft({}); }}>取消調整</button><button className={styles.primary} type="button" disabled={busy || Math.abs(selectedRemaining) > 0.001} onClick={() => void saveAllocations(selectedEvent, true)}>{actionableSalesEvents.some((event) => event.id !== selectedEvent.id) ? "儲存並處理下一筆" : "儲存並完成"}</button></> : selectedEvent ? <>
+                    {salesEventEditable(selectedEvent) ? <button type="button" disabled={busy} onClick={() => beginAllocation(selectedEvent)}>{selectedEvent.allocations.length ? "調整分配" : "開始分配"}</button> : null}
+                    {data.actor.canApprove && selectedEvent.status === "pending_manager" && !reportConfirmed ? <><button type="button" disabled={busy} onClick={() => void reviewEvent(selectedEvent.id, "reject")}>駁回</button><button className={styles.primary} type="button" disabled={busy} onClick={() => void reviewEvent(selectedEvent.id, "approve")}>同意分配</button></> : null}
+                  </> : null}
+                </div>
               </footer> : null}
             </section>
           </div> : null}
