@@ -96,7 +96,7 @@ test("manager daily view defaults to the requested day and keeps history browsin
   assert.doesNotMatch(dashboard, /副理可完成初審並送出/);
 });
 
-test("daily workbench renders a read-only snapshot before refreshing slow payment and EPO sources", () => {
+test("daily workbench withholds stale payment and EPO figures until source reconciliation finishes", () => {
   assert.match(route, /body\.action === "refresh_sources"/);
   assert.match(route, /if \(!actorPermissions\.canManage\) throw new Error\("您沒有同步業績與 EPO 的權限"\)/);
   assert.match(route, /\[staff-performance\] sources refreshed/);
@@ -113,8 +113,38 @@ test("daily workbench renders a read-only snapshot before refreshing slow paymen
   assert.match(dashboard, /action: "refresh_sources"/);
   assert.match(dashboard, /setLoading\(false\);[\s\S]*void refreshSources\(initialData, viewKey\)/);
   assert.match(dashboard, /今日工作台讀取超過 8 秒，請重試/);
-  assert.match(dashboard, /您仍可使用目前畫面/);
+  assert.match(dashboard, /const \[refreshing, setRefreshing\] = useState\(Boolean\(initialData\?\.actor\.canManage\)\)/);
+  assert.match(dashboard, /const sourceDataReady = viewDataReady && !refreshing && !refreshError/);
+  assert.match(dashboard, /完成前不顯示業績與 EPO 數字/);
+  assert.match(dashboard, /暫不顯示舊數字/);
+  assert.match(dashboard, /請重試後再處理業績或結算/);
+  assert.match(dashboard, /disabled=\{busy \|\| Boolean\(blockReason\)\}/);
+  assert.match(route, /body\.action === "prepare_day"[\s\S]*syncBigePaymentPerformanceSources[\s\S]*syncAutomaticEpoForDate/);
+  assert.match(route, /body\.action === "confirm_day"[\s\S]*syncBigePaymentPerformanceSources[\s\S]*syncAutomaticEpoForDate/);
   assert.match(dashboard, /重新讀取/);
+});
+
+test("daily workbench presents one four-step flow and a consolidated allocation summary", () => {
+  assert.match(dashboard, /<p className=\{styles\.eyebrow\}>本日流程<\/p>/);
+  assert.match(dashboard, />課程狀態</);
+  assert.match(dashboard, />業績分配</);
+  assert.match(dashboard, />EPO 判定</);
+  assert.match(dashboard, /data\.actor\.canConfirm \? "正式結算" : "送交覆核"/);
+  assert.match(dashboard, /完成剩餘 \$\{settlementAttentionCount\} 項後/);
+  assert.match(dashboard, /課程 \$\{pendingCourseCount\} · 業績 \$\{salesTaskCount\} · EPO \$\{epoTaskCount\}/);
+  assert.match(dashboard, /實收淨額/);
+  assert.match(dashboard, />已分配</);
+  assert.match(dashboard, />尚未分配</);
+  assert.match(dashboard, /<progress max="100" value=\{allocationProgress\}/);
+  assert.match(dashboardStyles, /\.taskList \{[^}]*repeat\(4/);
+  assert.match(dashboardStyles, /\.salesProgressSummary/);
+  assert.match(dashboardStyles, /@media \(max-width: 780px\)[\s\S]*\.taskList \{ grid-template-columns: 1fr; \}/);
+});
+
+test("monthly overview labels unsettled projections in operational language", () => {
+  assert.match(dashboard, /含未結算業績／EPO/);
+  assert.match(dashboard, /已正式結算/);
+  assert.doesNotMatch(dashboard, /含待確認資料/);
 });
 
 test("daily settlement follows daily-board duty markers and lists each working coach's lessons and sales", () => {

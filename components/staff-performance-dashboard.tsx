@@ -171,10 +171,14 @@ function shiftDate(value: string, offset: number) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(next);
 }
 
-function eventNeedsAttention(event: SalesEvent) {
+function eventNeedsAllocation(event: SalesEvent) {
   const allocated = event.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0);
   const hasGap = event.source_type !== "refund" && Math.abs(Number(event.amount) - allocated) > 0.001;
-  return hasGap || event.status === "unassigned" || event.status === "pending_manager";
+  return hasGap || event.status === "unassigned";
+}
+
+function eventNeedsAttention(event: SalesEvent) {
+  return eventNeedsAllocation(event) || event.status === "pending_manager";
 }
 
 async function parse(response: Response) {
@@ -233,7 +237,7 @@ export default function StaffPerformanceDashboard({
   const [overviewData, setOverviewData] = useState<PerformanceState | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] = useState(Boolean(initialData?.actor.canManage));
   const [refreshError, setRefreshError] = useState("");
   const activeViewKeyRef = useRef(`${month}:${date}`);
   const refreshedViewKeyRef = useRef("");
@@ -271,7 +275,7 @@ export default function StaffPerformanceDashboard({
       const refreshed = await fetchPerformanceState(
         "/api/staff-performance",
         30_000,
-        "最新收款與 EPO 同步逾時，您仍可使用目前畫面。",
+        "最新收款與 EPO 核對逾時，請重試後再處理業績或結算。",
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -401,6 +405,13 @@ export default function StaffPerformanceDashboard({
   const selectedEvent = dayEvents.find((item) => item.id === selectedEventId) || null;
   const isToday = date === initialToday;
   const daySalesTotal = dayEvents.reduce((sum, event) => sum + Number(event.amount), 0);
+  const allocatedSalesTotal = dayEvents.reduce((sum, event) => sum + event.allocations.reduce((allocationSum, allocation) => allocationSum + Number(allocation.amount), 0), 0);
+  const allocationBase = dayEvents.reduce((sum, event) => sum + Math.abs(Number(event.amount)), 0);
+  const unallocatedSalesTotal = dayEvents.reduce((sum, event) => {
+    const allocated = event.allocations.reduce((allocationSum, allocation) => allocationSum + Number(allocation.amount), 0);
+    return sum + Math.abs(Number(event.amount) - allocated);
+  }, 0);
+  const allocationProgress = allocationBase > 0 ? Math.max(0, Math.min(100, Math.round(((allocationBase - unallocatedSalesTotal) / allocationBase) * 100))) : 0;
   const pendingDayEvents = dayEvents.filter(eventNeedsAttention);
   const completedDayEvents = dayEvents.filter((event) => !eventNeedsAttention(event));
   const pendingSalesCount = pendingDayEvents.length;
@@ -408,6 +419,19 @@ export default function StaffPerformanceDashboard({
     + topStates.filter((item) => item.status === "tie_pending" || item.status === "assistant_selected").length;
   const pendingCourseCount = courseSummary?.pending || 0;
   const attentionCount = pendingSalesCount + pendingEpoCount + pendingCourseCount;
+  const assistantSalesBlockingCount = dayEvents.filter(eventNeedsAllocation).length;
+  const assistantEpoBlockingCount = topStates.filter((item) => item.status === "tie_pending").length;
+  const settlementAttentionCount = data?.actor.canConfirm
+    ? attentionCount
+    : assistantSalesBlockingCount + assistantEpoBlockingCount + pendingCourseCount;
+  const salesTaskCount = data?.actor.canConfirm ? pendingSalesCount : assistantSalesBlockingCount;
+  const epoTaskCount = data?.actor.canConfirm ? pendingEpoCount : assistantEpoBlockingCount;
+  const salesTaskStatus = salesTaskCount ? `${salesTaskCount} 筆需要處理` : pendingSalesCount ? "已送經理覆核" : "已完成";
+  const epoTaskStatus = epoTaskCount ? `${epoTaskCount} 項需要確認` : pendingEpoCount ? "已送經理覆核" : "已完成";
+  const viewDataReady = data?.selectedDate === date && !loading;
+  const sourceDataReady = viewDataReady && !refreshing && !refreshError;
+  const unavailableSourceLabel = refreshError ? "待重試" : refreshing ? "核對中…" : "讀取中…";
+  const dayEpoTotal = dayEpo.reduce((sum, row) => sum + Number(row.quantity), 0);
 
   const historyEvents = (historyData?.events || []).filter((item) => item.business_date === historyDate);
   const historyEpo = (historyData?.epoAwards || []).filter((item) => item.business_date === historyDate);
@@ -516,11 +540,21 @@ export default function StaffPerformanceDashboard({
 
   function settlementAction(compact = false) {
     if (!data) return null;
+    const actionVerb = data.actor.canConfirm ? "結算" : "送經理";
+    const blockReason = !viewDataReady
+      ? `資料讀取完成後可${actionVerb}`
+      : refreshing
+        ? `核對最新資料後可${actionVerb}`
+        : refreshError
+          ? `重新核對資料後可${actionVerb}`
+          : settlementAttentionCount
+            ? `完成剩餘 ${settlementAttentionCount} 項後可${actionVerb}`
+            : "";
     if (!data.actor.canConfirm && data.actor.canAllocate && !reportConfirmed) {
-      return <button className={`${styles.primary} ${compact ? styles.compactAction : ""}`} type="button" disabled={busy} onClick={() => { if (window.confirm(`確認已整理 ${date} 的課程狀態、業績分配與 EPO，並送經理覆核？`)) void act("prepare_day", {}, "今日課程與業績已送經理覆核"); }}>完成初審並送經理</button>;
+      return <button className={`${styles.primary} ${blockReason ? styles.settlementBlocked : ""} ${compact ? styles.compactAction : ""}`} type="button" disabled={busy || Boolean(blockReason)} title={blockReason || undefined} onClick={() => { if (window.confirm(`確認已整理 ${date} 的課程狀態、業績分配與 EPO，並送經理覆核？`)) void act("prepare_day", {}, "今日課程與業績已送經理覆核"); }}>{blockReason || "完成初審並送經理"}</button>;
     }
     if (data.actor.canConfirm && !reportConfirmed) {
-      return <button className={`${styles.primary} ${compact ? styles.compactAction : ""}`} type="button" disabled={busy} onClick={() => { if (window.confirm(`正式結算 ${date} 的課程、業績與 EPO？完成後會計入教練面板與薪資。`)) void act("confirm_day", {}, "本日課程、業績與 EPO 已正式結算"); }}>{isToday ? "正式結算今日課程與業績" : "正式結算此日課程與業績"}</button>;
+      return <button className={`${styles.primary} ${blockReason ? styles.settlementBlocked : ""} ${compact ? styles.compactAction : ""}`} type="button" disabled={busy || Boolean(blockReason)} title={blockReason || undefined} onClick={() => { if (window.confirm(`正式結算 ${date} 的課程、業績與 EPO？完成後會計入教練面板與薪資。`)) void act("confirm_day", {}, "本日課程、業績與 EPO 已正式結算"); }}>{blockReason || (isToday ? "正式結算今日課程與業績" : "正式結算此日課程與業績")}</button>;
     }
     if (data.actor.canConfirm && reportConfirmed) {
       return <button className={compact ? styles.compactAction : ""} type="button" disabled={busy} onClick={() => { const reason = window.prompt("重新開啟原因（必填）"); if (reason && window.confirm("重新開啟後，本日課程、業績與 EPO 會暫時退出正式結算，確定繼續？")) void act("reopen_day", { reason }, "今日結算已重新開啟，可進行更正"); }}>重新開啟更正</button>;
@@ -587,20 +621,19 @@ export default function StaffPerformanceDashboard({
                   <h1>{dayLabel(date)}</h1>
                   <strong className={reportConfirmed ? styles.confirmed : styles.draft}>{reportConfirmed ? "已正式結算" : dayReport?.status === "reopened" ? "已重新開啟" : dayReport?.prepared_at ? "等待經理覆核" : "尚未結算"}</strong>
                 </div>
-                {refreshing ? <small className={styles.syncState}>正在背景同步最新收款與 EPO…</small> : refreshError ? <button className={styles.syncRetry} type="button" onClick={() => void refreshSources(data, `${month}:${date}`, true)}>{refreshError} 重試</button> : null}
-                {!isToday ? <div className={styles.historyNotice}><span>正在查看 {date}</span><button type="button" onClick={() => selectWorkbenchDate(initialToday)}>回到今天</button></div> : null}
+                {refreshing ? <div className={`${styles.syncStatus} ${styles.syncChecking}`} role="status" aria-live="polite"><i aria-hidden="true" /><span><strong>正在核對最新收款與 EPO</strong><small>完成前不顯示業績與 EPO 數字</small></span></div> : refreshError ? <button className={styles.syncRetry} type="button" onClick={() => void refreshSources(data, `${month}:${date}`, true)}><strong>最新資料核對失敗</strong><small>{refreshError}｜點此重試</small></button> : <div className={`${styles.syncStatus} ${styles.syncComplete}`} role="status"><i aria-hidden="true">✓</i><span><strong>最新收款與 EPO 已核對</strong></span></div>}
+                {!isToday ? <button className={styles.historyReturn} type="button" onClick={() => selectWorkbenchDate(initialToday)}>回到今天</button> : null}
               </div>
               <div className={styles.workbenchActions}>
                 <button type="button" onClick={openDateBrowser}>查看其他日期</button>
                 <button type="button" onClick={openMonthOverview}>本月總覽</button>
-                {settlementAction()}
               </div>
             </div>
             <div className={styles.summaryGrid}>
-              <article className={attentionCount ? styles.summaryPending : styles.summaryReady}><span>待處理</span><strong>{attentionCount} 項</strong><small>課程 {pendingCourseCount} · 業績 {pendingSalesCount} · EPO {pendingEpoCount}</small></article>
-              <article><span>課程</span><strong>{courseSummary?.completed || 0}／{courseSummary?.total || 0} 堂</strong></article>
-              <article><span>實收</span><strong className={daySalesTotal < 0 ? styles.negative : ""}>{money(daySalesTotal)}</strong></article>
-              <article><span>EPO</span><strong>{dayEpo.reduce((sum, row) => sum + Number(row.quantity), 0)}</strong></article>
+              <article className={!sourceDataReady ? styles.summaryChecking : settlementAttentionCount ? styles.summaryPending : styles.summaryReady}><span>待處理</span><strong>{sourceDataReady ? `${settlementAttentionCount} 項` : unavailableSourceLabel}</strong><small>{sourceDataReady ? `課程 ${pendingCourseCount} · 業績 ${salesTaskCount} · EPO ${epoTaskCount}` : viewDataReady ? `課程 ${pendingCourseCount} · 業績與 EPO 尚未顯示` : "正在讀取本日資料"}</small></article>
+              <article><span>課程</span><strong>{viewDataReady ? `${courseSummary?.completed || 0}／${courseSummary?.total || 0} 堂` : "讀取中…"}</strong></article>
+              <article className={!sourceDataReady ? styles.summaryChecking : ""}><span>實收</span><strong className={sourceDataReady && daySalesTotal < 0 ? styles.negative : ""}>{sourceDataReady ? money(daySalesTotal) : unavailableSourceLabel}</strong><small>{sourceDataReady ? "最新核對結果" : "暫不顯示舊數字"}</small></article>
+              <article className={!sourceDataReady ? styles.summaryChecking : ""}><span>EPO</span><strong>{sourceDataReady ? dayEpoTotal : unavailableSourceLabel}</strong><small>{sourceDataReady ? "最新核對結果" : "暫不顯示舊數字"}</small></article>
             </div>
           </section>
 
@@ -608,34 +641,50 @@ export default function StaffPerformanceDashboard({
             <div className={styles.mainColumn}>
               <section className={`${styles.panel} ${styles.taskPanel}`}>
                 <div className={styles.panelHeading}>
-                  <div><p className={styles.eyebrow}>{isToday ? "今天" : date}</p><h2>{reportConfirmed ? "本日已完成" : attentionCount ? `還有 ${attentionCount} 項待處理` : "可以進行日結"}</h2></div>
+                  <div><p className={styles.eyebrow}>本日流程</p><h2>{reportConfirmed ? "本日已完成" : !sourceDataReady ? "正在整理本日待辦" : settlementAttentionCount ? `還有 ${settlementAttentionCount} 項待處理` : data.actor.canConfirm ? "可以進行正式結算" : "可以送交經理覆核"}</h2></div>
                 </div>
                 <div className={styles.taskList}>
-                  <article className={pendingCourseCount ? styles.taskPending : styles.taskReady}>
-                    <div><strong>課程狀態</strong><span>{pendingCourseCount ? `${pendingCourseCount} 堂尚未完成` : "已完成"}</span></div>
-                    {pendingCourseCount ? <Link href="/manager/fitness">前往營運班表</Link> : <b>✓</b>}
+                  <article className={!viewDataReady ? styles.taskChecking : pendingCourseCount ? styles.taskPending : styles.taskReady}>
+                    <b className={styles.taskStepNumber}>{viewDataReady && !pendingCourseCount ? "✓" : "1"}</b>
+                    <div><strong>課程狀態</strong><span>{viewDataReady ? pendingCourseCount ? `${pendingCourseCount} 堂尚未完成` : "已完成" : "正在讀取課程資料"}</span></div>
+                    {!viewDataReady ? <span className={styles.taskWaiting}>讀取中</span> : pendingCourseCount ? <Link href="/manager/fitness">前往班表</Link> : <span className={styles.taskDone}>完成</span>}
                   </article>
-                  <article className={pendingSalesCount ? styles.taskPending : styles.taskReady}>
-                    <div><strong>業績分配</strong><span>{pendingSalesCount ? `${pendingSalesCount} 筆需要處理` : "已完成"}</span></div>
-                    {pendingSalesCount ? <button type="button" onClick={() => document.getElementById("sales-tasks")?.scrollIntoView({ behavior: "smooth", block: "start" })}>查看業績</button> : <b>✓</b>}
+                  <article className={!sourceDataReady ? styles.taskChecking : salesTaskCount ? styles.taskPending : styles.taskReady}>
+                    <b className={styles.taskStepNumber}>{sourceDataReady && !salesTaskCount ? "✓" : "2"}</b>
+                    <div><strong>業績分配</strong><span>{sourceDataReady ? salesTaskStatus : refreshError ? "最新資料核對失敗" : "正在核對最新收款"}</span></div>
+                    {!sourceDataReady ? <button type="button" disabled>{refreshError ? "請先重試" : "核對中"}</button> : salesTaskCount ? <button type="button" onClick={() => document.getElementById("sales-tasks")?.scrollIntoView({ behavior: "smooth", block: "start" })}>處理業績</button> : <span className={styles.taskDone}>完成</span>}
                   </article>
-                  <article className={pendingEpoCount ? styles.taskPending : styles.taskReady}>
-                    <div><strong>EPO 判定</strong><span>{pendingEpoCount ? `${pendingEpoCount} 項需要確認` : "已完成"}</span></div>
-                    <button type="button" onClick={() => setActiveModal("epo")}>{pendingEpoCount ? "處理 EPO" : "查看紀錄"}</button>
+                  <article className={!sourceDataReady ? styles.taskChecking : epoTaskCount ? styles.taskPending : styles.taskReady}>
+                    <b className={styles.taskStepNumber}>{sourceDataReady && !epoTaskCount ? "✓" : "3"}</b>
+                    <div><strong>EPO 判定</strong><span>{sourceDataReady ? epoTaskStatus : refreshError ? "最新資料核對失敗" : "正在核對最新 EPO"}</span></div>
+                    <button type="button" disabled={!sourceDataReady} onClick={() => setActiveModal("epo")}>{!sourceDataReady ? refreshError ? "請先重試" : "核對中" : epoTaskCount ? "處理 EPO" : "查看紀錄"}</button>
+                  </article>
+                  <article className={reportConfirmed ? styles.taskReady : !sourceDataReady ? styles.taskChecking : settlementAttentionCount ? styles.taskPending : styles.taskReady}>
+                    <b className={styles.taskStepNumber}>{reportConfirmed ? "✓" : "4"}</b>
+                    <div><strong>{data.actor.canConfirm ? "正式結算" : "送交覆核"}</strong><span>{reportConfirmed ? "已正式結算" : !sourceDataReady ? refreshError ? "重新核對資料後才能繼續" : "等待最新資料核對完成" : settlementAttentionCount ? `完成剩餘 ${settlementAttentionCount} 項後才能繼續` : "所有前置項目已完成"}</span></div>
+                    {settlementAction()}
                   </article>
                 </div>
               </section>
 
               <section id="sales-tasks" className={`${styles.panel} ${styles.salesPanel}`}>
                 <div className={styles.panelHeading}>
-                  <div><p className={styles.eyebrow}>當日實收</p><h2>業績分配</h2></div>
-                  <div className={styles.headingActions}><button type="button" onClick={() => setActiveModal("rules")}>規則</button><span>{dayEvents.length} 筆</span></div>
+                  <div><p className={styles.eyebrow}>最新核對結果</p><h2>業績分配</h2></div>
+                  <div className={styles.headingActions}><button type="button" onClick={() => setActiveModal("rules")}>規則</button><span>{sourceDataReady ? `${dayEvents.length} 筆` : unavailableSourceLabel}</span></div>
                 </div>
-                {pendingDayEvents.length ? <div className={styles.salesEventList}>{pendingDayEvents.map(renderSalesEvent)}</div> : dayEvents.length ? <div className={styles.readyMessage}>本日業績皆已完成分配</div> : <div className={styles.empty}>這一天沒有收款或退款資料。</div>}
-                {completedDayEvents.length ? <details className={styles.completedGroup} open={!pendingDayEvents.length}>
-                  <summary>已完成 {completedDayEvents.length} 筆</summary>
-                  <div className={styles.salesEventList}>{completedDayEvents.map(renderSalesEvent)}</div>
-                </details> : null}
+                {!sourceDataReady ? <div className={styles.sourceCheckingPanel}><strong>{refreshError ? "最新收款尚未完成核對" : "正在核對最新收款資料"}</strong><span>{refreshError ? "請從上方重新核對後再處理業績。" : "完成後才會顯示實收、已分配與未分配金額。"}</span></div> : <>
+                  <div className={styles.salesProgressSummary}>
+                    <div><span>實收淨額</span><strong className={daySalesTotal < 0 ? styles.negative : ""}>{money(daySalesTotal)}</strong></div>
+                    <div><span>已分配</span><strong className={allocatedSalesTotal < 0 ? styles.negative : ""}>{money(allocatedSalesTotal)}</strong></div>
+                    <div><span>尚未分配</span><strong className={unallocatedSalesTotal > 0 ? styles.pendingAmount : ""}>{money(unallocatedSalesTotal)}</strong></div>
+                    <div className={styles.allocationProgress}><span><b>分配進度</b><strong>{allocationProgress}%</strong></span><progress max="100" value={allocationProgress} aria-label={`業績分配進度 ${allocationProgress}%`} /></div>
+                  </div>
+                  {pendingDayEvents.length ? <div className={styles.salesEventList}>{pendingDayEvents.map(renderSalesEvent)}</div> : dayEvents.length ? <div className={styles.readyMessage}>本日業績皆已完成分配</div> : <div className={styles.empty}>這一天沒有收款或退款資料。</div>}
+                  {completedDayEvents.length ? <details className={styles.completedGroup} open={!pendingDayEvents.length}>
+                    <summary>已完成 {completedDayEvents.length} 筆</summary>
+                    <div className={styles.salesEventList}>{completedDayEvents.map(renderSalesEvent)}</div>
+                  </details> : null}
+                </>}
               </section>
 
               <section className={`${styles.panel} ${styles.dailyCoachPanel}`}>
@@ -643,10 +692,10 @@ export default function StaffPerformanceDashboard({
                   <div><h2>{isToday ? "今日上班教練" : `${date} 上班教練`}</h2></div>
                   <div className={styles.headingActions}><span>{data.dailyCoachSummaries.length} 人</span></div>
                 </div>
-                {data.dailyCoachSummaries.length ? <><div className={styles.dailyCoachTableHeader} aria-hidden="true"><span>教練</span><span>完成／排課（堂）</span><span>當日業績</span></div><div className={styles.dailyCoachList}>{data.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}>
+                {!viewDataReady ? <div className={styles.empty}>正在讀取當日教練資料…</div> : data.dailyCoachSummaries.length ? <><div className={styles.dailyCoachTableHeader} aria-hidden="true"><span>教練</span><span>完成／排課（堂）</span><span>當日業績</span></div><div className={styles.dailyCoachList}>{data.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}>
                   <div className={styles.dailyCoachIdentity}><strong>{coachName(coach.employeeId)}</strong>{coach.shiftLabel ? <span>{coach.shiftLabel}</span> : null}</div>
                   <div className={styles.dailyCoachCourse}><strong>{coach.completedSessions}<span>／{coach.scheduledSessions}</span></strong>{coach.pendingSessions ? <small>{coach.pendingSessions} 堂待處理</small> : null}</div>
-                  <div className={styles.dailyCoachSales}><strong className={coach.salesAmount < 0 ? styles.negative : ""}>{money(coach.salesAmount)}</strong>{coach.salesNeedsConfirmation ? <small>待確認</small> : null}</div>
+                  <div className={styles.dailyCoachSales}>{sourceDataReady ? <><strong className={coach.salesAmount < 0 ? styles.negative : ""}>{money(coach.salesAmount)}</strong>{coach.salesNeedsConfirmation ? <small>待確認</small> : null}</> : <strong className={styles.inlineChecking}>{unavailableSourceLabel}</strong>}</div>
                 </article>)}</div></> : <div className={styles.empty}>這一天沒有教練上班，請確認日排課表。</div>}
               </section>
 
@@ -673,7 +722,7 @@ export default function StaffPerformanceDashboard({
                   {monthOverview ? <div className={styles.coachOverviewList}>{monthOverview.coaches.map((coach) => <article key={coach.id}>
                     <div className={styles.coachIdentity}><strong>{coachName(coach.id)}</strong><small>{!coach.employment_configured ? "正／兼職待設定" : coach.employment_type === "part_time" ? "兼職" : "正職"}</small></div>
                     <dl><div><dt>本月業績</dt><dd>{money(coach.projectedSales)}</dd></div><div><dt>本月 EPO</dt><dd>{coach.projectedEpo}</dd></div><div><dt>本月已完課</dt><dd>{coach.completedSessions} 堂</dd></div><div><dt>本月堂費級距</dt><dd>{coach.employment_configured ? `${money(coach.sessionRate)}／堂` : "待設定"}</dd></div></dl>
-                    {coach.projectedSales !== coach.confirmedSales || coach.projectedEpo !== coach.confirmedEpo ? <small className={styles.pending}>含待確認資料</small> : <small className={styles.confirmedText}>已確認</small>}
+                    {coach.projectedSales !== coach.confirmedSales || coach.projectedEpo !== coach.confirmedEpo ? <small className={styles.pending}>含未結算業績／EPO</small> : <small className={styles.confirmedText}>已正式結算</small>}
                   </article>)}</div> : null}
                 </div> : null}
 
