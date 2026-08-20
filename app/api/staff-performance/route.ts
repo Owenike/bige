@@ -19,6 +19,7 @@ const STAFF_ROLES = [
 ] as const;
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
+type AutomaticEpoState = Awaited<ReturnType<typeof syncAutomaticEpoForDate>>;
 type ProfileRow = {
   id: string;
   tenant_id: string | null;
@@ -40,15 +41,16 @@ async function loadProfile(admin: AdminClient, id: string) {
 }
 
 async function coachDirectory(admin: AdminClient, tenantId: string) {
-  const employmentResult = await admin.from("staff_employment_profiles")
-    .select("employee_id, employment_type, work_group")
-    .eq("tenant_id", tenantId).eq("work_group", "coach");
-  if (employmentResult.error) throw new Error(employmentResult.error.message);
-  const profileResult = await admin.from("profiles")
+  const [employmentResult, profileResult] = await Promise.all([
+    admin.from("staff_employment_profiles")
+      .select("employee_id, employment_type, work_group")
+      .eq("tenant_id", tenantId).eq("work_group", "coach"),
+    admin.from("profiles")
       .select("id, display_name, english_name, employee_number, role, position")
       .eq("tenant_id", tenantId).eq("is_active", true).is("staff_deleted_at", null)
-      .or("role.eq.coach,position.in.(coach,coach_team_lead,coach_director,coach_assistant_manager,coach_manager,coach_city_manager)");
-  if (profileResult.error) throw new Error(profileResult.error.message);
+      .or("role.eq.coach,position.in.(coach,coach_team_lead,coach_director,coach_assistant_manager,coach_manager,coach_city_manager)"),
+  ]);
+  if (employmentResult.error || profileResult.error) throw new Error(employmentResult.error?.message || profileResult.error?.message || "教練名錄讀取失敗");
   const employment = new Map((employmentResult.data || []).map((row) => [String(row.employee_id), String(row.employment_type)]));
   return (profileResult.data || []).map((profile) => ({
     ...profile,
@@ -80,23 +82,22 @@ async function permissions(admin: AdminClient, user: ProfileRow, context: Profil
   return { canAllocate, canApprove, canManageEpo, canConfirm, canViewSalary, canManage: canAllocate || canApprove || canManageEpo || canConfirm };
 }
 
-async function state(admin: AdminClient, user: ProfileRow, context: ProfileContext, month: string, selectedDate: string) {
+async function state(
+  admin: AdminClient,
+  user: ProfileRow,
+  context: ProfileContext,
+  month: string,
+  selectedDate: string,
+  automaticEpo: AutomaticEpoState = { dailyTopStates: [], sessionEvidence: [] },
+) {
+  const startedAt = Date.now();
   const tenantId = user.tenant_id;
   if (!tenantId) throw new Error("帳號尚未設定館別");
   const range = performanceMonthRange(month);
-  const actor = await permissions(admin, user, context);
-  let automaticEpo = { dailyTopStates: [] as any[], sessionEvidence: [] as any[] };
-  if (actor.canManage) {
-    await syncBigePaymentPerformanceSources(admin, tenantId, month, user.id);
-    automaticEpo = await syncAutomaticEpoForDate({
-      admin,
-      tenantId,
-      branchId: user.branch_id,
-      businessDate: selectedDate,
-      actorId: user.id,
-    });
-  }
-  const coaches = await coachDirectory(admin, tenantId);
+  const [actor, coaches] = await Promise.all([
+    permissions(admin, user, context),
+    coachDirectory(admin, tenantId),
+  ]);
   const coachIds = coaches.map((item) => String(item.id));
   let coachDayNotesQuery = admin.from("bige_schedule_notes")
     .select("coach_id, content")
@@ -197,7 +198,7 @@ async function state(admin: AdminClient, user: ProfileRow, context: ProfileConte
       return { ...event, allocations, amount: allocations.reduce((sum: number, allocation: any) => sum + Number(allocation.amount), 0) };
     })
     .filter((event) => event.allocations.length > 0);
-  return {
+  const result = {
     actor: { id: user.id, ...actor }, month, selectedDate,
     coaches: selfOnly ? summaries.filter((row) => String(row.id) === user.id) : summaries,
     events: selfOnly ? selfEvents : eventsWithAllocations,
@@ -208,6 +209,12 @@ async function state(admin: AdminClient, user: ProfileRow, context: ProfileConte
     dailyCoachSummaries: selfOnly ? [] : dailyCoachSummaries,
     courseSettlement: selfOnly ? null : { summary: courseSummary, closure: courseClosureResult.data || null },
   };
+  console.info("[staff-performance] state ready", {
+    month,
+    selectedDate,
+    totalMs: Date.now() - startedAt,
+  });
+  return result;
 }
 
 async function ensureDraftDay(admin: AdminClient, tenantId: string, date: string) {
@@ -364,6 +371,26 @@ export async function POST(request: Request) {
     const body = z.object({ action: z.string(), month: z.string().regex(/^\d{4}-\d{2}$/), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).passthrough().parse(await request.json());
     if (!body.date.startsWith(body.month)) throw new Error("日期不在所選月份");
     const actorPermissions = await permissions(admin, user, auth.context);
+    let refreshedAutomaticEpo: AutomaticEpoState | undefined;
+
+    if (body.action === "refresh_sources") {
+      if (!actorPermissions.canManage) throw new Error("您沒有同步業績與 EPO 的權限");
+      const sourceSyncStartedAt = Date.now();
+      await syncBigePaymentPerformanceSources(admin, tenantId, body.month, user.id);
+      refreshedAutomaticEpo = await syncAutomaticEpoForDate({
+        admin,
+        tenantId,
+        branchId: user.branch_id,
+        businessDate: body.date,
+        actorId: user.id,
+      });
+      console.info("[staff-performance] sources refreshed", {
+        month: body.month,
+        selectedDate: body.date,
+        sourceSyncMs: Date.now() - sourceSyncStartedAt,
+      });
+      return apiSuccess(await state(admin, user, auth.context, body.month, body.date, refreshedAutomaticEpo));
+    }
 
     if (body.action === "save_allocations") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: user.id, context: auth.context, permission: "allocate_sales_performance", message: "您沒有分配業績的權限" });
@@ -426,7 +453,7 @@ export async function POST(request: Request) {
         decision_at: decidedAt,
       }).eq("id", topResult.data.id).select("id").single();
       if (decision.error) throw new Error(decision.error.message);
-      await syncAutomaticEpoForDate({ admin, tenantId, branchId: user.branch_id, businessDate: body.date, actorId: user.id });
+      refreshedAutomaticEpo = await syncAutomaticEpoForDate({ admin, tenantId, branchId: user.branch_id, businessDate: body.date, actorId: user.id });
       if (!actorPermissions.canApprove) await createInAppNotifications({ supabase: admin, tenantId, recipientRoles: ["manager", "branch_manager", "store_owner", "store_manager"], title: `${values.originalBusinessDate} 每日最高同額待覆核`, message: `副理建議由指定教練取得每日最高 1 EPO，請經理覆核。`, eventType: "staff_daily_top_review", targetType: "staff_epo_daily_top_state", targetId: String(topResult.data.id), actionUrl: `/manager/staff-performance?month=${body.month}&date=${body.date}`, dedupeKey: `staff-daily-top:${topResult.data.id}:${decidedAt}`, createdBy: user.id });
       await writeStaffAudit({ supabase: admin, request, tenantId, actorId: user.id, action: "staff_daily_top_selected", targetType: "staff_epo_daily_top_state", targetId: String(topResult.data.id), after: { originalBusinessDate: values.originalBusinessDate, employeeId: values.employeeId, status: actorPermissions.canApprove ? "manager_selected" : "assistant_selected" } });
     } else if (body.action === "propose_epo") {
@@ -459,7 +486,7 @@ export async function POST(request: Request) {
       if (!actorPermissions.canAllocate && !actorPermissions.canApprove) throw new Error("您沒有整理今日結算的權限");
       await ensureDraftDay(admin, tenantId, body.date);
       await syncBigePaymentPerformanceSources(admin, tenantId, body.month, user.id);
-      await syncAutomaticEpoForDate({ admin, tenantId, branchId: user.branch_id, businessDate: body.date, actorId: user.id });
+      refreshedAutomaticEpo = await syncAutomaticEpoForDate({ admin, tenantId, branchId: user.branch_id, businessDate: body.date, actorId: user.id });
       const inputs = await dailySettlementInputs(admin, tenantId, user.branch_id, body.date);
       if (inputs.unassignedEvents || inputs.pendingTopTies || inputs.courseSnapshot.pending) {
         throw new Error(`尚有 ${inputs.unassignedEvents} 筆業績未完整分配、${inputs.pendingTopTies} 組每日最高同額未決定、${inputs.courseSnapshot.pending} 堂課程狀態未處理`);
@@ -478,7 +505,7 @@ export async function POST(request: Request) {
     } else if (body.action === "confirm_day") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: user.id, context: auth.context, permission: "confirm_daily_sales_report", message: "只有經理能確認每日業績報表" });
       await syncBigePaymentPerformanceSources(admin, tenantId, body.month, user.id);
-      await syncAutomaticEpoForDate({ admin, tenantId, branchId: user.branch_id, businessDate: body.date, actorId: user.id });
+      refreshedAutomaticEpo = await syncAutomaticEpoForDate({ admin, tenantId, branchId: user.branch_id, businessDate: body.date, actorId: user.id });
       const inputs = await dailySettlementInputs(admin, tenantId, user.branch_id, body.date);
       const missingPurchaseDates = await countLegacyPurchaseDateReminders(admin, tenantId, user.branch_id, body.date);
       if (missingPurchaseDates) throw new Error(`尚有 ${missingPurchaseDates} 份舊合約未輸入購買日，請先完成日報提醒項目`);
@@ -517,7 +544,7 @@ export async function POST(request: Request) {
       await writeStaffAudit({ supabase: admin, request, tenantId, actorId: user.id, action: "staff_sales_manual_event_created", targetType: "staff_sales_event", targetId: String(insert.data.id), after: { ...values, amount: signedAmount } });
     } else throw new Error("不支援的業績操作");
 
-    return apiSuccess(await state(admin, user, auth.context, body.month, body.date));
+    return apiSuccess(await state(admin, user, auth.context, body.month, body.date, refreshedAutomaticEpo));
   } catch (error) {
     const message = error instanceof z.ZodError ? error.issues[0]?.message || "欄位格式錯誤" : error instanceof Error ? normalizedDatabaseMessage(error.message) : "業績操作失敗";
     return apiError(400, "FORBIDDEN", message);

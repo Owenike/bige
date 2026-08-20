@@ -38,6 +38,8 @@
 .error { background: #ffe8e5; color: #8d251c; border: 1px solid #efb6b0; }
 .notice { background: #e2f5e8; color: #175f36; border: 1px solid #a9dbb8; }
 .empty { background: #fff; color: #6d7a74; text-align: center; }
+.loadFailure { min-height: 180px; display: grid; place-items: center; align-content: center; gap: 14px; padding: 28px; border: 1px solid #efb6b0; border-radius: 18px; background: #fff; color: #8d251c; text-align: center; }
+.loadFailure button { min-width: 120px; }
 
 .coachGrid {
   display: grid;
@@ -218,6 +220,8 @@
 .dayTitleLine { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .dayTitleLine h1 { margin: 0; font-size: clamp(27px, 3vw, 38px); line-height: 1; }
 .dayTitleLine .confirmed, .dayTitleLine .draft { white-space: nowrap; }
+.syncState { color: #dce7df; font-size: 12px; }
+.syncRetry { width: fit-content; min-height: 30px; padding: 4px 9px; border-color: rgba(255,255,255,.28); color: #fff; background: rgba(255,255,255,.08); font-size: 12px; text-align: left; }
 .historyNotice { display: flex; align-items: center; gap: 9px; color: #dce7df; font-size: 13px; }
 .historyNotice button { min-height: 32px; padding: 5px 9px; border-color: rgba(255,255,255,.28); color: #fff; background: rgba(255,255,255,.08); }
 .workbenchActions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 9px; }

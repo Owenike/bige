@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import styles from "../app/staff/performance/page.module.css";
 
@@ -182,6 +182,19 @@ async function parse(response: Response) {
   return payload.data as PerformanceState;
 }
 
+async function fetchPerformanceState(url: string, timeoutMs: number, timeoutMessage: string, init: RequestInit = {}) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await parse(await fetch(url, { ...init, cache: "no-store", signal: controller.signal }));
+  } catch (caught) {
+    if (caught instanceof DOMException && caught.name === "AbortError") throw new Error(timeoutMessage);
+    throw caught;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export default function StaffPerformanceDashboard() {
   const initialToday = todayTaiwan();
   const [month, setMonth] = useState(initialToday.slice(0, 7));
@@ -207,6 +220,10 @@ export default function StaffPerformanceDashboard() {
   const [overviewData, setOverviewData] = useState<PerformanceState | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
+  const activeViewKeyRef = useRef(`${month}:${date}`);
+  const refreshedViewKeyRef = useRef("");
 
   const closeModal = useCallback((force = false) => {
     if (!force && activeModal === "sales" && editingEventId && !window.confirm("尚未儲存分配內容，確定關閉？")) return;
@@ -239,17 +256,54 @@ export default function StaffPerformanceDashboard() {
     if (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) setDate(requestedDate);
   }, []);
 
+  const refreshSources = useCallback(async (snapshot: PerformanceState, viewKey: string, force = false) => {
+    if (!snapshot.actor.canManage || (!force && refreshedViewKeyRef.current === viewKey)) return;
+    refreshedViewKeyRef.current = viewKey;
+    setRefreshing(true);
+    setRefreshError("");
+    try {
+      const refreshed = await fetchPerformanceState(
+        "/api/staff-performance",
+        30_000,
+        "最新收款與 EPO 同步逾時，您仍可使用目前畫面。",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "refresh_sources", month: snapshot.month, date: snapshot.selectedDate }),
+        },
+      );
+      if (activeViewKeyRef.current === viewKey) setData(refreshed);
+    } catch (caught) {
+      if (activeViewKeyRef.current === viewKey) {
+        setRefreshError(caught instanceof Error ? caught.message : "最新資料同步失敗");
+      }
+    } finally {
+      if (activeViewKeyRef.current === viewKey) setRefreshing(false);
+    }
+  }, []);
+
   const load = useCallback(async () => {
+    const viewKey = `${month}:${date}`;
+    activeViewKeyRef.current = viewKey;
     setLoading(true);
     setError("");
+    setRefreshError("");
     try {
-      setData(await parse(await fetch(`/api/staff-performance?month=${month}&date=${date}`, { cache: "no-store" })));
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "讀取失敗");
-    } finally {
+      const snapshot = await fetchPerformanceState(
+        `/api/staff-performance?month=${month}&date=${date}`,
+        8_000,
+        "今日工作台讀取超過 8 秒，請重試。",
+      );
+      if (activeViewKeyRef.current !== viewKey) return;
+      setData(snapshot);
       setLoading(false);
+      void refreshSources(snapshot, viewKey);
+    } catch (caught) {
+      if (activeViewKeyRef.current === viewKey) setError(caught instanceof Error ? caught.message : "讀取失敗");
+    } finally {
+      if (activeViewKeyRef.current === viewKey) setLoading(false);
     }
-  }, [date, month]);
+  }, [date, month, refreshSources]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -297,11 +351,14 @@ export default function StaffPerformanceDashboard() {
     setError("");
     setNotice("");
     try {
-      setData(await parse(await fetch("/api/staff-performance", {
+      const nextData = await parse(await fetch("/api/staff-performance", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, month, date, ...values }),
-      })));
+      }));
+      setData((current) => current && current.selectedDate === nextData.selectedDate && !nextData.sessionEpoEvidence.length
+        ? { ...nextData, sessionEpoEvidence: current.sessionEpoEvidence }
+        : nextData);
       setNotice(success);
       return true;
     } catch (caught) {
@@ -484,7 +541,8 @@ export default function StaffPerformanceDashboard() {
     }
   }
 
-  if (loading && !data) return <main className={styles.page}><div className={styles.empty}>正在整理業績與 EPO…</div></main>;
+  if (loading && !data) return <main className={styles.page}><div className={styles.empty}>正在開啟今日工作台…</div></main>;
+  if (!data) return <main className={styles.page}><div className={styles.loadFailure}><strong>{error || "今日工作台暫時無法開啟"}</strong><button type="button" onClick={() => void load()}>重新讀取</button></div></main>;
   const self = data?.coaches[0] || null;
 
   return (
@@ -524,6 +582,7 @@ export default function StaffPerformanceDashboard() {
                   <h1>{dayLabel(date)}</h1>
                   <strong className={reportConfirmed ? styles.confirmed : styles.draft}>{reportConfirmed ? "已正式結算" : dayReport?.status === "reopened" ? "已重新開啟" : dayReport?.prepared_at ? "等待經理覆核" : "尚未結算"}</strong>
                 </div>
+                {refreshing ? <small className={styles.syncState}>正在背景同步最新收款與 EPO…</small> : refreshError ? <button className={styles.syncRetry} type="button" onClick={() => void refreshSources(data, `${month}:${date}`, true)}>{refreshError} 重試</button> : null}
                 {!isToday ? <div className={styles.historyNotice}><span>正在查看 {date}</span><button type="button" onClick={() => selectWorkbenchDate(initialToday)}>回到今天</button></div> : null}
               </div>
               <div className={styles.workbenchActions}>

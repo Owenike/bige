@@ -84,6 +84,20 @@ test("manager daily view defaults to the requested day and keeps history browsin
   assert.doesNotMatch(dashboard, /副理可完成初審並送出/);
 });
 
+test("daily workbench renders a read-only snapshot before refreshing slow payment and EPO sources", () => {
+  assert.match(route, /body\.action === "refresh_sources"/);
+  assert.match(route, /if \(!actorPermissions\.canManage\) throw new Error\("您沒有同步業績與 EPO 的權限"\)/);
+  assert.match(route, /\[staff-performance\] sources refreshed/);
+  assert.match(route, /sourceSyncMs/);
+  assert.match(route, /const \[actor, coaches\] = await Promise\.all/);
+  assert.match(dashboard, /\/api\/staff-performance\?month=\$\{month\}&date=\$\{date\}`/);
+  assert.match(dashboard, /action: "refresh_sources"/);
+  assert.match(dashboard, /setData\(snapshot\);[\s\S]*setLoading\(false\);[\s\S]*void refreshSources/);
+  assert.match(dashboard, /今日工作台讀取超過 8 秒，請重試/);
+  assert.match(dashboard, /您仍可使用目前畫面/);
+  assert.match(dashboard, /重新讀取/);
+});
+
 test("daily settlement follows daily-board duty markers and lists each working coach's lessons and sales", () => {
   assert.match(route, /collectCoachDayStatuses/);
   assert.match(route, /from\("bige_schedule_notes"\)[\s\S]*select\("coach_id, content"\)/);
