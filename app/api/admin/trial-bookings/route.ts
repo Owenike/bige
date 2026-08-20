@@ -42,7 +42,9 @@ const appointmentTimeValues = new Set(
 
 const TRIAL_BOOKING_SELECT = [
   "id",
+  "tenant_id",
   "created_at",
+  "scheduled_at",
   "name",
   "phone",
   "birthday",
@@ -423,6 +425,7 @@ export async function POST(request: Request) {
     const insertResult = await admin
       .from("trial_bookings")
       .insert({
+        tenant_id: tenantId,
         name: data.name,
         phone: data.phone,
         line_name: null,
@@ -440,6 +443,7 @@ export async function POST(request: Request) {
         booking_coach: data.bookingCoach,
         executing_coach: executingCoachLabel,
         line_notification_status: "not_sent",
+        scheduled_at: new Date().toISOString(),
       })
       .select(TRIAL_BOOKING_SELECT)
       .maybeSingle();

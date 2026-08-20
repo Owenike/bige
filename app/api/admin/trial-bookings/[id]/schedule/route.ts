@@ -116,7 +116,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const admin = createSupabaseAdminClient();
     const existingResult = await admin
       .from("trial_bookings")
-      .select("id, booking_status, source, line_notification_status")
+      .select("id, booking_status, source, line_notification_status, scheduled_at")
       .eq("id", bookingId)
       .maybeSingle();
 
@@ -223,6 +223,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const updateResult = await admin
       .from("trial_bookings")
       .update({
+        tenant_id: tenantId,
         name: data.name,
         phone: data.phone,
         service: data.service,
@@ -234,6 +235,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         booking_coach: data.bookingCoach,
         executing_coach: executingCoachLabel,
         line_notification_error: shouldSendLine ? null : undefined,
+        scheduled_at: existingResult.data.scheduled_at || new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq("id", bookingId)

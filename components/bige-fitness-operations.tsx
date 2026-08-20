@@ -187,11 +187,12 @@ type Booking = {
   ends_at: string;
   status: string;
   note: string | null;
-  operation_kind: "pt" | "trial";
-  course_type: BigeCourseType;
+  operation_kind: "pt" | "trial" | "bb";
+  course_type: BigeCourseType | null;
   trial_stage: string | null;
   operation_result: string | null;
   trial_conversion_outcome?: "pending_conversion" | "converted" | "not_converted" | null;
+  bb_conversion_outcome?: "converted" | "not_converted" | null;
   reminder_status: string;
   converted_at: string | null;
   converted_payment_amount?: number | null;
@@ -219,10 +220,16 @@ type FaFeeRecipientPrompt = {
 };
 type TrialBookingSummary = {
   id: string;
+  member_id?: string | null;
   name: string;
   phone: string;
   birthday: string | null;
   service: string;
+  original_fa_booking_id?: string | null;
+  original_fa_stage?: string | null;
+  original_fa_course_type?: BigeCourseType | null;
+  original_fa_starts_at?: string | null;
+  original_fa_coach_name?: string | null;
 };
 type ScheduleNote = {
   id: string;
@@ -1001,7 +1008,8 @@ function labelOrValue(labels: Record<string, string>, value: string) {
   return labels[value] || value;
 }
 
-function scheduleCourseLabel(courseType: BigeCourseType) {
+function scheduleCourseLabel(courseType: BigeCourseType | null) {
+  if (!courseType) return "BB 回訪";
   return courseType === "reformer_pilates"
     ? "皮拉提斯"
     : BIGE_COURSE_LABELS[courseType];
@@ -2530,7 +2538,7 @@ export default function BigeFitnessOperations({
           : null;
         return `FA · ${trial?.name || members.get(booking.member_id)?.full_name || "體驗學員"}`;
       }
-      return `${members.get(booking.member_id)?.full_name || "學員"} · ${BIGE_COURSE_LABELS[booking.course_type]}`;
+      return `${members.get(booking.member_id)?.full_name || "學員"} · ${scheduleCourseLabel(booking.course_type)}`;
     },
     [members, trialBookings],
   );
@@ -3164,8 +3172,8 @@ export default function BigeFitnessOperations({
     time: "09:00",
     memberId: "",
     trialBookingId: "",
-    operationKind: "pt" as "pt" | "trial",
-    courseType: "weight_training" as BigeCourseType,
+    operationKind: "pt" as "pt" | "trial" | "bb",
+    courseType: "weight_training" as BigeCourseType | null,
     duration: 60,
     note: "",
   });
@@ -3189,13 +3197,13 @@ export default function BigeFitnessOperations({
     }
     const timer = window.setTimeout(async () => {
       const response = await fetch(
-        `/api/bige-fitness?search=${encodeURIComponent(scheduleSearch.trim())}&memberScope=formal`,
+        `/api/bige-fitness?search=${encodeURIComponent(scheduleSearch.trim())}&memberScope=formal${scheduleDraft.operationKind === "bb" ? "&trialScope=bb" : ""}`,
       );
       const payload = await response.json().catch(() => null);
       if (response.ok) setScheduleResults(payload.data || payload);
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [dialog, editingSchedule, previewData, scheduleSearch]);
+  }, [dialog, editingSchedule, previewData, scheduleDraft.operationKind, scheduleSearch]);
 
   const submitSchedule = async (event: FormEvent) => {
     event.preventDefault();
@@ -3259,7 +3267,9 @@ export default function BigeFitnessOperations({
                           ...booking,
                           coach_id: selectedCoach,
                           course_type: scheduleDraft.courseType,
-                          service_name: BIGE_COURSE_LABELS[scheduleDraft.courseType],
+                          service_name: scheduleDraft.courseType
+                            ? BIGE_COURSE_LABELS[scheduleDraft.courseType]
+                            : "BB 回訪",
                           starts_at: normalizedStartsAt,
                           ends_at: endsAt,
                           note: scheduleDraft.note || null,
@@ -3418,9 +3428,14 @@ export default function BigeFitnessOperations({
     const optimisticBooking: Booking = {
       id: optimisticBookingId,
       optimistic: true,
-      member_id: scheduleDraft.operationKind === "pt" ? scheduleDraft.memberId : "",
+      member_id:
+        scheduleDraft.operationKind === "pt"
+          ? scheduleDraft.memberId
+          : scheduleDraft.operationKind === "bb"
+            ? selectedScheduleTrialResult?.member_id || ""
+            : "",
       coach_id: selectedCoach,
-      service_name: BIGE_COURSE_LABELS[scheduleDraft.courseType],
+      service_name: scheduleDraft.courseType ? BIGE_COURSE_LABELS[scheduleDraft.courseType] : "BB 回訪",
       starts_at: new Date(startsAt).toISOString(),
       ends_at: endsAt,
       status: "booked",
@@ -3432,7 +3447,7 @@ export default function BigeFitnessOperations({
       reminder_status: "pending",
       converted_at: null,
       trial_booking_id:
-        scheduleDraft.operationKind === "trial" ? scheduleDraft.trialBookingId : null,
+        scheduleDraft.operationKind !== "pt" ? scheduleDraft.trialBookingId : null,
     };
     const optimisticData = applyOptimisticBookingCreate(data, optimisticBooking, {
       member:
@@ -3442,7 +3457,7 @@ export default function BigeFitnessOperations({
             null
           : null,
       trialBooking:
-        scheduleDraft.operationKind === "trial"
+        scheduleDraft.operationKind !== "pt"
           ? selectedScheduleTrialResult ||
             (data.trialBookings || []).find(
               (trial) => trial.id === scheduleDraft.trialBookingId,
@@ -3455,7 +3470,7 @@ export default function BigeFitnessOperations({
       coachId: selectedCoach,
       memberId: scheduleDraft.operationKind === "pt" ? scheduleDraft.memberId || null : null,
       trialBookingId:
-        scheduleDraft.operationKind === "trial" ? scheduleDraft.trialBookingId || null : null,
+        scheduleDraft.operationKind !== "pt" ? scheduleDraft.trialBookingId || null : null,
       operationKind: scheduleDraft.operationKind,
       courseType: scheduleDraft.courseType,
       startsAt,
@@ -3793,6 +3808,30 @@ export default function BigeFitnessOperations({
     }
   };
 
+  const completeBbWithoutSale = async () => {
+    if (!selectedBooking || selectedBooking.operation_kind !== "bb" || bookingActionSubmitting) return;
+    const booking = selectedBooking;
+    setBookingActionSubmitting(true);
+    try {
+      await post({
+        action: "complete_bb_outcome",
+        bookingId: booking.id,
+        outcome: "not_converted",
+      });
+      setDialog(null);
+      setSelectedBooking(null);
+      setSuccess("BB 回訪已完成，本次未成交");
+      await loadBoard();
+    } catch (caught) {
+      showOperationAlert(
+        caught instanceof Error ? caught.message : "更新 BB 回訪結果失敗",
+        "無法更新 BB 回訪結果",
+      );
+    } finally {
+      setBookingActionSubmitting(false);
+    }
+  };
+
   const beginTrialConversionChange = () => {
     if (!selectedBooking?.converted_at || !data?.canChangeTrialConversion) return;
     setTrialConversionAmount(Number(selectedBooking.converted_payment_amount || 0));
@@ -4104,8 +4143,10 @@ export default function BigeFitnessOperations({
     contractPlanTotalSessions,
   );
   const contractPaymentTotal = paymentEntryTotal(contractPaymentEntries);
+  const selectedConversionBooking =
+    selectedBooking?.operation_kind === "trial" || selectedBooking?.operation_kind === "bb";
   const contractPaymentRequired = Boolean(
-    studentPaymentContext || selectedBooking?.operation_kind === "trial",
+    studentPaymentContext || selectedConversionBooking,
   );
 
   const openContract = (booking?: Booking, member?: Member) => {
@@ -4181,7 +4222,7 @@ export default function BigeFitnessOperations({
     if (contractSubmitting) return;
     setContractError("");
     const requiresInitialPayment = Boolean(
-      studentPaymentContext || selectedBooking?.operation_kind === "trial",
+      studentPaymentContext || selectedConversionBooking,
     );
     const entryError = paymentEntryError(contractPaymentEntries, requiresInitialPayment);
     if (entryError) {
@@ -4285,14 +4326,14 @@ export default function BigeFitnessOperations({
         {
           action: "create_contract",
           memberId: selectedMember?.id || null,
-          sourceBookingId: selectedBooking?.operation_kind === "trial" ? selectedBooking.id : null,
+          sourceBookingId: selectedConversionBooking ? selectedBooking?.id || null : null,
           sourceMemberBookingId:
             studentPaymentContext?.paymentType === "renewal"
               ? studentPaymentContext.bookingId
               : null,
           ...contractDraft,
           signedOn:
-            selectedBooking?.operation_kind === "trial"
+            selectedConversionBooking
               ? localDate()
               : contractDraft.signedOn,
           notifyManagerProfileChange:
@@ -4329,12 +4370,15 @@ export default function BigeFitnessOperations({
       setDialog(null);
       const wasStudentRenewal = studentPaymentContext?.paymentType === "renewal";
       const wasFaNewPayment = studentPaymentContext?.paymentType === "new";
+      const wasBbConversion = selectedBooking?.operation_kind === "bb";
       const paymentMemberId = studentPaymentContext?.memberId;
       setStudentPaymentContext(null);
       const notificationStatus = created.profileChangeNotification?.status;
       setSuccess(
         wasStudentRenewal
           ? "續約 Re 已建立，新合約與本次付款已記錄"
+          : wasBbConversion
+            ? "BB 成交已完成，正式會員、合約與本次付款已記錄；本筆不產生 EPO"
           : wasFaNewPayment
             ? notificationStatus === "failed"
               ? "新單 New 已建立，正式會員、合約與本次付款已記錄；主管個資通知送出失敗，請人工通知主管"
@@ -4804,7 +4848,7 @@ export default function BigeFitnessOperations({
     canCancelBigeCourseAnytime(sessionIdentity || {}) ||
     !!selectedBookingStatusWindow?.allowed;
   const contractIdentityLocked =
-    selectedBooking?.operation_kind === "trial" || Boolean(studentPaymentContext);
+    selectedConversionBooking || Boolean(studentPaymentContext);
   const missingContractProfileFields = selectedBooking?.operation_kind === "trial"
     ? getBigeTrialContractMissingProfileFields({
         fullName: contractDraft.fullName,
@@ -4907,6 +4951,7 @@ export default function BigeFitnessOperations({
     const detailMatchesBooking = scheduleMemberDetail?.member.id === booking.member_id;
     const canOpenPayment = Boolean(
       detailMatchesBooking &&
+        booking.operation_kind !== "bb" &&
         (booking.operation_kind === "trial"
           ? data?.canCreateContract
           : scheduleMemberDetail?.canRecordContractPayment || data?.canCreateContract),
@@ -6255,7 +6300,7 @@ export default function BigeFitnessOperations({
                   {(monthlyData?.bookings || []).map((booking) => (
                     <article className={styles.monthlyBookingItem} key={booking.id}>
                       <time>{new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(booking.starts_at))}</time>
-                      <strong>{booking.operation_kind === "trial" ? "FA" : BIGE_COURSE_LABELS[booking.course_type]}</strong>
+                      <strong>{booking.operation_kind === "trial" ? "FA" : booking.operation_kind === "bb" ? "BB 回訪" : scheduleCourseLabel(booking.course_type)}</strong>
                       <span>{coachLabel(monthlyCoachOptions.find((coach) => coach.id === booking.coach_id) || { id: "", display_name: null, english_name: null })} · {booking.status}</span>
                     </article>
                   ))}
@@ -6524,16 +6569,22 @@ export default function BigeFitnessOperations({
                     value={scheduleDraft.operationKind}
                     disabled={Boolean(editingSchedule)}
                     onChange={(event) => {
-                      const operationKind = event.target.value as "pt" | "trial";
+                      const operationKind = event.target.value as "pt" | "trial" | "bb";
                       setScheduleDraft({
                         ...scheduleDraft,
                         operationKind,
                         memberId: "",
                         trialBookingId: "",
+                        courseType:
+                          operationKind === "bb"
+                            ? null
+                            : scheduleDraft.courseType || "weight_training",
                         duration:
                           operationKind === "trial"
                             ? BIGE_FA_DURATION_MINUTES
-                            : scheduleDraft.duration,
+                            : operationKind === "bb"
+                              ? 60
+                              : scheduleDraft.duration,
                       });
                       setSelectedScheduleMemberResult(null);
                       setSelectedScheduleTrialResult(null);
@@ -6543,23 +6594,27 @@ export default function BigeFitnessOperations({
                   >
                     <option value="pt">PT 正式課</option>
                     <option value="trial">FA 體驗</option>
+                    <option value="bb">BB 回訪</option>
                   </select>
                 </label>
                 <label className={styles.field}>
                   <span className={styles.label}>課別</span>
                   <select
                     className={styles.select}
-                    value={scheduleDraft.courseType}
+                    value={scheduleDraft.courseType || ""}
+                    disabled={scheduleDraft.operationKind === "bb"}
                     onChange={(event) => setScheduleDraft({ ...scheduleDraft, courseType: event.target.value as BigeCourseType })}
                   >
-                    {(scheduleDraft.operationKind === "trial"
-                      ? BIGE_TRIAL_COURSE_TYPES
-                      : BIGE_CONTRACT_COURSE_TYPES
-                    ).map((course) => (
-                      <option key={course} value={course}>
-                        {BIGE_COURSE_LABELS[course]}
-                      </option>
-                    ))}
+                    {scheduleDraft.operationKind === "bb" ? (
+                      <option value="">不適用（不計課堂）</option>
+                    ) : (scheduleDraft.operationKind === "trial"
+                        ? BIGE_TRIAL_COURSE_TYPES
+                        : BIGE_CONTRACT_COURSE_TYPES
+                      ).map((course) => (
+                        <option key={course} value={course}>
+                          {BIGE_COURSE_LABELS[course]}
+                        </option>
+                      ))}
                   </select>
                 </label>
               </>
@@ -6581,7 +6636,13 @@ export default function BigeFitnessOperations({
             {editingSchedule?.kind !== "note" ? (
               <>
                 <label className={`${styles.field} ${styles.fieldFull}`}>
-                  <span className={styles.label}>{editingSchedule ? "學員" : "搜尋學員"}</span>
+                  <span className={styles.label}>
+                    {editingSchedule
+                      ? "學員"
+                      : scheduleDraft.operationKind === "bb"
+                        ? "搜尋原始 FA 客戶"
+                        : "搜尋學員"}
+                  </span>
                   <input
                     className={styles.input}
                     value={scheduleSearch}
@@ -6620,6 +6681,11 @@ export default function BigeFitnessOperations({
                         }}
                       >
                         <strong>{item.full_name || item.name}</strong> · {item.phone}
+                        {scheduleDraft.operationKind === "bb" ? (
+                          <small>
+                            {item.original_fa_stage || "未標示階段"} · {scheduleCourseLabel(item.original_fa_course_type || null)} · {item.original_fa_coach_name || "未命名教練"} · {formatDateTime(item.original_fa_starts_at)}
+                          </small>
+                        ) : null}
                       </button>
                     ))}
                   </div>
@@ -6714,7 +6780,7 @@ export default function BigeFitnessOperations({
             showCourseAllocationBookingBehind ||
             faFeeRecipientPrompt?.bookingId === selectedBooking.id
           }
-          title={`${selectedBooking.operation_kind === "trial" ? "FA 體驗" : "課程操作"}｜${members.get(selectedBooking.member_id)?.full_name || "學員"}`}
+          title={`${selectedBooking.operation_kind === "trial" ? "FA 體驗" : selectedBooking.operation_kind === "bb" ? "BB 回訪" : "課程操作"}｜${members.get(selectedBooking.member_id)?.full_name || "學員"}`}
           onClose={() => {
             if (bookingActionSubmitting || trialConversionSubmitting) return;
             setOperationAlert(null);
@@ -6856,6 +6922,63 @@ export default function BigeFitnessOperations({
                   ) : null}
                 </div>
               </>
+            ) : selectedBooking.operation_kind === "bb" ? (
+              <div className={styles.trialOutcomePanel}>
+                {selectedBooking.converted_at ? (
+                  <div className={styles.trialConvertedNotice}>
+                    <CircleDollarSign size={18} />
+                    <div>
+                      <strong>此 BB 已成交並完成合約與付款</strong>
+                      <span>業績預設 50% 給執行 BB 的教練；本筆不產生 EPO。</span>
+                    </div>
+                  </div>
+                ) : selectedBooking.bb_conversion_outcome === "not_converted" ? (
+                  <div className={styles.trialNotConvertedNotice}>
+                    <RotateCcw size={18} />
+                    <div>
+                      <strong>本次 BB 已完成，未成交</strong>
+                      <span>若後續完成合約與付款，仍可改記為 BB 成交。</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.bookingStatusGuidance}>
+                    <UserRoundCheck size={20} />
+                    <div>
+                      <strong>確認本次 BB 結果</strong>
+                      <span>只有完成會員資料、方案、合約與本次付款，才會計為 BB 成交。</span>
+                    </div>
+                  </div>
+                )}
+                {!selectedBooking.converted_at ? (
+                  <div className={styles.bookingStatusActions}>
+                    <button
+                      type="button"
+                      className={`${styles.button} ${styles.gold}`}
+                      disabled={!canOperateSelectedBooking || bookingActionSubmitting}
+                      onClick={() => openContract(selectedBooking)}
+                    >
+                      <CircleDollarSign size={17} />
+                      {selectedBooking.bb_conversion_outcome === "not_converted" ? "改為 BB 成交" : "BB 成交"}
+                    </button>
+                    {selectedBooking.status !== "completed" ? (
+                      <button
+                        type="button"
+                        className={styles.button}
+                        disabled={!canOperateSelectedBooking || bookingActionSubmitting}
+                        onClick={() => void completeBbWithoutSale()}
+                      >
+                        {bookingActionSubmitting ? "處理中…" : "完成・未成交"}
+                      </button>
+                    ) : null}
+                    {selectedBooking.status !== "completed" ? (
+                      <>
+                        <button disabled={!canOperateSelectedBooking} className={styles.button} onClick={() => void updateBooking("no_show")}>未到場</button>
+                        <button disabled={!canCancelSelectedBooking} className={`${styles.button} ${styles.danger}`} onClick={() => void updateBooking("cancelled")}>取消</button>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <div className={styles.trialOutcomePanel}>
                 {selectedBooking.fa_fee_recipient_name ? (
@@ -7067,6 +7190,8 @@ export default function BigeFitnessOperations({
           title={
             selectedBooking?.operation_kind === "trial" && !studentPaymentContext
               ? "FA 成交"
+              : selectedBooking?.operation_kind === "bb" && !studentPaymentContext
+                ? "BB 成交"
               : "直接建立正式會員"
           }
           onClose={() => {
@@ -7102,7 +7227,9 @@ export default function BigeFitnessOperations({
                   ? studentPaymentContext.paymentType === "new"
                     ? "姓名、手機、生日、Email、款項類型與簽約日已由本堂 FA 資料帶入，付款時不可更改。"
                     : "姓名、手機、生日與 Email 已由本堂學員資料帶入，付款時不可更改。"
-                  : "姓名、手機、生日與簽約日已由 FA 資料帶入，成交時不可直接更改。"}
+                  : selectedBooking?.operation_kind === "bb"
+                    ? "姓名、手機、生日與簽約日已由原始 FA／BB 資料帶入，成交時不可直接更改。"
+                    : "姓名、手機、生日與簽約日已由 FA 資料帶入，成交時不可直接更改。"}
               </p>
             ) : null}
             {missingContractIdentityFields.length > 0 ? (
@@ -7324,12 +7451,12 @@ export default function BigeFitnessOperations({
                 required
                 type="date"
                 value={
-                  selectedBooking?.operation_kind === "trial"
+                  selectedConversionBooking
                     ? localDate()
                     : contractDraft.signedOn
                 }
-                disabled={selectedBooking?.operation_kind === "trial"}
-                aria-readonly={selectedBooking?.operation_kind === "trial"}
+                disabled={selectedConversionBooking}
+                aria-readonly={selectedConversionBooking}
                 onChange={(event) => setContractDraft({ ...contractDraft, signedOn: event.target.value })}
               />
             </label>
@@ -7338,7 +7465,7 @@ export default function BigeFitnessOperations({
               <div className={styles.paymentSplitHeader}>
                 <div>
                   <span className={styles.label}>
-                    {studentPaymentContext || selectedBooking?.operation_kind === "trial"
+                    {studentPaymentContext || selectedConversionBooking
                       ? "本次付款"
                       : "首次付款"}
                   </span>
@@ -7455,10 +7582,10 @@ export default function BigeFitnessOperations({
             ) : null}
             {studentPaymentContext?.paymentType !== "balance" && maximumInitialPayment > 0 && contractPlanTotalSessions > 0 ? (
               <p className={`${styles.warning} ${styles.fieldFull}`}>
-                {studentPaymentContext || selectedBooking?.operation_kind === "trial"
+                {studentPaymentContext || selectedConversionBooking
                   ? "本次付款"
                   : "首次付款"}上限：{formatMoney(maximumInitialPayment)}（合約總額）；
-                {studentPaymentContext || selectedBooking?.operation_kind === "trial"
+                {studentPaymentContext || selectedConversionBooking
                   ? "必須付款，最低為"
                   : "若有付款，最低為"}
                 {formatMoney(
@@ -7489,7 +7616,7 @@ export default function BigeFitnessOperations({
                       maximumInitialPayment,
                       {
                         minimumAmount:
-                          studentPaymentContext || selectedBooking?.operation_kind === "trial"
+                          studentPaymentContext || selectedConversionBooking
                             ? minimumInitialPayment
                             : 0,
                       },
@@ -8388,7 +8515,7 @@ function HourRow(props: {
         const trialService = booking
           ? trialBooking
             ? TRIAL_SERVICE_LABELS[trialBooking.service] || trialBooking.service
-            : BIGE_COURSE_LABELS[booking.course_type]
+            : scheduleCourseLabel(booking.course_type)
           : "";
         const trialOutcomeVisualState = booking
           ? getBigeTrialOutcomeVisualState({
@@ -8511,7 +8638,11 @@ function HourRow(props: {
                   className={[
                     styles.booking,
                     startsOnHour ? styles.cellEntryFull : styles.cellEntryHalf,
-                    booking.operation_kind === "trial" ? styles.bookingTrial : styles.bookingPt,
+                    booking.operation_kind === "trial"
+                      ? styles.bookingTrial
+                      : booking.operation_kind === "bb"
+                        ? styles.bookingBb
+                        : styles.bookingPt,
                     booking.operation_kind === "trial" &&
                     isBigeTrialReminderConfirmed(booking.reminder_status)
                       ? styles.bookingTrialReminded
@@ -8581,6 +8712,24 @@ function HourRow(props: {
                             {memberNumber}
                           </span>
                         ) : null}
+                      </>
+                    ) : booking.operation_kind === "bb" ? (
+                      <>
+                        <span className={styles.bookingEyebrow}>
+                          BB 回訪 · {bookingDurationMinutes(booking)} 分鐘
+                        </span>
+                        <span className={styles.bookingTrialNameLine}>
+                          <span className={styles.bookingName}>{trialName}</span>
+                          {trialBirthday ? <span className={styles.bookingBirthday}>{trialBirthday}</span> : null}
+                        </span>
+                        <span className={styles.bookingPhone}>{trialPhone}</span>
+                        <span className={styles.bookingCourse}>
+                          {booking.bb_conversion_outcome === "converted"
+                            ? "BB 成交"
+                            : booking.bb_conversion_outcome === "not_converted"
+                              ? "BB 完成・未成交"
+                              : "等待回訪結果"}
+                        </span>
                       </>
                     ) : (
                       <>

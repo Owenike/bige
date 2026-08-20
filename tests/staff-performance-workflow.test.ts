@@ -9,6 +9,12 @@ const performanceRead = readFileSync("lib/staff-performance-read.ts", "utf8");
 const dashboardStyles = readFileSync("app/staff/performance/page.module.css", "utf8");
 const payrollRoute = readFileSync("app/api/staff-payroll/route.ts", "utf8");
 const contractRoute = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+const trialBookingRoute = readFileSync("app/api/admin/trial-bookings/route.ts", "utf8");
+const trialScheduleRoute = readFileSync("app/api/admin/trial-bookings/[id]/schedule/route.ts", "utf8");
+const trialTenantMigration = readFileSync(
+  "supabase/migrations/20260821123000_add_trial_booking_tenant_attribution.sql",
+  "utf8",
+);
 const migration = readFileSync(
   "supabase/migrations/20260818225608_staff_sales_allocation_epo_settlement.sql",
   "utf8",
@@ -171,7 +177,7 @@ test("daily settlement follows daily-board duty markers and lists each working c
   assert.match(performanceRead, /collectCoachDayStatuses/);
   assert.match(performanceRead, /from\("bige_schedule_notes"\)[\s\S]*select\("coach_id, content"\)/);
   assert.match(performanceRead, /status !== "off"/);
-  assert.match(performanceRead, /select\("id, coach_id, operation_kind, status, operation_result"\)/);
+  assert.match(performanceRead, /select\("id, coach_id, operation_kind, status, operation_result, course_type, trial_stage, trial_conversion_outcome, bb_conversion_outcome, converted_at, trial_booking_id, starts_at"\)/);
   assert.match(performanceRead, /dailyCoachSummaries/);
   assert.match(performanceRead, /\["pt", "trial"\]\.includes/);
   assert.match(performanceRead, /salesNeedsConfirmation/);
@@ -185,6 +191,27 @@ test("daily settlement follows daily-board duty markers and lists each working c
   assert.doesNotMatch(dashboard, /完成：正式 PT/);
   assert.match(dashboardStyles, /\.dailyCoachList/);
   assert.match(dashboardStyles, /\.dailyCoachTableHeader/);
+});
+
+test("daily and monthly summaries show exact PT, FA, appointment, and BB figures without an invented other course", () => {
+  assert.match(performanceRead, /formalCourseCounts/);
+  assert.match(performanceRead, /faExecutionCounts/);
+  assert.match(performanceRead, /successfulFaAppointmentCredits/);
+  assert.match(performanceRead, /scheduled_at/);
+  assert.match(performanceRead, /from\("trial_bookings"\)[\s\S]*\.eq\("tenant_id", params\.tenantId\)/);
+  assert.match(trialBookingRoute, /tenant_id: tenantId[\s\S]*scheduled_at: new Date\(\)\.toISOString\(\)/);
+  assert.match(trialScheduleRoute, /tenant_id: tenantId[\s\S]*scheduled_at: existingResult\.data\.scheduled_at \|\| new Date\(\)\.toISOString\(\)/);
+  assert.match(trialTenantMigration, /ambiguous rows remain null instead of being guessed/);
+  assert.match(performanceRead, /bbVisits/);
+  assert.match(performanceRead, /bbConversions/);
+  assert.match(dashboard, /正式課完成/);
+  assert.match(dashboard, /FA 完成/);
+  assert.match(dashboard, /FA 預約成功/);
+  assert.match(dashboard, /BB 回訪／成交/);
+  assert.match(dashboard, /FA1／FA2 成交率/);
+  assert.match(dashboard, /待判定/);
+  assert.doesNotMatch(dashboard, /<span>其他<\/span>/);
+  assert.match(route, /filter\(\(row\) => \["pt", "trial"\]\.includes\(String\(row\.operation_kind\)\)\)/);
 });
 
 test("new contracts snapshot the original coach for default allocation and EPO evidence", () => {

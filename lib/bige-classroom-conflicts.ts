@@ -9,7 +9,7 @@ export type BigeClassroomConflictBooking = {
   starts_at: string;
   ends_at: string;
   status: string;
-  course_type: string;
+  course_type: string | null;
 };
 
 export type BigeClassroomConflict = {
@@ -36,7 +36,7 @@ export function buildBigeClassroomConflicts(
     .filter(
       (booking) =>
         ACTIVE_STATUSES.has(String(booking.status || "").toLowerCase()) &&
-        CLASSROOM_COURSE_TYPES.has(booking.course_type),
+        CLASSROOM_COURSE_TYPES.has(String(booking.course_type || "")),
     )
     .map((booking) => ({
       ...booking,

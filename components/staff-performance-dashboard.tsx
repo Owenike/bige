@@ -21,7 +21,18 @@ type CoachSummary = {
   salesRemaining: number;
   sessionsRemaining: number;
   nextTier: null | { salesThreshold: number; sessionThreshold: number | null; sessionRate: number };
+  formalCourseCounts: MetricCount[];
+  faExecutionCounts: MetricCount[];
+  faConverted: number;
+  faNotConverted: number;
+  faPending: number;
+  faConversionRate: number | null;
+  successfulFaAppointments: number;
+  bbVisits: number;
+  bbConversions: number;
 };
+
+type MetricCount = { label: string; count: number };
 
 type SalesEvent = {
   id: string;
@@ -88,6 +99,11 @@ type DailyCoachSummary = {
   confirmedSalesAmount: number;
   salesAllocationCount: number;
   salesNeedsConfirmation: boolean;
+  formalCourseCounts: MetricCount[];
+  faExecutionCounts: MetricCount[];
+  successfulFaAppointments: number;
+  bbVisits: number;
+  bbConversions: number;
 };
 
 type PerformanceState = {
@@ -109,6 +125,10 @@ type PerformanceState = {
   dailyTopStates: DailyTopState[];
   sessionEpoEvidence: Array<{ employeeId: string; employmentType: "full_time" | "part_time"; scheduleReady: boolean; inside: number; outside: number; boundary: number; eligible: boolean; requiredInside: number; requiredOutside: number }>;
   dailyCoachSummaries: DailyCoachSummary[];
+  successfulFaAppointments: null | {
+    total: number;
+    otherBookers: MetricCount[];
+  };
   courseSettlement: null | {
     summary: { total: number; completed: number; cancelled: number; noShow: number; pending: number; ptCompleted: number; trialCompleted: number };
     closure: null | { status: string; confirmed_at: string | null; reopened_at: string | null };
@@ -117,6 +137,7 @@ type PerformanceState = {
 
 const SOURCE_LABELS: Record<string, string> = {
   fa: "FA 成交",
+  bb: "BB 成交",
   renewal: "續約",
   final_payment: "繳交尾款",
   refund: "退款扣回",
@@ -146,6 +167,13 @@ const EPO_TYPE_LABELS: Record<string, string> = {
 
 function money(value: number | string | null | undefined) {
   return new Intl.NumberFormat("zh-TW", { style: "currency", currency: "TWD", maximumFractionDigits: 0 }).format(Number(value || 0));
+}
+
+function MetricBreakdown({ items, empty = "0" }: { items: MetricCount[]; empty?: string }) {
+  if (!items.length) return <span className={styles.metricEmpty}>{empty}</span>;
+  return <div className={styles.metricBreakdown}>{items.map((item) => (
+    <span key={item.label}><b>{item.label}</b><strong>{item.count}</strong></span>
+  ))}</div>;
 }
 
 function monthLabel(value: string) {
@@ -736,11 +764,21 @@ export default function StaffPerformanceDashboard({
                   <div><h2>{isToday ? "今日上班教練" : `${date} 上班教練`}</h2></div>
                   <div className={styles.headingActions}><span>{data.dailyCoachSummaries.length} 人</span></div>
                 </div>
-                {!viewDataReady ? <div className={styles.empty}>正在讀取當日教練資料…</div> : data.dailyCoachSummaries.length ? <><div className={styles.dailyCoachTableHeader} aria-hidden="true"><span>教練</span><span>完成／排課（堂）</span><span>當日業績</span></div><div className={styles.dailyCoachList}>{data.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}>
-                  <div className={styles.dailyCoachIdentity}><strong>{coachName(coach.employeeId)}</strong>{coach.shiftLabel ? <span>{coach.shiftLabel}</span> : null}</div>
-                  <div className={styles.dailyCoachCourse}><strong>{coach.completedSessions}<span>／{coach.scheduledSessions}</span></strong>{coach.pendingSessions ? <small>{coach.pendingSessions} 堂待處理</small> : null}</div>
-                  <div className={styles.dailyCoachSales}>{sourceDataReady ? <><strong className={coach.salesAmount < 0 ? styles.negative : ""}>{money(coach.salesAmount)}</strong>{coach.salesNeedsConfirmation ? <small>待確認</small> : null}</> : <strong className={styles.inlineChecking}>{unavailableSourceLabel}</strong>}</div>
-                </article>)}</div></> : <div className={styles.empty}>這一天沒有教練上班，請確認日排課表。</div>}
+                {!viewDataReady ? <div className={styles.empty}>正在讀取當日教練資料…</div> : data.dailyCoachSummaries.length ? <>
+                  <div className={styles.dailyCoachTableHeader} aria-hidden="true">
+                    <span>教練</span><span>完成／排課（堂）</span><span>正式課完成</span><span>FA 完成</span><span>FA 預約成功</span><span>BB</span><span>當日業績</span>
+                  </div>
+                  <div className={styles.dailyCoachList}>{data.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}>
+                    <div className={styles.dailyCoachIdentity}><strong>{coachName(coach.employeeId)}</strong>{coach.shiftLabel ? <span>{coach.shiftLabel}</span> : null}</div>
+                    <div className={styles.dailyCoachCourse}><strong>{coach.completedSessions}<span>／{coach.scheduledSessions}</span></strong>{coach.pendingSessions ? <small>{coach.pendingSessions} 堂待處理</small> : null}</div>
+                    <div className={styles.dailyCoachMetric}><label>正式課完成</label><MetricBreakdown items={coach.formalCourseCounts || []} /></div>
+                    <div className={styles.dailyCoachMetric}><label>FA 完成</label><MetricBreakdown items={coach.faExecutionCounts || []} /></div>
+                    <div className={styles.dailyCoachSingleMetric}><label>FA 預約成功</label><strong>{coach.successfulFaAppointments}</strong></div>
+                    <div className={styles.dailyCoachSingleMetric}><label>BB</label><strong>{coach.bbConversions}<span>／{coach.bbVisits}</span></strong><small>成交／回訪</small></div>
+                    <div className={styles.dailyCoachSales}><label>當日業績</label>{sourceDataReady ? <><strong className={coach.salesAmount < 0 ? styles.negative : ""}>{money(coach.salesAmount)}</strong>{coach.salesNeedsConfirmation ? <small>待確認</small> : null}</> : <strong className={styles.inlineChecking}>{unavailableSourceLabel}</strong>}</div>
+                  </article>)}</div>
+                  {data.successfulFaAppointments?.otherBookers.length ? <div className={styles.otherAppointmentBookers}><strong>其他預約人員</strong><MetricBreakdown items={data.successfulFaAppointments.otherBookers} /></div> : null}
+                </> : <div className={styles.empty}>這一天沒有教練上班，請確認日排課表。</div>}
               </section>
 
             </div>
@@ -763,11 +801,23 @@ export default function StaffPerformanceDashboard({
                   </div>
                   {overviewError ? <div className={styles.error}>{overviewError}</div> : null}
                   {!monthOverview && overviewLoading ? <div className={styles.empty}>正在整理本月績效…</div> : null}
-                  {monthOverview ? <div className={styles.coachOverviewList}>{monthOverview.coaches.map((coach) => <article key={coach.id}>
-                    <div className={styles.coachIdentity}><strong>{coachName(coach.id)}</strong><small>{!coach.employment_configured ? "正／兼職待設定" : coach.employment_type === "part_time" ? "兼職" : "正職"}</small></div>
-                    <dl><div><dt>本月業績</dt><dd>{money(coach.projectedSales)}</dd></div><div><dt>本月 EPO</dt><dd>{coach.projectedEpo}</dd></div><div><dt>本月已完課</dt><dd>{coach.completedSessions} 堂</dd></div><div><dt>本月堂費級距</dt><dd>{coach.employment_configured ? `${money(coach.sessionRate)}／堂` : "待設定"}</dd></div></dl>
-                    {coach.projectedSales !== coach.confirmedSales || coach.projectedEpo !== coach.confirmedEpo ? <small className={styles.pending}>含未結算業績／EPO</small> : <small className={styles.confirmedText}>已正式結算</small>}
-                  </article>)}</div> : null}
+                  {monthOverview ? <>
+                    <div className={styles.coachOverviewList}>{monthOverview.coaches.map((coach) => <article key={coach.id}>
+                      <div className={styles.coachOverviewTopline}>
+                        <div className={styles.coachIdentity}><strong>{coachName(coach.id)}</strong><small>{!coach.employment_configured ? "正／兼職待設定" : coach.employment_type === "part_time" ? "兼職" : "正職"}</small></div>
+                        {coach.projectedSales !== coach.confirmedSales || coach.projectedEpo !== coach.confirmedEpo ? <small className={styles.pending}>含未結算業績／EPO</small> : <small className={styles.confirmedText}>已正式結算</small>}
+                      </div>
+                      <dl className={styles.coachOverviewPrimary}><div><dt>本月業績</dt><dd>{money(coach.projectedSales)}</dd></div><div><dt>本月 EPO</dt><dd>{coach.projectedEpo}</dd></div><div><dt>本月已完正式課</dt><dd>{coach.completedSessions} 堂</dd></div><div><dt>本月堂費級距</dt><dd>{coach.employment_configured ? `${money(coach.sessionRate)}／堂` : "待設定"}</dd></div></dl>
+                      <div className={styles.coachOverviewDetails}>
+                        <section><label>正式課完成</label><MetricBreakdown items={coach.formalCourseCounts || []} /></section>
+                        <section><label>FA 完成</label><MetricBreakdown items={coach.faExecutionCounts || []} /></section>
+                        <section className={styles.faConversionMetric}><label>FA1／FA2 成交率</label><strong>{coach.faConversionRate == null ? "—" : `${coach.faConversionRate}%`}</strong><small>成交 {coach.faConverted}・未成交 {coach.faNotConverted}・待判定 {coach.faPending}</small></section>
+                        <section className={styles.singleOverviewMetric}><label>FA 預約成功</label><strong>{coach.successfulFaAppointments}</strong></section>
+                        <section className={styles.singleOverviewMetric}><label>BB 回訪／成交</label><strong>{coach.bbVisits}<span>／{coach.bbConversions}</span></strong><small>回訪／成交；不計 FA 率與 EPO</small></section>
+                      </div>
+                    </article>)}</div>
+                    {monthOverview.successfulFaAppointments?.otherBookers.length ? <section className={styles.monthOtherBookers}><div><strong>其他預約人員</strong><small>櫃台或非上班教練建立的成功 FA 預約</small></div><MetricBreakdown items={monthOverview.successfulFaAppointments.otherBookers} /></section> : null}
+                  </> : null}
                 </div> : null}
 
                 {activeModal === "dates" ? <div className={styles.dateBrowser}>

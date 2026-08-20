@@ -46,7 +46,8 @@ export const BIGE_COURSE_LABELS: Record<BigeCourseType, string> = {
   onsite_assessment: "現場評估",
 };
 
-export const BIGE_OPERATION_KINDS = ["pt", "trial"] as const;
+export const BIGE_OPERATION_KINDS = ["pt", "trial", "bb"] as const;
+export const BIGE_BATCH_OPERATION_KINDS = ["pt", "trial"] as const;
 export const BIGE_TRIAL_REMINDER_PENDING_STATUS = "pending" as const;
 export const BIGE_TRIAL_REMINDER_CONFIRMED_STATUS = "reached" as const;
 export const BIGE_FA_DEFAULT_FEE_AMOUNT = 880 as const;
@@ -275,6 +276,8 @@ export type BigeTrialConversionOutcome =
   | "converted"
   | "not_converted";
 
+export type BigeBbConversionOutcome = "converted" | "not_converted";
+
 export type BigeTrialOutcomeVisualState =
   | "pending_conversion"
   | "converted"
@@ -415,12 +418,25 @@ export const createScheduleSchema = z.object({
   trialBookingId: z.string().uuid().nullable().optional(),
   coachId: z.string().uuid(),
   operationKind: z.enum(BIGE_OPERATION_KINDS),
-  courseType: z.enum(BIGE_COURSE_TYPES),
+  courseType: z.enum(BIGE_COURSE_TYPES).nullable(),
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
   note: z.string().trim().max(500).nullable().optional(),
   groupId: z.string().uuid().nullable().optional(),
   idempotencyKey: z.string().trim().min(8).max(180),
+}).superRefine((input, context) => {
+  if (input.operationKind === "bb" && input.courseType !== null) {
+    context.addIssue({ code: "custom", path: ["courseType"], message: "BB 回訪不應設定課別" });
+  }
+  if (input.operationKind !== "bb" && input.courseType === null) {
+    context.addIssue({ code: "custom", path: ["courseType"], message: "請選擇課別" });
+  }
+  if (input.operationKind === "pt" && !input.memberId) {
+    context.addIssue({ code: "custom", path: ["memberId"], message: "請選擇正式會員" });
+  }
+  if (input.operationKind !== "pt" && !input.trialBookingId) {
+    context.addIssue({ code: "custom", path: ["trialBookingId"], message: "請選擇原始 FA 紀錄" });
+  }
 });
 
 export const createScheduleBatchSchema = z.object({
@@ -428,7 +444,7 @@ export const createScheduleBatchSchema = z.object({
   branchId: z.string().uuid().nullable().optional(),
   memberId: z.string().uuid(),
   coachId: z.string().uuid(),
-  operationKind: z.enum(BIGE_OPERATION_KINDS).default("pt"),
+  operationKind: z.enum(BIGE_BATCH_OPERATION_KINDS).default("pt"),
   courseType: z.enum(BIGE_COURSE_TYPES),
   startsAt: z.array(z.string().datetime({ offset: true })).min(1).max(62),
   note: z.string().trim().max(500).nullable().optional(),
@@ -440,7 +456,7 @@ export const checkScheduleBatchSchema = z.object({
   branchId: z.string().uuid().nullable().optional(),
   memberId: z.string().uuid(),
   coachId: z.string().uuid(),
-  operationKind: z.enum(BIGE_OPERATION_KINDS).default("pt"),
+  operationKind: z.enum(BIGE_BATCH_OPERATION_KINDS).default("pt"),
   courseType: z.enum(BIGE_COURSE_TYPES),
   startsAt: z.array(z.string().datetime({ offset: true })).min(1).max(62),
 });
@@ -458,7 +474,7 @@ export const editScheduleBookingSchema = z.object({
   action: z.literal("edit_schedule_booking"),
   bookingId: z.string().uuid(),
   coachId: z.string().uuid(),
-  courseType: z.enum(BIGE_COURSE_TYPES),
+  courseType: z.enum(BIGE_COURSE_TYPES).nullable(),
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
   note: z.string().trim().max(500).nullable().optional(),
@@ -661,13 +677,6 @@ export const createContractSchema = z.object({
       });
     }
   }
-  if (input.sourceBookingId && !input.faFeeRecipientName) {
-    context.addIssue({
-      code: "custom",
-      path: ["faFeeRecipientName"],
-      message: "請先選擇或輸入 FA 收款人",
-    });
-  }
   if (
     !input.sourceBookingId &&
     (input.faFeeRecipientProfileId != null || input.faFeeRecipientName != null)
@@ -779,6 +788,12 @@ export const completeTrialOutcomeSchema = z.object({
   }
 });
 
+export const completeBbOutcomeSchema = z.object({
+  action: z.literal("complete_bb_outcome"),
+  bookingId: z.string().uuid(),
+  outcome: z.literal("not_converted"),
+});
+
 export const changeTrialConversionPaymentSchema = z.object({
   action: z.literal("change_trial_conversion_payment"),
   bookingId: z.string().uuid(),
@@ -876,6 +891,7 @@ export const bigeFitnessActionSchema = z.discriminatedUnion("action", [
   updatePaymentSchema,
   completeBookingSchema,
   completeTrialOutcomeSchema,
+  completeBbOutcomeSchema,
   changeTrialConversionPaymentSchema,
   changeTrialConversionOutcomeSchema,
   restoreTrialConversionSchema,

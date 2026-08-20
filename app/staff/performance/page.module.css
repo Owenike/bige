@@ -286,7 +286,7 @@
 .dailyCoachHeading { padding-top: 15px; padding-bottom: 15px; }
 .dailyCoachHeading .headingActions { width: auto; flex: 0 0 auto; margin-left: auto; }
 .dailyCoachHeading p { margin-top: 3px; font-size: 13px; }
-.dailyCoachTableHeader, .dailyCoachList > article { display: grid; grid-template-columns: minmax(180px, 1fr) 170px 180px; gap: 18px; align-items: center; min-width: 0; padding-right: 20px; padding-left: 20px; }
+.dailyCoachTableHeader, .dailyCoachList > article { display: grid; grid-template-columns: minmax(140px, .9fr) 130px minmax(150px, 1.1fr) minmax(190px, 1.35fr) 104px 106px 150px; gap: 14px; align-items: center; min-width: 0; padding-right: 20px; padding-left: 20px; }
 .dailyCoachTableHeader { padding-top: 8px; padding-bottom: 8px; border-bottom: 1px solid #e1e7e2; color: #728078; background: #f6f8f6; font-size: 11px; font-weight: 800; letter-spacing: .03em; }
 .dailyCoachList { display: grid; }
 .dailyCoachList > article { min-height: 66px; padding-top: 11px; padding-bottom: 11px; border-bottom: 1px solid #e6ebe7; }
@@ -299,6 +299,18 @@
 .dailyCoachSales .inlineChecking { color: #7b8880; font-size: 14px; }
 .dailyCoachCourse strong span { color: #738078; font-size: 15px; font-weight: 750; }
 .dailyCoachCourse small, .dailyCoachSales small { color: #95621e; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.dailyCoachMetric, .dailyCoachSingleMetric { display: grid; min-width: 0; gap: 5px; }
+.dailyCoachMetric > label, .dailyCoachSingleMetric > label, .dailyCoachSales > label { display: none; color: #728078; font-size: 10px; font-weight: 850; }
+.dailyCoachSingleMetric strong { font-size: 20px; }
+.dailyCoachSingleMetric strong span { color: #738078; font-size: 14px; }
+.dailyCoachSingleMetric small { color: #738078; font-size: 10px; }
+.metricBreakdown { display: flex; flex-wrap: wrap; min-width: 0; gap: 5px; }
+.metricBreakdown > span { display: inline-flex; align-items: center; max-width: 100%; gap: 5px; padding: 4px 7px; border: 1px solid #d8e2da; border-radius: 999px; color: #4c5e53; background: #f6f9f6; font-size: 11px; }
+.metricBreakdown > span b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.metricBreakdown > span strong { color: #183e28; font-size: 12px; }
+.metricEmpty { color: #8a968f; font-weight: 800; }
+.otherAppointmentBookers { display: flex; align-items: center; gap: 14px; padding: 11px 20px; border-top: 1px solid #e1e7e2; background: #f7f9f7; }
+.otherAppointmentBookers > strong { flex: 0 0 auto; font-size: 13px; }
 .eventIdentity, .eventAllocation { display: grid; min-width: 0; gap: 5px; }
 .eventIdentity > div { display: flex; flex-wrap: wrap; gap: 6px; }
 .eventIdentity > strong { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
@@ -409,14 +421,25 @@
 .historyRecordList article > div span { color: #6b7971; font-size: 12px; }
 .dateBrowserActions { position: sticky; bottom: -24px; display: flex; justify-content: flex-end; padding: 12px 0 0; background: linear-gradient(transparent, #f7f9f6 25%); }
 .coachOverviewList { display: grid; gap: 9px; }
-.coachOverviewList article { display: grid; grid-template-columns: 180px minmax(0, 1fr) 190px; gap: 18px; align-items: center; padding: 13px 15px; border: 1px solid #dce4de; border-radius: 12px; background: #fff; }
+.coachOverviewList article { display: grid; gap: 13px; padding: 15px; border: 1px solid #dce4de; border-radius: 14px; background: #fff; }
+.coachOverviewTopline { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .coachIdentity { display: grid; gap: 3px; }
 .coachIdentity strong { font-size: 17px; }
-.coachIdentity small, .coachOverviewList article > small { color: #6b7871; }
+.coachIdentity small, .coachOverviewTopline > small { color: #6b7871; }
 .coachOverviewList dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
 .coachOverviewList dl div { min-width: 0; }
 .coachOverviewList dt { color: #718078; font-size: 11px; }
 .coachOverviewList dd { overflow: hidden; margin: 3px 0 0; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.coachOverviewPrimary { padding: 11px 12px; border: 1px solid #e0e7e2; border-radius: 11px; background: #f8faf8; }
+.coachOverviewDetails { display: grid; grid-template-columns: 1.15fr 1.35fr 1.25fr .7fr .95fr; gap: 8px; }
+.coachOverviewDetails > section { display: grid; align-content: start; min-width: 0; gap: 6px; padding: 10px 11px; border-left: 3px solid #ccd9cf; border-radius: 8px; background: #f7f9f7; }
+.coachOverviewDetails label { color: #6e7c74; font-size: 10px; font-weight: 850; }
+.faConversionMetric > strong, .singleOverviewMetric > strong { color: #173f28; font-size: 20px; }
+.singleOverviewMetric > strong span { color: #738078; font-size: 14px; }
+.coachOverviewDetails small { color: #718078; font-size: 10px; line-height: 1.45; }
+.monthOtherBookers { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px; border: 1px solid #d9e2db; border-radius: 12px; background: #fff; }
+.monthOtherBookers > div { display: grid; gap: 3px; }
+.monthOtherBookers small { color: #6d7a73; }
 .confirmedText { color: #287044 !important; }
 .infoBox { padding: 12px 13px; border: 1px solid #ddcfaa; border-radius: 10px; color: #6f5520; background: #fff8e8; }
 .modalIntro { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px solid #d8e1da; border-radius: 13px; background: #fff; }
@@ -447,8 +470,16 @@
   .salesProgressSummary { grid-template-columns: 1fr 1fr; }
   .salesWorkspaceGrid { grid-template-columns: minmax(250px, .75fr) minmax(0, 1.6fr); }
   .salesModal .allocationEditor { grid-template-columns: 1fr; }
-  .coachOverviewList article { grid-template-columns: 150px minmax(0, 1fr); }
-  .coachOverviewList article > small { grid-column: 1 / -1; }
+  .dailyCoachTableHeader { display: none; }
+  .dailyCoachList { gap: 10px; padding: 10px; }
+  .dailyCoachList > article { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px; border: 1px solid #dfe6e1; border-radius: 12px; }
+  .dailyCoachIdentity { grid-column: 1 / -1; }
+  .dailyCoachMetric > label, .dailyCoachSingleMetric > label, .dailyCoachSales > label { display: block; }
+  .dailyCoachMetric { min-height: 58px; }
+  .dailyCoachSales { align-items: flex-start; flex-direction: column; }
+  .coachOverviewList article { grid-template-columns: 1fr; }
+  .coachOverviewDetails { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .coachOverviewDetails > section:last-child { grid-column: 1 / -1; }
 }
 
 @media (max-width: 780px) {
@@ -476,8 +507,8 @@
   .salesFooterActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
   .salesFooterActions button { width: 100%; }
   .salesFooterActions > .primary:last-child:nth-child(3) { grid-column: 1 / -1; }
-  .coachOverviewList article { grid-template-columns: 1fr; gap: 11px; }
-  .coachOverviewList article > small { grid-column: auto; }
+  .coachOverviewList article { gap: 11px; }
+  .coachOverviewPrimary { grid-template-columns: 1fr 1fr !important; }
   .epoWorkspace .epoForm { grid-template-columns: 1fr 72px; }
   .decisionList article { grid-template-columns: 1fr; }
   .historyPreviewGrid { grid-template-columns: 1fr 1fr; }
@@ -516,16 +547,18 @@
   .salesFooterStatus strong { white-space: normal; }
   .modalIntro { align-items: stretch; flex-direction: column; }
   .dailyCoachHeading { align-items: center; flex-direction: row; }
-  .dailyCoachTableHeader, .dailyCoachList > article { grid-template-columns: minmax(92px, 1fr) 94px 104px; gap: 8px; padding-right: 12px; padding-left: 12px; }
-  .dailyCoachTableHeader { font-size: 10px; }
-  .dailyCoachList > article { min-height: 60px; }
+  .dailyCoachList > article { grid-template-columns: 1fr 1fr; min-height: 60px; gap: 11px; padding: 13px; }
   .dailyCoachIdentity { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .dailyCoachIdentity, .dailyCoachMetric, .dailyCoachSales { grid-column: 1 / -1; }
   .dailyCoachIdentity strong { font-size: 16px; }
   .dailyCoachIdentity span { padding: 2px 6px; font-size: 10px; }
   .dailyCoachCourse, .dailyCoachSales { align-items: flex-start; flex-direction: column; gap: 2px; }
   .dailyCoachCourse strong, .dailyCoachSales strong { font-size: 17px; }
   .dailyCoachCourse strong span { font-size: 13px; }
   .dailyCoachCourse small, .dailyCoachSales small { font-size: 10px; white-space: normal; }
+  .otherAppointmentBookers, .monthOtherBookers { align-items: flex-start; flex-direction: column; }
+  .coachOverviewDetails { grid-template-columns: 1fr; }
+  .coachOverviewDetails > section:last-child { grid-column: auto; }
   .taskList article { padding: 14px; }
   .monthOverviewToolbar { align-items: stretch; flex-direction: column; }
   .monthOverviewToolbar strong { margin-left: 0; }

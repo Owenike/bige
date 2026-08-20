@@ -469,7 +469,7 @@ test("FA fee amount follows the original trial service instead of the normalized
   assert.equal(getBigeFaFeeAmount(null), 880);
 });
 
-test("FA contract creation requires a recipient while ordinary contracts reject one", () => {
+test("contract schema leaves FA versus BB recipient validation to the trusted booking lookup", () => {
   const baseInput = {
     action: "create_contract" as const,
     fullName: "測試會員",
@@ -487,7 +487,7 @@ test("FA contract creation requires a recipient while ordinary contracts reject 
 
   assert.equal(
     createContractSchema.safeParse({ ...baseInput, sourceBookingId }).success,
-    false,
+    true,
   );
   assert.equal(
     createContractSchema.safeParse({
@@ -504,6 +504,16 @@ test("FA contract creation requires a recipient while ordinary contracts reject 
       faFeeRecipientName: "不應出現在一般合約",
     }).success,
     false,
+  );
+
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  assert.match(
+    route,
+    /sourceOperationKind === "trial" && !input\.faFeeRecipientName[\s\S]*請先選擇或輸入 FA 收款人/,
+  );
+  assert.match(
+    route,
+    /sourceOperationKind !== "trial"[\s\S]*只有 FA 首次付款可以記錄 FA 收款人/,
   );
 });
 
@@ -1063,7 +1073,7 @@ test("schedule student payments carry the source booking for server-side identit
   );
 });
 
-test("FA schedule payments are fixed to New while member payments keep renewal and balance", () => {
+test("FA and BB conversions use their source booking while member payments keep renewal and balance", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
   const openStudentPayment = component.slice(
@@ -1089,17 +1099,18 @@ test("FA schedule payments are fixed to New while member payments keep renewal a
   assert.match(paymentTypeField, /<option value="balance">尾款 PTP<\/option>/);
   assert.match(
     submitContract,
-    /sourceBookingId: selectedBooking\?\.operation_kind === "trial" \? selectedBooking\.id : null/,
+    /sourceBookingId: selectedConversionBooking \? selectedBooking\?\.id \|\| null : null/,
   );
   assert.match(
     submitContract,
     /sourceMemberBookingId:[\s\S]*studentPaymentContext\?\.paymentType === "renewal"[\s\S]*\? studentPaymentContext\.bookingId[\s\S]*: null/,
   );
-  assert.match(route, /select\("id, member_id, coach_id, operation_kind"\)/);
+  assert.match(route, /select\("id, member_id, coach_id, trial_booking_id, operation_kind"\)/);
   assert.match(
     route,
     /sourceBookingResult\.data\.operation_kind === "trial"[\s\S]*FA 付款的款項類型固定為新單 New/,
   );
+  assert.match(route, /sourceOperationKind === "bb"[\s\S]*bige_create_bb_member_contract_v1/);
 });
 
 test("tablet payment and plan number inputs preserve the in-progress text value", () => {
@@ -1265,7 +1276,7 @@ test("FA payment and not-converted actions capture one atomic fee recipient", ()
   assert.match(component, /\/api\/bige-fitness\?faFeeRecipients=1/);
   assert.match(route, /bige_create_member_contract_v6/);
   assert.match(route, /p_sales_origin_coach_id: trustedSalesOriginCoachId/);
-  assert.match(route, /p_sales_origin_kind: input\.sourceBookingId \? "fa" : input\.sourceMemberBookingId \? "renewal" : "manual"/);
+  assert.match(route, /p_sales_origin_kind: sourceOperationKind === "trial" \? "fa" : input\.sourceMemberBookingId \? "renewal" : "manual"/);
   assert.match(route, /bige_complete_trial_outcome_v2/);
   assert.match(migration, /trial_service = 'sports_massage' then 1500 else 880/);
   assert.match(migration, /contract_result := public\.bige_create_member_contract_v3/);
@@ -1575,7 +1586,7 @@ test("creating a selected schedule member paints the cell before the request fin
 
   assert.match(
     submitSchedule,
-    /const optimisticBooking: Booking = \{[\s\S]*optimistic: true,[\s\S]*member_id: scheduleDraft\.operationKind === "pt"[\s\S]*starts_at: new Date\(startsAt\)\.toISOString\(\)/,
+    /const optimisticBooking: Booking = \{[\s\S]*optimistic: true,[\s\S]*member_id:[\s\S]*scheduleDraft\.operationKind === "pt"[\s\S]*scheduleDraft\.operationKind === "bb"[\s\S]*selectedScheduleTrialResult\?\.member_id[\s\S]*starts_at: new Date\(startsAt\)\.toISOString\(\)/,
   );
   assert.match(
     optimisticCreate,
@@ -2051,16 +2062,46 @@ test("FA signing date is locked to today and ECPay installments require a stored
   assert.match(component, /請輸入綠界分期期數（2 至 60 期）/);
   assert.match(
     component,
-    /disabled=\{selectedBooking\?\.operation_kind === "trial"\}/,
+    /disabled=\{selectedConversionBooking\}/,
   );
   assert.match(
     component,
-    /selectedBooking\?\.operation_kind === "trial"[\s\S]*\? localDate\(\)[\s\S]*: contractDraft\.signedOn/,
+    /selectedConversionBooking[\s\S]*\? localDate\(\)[\s\S]*: contractDraft\.signedOn/,
   );
   assert.match(route, /rpc\("bige_create_member_contract_v6"/);
   assert.match(route, /const trustedSignedOn = input\.sourceBookingId \? toTaipeiDateString\(\) : input\.signedOn/);
   assert.match(route, /rpc\("bige_record_contract_payment_v2"/);
   assert.match(route, /p_installment_count: input\.installmentCount \|\| null/);
+});
+
+test("BB is bound to a completed non-converted FA and never becomes a lesson, FA, or EPO", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260820212138_add_bb_followup_and_reporting.sql",
+    "utf8",
+  );
+  const settlement = readFileSync("lib/staff-performance-settlement.ts", "utf8");
+  const sync = readFileSync("lib/staff-performance-sync.ts", "utf8");
+
+  assert.match(component, /<option value="bb">BB 回訪<\/option>/);
+  assert.match(component, /trialScope=bb/);
+  assert.match(component, /disabled=\{scheduleDraft\.operationKind === "bb"\}/);
+  assert.match(component, /不適用（不計課堂）/);
+  assert.match(component, /action: "complete_bb_outcome"/);
+  assert.match(component, /BB 成交已完成[\s\S]*本筆不產生 EPO/);
+  assert.match(route, /url\.searchParams\.get\("trialScope"\) === "bb"/);
+  assert.match(route, /bige_create_bb_member_contract_v1/);
+  assert.match(route, /bige_complete_bb_outcome_v1/);
+  assert.match(migration, /operation_kind = 'bb'/);
+  assert.match(migration, /trial_conversion_outcome = 'not_converted'/);
+  assert.match(migration, /course_type[\s\S]*null/);
+  assert.match(migration, /extract\(epoch from \(ends_at - starts_at\)\) \/ 60 in \(30, 60, 90, 120\)/);
+  assert.match(migration, /source_booking\.coach_id, 'bb', source_booking\.id/);
+  assert.match(migration, /'epoEligible', false/);
+  assert.match(settlement, /\["fa", "bb", "renewal"\]\.includes/);
+  assert.match(sync, /if \(params\.originKind === "bb"\) return "bb"/);
+  assert.match(route, /booking\.operation_kind === "bb" && input\.result === "completed"/);
 });
 
 test("FA conversion preserves an imported shared contact without weakening direct member phone uniqueness", () => {

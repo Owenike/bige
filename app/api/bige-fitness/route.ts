@@ -386,7 +386,15 @@ function normalizeErrorMessage(message: string) {
     manager_required: "此操作僅限主管",
     email_or_unavailable_required: "請填寫有效 Email，或明確勾選沒有 Email",
     invalid_trial_conversion_outcome: "無效的 FA 成交結果",
+    invalid_bb_conversion_outcome: "無效的 BB 回訪結果",
     trial_booking_not_found: "找不到這筆 FA 預約",
+    bb_booking_not_found: "找不到這筆 BB 回訪",
+    bb_completed_non_converted_fa_required: "只能為已完成且未成交的 FA 建立 BB 回訪",
+    bb_already_converted: "這筆 BB 已完成成交",
+    bb_payment_required: "BB 成交必須完成本次付款",
+    bb_member_mismatch: "BB 綁定的學員與成交會員不一致",
+    bb_source_incomplete: "BB 缺少原始 FA 或學員資料，請重新建立",
+    invalid_bb_schedule_input: "BB 回訪只能綁定原始 FA，不可設定課別",
     fa_fee_recipient_invalid: "請選擇或輸入 1 至 80 字的 FA 收款人",
     fa_fee_recipient_profile_invalid: "所選員工已停用或不屬於目前場館，請重新選擇",
     fa_fee_recipient_not_allowed: "這個操作不能記錄 FA 收款人",
@@ -756,6 +764,7 @@ export async function GET(request: Request) {
   }
   const search = (url.searchParams.get("search") || "").trim().slice(0, 60);
   const formalMembersOnly = url.searchParams.get("memberScope") === "formal";
+  const bbTrialOnly = url.searchParams.get("trialScope") === "bb";
   if (search) {
     const searchRule = resolveBigeMemberSearchRule(search);
     let legacyMemberIds: string[] = [];
@@ -842,6 +851,54 @@ export async function GET(request: Request) {
         .limit(20);
       if (trialResult.error) return apiError(500, "INTERNAL_ERROR", trialResult.error.message);
       trials = trialResult.data || [];
+      if (bbTrialOnly && trials.length) {
+        const trialIds = trials.map((trial) => String(trial.id));
+        const faResult = await auth.supabase
+          .from("bookings")
+          .select("id, trial_booking_id, member_id, coach_id, trial_stage, course_type, starts_at, created_at")
+          .eq("tenant_id", tenantId)
+          .eq("is_bige_schedule", true)
+          .eq("operation_kind", "trial")
+          .eq("status", "completed")
+          .eq("trial_conversion_outcome", "not_converted")
+          .is("converted_at", null)
+          .in("trial_booking_id", trialIds)
+          .order("starts_at", { ascending: false });
+        if (faResult.error) return apiError(500, "INTERNAL_ERROR", faResult.error.message);
+        const latestFaByTrial = new Map<string, any>();
+        for (const fa of faResult.data || []) {
+          const trialId = String(fa.trial_booking_id || "");
+          if (trialId && !latestFaByTrial.has(trialId)) latestFaByTrial.set(trialId, fa);
+        }
+        const coachIds = [...new Set([...latestFaByTrial.values()].map((fa) => fa.coach_id).filter(Boolean).map(String))];
+        const coachResult = coachIds.length
+          ? await auth.supabase
+              .from("profiles")
+              .select("id, display_name, english_name")
+              .eq("tenant_id", tenantId)
+              .in("id", coachIds)
+          : { data: [], error: null };
+        if (coachResult.error) return apiError(500, "INTERNAL_ERROR", coachResult.error.message);
+        const coachLabels = new Map(
+          (coachResult.data || []).map((coach: { id: string; display_name: string | null; english_name: string | null }) => [
+            String(coach.id),
+            coach.english_name || coach.display_name || "未命名教練",
+          ]),
+        );
+        trials = trials.flatMap((trial) => {
+          const fa = latestFaByTrial.get(String(trial.id));
+          if (!fa) return [];
+          return [{
+            ...trial,
+            member_id: fa.member_id,
+            original_fa_booking_id: fa.id,
+            original_fa_stage: fa.trial_stage,
+            original_fa_course_type: fa.course_type,
+            original_fa_starts_at: fa.starts_at,
+            original_fa_coach_name: coachLabels.get(String(fa.coach_id || "")) || "未命名教練",
+          }];
+        });
+      }
     }
     return apiSuccess({ members: membersWithLegacy, trials });
   }
@@ -1214,7 +1271,7 @@ export async function GET(request: Request) {
   let bookingsQuery = scheduleSupabase
     .from("bookings")
     .select(
-      "id, branch_id, member_id, coach_id, service_name, starts_at, ends_at, status, status_reason, note, operation_kind, course_type, trial_stage, operation_result, trial_conversion_outcome, trial_booking_id, group_id, reminder_status, converted_at, converted_contract_id, member_plan_contract_id, requires_contract_followup, import_batch_id, import_row_key, fa_fee_amount, fa_fee_recipient_profile_id, fa_fee_recipient_name, fa_fee_recorded_at",
+      "id, branch_id, member_id, coach_id, service_name, starts_at, ends_at, status, status_reason, note, operation_kind, course_type, trial_stage, operation_result, trial_conversion_outcome, bb_conversion_outcome, trial_booking_id, group_id, reminder_status, converted_at, converted_contract_id, member_plan_contract_id, requires_contract_followup, import_batch_id, import_row_key, fa_fee_amount, fa_fee_recipient_profile_id, fa_fee_recipient_name, fa_fee_recorded_at",
     )
     .eq("tenant_id", tenantId)
     .eq("is_bige_schedule", true)
@@ -2170,8 +2227,16 @@ export async function POST(request: Request) {
     if (!canEditBigeScheduleBooking(bookingResult.data.status)) {
       return apiError(409, "FORBIDDEN", BIGE_COMPLETED_BOOKING_EDIT_MESSAGE);
     }
+    const isBb = bookingResult.data.operation_kind === "bb";
+    if ((isBb && input.courseType !== null) || (!isBb && input.courseType === null)) {
+      return apiError(400, "FORBIDDEN", isBb ? "BB 回訪不可設定課別" : "請選擇課別");
+    }
     const endsAt = normalizeBigeScheduleEndAt(
-      bookingResult.data.operation_kind === "trial" ? "trial" : "pt",
+      bookingResult.data.operation_kind === "trial"
+        ? "trial"
+        : bookingResult.data.operation_kind === "bb"
+          ? "bb"
+          : "pt",
       input.startsAt,
       input.endsAt,
     );
@@ -2197,7 +2262,7 @@ export async function POST(request: Request) {
       .update({
         coach_id: input.coachId,
         course_type: input.courseType,
-        service_name: BIGE_COURSE_LABELS[input.courseType],
+        service_name: input.courseType ? BIGE_COURSE_LABELS[input.courseType] : "BB 回訪",
         starts_at: input.startsAt,
         ends_at: endsAt,
         note: input.note || null,
@@ -2207,7 +2272,7 @@ export async function POST(request: Request) {
       .eq("tenant_id", tenantId)
       .eq("is_bige_schedule", true)
       .select(
-        "id, member_id, coach_id, service_name, starts_at, ends_at, status, note, operation_kind, course_type, trial_stage, operation_result, reminder_status, converted_at",
+        "id, member_id, coach_id, service_name, starts_at, ends_at, status, note, operation_kind, course_type, trial_stage, operation_result, reminder_status, converted_at, bb_conversion_outcome",
       )
       .single();
     if (result.error) return handleDatabaseError(result.error, "儲存排課變更失敗");
@@ -2650,6 +2715,7 @@ export async function POST(request: Request) {
     let trustedEmailUnavailable = input.emailUnavailable;
     let trustedMemberId = input.memberId || null;
     let trustedSalesOriginCoachId: string | null = null;
+    let sourceOperationKind: "trial" | "bb" | null = null;
     let sourceMissingProfileFields: string[] = [];
     if (input.sourceBookingId && input.sourceMemberBookingId) {
       return apiError(400, "FORBIDDEN", "同一筆合約不能同時指定 FA 成交與學員付款來源");
@@ -2702,14 +2768,15 @@ export async function POST(request: Request) {
       const admin = createSupabaseAdminClient();
       const sourceBookingResult = await admin
         .from("bookings")
-        .select("id, member_id, coach_id, trial_booking_id")
+        .select("id, member_id, coach_id, trial_booking_id, operation_kind")
         .eq("id", input.sourceBookingId)
         .eq("tenant_id", tenantId)
-        .eq("operation_kind", "trial")
+        .in("operation_kind", ["trial", "bb"])
         .maybeSingle();
       if (sourceBookingResult.error || !sourceBookingResult.data?.member_id) {
-        return apiError(404, "FORBIDDEN", "找不到這筆 FA 的學員資料");
+        return apiError(404, "FORBIDDEN", "找不到這筆 FA／BB 的學員資料");
       }
+      sourceOperationKind = sourceBookingResult.data.operation_kind as "trial" | "bb";
       const [sourceMemberResult, sourceTrialBookingResult] = await Promise.all([
         admin
           .from("members")
@@ -2726,7 +2793,7 @@ export async function POST(request: Request) {
           : Promise.resolve({ data: null, error: null }),
       ]);
       if (sourceMemberResult.error || sourceTrialBookingResult.error || !sourceMemberResult.data) {
-        return apiError(400, "FORBIDDEN", "FA 學員資料讀取失敗，請重新整理後再試");
+        return apiError(400, "FORBIDDEN", "FA／BB 學員資料讀取失敗，請重新整理後再試");
       }
       const identity = resolveBigeTrialContractIdentity({
         trialBooking: sourceTrialBookingResult.data,
@@ -2734,13 +2801,23 @@ export async function POST(request: Request) {
       });
       sourceMissingProfileFields = getBigeTrialContractMissingProfileFields(identity);
       if (!identity.fullName || !identity.phone) {
-        return apiError(400, "FORBIDDEN", "FA 姓名或電話資料不完整，請先補齊");
+        return apiError(400, "FORBIDDEN", "FA／BB 姓名或電話資料不完整，請先補齊");
       }
       trustedMemberId = sourceMemberResult.data.id;
       trustedFullName = identity.fullName;
       trustedPhone = identity.phone;
       trustedBirthDate = identity.birthDate || null;
       trustedSalesOriginCoachId = sourceBookingResult.data.coach_id || null;
+    }
+
+    if (sourceOperationKind === "trial" && !input.faFeeRecipientName) {
+      return apiError(400, "FORBIDDEN", "請先選擇或輸入 FA 收款人");
+    }
+    if (
+      sourceOperationKind !== "trial" &&
+      (input.faFeeRecipientProfileId != null || input.faFeeRecipientName != null)
+    ) {
+      return apiError(400, "FORBIDDEN", "只有 FA 首次付款可以記錄 FA 收款人");
     }
 
     const trustedSignedOn = input.sourceBookingId ? toTaipeiDateString() : input.signedOn;
@@ -2753,11 +2830,10 @@ export async function POST(request: Request) {
           }]
         : []
     );
-    const result = await operationSupabase.rpc("bige_create_member_contract_v6", {
+    const sharedContractParams = {
       p_tenant_id: tenantId,
       p_branch_id: input.branchId || auth.context.branchId,
       p_member_id: trustedMemberId,
-      p_source_booking_id: input.sourceBookingId || null,
       p_full_name: trustedFullName,
       p_phone: trustedPhone,
       p_birth_date: trustedBirthDate,
@@ -2773,13 +2849,22 @@ export async function POST(request: Request) {
       p_initial_payment: input.initialPayment,
       p_payments: paymentEntries,
       p_payment_schedule: input.paymentSchedule,
-      p_future_trial_action: input.futureTrialAction || "none",
-      p_fa_fee_recipient_profile_id: input.faFeeRecipientProfileId || null,
-      p_fa_fee_recipient_name: input.faFeeRecipientName || null,
-      p_sales_origin_coach_id: trustedSalesOriginCoachId,
-      p_sales_origin_kind: input.sourceBookingId ? "fa" : input.sourceMemberBookingId ? "renewal" : "manual",
-      p_payment_source_booking_id: input.sourceBookingId || input.sourceMemberBookingId || null,
-    });
+    };
+    const result = sourceOperationKind === "bb"
+      ? await operationSupabase.rpc("bige_create_bb_member_contract_v1", {
+          ...sharedContractParams,
+          p_source_booking_id: input.sourceBookingId,
+        })
+      : await operationSupabase.rpc("bige_create_member_contract_v6", {
+          ...sharedContractParams,
+          p_source_booking_id: input.sourceBookingId || null,
+          p_future_trial_action: input.futureTrialAction || "none",
+          p_fa_fee_recipient_profile_id: input.faFeeRecipientProfileId || null,
+          p_fa_fee_recipient_name: input.faFeeRecipientName || null,
+          p_sales_origin_coach_id: trustedSalesOriginCoachId,
+          p_sales_origin_kind: sourceOperationKind === "trial" ? "fa" : input.sourceMemberBookingId ? "renewal" : "manual",
+          p_payment_source_booking_id: input.sourceBookingId || input.sourceMemberBookingId || null,
+        });
     if (result.error) return handleDatabaseError(result.error, "建立正式會員失敗");
 
     let profileChangeNotification: { status: "skipped" | "sent" | "failed"; error?: string } = {
@@ -3158,6 +3243,36 @@ export async function POST(request: Request) {
     return apiSuccess({ item: result.data });
   }
 
+  if (input.action === "complete_bb_outcome") {
+    if (!canManageBigeSchedule(auth.context)) {
+      return apiError(403, "FORBIDDEN", "您沒有處理 BB 回訪結果的權限");
+    }
+    const bookingResult = await auth.supabase
+      .from("bookings")
+      .select("id, starts_at, ends_at")
+      .eq("id", input.bookingId)
+      .eq("tenant_id", tenantId)
+      .eq("is_bige_schedule", true)
+      .eq("operation_kind", "bb")
+      .maybeSingle();
+    if (bookingResult.error || !bookingResult.data) {
+      return apiError(404, "FORBIDDEN", "找不到這筆 BB 回訪");
+    }
+    const statusWindow = getBigeCourseStatusWindow({
+      startsAt: bookingResult.data.starts_at,
+      endsAt: bookingResult.data.ends_at,
+    });
+    if (!isBigeCourseStatusWindowExempt(operationContext) && !statusWindow.allowed) {
+      return apiError(400, "FORBIDDEN", "只能在預約前 30 分鐘至結束後 30 分鐘內操作");
+    }
+    const result = await auth.supabase.rpc("bige_complete_bb_outcome_v1", {
+      p_booking_id: input.bookingId,
+      p_outcome: input.outcome,
+    });
+    if (result.error) return handleDatabaseError(result.error, "更新 BB 回訪結果失敗");
+    return apiSuccess({ item: result.data });
+  }
+
   if (input.action === "change_trial_conversion_payment") {
     if (!canRecordBigeContractPayment(operationContext)) {
       return apiError(403, "FORBIDDEN", "只有櫃台、教練副理或經理能變更 FA 成交金額");
@@ -3338,6 +3453,9 @@ export async function POST(request: Request) {
     }
     if (booking.operation_kind === "pt" && input.result === "completed") {
       return apiError(400, "FORBIDDEN", "請使用完成上課並扣除一堂");
+    }
+    if (booking.operation_kind === "bb" && input.result === "completed") {
+      return apiError(400, "FORBIDDEN", "請選擇 BB 成交或完成未成交");
     }
     if (booking.operation_kind === "pt" && booking.status === "completed" && input.result === "cancelled") {
       return apiError(400, "FORBIDDEN", "已完成課程請先復原扣堂狀態");

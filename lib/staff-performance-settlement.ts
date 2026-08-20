@@ -1,7 +1,7 @@
 export const STAFF_PERFORMANCE_ALLOCATION_VERSION = "bige-sales-allocation-2026-08-v2";
 export const STAFF_EPO_RULE_VERSION = "bige-epo-2026-08-v1";
 
-export type SalesSourceType = "fa" | "renewal" | "final_payment" | "refund" | "manual_adjustment";
+export type SalesSourceType = "fa" | "bb" | "renewal" | "final_payment" | "refund" | "manual_adjustment";
 
 export type SalesAllocationDraft = {
   employeeId: string;
@@ -25,7 +25,7 @@ export function buildDefaultSalesAllocations(params: {
   originEmployeeId: string | null;
 }) {
   const totalCents = toCents(params.amount);
-  if (totalCents <= 0 || !params.originEmployeeId || !["fa", "renewal"].includes(params.sourceType)) {
+  if (totalCents <= 0 || !params.originEmployeeId || !["fa", "bb", "renewal"].includes(params.sourceType)) {
     return { allocations: [] as SalesAllocationDraft[], allocatedAmount: 0, remainingAmount: params.amount };
   }
   const originCents = Math.round(totalCents / 2);

@@ -19,7 +19,7 @@ export type ScheduleDragBooking = {
   starts_at: string;
   ends_at: string;
   status: string;
-  course_type?: string;
+  course_type?: string | null;
 };
 
 export type ScheduleDragNote = {

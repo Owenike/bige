@@ -127,7 +127,7 @@ async function dailySettlementInputs(
     return event && Number(allocation.allocation_version) === Number(event.active_allocation_version);
   });
   const epo = epoResult.data || [];
-  const courses = courseResult.data || [];
+  const courses = (courseResult.data || []).filter((row) => ["pt", "trial"].includes(String(row.operation_kind)));
   const courseSnapshot = {
     businessDate,
     generatedAt: new Date().toISOString(),

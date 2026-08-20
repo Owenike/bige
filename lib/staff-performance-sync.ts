@@ -21,6 +21,7 @@ function sourceTypeForPayment(params: {
   isFa: boolean;
   originKind: string | null;
 }): SalesSourceType {
+  if (params.originKind === "bb") return "bb";
   const first = params.firstPaymentByContract.get(params.contractId) === params.paymentId;
   if (!first || params.paymentKind === "balance") return "final_payment";
   if (params.originKind === "manual") return "final_payment";
@@ -38,7 +39,7 @@ function activeAllocationRows(event: any, allocations: any[]) {
 
 /**
  * Mirrors BIG E receipts/refunds into the settlement inbox, snapshots the
- * source coach, creates the editable 50% FA/renewal default, and generates
+ * source coach, creates the editable 50% FA/BB/renewal default, and generates
  * exact refund reversals from the frozen original allocation rows.
  */
 export async function syncBigePaymentPerformanceSources(
@@ -100,7 +101,9 @@ export async function syncBigePaymentPerformanceSources(
       : contract.converted_from_booking_id
         ? bookingCoach.get(String(contract.converted_from_booking_id)) || null
         : member?.primary_coach_id ? String(member.primary_coach_id) : null;
-    const isFa = Boolean(contract.converted_from_booking_id || contract.source_trial_booking_id || contract.sales_origin_kind === "fa");
+    const isFa = contract.sales_origin_kind === "fa" || (
+      !contract.sales_origin_kind && Boolean(contract.converted_from_booking_id || contract.source_trial_booking_id)
+    );
     const sourceType = sourceTypeForPayment({
       paymentId: String(payment.id),
       contractId: String(payment.contract_id),
@@ -128,7 +131,7 @@ export async function syncBigePaymentPerformanceSources(
         source_type: sourceType,
         source_key: `bige-payment:${payment.id}`,
         source_occurred_at: payment.paid_at,
-        label: `${sourceType === "fa" ? "FA 成交" : sourceType === "renewal" ? "續約" : "繳交尾款"}｜${memberName}`,
+        label: `${sourceType === "fa" ? "FA 成交" : sourceType === "bb" ? "BB 成交" : sourceType === "renewal" ? "續約" : "繳交尾款"}｜${memberName}`,
         amount: Number(payment.amount),
         metadata: {
           paymentKind: payment.payment_kind,

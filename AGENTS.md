@@ -41,3 +41,4 @@
 ## Communication
 - Keep updates short and action-focused.
 - Continue execution end-to-end once a task is clear, without pausing for routine confirmations.
+- Never guess, fabricate, or force an answer merely to appear responsive. When evidence is insufficient, a definition is ambiguous, or the current system cannot calculate something accurately, state the limitation and evidence, propose a concrete solution, and ask a question only when a user decision is genuinely required.

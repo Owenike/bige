@@ -10,11 +10,16 @@ import {
   validateSalesAllocations,
 } from "../lib/staff-performance-settlement";
 
-test("FA and renewal default half of the received amount to the origin coach", () => {
+test("FA, BB, and renewal default half of the received amount to the origin coach", () => {
   assert.deepEqual(buildDefaultSalesAllocations({ amount: 100_001, sourceType: "fa", originEmployeeId: "coach-a" }), {
     allocations: [{ employeeId: "coach-a", amount: 50_000.5, allocationKind: "origin_default" }],
     allocatedAmount: 50_000.5,
     remainingAmount: 50_000.5,
+  });
+  assert.deepEqual(buildDefaultSalesAllocations({ amount: 80_000, sourceType: "bb", originEmployeeId: "coach-b" }), {
+    allocations: [{ employeeId: "coach-b", amount: 40_000, allocationKind: "origin_default" }],
+    allocatedAmount: 40_000,
+    remainingAmount: 40_000,
   });
   assert.equal(buildDefaultSalesAllocations({ amount: 80_000, sourceType: "final_payment", originEmployeeId: "coach-a" }).allocatedAmount, 0);
 });
@@ -44,6 +49,7 @@ test("each qualifying new or renewal contract receives one threshold EPO", () =>
   assert.equal(contractThresholdEpoRule({ sourceType: "fa", totalSessions: 72 }).eligible, true);
   assert.equal(contractThresholdEpoRule({ sourceType: "renewal", totalSessions: 48 }).eligible, true);
   assert.equal(contractThresholdEpoRule({ sourceType: "fa", totalSessions: 71 }).eligible, false);
+  assert.equal(contractThresholdEpoRule({ sourceType: "bb", totalSessions: 100 }).eligible, false);
   assert.equal(contractThresholdEpoRule({ sourceType: "final_payment", totalSessions: 100 }).eligible, false);
 });
 

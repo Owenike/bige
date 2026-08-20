@@ -1,5 +1,6 @@
 import type { ProfileContext } from "./auth-context";
 import { collectCoachDayStatuses } from "./bige-coach-day-status";
+import { BIGE_COURSE_LABELS, type BigeCourseType } from "./bige-fitness";
 import { resolveStaffPermissions } from "./staff-operation-permissions";
 import { performanceMonthRange, resolveCourseFeeTier } from "./staff-performance";
 import type { syncAutomaticEpoForDate } from "./staff-epo-sync";
@@ -42,6 +43,79 @@ async function coachDirectory(admin: StaffPerformanceAdminClient, tenantId: stri
       : null,
     employment_configured: employment.has(String(profile.id)),
   })).sort((left, right) => String(left.employee_number || left.display_name || "").localeCompare(String(right.employee_number || right.display_name || ""), "zh-Hant"));
+}
+
+function normalizedStaffLabel(value: unknown) {
+  return String(value || "").trim().toLocaleLowerCase("en-US").replace(/\s+/g, "");
+}
+
+function exactCourseLabel(value: unknown) {
+  const key = String(value || "") as BigeCourseType;
+  return BIGE_COURSE_LABELS[key] || key || "未標示課別";
+}
+
+function timestampInRange(value: unknown, startIso: string, nextIso: string) {
+  const timestamp = new Date(String(value || "")).getTime();
+  return Number.isFinite(timestamp)
+    && timestamp >= new Date(startIso).getTime()
+    && timestamp < new Date(nextIso).getTime();
+}
+
+function countLabels(labels: string[]) {
+  const counts = new Map<string, number>();
+  for (const label of labels) counts.set(label, (counts.get(label) || 0) + 1);
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "zh-Hant"));
+}
+
+function formalCourseCounts(rows: any[]) {
+  return countLabels(rows
+    .filter((row) => row.operation_kind === "pt" && row.status === "completed")
+    .map((row) => exactCourseLabel(row.course_type)));
+}
+
+function faExecutionCounts(rows: any[]) {
+  return countLabels(rows
+    .filter((row) => row.operation_kind === "trial" && row.status === "completed")
+    .map((row) => `${String(row.trial_stage || "未標示階段")}・${exactCourseLabel(row.course_type)}`));
+}
+
+async function successfulFaAppointmentCredits(params: {
+  admin: StaffPerformanceAdminClient;
+  tenantId: string;
+  startIso: string;
+  nextIso: string;
+  coaches: Array<{ id: string; display_name: string | null; english_name: string | null }>;
+}) {
+  const trialsResult = await params.admin.from("trial_bookings")
+    .select("id, booking_coach, scheduled_at")
+    .eq("tenant_id", params.tenantId)
+    .not("booking_coach", "is", null)
+    .not("appointment_date", "is", null)
+    .gte("scheduled_at", params.startIso)
+    .lt("scheduled_at", params.nextIso);
+  if (trialsResult.error) throw new Error(trialsResult.error.message || "FA 預約成功資料讀取失敗");
+  const coachByLabel = new Map<string, string>();
+  for (const coach of params.coaches) {
+    for (const label of [coach.english_name, coach.display_name]) {
+      const normalized = normalizedStaffLabel(label);
+      if (normalized && !coachByLabel.has(normalized)) coachByLabel.set(normalized, String(coach.id));
+    }
+  }
+
+  const byEmployee = new Map<string, number>();
+  const otherLabels: string[] = [];
+  let total = 0;
+  for (const trial of trialsResult.data || []) {
+    const bookingCoach = String(trial.booking_coach || "").trim();
+    if (!bookingCoach) continue;
+    total += 1;
+    const employeeId = coachByLabel.get(normalizedStaffLabel(bookingCoach));
+    if (employeeId) byEmployee.set(employeeId, (byEmployee.get(employeeId) || 0) + 1);
+    else otherLabels.push(bookingCoach);
+  }
+  return { byEmployee, other: countLabels(otherLabels), total };
 }
 
 export async function staffPerformancePermissions(
@@ -99,18 +173,29 @@ export async function getStaffPerformanceState(
   if (user.branch_id) coachDayNotesQuery = coachDayNotesQuery.eq("branch_id", user.branch_id);
 
   const dataStartedAt = Date.now();
-  const [eventResult, allocationResult, epoResult, reportResult, bookingResult, topStateResult, courseResult, courseClosureResult, coachDayNotesResult] = await Promise.all([
+  const appointmentStartIso = scope === "daily" ? `${selectedDate}T00:00:00+08:00` : range.startIso;
+  const appointmentNextIso = scope === "daily"
+    ? new Date(new Date(`${selectedDate}T00:00:00+08:00`).getTime() + 24 * 60 * 60 * 1000).toISOString()
+    : range.nextIso;
+  const [eventResult, allocationResult, epoResult, reportResult, bookingResult, topStateResult, courseResult, courseClosureResult, coachDayNotesResult, appointmentCredits] = await Promise.all([
     admin.from("staff_sales_events").select("*").eq("tenant_id", tenantId).gte("business_date", startDate).lte("business_date", endDate).order("source_occurred_at", { ascending: false }),
     admin.from("staff_sales_allocations").select("*, staff_sales_events!inner(business_date)").eq("tenant_id", tenantId).gte("staff_sales_events.business_date", startDate).lte("staff_sales_events.business_date", endDate),
     admin.from("staff_epo_awards").select("*").eq("tenant_id", tenantId).gte("business_date", startDate).lte("business_date", endDate).order("created_at", { ascending: false }),
     admin.from("staff_sales_daily_reports").select("*").eq("tenant_id", tenantId).gte("business_date", startDate).lte("business_date", endDate).order("business_date", { ascending: false }),
     scope === "month" && coachIds.length
-      ? admin.from("bookings").select("id, coach_id, starts_at, course_type").eq("tenant_id", tenantId).eq("is_bige_schedule", true).eq("operation_kind", "pt").eq("status", "completed").gte("starts_at", range.startIso).lt("starts_at", range.nextIso).in("coach_id", coachIds)
+      ? admin.from("bookings").select("id, coach_id, starts_at, course_type, operation_kind, trial_stage, status, trial_conversion_outcome, bb_conversion_outcome, converted_at, trial_booking_id").eq("tenant_id", tenantId).eq("is_bige_schedule", true).eq("status", "completed").or(`and(starts_at.gte.${range.startIso},starts_at.lt.${range.nextIso}),and(operation_kind.eq.bb,converted_at.gte.${range.startIso},converted_at.lt.${range.nextIso})`).in("coach_id", coachIds)
       : Promise.resolve({ data: [], error: null }),
     admin.from("staff_epo_daily_top_states").select("*").eq("tenant_id", tenantId).or(`business_date.eq.${selectedDate},adjustment_business_date.eq.${selectedDate}`).order("business_date"),
-    admin.from("bookings").select("id, coach_id, operation_kind, status, operation_result").eq("tenant_id", tenantId).eq("is_bige_schedule", true).gte("starts_at", `${selectedDate}T00:00:00+08:00`).lte("starts_at", `${selectedDate}T23:59:59.999+08:00`),
+    admin.from("bookings").select("id, coach_id, operation_kind, status, operation_result, course_type, trial_stage, trial_conversion_outcome, bb_conversion_outcome, converted_at, trial_booking_id, starts_at").eq("tenant_id", tenantId).eq("is_bige_schedule", true).or(`and(starts_at.gte.${appointmentStartIso},starts_at.lt.${appointmentNextIso}),and(operation_kind.eq.bb,converted_at.gte.${appointmentStartIso},converted_at.lt.${appointmentNextIso})`),
     admin.from("bige_daily_closures").select("id, status, snapshot, confirmed_at, reopened_at, reopen_reason").eq("tenant_id", tenantId).eq("business_date", selectedDate).maybeSingle(),
     coachDayNotesQuery,
+    successfulFaAppointmentCredits({
+      admin,
+      tenantId,
+      startIso: appointmentStartIso,
+      nextIso: appointmentNextIso,
+      coaches,
+    }),
   ]);
   const dataMs = Date.now() - dataStartedAt;
   if (eventResult.error || allocationResult.error || epoResult.error || reportResult.error || bookingResult.error || topStateResult.error || courseResult.error || courseClosureResult.error || coachDayNotesResult.error) {
@@ -134,7 +219,21 @@ export async function getStaffPerformanceState(
     const assigned = allAllocations.filter((row) => String(row.employee_id || "") === employeeId);
     const confirmedSales = assigned.filter((row) => row.status === "daily_confirmed").reduce((sum, row) => sum + Number(row.amount), 0);
     const projectedSales = assigned.filter((row) => ["pending_manager", "approved", "daily_confirmed"].includes(String(row.status))).reduce((sum, row) => sum + Number(row.amount), 0);
-    const completedSessions = bookings.filter((row) => String(row.coach_id || "") === employeeId).length;
+    const coachBookings = bookings.filter((row) => String(row.coach_id || "") === employeeId);
+    const coachScheduledBookings = coachBookings.filter((row) => timestampInRange(row.starts_at, range.startIso, range.nextIso));
+    const completedSessions = coachScheduledBookings.filter((row) => row.operation_kind === "pt").length;
+    const fa1Fa2 = coachScheduledBookings.filter((row) =>
+      row.operation_kind === "trial" && ["FA1", "FA2"].includes(String(row.trial_stage || "")),
+    );
+    const faConverted = fa1Fa2.filter((row) => row.trial_conversion_outcome === "converted" || row.converted_at).length;
+    const faNotConverted = fa1Fa2.filter((row) => row.trial_conversion_outcome === "not_converted").length;
+    const faResolved = faConverted + faNotConverted;
+    const bbVisits = coachScheduledBookings.filter((row) => row.operation_kind === "bb").length;
+    const bbConversions = coachBookings.filter((row) =>
+      row.operation_kind === "bb"
+      && row.bb_conversion_outcome === "converted"
+      && timestampInRange(row.converted_at, range.startIso, range.nextIso),
+    ).length;
     const tier = resolveCourseFeeTier({ employmentType: coach.employment_type === "part_time" ? "part_time" : "full_time", salesAmount: confirmedSales, completedSessions });
     return {
       ...coach,
@@ -142,16 +241,26 @@ export async function getStaffPerformanceState(
       projectedSales,
       confirmedEpo: allEpo.filter((row) => String(row.employee_id) === employeeId && row.status === "daily_confirmed").reduce((sum, row) => sum + Number(row.quantity), 0),
       projectedEpo: allEpo.filter((row) => String(row.employee_id) === employeeId && ["assistant_proposed", "manager_approved", "daily_confirmed"].includes(String(row.status))).reduce((sum, row) => sum + Number(row.quantity), 0),
+      formalCourseCounts: formalCourseCounts(coachScheduledBookings),
+      faExecutionCounts: faExecutionCounts(coachScheduledBookings),
+      faConverted,
+      faNotConverted,
+      faPending: Math.max(0, fa1Fa2.length - faResolved),
+      faConversionRate: faResolved ? Math.round((faConverted / faResolved) * 1000) / 10 : null,
+      successfulFaAppointments: appointmentCredits.byEmployee.get(employeeId) || 0,
+      bbVisits,
+      bbConversions,
       ...tier,
     };
   });
   const courseRows = courseResult.data || [];
+  const settlementCourseRows = courseRows.filter((row) => ["pt", "trial"].includes(String(row.operation_kind)));
   const courseSummary = {
-    total: courseRows.length,
-    completed: courseRows.filter((row) => row.status === "completed").length,
-    cancelled: courseRows.filter((row) => row.status === "cancelled").length,
-    noShow: courseRows.filter((row) => row.status === "no_show").length,
-    pending: courseRows.filter((row) => ["pending", "confirmed", "booked", "checked_in"].includes(String(row.status))).length,
+    total: settlementCourseRows.length,
+    completed: settlementCourseRows.filter((row) => row.status === "completed").length,
+    cancelled: settlementCourseRows.filter((row) => row.status === "cancelled").length,
+    noShow: settlementCourseRows.filter((row) => row.status === "no_show").length,
+    pending: settlementCourseRows.filter((row) => ["pending", "confirmed", "booked", "checked_in"].includes(String(row.status))).length,
     ptCompleted: courseRows.filter((row) => row.operation_kind === "pt" && row.status === "completed").length,
     trialCompleted: courseRows.filter((row) => row.operation_kind === "trial" && row.status === "completed").length,
   };
@@ -168,6 +277,9 @@ export async function getStaffPerformanceState(
     const coachCourses = courseRows.filter((row) => String(row.coach_id || "") === employeeId && ["pt", "trial"].includes(String(row.operation_kind)));
     const activeCourses = coachCourses.filter((row) => ["completed", "pending", "confirmed", "booked", "checked_in"].includes(String(row.status)));
     const completedCourses = coachCourses.filter((row) => row.status === "completed");
+    const coachBbRows = courseRows.filter((row) =>
+      String(row.coach_id || "") === employeeId && row.operation_kind === "bb" && row.status === "completed",
+    );
     const allocations = dayAllocations.filter((row) => String(row.employee_id || "") === employeeId);
     return {
       employeeId,
@@ -179,6 +291,14 @@ export async function getStaffPerformanceState(
       pendingSessions: activeCourses.filter((row) => row.status !== "completed").length,
       ptCompletedSessions: completedCourses.filter((row) => row.operation_kind === "pt").length,
       trialCompletedSessions: completedCourses.filter((row) => row.operation_kind === "trial").length,
+      formalCourseCounts: formalCourseCounts(completedCourses),
+      faExecutionCounts: faExecutionCounts(completedCourses),
+      successfulFaAppointments: appointmentCredits.byEmployee.get(employeeId) || 0,
+      bbVisits: coachBbRows.filter((row) => timestampInRange(row.starts_at, appointmentStartIso, appointmentNextIso)).length,
+      bbConversions: coachBbRows.filter((row) =>
+        row.bb_conversion_outcome === "converted"
+        && timestampInRange(row.converted_at, appointmentStartIso, appointmentNextIso),
+      ).length,
       cancelledSessions: coachCourses.filter((row) => row.status === "cancelled").length,
       noShowSessions: coachCourses.filter((row) => row.status === "no_show").length,
       salesAmount: allocations.reduce((sum, row) => sum + Number(row.amount), 0),
@@ -203,6 +323,10 @@ export async function getStaffPerformanceState(
     dailyTopStates: selfOnly ? [] : topStateResult.data || automaticEpo.dailyTopStates,
     sessionEpoEvidence: selfOnly ? [] : automaticEpo.sessionEvidence,
     dailyCoachSummaries: selfOnly ? [] : dailyCoachSummaries,
+    successfulFaAppointments: selfOnly ? null : {
+      total: appointmentCredits.total,
+      otherBookers: appointmentCredits.other,
+    },
     courseSettlement: selfOnly ? null : { summary: courseSummary, closure: courseClosureResult.data || null },
   };
   console.info("[staff-performance] state ready", {

@@ -1246,6 +1246,15 @@
   background: rgba(255, 248, 221, 0.76);
 }
 
+.bookingBb {
+  align-items: flex-start;
+  padding: 5px 8px;
+  text-align: left;
+  border-left: 4px solid #7458a8;
+  background: linear-gradient(135deg, rgba(241, 235, 255, 0.94), rgba(252, 249, 255, 0.88));
+  box-shadow: inset 0 0 0 1px rgba(116, 88, 168, 0.2);
+}
+
 .bookingTrialReminded {
   border-left-color: #1c9b69;
   background:
