@@ -5,6 +5,7 @@ import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
 import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 import { recordSystemAuditEvent, type SystemAuditOutcome } from "../../../../../lib/system-audit";
+import { STUDENT_CHECKIN_ADMIN_COOKIE_NAME } from "../../../../../lib/student-checkin-admin-session";
 
 const schema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
@@ -56,7 +57,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "請輸入正確的 Email 與密碼。" }, { status: 400 });
   }
 
-  const supabase = await createSupabaseServerClient(request);
+  const supabase = await createSupabaseServerClient(request, {
+    cookieName: STUDENT_CHECKIN_ADMIN_COOKIE_NAME,
+  });
   const result = await supabase.auth.signInWithPassword({
     email: parsed.data.email,
     password: parsed.data.password,

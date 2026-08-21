@@ -8,6 +8,10 @@ type CookieValue = {
   options?: unknown;
 };
 
+type SupabaseServerClientOptions = {
+  cookieName?: string;
+};
+
 function readSupabaseEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -27,7 +31,10 @@ function readBearerToken(request?: Request) {
   return match?.[1] || null;
 }
 
-export async function createSupabaseServerClient(request?: Request) {
+export async function createSupabaseServerClient(
+  request?: Request,
+  options?: SupabaseServerClientOptions,
+) {
   const bearerToken = readBearerToken(request);
   const { url, anonKey } = readSupabaseEnv();
 
@@ -43,6 +50,7 @@ export async function createSupabaseServerClient(request?: Request) {
 
   const cookieStore = await cookies();
   return createServerClient(url, anonKey, {
+    cookieOptions: options?.cookieName ? { name: options.cookieName } : undefined,
     cookies: {
       getAll() {
         return cookieStore.getAll();

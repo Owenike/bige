@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createSupabaseAdminClient } from "./lib/supabase/admin";
 import { evaluateTenantAccess, type TenantStatus, type TenantSubscriptionSnapshot } from "./lib/tenant-subscription";
 import { hasAuthCapability } from "./lib/auth-capabilities";
+import { studentCheckinAdminCookieCandidates } from "./lib/student-checkin-admin-session";
 
 const REQUEST_ID_HEADER = "x-request-id";
 
@@ -97,26 +98,42 @@ function redirectBlocked(request: NextRequest, requestId: string, code: string) 
   return withRequestId(NextResponse.redirect(url), requestId);
 }
 
-async function loadSessionContext(request: NextRequest, response: NextResponse): Promise<SessionContext | null> {
+async function loadSessionContext(
+  request: NextRequest,
+  response: NextResponse,
+  scope: RouteScope,
+): Promise<SessionContext | null> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseAnonKey) return null;
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll: () => request.cookies.getAll(),
-      setAll: (cookiesToSet) => {
-        for (const cookie of cookiesToSet) {
-          const options = cookie.options as Parameters<typeof response.cookies.set>[2];
-          response.cookies.set(cookie.name, cookie.value, options);
-        }
-      },
-    },
-  });
+  const cookieNames = scope === "student_checkin_admin"
+    ? studentCheckinAdminCookieCandidates()
+    : [undefined] as const;
+  let supabase: ReturnType<typeof createServerClient> | null = null;
+  let user: Awaited<ReturnType<ReturnType<typeof createServerClient>["auth"]["getUser"]>>["data"]["user"] = null;
 
-  const authResult = await supabase.auth.getUser();
-  const user = authResult.data.user;
-  if (authResult.error || !user) return null;
+  for (const cookieName of cookieNames) {
+    const candidate = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookieOptions: cookieName ? { name: cookieName } : undefined,
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          for (const cookie of cookiesToSet) {
+            const options = cookie.options as Parameters<typeof response.cookies.set>[2];
+            response.cookies.set(cookie.name, cookie.value, options);
+          }
+        },
+      },
+    });
+    const authResult = await candidate.auth.getUser();
+    if (!authResult.error && authResult.data.user) {
+      supabase = candidate;
+      user = authResult.data.user;
+      break;
+    }
+  }
+  if (!supabase || !user) return null;
 
   const isStudentCheckinAdmin = hasAuthCapability(user.app_metadata, "student_checkin_admin");
 
@@ -241,7 +258,7 @@ export async function proxy(request: NextRequest) {
   const scope = normalizePathScope(request.nextUrl.pathname);
   if (!scope) return withRequestId(response, requestId);
 
-  const session = await loadSessionContext(request, response);
+  const session = await loadSessionContext(request, response, scope);
   if (!session) {
     return redirectToLogin(request, requestId);
   }

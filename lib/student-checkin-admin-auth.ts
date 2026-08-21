@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "./supabase/server";
 import { hasAuthCapability } from "./auth-capabilities";
+import { studentCheckinAdminCookieCandidates } from "./student-checkin-admin-session";
 
 export type StudentCheckinAdminContext = {
   userId: string;
@@ -35,10 +36,16 @@ export async function requireStudentCheckinAdmin(request: Request) {
         return { ok: false as const, response: studentCheckinAdminAuthFailure(401) };
       }
     } else {
-      supabase = await createSupabaseServerClient(request);
-      const authResult = await supabase.auth.getUser();
-      user = authResult.data.user;
-      if (authResult.error || !user) {
+      for (const cookieName of studentCheckinAdminCookieCandidates()) {
+        const candidate = await createSupabaseServerClient(request, { cookieName });
+        const authResult = await candidate.auth.getUser();
+        if (!authResult.error && authResult.data.user) {
+          supabase = candidate;
+          user = authResult.data.user;
+          break;
+        }
+      }
+      if (!supabase || !user) {
         return { ok: false as const, response: studentCheckinAdminAuthFailure(401) };
       }
     }

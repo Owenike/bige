@@ -10,6 +10,29 @@ import {
   studentCheckInEntryLabel,
   studentCheckInPath,
 } from "../lib/student-checkin-entry";
+import {
+  STUDENT_CHECKIN_ADMIN_COOKIE_NAME,
+  studentCheckinAdminCookieCandidates,
+} from "../lib/student-checkin-admin-session";
+
+test("the check-in control session is isolated while retaining staff-session compatibility", () => {
+  assert.equal(STUDENT_CHECKIN_ADMIN_COOKIE_NAME, "bige-student-checkin-admin-auth");
+  assert.deepEqual(studentCheckinAdminCookieCandidates(), [
+    STUDENT_CHECKIN_ADMIN_COOKIE_NAME,
+    undefined,
+  ]);
+
+  const loginRoute = readFileSync(
+    resolve(process.cwd(), "app/api/admin/student-check-ins/login/route.ts"),
+    "utf8",
+  );
+  const adminAuth = readFileSync(resolve(process.cwd(), "lib/student-checkin-admin-auth.ts"), "utf8");
+  const proxy = readFileSync(resolve(process.cwd(), "proxy.ts"), "utf8");
+
+  assert.match(loginRoute, /cookieName: STUDENT_CHECKIN_ADMIN_COOKIE_NAME/);
+  assert.match(adminAuth, /studentCheckinAdminCookieCandidates\(\)/);
+  assert.match(proxy, /scope === "student_checkin_admin"[\s\S]*studentCheckinAdminCookieCandidates\(\)/);
+});
 
 test("the admin popup has a single owner while still covering both entry types", () => {
   assert.equal(studentCheckInAdminAlertScope("/admin/student-check-ins/login", 0, 1), "none");

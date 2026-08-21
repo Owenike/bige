@@ -137,6 +137,20 @@ try {
   $frontdesk = Invoke-Status "$devUrl/frontdesk/checkin"
   Assert-Status -Actual $frontdesk.status -Allowed @(200, 307, 308) -Label "GET /frontdesk/checkin (fail-open or unauthenticated redirect)"
 
+  $studentAdminLogin = Invoke-Status "$devUrl/admin/student-check-ins/login"
+  Assert-Status -Actual $studentAdminLogin.status -Allowed @(200) -Label "GET /admin/student-check-ins/login"
+
+  $studentAdmin = Invoke-Status "$devUrl/admin/student-check-ins"
+  Assert-Status -Actual $studentAdmin.status -Allowed @(307, 308) -Label "GET /admin/student-check-ins (unauthenticated redirect)"
+  $studentAdminLocation = Normalize-Location $studentAdmin.location
+  if (-not $studentAdminLocation -or $studentAdminLocation -notlike "*/admin/student-check-ins/login*") {
+    throw "[FAIL] /admin/student-check-ins redirect location is not the dedicated control login"
+  }
+  Write-Host ("[OK]   /admin/student-check-ins redirect location -> " + $studentAdminLocation) -ForegroundColor Green
+
+  $studentAdminApi = Invoke-Status "$devUrl/api/admin/student-check-ins"
+  Assert-Status -Actual $studentAdminApi.status -Allowed @(401) -Label "GET /api/admin/student-check-ins (unauthenticated)"
+
   Write-Host ""
   Write-Host "Smoke tests passed." -ForegroundColor Green
 } finally {
