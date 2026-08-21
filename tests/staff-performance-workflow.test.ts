@@ -73,9 +73,12 @@ test("manager settlement workbench keeps the daily flow visible and moves sales 
   assert.doesNotMatch(dashboard, /className=\{styles\.tableWrap\}/);
 });
 
-test("manager workbench presents EPO rules in a dedicated responsive dialog", () => {
-  assert.match(dashboard, />EPO 規則<\/button>/);
-  assert.match(dashboard, /setActiveModal\("epoRules"\)/);
+test("manager workbench presents EPO rules inside the EPO decision dialog", () => {
+  assert.match(dashboard, /showEpoRules \? "收起規則" : "EPO 規則"/);
+  assert.match(dashboard, /activeModal === "epo" \? <div className=\{styles\.epoModalHeaderActions\}>/);
+  assert.match(dashboard, /aria-controls="epo-rules-panel"/);
+  assert.match(dashboard, /showEpoRules \? <div id="epo-rules-panel"/);
+  assert.doesNotMatch(dashboard, /setActiveModal\("epoRules"\)/);
   assert.match(dashboard, /每日數字最高/);
   assert.match(dashboard, /上班時間內滿 <b>6 堂<\/b>，且上班時間外再滿 <b>2 堂<\/b>/);
   assert.match(dashboard, /上班時間內滿 <b>3 堂<\/b>，且上班時間外再滿 <b>1 堂<\/b>/);

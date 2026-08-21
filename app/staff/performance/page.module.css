@@ -330,9 +330,9 @@
 .modalHeader h2 { margin: 0; font-size: 22px; }
 .modalHeader > button { min-width: 44px; padding: 5px; font-size: 27px; line-height: 1; }
 .salesModalHeader { padding: 14px 18px; }
-.salesModalHeaderActions { display: flex; align-items: center; gap: 8px; }
-.salesModalHeaderActions > button:first-child { min-height: 38px; padding: 7px 12px; }
-.salesModalHeaderActions > button:last-child { min-width: 42px; min-height: 38px; padding: 4px; font-size: 26px; line-height: 1; }
+.salesModalHeaderActions, .epoModalHeaderActions { display: flex; align-items: center; gap: 8px; }
+.salesModalHeaderActions > button:first-child, .epoModalHeaderActions > button:first-child { min-height: 38px; padding: 7px 12px; }
+.salesModalHeaderActions > button:last-child, .epoModalHeaderActions > button:last-child { min-width: 42px; min-height: 38px; padding: 4px; font-size: 26px; line-height: 1; }
 .modalBody { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 20px 24px; }
 .salesModalBody { overflow: hidden; padding: 0; }
 .modalFooter { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; padding: 13px 20px; border-top: 1px solid #dfe6e0; background: #fff; box-shadow: 0 -10px 30px rgba(32, 55, 42, .06); }
@@ -553,7 +553,7 @@
   .coachOverviewList dl { grid-template-columns: 1fr 1fr; }
   .modalFooter > button { flex: 1 1 auto; }
   .salesModalHeader { gap: 10px; }
-  .salesModalHeaderActions > button:first-child { padding-right: 8px; padding-left: 8px; font-size: 12px; }
+  .salesModalHeaderActions > button:first-child, .epoModalHeaderActions > button:first-child { padding-right: 8px; padding-left: 8px; font-size: 12px; }
   .salesQueueTabs { padding: 7px; }
   .salesQueueItem { padding: 10px; }
   .selectedEventHeader { align-items: stretch; flex-direction: column; gap: 12px; }

@@ -82,7 +82,7 @@ type DailyTopState = {
   status: string;
 };
 
-type ManagerModal = "coaches" | "dates" | "epo" | "epoRules" | "sales";
+type ManagerModal = "coaches" | "dates" | "epo" | "sales";
 type SalesListMode = "pending" | "completed";
 
 type DailyCoachSummary = {
@@ -276,6 +276,7 @@ export default function StaffPerformanceDashboard({
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [salesListMode, setSalesListMode] = useState<SalesListMode>("pending");
   const [showSalesRules, setShowSalesRules] = useState(false);
+  const [showEpoRules, setShowEpoRules] = useState(false);
   const [showEpoForm, setShowEpoForm] = useState(false);
   const [historyDate, setHistoryDate] = useState(requestedDate);
   const [historyData, setHistoryData] = useState<PerformanceState | null>(null);
@@ -298,6 +299,7 @@ export default function StaffPerformanceDashboard({
     setEditingEventId(null);
     setAllocationDraft({});
     setShowSalesRules(false);
+    setShowEpoRules(false);
     setShowEpoForm(false);
   }, [activeModal, editingEventId]);
 
@@ -736,7 +738,6 @@ export default function StaffPerformanceDashboard({
               <div className={styles.workbenchActions}>
                 <button type="button" onClick={openDateBrowser}>查看其他日期</button>
                 <button type="button" onClick={openMonthOverview}>本月總覽</button>
-                <button type="button" onClick={() => setActiveModal("epoRules")}>EPO 規則</button>
               </div>
             </div>
             <div className={styles.summaryGrid}>
@@ -807,8 +808,8 @@ export default function StaffPerformanceDashboard({
           {activeModal ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.currentTarget === event.target) closeModal(); }}>
             <section className={`${styles.modal} ${activeModal === "sales" ? styles.salesModal : ""}`} role="dialog" aria-modal="true" aria-labelledby="performance-modal-title">
               <header className={`${styles.modalHeader} ${activeModal === "sales" ? styles.salesModalHeader : ""}`}>
-                <div><p>{activeModal === "coaches" ? monthLabel(overviewMonth) : activeModal === "dates" ? historyDate : activeModal === "sales" ? `${date}｜待處理 ${actionableSalesEvents.length} 筆` : activeModal === "epoRules" ? "獲得條件與點數" : date}</p><h2 id="performance-modal-title">{activeModal === "coaches" ? "本月總覽" : activeModal === "dates" ? "查看其他日期" : activeModal === "epo" ? "EPO 判定與紀錄" : activeModal === "epoRules" ? "EPO 規則" : "業績分配"}</h2></div>
-                {activeModal === "sales" ? <div className={styles.salesModalHeaderActions}><button type="button" aria-expanded={showSalesRules} onClick={() => setShowSalesRules((current) => !current)}>{showSalesRules ? "收起規則" : "分配規則"}</button><button type="button" aria-label="關閉視窗" onClick={() => closeModal()}>×</button></div> : <button type="button" aria-label="關閉視窗" onClick={() => closeModal()}>×</button>}
+                <div><p>{activeModal === "coaches" ? monthLabel(overviewMonth) : activeModal === "dates" ? historyDate : activeModal === "sales" ? `${date}｜待處理 ${actionableSalesEvents.length} 筆` : date}</p><h2 id="performance-modal-title">{activeModal === "coaches" ? "本月總覽" : activeModal === "dates" ? "查看其他日期" : activeModal === "epo" ? "EPO 判定與紀錄" : "業績分配"}</h2></div>
+                {activeModal === "sales" ? <div className={styles.salesModalHeaderActions}><button type="button" aria-expanded={showSalesRules} onClick={() => setShowSalesRules((current) => !current)}>{showSalesRules ? "收起規則" : "分配規則"}</button><button type="button" aria-label="關閉視窗" onClick={() => closeModal()}>×</button></div> : activeModal === "epo" ? <div className={styles.epoModalHeaderActions}><button type="button" aria-expanded={showEpoRules} aria-controls="epo-rules-panel" onClick={() => setShowEpoRules((current) => !current)}>{showEpoRules ? "收起規則" : "EPO 規則"}</button><button type="button" aria-label="關閉視窗" onClick={() => closeModal()}>×</button></div> : <button type="button" aria-label="關閉視窗" onClick={() => closeModal()}>×</button>}
               </header>
               <div className={`${styles.modalBody} ${activeModal === "sales" ? styles.salesModalBody : ""}`}>
                 {activeModal === "coaches" ? <div className={styles.monthOverview}>
@@ -869,43 +870,6 @@ export default function StaffPerformanceDashboard({
                   </> : null}
                 </div> : null}
 
-                {activeModal === "epoRules" ? <div className={styles.epoRules}>
-                  <p className={styles.epoRulesLead}>符合下列任一條件，即可依該項規則獲得 EPO。</p>
-                  <div className={styles.epoRuleGrid}>
-                    <article>
-                      <div className={styles.epoRuleHeading}><span>01</span><h3>每日數字最高</h3><b>＋1 EPO</b></div>
-                      <p>當日數字排名最高者獲得。</p>
-                    </article>
-                    <article>
-                      <div className={styles.epoRuleHeading}><span>02</span><h3>額外上課達標</h3><b>＋1 EPO</b></div>
-                      <div className={styles.epoRuleRows}>
-                        <div><strong>正職</strong><p>上班時間內滿 <b>6 堂</b>，且上班時間外再滿 <b>2 堂</b></p></div>
-                        <div><strong>兼職</strong><p>上班時間內滿 <b>3 堂</b>，且上班時間外再滿 <b>1 堂</b></p></div>
-                      </div>
-                    </article>
-                    <article>
-                      <div className={styles.epoRuleHeading}><span>03</span><h3>證照獎勵</h3><b>＋2 EPO</b></div>
-                      <p>自第 <b>6 張證照</b>起，每新增取得 1 張證照即可獲得。</p>
-                    </article>
-                    <article>
-                      <div className={styles.epoRuleHeading}><span>04</span><h3>主動學習</h3><b>＋1 EPO</b></div>
-                      <p>下班後主動找主管進行學習／訓練。</p>
-                    </article>
-                    <article>
-                      <div className={styles.epoRuleHeading}><span>05</span><h3>高堂數成交</h3><b>各＋1 EPO</b></div>
-                      <div className={styles.epoRuleRows}>
-                        <div><strong>新單</strong><p>成交 <b>72 堂以上</b></p></div>
-                        <div><strong>續約</strong><p>成交 <b>48 堂以上</b></p></div>
-                      </div>
-                    </article>
-                    <article>
-                      <div className={styles.epoRuleHeading}><span>06</span><h3>FA2 成交獎勵</h3><b>＋1 EPO</b></div>
-                      <p>FA1 階段有經過主管級 To，並於 FA2 成交。</p>
-                      <small>須有明確的主管級 To 紀錄才列入計算。</small>
-                    </article>
-                  </div>
-                </div> : null}
-
                 {activeModal === "sales" ? <div className={styles.salesWorkspace}>
                   <div className={styles.salesProgressSummary}>
                     <div><span>實收淨額</span><strong className={daySalesTotal < 0 ? styles.negative : ""}>{money(daySalesTotal)}</strong></div>
@@ -945,6 +909,42 @@ export default function StaffPerformanceDashboard({
                 </div> : null}
 
                 {activeModal === "epo" ? <div className={styles.epoWorkspace}>
+                  {showEpoRules ? <div id="epo-rules-panel" className={styles.epoRules}>
+                    <p className={styles.epoRulesLead}>符合下列任一條件，即可依該項規則獲得 EPO。</p>
+                    <div className={styles.epoRuleGrid}>
+                      <article>
+                        <div className={styles.epoRuleHeading}><span>01</span><h3>每日數字最高</h3><b>＋1 EPO</b></div>
+                        <p>當日數字排名最高者獲得。</p>
+                      </article>
+                      <article>
+                        <div className={styles.epoRuleHeading}><span>02</span><h3>額外上課達標</h3><b>＋1 EPO</b></div>
+                        <div className={styles.epoRuleRows}>
+                          <div><strong>正職</strong><p>上班時間內滿 <b>6 堂</b>，且上班時間外再滿 <b>2 堂</b></p></div>
+                          <div><strong>兼職</strong><p>上班時間內滿 <b>3 堂</b>，且上班時間外再滿 <b>1 堂</b></p></div>
+                        </div>
+                      </article>
+                      <article>
+                        <div className={styles.epoRuleHeading}><span>03</span><h3>證照獎勵</h3><b>＋2 EPO</b></div>
+                        <p>自第 <b>6 張證照</b>起，每新增取得 1 張證照即可獲得。</p>
+                      </article>
+                      <article>
+                        <div className={styles.epoRuleHeading}><span>04</span><h3>主動學習</h3><b>＋1 EPO</b></div>
+                        <p>下班後主動找主管進行學習／訓練。</p>
+                      </article>
+                      <article>
+                        <div className={styles.epoRuleHeading}><span>05</span><h3>高堂數成交</h3><b>各＋1 EPO</b></div>
+                        <div className={styles.epoRuleRows}>
+                          <div><strong>新單</strong><p>成交 <b>72 堂以上</b></p></div>
+                          <div><strong>續約</strong><p>成交 <b>48 堂以上</b></p></div>
+                        </div>
+                      </article>
+                      <article>
+                        <div className={styles.epoRuleHeading}><span>06</span><h3>FA2 成交獎勵</h3><b>＋1 EPO</b></div>
+                        <p>FA1 階段有經過主管級 To，並於 FA2 成交。</p>
+                        <small>須有明確的主管級 To 紀錄才列入計算。</small>
+                      </article>
+                    </div>
+                  </div> : null}
                   <div className={styles.modalIntro}><div><strong>本日共 {dayEpo.reduce((sum, row) => sum + Number(row.quantity), 0)} EPO</strong><small>{pendingEpoCount ? `尚有 ${pendingEpoCount} 項需要確認` : "目前沒有待確認項目"}</small></div>{data.actor.canManageEpo && !reportConfirmed ? <button type="button" onClick={() => setShowEpoForm((current) => !current)}>{showEpoForm ? "收起新增表單" : "＋新增人工 EPO"}</button> : null}</div>
                   {showEpoForm && data.actor.canManageEpo && !reportConfirmed ? <div className={styles.epoForm}>
                     <select value={epoEmployeeId} onChange={(event) => setEpoEmployeeId(event.target.value)}><option value="">選擇教練</option>{data.coaches.map((coach) => <option key={coach.id} value={coach.id}>{coachName(coach.id)}</option>)}</select>
