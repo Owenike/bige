@@ -395,6 +395,16 @@ function normalizeErrorMessage(message: string) {
     bb_member_mismatch: "BB 綁定的學員與成交會員不一致",
     bb_source_incomplete: "BB 缺少原始 FA 或學員資料，請重新建立",
     invalid_bb_schedule_input: "BB 回訪只能綁定原始 FA，不可設定課別",
+    bb_active_followup_exists: "這位客戶已有進行中的 BB 回訪",
+    bb_source_already_converted: "這筆原始 FA 已有 BB 成交紀錄，不能再次建立 BB",
+    bb_no_sale_not_found: "這筆 BB 目前不是完成未成交，無法復原",
+    bb_conversion_not_found: "找不到可復原的 BB 成交紀錄",
+    bb_conversion_restore_not_available: "這筆 BB 成交目前無法復原",
+    bb_conversion_payments_must_be_reversed: "請先將這份 BB 合約的所有付款作廢或退款，再復原成交",
+    bb_conversion_has_available_or_used_sessions: "這份 BB 合約仍有可用或已使用堂數，不能復原成交",
+    bb_conversion_has_linked_bookings: "這份 BB 合約已有排課，不能復原成交",
+    bb_conversion_has_redemptions: "這份 BB 合約已有扣堂紀錄，不能復原成交",
+    bb_conversion_has_extensions: "這份 BB 合約已有延期紀錄，不能復原成交",
     fa_fee_recipient_invalid: "請選擇或輸入 1 至 80 字的 FA 收款人",
     fa_fee_recipient_profile_invalid: "所選員工已停用或不屬於目前場館，請重新選擇",
     fa_fee_recipient_not_allowed: "這個操作不能記錄 FA 收款人",
@@ -830,14 +840,15 @@ export async function GET(request: Request) {
 
     let trials: any[] = [];
     if (
-      auth.context.role !== "coach" &&
+      (auth.context.role !== "coach" || (bbTrialOnly && canManageBigeSchedule(auth.context))) &&
       (searchRule.mode === "phone" || searchRule.mode === "name")
     ) {
       let trialQuery = auth.supabase
         .from("trial_bookings")
         .select(
           "id, member_id, name, phone, birthday, service, appointment_date, appointment_time, booking_status, note",
-        );
+        )
+        .eq("tenant_id", tenantId);
       if (searchRule.mode === "phone") {
         trialQuery = trialQuery.in("phone", searchRule.phoneVariants);
       } else {
@@ -848,23 +859,43 @@ export async function GET(request: Request) {
       }
       const trialResult = await trialQuery
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(bbTrialOnly ? 100 : 20);
       if (trialResult.error) return apiError(500, "INTERNAL_ERROR", trialResult.error.message);
       trials = trialResult.data || [];
       if (bbTrialOnly && trials.length) {
         const trialIds = trials.map((trial) => String(trial.id));
-        const faResult = await auth.supabase
-          .from("bookings")
-          .select("id, trial_booking_id, member_id, coach_id, trial_stage, course_type, starts_at, created_at")
-          .eq("tenant_id", tenantId)
-          .eq("is_bige_schedule", true)
-          .eq("operation_kind", "trial")
-          .eq("status", "completed")
-          .eq("trial_conversion_outcome", "not_converted")
-          .is("converted_at", null)
-          .in("trial_booking_id", trialIds)
-          .order("starts_at", { ascending: false });
-        if (faResult.error) return apiError(500, "INTERNAL_ERROR", faResult.error.message);
+        const [faResult, bbResult] = await Promise.all([
+          auth.supabase
+            .from("bookings")
+            .select("id, trial_booking_id, member_id, coach_id, trial_stage, course_type, starts_at, created_at")
+            .eq("tenant_id", tenantId)
+            .eq("is_bige_schedule", true)
+            .eq("operation_kind", "trial")
+            .eq("status", "completed")
+            .eq("trial_conversion_outcome", "not_converted")
+            .is("converted_at", null)
+            .in("trial_booking_id", trialIds)
+            .order("starts_at", { ascending: false }),
+          auth.supabase
+            .from("bookings")
+            .select("trial_booking_id, status, converted_at")
+            .eq("tenant_id", tenantId)
+            .eq("is_bige_schedule", true)
+            .eq("operation_kind", "bb")
+            .in("trial_booking_id", trialIds),
+        ]);
+        if (faResult.error || bbResult.error) {
+          return apiError(500, "INTERNAL_ERROR", faResult.error?.message || bbResult.error?.message || "BB 搜尋失敗");
+        }
+        const unavailableTrialIds = new Set(
+          (bbResult.data || [])
+            .filter((bb: { converted_at: string | null; status: string | null; trial_booking_id: string | null }) =>
+              Boolean(bb.converted_at) ||
+              ["pending", "confirmed", "booked", "checked_in"].includes(String(bb.status || "")),
+            )
+            .map((bb: { trial_booking_id: string | null }) => String(bb.trial_booking_id || ""))
+            .filter(Boolean),
+        );
         const latestFaByTrial = new Map<string, any>();
         for (const fa of faResult.data || []) {
           const trialId = String(fa.trial_booking_id || "");
@@ -887,7 +918,7 @@ export async function GET(request: Request) {
         );
         trials = trials.flatMap((trial) => {
           const fa = latestFaByTrial.get(String(trial.id));
-          if (!fa) return [];
+          if (!fa || unavailableTrialIds.has(String(trial.id))) return [];
           return [{
             ...trial,
             member_id: fa.member_id,
@@ -897,7 +928,7 @@ export async function GET(request: Request) {
             original_fa_starts_at: fa.starts_at,
             original_fa_coach_name: coachLabels.get(String(fa.coach_id || "")) || "未命名教練",
           }];
-        });
+        }).slice(0, 20);
       }
     }
     return apiSuccess({ members: membersWithLegacy, trials });
@@ -3270,6 +3301,28 @@ export async function POST(request: Request) {
       p_outcome: input.outcome,
     });
     if (result.error) return handleDatabaseError(result.error, "更新 BB 回訪結果失敗");
+    return apiSuccess({ item: result.data });
+  }
+
+  if (input.action === "restore_bb_no_sale") {
+    if (!canManageBigeSchedule(auth.context)) {
+      return apiError(403, "FORBIDDEN", "您沒有更正 BB 回訪結果的權限");
+    }
+    const result = await auth.supabase.rpc("bige_restore_bb_no_sale_v1", {
+      p_booking_id: input.bookingId,
+    });
+    if (result.error) return handleDatabaseError(result.error, "復原 BB 未成交結果失敗");
+    return apiSuccess({ item: result.data });
+  }
+
+  if (input.action === "restore_bb_conversion") {
+    if (!canDirectlyApproveBigeContractRisk(operationContext)) {
+      return apiError(403, "FORBIDDEN", "只有教練經理或具核准權限的主管能復原 BB 成交");
+    }
+    const result = await auth.supabase.rpc("bige_restore_bb_conversion_v1", {
+      p_booking_id: input.bookingId,
+    });
+    if (result.error) return handleDatabaseError(result.error, "復原 BB 成交失敗");
     return apiSuccess({ item: result.data });
   }
 

@@ -3182,6 +3182,7 @@ export default function BigeFitnessOperations({
     members: [],
     trials: [],
   });
+  const [scheduleSearchStatus, setScheduleSearchStatus] = useState<"idle" | "loading" | "error">("idle");
   const [selectedScheduleMemberResult, setSelectedScheduleMemberResult] = useState<Member | null>(null);
   const [selectedScheduleTrialResult, setSelectedScheduleTrialResult] = useState<TrialBookingSummary | null>(null);
 
@@ -3189,21 +3190,54 @@ export default function BigeFitnessOperations({
     if (previewData) return;
     if (dialog !== "schedule" || editingSchedule) {
       setScheduleResults({ members: [], trials: [] });
+      setScheduleSearchStatus("idle");
+      return;
+    }
+    if (
+      (scheduleDraft.operationKind === "bb" && selectedScheduleTrialResult) ||
+      (scheduleDraft.operationKind === "pt" && selectedScheduleMemberResult)
+    ) {
+      setScheduleResults({ members: [], trials: [] });
+      setScheduleSearchStatus("idle");
       return;
     }
     if (!scheduleSearch.trim()) {
       setScheduleResults({ members: [], trials: [] });
+      setScheduleSearchStatus("idle");
       return;
     }
+    const controller = new AbortController();
+    setScheduleResults({ members: [], trials: [] });
+    setScheduleSearchStatus("loading");
     const timer = window.setTimeout(async () => {
-      const response = await fetch(
-        `/api/bige-fitness?search=${encodeURIComponent(scheduleSearch.trim())}&memberScope=formal${scheduleDraft.operationKind === "bb" ? "&trialScope=bb" : ""}`,
-      );
-      const payload = await response.json().catch(() => null);
-      if (response.ok) setScheduleResults(payload.data || payload);
+      try {
+        const response = await fetch(
+          `/api/bige-fitness?search=${encodeURIComponent(scheduleSearch.trim())}&memberScope=formal${scheduleDraft.operationKind === "bb" ? "&trialScope=bb" : ""}`,
+          { signal: controller.signal },
+        );
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(payload?.error?.message || "搜尋失敗");
+        setScheduleResults(payload.data || payload);
+        setScheduleSearchStatus("idle");
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        setScheduleResults({ members: [], trials: [] });
+        setScheduleSearchStatus("error");
+      }
     }, 220);
-    return () => window.clearTimeout(timer);
-  }, [dialog, editingSchedule, previewData, scheduleDraft.operationKind, scheduleSearch]);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    dialog,
+    editingSchedule,
+    previewData,
+    scheduleDraft.operationKind,
+    scheduleSearch,
+    selectedScheduleMemberResult,
+    selectedScheduleTrialResult,
+  ]);
 
   const submitSchedule = async (event: FormEvent) => {
     event.preventDefault();
@@ -3826,6 +3860,51 @@ export default function BigeFitnessOperations({
       showOperationAlert(
         caught instanceof Error ? caught.message : "更新 BB 回訪結果失敗",
         "無法更新 BB 回訪結果",
+      );
+    } finally {
+      setBookingActionSubmitting(false);
+    }
+  };
+
+  const restoreBbNoSale = async () => {
+    if (!selectedBooking || selectedBooking.operation_kind !== "bb" || bookingActionSubmitting) return;
+    const booking = selectedBooking;
+    setBookingActionSubmitting(true);
+    try {
+      await post({ action: "restore_bb_no_sale", bookingId: booking.id });
+      setDialog(null);
+      setSelectedBooking(null);
+      setSuccess("BB 未成交結果已復原為尚未處理");
+      await loadBoard();
+    } catch (caught) {
+      showOperationAlert(
+        caught instanceof Error ? caught.message : "復原 BB 未成交結果失敗",
+        "無法復原 BB 結果",
+      );
+    } finally {
+      setBookingActionSubmitting(false);
+    }
+  };
+
+  const restoreBbConversion = async () => {
+    if (!selectedBooking || selectedBooking.operation_kind !== "bb" || bookingActionSubmitting) return;
+    const memberName = members.get(selectedBooking.member_id)?.full_name || "此學員";
+    const confirmed = window.confirm(
+      `確定要復原 ${memberName} 的 BB 成交嗎？\n\n必須先將這份合約的所有付款作廢或退款，且不能已有排課、扣堂或延期。復原後會保留 BB 到場紀錄並改為未成交。`,
+    );
+    if (!confirmed) return;
+    const booking = selectedBooking;
+    setBookingActionSubmitting(true);
+    try {
+      await post({ action: "restore_bb_conversion", bookingId: booking.id });
+      setDialog(null);
+      setSelectedBooking(null);
+      setSuccess("BB 成交已復原為完成未成交");
+      await loadBoard();
+    } catch (caught) {
+      showOperationAlert(
+        caught instanceof Error ? caught.message : "復原 BB 成交失敗",
+        "無法復原 BB 成交",
       );
     } finally {
       setBookingActionSubmitting(false);
@@ -6659,7 +6738,18 @@ export default function BigeFitnessOperations({
                     }}
                   />
                 </label>
-                {!editingSchedule ? (
+                {!editingSchedule && scheduleDraft.operationKind === "bb" && selectedScheduleTrialResult ? (
+                  <div className={`${styles.bookingStatusGuidance} ${styles.fieldFull}`}>
+                    <UserRoundCheck size={20} />
+                    <div>
+                      <strong>已綁定：{selectedScheduleTrialResult.name}</strong>
+                      <span>
+                        {selectedScheduleTrialResult.phone}・{selectedScheduleTrialResult.original_fa_stage || "未標示階段"}・{scheduleCourseLabel(selectedScheduleTrialResult.original_fa_course_type || null)}・{selectedScheduleTrialResult.original_fa_coach_name || "未命名教練"}・{selectedScheduleTrialResult.original_fa_starts_at ? formatDateTime(selectedScheduleTrialResult.original_fa_starts_at) : "未標示時間"}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+                {!editingSchedule && !selectedScheduleTrialResult && !selectedScheduleMemberResult ? (
                   <div className={`${styles.list} ${styles.fieldFull}`}>
                     {(scheduleDraft.operationKind === "pt" ? scheduleResults.members : scheduleResults.trials).map((item: any) => (
                       <button
@@ -6688,6 +6778,20 @@ export default function BigeFitnessOperations({
                         ) : null}
                       </button>
                     ))}
+                    {scheduleSearchStatus === "loading" ? (
+                      <div className={styles.emptyState}>搜尋中…</div>
+                    ) : null}
+                    {scheduleSearchStatus === "error" ? (
+                      <div className={styles.emptyState}>搜尋失敗，請稍後再試</div>
+                    ) : null}
+                    {scheduleSearchStatus === "idle" && scheduleSearch.trim() &&
+                    (scheduleDraft.operationKind === "pt" ? scheduleResults.members : scheduleResults.trials).length === 0 ? (
+                      <div className={styles.emptyState}>
+                        {scheduleDraft.operationKind === "bb"
+                          ? "沒有可建立 BB 的原始 FA；已成交或已有進行中 BB 的資料不會顯示"
+                          : "查無符合資料"}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </>
@@ -6976,6 +7080,29 @@ export default function BigeFitnessOperations({
                         <button disabled={!canCancelSelectedBooking} className={`${styles.button} ${styles.danger}`} onClick={() => void updateBooking("cancelled")}>取消</button>
                       </>
                     ) : null}
+                    {selectedBooking.bb_conversion_outcome === "not_converted" && data?.canManageSchedule ? (
+                      <button
+                        type="button"
+                        className={styles.button}
+                        disabled={bookingActionSubmitting}
+                        onClick={() => void restoreBbNoSale()}
+                      >
+                        <RotateCcw size={17} />
+                        更正為尚未處理
+                      </button>
+                    ) : null}
+                  </div>
+                ) : data?.canRestoreTrialConversion ? (
+                  <div className={styles.bookingStatusActions}>
+                    <button
+                      type="button"
+                      className={`${styles.button} ${styles.danger}`}
+                      disabled={bookingActionSubmitting}
+                      onClick={() => void restoreBbConversion()}
+                    >
+                      <RotateCcw size={17} />
+                      {bookingActionSubmitting ? "復原中…" : "復原 BB 成交"}
+                    </button>
                   </div>
                 ) : null}
               </div>

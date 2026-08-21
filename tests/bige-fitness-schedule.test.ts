@@ -2104,6 +2104,37 @@ test("BB is bound to a completed non-converted FA and never becomes a lesson, FA
   assert.match(route, /booking\.operation_kind === "bb" && input\.result === "completed"/);
 });
 
+test("BB lifecycle prevents duplicate followups and supports audited corrections", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const schema = readFileSync("lib/bige-fitness.ts", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260821102855_harden_bb_followup_lifecycle.sql",
+    "utf8",
+  );
+  const regression = readFileSync("tests/bige_bb_followup.sql", "utf8");
+
+  assert.match(migration, /bookings_bb_one_active_per_fa_idx/);
+  assert.match(migration, /bookings_bb_one_conversion_per_fa_idx/);
+  assert.match(migration, /bb_active_followup_exists/);
+  assert.match(migration, /bb_source_already_converted/);
+  assert.match(migration, /bige_profile_can_manage_schedule\(actor\)/);
+  assert.match(migration, /bige_enforce_bb_completion_window/);
+  assert.match(migration, /bige_restore_bb_no_sale_v1/);
+  assert.match(migration, /bige_restore_bb_conversion_v1/);
+  assert.match(schema, /action: z\.literal\("restore_bb_no_sale"\)/);
+  assert.match(schema, /action: z\.literal\("restore_bb_conversion"\)/);
+  assert.match(route, /rpc\("bige_restore_bb_no_sale_v1"/);
+  assert.match(route, /rpc\("bige_restore_bb_conversion_v1"/);
+  assert.match(route, /\.eq\("tenant_id", tenantId\)[\s\S]*\.limit\(bbTrialOnly \? 100 : 20\)/);
+  assert.match(component, /const controller = new AbortController\(\)/);
+  assert.match(component, /已綁定：\{selectedScheduleTrialResult\.name\}/);
+  assert.match(component, /更正為尚未處理/);
+  assert.match(component, /復原 BB 成交/);
+  assert.match(regression, /a second active BB for the same FA unexpectedly succeeded/);
+  assert.match(regression, /BB source did not reopen after an audited conversion correction/);
+});
+
 test("FA conversion preserves an imported shared contact without weakening direct member phone uniqueness", () => {
   const migration = readFileSync(
     "supabase/migrations/20260819151501_preserve_shared_fa_contact_on_conversion.sql",

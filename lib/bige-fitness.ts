@@ -794,6 +794,16 @@ export const completeBbOutcomeSchema = z.object({
   outcome: z.literal("not_converted"),
 });
 
+export const restoreBbNoSaleSchema = z.object({
+  action: z.literal("restore_bb_no_sale"),
+  bookingId: z.string().uuid(),
+});
+
+export const restoreBbConversionSchema = z.object({
+  action: z.literal("restore_bb_conversion"),
+  bookingId: z.string().uuid(),
+});
+
 export const changeTrialConversionPaymentSchema = z.object({
   action: z.literal("change_trial_conversion_payment"),
   bookingId: z.string().uuid(),
@@ -892,6 +902,8 @@ export const bigeFitnessActionSchema = z.discriminatedUnion("action", [
   completeBookingSchema,
   completeTrialOutcomeSchema,
   completeBbOutcomeSchema,
+  restoreBbNoSaleSchema,
+  restoreBbConversionSchema,
   changeTrialConversionPaymentSchema,
   changeTrialConversionOutcomeSchema,
   restoreTrialConversionSchema,
