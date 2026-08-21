@@ -230,7 +230,8 @@
 .syncRetry { display: grid; width: fit-content; min-height: 36px; gap: 1px; padding: 5px 9px; border-color: rgba(255,214,140,.5); color: #fff; background: rgba(113,68,12,.34); text-align: left; }
 .syncRetry strong { font-size: 12px; }
 .syncRetry small { color: #ffe2ad; font-size: 10px; }
-.historyReturn { width: fit-content; min-height: 31px; padding: 4px 9px; border-color: rgba(255,255,255,.28); color: #fff; background: rgba(255,255,255,.08); font-size: 12px; }
+.page .historyReturn { width: fit-content; min-height: 31px; padding: 4px 9px; border-color: rgba(255,255,255,.28); color: #fff; background: rgba(255,255,255,.08); font-size: 12px; }
+.page .historyReturn:hover:not(:disabled) { border-color: rgba(255,255,255,.42); color: #fff; background: rgba(255,255,255,.16); }
 @keyframes performanceSpin { to { transform: rotate(360deg); } }
 .workbenchActions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 9px; }
 .workbenchActions button:not(.primary) { border-color: rgba(255,255,255,.28); color: #fff; background: rgba(255,255,255,.08); }

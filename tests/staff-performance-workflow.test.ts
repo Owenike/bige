@@ -103,6 +103,8 @@ test("manager daily view defaults to the requested day and keeps history browsin
   assert.match(dashboard, /historyData\?\.selectedDate === historyDate/);
   assert.match(dashboard, /進入該日日結/);
   assert.match(dashboard, /回到今天/);
+  assert.match(dashboardStyles, /\.page \.historyReturn \{[^}]*color: #fff;[^}]*background: rgba\(255,255,255,\.08\)/);
+  assert.match(dashboardStyles, /\.page \.historyReturn:hover:not\(:disabled\) \{[^}]*color: #fff;[^}]*background: rgba\(255,255,255,\.16\)/);
   assert.match(dashboard, /window\.history\.replaceState/);
   assert.doesNotMatch(dashboard, /副理可完成初審並送出/);
 });
