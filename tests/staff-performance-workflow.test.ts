@@ -73,6 +73,20 @@ test("manager settlement workbench keeps the daily flow visible and moves sales 
   assert.doesNotMatch(dashboard, /className=\{styles\.tableWrap\}/);
 });
 
+test("manager workbench presents EPO rules in a dedicated responsive dialog", () => {
+  assert.match(dashboard, />EPO 規則<\/button>/);
+  assert.match(dashboard, /setActiveModal\("epoRules"\)/);
+  assert.match(dashboard, /每日數字最高/);
+  assert.match(dashboard, /上班時間內滿 <b>6 堂<\/b>，且上班時間外再滿 <b>2 堂<\/b>/);
+  assert.match(dashboard, /上班時間內滿 <b>3 堂<\/b>，且上班時間外再滿 <b>1 堂<\/b>/);
+  assert.match(dashboard, /自第 <b>6 張證照<\/b>起/);
+  assert.match(dashboard, /成交 <b>72 堂以上<\/b>/);
+  assert.match(dashboard, /成交 <b>48 堂以上<\/b>/);
+  assert.match(dashboard, /須有明確的主管級 To 紀錄才列入計算/);
+  assert.match(dashboardStyles, /\.epoRuleGrid \{[^}]*repeat\(2/);
+  assert.match(dashboardStyles, /@media \(max-width: 780px\)[\s\S]*\.epoRuleGrid \{ grid-template-columns: 1fr; \}/);
+});
+
 test("manager dashboard does not expose manual performance entry controls", () => {
   assert.match(route, /body\.action === "create_manual_event"/);
   assert.match(route, /z\.coerce\.number\(\)\.positive\(\)/);
