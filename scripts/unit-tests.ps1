@@ -42,6 +42,7 @@ npx tsc `
   tests/student-checkin-entry.test.ts `
   tests/student-entry-access.test.ts `
   tests/student-drop-in-plan.test.ts `
+  tests/student-drop-in-request-recency.test.ts `
   tests/student-drop-in-registration.test.ts `
   tests/system-audit.test.ts `
   tests/user-facing-error.test.ts `
@@ -84,6 +85,7 @@ npx tsc `
   lib/student-checkin-entry.ts `
   lib/student-entry-access.ts `
   lib/student-drop-in-plan.ts `
+  lib/student-drop-in-request-recency.ts `
   lib/student-drop-in-registration.ts `
   lib/system-audit.ts `
   lib/user-facing-error.ts `

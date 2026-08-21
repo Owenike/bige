@@ -168,17 +168,44 @@ result = await jsonRequest("/api/student-checkin/drop-in/request", { method: "PO
 assert.equal(result.response.status, 200);
 assert.equal(result.payload.request.status, "pending");
 const approvedDropInId = result.payload.request.id;
+const delayedRequestedAt = new Date(Date.now() - (45 * 60 * 1000)).toISOString();
+const earlierRejectedAt = new Date(Date.now() - (60 * 60 * 1000)).toISOString();
+const delayedRequests = await Promise.all([
+  adminDatabase
+    .from("student_drop_in_requests")
+    .update({ requested_at: earlierRejectedAt })
+    .eq("id", rejectedDropInId),
+  adminDatabase
+    .from("student_drop_in_requests")
+    .update({ requested_at: delayedRequestedAt })
+    .eq("id", approvedDropInId),
+]);
+for (const delayedRequest of delayedRequests) assert.ifError(delayedRequest.error);
 await adminDecision(
   "drop_in",
   approvedDropInId,
   "approved",
   token,
-  { lockerKeyTaken: true, lockerKeyNumber: 27 },
+  { lockerKeyTaken: true, lockerKeyNumber: 12 },
 );
 result = await jsonRequest("/api/student-checkin/drop-in/request", { headers: { cookie: nonMemberCookie }, cache: "no-store" });
 assert.equal(result.payload.request.status, "approved");
 assert.equal(result.payload.dropInCheckIn.price_twd, 50);
 assert.equal(result.payload.dropInCheckIn.remaining_uses, 9);
+result = await jsonRequest("/api/student-checkin/drop-in/request", { method: "POST", headers: { cookie: nonMemberCookie } });
+assert.equal(result.response.status, 200);
+assert.equal(result.payload.request.id, approvedDropInId);
+assert.equal(result.payload.request.status, "approved");
+const delayedApprovalEntries = await adminDatabase
+  .from("student_drop_ins")
+  .select("id, use_sequence, remaining_uses")
+  .eq("student_profile_id", "00000000-0000-4000-8000-00000000e203");
+assert.ifError(delayedApprovalEntries.error);
+assert.deepEqual(delayedApprovalEntries.data, [{
+  id: result.payload.dropInCheckIn.id,
+  use_sequence: 1,
+  remaining_uses: 9,
+}]);
 storedEntry = await adminDatabase
   .from("student_drop_ins")
   .select("locker_key_taken, locker_key_number")
@@ -186,7 +213,7 @@ storedEntry = await adminDatabase
   .single();
 assert.ifError(storedEntry.error);
 assert.equal(storedEntry.data.locker_key_taken, true);
-assert.equal(storedEntry.data.locker_key_number, 27);
+assert.equal(storedEntry.data.locker_key_number, 12);
 
 adminQueue = await jsonRequest("/api/admin/student-check-ins", {
   headers: { authorization: `Bearer ${token}` },
@@ -197,7 +224,7 @@ const dropInSummaryEntry = adminQueue.payload.dropInToday.find((item) => item.re
 assert.equal(autonomousSummaryEntry?.locker_key_taken, false);
 assert.equal(autonomousSummaryEntry?.locker_key_number, null);
 assert.equal(dropInSummaryEntry?.locker_key_taken, true);
-assert.equal(dropInSummaryEntry?.locker_key_number, 27);
+assert.equal(dropInSummaryEntry?.locker_key_number, 12);
 
 const blockedCookie = await studentLogin("0900000204");
 result = await jsonRequest("/api/student-checkin/session", { headers: { cookie: blockedCookie } });
@@ -224,6 +251,7 @@ console.log(JSON.stringify({
     adminPagesRendered: true,
     lockerKeyAnswersStored: true,
     lockerKeySummaryReturned: true,
+    delayedApprovalReused: true,
     rawHtmlErrors: false,
   },
 }));

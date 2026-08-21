@@ -11,10 +11,10 @@ import {
   studentDropInRemainingUses,
   type StudentDropInEntryPlan,
 } from "./student-drop-in-plan";
+import { shouldReuseStudentDropInRequest } from "./student-drop-in-request-recency";
 
 export const STUDENT_DROP_IN_MAX_USES = 10;
 export const STUDENT_DROP_IN_PRICE_TWD = 50;
-const RECENT_REQUEST_WINDOW_MS = 30 * 60 * 1000;
 
 export type StudentDropInEntitlementRow = {
   student_profile_id: string;
@@ -110,17 +110,16 @@ export async function ensureStudentDropInEntitlement(profileId: string) {
 }
 
 export async function loadRecentStudentDropInRequest(profileId: string) {
-  const cutoff = new Date(Date.now() - RECENT_REQUEST_WINDOW_MS).toISOString();
   const result = await createSupabaseAdminClient()
     .from("student_drop_in_requests")
     .select(requestSelect)
     .eq("student_profile_id", profileId)
-    .gte("requested_at", cutoff)
     .order("requested_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (result.error) throw new Error(result.error.message);
-  return (result.data || null) as StudentDropInRequestRow | null;
+  const latest = (result.data || null) as StudentDropInRequestRow | null;
+  return latest && shouldReuseStudentDropInRequest(latest) ? latest : null;
 }
 
 export async function loadPendingStudentDropInRequest(profileId: string) {

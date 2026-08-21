@@ -70,6 +70,13 @@ test("student and NT$50 entries use separate URLs while retaining stable labels"
   assert.equal(studentCheckInEntryLabel("drop_in"), "50 元入場");
 });
 
+test("NT$50 request loading keeps delayed decisions visible to prevent a second charge", () => {
+  const dropInService = readFileSync(resolve(process.cwd(), "lib/student-drop-in.ts"), "utf8");
+
+  assert.match(dropInService, /shouldReuseStudentDropInRequest\(latest\)/);
+  assert.doesNotMatch(dropInService, /\.gte\("requested_at", cutoff\)/);
+});
+
 test("entry mode validation rejects arbitrary URL input", () => {
   assert.equal(isStudentCheckInEntryMode("autonomous"), true);
   assert.equal(isStudentCheckInEntryMode("drop_in"), true);
