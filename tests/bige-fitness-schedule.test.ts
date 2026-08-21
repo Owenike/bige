@@ -147,8 +147,8 @@ test("batch preflight blocks overlapping coach notes but permits adjacent or ina
   assert.equal(noteConflict?.kind, "coach_note");
 });
 
-test("batch preflight treats imported appointment-book rows and notes as references", () => {
-  const conflict = findBigeScheduleBatchConflict({
+test("batch preflight treats imported appointment-book rows and notes as occupied slots", () => {
+  const bookingConflict = findBigeScheduleBatchConflict({
     coachId: batchCoachId,
     memberId: batchMemberId,
     startsAt: "2026-08-20T10:00:00+08:00",
@@ -173,7 +173,25 @@ test("batch preflight treats imported appointment-book rows and notes as referen
     }],
   });
 
-  assert.equal(conflict, null);
+  assert.equal(bookingConflict?.kind, "coach_booking");
+
+  const noteConflict = findBigeScheduleBatchConflict({
+    coachId: batchCoachId,
+    memberId: batchMemberId,
+    startsAt: "2026-08-20T10:00:00+08:00",
+    endsAt: "2026-08-20T11:00:00+08:00",
+    bookings: [],
+    notes: [{
+      id: "legacy-note",
+      coach_id: batchCoachId,
+      starts_at: "2026-08-20T10:00:00+08:00",
+      ends_at: "2026-08-20T11:00:00+08:00",
+      content: "舊預約本",
+      source: "legacy_schedule_import",
+    }],
+  });
+
+  assert.equal(noteConflict?.kind, "coach_note");
 });
 
 test("completed and deducted bookings must be restored before schedule edits", () => {
