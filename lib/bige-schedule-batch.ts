@@ -15,6 +15,7 @@ export type BigeScheduleBatchBookingCandidate = {
   status: string;
   course_type?: string | null;
   is_bige_schedule?: boolean | null;
+  operation_idempotency_key?: string | null;
 };
 
 export type BigeScheduleBatchNoteCandidate = {
@@ -23,6 +24,7 @@ export type BigeScheduleBatchNoteCandidate = {
   starts_at: string;
   ends_at: string;
   content: string;
+  source?: string | null;
 };
 
 export type BigeScheduleBatchConflict =
@@ -58,6 +60,7 @@ export function findBigeScheduleBatchConflict(params: {
   const activeStatuses = new Set<string>(BIGE_ACTIVE_BOOKING_STATUSES);
   const overlappingBookings = params.bookings.filter(
     (booking) =>
+      !String(booking.operation_idempotency_key || "").startsWith("legacy-august:") &&
       activeStatuses.has(booking.status) &&
       rangesOverlap(params.startsAt, params.endsAt, booking.starts_at, booking.ends_at),
   );
@@ -69,6 +72,7 @@ export function findBigeScheduleBatchConflict(params: {
 
   const coachNote = params.notes.find(
     (note) =>
+      note.source !== "legacy_schedule_import" &&
       note.coach_id === params.coachId &&
       rangesOverlap(params.startsAt, params.endsAt, note.starts_at, note.ends_at),
   );

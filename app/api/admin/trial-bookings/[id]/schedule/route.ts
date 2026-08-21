@@ -96,6 +96,52 @@ function lineError(result: { error?: string; skipped?: boolean; status?: number 
   return (result.error || "line_push_failed").slice(0, 220);
 }
 
+type ScheduleWarning = {
+  code?: string;
+  existingCount?: number;
+};
+
+function scheduleErrorMessage(error: string) {
+  const code = error.split("\n")[0]?.trim() || "";
+  if (code.includes("member_time_conflict")) {
+    return "這位客戶在同一時段已有正式預約，請確認日期與時間。";
+  }
+  if (code.includes("schedule_time_overlap") || code.includes("schedule_cell_occupied")) {
+    return "所選教練在同一時段已有正式安排，請確認教練與時間。";
+  }
+  if (code.includes("coach_capacity_exceeded")) {
+    return "所選教練在同一時段已達可服務人數上限。";
+  }
+  if (code.includes("group_course_type_mismatch")) {
+    return "同一團體課程的課別必須一致，請確認課別。";
+  }
+  if (code.includes("outside_business_hours")) {
+    return "預約時間不在可排課時段內。";
+  }
+  return code || "無法加入教練日表";
+}
+
+function scheduleSuccessMessage(base: string, warnings: ScheduleWarning[]) {
+  const messages: string[] = [];
+  const legacyReferenceWarning = warnings.find(
+    (warning) => warning?.code === "legacy_schedule_reference_conflict",
+  );
+  if (legacyReferenceWarning) {
+    const count = Number(legacyReferenceWarning.existingCount || 0);
+    messages.push(
+      count > 0
+        ? `同時段有 ${count} 筆舊預約本資料，僅供對照，本次安排已保留`
+        : "同時段有舊預約本資料，僅供對照，本次安排已保留",
+    );
+  }
+  if (warnings.some((warning) => warning?.code === "classroom_conflict")) {
+    messages.push("此時段有教室衝突，請到課表確認");
+  }
+  return messages.length > 0
+    ? `${base.replace(/[。；]+$/u, "")}；${messages.join("；")}。`
+    : base;
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireTrialBookingAdmin(request);
   if (!auth.ok) return authFailureResponse(auth.response.status);
@@ -207,18 +253,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         });
     if (scheduleResult.error) {
       return NextResponse.json(
-        { ok: false, error: scheduleResult.error.message.split("\n")[0] || "無法加入教練日表" },
+        { ok: false, error: scheduleErrorMessage(scheduleResult.error.message) },
         { status: 409 },
       );
     }
     const scheduleWarnings = Array.isArray(
       (scheduleResult.data as { warnings?: unknown } | null)?.warnings,
     )
-      ? ((scheduleResult.data as { warnings: Array<{ code?: string }> }).warnings || [])
+      ? ((scheduleResult.data as { warnings: ScheduleWarning[] }).warnings || [])
       : [];
-    const hasClassroomConflict = scheduleWarnings.some(
-      (warning) => warning?.code === "classroom_conflict",
-    );
 
     const updateResult = await admin
       .from("trial_bookings")
@@ -256,9 +299,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         booking: updateResult.data,
         lineNotification: "not_sent",
         warnings: scheduleWarnings,
-        message: hasClassroomConflict
-          ? "預約資料已更新；此時段有教室衝突，請到課表確認。"
-          : "預約資料已更新。",
+        message: scheduleSuccessMessage("預約資料已更新。", scheduleWarnings),
       });
     }
 
@@ -295,13 +336,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       booking: lineUpdateResult.data || updateResult.data,
       lineNotification: lineOk ? "sent" : "failed",
       warnings: scheduleWarnings,
-      message: hasClassroomConflict
-        ? lineOk
-          ? "預約資料已更新並發送 LINE 通知；此時段有教室衝突，請到課表確認。"
-          : "資料已儲存；此時段有教室衝突，且 LINE 通知發送失敗。"
-        : lineOk
-          ? "預約資料已更新並發送 LINE 通知。"
-          : "資料已儲存，但 LINE 通知發送失敗。",
+      message: scheduleSuccessMessage(
+        lineOk ? "預約資料已更新並發送 LINE 通知。" : "資料已儲存，但 LINE 通知發送失敗。",
+        scheduleWarnings,
+      ),
     });
   } catch (error) {
     return NextResponse.json(

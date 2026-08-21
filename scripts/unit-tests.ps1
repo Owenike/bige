@@ -23,6 +23,7 @@ npx tsc `
   tests/bige-schedule-permissions.test.ts `
   tests/giveme-invoice.test.ts `
   tests/line-push.test.ts `
+  tests/legacy-schedule-reference.test.ts `
   tests/member-progress-events.test.ts `
   tests/member-progress-feedback.test.ts `
   tests/notification-productization.test.ts `

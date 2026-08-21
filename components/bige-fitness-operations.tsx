@@ -93,6 +93,8 @@ import {
   buildOptimisticFaAssistantToState,
   buildOptimisticScheduleMoveResult,
   findScheduleEditConflict,
+  isLegacyScheduleReferenceBooking,
+  isLegacyScheduleReferenceNote,
   isScheduleBookingDraggable,
   runOptimisticScheduleMutation,
   type ScheduleDropPlan,
@@ -206,6 +208,7 @@ type Booking = {
   fa_fee_recipient_profile_id?: string | null;
   fa_fee_recipient_name?: string | null;
   fa_fee_recorded_at?: string | null;
+  operation_idempotency_key?: string | null;
 };
 type FaFeeRecipientOption = {
   id: string;
@@ -240,6 +243,7 @@ type ScheduleNote = {
   system_kind?: string | null;
   source_booking_ids?: string[] | null;
   metadata?: Record<string, unknown> | null;
+  source?: string | null;
 };
 type ScheduleNoteUndo = {
   noteId: string;
@@ -584,7 +588,10 @@ type MonthlySchedulePreflight = {
 };
 
 type MonthlyScheduleBatchResult = {
-  created: Array<{ startsAt: string; item: unknown }>;
+  created: Array<{
+    startsAt: string;
+    item?: { warnings?: Array<{ code?: string; existingCount?: number }> };
+  }>;
   skipped: MonthlyScheduleConflict[];
   failures: Array<{ startsAt: string; message: string }>;
 };
@@ -2334,7 +2341,10 @@ export default function BigeFitnessOperations({
         note: monthlyNote.trim() || null,
         idempotencyKey: `month-${monthlyMember.id}-${Date.now()}`,
       })) as {
-        created?: Array<{ startsAt: string; item: unknown }>;
+        created?: Array<{
+          startsAt: string;
+          item?: { warnings?: Array<{ code?: string; existingCount?: number }> };
+        }>;
         failures?: Array<{ startsAt: string; message: string }>;
       };
       const batchResult: MonthlyScheduleBatchResult = {
@@ -2640,13 +2650,21 @@ export default function BigeFitnessOperations({
     if (payload.kind === "note") {
       setActiveScheduleDrag(null);
       setError("");
-      setScheduleDragNotice("自由文字不能拖拉、交換或覆蓋，請直接點擊原資料編輯。");
+      setScheduleDragNotice(
+        isLegacyScheduleReferenceNote(payload.item)
+          ? "舊預約本資料僅供對照，不能移動或覆蓋。"
+          : "自由文字不能拖拉、交換或覆蓋，請直接點擊原資料編輯。",
+      );
       return;
     }
     if (!payload.movable) {
       setActiveScheduleDrag(null);
       setError("");
-      setScheduleDragNotice("已完成、已取消、已報到或已核銷的課程不能拖拉。");
+      setScheduleDragNotice(
+        isLegacyScheduleReferenceBooking(payload.item)
+          ? "舊預約本資料僅供對照，不能移動或覆蓋。"
+          : "已完成、已取消、已報到或已核銷的課程不能拖拉。",
+      );
       return;
     }
     setError("");
@@ -2808,13 +2826,28 @@ export default function BigeFitnessOperations({
           mode,
         },
         { errorPresentation: "inline" },
-      )) as { item?: { operationId?: string; items?: ScheduleMoveResultItem[] } };
-      const message =
+      )) as {
+        item?: {
+          operationId?: string;
+          items?: ScheduleMoveResultItem[];
+          warnings?: Array<{ code?: string; existingCount?: number }>;
+        };
+      };
+      const baseMessage =
         mode === "swap"
           ? "課程已交換，操作時間與變更內容已留存"
           : mode === "overwrite"
             ? "課程已覆蓋，被取代的課程已取消並保留操作紀錄"
             : "課程已移動，操作時間與變更內容已留存";
+      const legacyReferenceWarning = result.item?.warnings?.find(
+        (warning) => warning.code === "legacy_schedule_reference_conflict",
+      );
+      const legacyReferenceCount = Number(legacyReferenceWarning?.existingCount || 0);
+      const message = legacyReferenceWarning
+        ? legacyReferenceCount > 0
+          ? `${baseMessage}；同時段有 ${legacyReferenceCount} 筆舊預約本資料，僅供對照`
+          : `${baseMessage}；同時段有舊預約本資料，僅供對照`
+        : baseMessage;
       setSuccess(message);
       setScheduleMoveUndo(
         result.item?.operationId
@@ -3390,7 +3423,20 @@ export default function BigeFitnessOperations({
           }
         },
         request: () => post(requestBody, { preserveFeedback: true }),
-        commit: () => {
+        commit: (result) => {
+          const legacyReferenceWarning = (result as {
+            item?: { warnings?: Array<{ code?: string; existingCount?: number }> };
+          }).item?.warnings?.find(
+            (warning) => warning.code === "legacy_schedule_reference_conflict",
+          );
+          const legacyReferenceCount = Number(legacyReferenceWarning?.existingCount || 0);
+          setSuccess(
+            legacyReferenceWarning
+              ? legacyReferenceCount > 0
+                ? `原排課資料已更新；同時段有 ${legacyReferenceCount} 筆舊預約本資料，僅供對照`
+                : "原排課資料已更新；同時段有舊預約本資料，僅供對照"
+              : "原排課資料已更新",
+          );
           if (
             scheduleNoteUndo &&
             scheduleHourCellKey(selectedCoach, startsAt) ===
@@ -3532,7 +3578,12 @@ export default function BigeFitnessOperations({
         }),
       commit: (result) => {
         const created = (result as {
-          item?: { bookingId?: string; memberId?: string; trialStage?: string | null };
+          item?: {
+            bookingId?: string;
+            memberId?: string;
+            trialStage?: string | null;
+            warnings?: Array<{ code?: string; existingCount?: number }>;
+          };
         }).item;
         const updates: Partial<Booking> = {
           id: created?.bookingId || optimisticBookingId,
@@ -3562,7 +3613,17 @@ export default function BigeFitnessOperations({
         ) {
           clearScheduleNoteUndo();
         }
-        setSuccess("排課已建立");
+        const legacyReferenceWarning = created?.warnings?.find(
+          (warning) => warning.code === "legacy_schedule_reference_conflict",
+        );
+        const legacyReferenceCount = Number(legacyReferenceWarning?.existingCount || 0);
+        setSuccess(
+          legacyReferenceWarning
+            ? legacyReferenceCount > 0
+              ? `排課已建立；同時段有 ${legacyReferenceCount} 筆舊預約本資料，僅供對照`
+              : "排課已建立；同時段有舊預約本資料，僅供對照"
+            : "排課已建立",
+        );
         void loadBoard({ silent: true, targetDate: operationDate });
       },
       rollback: (caught) => {
@@ -6483,7 +6544,14 @@ export default function BigeFitnessOperations({
                 <h3>已成功建立</h3>
                 <div className={styles.monthlyResultList}>
                   {monthlyBatchResult.created.map((created) => (
-                    <div data-tone="success" key={created.startsAt}>{formatDateTime(created.startsAt)}</div>
+                    <div data-tone="success" key={created.startsAt}>
+                      {formatDateTime(created.startsAt)}
+                      {created.item?.warnings?.some(
+                        (warning) => warning.code === "legacy_schedule_reference_conflict",
+                      ) ? (
+                        <small>舊預約本有資料，已保留並建立</small>
+                      ) : null}
+                    </div>
                   ))}
                 </div>
               </section>

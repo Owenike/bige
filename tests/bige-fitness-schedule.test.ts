@@ -147,6 +147,35 @@ test("batch preflight blocks overlapping coach notes but permits adjacent or ina
   assert.equal(noteConflict?.kind, "coach_note");
 });
 
+test("batch preflight treats imported appointment-book rows and notes as references", () => {
+  const conflict = findBigeScheduleBatchConflict({
+    coachId: batchCoachId,
+    memberId: batchMemberId,
+    startsAt: "2026-08-20T10:00:00+08:00",
+    endsAt: "2026-08-20T11:00:00+08:00",
+    bookings: [{
+      id: "legacy-booking",
+      coach_id: batchCoachId,
+      member_id: batchMemberId,
+      starts_at: "2026-08-20T10:00:00+08:00",
+      ends_at: "2026-08-20T11:00:00+08:00",
+      status: "booked",
+      is_bige_schedule: true,
+      operation_idempotency_key: "legacy-august:test-reference",
+    }],
+    notes: [{
+      id: "legacy-note",
+      coach_id: batchCoachId,
+      starts_at: "2026-08-20T10:00:00+08:00",
+      ends_at: "2026-08-20T11:00:00+08:00",
+      content: "舊預約本",
+      source: "legacy_schedule_import",
+    }],
+  });
+
+  assert.equal(conflict, null);
+});
+
 test("completed and deducted bookings must be restored before schedule edits", () => {
   assert.equal(canEditBigeScheduleBooking("completed"), false);
   assert.equal(canEditBigeScheduleBooking("booked"), true);
@@ -1610,7 +1639,7 @@ test("creating a selected schedule member paints the cell before the request fin
   );
   assert.match(
     submitSchedule,
-    /commit: \(result\) => \{[\s\S]*bookingId[\s\S]*setSuccess\("排課已建立"\)[\s\S]*loadBoard\(\{ silent: true, targetDate: operationDate \}\)/,
+    /commit: \(result\) => \{[\s\S]*bookingId[\s\S]*const legacyReferenceWarning[\s\S]*setSuccess\([\s\S]*: "排課已建立",[\s\S]*loadBoard\(\{ silent: true, targetDate: operationDate \}\)/,
   );
   assert.match(
     submitSchedule,

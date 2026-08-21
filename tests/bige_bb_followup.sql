@@ -105,15 +105,30 @@ begin
   perform set_config('request.jwt.claim.sub', test_manager_id::text, true);
   perform set_config('request.jwt.claim.role', 'authenticated', true);
 
-  created_result := public.bige_create_bb_schedule_booking_v1(
-    test_tenant_id, test_branch_id, test_trial_id, test_manager_id,
+  insert into public.bookings (
+    tenant_id, branch_id, member_id, coach_id, service_name, starts_at, ends_at,
+    status, is_bige_schedule, operation_kind, course_type,
+    operation_idempotency_key
+  ) values (
+    test_tenant_id, test_branch_id, test_member_id, test_manager_id,
+    'Imported BB reference', '2099-01-05 10:00:00+08', '2099-01-05 11:00:00+08',
+    'booked', true, 'pt', 'weight_training', 'legacy-august:test-bb-reference'
+  );
+
+  created_result := public.bige_create_schedule_booking_v2(
+    test_tenant_id, test_branch_id, null, test_trial_id, test_manager_id,
+    'bb', null,
     '2099-01-05 10:00:00+08', '2099-01-05 11:00:00+08',
-    'BB regression test', 'test:bb-followup:create'
+    'BB regression test', null, 'test:bb-followup:create'
   );
   bb_booking_id := (created_result->>'bookingId')::uuid;
 
   if coalesce((created_result->>'replayed')::boolean, true) then
     raise exception 'first BB schedule creation was unexpectedly replayed';
+  end if;
+  if not coalesce(created_result->'warnings', '[]'::jsonb) @>
+    '[{"code":"legacy_schedule_reference_conflict"}]'::jsonb then
+    raise exception 'BB should treat the imported appointment book as a warning';
   end if;
   if not exists (
     select 1 from public.bookings booking

@@ -257,7 +257,7 @@ async function loadScheduleEditConflict(params: {
 }) {
   let bookingsQuery = params.supabase
     .from("bookings")
-    .select("id, member_id, coach_id, starts_at, ends_at, status, course_type")
+    .select("id, member_id, coach_id, starts_at, ends_at, status, course_type, operation_idempotency_key")
     .eq("tenant_id", params.tenantId)
     .eq("coach_id", params.coachId)
     .eq("is_bige_schedule", true)
@@ -270,7 +270,7 @@ async function loadScheduleEditConflict(params: {
 
   let notesQuery = params.supabase
     .from("bige_schedule_notes")
-    .select("id, coach_id, starts_at, ends_at, content")
+    .select("id, coach_id, starts_at, ends_at, content, source")
     .eq("tenant_id", params.tenantId)
     .eq("coach_id", params.coachId)
     .lt("starts_at", params.endsAt)
@@ -322,6 +322,7 @@ function normalizeErrorMessage(message: string) {
     invalid_schedule_move_mode: "無效的課表拖拉方式",
     schedule_drag_forbidden: "您的帳號沒有拖拉課表的權限",
     schedule_booking_not_found: "找不到要移動的課程",
+    legacy_schedule_reference_read_only: "舊預約本資料僅供對照，不能移動或覆蓋",
     schedule_target_coach_not_found: "找不到目標教練",
     schedule_booking_locked: "交換範圍含有已完成、已取消、已報到或已核銷的課程，無法拖拉",
     schedule_booking_redeemed: "這堂課已核銷，不能拖拉",
@@ -1302,7 +1303,7 @@ export async function GET(request: Request) {
   let bookingsQuery = scheduleSupabase
     .from("bookings")
     .select(
-      "id, branch_id, member_id, coach_id, service_name, starts_at, ends_at, status, status_reason, note, operation_kind, course_type, trial_stage, operation_result, trial_conversion_outcome, bb_conversion_outcome, trial_booking_id, group_id, reminder_status, converted_at, converted_contract_id, member_plan_contract_id, requires_contract_followup, import_batch_id, import_row_key, fa_fee_amount, fa_fee_recipient_profile_id, fa_fee_recipient_name, fa_fee_recorded_at",
+      "id, branch_id, member_id, coach_id, service_name, starts_at, ends_at, status, status_reason, note, operation_kind, course_type, trial_stage, operation_result, trial_conversion_outcome, bb_conversion_outcome, trial_booking_id, group_id, reminder_status, converted_at, converted_contract_id, member_plan_contract_id, requires_contract_followup, import_batch_id, import_row_key, fa_fee_amount, fa_fee_recipient_profile_id, fa_fee_recipient_name, fa_fee_recorded_at, operation_idempotency_key",
     )
     .eq("tenant_id", tenantId)
     .eq("is_bige_schedule", true)
@@ -1316,7 +1317,7 @@ export async function GET(request: Request) {
 
   let notesQuery = scheduleSupabase
     .from("bige_schedule_notes")
-    .select("id, branch_id, coach_id, starts_at, ends_at, content, system_kind, source_booking_ids, metadata, updated_at")
+    .select("id, branch_id, coach_id, starts_at, ends_at, content, system_kind, source_booking_ids, metadata, source, updated_at")
     .eq("tenant_id", tenantId)
     .gte("starts_at", range.start)
     .lt("starts_at", range.end)
@@ -1991,7 +1992,7 @@ export async function POST(request: Request) {
       admin
         .from("bookings")
         .select(
-          "id, member_id, coach_id, service_name, starts_at, ends_at, status, course_type, is_bige_schedule",
+          "id, member_id, coach_id, service_name, starts_at, ends_at, status, course_type, is_bige_schedule, operation_idempotency_key",
         )
         .eq("tenant_id", tenantId)
         .in("status", ACTIVE_BOOKING_STATUSES)
@@ -2000,7 +2001,7 @@ export async function POST(request: Request) {
         .limit(5000),
       admin
         .from("bige_schedule_notes")
-        .select("id, coach_id, starts_at, ends_at, content")
+        .select("id, coach_id, starts_at, ends_at, content, source")
         .eq("tenant_id", tenantId)
         .eq("coach_id", input.coachId)
         .lt("starts_at", rangeEnd)
@@ -2247,7 +2248,7 @@ export async function POST(request: Request) {
     }
     const bookingResult = await auth.supabase
       .from("bookings")
-      .select("id, tenant_id, operation_kind, status")
+      .select("id, tenant_id, branch_id, operation_kind, status")
       .eq("id", input.bookingId)
       .eq("tenant_id", tenantId)
       .eq("is_bige_schedule", true)
@@ -2288,26 +2289,53 @@ export async function POST(request: Request) {
     if (conflictResult.conflict) {
       return apiError(409, "FORBIDDEN", scheduleEditConflictMessage(conflictResult.conflict));
     }
+    let scheduleWarnings: Array<{ code?: string; existingCount?: number }> = [];
+    if (isBb) {
+      const updateResult = await auth.supabase
+        .from("bookings")
+        .update({
+          coach_id: input.coachId,
+          starts_at: input.startsAt,
+          ends_at: endsAt,
+          note: input.note || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.bookingId)
+        .eq("tenant_id", tenantId)
+        .eq("is_bige_schedule", true);
+      if (updateResult.error) {
+        return handleDatabaseError(updateResult.error, "儲存 BB 回訪變更失敗");
+      }
+    } else {
+      const scheduleResult = await auth.supabase.rpc("bige_reschedule_schedule_booking_v2", {
+        p_booking_id: input.bookingId,
+        p_branch_id: bookingResult.data.branch_id || auth.context.branchId,
+        p_coach_id: input.coachId,
+        p_course_type: input.courseType,
+        p_starts_at: input.startsAt,
+        p_ends_at: endsAt,
+        p_note: input.note || null,
+      });
+      if (scheduleResult.error) {
+        return handleDatabaseError(scheduleResult.error, "儲存排課變更失敗");
+      }
+      const warnings = (scheduleResult.data as { warnings?: unknown } | null)?.warnings;
+      scheduleWarnings = Array.isArray(warnings)
+        ? (warnings as Array<{ code?: string; existingCount?: number }>)
+        : [];
+    }
+
     const result = await auth.supabase
       .from("bookings")
-      .update({
-        coach_id: input.coachId,
-        course_type: input.courseType,
-        service_name: input.courseType ? BIGE_COURSE_LABELS[input.courseType] : "BB 回訪",
-        starts_at: input.startsAt,
-        ends_at: endsAt,
-        note: input.note || null,
-        updated_at: new Date().toISOString(),
-      })
+      .select(
+        "id, member_id, coach_id, service_name, starts_at, ends_at, status, note, operation_kind, course_type, trial_stage, operation_result, reminder_status, converted_at, bb_conversion_outcome, operation_idempotency_key",
+      )
       .eq("id", input.bookingId)
       .eq("tenant_id", tenantId)
       .eq("is_bige_schedule", true)
-      .select(
-        "id, member_id, coach_id, service_name, starts_at, ends_at, status, note, operation_kind, course_type, trial_stage, operation_result, reminder_status, converted_at, bb_conversion_outcome",
-      )
       .single();
-    if (result.error) return handleDatabaseError(result.error, "儲存排課變更失敗");
-    return apiSuccess({ item: result.data });
+    if (result.error) return handleDatabaseError(result.error, "讀取排課變更失敗");
+    return apiSuccess({ item: { ...result.data, warnings: scheduleWarnings } });
   }
 
   if (input.action === "edit_schedule_note") {

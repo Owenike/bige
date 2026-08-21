@@ -189,6 +189,46 @@ test("free text also blocks a schedule edit that would cover its time", () => {
   assert.equal(conflict?.item.id, "note-16");
 });
 
+test("legacy appointment-book entries warn visually but do not block edits or drag targets", () => {
+  const source = booking("source", "coach-a", "2026-08-03T15:00:00+08:00");
+  const legacyBooking = {
+    ...booking("legacy", "coach-b", "2026-08-03T16:00:00+08:00"),
+    operation_idempotency_key: "legacy-august:test-reference",
+  };
+  const legacyNote = {
+    id: "legacy-note",
+    coach_id: "coach-b",
+    starts_at: "2026-08-03T16:00:00+08:00",
+    ends_at: "2026-08-03T17:00:00+08:00",
+    content: "舊預約本",
+    source: "legacy_schedule_import",
+  };
+
+  assert.equal(
+    findScheduleEditConflict({
+      bookings: [legacyBooking],
+      notes: [legacyNote],
+      coachId: "coach-b",
+      startsAt: "2026-08-03T16:00:00+08:00",
+      endsAt: "2026-08-03T17:00:00+08:00",
+    }),
+    null,
+  );
+  assert.equal(isScheduleBookingDraggable(legacyBooking), false);
+
+  const drop = analyzeScheduleDrop({
+    bookings: [source, legacyBooking],
+    notes: [legacyNote],
+    sourceBookingId: source.id,
+    targetCoachId: "coach-b",
+    targetStartsAt: "2026-08-03T16:00:00+08:00",
+  });
+  assert.equal(drop.ok, true);
+  if (!drop.ok) return;
+  assert.deepEqual(drop.plan.targetItems, []);
+  assert.equal(drop.plan.targetStartsAt, "2026-08-03T16:00:00+08:00");
+});
+
 test("a two-hour FA can move from 11:00 to its own occupied 12:00 second hour", () => {
   const source = booking("source-fa", "coach-a", "2026-08-03T11:00:00+08:00", 120);
   const result = analyzeScheduleDrop({

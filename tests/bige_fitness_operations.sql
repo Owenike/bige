@@ -28,6 +28,7 @@ declare
   redemption_count integer;
   contract_row public.member_plan_contracts%rowtype;
   member_row public.members%rowtype;
+  real_conflict_blocked boolean := false;
 begin
   insert into auth.users (
     id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -177,6 +178,123 @@ begin
   if not coalesce(reschedule_result->'warnings', '[]'::jsonb) @>
     '[{"code":"classroom_conflict"}]'::jsonb then
     raise exception 'third classroom booking should succeed with a classroom_conflict warning';
+  end if;
+
+  -- The imported appointment book is reference material. An operational
+  -- booking may overlap it, receives a warning, and then becomes the real
+  -- conflict guard for any later operational booking.
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_e, null, coach_c, 'pt', 'weight_training',
+    schedule_start + interval '7 hours', schedule_start + interval '8 hours',
+    'Imported reference', null, 'legacy-august:test-reference:create'
+  );
+  reschedule_result := public.bige_create_schedule_booking_v2(
+    tenant_id, branch_id, member_e, null, coach_c, 'pt', 'weight_training',
+    schedule_start + interval '7 hours', schedule_start + interval '8 hours',
+    'Operational booking', null, 'test:legacy-reference:create'
+  );
+  if not coalesce(reschedule_result->'warnings', '[]'::jsonb) @>
+    '[{"code":"legacy_schedule_reference_conflict"}]'::jsonb then
+    raise exception 'operational booking should preserve the legacy overlap as a warning';
+  end if;
+  if (
+    select count(*)
+    from public.bookings
+    where operation_idempotency_key in (
+      'legacy-august:test-reference:create',
+      'test:legacy-reference:create'
+    )
+  ) <> 2 then
+    raise exception 'legacy reference and operational booking should both remain visible';
+  end if;
+
+  begin
+    perform public.bige_create_schedule_booking_v2(
+      tenant_id, branch_id, member_e, null, coach_b, 'pt', 'weight_training',
+      schedule_start + interval '7 hours', schedule_start + interval '8 hours',
+      'Real conflict', null, 'test:legacy-reference:real-conflict'
+    );
+  exception
+    when others then
+      if sqlerrm <> 'member_time_conflict' then
+        raise;
+      end if;
+      real_conflict_blocked := true;
+  end;
+  if not real_conflict_blocked then
+    raise exception 'a real operational member conflict must remain blocked';
+  end if;
+
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_d, null, coach_b, 'pt', 'weight_training',
+    schedule_start + interval '9 hours', schedule_start + interval '10 hours',
+    'Imported reschedule reference', null, 'legacy-august:test-reference:reschedule'
+  );
+  perform public.bige_create_schedule_booking_v2(
+    tenant_id, branch_id, member_d, null, coach_c, 'pt', 'weight_training',
+    schedule_start + interval '8 hours', schedule_start + interval '9 hours',
+    'Before reschedule', null, 'test:legacy-reference:reschedule'
+  );
+  select id into reschedule_booking_id
+  from public.bookings
+  where operation_idempotency_key = 'test:legacy-reference:reschedule';
+
+  reschedule_result := public.bige_reschedule_schedule_booking_v2(
+    reschedule_booking_id, branch_id, coach_b, 'weight_training',
+    schedule_start + interval '9 hours', schedule_start + interval '10 hours',
+    'Operational reschedule'
+  );
+  if not coalesce(reschedule_result->'warnings', '[]'::jsonb) @>
+    '[{"code":"legacy_schedule_reference_conflict"}]'::jsonb then
+    raise exception 'reschedule over a legacy reference should succeed with a warning';
+  end if;
+  if not exists (
+    select 1
+    from public.bookings
+    where id = reschedule_booking_id
+      and coach_id = coach_b
+      and starts_at = schedule_start + interval '9 hours'
+      and note = 'Operational reschedule'
+  ) then
+    raise exception 'operational booking did not move onto the legacy reference slot';
+  end if;
+
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_a, null, coach_a, 'pt', 'weight_training',
+    schedule_start + interval '11 hours', schedule_start + interval '12 hours',
+    'Imported drag reference', null, 'legacy-august:test-reference:drag'
+  );
+  perform public.bige_create_schedule_booking_v2(
+    tenant_id, branch_id, member_b, null, coach_b, 'pt', 'weight_training',
+    schedule_start + interval '10 hours', schedule_start + interval '11 hours',
+    'Before drag', null, 'test:legacy-reference:drag'
+  );
+  select id into reschedule_booking_id
+  from public.bookings
+  where operation_idempotency_key = 'test:legacy-reference:drag';
+
+  reschedule_result := public.bige_drag_schedule_booking(
+    tenant_id,
+    reschedule_booking_id,
+    coach_a,
+    schedule_start + interval '11 hours',
+    'move'
+  );
+  if not coalesce(reschedule_result->'warnings', '[]'::jsonb) @>
+    '[{"code":"legacy_schedule_reference_conflict"}]'::jsonb then
+    raise exception 'dragging onto a legacy reference should succeed with a warning';
+  end if;
+  if (
+    select count(*)
+    from public.bookings
+    where coach_id = coach_a
+      and starts_at = schedule_start + interval '11 hours'
+      and operation_idempotency_key in (
+        'legacy-august:test-reference:drag',
+        'test:legacy-reference:drag'
+      )
+  ) <> 2 then
+    raise exception 'drag should preserve both the reference and operational booking';
   end if;
 
   contract_result := public.bige_create_member_contract(

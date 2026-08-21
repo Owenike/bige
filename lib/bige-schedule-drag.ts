@@ -20,6 +20,7 @@ export type ScheduleDragBooking = {
   ends_at: string;
   status: string;
   course_type?: string | null;
+  operation_idempotency_key?: string | null;
 };
 
 export type ScheduleDragNote = {
@@ -31,6 +32,7 @@ export type ScheduleDragNote = {
   system_kind?: string | null;
   source_booking_ids?: string[] | null;
   metadata?: Record<string, unknown> | null;
+  source?: string | null;
 };
 
 export type ScheduleMoveMode = "move" | "swap" | "overwrite";
@@ -121,6 +123,16 @@ function overlaps(
     new Date(item.ends_at).getTime() > startsAtMs;
 }
 
+export function isLegacyScheduleReferenceBooking(booking: {
+  operation_idempotency_key?: string | null;
+}) {
+  return String(booking.operation_idempotency_key || "").startsWith("legacy-august:");
+}
+
+export function isLegacyScheduleReferenceNote(note: { source?: string | null }) {
+  return note.source === "legacy_schedule_import";
+}
+
 export function findScheduleEditConflict<
   TBooking extends ScheduleDragBooking,
   TNote extends ScheduleDragNote,
@@ -146,6 +158,7 @@ export function findScheduleEditConflict<
     .filter(
       (item) =>
         item.id !== params.excludeBookingId &&
+        !isLegacyScheduleReferenceBooking(item) &&
         item.coach_id === params.coachId &&
         (BIGE_ACTIVE_SCHEDULE_BOOKING_STATUSES as readonly string[]).includes(item.status) &&
         overlaps(item, startsAtMs, endsAtMs),
@@ -160,6 +173,7 @@ export function findScheduleEditConflict<
     .filter(
       (item) =>
         item.id !== params.excludeNoteId &&
+        !isLegacyScheduleReferenceNote(item) &&
         item.coach_id === params.coachId &&
         overlaps(item, startsAtMs, endsAtMs),
     )
@@ -170,8 +184,13 @@ export function findScheduleEditConflict<
   return note ? { kind: "note", item: note } : null;
 }
 
-export function isScheduleBookingDraggable(booking: Pick<ScheduleDragBooking, "status">) {
-  return (BIGE_DRAGGABLE_BOOKING_STATUSES as readonly string[]).includes(booking.status);
+export function isScheduleBookingDraggable(
+  booking: Pick<ScheduleDragBooking, "status" | "operation_idempotency_key">,
+) {
+  return (
+    !isLegacyScheduleReferenceBooking(booking) &&
+    (BIGE_DRAGGABLE_BOOKING_STATUSES as readonly string[]).includes(booking.status)
+  );
 }
 
 export function isScheduleTrashDeletedBooking(booking: {
@@ -187,6 +206,7 @@ export function isScheduleTrashDeletedBooking(booking: {
 const LEGACY_SHIFT_MARKERS = new Set(["早", "晚", "休"]);
 
 export function isScheduleDragBlockingNote(note: ScheduleDragNote) {
+  if (isLegacyScheduleReferenceNote(note)) return false;
   if (note.system_kind === "fa_assistant_to") return false;
   return !LEGACY_SHIFT_MARKERS.has((note.content || "").trim());
 }
@@ -507,6 +527,7 @@ export function analyzeScheduleDrop<TBooking extends ScheduleDragBooking>(params
   const targetPrimary = params.bookings.find(
     (booking) =>
       booking.id !== source.id &&
+      !isLegacyScheduleReferenceBooking(booking) &&
       booking.coach_id === params.targetCoachId &&
       requestedTargetMs >= new Date(booking.starts_at).getTime() &&
       requestedTargetMs < new Date(booking.ends_at).getTime(),
@@ -543,13 +564,19 @@ export function analyzeScheduleDrop<TBooking extends ScheduleDragBooking>(params
     const targetEnd = targetMs + spanMs;
     sourceItems = params.bookings.filter((booking) => {
       const start = new Date(booking.starts_at).getTime();
-      return booking.coach_id === source.coach_id && start >= sourceMs && start < sourceEnd;
+      return (
+        !isLegacyScheduleReferenceBooking(booking) &&
+        booking.coach_id === source.coach_id &&
+        start >= sourceMs &&
+        start < sourceEnd
+      );
     });
     const sourceIds = new Set(sourceItems.map((booking) => booking.id));
     targetItems = params.bookings.filter((booking) => {
       const start = new Date(booking.starts_at).getTime();
       return (
         booking.coach_id === params.targetCoachId &&
+        !isLegacyScheduleReferenceBooking(booking) &&
         start >= targetMs &&
         start < targetEnd &&
         !sourceIds.has(booking.id)
