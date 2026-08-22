@@ -691,12 +691,13 @@ export default function StaffPerformanceDashboard({
     }
   }
 
-  if (loading && !data) return <main className={styles.page}><div className={styles.empty}>正在開啟今日工作台…</div></main>;
-  if (!data) return <main className={styles.page}><div className={styles.loadFailure}><strong>{error || "今日工作台暫時無法開啟"}</strong><button type="button" onClick={() => void load()}>重新讀取</button></div></main>;
+  const pageClassName = `${styles.page} ${managerMode ? styles.managerPage : ""}`.trim();
+  if (loading && !data) return <main className={pageClassName}><div className={styles.empty}>正在開啟今日工作台…</div></main>;
+  if (!data) return <main className={pageClassName}><div className={styles.loadFailure}><strong>{error || "今日工作台暫時無法開啟"}</strong><button type="button" onClick={() => void load()}>重新讀取</button></div></main>;
   const self = data?.coaches[0] || null;
 
   return (
-    <main className={styles.page}>
+    <main className={pageClassName}>
       {data?.actor.canManage ? <header className={styles.managerToolbar}>
         <Link className={styles.backLink} href="/manager/fitness">← 返回營運</Link>
         <details className={styles.moreMenu}>

@@ -82,6 +82,15 @@ test("manager settlement workbench keeps the daily flow visible and moves sales 
   assert.doesNotMatch(dashboard, /className=\{styles\.tableWrap\}/);
 });
 
+test("manager daily close shares the schedule black-and-gold visual language without changing the staff view", () => {
+  assert.match(dashboard, /const pageClassName = `\$\{styles\.page\} \$\{managerMode \? styles\.managerPage : ""\}`\.trim\(\)/);
+  assert.match(dashboardStyles, /\.managerPage \{[\s\S]*--settlement-gold: #d8b669/);
+  assert.match(dashboardStyles, /\.managerPage \{[\s\S]*linear-gradient\(145deg, #04070c 0%, #0a101a 48%, #05080f 100%\)/);
+  assert.match(dashboardStyles, /\.managerPage \.primary,[\s\S]*linear-gradient\(135deg, #f6e4af 0%, #d9b45e 55%, #b98432 100%\)/);
+  assert.match(dashboardStyles, /\.managerPage \.modal \{[\s\S]*rgba\(8, 13, 21, \.98\)/);
+  assert.match(dashboardStyles, /\.managerPage \.mobileSettlementBar \{[\s\S]*rgba\(7, 13, 22, \.96\)/);
+});
+
 test("manager workbench presents EPO rules inside the EPO decision dialog", () => {
   assert.match(dashboard, /showEpoRules \? "收起規則" : "EPO 規則"/);
   assert.match(dashboard, /activeModal === "epo" \? <div className=\{styles\.epoModalHeaderActions\}>/);

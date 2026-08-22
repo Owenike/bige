@@ -589,3 +589,679 @@
   .historyCoachList article > b { grid-column: 1 / -1; text-align: left; }
   .historyRecordList article { grid-template-columns: minmax(0, 1fr) auto; }
 }
+
+/* Manager daily close — share the schedule's restrained black-and-gold language. */
+.managerPage {
+  --settlement-gold: #d8b669;
+  --settlement-gold-bright: #f0d493;
+  --settlement-gold-muted: rgba(214, 183, 111, .72);
+  --settlement-gold-line: rgba(221, 189, 118, .3);
+  --settlement-line: rgba(172, 187, 207, .1);
+  --settlement-line-strong: rgba(220, 190, 122, .23);
+  --settlement-surface: rgba(8, 14, 23, .84);
+  --settlement-surface-raised: rgba(13, 20, 31, .92);
+  --settlement-surface-soft: rgba(18, 26, 38, .76);
+  --settlement-text: #f5f0e6;
+  --settlement-muted: rgba(218, 225, 235, .66);
+  position: relative;
+  isolation: isolate;
+  color-scheme: dark;
+  color: var(--settlement-text);
+  background:
+    radial-gradient(circle at 8% -8%, rgba(213, 178, 100, .2), transparent 30%),
+    radial-gradient(circle at 92% 5%, rgba(46, 101, 118, .18), transparent 28%),
+    radial-gradient(circle at 52% 76%, rgba(173, 126, 49, .1), transparent 34%),
+    linear-gradient(145deg, #04070c 0%, #0a101a 48%, #05080f 100%);
+}
+
+.managerPage::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .34;
+  background-image:
+    linear-gradient(rgba(222, 190, 119, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(222, 190, 119, .025) 1px, transparent 1px),
+    radial-gradient(circle at 50% 0%, rgba(255, 226, 159, .09), transparent 38%);
+  background-size: 72px 72px, 72px 72px, auto;
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, .68) 58%, transparent 100%);
+}
+
+.managerPage button,
+.managerPage select,
+.managerPage input,
+.managerPage .backLink,
+.managerPage .moreMenu summary,
+.managerPage .moreMenu nav a,
+.managerPage .taskList article > a {
+  color: rgba(247, 242, 230, .9);
+  border-color: rgba(218, 193, 140, .22);
+  background: linear-gradient(180deg, rgba(22, 30, 42, .9), rgba(12, 19, 29, .9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .045),
+    0 8px 20px rgba(0, 0, 0, .1);
+  transition: transform 150ms ease, color 150ms ease, background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.managerPage button:hover:not(:disabled),
+.managerPage .backLink:hover,
+.managerPage .moreMenu summary:hover,
+.managerPage .moreMenu nav a:hover,
+.managerPage .taskList article > a:hover {
+  transform: translateY(-1px);
+  color: #fff8e9;
+  border-color: rgba(230, 199, 128, .52);
+  background: linear-gradient(180deg, rgba(43, 37, 27, .94), rgba(22, 24, 28, .94));
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, .22),
+    0 0 18px rgba(213, 170, 76, .09);
+}
+
+.managerPage button:focus-visible,
+.managerPage input:focus-visible,
+.managerPage select:focus-visible,
+.managerPage .backLink:focus-visible,
+.managerPage .moreMenu summary:focus-visible,
+.managerPage .moreMenu nav a:focus-visible,
+.managerPage .taskList article > a:focus-visible {
+  outline: 2px solid rgba(241, 210, 139, .86);
+  outline-offset: 2px;
+}
+
+.managerPage input,
+.managerPage select {
+  color: #f4efe5;
+  background: rgba(5, 11, 19, .78);
+}
+
+.managerPage input:hover,
+.managerPage select:hover {
+  border-color: rgba(223, 194, 127, .4);
+}
+
+.managerPage select option {
+  color: #171a20;
+  background: #f6f0e4;
+}
+
+.managerPage .primary,
+.managerPage .taskList article > .primary:not(.settlementBlocked),
+.managerPage .workbenchActions .primary {
+  color: #171107 !important;
+  border-color: rgba(255, 230, 168, .78) !important;
+  background: linear-gradient(135deg, #f6e4af 0%, #d9b45e 55%, #b98432 100%) !important;
+  box-shadow:
+    0 9px 28px rgba(188, 135, 39, .24),
+    0 0 20px rgba(236, 202, 126, .13),
+    inset 0 1px 0 rgba(255, 255, 255, .68);
+}
+
+.managerPage .primary:hover:not(:disabled),
+.managerPage .taskList article > .primary:not(.settlementBlocked):hover:not(:disabled) {
+  color: #100b04 !important;
+  border-color: rgba(255, 239, 199, .94) !important;
+  background: linear-gradient(135deg, #fff0c4 0%, #e5c16b 55%, #c8923b 100%) !important;
+  box-shadow:
+    0 12px 32px rgba(188, 135, 39, .34),
+    0 0 30px rgba(236, 202, 126, .22),
+    inset 0 1px 0 rgba(255, 255, 255, .74);
+}
+
+.managerPage button:disabled,
+.managerPage .taskList article > button:disabled {
+  opacity: .48;
+  color: rgba(211, 215, 221, .46);
+  border-color: rgba(172, 187, 207, .12);
+  background: rgba(13, 20, 29, .64);
+  box-shadow: none;
+}
+
+.managerPage .managerToolbar {
+  position: relative;
+  z-index: 2;
+}
+
+.managerPage .backLink,
+.managerPage .moreMenu summary {
+  color: #edd69d;
+  border-color: rgba(224, 190, 111, .38);
+}
+
+.managerPage .moreMenu nav {
+  border-color: var(--settlement-gold-line);
+  background:
+    radial-gradient(circle at 0 0, rgba(220, 177, 83, .1), transparent 38%),
+    rgba(8, 13, 21, .98);
+  box-shadow:
+    0 24px 62px rgba(0, 0, 0, .52),
+    0 0 26px rgba(213, 169, 72, .08),
+    inset 0 1px 0 rgba(255, 236, 190, .08);
+}
+
+.managerPage .moreMenu nav a {
+  border-color: transparent;
+  background: transparent;
+}
+
+.managerPage .workbenchHeader,
+.managerPage .panel {
+  color: var(--settlement-text);
+  border-color: var(--settlement-gold-line);
+  background:
+    radial-gradient(circle at 0 0, rgba(219, 177, 83, .065), transparent 35%),
+    var(--settlement-surface);
+  box-shadow:
+    0 22px 58px rgba(0, 0, 0, .3),
+    0 0 28px rgba(205, 161, 67, .055),
+    inset 0 1px 0 rgba(255, 238, 197, .065);
+}
+
+.managerPage .workbenchHeader {
+  background:
+    radial-gradient(circle at 0 0, rgba(229, 193, 108, .12), transparent 36%),
+    linear-gradient(115deg, rgba(255, 237, 193, .025), transparent 50%),
+    rgba(7, 13, 22, .9);
+}
+
+.managerPage .workbenchTopline,
+.managerPage .panelHeading,
+.managerPage .dailyCoachTableHeader,
+.managerPage .dailyCoachList > article,
+.managerPage .otherAppointmentBookers {
+  border-color: var(--settlement-line-strong);
+}
+
+.managerPage .dayHero > p,
+.managerPage .eyebrow {
+  color: var(--settlement-gold-muted) !important;
+}
+
+.managerPage .dayTitleLine h1,
+.managerPage .panelHeading h2,
+.managerPage .dailyCoachIdentity strong,
+.managerPage .dailyCoachCourse strong,
+.managerPage .dailyCoachSales strong,
+.managerPage .dailyCoachSingleMetric strong {
+  color: #fff8e9;
+}
+
+.managerPage .syncStatus,
+.managerPage .summaryGrid span,
+.managerPage .summaryGrid small,
+.managerPage .panelHeading p,
+.managerPage .taskList article span,
+.managerPage .dailyCoachMetric > label,
+.managerPage .dailyCoachSingleMetric > label,
+.managerPage .dailyCoachSales > label,
+.managerPage .dailyCoachSingleMetric small {
+  color: var(--settlement-muted);
+}
+
+.managerPage .syncStatus small {
+  color: rgba(222, 226, 234, .5);
+}
+
+.managerPage .syncComplete > i {
+  color: #0c2518;
+  background: #68d6a6;
+  box-shadow: 0 0 18px rgba(84, 211, 157, .22);
+}
+
+.managerPage .confirmed {
+  color: #d6f6e2;
+  border: 1px solid rgba(90, 203, 140, .4);
+  background: rgba(27, 101, 65, .48);
+  box-shadow: 0 0 18px rgba(62, 185, 117, .14);
+}
+
+.managerPage .draft {
+  color: #f4d88f;
+  border: 1px solid rgba(239, 207, 129, .42);
+  background: rgba(116, 76, 18, .34);
+  box-shadow: 0 0 18px rgba(218, 177, 87, .1);
+}
+
+.managerPage .summaryGrid article {
+  border-color: rgba(223, 193, 125, .12);
+  background: linear-gradient(180deg, rgba(16, 23, 34, .3), rgba(7, 13, 22, .2));
+}
+
+.managerPage .summaryGrid strong {
+  color: #fff6e2;
+}
+
+.managerPage .summaryReady { box-shadow: inset 0 -3px 0 #68d6a6; }
+.managerPage .summaryPending { box-shadow: inset 0 -3px 0 var(--settlement-gold); }
+.managerPage .summaryChecking { box-shadow: inset 0 -3px 0 rgba(214, 183, 111, .4); }
+.managerPage .summaryChecking strong { color: #ead9ad; }
+
+.managerPage .taskList,
+.managerPage .salesProgressSummary {
+  background: rgba(219, 187, 116, .14);
+}
+
+.managerPage .taskList article,
+.managerPage .salesProgressSummary > div {
+  color: var(--settlement-text);
+  background: rgba(10, 17, 27, .88);
+}
+
+.managerPage .taskList .taskChecking {
+  background: rgba(13, 20, 29, .78);
+  box-shadow: inset 0 3px 0 rgba(172, 187, 207, .28);
+}
+
+.managerPage .taskList .taskPending {
+  box-shadow: inset 0 3px 0 var(--settlement-gold);
+}
+
+.managerPage .taskList .taskPending > div span,
+.managerPage .dailyCoachCourse small,
+.managerPage .dailyCoachSales small,
+.managerPage .pending,
+.managerPage .pendingAmount {
+  color: #e6c472 !important;
+}
+
+.managerPage .taskStepNumber {
+  color: #d8c08c;
+  border-color: rgba(224, 190, 114, .28);
+  background: rgba(32, 29, 23, .78);
+}
+
+.managerPage .taskList .taskPending .taskStepNumber {
+  color: #1b1307;
+  border-color: rgba(239, 207, 129, .72);
+  background: linear-gradient(135deg, #f3d98e, #c99235);
+  box-shadow: 0 0 18px rgba(218, 177, 87, .14);
+}
+
+.managerPage .taskList .taskReady .taskStepNumber,
+.managerPage .taskDone {
+  color: #d6f6e2 !important;
+  border-color: rgba(90, 203, 140, .34);
+  background: rgba(27, 101, 65, .48);
+}
+
+.managerPage .taskWaiting {
+  color: rgba(218, 225, 235, .55) !important;
+  background: rgba(172, 187, 207, .1);
+}
+
+.managerPage .settlementBlocked:disabled {
+  color: rgba(218, 225, 235, .45) !important;
+  border-color: rgba(172, 187, 207, .12) !important;
+  background: rgba(13, 20, 29, .64) !important;
+}
+
+.managerPage .dailyCoachTableHeader {
+  color: rgba(216, 195, 151, .68);
+  background: rgba(7, 13, 22, .82);
+}
+
+.managerPage .dailyCoachList > article {
+  background: linear-gradient(135deg, rgba(230, 192, 104, .025), transparent 48%), rgba(11, 18, 28, .72);
+}
+
+.managerPage .dailyCoachList > article:hover {
+  background: linear-gradient(135deg, rgba(230, 192, 104, .055), transparent 48%), rgba(15, 23, 34, .86);
+}
+
+.managerPage .dailyCoachIdentity span,
+.managerPage .metricBreakdown > span,
+.managerPage .status {
+  color: #ecd69f;
+  border: 1px solid rgba(224, 190, 111, .24);
+  background: rgba(82, 59, 22, .42);
+}
+
+.managerPage .metricBreakdown > span strong {
+  color: #fff4d6;
+}
+
+.managerPage .metricEmpty,
+.managerPage .inlineChecking {
+  color: rgba(218, 225, 235, .46) !important;
+}
+
+.managerPage .otherAppointmentBookers {
+  background: rgba(7, 13, 22, .68);
+}
+
+.managerPage .notice,
+.managerPage .error,
+.managerPage .loadFailure,
+.managerPage .empty {
+  color: var(--settlement-text);
+  border: 1px solid var(--settlement-gold-line);
+  background: rgba(8, 14, 23, .86);
+  box-shadow: inset 0 1px 0 rgba(255, 238, 197, .05);
+}
+
+.managerPage .notice {
+  color: #c9f5dc;
+  border-color: rgba(85, 196, 139, .3);
+  background: rgba(17, 77, 53, .56);
+}
+
+.managerPage .error,
+.managerPage .loadFailure {
+  color: #ffc5cb;
+  border-color: rgba(220, 89, 106, .34);
+  background: rgba(92, 25, 38, .58);
+}
+
+.managerPage .modalBackdrop {
+  background: rgba(2, 5, 10, .78);
+  backdrop-filter: blur(22px) saturate(1.1);
+}
+
+.managerPage .modal {
+  color: var(--settlement-text);
+  border-color: rgba(233, 202, 133, .44);
+  background:
+    radial-gradient(circle at 0 0, rgba(220, 177, 83, .12), transparent 34%),
+    rgba(8, 13, 21, .98);
+  box-shadow:
+    0 36px 100px rgba(0, 0, 0, .62),
+    0 0 42px rgba(213, 169, 72, .1),
+    inset 0 1px 0 rgba(255, 236, 190, .1);
+}
+
+.managerPage .modalHeader,
+.managerPage .modalFooter {
+  border-color: var(--settlement-gold-line);
+  background:
+    linear-gradient(110deg, rgba(213, 173, 82, .075), transparent 44%),
+    rgba(7, 13, 22, .96);
+}
+
+.managerPage .modalHeader p,
+.managerPage .modalIntro small,
+.managerPage .detailGroup > summary small,
+.managerPage .salesFooterStatus span,
+.managerPage .monthOverviewToolbar span,
+.managerPage .historyStatusLine span,
+.managerPage .historyPreviewGrid span,
+.managerPage .historySection > div:first-child span,
+.managerPage .historySection > p,
+.managerPage .historyCoachList article > span,
+.managerPage .historyRecordList article > div span,
+.managerPage .coachIdentity small,
+.managerPage .coachOverviewTopline > small,
+.managerPage .coachOverviewList dt,
+.managerPage .coachOverviewDetails label,
+.managerPage .coachOverviewDetails small,
+.managerPage .monthOtherBookers small,
+.managerPage .selectedEventHeader small,
+.managerPage .selectedEventHeader > div:last-child span,
+.managerPage .selectedAllocationSummary span,
+.managerPage .salesEditorHeading > span,
+.managerPage .salesQueueEmpty,
+.managerPage .salesDetailEmpty {
+  color: var(--settlement-muted);
+}
+
+.managerPage .modalHeader h2,
+.managerPage .selectedEventHeader h3,
+.managerPage .salesDetailEmpty strong,
+.managerPage .coachIdentity strong,
+.managerPage .historyStatusLine > div strong,
+.managerPage .historySection h3 {
+  color: #fff8e9;
+}
+
+.managerPage .salesWorkspace,
+.managerPage .salesQueue,
+.managerPage .salesDetail {
+  background: rgba(6, 12, 20, .9);
+}
+
+.managerPage .salesWorkspace > .salesProgressSummary,
+.managerPage .salesWorkspaceGrid,
+.managerPage .salesQueue,
+.managerPage .salesQueueTabs,
+.managerPage .selectedEventHeader,
+.managerPage .salesModalFooter {
+  border-color: var(--settlement-gold-line);
+}
+
+.managerPage .salesRulesPanel {
+  border-color: var(--settlement-gold-line);
+  background: rgba(82, 59, 22, .28);
+}
+
+.managerPage .salesRulesPanel article,
+.managerPage .salesQueueTabs,
+.managerPage .salesQueueItem,
+.managerPage .selectedAllocationSummary article,
+.managerPage .salesModal .allocationEditor label,
+.managerPage .salesModal .allocationList > span {
+  color: var(--settlement-text);
+  border-color: rgba(218, 187, 120, .2);
+  background: linear-gradient(135deg, rgba(230, 192, 104, .025), transparent 48%), rgba(11, 18, 28, .88);
+}
+
+.managerPage .salesRulesPanel article strong {
+  color: #f0d493;
+}
+
+.managerPage .salesRulesPanel article span {
+  color: var(--settlement-muted);
+}
+
+.managerPage .salesQueueTabs button {
+  color: var(--settlement-muted);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.managerPage .salesQueueTabs .salesQueueTabActive {
+  color: #f6dda1;
+  border-color: rgba(231, 197, 118, .44);
+  background: rgba(101, 75, 28, .38);
+  box-shadow: inset 0 1px 0 rgba(255, 237, 191, .08), 0 0 18px rgba(211, 169, 75, .08);
+}
+
+.managerPage .salesQueueItem:hover {
+  color: #fff8e9;
+  border-color: rgba(226, 195, 126, .44);
+  background: rgba(20, 26, 34, .96);
+}
+
+.managerPage .salesQueueItemSelected,
+.managerPage .salesQueueItemSelected:hover {
+  border-color: rgba(239, 207, 129, .66);
+  background: linear-gradient(135deg, rgba(91, 66, 27, .62), rgba(18, 23, 30, .96));
+  box-shadow: 0 0 0 2px rgba(218, 177, 87, .12), 0 0 22px rgba(218, 177, 87, .1);
+}
+
+.managerPage .salesQueueItemPending {
+  box-shadow: inset 3px 0 0 var(--settlement-gold);
+}
+
+.managerPage .salesQueueItemSelected.salesQueueItemPending {
+  box-shadow: inset 3px 0 0 var(--settlement-gold), 0 0 0 2px rgba(218, 177, 87, .12), 0 0 22px rgba(218, 177, 87, .1);
+}
+
+.managerPage .selectedAllocationPending {
+  border-color: rgba(239, 207, 129, .5) !important;
+  background: rgba(116, 76, 18, .28) !important;
+}
+
+.managerPage .selectedAllocationPending strong {
+  color: #f0d493;
+}
+
+.managerPage .salesModal .allocationEditor label > span b {
+  color: #1b1307;
+  background: linear-gradient(135deg, #f3d98e, #c99235);
+}
+
+.managerPage .salesModal .allocationEditor label > div {
+  border-color: rgba(213, 187, 131, .24);
+  background: rgba(5, 11, 19, .78);
+}
+
+.managerPage .salesModal .allocationEditor label > div > span {
+  color: var(--settlement-muted);
+}
+
+.managerPage .allocationProgress > span,
+.managerPage .salesProgressSummary > div > span {
+  color: var(--settlement-muted);
+}
+
+.managerPage .allocationProgress > span strong {
+  color: #f0d493;
+}
+
+.managerPage .allocationProgress progress,
+.managerPage .allocationProgress progress::-webkit-progress-bar {
+  background: rgba(172, 187, 207, .14);
+}
+
+.managerPage .allocationProgress progress::-webkit-progress-value {
+  background: linear-gradient(90deg, #9a7130, #e2c176);
+  box-shadow: 0 0 12px rgba(218, 177, 87, .22);
+}
+
+.managerPage .allocationProgress progress::-moz-progress-bar {
+  background: linear-gradient(90deg, #9a7130, #e2c176);
+}
+
+.managerPage .monthOverviewToolbar,
+.managerPage .historyStatusLine,
+.managerPage .historyPreviewGrid article,
+.managerPage .historySection,
+.managerPage .coachOverviewList article,
+.managerPage .monthOtherBookers,
+.managerPage .modalIntro,
+.managerPage .detailGroup,
+.managerPage .epoWorkspace .epoForm,
+.managerPage .epoRuleGrid > article {
+  color: var(--settlement-text);
+  border-color: rgba(218, 187, 120, .22);
+  background: linear-gradient(135deg, rgba(230, 192, 104, .025), transparent 48%), rgba(11, 18, 28, .88);
+  box-shadow: inset 0 1px 0 rgba(255, 239, 200, .04), 0 10px 26px rgba(0, 0, 0, .12);
+}
+
+.managerPage .historySection > div:first-child,
+.managerPage .historyCoachList article,
+.managerPage .historyRecordList article,
+.managerPage .detailGroup[open] > summary,
+.managerPage .decisionList article,
+.managerPage .epoList article,
+.managerPage .epoForm {
+  border-color: var(--settlement-line-strong);
+}
+
+.managerPage .historyStatusLine > b,
+.managerPage .confirmedText {
+  color: #c9f5dc !important;
+  background: rgba(17, 77, 53, .56);
+}
+
+.managerPage .coachOverviewPrimary,
+.managerPage .coachOverviewDetails > section,
+.managerPage .epoRuleRows > div,
+.managerPage .evidenceGrid article,
+.managerPage .allocationList span {
+  color: var(--settlement-text);
+  border-color: rgba(218, 187, 120, .18);
+  background: rgba(10, 17, 27, .72);
+}
+
+.managerPage .faConversionMetric > strong,
+.managerPage .singleOverviewMetric > strong,
+.managerPage .epoRuleRows strong,
+.managerPage .epoRuleRows p b,
+.managerPage .epoRuleGrid > article > p b {
+  color: #f0d493;
+}
+
+.managerPage .epoRulesLead,
+.managerPage .infoBox {
+  color: #ead9ad;
+  border-color: rgba(224, 190, 111, .4);
+  background: rgba(82, 59, 22, .34);
+}
+
+.managerPage .epoRuleGrid > article > p,
+.managerPage .epoRuleRows p,
+.managerPage .epoList p,
+.managerPage .evidenceGrid small {
+  color: var(--settlement-muted);
+}
+
+.managerPage .epoRuleGrid > article > small {
+  color: #f0d493;
+  background: rgba(116, 76, 18, .3);
+}
+
+.managerPage .epoRuleHeading > span {
+  color: #171107;
+  background: linear-gradient(135deg, #f6e4af, #c28d37);
+  box-shadow: 0 0 18px rgba(218, 177, 87, .16);
+}
+
+.managerPage .epoRuleHeading > b {
+  color: #1b1307;
+  background: linear-gradient(135deg, #f3d98e, #c99235);
+}
+
+.managerPage .detailGroup > summary::after {
+  color: var(--settlement-gold-bright);
+}
+
+.managerPage .evidenceGrid article.eligible {
+  color: #d6f6e2;
+  border-color: rgba(90, 203, 140, .48);
+  background: rgba(27, 101, 65, .38);
+  box-shadow: 0 0 18px rgba(62, 185, 117, .1);
+}
+
+.managerPage .allocationTotal {
+  color: #f0d493;
+  background: rgba(116, 76, 18, .28);
+}
+
+.managerPage .negative {
+  color: #ffb6ae !important;
+}
+
+.managerPage .dateBrowserActions {
+  background: linear-gradient(transparent, rgba(8, 13, 21, .98) 30%);
+}
+
+@media (max-width: 980px) {
+  .managerPage .dailyCoachList > article {
+    border-color: var(--settlement-line-strong);
+  }
+}
+
+@media (max-width: 780px) {
+  .managerPage .mobileSettlementBar {
+    border-color: var(--settlement-gold-line);
+    background: rgba(7, 13, 22, .96);
+    box-shadow: 0 -12px 35px rgba(0, 0, 0, .46), 0 0 24px rgba(205, 161, 67, .07);
+    backdrop-filter: blur(18px) saturate(1.15);
+  }
+
+  .managerPage .salesQueue {
+    border-color: var(--settlement-gold-line);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .managerPage button,
+  .managerPage .backLink,
+  .managerPage .moreMenu summary,
+  .managerPage .moreMenu nav a,
+  .managerPage .taskList article > a {
+    transition: none;
+  }
+}
