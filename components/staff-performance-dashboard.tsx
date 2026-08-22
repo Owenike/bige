@@ -178,19 +178,40 @@ function MetricBreakdown({ items, empty = "0" }: { items: MetricCount[]; empty?:
   ))}</div>;
 }
 
-function coachIdentityLabel(coach: CoachSummary | null | undefined) {
-  if (!coach) return "尚未分配";
-  const parts: string[] = [];
+function coachIdentityParts(coach: CoachSummary | null | undefined) {
+  if (!coach) return { names: ["尚未分配"], position: null };
+  const names: string[] = [];
   for (const value of [coach.display_name, coach.english_name]) {
     const label = value?.trim();
-    if (label && !parts.some((part) => part.toLocaleLowerCase("zh-TW") === label.toLocaleLowerCase("zh-TW"))) {
-      parts.push(label);
+    if (label && !names.some((part) => part.toLocaleLowerCase("zh-TW") === label.toLocaleLowerCase("zh-TW"))) {
+      names.push(label);
     }
   }
-  if (!parts.length && coach.employee_number?.trim()) parts.push(coach.employee_number.trim());
-  const position = normalizeStaffPosition(coach.position);
-  if (position) parts.push(positionLabel(position));
-  return parts.join("｜") || "尚未分配";
+  if (!names.length && coach.employee_number?.trim()) names.push(coach.employee_number.trim());
+  return { names: names.length ? names : ["尚未分配"], position: normalizeStaffPosition(coach.position) };
+}
+
+function coachIdentityLabel(coach: CoachSummary | null | undefined) {
+  const { names, position } = coachIdentityParts(coach);
+  return [...names, ...(position ? [positionLabel(position)] : [])].join("｜");
+}
+
+function coachPositionBadgeTone(position: ReturnType<typeof normalizeStaffPosition>) {
+  if (position === "coach_city_manager" || position === "coach_manager") return styles.positionBadgeExecutive;
+  if (position === "coach_assistant_manager" || position === "coach_director") return styles.positionBadgeSupervisor;
+  if (position === "coach_team_lead") return styles.positionBadgeLead;
+  return styles.positionBadgeCoach;
+}
+
+function CoachIdentityPresentation({ coach, compact = false }: { coach: CoachSummary | null | undefined; compact?: boolean }) {
+  const { names, position } = coachIdentityParts(coach);
+  return <span className={`${styles.coachIdentityPresentation} ${compact ? styles.coachIdentityCompact : ""}`} aria-label={coachIdentityLabel(coach)}>
+    <span className={styles.coachIdentityNames}>
+      <strong>{names[0]}</strong>
+      {names[1] ? <span className={styles.coachEnglishName}>{names[1]}</span> : null}
+    </span>
+    {position ? <span className={`${styles.positionBadge} ${coachPositionBadgeTone(position)}`}>{positionLabel(position)}</span> : null}
+  </span>;
 }
 
 function monthLabel(value: string) {
@@ -480,6 +501,15 @@ export default function StaffPerformanceDashboard({
   const epoTaskStatus = epoTaskCount ? `${epoTaskCount} 項需要確認` : pendingEpoCount ? "已送經理覆核" : "已完成";
   const viewDataReady = data?.selectedDate === date && !loading;
   const sourceDataReady = viewDataReady && !refreshing && !refreshError;
+  const activeTaskStep = reportConfirmed
+    ? null
+    : !viewDataReady || pendingCourseCount
+      ? 1
+      : !sourceDataReady || salesTaskCount
+        ? 2
+        : epoTaskCount
+          ? 3
+          : 4;
   const unavailableSourceLabel = refreshError ? "待重試" : refreshing ? "核對中…" : "讀取中…";
   const dayEpoTotal = dayEpo.reduce((sum, row) => sum + Number(row.quantity), 0);
   const actionableSalesEvents = dayEvents.filter((event) => data?.actor.canConfirm ? eventNeedsAttention(event) : eventNeedsAllocation(event));
@@ -743,9 +773,9 @@ export default function StaffPerformanceDashboard({
             </div>
             <div className={styles.summaryGrid}>
               <article className={!sourceDataReady ? styles.summaryChecking : settlementAttentionCount ? styles.summaryPending : styles.summaryReady}><span>待處理</span><strong>{sourceDataReady ? `${settlementAttentionCount} 項` : unavailableSourceLabel}</strong><small>{sourceDataReady ? `課程 ${pendingCourseCount} · 業績 ${salesTaskCount} · EPO ${epoTaskCount}` : viewDataReady ? `課程 ${pendingCourseCount} · 業績與 EPO 尚未顯示` : "正在讀取本日資料"}</small></article>
-              <article><span>課程</span><strong>{viewDataReady ? `${courseSummary?.completed || 0}／${courseSummary?.total || 0} 堂` : "讀取中…"}</strong></article>
-              <article className={!sourceDataReady ? styles.summaryChecking : ""}><span>實收</span><strong className={sourceDataReady && daySalesTotal < 0 ? styles.negative : ""}>{sourceDataReady ? money(daySalesTotal) : unavailableSourceLabel}</strong><small>{sourceDataReady ? "最新核對結果" : "暫不顯示舊數字"}</small></article>
-              <article className={!sourceDataReady ? styles.summaryChecking : ""}><span>EPO</span><strong>{sourceDataReady ? dayEpoTotal : unavailableSourceLabel}</strong><small>{sourceDataReady ? "最新核對結果" : "暫不顯示舊數字"}</small></article>
+              <article className={`${styles.summaryCourse} ${!viewDataReady ? styles.summaryChecking : pendingCourseCount ? styles.summaryPending : styles.summaryReady}`}><span>課程</span><strong>{viewDataReady ? `${courseSummary?.completed || 0}／${courseSummary?.total || 0} 堂` : "讀取中…"}</strong><small>{viewDataReady ? pendingCourseCount ? `${pendingCourseCount} 堂待處理` : "課程狀態已完成" : "正在讀取課程資料"}</small></article>
+              <article className={`${styles.summaryRevenue} ${!sourceDataReady ? styles.summaryChecking : ""}`}><span>實收</span><strong className={sourceDataReady && daySalesTotal < 0 ? styles.negative : ""}>{sourceDataReady ? money(daySalesTotal) : unavailableSourceLabel}</strong><small>{sourceDataReady ? "最新核對結果" : "暫不顯示舊數字"}</small></article>
+              <article className={`${styles.summaryEpo} ${!sourceDataReady ? styles.summaryChecking : ""}`}><span>EPO</span><strong>{sourceDataReady ? dayEpoTotal : unavailableSourceLabel}</strong><small>{sourceDataReady ? "最新核對結果" : "暫不顯示舊數字"}</small></article>
             </div>
           </section>
 
@@ -756,22 +786,22 @@ export default function StaffPerformanceDashboard({
                   <div><p className={styles.eyebrow}>本日流程</p><h2>{reportConfirmed ? "本日已完成" : !sourceDataReady ? "正在整理本日待辦" : settlementAttentionCount ? `還有 ${settlementAttentionCount} 項待處理` : data.actor.canConfirm ? "可以進行正式結算" : "可以送交經理覆核"}</h2></div>
                 </div>
                 <div className={styles.taskList}>
-                  <article className={!viewDataReady ? styles.taskChecking : pendingCourseCount ? styles.taskPending : styles.taskReady}>
+                  <article className={`${!viewDataReady ? styles.taskChecking : pendingCourseCount ? styles.taskPending : styles.taskReady} ${activeTaskStep === 1 ? styles.taskCurrent : ""}`} aria-current={activeTaskStep === 1 ? "step" : undefined}>
                     <b className={styles.taskStepNumber}>{viewDataReady && !pendingCourseCount ? "✓" : "1"}</b>
                     <div><strong>課程狀態</strong><span>{viewDataReady ? pendingCourseCount ? `${pendingCourseCount} 堂尚未完成` : "已完成" : "正在讀取課程資料"}</span></div>
-                    {!viewDataReady ? <span className={styles.taskWaiting}>讀取中</span> : pendingCourseCount ? <Link href="/manager/fitness">前往班表</Link> : <span className={styles.taskDone}>完成</span>}
+                    {!viewDataReady ? <span className={styles.taskWaiting}>讀取中</span> : pendingCourseCount ? <Link className={styles.taskPrimaryAction} href="/manager/fitness">前往班表</Link> : <span className={styles.taskDone}>完成</span>}
                   </article>
-                  <article className={!sourceDataReady ? styles.taskChecking : salesTaskCount ? styles.taskPending : styles.taskReady}>
+                  <article className={`${!sourceDataReady ? styles.taskChecking : salesTaskCount ? styles.taskPending : styles.taskReady} ${activeTaskStep === 2 ? styles.taskCurrent : ""}`} aria-current={activeTaskStep === 2 ? "step" : undefined}>
                     <b className={styles.taskStepNumber}>{sourceDataReady && !salesTaskCount ? "✓" : "2"}</b>
                     <div><strong>業績分配</strong><span>{sourceDataReady ? salesTaskStatus : refreshError ? "最新資料核對失敗" : "正在核對最新收款"}</span></div>
-                    <button type="button" disabled={!sourceDataReady} onClick={openSalesWorkspace}>{!sourceDataReady ? refreshError ? "請先重試" : "核對中" : salesActionLabel}</button>
+                    <button className={sourceDataReady && salesTaskCount ? styles.taskPrimaryAction : styles.taskSecondaryAction} type="button" disabled={!sourceDataReady} onClick={openSalesWorkspace}>{!sourceDataReady ? refreshError ? "請先重試" : "核對中" : salesActionLabel}</button>
                   </article>
-                  <article className={!sourceDataReady ? styles.taskChecking : epoTaskCount ? styles.taskPending : styles.taskReady}>
+                  <article className={`${!sourceDataReady ? styles.taskChecking : epoTaskCount ? styles.taskPending : styles.taskReady} ${activeTaskStep === 3 ? styles.taskCurrent : ""}`} aria-current={activeTaskStep === 3 ? "step" : undefined}>
                     <b className={styles.taskStepNumber}>{sourceDataReady && !epoTaskCount ? "✓" : "3"}</b>
                     <div><strong>EPO 判定</strong><span>{sourceDataReady ? epoTaskStatus : refreshError ? "最新資料核對失敗" : "正在核對最新 EPO"}</span></div>
-                    <button type="button" disabled={!sourceDataReady} onClick={() => setActiveModal("epo")}>{!sourceDataReady ? refreshError ? "請先重試" : "核對中" : epoTaskCount ? "處理 EPO" : "查看紀錄"}</button>
+                    <button className={sourceDataReady && epoTaskCount ? styles.taskPrimaryAction : styles.taskSecondaryAction} type="button" disabled={!sourceDataReady} onClick={() => setActiveModal("epo")}>{!sourceDataReady ? refreshError ? "請先重試" : "核對中" : epoTaskCount ? "處理 EPO" : "查看紀錄"}</button>
                   </article>
-                  <article className={reportConfirmed ? styles.taskReady : !sourceDataReady ? styles.taskChecking : settlementAttentionCount ? styles.taskPending : styles.taskReady}>
+                  <article className={`${reportConfirmed ? styles.taskReady : !sourceDataReady ? styles.taskChecking : settlementAttentionCount ? styles.taskPending : styles.taskReady} ${activeTaskStep === 4 ? styles.taskCurrent : ""}`} aria-current={activeTaskStep === 4 ? "step" : undefined}>
                     <b className={styles.taskStepNumber}>{reportConfirmed ? "✓" : "4"}</b>
                     <div><strong>{data.actor.canConfirm ? "正式結算" : "送交覆核"}</strong><span>{reportConfirmed ? "已正式結算" : !sourceDataReady ? refreshError ? "重新核對資料後才能繼續" : "等待最新資料核對完成" : settlementAttentionCount ? `完成剩餘 ${settlementAttentionCount} 項後才能繼續` : "所有前置項目已完成"}</span></div>
                     {settlementAction()}
@@ -789,13 +819,13 @@ export default function StaffPerformanceDashboard({
                     <span>教練</span><span>完成／排課（堂）</span><span>正式課完成</span><span>FA 完成</span><span>FA 預約成功</span><span>BB</span><span>當日業績</span>
                   </div>
                   <div className={styles.dailyCoachList}>{data.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}>
-                    <div className={styles.dailyCoachIdentity}><strong>{coachIdentityLabel(coachMap.get(coach.employeeId))}</strong>{coach.shiftLabel ? <span>{coach.shiftLabel}</span> : null}</div>
-                    <div className={styles.dailyCoachCourse}><strong>{coach.completedSessions}<span>／{coach.scheduledSessions}</span></strong>{coach.pendingSessions ? <small>{coach.pendingSessions} 堂待處理</small> : null}</div>
+                    <div className={styles.dailyCoachIdentity}><CoachIdentityPresentation coach={coachMap.get(coach.employeeId)} />{coach.shiftLabel ? <span className={styles.shiftBadge}>{coach.shiftLabel}</span> : null}</div>
+                    <div className={`${styles.dailyCoachCourse} ${coach.completedSessions === 0 ? styles.zeroMetric : ""}`}><strong>{coach.completedSessions}<span>／{coach.scheduledSessions}</span></strong>{coach.pendingSessions ? <small>{coach.pendingSessions} 堂待處理</small> : null}</div>
                     <div className={styles.dailyCoachMetric}><label>正式課完成</label><MetricBreakdown items={coach.formalCourseCounts || []} /></div>
                     <div className={styles.dailyCoachMetric}><label>FA 完成</label><MetricBreakdown items={coach.faExecutionCounts || []} /></div>
-                    <div className={styles.dailyCoachSingleMetric}><label>FA 預約成功</label><strong>{coach.successfulFaAppointments}</strong></div>
-                    <div className={styles.dailyCoachSingleMetric}><label>BB</label><strong>{coach.bbConversions}<span>／{coach.bbVisits}</span></strong><small>成交／回訪</small></div>
-                    <div className={styles.dailyCoachSales}><label>當日業績</label>{sourceDataReady ? <><strong className={coach.salesAmount < 0 ? styles.negative : ""}>{money(coach.salesAmount)}</strong>{coach.salesNeedsConfirmation ? <small>待確認</small> : null}</> : <strong className={styles.inlineChecking}>{unavailableSourceLabel}</strong>}</div>
+                    <div className={`${styles.dailyCoachSingleMetric} ${coach.successfulFaAppointments === 0 ? styles.zeroMetric : ""}`}><label>FA 預約成功</label><strong>{coach.successfulFaAppointments}</strong></div>
+                    <div className={`${styles.dailyCoachSingleMetric} ${coach.bbConversions === 0 && coach.bbVisits === 0 ? styles.zeroMetric : ""}`}><label>BB</label><strong>{coach.bbConversions}<span>／{coach.bbVisits}</span></strong><small>成交／回訪</small></div>
+                    <div className={`${styles.dailyCoachSales} ${coach.salesAmount > 0 ? styles.salesPositive : coach.salesAmount === 0 ? styles.zeroMetric : ""}`}><label>當日業績</label>{sourceDataReady ? <><strong className={coach.salesAmount < 0 ? styles.negative : ""}>{money(coach.salesAmount)}</strong>{coach.salesNeedsConfirmation ? <small>待確認</small> : null}</> : <strong className={styles.inlineChecking}>{unavailableSourceLabel}</strong>}</div>
                   </article>)}</div>
                   {data.successfulFaAppointments?.otherBookers.length ? <div className={styles.otherAppointmentBookers}><strong>其他預約人員</strong><MetricBreakdown items={data.successfulFaAppointments.otherBookers} /></div> : null}
                 </> : <div className={styles.empty}>這一天沒有教練上班，請確認日排課表。</div>}
@@ -824,7 +854,7 @@ export default function StaffPerformanceDashboard({
                   {monthOverview ? <>
                     <div className={styles.coachOverviewList}>{monthOverview.coaches.map((coach) => <article key={coach.id}>
                       <div className={styles.coachOverviewTopline}>
-                        <div className={styles.coachIdentity}><strong>{coachIdentityLabel(coach)}</strong><small>{!coach.employment_configured ? "正／兼職待設定" : coach.employment_type === "part_time" ? "兼職" : "正職"}</small></div>
+                        <div className={styles.coachIdentity}><CoachIdentityPresentation coach={coach} /><small>{!coach.employment_configured ? "正／兼職待設定" : coach.employment_type === "part_time" ? "兼職" : "正職"}</small></div>
                         {coach.projectedSales !== coach.confirmedSales || coach.projectedEpo !== coach.confirmedEpo ? <small className={styles.pending}>含未結算業績／EPO</small> : <small className={styles.confirmedText}>已正式結算</small>}
                       </div>
                       <dl className={styles.coachOverviewPrimary}><div><dt>本月業績</dt><dd>{money(coach.projectedSales)}</dd></div><div><dt>本月 EPO</dt><dd>{coach.projectedEpo}</dd></div><div><dt>本月已完正式課</dt><dd>{coach.completedSessions} 堂</dd></div><div><dt>本月堂費級距</dt><dd>{coach.employment_configured ? `${money(coach.sessionRate)}／堂` : "待設定"}</dd></div></dl>
@@ -861,7 +891,7 @@ export default function StaffPerformanceDashboard({
                     </div>
                     <section className={styles.historySection}>
                       <div><h3>上班教練</h3><span>{historyData.dailyCoachSummaries.length} 人</span></div>
-                      {historyData.dailyCoachSummaries.length ? <div className={styles.historyCoachList}>{historyData.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}><strong>{coachIdentityLabel(historyData.coaches.find((item) => item.id === coach.employeeId))}</strong><span>{coach.completedSessions}／{coach.scheduledSessions} 堂</span><b>{money(coach.salesAmount)}</b></article>)}</div> : <p>沒有上班教練</p>}
+                      {historyData.dailyCoachSummaries.length ? <div className={styles.historyCoachList}>{historyData.dailyCoachSummaries.map((coach) => <article key={coach.employeeId}><span className={styles.historyCoachIdentity}><CoachIdentityPresentation compact coach={historyData.coaches.find((item) => item.id === coach.employeeId)} /></span><span>{coach.completedSessions}／{coach.scheduledSessions} 堂</span><b>{money(coach.salesAmount)}</b></article>)}</div> : <p>沒有上班教練</p>}
                     </section>
                     <section className={styles.historySection}>
                       <div><h3>實收紀錄</h3><span>{historyEvents.length} 筆</span></div>

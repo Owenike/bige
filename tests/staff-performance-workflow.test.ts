@@ -91,6 +91,19 @@ test("manager daily close shares the schedule black-and-gold visual language wit
   assert.match(dashboardStyles, /\.managerPage \.mobileSettlementBar \{[\s\S]*rgba\(7, 13, 22, \.96\)/);
 });
 
+test("manager daily close refines action hierarchy, workflow focus, summaries, and coach scanning", () => {
+  assert.match(dashboard, /const activeTaskStep = reportConfirmed/);
+  assert.match(dashboard, /aria-current=\{activeTaskStep === 2 \? "step" : undefined\}/);
+  assert.match(dashboard, /salesTaskCount \? styles\.taskPrimaryAction : styles\.taskSecondaryAction/);
+  assert.match(dashboard, /epoTaskCount \? styles\.taskPrimaryAction : styles\.taskSecondaryAction/);
+  assert.match(dashboard, /coach\.salesAmount > 0 \? styles\.salesPositive : coach\.salesAmount === 0 \? styles\.zeroMetric/);
+  assert.match(dashboardStyles, /\.managerPage \.summaryGrid article::before/);
+  assert.match(dashboardStyles, /\.managerPage \.taskList \.taskCurrent \{[\s\S]*0 0 28px rgba\(213, 169, 72, \.11\)/);
+  assert.match(dashboardStyles, /\.managerPage \.taskList article > \.taskPrimaryAction \{[\s\S]*linear-gradient\(135deg, #f6e4af 0%, #d9b45e 55%, #b98432 100%\)/);
+  assert.match(dashboardStyles, /\.managerPage \.zeroMetric > strong/);
+  assert.match(dashboardStyles, /\.managerPage \.salesPositive > strong/);
+});
+
 test("manager workbench presents EPO rules inside the EPO decision dialog", () => {
   assert.match(dashboard, /showEpoRules \? "收起規則" : "EPO 規則"/);
   assert.match(dashboard, /activeModal === "epo" \? <div className=\{styles\.epoModalHeaderActions\}>/);
@@ -272,10 +285,16 @@ test("daily, history, and monthly coach identities show Chinese, English, and co
   const styles = readFileSync("app/staff/performance/page.module.css", "utf8");
   assert.match(component, /\[coach\.display_name, coach\.english_name\]/);
   assert.match(component, /normalizeStaffPosition\(coach\.position\)/);
-  assert.match(component, /parts\.push\(positionLabel\(position\)\)/);
-  assert.match(component, /dailyCoachIdentity[\s\S]*coachIdentityLabel\(coachMap\.get\(coach\.employeeId\)\)/);
-  assert.match(component, /coachOverviewTopline[\s\S]*coachIdentityLabel\(coach\)/);
-  assert.match(component, /historyCoachList[\s\S]*coachIdentityLabel\(historyData\.coaches\.find/);
+  assert.match(component, /function CoachIdentityPresentation/);
+  assert.match(component, /aria-label=\{coachIdentityLabel\(coach\)\}/);
+  assert.match(component, /dailyCoachIdentity[\s\S]*<CoachIdentityPresentation coach=\{coachMap\.get\(coach\.employeeId\)\}/);
+  assert.match(component, /coachOverviewTopline[\s\S]*<CoachIdentityPresentation coach=\{coach\}/);
+  assert.match(component, /historyCoachList[\s\S]*<CoachIdentityPresentation compact coach=\{historyData\.coaches\.find/);
+  assert.match(component, /positionBadgeExecutive/);
+  assert.match(component, /positionBadgeSupervisor/);
+  assert.match(component, /positionBadgeLead/);
+  assert.match(styles, /\.positionBadge, \.shiftBadge \{[^}]*cursor: default;[^}]*user-select: none/);
+  assert.match(styles, /\.managerPage \.positionBadgeExecutive \{[\s\S]*linear-gradient\(135deg, #f2dda1, #bd8732\)/);
   assert.match(styles, /\.dailyCoachIdentity strong \{[^}]*overflow-wrap: anywhere/);
   assert.match(styles, /\.coachIdentity strong \{[^}]*overflow-wrap: anywhere/);
 });

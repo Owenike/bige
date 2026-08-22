@@ -294,7 +294,18 @@
 .dailyCoachList > article:last-child { border-bottom: 0; }
 .dailyCoachIdentity { display: flex; align-items: center; min-width: 0; gap: 8px; }
 .dailyCoachIdentity strong { font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; }
-.dailyCoachIdentity span { width: fit-content; padding: 4px 8px; border-radius: 999px; color: #315740; background: #eaf3ec; font-size: 12px; font-weight: 800; }
+.coachIdentityPresentation { display: inline-flex; align-items: center; flex-wrap: wrap; min-width: 0; gap: 7px; }
+.coachIdentityNames { display: inline-flex; align-items: baseline; min-width: 0; gap: 6px; }
+.coachEnglishName { color: #738078; font-size: 12px; font-weight: 720; letter-spacing: .01em; }
+.positionBadge, .shiftBadge { display: inline-flex; align-items: center; width: fit-content; padding: 3px 7px; border: 1px solid #d7dfd9; border-radius: 999px; cursor: default; user-select: none; font-size: 10px; font-weight: 850; line-height: 1.25; white-space: nowrap; }
+.positionBadgeExecutive { color: #63420c; border-color: #d9b85f; background: #f7e7b9; }
+.positionBadgeSupervisor { color: #74531a; border-color: #dfc98f; background: #faf1d7; }
+.positionBadgeLead { color: #775a2f; border-color: #ddcfb6; background: #f7f1e8; }
+.positionBadgeCoach { color: #5d6b63; border-color: #d9e0db; background: #f1f4f2; }
+.shiftBadge { color: #315740; border-color: transparent; background: #eaf3ec; font-size: 12px; }
+.coachIdentityCompact { gap: 5px; }
+.coachIdentityCompact .positionBadge { padding: 2px 6px; font-size: 9px; }
+.historyCoachIdentity { min-width: 0; }
 .dailyCoachCourse, .dailyCoachSales { display: flex; align-items: baseline; min-width: 0; gap: 8px; }
 .dailyCoachCourse strong, .dailyCoachSales strong { overflow: hidden; font-size: 20px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
 .dailyCoachSales .inlineChecking { color: #7b8880; font-size: 14px; }
@@ -305,6 +316,8 @@
 .dailyCoachSingleMetric strong { font-size: 20px; }
 .dailyCoachSingleMetric strong span { color: #738078; font-size: 14px; }
 .dailyCoachSingleMetric small { color: #738078; font-size: 10px; }
+.zeroMetric > strong, .zeroMetric .metricEmpty { color: #8a968f; }
+.salesPositive > strong { color: #8a641d; }
 .metricBreakdown { display: flex; flex-wrap: wrap; min-width: 0; gap: 5px; }
 .metricBreakdown > span { display: inline-flex; align-items: center; max-width: 100%; gap: 5px; padding: 4px 7px; border: 1px solid #d8e2da; border-radius: 999px; color: #4c5e53; background: #f6f9f6; font-size: 11px; }
 .metricBreakdown > span b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -571,9 +584,10 @@
   .dailyCoachHeading { align-items: center; flex-direction: row; }
   .dailyCoachList > article { grid-template-columns: 1fr 1fr; min-height: 60px; gap: 11px; padding: 13px; }
   .dailyCoachIdentity { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .dailyCoachIdentity .coachIdentityPresentation { display: grid; justify-items: start; gap: 4px; }
   .dailyCoachIdentity, .dailyCoachMetric, .dailyCoachSales { grid-column: 1 / -1; }
   .dailyCoachIdentity strong { font-size: 16px; }
-  .dailyCoachIdentity span { padding: 2px 6px; font-size: 10px; }
+  .dailyCoachIdentity > .shiftBadge { padding: 2px 6px; font-size: 10px; }
   .dailyCoachCourse, .dailyCoachSales { align-items: flex-start; flex-direction: column; gap: 2px; }
   .dailyCoachCourse strong, .dailyCoachSales strong { font-size: 17px; }
   .dailyCoachCourse strong span { font-size: 13px; }
@@ -909,7 +923,7 @@
   background: linear-gradient(135deg, rgba(230, 192, 104, .055), transparent 48%), rgba(15, 23, 34, .86);
 }
 
-.managerPage .dailyCoachIdentity span,
+.managerPage .shiftBadge,
 .managerPage .metricBreakdown > span,
 .managerPage .status {
   color: #ecd69f;
@@ -1237,7 +1251,274 @@
   background: linear-gradient(transparent, rgba(8, 13, 21, .98) 30%);
 }
 
+/* Manager daily close — visual hierarchy refinement. */
+.managerPage {
+  padding-top: 24px;
+}
+
+.managerPage .workbenchHeader {
+  border-color: rgba(235, 202, 129, .38);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, .34),
+    0 0 34px rgba(205, 161, 67, .075),
+    inset 0 1px 0 rgba(255, 238, 197, .085);
+}
+
+.managerPage .panel {
+  border-color: rgba(218, 187, 120, .21);
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, .24),
+    inset 0 1px 0 rgba(255, 238, 197, .045);
+}
+
+.managerPage .taskPanel {
+  border-color: rgba(235, 202, 129, .34);
+  box-shadow:
+    0 22px 54px rgba(0, 0, 0, .29),
+    0 0 26px rgba(205, 161, 67, .055),
+    inset 0 1px 0 rgba(255, 238, 197, .07);
+}
+
+.managerPage .dailyCoachPanel {
+  background: rgba(7, 13, 22, .78);
+}
+
+.managerPage .workbenchTopline {
+  padding: 17px 22px;
+}
+
+.managerPage .panelHeading {
+  padding: 15px 20px;
+}
+
+.managerPage .workbenchActions button:not(.primary) {
+  color: #eee5d2;
+  border-color: rgba(218, 193, 140, .3);
+  background: linear-gradient(180deg, rgba(25, 33, 45, .94), rgba(13, 20, 30, .94));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055), 0 9px 22px rgba(0, 0, 0, .16);
+}
+
+.managerPage .summaryGrid article {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.managerPage .summaryGrid article::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(218, 187, 120, .24);
+  box-shadow: 0 0 14px rgba(218, 177, 87, .08);
+}
+
+.managerPage .summaryGrid article::after {
+  content: "";
+  position: absolute;
+  top: -28px;
+  right: -36px;
+  z-index: -1;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(224, 188, 102, .075), transparent 68%);
+}
+
+.managerPage .summaryReady,
+.managerPage .summaryPending,
+.managerPage .summaryChecking {
+  box-shadow: none;
+}
+
+.managerPage .summaryReady::before {
+  background: #68d6a6;
+  box-shadow: 0 0 14px rgba(84, 211, 157, .2);
+}
+
+.managerPage .summaryPending::before {
+  background: var(--settlement-gold);
+  box-shadow: 0 0 16px rgba(218, 177, 87, .22);
+}
+
+.managerPage .summaryChecking::before {
+  background: rgba(214, 183, 111, .46);
+}
+
+.managerPage .summaryRevenue strong,
+.managerPage .summaryEpo strong {
+  color: var(--settlement-gold-bright);
+}
+
+.managerPage .summaryCourse.summaryReady strong {
+  color: #d6f6e2;
+}
+
+.managerPage .taskList {
+  gap: 1px;
+  background: rgba(219, 187, 116, .12);
+}
+
+.managerPage .taskList article {
+  position: relative;
+  min-height: 132px;
+  isolation: isolate;
+}
+
+.managerPage .taskList article:not(:last-child)::after {
+  content: "›";
+  position: absolute;
+  top: 50%;
+  right: -9px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 28px;
+  border: 1px solid rgba(218, 187, 120, .18);
+  border-radius: 999px;
+  color: rgba(235, 211, 159, .5);
+  background: #0a111b;
+  box-shadow: 0 0 12px rgba(0, 0, 0, .24);
+  font-size: 18px;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.managerPage .taskList .taskCurrent {
+  z-index: 2;
+  border-color: rgba(235, 202, 129, .34);
+  background:
+    radial-gradient(circle at 22% 0%, rgba(234, 198, 112, .15), transparent 44%),
+    linear-gradient(145deg, rgba(35, 31, 23, .96), rgba(12, 18, 27, .96)) !important;
+  box-shadow:
+    inset 0 3px 0 var(--settlement-gold),
+    inset 0 0 0 1px rgba(235, 202, 129, .18),
+    0 0 28px rgba(213, 169, 72, .11);
+}
+
+.managerPage .taskList .taskCurrent .taskStepNumber {
+  box-shadow: 0 0 20px rgba(218, 177, 87, .2);
+}
+
+.managerPage .taskList article > button,
+.managerPage .taskList article > a {
+  color: #e9e1d0;
+  border-color: rgba(218, 193, 140, .24);
+  background: linear-gradient(180deg, rgba(23, 31, 43, .96), rgba(12, 19, 29, .96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045), 0 8px 20px rgba(0, 0, 0, .14);
+}
+
+.managerPage .taskList article > .taskPrimaryAction {
+  color: #171107 !important;
+  border-color: rgba(255, 230, 168, .78) !important;
+  background: linear-gradient(135deg, #f6e4af 0%, #d9b45e 55%, #b98432 100%) !important;
+  box-shadow:
+    0 9px 26px rgba(188, 135, 39, .24),
+    0 0 18px rgba(236, 202, 126, .12),
+    inset 0 1px 0 rgba(255, 255, 255, .68);
+}
+
+.managerPage .taskList article > .taskPrimaryAction:hover:not(:disabled) {
+  color: #100b04 !important;
+  border-color: rgba(255, 239, 199, .94) !important;
+  background: linear-gradient(135deg, #fff0c4 0%, #e5c16b 55%, #c8923b 100%) !important;
+  box-shadow:
+    0 12px 30px rgba(188, 135, 39, .33),
+    0 0 28px rgba(236, 202, 126, .2),
+    inset 0 1px 0 rgba(255, 255, 255, .74);
+}
+
+.managerPage .taskList article > .taskSecondaryAction {
+  color: rgba(235, 230, 218, .78);
+  border-color: rgba(178, 190, 207, .17);
+  background: rgba(12, 19, 29, .7);
+  box-shadow: none;
+}
+
+.managerPage .dailyCoachTableHeader {
+  background: linear-gradient(180deg, rgba(9, 15, 24, .98), rgba(6, 12, 20, .94));
+  box-shadow: inset 0 -1px 0 rgba(218, 187, 120, .08);
+}
+
+.managerPage .dailyCoachList > article {
+  min-height: 62px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  transition: background 150ms ease, box-shadow 150ms ease;
+}
+
+.managerPage .dailyCoachList > article:hover {
+  background: linear-gradient(90deg, rgba(230, 192, 104, .07), transparent 42%), rgba(15, 23, 34, .9);
+  box-shadow: inset 3px 0 0 rgba(218, 182, 105, .58);
+}
+
+.managerPage .coachIdentityPresentation {
+  color: #fff8e9;
+}
+
+.managerPage .coachEnglishName {
+  color: rgba(218, 225, 235, .5);
+}
+
+.managerPage .positionBadge {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+
+.managerPage .positionBadgeExecutive {
+  color: #1a1206;
+  border-color: rgba(255, 229, 166, .76);
+  background: linear-gradient(135deg, #f2dda1, #bd8732);
+}
+
+.managerPage .positionBadgeSupervisor {
+  color: #f3d996;
+  border-color: rgba(229, 194, 112, .42);
+  background: rgba(102, 72, 24, .48);
+}
+
+.managerPage .positionBadgeLead {
+  color: #ddc28e;
+  border-color: rgba(193, 155, 89, .3);
+  background: rgba(76, 56, 27, .38);
+}
+
+.managerPage .positionBadgeCoach {
+  color: rgba(218, 225, 235, .58);
+  border-color: rgba(172, 187, 207, .15);
+  background: rgba(21, 29, 41, .68);
+}
+
+.managerPage .shiftBadge {
+  color: #c9f5dc;
+  border-color: rgba(85, 196, 139, .2);
+  background: rgba(17, 77, 53, .38);
+}
+
+.managerPage .zeroMetric > strong,
+.managerPage .zeroMetric .metricEmpty {
+  color: rgba(218, 225, 235, .34) !important;
+}
+
+.managerPage .salesPositive > strong {
+  color: var(--settlement-gold-bright) !important;
+  text-shadow: 0 0 16px rgba(218, 177, 87, .12);
+}
+
+.managerPage .historyCoachIdentity {
+  display: block;
+}
+
 @media (max-width: 980px) {
+  .managerPage .taskList article:not(:last-child)::after {
+    display: none;
+  }
+
   .managerPage .dailyCoachList > article {
     border-color: var(--settlement-line-strong);
   }
@@ -1254,6 +1535,22 @@
   .managerPage .salesQueue {
     border-color: var(--settlement-gold-line);
   }
+
+  .managerPage .taskList article {
+    min-height: 0;
+  }
+
+  .managerPage .taskList article:not(:last-child)::after {
+    content: "↓";
+    top: auto;
+    right: 50%;
+    bottom: -9px;
+    display: grid;
+    width: 28px;
+    height: 18px;
+    font-size: 11px;
+    transform: translateX(50%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1262,6 +1559,10 @@
   .managerPage .moreMenu summary,
   .managerPage .moreMenu nav a,
   .managerPage .taskList article > a {
+    transition: none;
+  }
+
+  .managerPage .dailyCoachList > article {
     transition: none;
   }
 }
