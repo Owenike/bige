@@ -6,6 +6,7 @@ const route = readFileSync("app/api/staff-performance/route.ts", "utf8");
 const dashboard = readFileSync("components/staff-performance-dashboard.tsx", "utf8");
 const managerPage = readFileSync("app/manager/staff-performance/page.tsx", "utf8");
 const performanceRead = readFileSync("lib/staff-performance-read.ts", "utf8");
+const performanceSync = readFileSync("lib/staff-performance-sync.ts", "utf8");
 const dashboardStyles = readFileSync("app/staff/performance/page.module.css", "utf8");
 const payrollRoute = readFileSync("app/api/staff-payroll/route.ts", "utf8");
 const contractRoute = readFileSync("app/api/bige-fitness/route.ts", "utf8");
@@ -13,6 +14,14 @@ const trialBookingRoute = readFileSync("app/api/admin/trial-bookings/route.ts", 
 const trialScheduleRoute = readFileSync("app/api/admin/trial-bookings/[id]/schedule/route.ts", "utf8");
 const trialTenantMigration = readFileSync(
   "supabase/migrations/20260821123000_add_trial_booking_tenant_attribution.sql",
+  "utf8",
+);
+const originDateMigration = readFileSync(
+  "supabase/migrations/20260822092929_align_fa_bb_sales_with_origin_booking_date.sql",
+  "utf8",
+);
+const staleDailyTopMigration = readFileSync(
+  "supabase/migrations/20260822093355_clear_stale_daily_top_after_sales_date_alignment.sql",
   "utf8",
 );
 const migration = readFileSync(
@@ -152,6 +161,22 @@ test("daily workbench withholds stale payment and EPO figures until source recon
   assert.match(route, /body\.action === "prepare_day"[\s\S]*syncBigePaymentPerformanceSources[\s\S]*syncAutomaticEpoForDate/);
   assert.match(route, /body\.action === "confirm_day"[\s\S]*syncBigePaymentPerformanceSources[\s\S]*syncAutomaticEpoForDate/);
   assert.match(dashboard, /重新讀取/);
+});
+
+test("FA and BB sales follow their originating appointment date without moving confirmed settlements", () => {
+  assert.match(performanceSync, /resolveSalesPerformanceOccurrence/);
+  assert.match(performanceSync, /\.in\("operation_kind", \["trial", "bb"\]\)/);
+  assert.match(performanceSync, /\.gte\("starts_at", range\.startIso\)/);
+  assert.match(performanceSync, /originBookingStartsAt: originBooking\?\.starts_at \|\| null/);
+  assert.match(performanceSync, /params\.sourceType === "fa" \|\| params\.sourceType === "bb"/);
+  assert.match(performanceSync, /row\.status === "daily_confirmed"/);
+  assert.match(performanceSync, /business_date: confirmed\.business_date/);
+  assert.match(originDateMigration, /event\.source_type in \('fa', 'bb'\)/);
+  assert.match(originDateMigration, /event\.status <> 'daily_confirmed'/);
+  assert.match(originDateMigration, /origin_booking\.starts_at at time zone 'Asia\/Taipei'/);
+  assert.match(staleDailyTopMigration, /award\.status <> 'daily_confirmed'/);
+  assert.match(staleDailyTopMigration, /current_event\.origin_employee_id is not null/);
+  assert.match(staleDailyTopMigration, /active_award_id = null/);
 });
 
 test("daily workbench presents one four-step flow and a consolidated allocation summary", () => {

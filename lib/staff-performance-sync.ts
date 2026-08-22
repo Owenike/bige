@@ -7,6 +7,24 @@ import { performanceMonthRange, taiwanBusinessDate } from "./staff-performance";
 
 type QueryClient = any;
 
+export function resolveSalesPerformanceOccurrence(params: {
+  sourceType: SalesSourceType;
+  paidAt: string;
+  originBookingStartsAt?: string | null;
+}) {
+  const usesOriginBooking = (
+    params.sourceType === "fa" || params.sourceType === "bb"
+  ) && Boolean(params.originBookingStartsAt);
+  const occurredAt = usesOriginBooking
+    ? String(params.originBookingStartsAt)
+    : params.paidAt;
+  return {
+    businessDate: taiwanBusinessDate(occurredAt),
+    occurredAt,
+    dateSource: usesOriginBooking ? "origin_booking" : "payment",
+  } as const;
+}
+
 function occursInMonth(value: string | null | undefined, range: ReturnType<typeof performanceMonthRange>) {
   if (!value) return false;
   const date = taiwanBusinessDate(value);
@@ -49,13 +67,41 @@ export async function syncBigePaymentPerformanceSources(
   actorId: string,
 ) {
   const range = performanceMonthRange(month);
-  const paymentResult = await admin.from("bige_contract_payments")
+  const originBookingResult = await admin.from("bookings")
+    .select("id, converted_contract_id")
+    .eq("tenant_id", tenantId)
+    .eq("is_bige_schedule", true)
+    .in("operation_kind", ["trial", "bb"])
+    .gte("starts_at", range.startIso)
+    .lt("starts_at", range.nextIso)
+    .not("converted_contract_id", "is", null);
+  if (originBookingResult.error) throw new Error(originBookingResult.error.message);
+  const originContractIds = [...new Set((originBookingResult.data || [])
+    .map((row: any) => row.converted_contract_id ? String(row.converted_contract_id) : "")
+    .filter(Boolean))];
+  const datedPaymentPromise = admin.from("bige_contract_payments")
     .select("id, contract_id, payment_kind, amount, status, paid_at, voided_at, void_reason, recorded_by")
     .eq("tenant_id", tenantId)
     .or(`and(paid_at.gte.${range.startIso},paid_at.lt.${range.nextIso}),and(voided_at.gte.${range.startIso},voided_at.lt.${range.nextIso})`)
     .order("paid_at", { ascending: true });
-  if (paymentResult.error) throw new Error(paymentResult.error.message);
-  const payments = paymentResult.data || [];
+  const originPaymentPromise = originContractIds.length
+    ? admin.from("bige_contract_payments")
+      .select("id, contract_id, payment_kind, amount, status, paid_at, voided_at, void_reason, recorded_by")
+      .eq("tenant_id", tenantId)
+      .in("contract_id", originContractIds)
+      .order("paid_at", { ascending: true })
+    : Promise.resolve({ data: [], error: null });
+  const [datedPaymentResult, originPaymentResult] = await Promise.all([
+    datedPaymentPromise,
+    originPaymentPromise,
+  ]);
+  if (datedPaymentResult.error || originPaymentResult.error) {
+    throw new Error(datedPaymentResult.error?.message || originPaymentResult.error?.message || "業績來源讀取失敗");
+  }
+  const payments = [...new Map([
+    ...(datedPaymentResult.data || []),
+    ...(originPaymentResult.data || []),
+  ].map((row: any) => [String(row.id), row])).values()];
   const contractIds = [...new Set(payments.map((row: any) => String(row.contract_id)))];
   if (!contractIds.length) return;
 
@@ -77,12 +123,12 @@ export async function syncBigePaymentPerformanceSources(
       ? admin.from("members").select("id, full_name, primary_coach_id").eq("tenant_id", tenantId).in("id", memberIds)
       : Promise.resolve({ data: [], error: null }),
     bookingIds.length
-      ? admin.from("bookings").select("id, coach_id").eq("tenant_id", tenantId).in("id", bookingIds)
+      ? admin.from("bookings").select("id, coach_id, starts_at, operation_kind").eq("tenant_id", tenantId).in("id", bookingIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (memberResult.error || bookingResult.error) throw new Error(memberResult.error?.message || bookingResult.error?.message || "原成交教練讀取失敗");
   const members = new Map((memberResult.data || []).map((row: any) => [String(row.id), row]));
-  const bookingCoach = new Map((bookingResult.data || []).map((row: any) => [String(row.id), row.coach_id ? String(row.coach_id) : null]));
+  const originBookings = new Map<string, any>((bookingResult.data || []).map((row: any) => [String(row.id), row]));
   const firstPaymentByContract = new Map<string, string>();
   for (const row of allPaymentsResult.data || []) {
     const key = String(row.contract_id);
@@ -99,7 +145,7 @@ export async function syncBigePaymentPerformanceSources(
     const originEmployeeId = contract.sales_origin_coach_id
       ? String(contract.sales_origin_coach_id)
       : contract.converted_from_booking_id
-        ? bookingCoach.get(String(contract.converted_from_booking_id)) || null
+        ? originBookings.get(String(contract.converted_from_booking_id))?.coach_id || null
         : member?.primary_coach_id ? String(member.primary_coach_id) : null;
     const isFa = contract.sales_origin_kind === "fa" || (
       !contract.sales_origin_kind && Boolean(contract.converted_from_booking_id || contract.source_trial_booking_id)
@@ -111,6 +157,14 @@ export async function syncBigePaymentPerformanceSources(
       firstPaymentByContract,
       isFa,
       originKind: contract.sales_origin_kind ? String(contract.sales_origin_kind) : null,
+    });
+    const originBooking = contract.converted_from_booking_id
+      ? originBookings.get(String(contract.converted_from_booking_id))
+      : null;
+    const occurrence = resolveSalesPerformanceOccurrence({
+      sourceType,
+      paidAt: String(payment.paid_at),
+      originBookingStartsAt: originBooking?.starts_at || null,
     });
     const shared = {
       tenant_id: tenantId,
@@ -124,13 +178,13 @@ export async function syncBigePaymentPerformanceSources(
       source_table: "bige_contract_payments",
       source_id: payment.id,
     };
-    if ((occursInMonth(String(payment.paid_at), range) || payment.status === "refunded") && payment.status !== "voided") {
+    if ((occursInMonth(occurrence.businessDate, range) || payment.status === "refunded") && payment.status !== "voided") {
       sourceRows.push({
         ...shared,
-        business_date: taiwanBusinessDate(String(payment.paid_at)),
+        business_date: occurrence.businessDate,
         source_type: sourceType,
         source_key: `bige-payment:${payment.id}`,
-        source_occurred_at: payment.paid_at,
+        source_occurred_at: occurrence.occurredAt,
         label: `${sourceType === "fa" ? "FA 成交" : sourceType === "bb" ? "BB 成交" : sourceType === "renewal" ? "續約" : "繳交尾款"}｜${memberName}`,
         amount: Number(payment.amount),
         metadata: {
@@ -139,6 +193,9 @@ export async function syncBigePaymentPerformanceSources(
           contractStatus: contract.status,
           contractPaymentStatus: contract.payment_status,
           originEmployeeId,
+          paymentPaidAt: payment.paid_at,
+          settlementDateSource: occurrence.dateSource,
+          originBookingStartsAt: originBooking?.starts_at || null,
         },
       });
     }
@@ -165,7 +222,24 @@ export async function syncBigePaymentPerformanceSources(
     }
   }
   if (sourceRows.length) {
-    const saved = await admin.from("staff_sales_events").upsert(sourceRows, { onConflict: "tenant_id,source_key" });
+    const sourceKeys = sourceRows.map((row) => String(row.source_key));
+    const existingResult = await admin.from("staff_sales_events")
+      .select("source_key, business_date, source_occurred_at, status")
+      .eq("tenant_id", tenantId)
+      .in("source_key", sourceKeys);
+    if (existingResult.error) throw new Error(existingResult.error.message);
+    const confirmedEvents = new Map<string, any>((existingResult.data || [])
+      .filter((row: any) => row.status === "daily_confirmed")
+      .map((row: any) => [String(row.source_key), row]));
+    const safeSourceRows = sourceRows.map((row) => {
+      const confirmed = confirmedEvents.get(String(row.source_key));
+      return confirmed ? {
+        ...row,
+        business_date: confirmed.business_date,
+        source_occurred_at: confirmed.source_occurred_at,
+      } : row;
+    });
+    const saved = await admin.from("staff_sales_events").upsert(safeSourceRows, { onConflict: "tenant_id,source_key" });
     if (saved.error) throw new Error(saved.error.message);
   }
 
