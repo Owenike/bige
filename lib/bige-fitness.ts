@@ -93,6 +93,13 @@ export function isBigeContractVoidedForDisplay(input: {
   );
 }
 
+export function isBigeContractEligibleForPayment(input: {
+  contractStatus?: string | null;
+  payments?: Array<{ status?: string | null }> | null;
+}) {
+  return !isBigeContractVoidedForDisplay(input);
+}
+
 export function getBigeStudentPaymentBalanceState(input: {
   contractCount: number;
   outstandingBalance: number;

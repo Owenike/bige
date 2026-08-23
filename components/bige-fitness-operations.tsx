@@ -72,6 +72,7 @@ import {
   getBigeTrialContractMissingProfileFields,
   getBigeTrialBookingActionVisibility,
   getBigeTrialOutcomeVisualState,
+  isBigeContractEligibleForPayment,
   isBigeContractVoidedForDisplay,
   isBigeContractPaymentAmountAllowed,
   isBigeTrialReminderConfirmed,
@@ -4329,16 +4330,23 @@ export default function BigeFitnessOperations({
     const member = members.get(booking.member_id);
     if (!member || !scheduleMemberDetail) return;
     const outstandingContracts = scheduleMemberDetail.contracts
-      .map((contract) => ({
-        contract,
-        outstanding: calculateBigeContractOutstandingBalance(
-          contract.total_amount,
-          scheduleMemberDetail.payments.filter(
-            (payment) => payment.contract_id === contract.id,
+      .map((contract) => {
+        const payments = scheduleMemberDetail.payments.filter(
+          (payment) => payment.contract_id === contract.id,
+        );
+        return {
+          contract,
+          outstanding: calculateBigeContractOutstandingBalance(
+            contract.total_amount,
+            payments,
           ),
-        ),
-      }))
-      .filter((item) => item.outstanding > 0 && item.contract.status !== "canceled");
+          eligibleForPayment: isBigeContractEligibleForPayment({
+            contractStatus: contract.status,
+            payments,
+          }),
+        };
+      })
+      .filter((item) => item.outstanding > 0 && item.eligibleForPayment);
     openContract(booking, member);
     setStudentPaymentContext({
       bookingId: booking.id,
@@ -4897,16 +4905,23 @@ export default function BigeFitnessOperations({
   const scheduleOutstandingContracts = useMemo(
     () =>
       (scheduleMemberDetail?.contracts || [])
-        .map((contract) => ({
-          contract,
-          outstanding: calculateBigeContractOutstandingBalance(
-            contract.total_amount,
-            (scheduleMemberDetail?.payments || []).filter(
-              (payment) => payment.contract_id === contract.id,
+        .map((contract) => {
+          const payments = (scheduleMemberDetail?.payments || []).filter(
+            (payment) => payment.contract_id === contract.id,
+          );
+          return {
+            contract,
+            outstanding: calculateBigeContractOutstandingBalance(
+              contract.total_amount,
+              payments,
             ),
-          ),
-        }))
-        .filter((item) => item.outstanding > 0 && item.contract.status !== "canceled"),
+            eligibleForPayment: isBigeContractEligibleForPayment({
+              contractStatus: contract.status,
+              payments,
+            }),
+          };
+        })
+        .filter((item) => item.outstanding > 0 && item.eligibleForPayment),
     [scheduleMemberDetail],
   );
   const scheduleOutstandingBalance = scheduleOutstandingContracts.reduce(

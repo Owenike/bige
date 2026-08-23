@@ -353,6 +353,7 @@ function normalizeErrorMessage(message: string) {
     minimum_deposit_not_met: "首次付款不得低於此方案一堂課的金額",
     payment_amount_invalid: "付款金額不可小於 0",
     payment_amount_exceeds_contract_balance: "付款金額不能超過合約尚有尾款",
+    voided_contract_payment_not_allowed: "此合約已作廢，不能再登記付款",
     payment_entries_invalid: "付款明細格式不正確，請重新確認每一筆金額與方式",
     payment_entries_total_mismatch: "多筆付款合計與本次付款金額不一致",
     payment_source_booking_invalid: "付款來源課程與學員或合約不一致",

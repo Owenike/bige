@@ -17,6 +17,7 @@ import {
   getBigeStudentPaymentBalanceState,
   getBigeFaFeeAmount,
   isBigeAssistantToContent,
+  isBigeContractEligibleForPayment,
   isBigeContractPaymentAmountAllowed,
   isBigeContractVoidedForDisplay,
   isBigeScheduleNoteUndoAvailable,
@@ -2341,4 +2342,59 @@ test("voided member contracts render with a strike line and red voided stamp", (
   assert.match(component, /className=\{styles\.contractVoidedStamp\}[\s\S]*已作廢/);
   assert.match(styles, /\.contractVoided > \.contractSummary::after[\s\S]*background: rgba\(196, 39, 39/);
   assert.match(styles, /\.contractVoidedStamp[\s\S]*border: 3px double #d03838/);
+});
+
+test("voided contracts are excluded from balance payment and rejected by the payment RPC", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260823170811_prevent_voided_contract_payments.sql",
+    "utf8",
+  );
+
+  assert.equal(
+    isBigeContractEligibleForPayment({ contractStatus: "canceled", payments: [] }),
+    false,
+  );
+  assert.equal(
+    isBigeContractEligibleForPayment({
+      contractStatus: "pending",
+      payments: [{ status: "voided" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isBigeContractEligibleForPayment({
+      contractStatus: "frozen",
+      payments: [{ status: "voided" }, { status: "voided" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isBigeContractEligibleForPayment({
+      contractStatus: "active",
+      payments: [{ status: "recorded" }],
+    }),
+    true,
+  );
+  assert.equal(
+    isBigeContractEligibleForPayment({
+      contractStatus: "active",
+      payments: [{ status: "voided" }, { status: "recorded" }],
+    }),
+    true,
+  );
+
+  assert.equal(
+    (component.match(/eligibleForPayment: isBigeContractEligibleForPayment/g) || []).length,
+    2,
+  );
+  assert.equal(
+    (component.match(/item\.outstanding > 0 && item\.eligibleForPayment/g) || []).length,
+    2,
+  );
+  assert.match(migration, /contract_row\.status = 'canceled'/);
+  assert.match(migration, /payment\.status <> 'voided'/);
+  assert.match(migration, /raise exception 'voided_contract_payment_not_allowed'/);
+  assert.match(route, /voided_contract_payment_not_allowed: "此合約已作廢，不能再登記付款"/);
 });

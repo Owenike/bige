@@ -12,8 +12,12 @@ declare
   create_member_id uuid := '20000000-0000-4000-8000-000000000007';
   create_booking_id uuid := '20000000-0000-4000-8000-000000000008';
   plan_id uuid := '20000000-0000-4000-8000-000000000009';
+  voided_contract_id uuid := '20000000-0000-4000-8000-000000000010';
+  canceled_contract_id uuid := '20000000-0000-4000-8000-000000000011';
   created_contract_id uuid;
   conflict_detected boolean := false;
+  voided_contract_blocked boolean := false;
+  canceled_contract_blocked boolean := false;
   result jsonb;
   replay jsonb;
   create_result jsonb;
@@ -62,9 +66,26 @@ begin
     id, tenant_id, branch_id, member_id, contract_number, status,
     starts_at, ends_at, total_sessions, total_amount, unlocked_sessions,
     used_sessions, remaining_sessions, payment_status
-  ) values (
+  ) values
+  (
     contract_id, tenant_id, branch_id, member_id, 'SPLIT-PAY-01', 'pending',
     now(), now() + interval '65 days', 10, 10000, 0, 0, 0, 'unpaid'
+  ),
+  (
+    voided_contract_id, tenant_id, branch_id, member_id, 'VOIDED-PAY-01', 'pending',
+    now(), now() + interval '65 days', 10, 10000, 0, 0, 0, 'unpaid'
+  ),
+  (
+    canceled_contract_id, tenant_id, branch_id, member_id, 'CANCELED-PAY-01', 'canceled',
+    now(), now() + interval '65 days', 10, 10000, 0, 0, 0, 'unpaid'
+  );
+
+  insert into public.bige_contract_payments (
+    tenant_id, contract_id, payment_kind, amount, method, status,
+    idempotency_key, recorded_by, voided_by, voided_at, void_reason
+  ) values (
+    tenant_id, voided_contract_id, 'deposit', 10000, 'cash', 'voided',
+    'test:voided-contract:original', assistant_id, assistant_id, now(), 'regression fixture'
   );
 
   insert into public.bookings (
@@ -172,6 +193,52 @@ begin
   end;
   if not conflict_detected then
     raise exception 'changed split payment replay unexpectedly succeeded';
+  end if;
+
+  begin
+    perform public.bige_record_contract_payments_v1(
+      voided_contract_id,
+      booking_id,
+      null,
+      'balance',
+      '[{"amount":10000,"method":"cash"}]'::jsonb,
+      now(),
+      'test:voided-contract:retry',
+      'voided contract must remain blocked'
+    );
+  exception
+    when others then
+      if sqlerrm = 'voided_contract_payment_not_allowed' then
+        voided_contract_blocked := true;
+      else
+        raise;
+      end if;
+  end;
+  if not voided_contract_blocked then
+    raise exception 'all-voided contract unexpectedly accepted a new payment';
+  end if;
+
+  begin
+    perform public.bige_record_contract_payments_v1(
+      canceled_contract_id,
+      booking_id,
+      null,
+      'balance',
+      '[{"amount":10000,"method":"cash"}]'::jsonb,
+      now(),
+      'test:canceled-contract:retry',
+      'canceled contract must remain blocked'
+    );
+  exception
+    when others then
+      if sqlerrm = 'voided_contract_payment_not_allowed' then
+        canceled_contract_blocked := true;
+      else
+        raise;
+      end if;
+  end;
+  if not canceled_contract_blocked then
+    raise exception 'canceled contract unexpectedly accepted a new payment';
   end if;
 
   create_result := public.bige_create_member_contract_v6(
