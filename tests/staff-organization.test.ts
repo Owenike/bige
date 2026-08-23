@@ -9,6 +9,7 @@ import {
   canCreatePosition,
   canManageBigeContractRefundOrExtension,
   canManageBigePaidScheduleCells,
+  canUseBigeWalkInPayments,
   canManagePosition,
   canViewAllCoachSchedules,
   legacyRoleForPosition,
@@ -136,6 +137,45 @@ test("paid schedule cells are restricted to coaching management while platform a
       role: "frontdesk",
       department: "general_affairs",
       position: "frontdesk",
+    }),
+    false,
+  );
+});
+
+test("walk-in payment button is limited to employee 06 and coaching team lead or above", () => {
+  assert.equal(canUseBigeWalkInPayments({ ...platformAdmin, employeeNumber: "E000001" }), true);
+  assert.equal(
+    canUseBigeWalkInPayments({
+      role: "frontdesk",
+      department: "general_affairs",
+      position: "frontdesk",
+      employeeNumber: "E000006",
+    }),
+    true,
+  );
+  for (const position of [
+    "coach_team_lead",
+    "coach_director",
+    "coach_assistant_manager",
+    "coach_manager",
+    "coach_city_manager",
+  ] as const) {
+    assert.equal(
+      canUseBigeWalkInPayments({
+        role: legacyRoleForPosition(position),
+        department: "coaching",
+        position,
+        employeeNumber: "E000099",
+      }),
+      true,
+    );
+  }
+  assert.equal(
+    canUseBigeWalkInPayments({
+      role: "coach",
+      department: "coaching",
+      position: "coach",
+      employeeNumber: "E000007",
     }),
     false,
   );

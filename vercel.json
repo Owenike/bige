@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/bige-fitness-close",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/bige-line-schedule",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

@@ -605,6 +605,9 @@ export const createContractSchema = z.object({
   memberId: z.string().uuid().nullable().optional(),
   sourceBookingId: z.string().uuid().nullable().optional(),
   sourceMemberBookingId: z.string().uuid().nullable().optional(),
+  lineGroupBindingId: z.string().uuid(),
+  walkIn: z.boolean().default(false),
+  walkInIdempotencyKey: z.string().trim().min(8).max(180).nullable().optional(),
   fullName: z.string().trim().min(1).max(80),
   phone: z
     .string()
@@ -647,6 +650,13 @@ export const createContractSchema = z.object({
   faFeeRecipientProfileId: z.string().uuid().nullable().optional(),
   faFeeRecipientName: z.string().trim().min(1).max(80).nullable().optional(),
 }).superRefine((input, context) => {
+  if (input.walkIn && (!input.walkInIdempotencyKey || input.initialPayment <= 0)) {
+    context.addIssue({
+      code: "custom",
+      path: ["walkInIdempotencyKey"],
+      message: "現場續約必須包含付款與操作識別碼",
+    });
+  }
   if (input.paymentMethod === "ecpay_installment" && input.installmentCount == null) {
     context.addIssue({
       code: "custom",
@@ -731,6 +741,18 @@ export const recordPaymentsSchema = z.object({
   contractId: z.string().uuid(),
   sourceBookingId: z.string().uuid().nullable().optional(),
   scheduleItemId: z.string().uuid().nullable().optional(),
+  paymentKind: z.enum(["deposit", "balance", "installment"]),
+  payments: z.array(bigePaymentEntrySchema).min(1).max(10),
+  paidAt: z.string().datetime({ offset: true }).optional(),
+  idempotencyKey: z.string().trim().min(8).max(160),
+  note: z.string().trim().max(300).nullable().optional(),
+});
+
+export const recordWalkInPaymentSchema = z.object({
+  action: z.literal("record_walk_in_payment"),
+  branchId: z.string().uuid().nullable().optional(),
+  memberId: z.string().uuid(),
+  contractId: z.string().uuid(),
   paymentKind: z.enum(["deposit", "balance", "installment"]),
   payments: z.array(bigePaymentEntrySchema).min(1).max(10),
   paidAt: z.string().datetime({ offset: true }).optional(),
@@ -906,6 +928,7 @@ export const bigeFitnessActionSchema = z.discriminatedUnion("action", [
   createContractSchema,
   recordPaymentSchema,
   recordPaymentsSchema,
+  recordWalkInPaymentSchema,
   updatePaymentSchema,
   completeBookingSchema,
   completeTrialOutcomeSchema,

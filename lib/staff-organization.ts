@@ -1,4 +1,5 @@
 import type { AppRole } from "./auth-context";
+import { normalizeEmployeeNumber } from "./staff-credentials";
 
 export const STAFF_DEPARTMENTS = ["general_affairs", "coaching"] as const;
 export type StaffDepartment = (typeof STAFF_DEPARTMENTS)[number];
@@ -296,8 +297,32 @@ export function canRecordBigeContractPayment(
   if (canDirectlyApproveBigeContractRisk(actor)) return true;
   if (actor.role === "frontdesk") return true;
   return (
-    (actor.department === "coaching" && actor.position === "coach_assistant_manager") ||
+    (actor.department === "coaching" &&
+      actor.position != null &&
+      COACH_SCHEDULE_OVERVIEW_POSITIONS.has(actor.position)) ||
     (!actor.department && !actor.position && actor.role === "supervisor")
+  );
+}
+
+export function canUseBigeWalkInPayments(
+  actor: Pick<OrganizationActor, "role"> &
+    Partial<Pick<OrganizationActor, "department" | "position">> & {
+      employeeNumber?: string | null;
+    },
+) {
+  if (actor.role === "platform_admin") return true;
+  if (normalizeEmployeeNumber(actor.employeeNumber) === "E000006") return true;
+  if (
+    actor.department === "coaching" &&
+    actor.position != null &&
+    COACH_SCHEDULE_OVERVIEW_POSITIONS.has(actor.position)
+  ) {
+    return true;
+  }
+  return (
+    !actor.department &&
+    !actor.position &&
+    LEGACY_SCHEDULE_OVERVIEW_ROLES.has(actor.role)
   );
 }
 

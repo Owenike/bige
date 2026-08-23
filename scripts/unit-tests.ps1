@@ -16,6 +16,7 @@ npx tsc `
   tests/auth-capabilities.test.ts `
   tests/auth-role-access.test.ts `
   tests/bige-member-search.test.ts `
+  tests/bige-line-schedule.test.ts `
   tests/bige-shared-contract.test.ts `
   tests/bige-fitness-schedule.test.ts `
   tests/bige-course-status-window.test.ts `
@@ -58,6 +59,7 @@ npx tsc `
   tests/trial-booking-sources.test.ts `
   lib/member-progress-events.ts `
   lib/bige-member-search.ts `
+  lib/bige-line-schedule.ts `
   lib/bige-fitness.ts `
   lib/bige-course-status-window.ts `
   lib/bige-coach-order.ts `

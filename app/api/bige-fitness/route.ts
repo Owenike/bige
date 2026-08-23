@@ -7,6 +7,7 @@ import {
   readCoachDayStatusMarker,
 } from "../../../lib/bige-coach-day-status";
 import { loadBigeBusinessDaySetting } from "../../../lib/bige-business-day";
+import { queueBigeLineScheduleSnapshot } from "../../../lib/bige-line-schedule";
 import {
   canCancelBigeCourseAnytime,
   getBigeCourseStatusWindow,
@@ -47,6 +48,7 @@ import {
   canManageBigePaidScheduleCells,
   canManageBigePlansAndDailyReports,
   canRecordBigeContractPayment,
+  canUseBigeWalkInPayments,
   canViewAllCoachSchedules,
   isBigeContractRiskRequester,
 } from "../../../lib/staff-organization";
@@ -121,6 +123,139 @@ function canSeeTrialRevenue(
   context: Pick<ProfileContext, "role" | "department" | "position">,
 ) {
   return canManageBigePaidScheduleCells(context);
+}
+
+async function requireFormalScheduleLineBinding(tenantId: string, memberId: string) {
+  if (process.env.BIGE_LINE_REQUIRE_BINDING_FOR_SCHEDULE !== "1") return null;
+  const result = await createSupabaseAdminClient()
+    .from("bige_line_group_bindings")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("member_id", memberId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (result.error) return result.error.message;
+  return result.data ? null : "此學員尚未綁定有效的 LINE 群組，不能建立正式課程";
+}
+
+async function notifyFormalScheduleMutation(params: {
+  tenantId: string;
+  branchId?: string | null;
+  memberId?: string | null;
+  operationKind?: string | null;
+  eventKind: "created" | "updated" | "cancelled";
+  dedupeKey: string;
+  actorId: string;
+}) {
+  if (params.operationKind !== "pt" || !params.memberId) {
+    return { ok: true as const, status: "not_applicable" };
+  }
+  const result = await queueBigeLineScheduleSnapshot({
+    tenantId: params.tenantId,
+    branchId: params.branchId,
+    memberId: params.memberId,
+    eventKind: params.eventKind,
+    dedupeKey: params.dedupeKey,
+    createdBy: params.actorId,
+  });
+  if (!result.ok && !("skipped" in result && result.skipped)) {
+    console.warn("[bige-fitness] LINE schedule snapshot queue failed", {
+      memberId: params.memberId,
+      eventKind: params.eventKind,
+      error: result.error,
+    });
+  }
+  return result;
+}
+
+async function notifyScheduleMoveMutation(params: {
+  tenantId: string;
+  operationId: string;
+  dedupePrefix: "move" | "undo";
+  actorId: string;
+  fallbackBranchId?: string | null;
+}) {
+  const admin = createSupabaseAdminClient();
+  const auditResult = await admin
+    .from("audit_logs")
+    .select("payload")
+    .eq("tenant_id", params.tenantId)
+    .eq("target_type", "schedule_operation")
+    .eq("target_id", params.operationId)
+    .in("action", [
+      "bige_schedule_drag_move",
+      "bige_schedule_drag_swap",
+      "bige_schedule_drag_overwrite",
+    ])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (auditResult.error || !auditResult.data) {
+    return {
+      ok: false as const,
+      status: "audit_unavailable",
+      error: auditResult.error?.message || "schedule_move_audit_not_found",
+    };
+  }
+
+  const payload = (auditResult.data.payload || {}) as Record<string, any>;
+  const before = [
+    ...(Array.isArray(payload.sourceBefore) ? payload.sourceBefore : []),
+    ...(Array.isArray(payload.targetBefore) ? payload.targetBefore : []),
+  ];
+  const after = Array.isArray(payload.after) ? payload.after : [];
+  const afterById = new Map(after.map((item: any) => [String(item.id), item]));
+  const changedIds = before
+    .filter((item: any) => {
+      const changed = afterById.get(String(item.id));
+      return Boolean(
+        changed &&
+          (String(item.startsAt) !== String(changed.startsAt) ||
+            String(item.endsAt) !== String(changed.endsAt) ||
+            String(item.status) !== String(changed.status)),
+      );
+    })
+    .map((item: any) => String(item.id));
+  if (changedIds.length === 0) {
+    return { ok: true as const, status: "coach_only", notifications: [] };
+  }
+
+  const bookingsResult = await admin
+    .from("bookings")
+    .select("id, branch_id, member_id, operation_kind, status")
+    .eq("tenant_id", params.tenantId)
+    .in("id", changedIds);
+  if (bookingsResult.error) {
+    return { ok: false as const, status: "booking_lookup_failed", error: bookingsResult.error.message };
+  }
+  const members = new Map<
+    string,
+    { branchId: string | null; operationKind: string | null; cancelled: boolean }
+  >();
+  for (const booking of bookingsResult.data || []) {
+    if (!booking.member_id || booking.operation_kind !== "pt") continue;
+    const memberId = String(booking.member_id);
+    const current = members.get(memberId);
+    members.set(memberId, {
+      branchId: String(booking.branch_id || params.fallbackBranchId || "") || null,
+      operationKind: booking.operation_kind,
+      cancelled: Boolean(current?.cancelled || booking.status === "cancelled"),
+    });
+  }
+  const notifications = await Promise.all(
+    [...members.entries()].map(([memberId, booking]) =>
+      notifyFormalScheduleMutation({
+        tenantId: params.tenantId,
+        branchId: booking.branchId,
+        memberId,
+        operationKind: booking.operationKind,
+        eventKind: booking.cancelled ? "cancelled" : "updated",
+        dedupeKey: `${params.dedupePrefix}:${params.operationId}:${memberId}`,
+        actorId: params.actorId,
+      }),
+    ),
+  );
+  return { ok: notifications.every((notification) => notification.ok), status: "processed", notifications };
 }
 
 function faFeeRecipientLabel(profile: {
@@ -754,6 +889,74 @@ async function attachScheduleMemberRelationships(tenantId: string, members: any[
   }));
 }
 
+async function loadBigeOperationsDashboard(
+  tenantId: string,
+  context: ProfileContext,
+) {
+  const walkInPaymentAllowed = canUseBigeWalkInPayments({
+    ...context,
+    employeeNumber: context.employeeNumber,
+  });
+  const admin = createSupabaseAdminClient();
+  const [lineBindingsResult, walkInOperationsResult] = await Promise.all([
+    canCreateBigeContract(context.employeeNumber)
+      ? admin
+          .from("bige_line_group_bindings")
+          .select("id, member_id, group_name, status, verified_at, last_seen_at")
+          .eq("tenant_id", tenantId)
+          .in("status", ["pending", "active"])
+          .order("last_seen_at", { ascending: false })
+          .limit(1000)
+      : Promise.resolve({ data: [], error: null }),
+    walkInPaymentAllowed
+      ? admin
+          .from("bige_walk_in_payment_operations")
+          .select("id, member_id, contract_id, payment_ids, payment_type, status, total_amount, business_date, actor_employee_number, actor_name, created_at, member:members(full_name)")
+          .eq("tenant_id", tenantId)
+          .eq("business_date", toTaipeiDateString())
+          .eq("status", "recorded")
+          .order("created_at", { ascending: false })
+          .limit(500)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (lineBindingsResult.error) throw new Error(lineBindingsResult.error.message);
+  if (walkInOperationsResult.error) throw new Error(walkInOperationsResult.error.message);
+
+  const rawWalkInOperations = walkInOperationsResult.data || [];
+  const walkInPaymentIds = Array.from(
+    new Set(
+      rawWalkInOperations.flatMap((operation: any) =>
+        Array.isArray(operation.payment_ids) ? operation.payment_ids.map(String) : [],
+      ),
+    ),
+  );
+  const paymentStatuses = walkInPaymentIds.length
+    ? await admin
+        .from("bige_contract_payments")
+        .select("id, status")
+        .in("id", walkInPaymentIds)
+    : { data: [], error: null };
+  if (paymentStatuses.error) throw new Error(paymentStatuses.error.message);
+  const recordedPaymentIds = new Set(
+    (paymentStatuses.data || [])
+      .filter((payment) => payment.status === "recorded")
+      .map((payment) => String(payment.id)),
+  );
+  const walkInPayments = rawWalkInOperations.filter((operation: any) => {
+    const paymentIds = Array.isArray(operation.payment_ids)
+      ? operation.payment_ids.map(String)
+      : [];
+    return paymentIds.length > 0 && paymentIds.every((id: string) => recordedPaymentIds.has(id));
+  });
+
+  return {
+    canUseWalkInPayments: walkInPaymentAllowed,
+    lineGroupBindings: lineBindingsResult.data || [],
+    walkInPaymentCount: walkInPayments.length,
+    walkInPayments,
+  };
+}
+
 export async function GET(request: Request) {
   const requestStartedAt = performance.now();
   const auth = await resolveAuth(request);
@@ -780,6 +983,17 @@ export async function GET(request: Request) {
   const branchId = hasAllCoachScheduleAccess
     ? requestedBranchId
     : requestedBranchId || auth.context.branchId;
+  if (url.searchParams.get("operations") === "1") {
+    try {
+      return apiSuccess(await loadBigeOperationsDashboard(tenantId, auth.context));
+    } catch (error) {
+      return apiError(
+        500,
+        "INTERNAL_ERROR",
+        error instanceof Error ? error.message : "讀取現場收款資料失敗",
+      );
+    }
+  }
   if (url.searchParams.get("faFeeRecipients") === "1") {
     const recipientsResult = await auth.supabase
       .from("profiles")
@@ -1982,6 +2196,10 @@ export async function POST(request: Request) {
     if (!openDay.open) {
       return apiError(409, "FORBIDDEN", openDay.setting?.closure_label || "當日館休，不能新增排課");
     }
+    if (input.operationKind === "pt" && input.memberId) {
+      const bindingError = await requireFormalScheduleLineBinding(tenantId, input.memberId);
+      if (bindingError) return apiError(409, "FORBIDDEN", bindingError);
+    }
     const result = await auth.supabase.rpc("bige_create_schedule_booking_v2", {
       p_tenant_id: tenantId,
       p_branch_id: input.branchId || auth.context.branchId,
@@ -1997,7 +2215,16 @@ export async function POST(request: Request) {
       p_idempotency_key: input.idempotencyKey,
     });
     if (result.error) return handleDatabaseError(result.error, "建立排課失敗");
-    return apiSuccess({ item: result.data });
+    const lineNotification = await notifyFormalScheduleMutation({
+      tenantId,
+      branchId: input.branchId || auth.context.branchId,
+      memberId: input.memberId,
+      operationKind: input.operationKind,
+      eventKind: "created",
+      dedupeKey: `create:${input.idempotencyKey}`,
+      actorId: auth.context.userId,
+    });
+    return apiSuccess({ item: result.data, lineNotification });
   }
 
   if (input.action === "check_schedule_batch") {
@@ -2170,6 +2397,10 @@ export async function POST(request: Request) {
     }
 
     const startsAtValues = [...new Set(input.startsAt)].sort();
+    if (input.operationKind === "pt") {
+      const bindingError = await requireFormalScheduleLineBinding(tenantId, input.memberId);
+      if (bindingError) return apiError(409, "FORBIDDEN", bindingError);
+    }
     const created: Array<{ startsAt: string; item: unknown }> = [];
     const failures: Array<{ startsAt: string; message: string }> = [];
 
@@ -2242,7 +2473,18 @@ export async function POST(request: Request) {
       },
     });
 
-    return apiSuccess({ created, failures });
+    const lineNotification = created.length
+      ? await notifyFormalScheduleMutation({
+          tenantId,
+          branchId: input.branchId || auth.context.branchId,
+          memberId: input.memberId,
+          operationKind: input.operationKind,
+          eventKind: "created",
+          dedupeKey: `batch:${input.idempotencyKey}`,
+          actorId: auth.context.userId,
+        })
+      : { ok: true as const, status: "no_created_bookings" };
+    return apiSuccess({ created, failures, lineNotification });
   }
 
   if (input.action === "create_note") {
@@ -2284,7 +2526,7 @@ export async function POST(request: Request) {
     }
     const bookingResult = await auth.supabase
       .from("bookings")
-      .select("id, tenant_id, branch_id, operation_kind, status")
+      .select("id, tenant_id, branch_id, member_id, coach_id, operation_kind, course_type, starts_at, ends_at, note, status")
       .eq("id", input.bookingId)
       .eq("tenant_id", tenantId)
       .eq("is_bige_schedule", true)
@@ -2364,14 +2606,29 @@ export async function POST(request: Request) {
     const result = await auth.supabase
       .from("bookings")
       .select(
-        "id, member_id, coach_id, service_name, starts_at, ends_at, status, note, operation_kind, course_type, trial_stage, operation_result, reminder_status, converted_at, bb_conversion_outcome, operation_idempotency_key",
+        "id, branch_id, member_id, coach_id, service_name, starts_at, ends_at, status, note, operation_kind, course_type, trial_stage, operation_result, reminder_status, converted_at, bb_conversion_outcome, operation_idempotency_key",
       )
       .eq("id", input.bookingId)
       .eq("tenant_id", tenantId)
       .eq("is_bige_schedule", true)
       .single();
     if (result.error) return handleDatabaseError(result.error, "讀取排課變更失敗");
-    return apiSuccess({ item: { ...result.data, warnings: scheduleWarnings } });
+    const studentVisibleChange =
+      bookingResult.data.starts_at !== result.data.starts_at ||
+      bookingResult.data.ends_at !== result.data.ends_at ||
+      bookingResult.data.course_type !== result.data.course_type;
+    const lineNotification = studentVisibleChange
+      ? await notifyFormalScheduleMutation({
+          tenantId,
+          branchId: result.data.branch_id || auth.context.branchId,
+          memberId: result.data.member_id,
+          operationKind: result.data.operation_kind,
+          eventKind: "updated",
+          dedupeKey: `edit:${input.bookingId}:${result.data.starts_at}:${result.data.course_type || "none"}`,
+          actorId: auth.context.userId,
+        })
+      : { ok: true as const, status: "internal_only" };
+    return apiSuccess({ item: { ...result.data, warnings: scheduleWarnings }, lineNotification });
   }
 
   if (input.action === "edit_schedule_note") {
@@ -2633,6 +2890,16 @@ export async function POST(request: Request) {
     if (!openDay.open) {
       return apiError(409, "FORBIDDEN", openDay.setting?.closure_label || "當日館休，不能拖拉課程");
     }
+    const sourceBookingResult = await createSupabaseAdminClient()
+      .from("bookings")
+      .select("id, branch_id, member_id, operation_kind, starts_at")
+      .eq("id", input.bookingId)
+      .eq("tenant_id", tenantId)
+      .eq("is_bige_schedule", true)
+      .maybeSingle();
+    if (sourceBookingResult.error || !sourceBookingResult.data) {
+      return apiError(404, "FORBIDDEN", "找不到要移動的課程");
+    }
     const startedAt = performance.now();
     const result = await auth.supabase.rpc("bige_drag_schedule_booking", {
       p_tenant_id: tenantId,
@@ -2654,7 +2921,17 @@ export async function POST(request: Request) {
       durationMs: Math.round(performance.now() - startedAt),
       itemCount: Array.isArray(result.data?.items) ? result.data.items.length : 0,
     });
-    return apiSuccess({ item: result.data });
+    const moveOperationId = String(result.data?.operationId || "");
+    const lineNotification = moveOperationId
+      ? await notifyScheduleMoveMutation({
+          tenantId,
+          operationId: moveOperationId,
+          dedupePrefix: "move",
+          actorId: auth.context.userId,
+          fallbackBranchId: sourceBookingResult.data.branch_id || auth.context.branchId,
+        })
+      : { ok: false as const, status: "operation_id_missing" };
+    return apiSuccess({ item: result.data, lineNotification });
   }
 
   if (input.action === "undo_schedule_booking_move") {
@@ -2666,7 +2943,14 @@ export async function POST(request: Request) {
       p_operation_id: input.operationId,
     });
     if (result.error) return handleDatabaseError(result.error, "復原課表移動失敗");
-    return apiSuccess({ item: result.data });
+    const lineNotification = await notifyScheduleMoveMutation({
+      tenantId,
+      operationId: input.operationId,
+      dedupePrefix: "undo",
+      actorId: auth.context.userId,
+      fallbackBranchId: auth.context.branchId,
+    });
+    return apiSuccess({ item: result.data, lineNotification });
   }
 
   if (input.action === "create_plan") {
@@ -2733,7 +3017,7 @@ export async function POST(request: Request) {
 
   if (input.action === "create_contract") {
     if (!canCreateBigeContract(operationContext.employeeNumber)) {
-      return apiError(403, "FORBIDDEN", "員工編號 06 不能建立正式會員與合約");
+      return apiError(403, "FORBIDDEN", "目前帳號不能建立正式會員與合約");
     }
     if (!input.sourceMemberBookingId && input.emailUnavailable && input.email) {
       return apiError(400, "FORBIDDEN", "已有 Email 時請不要勾選沒有 Email");
@@ -2770,7 +3054,7 @@ export async function POST(request: Request) {
       contractTotalSessions = Number(planResult.data.total_sessions || 0);
     }
     const requiresInitialPayment = Boolean(
-      input.sourceBookingId || input.sourceMemberBookingId,
+      input.sourceBookingId || input.sourceMemberBookingId || input.walkIn,
     );
     const minimumInitialPayment = requiresInitialPayment
       ? calculateMinimumDeposit(contractTotalAmount, contractTotalSessions)
@@ -2953,19 +3237,23 @@ export async function POST(request: Request) {
       p_payment_schedule: input.paymentSchedule,
     };
     const result = sourceOperationKind === "bb"
-      ? await operationSupabase.rpc("bige_create_bb_member_contract_v1", {
+      ? await operationSupabase.rpc("bige_create_bb_member_contract_v2", {
           ...sharedContractParams,
           p_source_booking_id: input.sourceBookingId,
+          p_line_binding_id: input.lineGroupBindingId,
         })
-      : await operationSupabase.rpc("bige_create_member_contract_v6", {
+      : await operationSupabase.rpc("bige_create_member_contract_v7", {
           ...sharedContractParams,
           p_source_booking_id: input.sourceBookingId || null,
           p_future_trial_action: input.futureTrialAction || "none",
           p_fa_fee_recipient_profile_id: input.faFeeRecipientProfileId || null,
           p_fa_fee_recipient_name: input.faFeeRecipientName || null,
           p_sales_origin_coach_id: trustedSalesOriginCoachId,
-          p_sales_origin_kind: sourceOperationKind === "trial" ? "fa" : input.sourceMemberBookingId ? "renewal" : "manual",
+          p_sales_origin_kind: sourceOperationKind === "trial" ? "fa" : input.sourceMemberBookingId || input.walkIn ? "renewal" : "manual",
           p_payment_source_booking_id: input.sourceBookingId || input.sourceMemberBookingId || null,
+          p_line_binding_id: input.lineGroupBindingId,
+          p_walk_in: input.walkIn,
+          p_walk_in_idempotency_key: input.walkInIdempotencyKey || null,
         });
     if (result.error) return handleDatabaseError(result.error, "建立正式會員失敗");
 
@@ -3017,6 +3305,28 @@ export async function POST(request: Request) {
     }
 
     return apiSuccess({ item: result.data, profileChangeNotification });
+  }
+
+  if (input.action === "record_walk_in_payment") {
+    if (!canUseBigeWalkInPayments({
+      ...operationContext,
+      employeeNumber: operationContext.employeeNumber,
+    })) {
+      return apiError(403, "FORBIDDEN", "只有員工 06、教練組長以上或主管能使用現場收款");
+    }
+    const result = await operationSupabase.rpc("bige_record_walk_in_payments_v1", {
+      p_tenant_id: tenantId,
+      p_branch_id: input.branchId || auth.context.branchId,
+      p_member_id: input.memberId,
+      p_contract_id: input.contractId,
+      p_payment_kind: input.paymentKind,
+      p_payments: input.payments,
+      p_paid_at: input.paidAt || new Date().toISOString(),
+      p_idempotency_key: input.idempotencyKey,
+      p_note: input.note || "現場收款｜尾款 PTP",
+    });
+    if (result.error) return handleDatabaseError(result.error, "現場收款紀錄失敗");
+    return apiSuccess({ item: result.data });
   }
 
   if (input.action === "record_payment") {
@@ -3488,7 +3798,24 @@ export async function POST(request: Request) {
       p_booking_id: input.bookingId,
     });
     if (result.error) return handleDatabaseError(result.error, "復原課程失敗");
-    return apiSuccess({ item: result.data });
+    const restoredBooking = await createSupabaseAdminClient()
+      .from("bookings")
+      .select("branch_id, member_id, operation_kind")
+      .eq("tenant_id", tenantId)
+      .eq("id", input.bookingId)
+      .maybeSingle();
+    const lineNotification = restoredBooking.error || !restoredBooking.data
+      ? { ok: false as const, status: "booking_lookup_failed", error: restoredBooking.error?.message }
+      : await notifyFormalScheduleMutation({
+          tenantId,
+          branchId: restoredBooking.data.branch_id || auth.context.branchId,
+          memberId: restoredBooking.data.member_id,
+          operationKind: restoredBooking.data.operation_kind,
+          eventKind: "updated",
+          dedupeKey: `restore-cancelled:${input.bookingId}:${crypto.randomUUID()}`,
+          actorId: auth.context.userId,
+        });
+    return apiSuccess({ item: result.data, lineNotification });
   }
 
   if (input.action === "restore_no_show_booking") {
@@ -3509,7 +3836,7 @@ export async function POST(request: Request) {
     const bookingResult = await auth.supabase
       .from("bookings")
       .select(
-        "id, tenant_id, coach_id, operation_kind, starts_at, ends_at, status, converted_contract_id",
+        "id, tenant_id, branch_id, member_id, coach_id, operation_kind, starts_at, ends_at, status, converted_contract_id",
       )
       .eq("id", input.bookingId)
       .eq("tenant_id", tenantId)
@@ -3580,7 +3907,16 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (result.error) return handleDatabaseError(result.error, "刪除預約失敗");
     if (!result.data) return apiError(409, "FORBIDDEN", "預約狀態已變更，請重新整理後再試");
-    return apiSuccess({ item: result.data });
+    const lineNotification = await notifyFormalScheduleMutation({
+      tenantId,
+      branchId: booking.branch_id || auth.context.branchId,
+      memberId: booking.member_id,
+      operationKind: booking.operation_kind,
+      eventKind: "cancelled",
+      dedupeKey: `delete:${booking.id}:${now}`,
+      actorId: auth.context.userId,
+    });
+    return apiSuccess({ item: result.data, lineNotification });
   }
 
   if (input.action === "update_schedule") {
@@ -3589,7 +3925,7 @@ export async function POST(request: Request) {
     }
     const bookingResult = await auth.supabase
       .from("bookings")
-      .select("id, tenant_id, coach_id, operation_kind, starts_at, ends_at, status")
+      .select("id, tenant_id, branch_id, member_id, coach_id, operation_kind, starts_at, ends_at, status")
       .eq("id", input.bookingId)
       .eq("tenant_id", tenantId)
       .eq("is_bige_schedule", true)
@@ -3660,7 +3996,21 @@ export async function POST(request: Request) {
       .select("id, status, operation_result")
       .single();
     if (result.error) return handleDatabaseError(result.error, "更新課程狀態失敗");
-    return apiSuccess({ item: result.data });
+    const shouldNotifyCancellation =
+      booking.operation_kind === "pt" &&
+      (input.result === "cancelled" || input.result === "rescheduled");
+    const lineNotification = shouldNotifyCancellation
+      ? await notifyFormalScheduleMutation({
+          tenantId,
+          branchId: booking.branch_id || auth.context.branchId,
+          memberId: booking.member_id,
+          operationKind: booking.operation_kind,
+          eventKind: "cancelled",
+          dedupeKey: `status:${booking.id}:${input.result}:${String(updates.updated_at)}`,
+          actorId: auth.context.userId,
+        })
+      : { ok: true as const, status: "not_applicable" };
+    return apiSuccess({ item: result.data, lineNotification });
   }
 
   if (input.action === "update_reminder") {

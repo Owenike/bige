@@ -417,6 +417,7 @@ test("legacy purchase-date updates require a contract id and a real date", () =>
 test("member contracts accept ECPay and ECPay installment payment methods", () => {
   const baseInput = {
     action: "create_contract" as const,
+    lineGroupBindingId: "00000000-0000-4000-8000-000000000099",
     fullName: "測試會員",
     phone: "0912345678",
     birthDate: "1990-01-01",
@@ -454,6 +455,7 @@ test("member contracts accept ECPay and ECPay installment payment methods", () =
 test("FA contracts may be created before a missing birthday is completed", () => {
   const result = createContractSchema.safeParse({
     action: "create_contract",
+    lineGroupBindingId: "00000000-0000-4000-8000-000000000099",
     memberId: "00000000-0000-4000-8000-000000000001",
     sourceBookingId: "00000000-0000-4000-8000-000000000002",
     fullName: "林佳琪",
@@ -473,11 +475,11 @@ test("FA contracts may be created before a missing birthday is completed", () =>
   assert.equal(result.success, true);
 });
 
-test("all valid employee accounts except 06 may create a BIG E contract", () => {
+test("all valid employee accounts including 06 may create a BIG E contract", () => {
   assert.equal(canCreateBigeContract("01"), true);
   assert.equal(canCreateBigeContract("02"), true);
-  assert.equal(canCreateBigeContract("E000006"), false);
-  assert.equal(canCreateBigeContract("06"), false);
+  assert.equal(canCreateBigeContract("E000006"), true);
+  assert.equal(canCreateBigeContract("06"), true);
   assert.equal(canCreateBigeContract("member"), false);
 });
 
@@ -528,6 +530,7 @@ test("FA fee amount follows the original trial service instead of the normalized
 test("contract schema leaves FA versus BB recipient validation to the trusted booking lookup", () => {
   const baseInput = {
     action: "create_contract" as const,
+    lineGroupBindingId: "00000000-0000-4000-8000-000000000099",
     fullName: "測試會員",
     phone: "0912345678",
     birthDate: "1990-01-01",
@@ -959,6 +962,7 @@ test("custom contract plans support all course allocations and an independent pr
   assert.equal(
     createContractSchema.safeParse({
       action: "create_contract",
+      lineGroupBindingId: "00000000-0000-4000-8000-000000000099",
       fullName: "測試會員",
       phone: "0912345678",
       birthDate: "1990-01-01",
@@ -1037,6 +1041,7 @@ test("one receipt can contain multiple validated payment methods", () => {
   assert.equal(
     createContractSchema.safeParse({
       action: "create_contract",
+      lineGroupBindingId: "00000000-0000-4000-8000-000000000099",
       fullName: "多元付款會員",
       phone: "0912345678",
       birthDate: "1990-01-01",
@@ -1054,6 +1059,7 @@ test("one receipt can contain multiple validated payment methods", () => {
   assert.equal(
     createContractSchema.safeParse({
       action: "create_contract",
+      lineGroupBindingId: "00000000-0000-4000-8000-000000000099",
       fullName: "合計錯誤會員",
       phone: "0912345678",
       birthDate: "1990-01-01",
@@ -1112,6 +1118,7 @@ test("schedule student payments carry the source booking for server-side identit
   assert.equal(
     createContractSchema.safeParse({
       action: "create_contract",
+      lineGroupBindingId: "00000000-0000-4000-8000-000000000099",
       memberId: "00000000-0000-4000-8000-000000000002",
       sourceMemberBookingId: sourceBookingId,
       fullName: "系統將以資料庫姓名覆蓋",
@@ -1169,7 +1176,7 @@ test("FA and BB conversions use their source booking while member payments keep 
     route,
     /sourceBookingResult\.data\.operation_kind === "trial"[\s\S]*FA 付款的款項類型固定為新單 New/,
   );
-  assert.match(route, /sourceOperationKind === "bb"[\s\S]*bige_create_bb_member_contract_v1/);
+  assert.match(route, /sourceOperationKind === "bb"[\s\S]*bige_create_bb_member_contract_v2/);
 });
 
 test("tablet payment and plan number inputs preserve the in-progress text value", () => {
@@ -1267,6 +1274,7 @@ test("contract payments cannot exceed the contract total or outstanding balance"
 test("FA conversion cannot create a zero-payment contract while direct contracts remain allowed", () => {
   const baseInput = {
     action: "create_contract" as const,
+    lineGroupBindingId: "00000000-0000-4000-8000-000000000099",
     fullName: "測試會員",
     phone: "0912345678",
     birthDate: "1990-01-01",
@@ -1333,9 +1341,12 @@ test("FA payment and not-converted actions capture one atomic fee recipient", ()
   assert.match(component, /list="fa-fee-recipient-options"/);
   assert.match(component, /選擇員工或自行輸入/);
   assert.match(component, /\/api\/bige-fitness\?faFeeRecipients=1/);
-  assert.match(route, /bige_create_member_contract_v6/);
+  assert.match(route, /bige_create_member_contract_v7/);
   assert.match(route, /p_sales_origin_coach_id: trustedSalesOriginCoachId/);
-  assert.match(route, /p_sales_origin_kind: sourceOperationKind === "trial" \? "fa" : input\.sourceMemberBookingId \? "renewal" : "manual"/);
+  assert.match(
+    route,
+    /p_sales_origin_kind: sourceOperationKind === "trial" \? "fa" : input\.sourceMemberBookingId \|\| input\.walkIn \? "renewal" : "manual"/,
+  );
   assert.match(route, /bige_complete_trial_outcome_v2/);
   assert.match(migration, /trial_service = 'sports_massage' then 1500 else 880/);
   assert.match(migration, /contract_result := public\.bige_create_member_contract_v3/);
@@ -2165,7 +2176,7 @@ test("schedule-origin contracts use the source business date and ECPay installme
     component,
     /toTaipeiDateString\(new Date\(selectedBooking\.starts_at\)\)/,
   );
-  assert.match(route, /rpc\("bige_create_member_contract_v6"/);
+  assert.match(route, /rpc\("bige_create_member_contract_v7"/);
   assert.match(route, /const trustedSignedOn = trustedSourceBusinessDate \|\| input\.signedOn/);
   assert.match(route, /rpc\("bige_record_contract_payment_v3"/);
   assert.match(route, /p_source_booking_id: input\.sourceBookingId \|\| null/);
@@ -2189,7 +2200,7 @@ test("BB is bound to a completed non-converted FA and never becomes a lesson, FA
   assert.match(component, /action: "complete_bb_outcome"/);
   assert.match(component, /BB 成交已完成[\s\S]*本筆不產生 EPO/);
   assert.match(route, /url\.searchParams\.get\("trialScope"\) === "bb"/);
-  assert.match(route, /bige_create_bb_member_contract_v1/);
+  assert.match(route, /bige_create_bb_member_contract_v2/);
   assert.match(route, /bige_complete_bb_outcome_v1/);
   assert.match(migration, /operation_kind = 'bb'/);
   assert.match(migration, /trial_conversion_outcome = 'not_converted'/);

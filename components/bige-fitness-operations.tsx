@@ -152,6 +152,7 @@ type DialogName =
   | "monthly-schedule-confirm"
   | "monthly-schedule-result"
   | "activity"
+  | "walk-in-payment"
   | null;
 type SessionIdentity = {
   displayName: string | null;
@@ -388,11 +389,33 @@ type MemberDetail = {
   canManageCourseAllocations?: boolean;
 };
 type StudentPaymentContext = {
-  bookingId: string;
+  bookingId: string | null;
   memberId: string;
   paymentType: "new" | "renewal" | "balance";
   amount: string;
   contractId: string;
+  source: "schedule" | "walk_in";
+};
+type LineGroupBinding = {
+  id: string;
+  member_id: string | null;
+  group_name: string;
+  status: "pending" | "active";
+  verified_at: string | null;
+  last_seen_at: string;
+};
+type WalkInPaymentOperation = {
+  id: string;
+  member_id: string;
+  contract_id: string;
+  payment_type: "balance" | "renewal";
+  status: string;
+  total_amount: number;
+  business_date: string;
+  actor_employee_number: string | null;
+  actor_name: string | null;
+  created_at: string;
+  member?: { full_name?: string | null } | null;
 };
 type PaymentEntryDraft = {
   id: string;
@@ -427,6 +450,7 @@ export type BoardData = {
   canEditContractPayment?: boolean;
   canManageCourseAllocations?: boolean;
   canCreateContract?: boolean;
+  canUseWalkInPayments?: boolean;
   canChangeTrialConversion?: boolean;
   canRestoreTrialConversion?: boolean;
   canManageDailyReports?: boolean;
@@ -452,6 +476,9 @@ export type BoardData = {
   previewMemberDetails?: Record<string, MemberDetail>;
   trialBookings?: TrialBookingSummary[];
   plans: Plan[];
+  lineGroupBindings?: LineGroupBinding[];
+  walkInPaymentCount?: number;
+  walkInPayments?: WalkInPaymentOperation[];
   closure: null | {
     id: string;
     status: string;
@@ -462,6 +489,11 @@ export type BoardData = {
   expiringContracts: Contract[];
   legacyPurchaseDateReminders?: LegacyPurchaseDateReminder[];
 };
+
+type OperationsDashboard = Pick<
+  BoardData,
+  "canUseWalkInPayments" | "lineGroupBindings" | "walkInPaymentCount" | "walkInPayments"
+>;
 
 function createPaymentEntryDraft(amount = ""): PaymentEntryDraft {
   return {
@@ -1618,6 +1650,12 @@ export default function BigeFitnessOperations({
   const boardCacheRef = useRef<Map<string, BoardData>>(new Map());
   const boardRequestsRef = useRef<Map<string, Promise<BoardData>>>(new Map());
   const boardRevisionRef = useRef(new Map<string, number>());
+  const operationsDashboardRef = useRef<OperationsDashboard>({
+    canUseWalkInPayments: previewData?.canUseWalkInPayments,
+    lineGroupBindings: previewData?.lineGroupBindings || [],
+    walkInPaymentCount: previewData?.walkInPaymentCount || 0,
+    walkInPayments: previewData?.walkInPayments || [],
+  });
   const boardPrefetchQueueRef = useRef<BigeBoardPrefetchQueue | null>(null);
   if (!boardPrefetchQueueRef.current) {
     boardPrefetchQueueRef.current = new BigeBoardPrefetchQueue();
@@ -1749,26 +1787,45 @@ export default function BigeFitnessOperations({
   );
 
   const applyBoardData = useCallback((next: BoardData) => {
+    const merged = { ...next, ...operationsDashboardRef.current };
     hasBoardRef.current = true;
     for (const [memberId, detail] of Object.entries(
-      next.paymentDetailsByMemberId || {},
+      merged.paymentDetailsByMemberId || {},
     )) {
       scheduleMemberDetailCacheRef.current.set(memberId, detail);
     }
     startTransition(() => {
-      setData(next);
+      setData(merged);
       setSelectedCoach((current) => {
-        if (next.coachScheduleScope === "all") {
-          return current === "all" || next.coaches.some((coach) => coach.id === current)
+        if (merged.coachScheduleScope === "all") {
+          return current === "all" || merged.coaches.some((coach) => coach.id === current)
             ? current
             : "all";
         }
-        return next.coaches.some((coach) => coach.id === current)
+        return merged.coaches.some((coach) => coach.id === current)
           ? current
-          : next.coaches[0]?.id || "";
+          : merged.coaches[0]?.id || "";
       });
     });
   }, []);
+
+  const loadOperationsDashboard = useCallback(async () => {
+    if (previewData) return operationsDashboardRef.current;
+    const response = await fetch("/api/bige-fitness?operations=1", { cache: "no-store" });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(apiMessage(payload, "讀取現場收款資料失敗"));
+    const next = (payload.data || payload) as OperationsDashboard;
+    operationsDashboardRef.current = {
+      canUseWalkInPayments: next.canUseWalkInPayments,
+      lineGroupBindings: next.lineGroupBindings || [],
+      walkInPaymentCount: next.walkInPaymentCount || 0,
+      walkInPayments: next.walkInPayments || [],
+    };
+    startTransition(() => {
+      setData((current) => current ? { ...current, ...operationsDashboardRef.current } : current);
+    });
+    return operationsDashboardRef.current;
+  }, [previewData]);
 
   const requestBoard = useCallback(async (targetDate: string, preferCache = false) => {
     if (previewData) return previewData;
@@ -1985,6 +2042,16 @@ export default function BigeFitnessOperations({
       preferCache: true,
     });
   }, [date, loadBoard]);
+
+  useEffect(() => {
+    if (previewData) return;
+    void loadOperationsDashboard().catch((caught) => {
+      console.warn(
+        "[bige-fitness] operations dashboard unavailable",
+        caught instanceof Error ? caught.message : caught,
+      );
+    });
+  }, [loadOperationsDashboard, previewData]);
 
   useEffect(() => () => {
     boardPrefetchQueueRef.current?.clear();
@@ -4285,6 +4352,7 @@ export default function BigeFitnessOperations({
     paymentMethod: "cash",
     installmentCount: null as number | null,
     futureTrialAction: "convert_to_pt",
+    lineGroupBindingId: "",
   });
   const [customContractPlan, setCustomContractPlan] = useState<CustomContractPlanDraft>(() =>
     customContractPlanFrom(),
@@ -4296,6 +4364,10 @@ export default function BigeFitnessOperations({
   const [contractError, setContractError] = useState("");
   const [studentPaymentContext, setStudentPaymentContext] =
     useState<StudentPaymentContext | null>(null);
+  const [walkInMemberSearch, setWalkInMemberSearch] = useState("");
+  const [walkInAmountVisibleId, setWalkInAmountVisibleId] = useState<string | null>(null);
+  const [walkInStartingMemberId, setWalkInStartingMemberId] = useState<string | null>(null);
+  const [walkInError, setWalkInError] = useState("");
   const selectedPlan = data?.plans.find((plan) => plan.id === contractDraft.planId);
   const maximumInitialPayment =
     contractDraft.planMode === "custom"
@@ -4310,6 +4382,21 @@ export default function BigeFitnessOperations({
     contractPlanTotalSessions,
   );
   const contractPaymentTotal = paymentEntryTotal(contractPaymentEntries);
+  const availableContractLineBindings = (data?.lineGroupBindings || []).filter(
+    (binding) =>
+      (binding.status === "pending" &&
+        (!binding.member_id || binding.member_id === selectedMember?.id)) ||
+      (binding.status === "active" && binding.member_id === selectedMember?.id),
+  );
+  const walkInMemberResults = (data?.members || [])
+    .filter((member) => {
+      const keyword = walkInMemberSearch.trim().toLowerCase();
+      if (!keyword) return true;
+      return [member.full_name, member.phone, member.member_code, ...(member.legacy_numbers || [])]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(keyword));
+    })
+    .slice(0, 40);
   const selectedConversionBooking =
     selectedBooking?.operation_kind === "trial" || selectedBooking?.operation_kind === "bb";
   const contractPaymentRequired = Boolean(
@@ -4326,6 +4413,9 @@ export default function BigeFitnessOperations({
       member: target,
     });
     const missingProfileFields = getBigeTrialContractMissingProfileFields(identity);
+    const activeLineBinding = data?.lineGroupBindings?.find(
+      (binding) => binding.status === "active" && binding.member_id === target?.id,
+    );
     setStudentPaymentContext(null);
     setSelectedBooking(booking || null);
     setSelectedMember(target || null);
@@ -4344,6 +4434,7 @@ export default function BigeFitnessOperations({
       initialPayment: 0,
       paymentMethod: "cash",
       installmentCount: null,
+      lineGroupBindingId: activeLineBinding?.id || "",
     }));
     setContractPaymentEntries([createPaymentEntryDraft()]);
     setCustomContractPlan(customContractPlanFrom(data?.plans[0]));
@@ -4385,7 +4476,50 @@ export default function BigeFitnessOperations({
             : "renewal",
       amount: "",
       contractId: outstandingContracts[0]?.contract.id || "",
+      source: "schedule",
     });
+  };
+
+  const openWalkInMemberPayment = async (
+    member: Member,
+    paymentType: "balance" | "renewal",
+  ) => {
+    setWalkInError("");
+    setWalkInStartingMemberId(member.id);
+    try {
+      const detail = await loadScheduleMemberDetail(member.id);
+      if (!detail) throw new Error("讀取學員合約資料失敗");
+      const outstandingContracts = detail.contracts
+        .map((contract) => ({
+          contract,
+          outstanding: calculateBigeContractOutstandingBalance(
+            contract.total_amount,
+            detail.payments.filter((payment) => payment.contract_id === contract.id),
+          ),
+          eligible: isBigeContractEligibleForPayment({
+            contractStatus: contract.status,
+            payments: detail.payments.filter((payment) => payment.contract_id === contract.id),
+          }),
+        }))
+        .filter((item) => item.outstanding > 0 && item.eligible);
+      if (paymentType === "balance" && outstandingContracts.length === 0) {
+        throw new Error("這位學員目前沒有可支付的尾款，請改選續約 Re");
+      }
+      openContract(undefined, member);
+      setStudentPaymentContext({
+        bookingId: null,
+        memberId: member.id,
+        paymentType,
+        amount: "",
+        contractId: outstandingContracts[0]?.contract.id || "",
+        source: "walk_in",
+      });
+    } catch (caught) {
+      setWalkInError(caught instanceof Error ? caught.message : "無法開啟現場收款");
+      setDialog("walk-in-payment");
+    } finally {
+      setWalkInStartingMemberId(null);
+    }
   };
 
   const submitContract = async (
@@ -4433,22 +4567,38 @@ export default function BigeFitnessOperations({
       }
       setContractSubmitting(true);
       try {
+        const walkInBalance = studentPaymentContext.source === "walk_in";
         await post(
-          {
-            action: "record_payments",
-            contractId: targetContract.id,
-            sourceBookingId: studentPaymentContext.bookingId,
-            paymentKind: "balance",
-            payments,
-            idempotencyKey: `student-payment:${studentPaymentContext.bookingId}:${crypto.randomUUID()}`,
-            note: "學員課程付款｜尾款 PTP",
-          },
+          walkInBalance
+            ? {
+                action: "record_walk_in_payment",
+                memberId: studentPaymentContext.memberId,
+                contractId: targetContract.id,
+                paymentKind: "balance",
+                payments,
+                idempotencyKey: `walk-in-balance:${studentPaymentContext.memberId}:${crypto.randomUUID()}`,
+                note: "現場收款｜尾款 PTP",
+              }
+            : {
+                action: "record_payments",
+                contractId: targetContract.id,
+                sourceBookingId: studentPaymentContext.bookingId,
+                paymentKind: "balance",
+                payments,
+                idempotencyKey: `student-payment:${studentPaymentContext.bookingId}:${crypto.randomUUID()}`,
+                note: "學員課程付款｜尾款 PTP",
+              },
           { errorPresentation: "inline" },
         );
         setDialog(null);
         setStudentPaymentContext(null);
-        setSuccess("尾款 PTP 已記錄，付款與可用堂數已更新");
+        setSuccess(
+          walkInBalance
+            ? "現場尾款 PTP 已記錄；未建立課程，也不會發送 LINE 通知"
+            : "尾款 PTP 已記錄，付款與可用堂數已更新",
+        );
         await loadBoard({ silent: true });
+        if (walkInBalance) await loadOperationsDashboard();
         await loadScheduleMemberDetail(studentPaymentContext.memberId);
       } catch (caught) {
         setContractError(caught instanceof Error ? caught.message : "尾款付款失敗");
@@ -4502,8 +4652,14 @@ export default function BigeFitnessOperations({
           memberId: selectedMember?.id || null,
           sourceBookingId: selectedConversionBooking ? selectedBooking?.id || null : null,
           sourceMemberBookingId:
-            studentPaymentContext?.paymentType === "renewal"
+            studentPaymentContext?.paymentType === "renewal" &&
+            studentPaymentContext.source === "schedule"
               ? studentPaymentContext.bookingId
+              : null,
+          walkIn: studentPaymentContext?.source === "walk_in",
+          walkInIdempotencyKey:
+            studentPaymentContext?.source === "walk_in"
+              ? `walk-in-renewal:${studentPaymentContext.memberId}:${crypto.randomUUID()}`
               : null,
           ...contractDraft,
           signedOn:
@@ -4544,6 +4700,8 @@ export default function BigeFitnessOperations({
       };
       setDialog(null);
       const wasStudentRenewal = studentPaymentContext?.paymentType === "renewal";
+      const wasWalkInRenewal =
+        wasStudentRenewal && studentPaymentContext?.source === "walk_in";
       const wasFaNewPayment = studentPaymentContext?.paymentType === "new";
       const wasBbConversion = selectedBooking?.operation_kind === "bb";
       const paymentMemberId = studentPaymentContext?.memberId;
@@ -4551,7 +4709,9 @@ export default function BigeFitnessOperations({
       const notificationStatus = created.profileChangeNotification?.status;
       setSuccess(
         wasStudentRenewal
-          ? "續約 Re 已建立，新合約與本次付款已記錄"
+          ? wasWalkInRenewal
+            ? "現場續約 Re 已建立；未建立課程，也不會發送 LINE 通知"
+            : "續約 Re 已建立，新合約與本次付款已記錄"
           : wasBbConversion
             ? "BB 成交已完成，正式會員、合約與本次付款已記錄；本筆不產生 EPO"
           : wasFaNewPayment
@@ -4567,6 +4727,7 @@ export default function BigeFitnessOperations({
             : "正式會員、合約與堂數已建立",
       );
       await loadBoard();
+      await loadOperationsDashboard();
       if (paymentMemberId) {
         await loadScheduleMemberDetail(paymentMemberId);
       } else if (selectedMember) {
@@ -5464,6 +5625,26 @@ export default function BigeFitnessOperations({
           </div>
           {data ? (
             <div className={styles.businessDayControls}>
+              {tab === "schedule" && data.canUseWalkInPayments ? (
+                <button
+                  className={styles.walkInPaymentButton}
+                  type="button"
+                  onClick={() => {
+                    setWalkInMemberSearch("");
+                    setWalkInAmountVisibleId(null);
+                    setWalkInError("");
+                    setDialog("walk-in-payment");
+                  }}
+                >
+                  <CircleDollarSign size={16} aria-hidden="true" />
+                  現場收款
+                  {Number(data.walkInPaymentCount || 0) > 0 ? (
+                    <span className={styles.walkInPaymentBadge} aria-label={`本日已收款 ${data.walkInPaymentCount} 筆`}>
+                      {Number(data.walkInPaymentCount || 0) > 99 ? "99+" : data.walkInPaymentCount}
+                    </span>
+                  ) : null}
+                </button>
+              ) : null}
               <span
                 className={styles.frontdeskStatus}
                 title="櫃台人員將由班表自動帶入，此處不可修改"
@@ -7442,6 +7623,87 @@ export default function BigeFitnessOperations({
         </Dialog>
       ) : null}
 
+      {dialog === "walk-in-payment" && data ? (
+        <Dialog title={`現場收款｜${data.businessDate}`} onClose={() => setDialog(null)} wide>
+          <div className={styles.walkInWorkspace}>
+            <p className={styles.warning}>
+              此處只建立付款紀錄，不占用課表、不扣堂，也不會發送 LINE 課程通知。
+            </p>
+            {walkInError ? <p className={styles.error} role="alert">{walkInError}</p> : null}
+            <div className={styles.searchBox}>
+              <Search size={18} aria-hidden="true" />
+              <input
+                className={styles.input}
+                autoFocus
+                placeholder="搜尋學員姓名、電話或會員編號"
+                value={walkInMemberSearch}
+                onChange={(event) => setWalkInMemberSearch(event.target.value)}
+              />
+            </div>
+            <div className={styles.walkInMemberList}>
+              {walkInMemberResults.map((member) => (
+                <div className={styles.walkInMemberRow} key={member.id}>
+                  <div>
+                    <strong>{member.full_name}</strong>
+                    <span>{getBigeMemberDisplayNumber(member) || member.phone || "未設定會員編號"}</span>
+                  </div>
+                  <div className={styles.bookingStatusActions}>
+                    <button
+                      className={styles.button}
+                      type="button"
+                      disabled={walkInStartingMemberId === member.id}
+                      onClick={() => void openWalkInMemberPayment(member, "balance")}
+                    >
+                      尾款 PTP
+                    </button>
+                    <button
+                      className={`${styles.button} ${styles.gold}`}
+                      type="button"
+                      disabled={walkInStartingMemberId === member.id || !data.canCreateContract}
+                      onClick={() => void openWalkInMemberPayment(member, "renewal")}
+                    >
+                      續約 Re
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {walkInMemberResults.length === 0 ? (
+                <p className={styles.muted}>找不到符合的正式學員。</p>
+              ) : null}
+            </div>
+            <section className={styles.walkInHistory}>
+              <div className={styles.walkInHistoryHeader}>
+                <strong>本日現場收款</strong>
+                <span>{data.walkInPaymentCount || 0} 筆</span>
+              </div>
+              {(data.walkInPayments || []).map((operation) => (
+                <button
+                  className={styles.walkInHistoryRow}
+                  type="button"
+                  key={operation.id}
+                  onClick={() =>
+                    setWalkInAmountVisibleId((current) => current === operation.id ? null : operation.id)
+                  }
+                >
+                  <span>
+                    <strong>{operation.member?.full_name || "學員"}</strong>
+                    <small>{operation.payment_type === "balance" ? "尾款 PTP" : "續約 Re"}｜{formatDateTime(operation.created_at)}</small>
+                  </span>
+                  <strong>
+                    {walkInAmountVisibleId === operation.id
+                      ? formatMoney(operation.total_amount)
+                      : "點開看金額"}
+                  </strong>
+                </button>
+              ))}
+              {(data.walkInPayments || []).length === 0 ? (
+                <p className={styles.muted}>本日尚無現場收款。</p>
+              ) : null}
+            </section>
+          </div>
+        </Dialog>
+      ) : null}
+
       {dialog === "contract" && data ? (
         <Dialog
           background={faFeeRecipientPrompt?.action === "confirm_payment"}
@@ -7498,6 +7760,31 @@ export default function BigeFitnessOperations({
                 {missingContractIdentityFields.join("、")}，請先由主管至會員個資補齊後再建立合約。
               </p>
             ) : null}
+            <label className={`${styles.field} ${styles.fieldFull}`}>
+              <span className={styles.label}>學員專屬 LINE 群組</span>
+              <select
+                className={styles.select}
+                required
+                value={contractDraft.lineGroupBindingId}
+                onChange={(event) =>
+                  setContractDraft({
+                    ...contractDraft,
+                    lineGroupBindingId: event.target.value,
+                  })
+                }
+              >
+                <option value="">請人工確認並選擇群組（不會依名稱自動綁定）</option>
+                {availableContractLineBindings.map((binding) => (
+                  <option key={binding.id} value={binding.id}>
+                    {binding.group_name}
+                    {binding.status === "active" ? "（已綁定此學員）" : "（待綁定）"}
+                  </option>
+                ))}
+              </select>
+              <small className={styles.fieldHelp}>
+                建立合約時會鎖定一位學員對一個群組；沒有可選項時，請先將「BIG E小幫手」加入學員群組。
+              </small>
+            </label>
             {!studentPaymentContext ? (
             <div className={`${styles.contractCheckboxRow} ${styles.fieldFull}`}>
               <label className={styles.contractCheckbox}>
@@ -7867,6 +8154,7 @@ export default function BigeFitnessOperations({
                 type="submit"
                 disabled={
                   contractSubmitting ||
+                  !contractDraft.lineGroupBindingId ||
                   missingContractIdentityFields.length > 0 ||
                   (studentPaymentContext?.paymentType === "balance" &&
                     (!scheduleMemberDetail?.canRecordContractPayment ||
