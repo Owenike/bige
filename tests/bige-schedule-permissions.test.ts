@@ -8,7 +8,15 @@ import {
   normalizeEmployeeNumber,
 } from "../lib/bige-schedule-permissions";
 
-test("only coaching managers and assistant managers can reorder coach columns", () => {
+test("platform admins, coaching managers, and assistant managers can reorder coach columns", () => {
+  assert.equal(
+    canReorderBigeScheduleCoaches({
+      role: "platform_admin",
+      department: null,
+      position: null,
+    }),
+    true,
+  );
   assert.equal(
     canReorderBigeScheduleCoaches({
       role: "manager",

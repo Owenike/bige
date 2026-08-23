@@ -69,6 +69,7 @@ export function canCompleteBigeTrialOutcome(
 }
 
 export function canReorderBigeScheduleCoaches(actor: SchedulePermissionActor) {
+  if (actor.role === "platform_admin") return true;
   return (
     actor.department === "coaching" &&
     (actor.position === "coach_manager" || actor.position === "coach_assistant_manager")

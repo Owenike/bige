@@ -81,7 +81,13 @@ function normalizeRole(input: unknown): AppRole | null {
   return null;
 }
 
-function roleMatchesAllowed(role: AppRole, allowedRoles: AppRole[]) {
+export function roleMatchesAllowed(role: AppRole, allowedRoles: AppRole[]) {
+  if (
+    role === "platform_admin" &&
+    allowedRoles.some((allowed) => !ROLE_MEMBER_EQUIVALENTS.has(allowed))
+  ) {
+    return true;
+  }
   for (const allowed of allowedRoles) {
     if (allowed === role) return true;
     if (allowed === "manager" && ROLE_MANAGER_EQUIVALENTS.has(role)) return true;

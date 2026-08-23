@@ -526,6 +526,7 @@ export const undoScheduleBookingMoveSchema = z.object({
 
 export const reorderScheduleCoachesSchema = z.object({
   action: z.literal("reorder_schedule_coaches"),
+  scheduleUnlocked: z.literal(true),
   coachIds: z
     .array(z.string().uuid())
     .min(1)

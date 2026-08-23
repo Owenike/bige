@@ -2685,7 +2685,7 @@ export default function BigeFitnessOperations({
   }, [isBusinessClosed, scheduleDeleteSubmitting, scheduleDragUnlocked, scheduleMoveSubmitting]);
 
   const persistCoachOrder = async (activeCoachId: string, targetCoachId: string) => {
-    if (!data?.canReorderCoaches || coachOrderSubmitting) return;
+    if (!data?.canReorderCoaches || !scheduleDragUnlocked || coachOrderSubmitting) return;
     const previousCoaches = data.coaches;
     const nextCoaches = reorderCoachList(previousCoaches, activeCoachId, targetCoachId);
     if (nextCoaches.every((coach, index) => coach.id === previousCoaches[index]?.id)) return;
@@ -2702,6 +2702,7 @@ export default function BigeFitnessOperations({
     try {
       await post({
         action: "reorder_schedule_coaches",
+        scheduleUnlocked: true,
         coachIds: nextCoachIds,
       });
       coachOrderPendingRef.current = false;
@@ -5627,7 +5628,12 @@ export default function BigeFitnessOperations({
                               (status) => status.coach_id === coach.id,
                             ) || null
                           }
-                          enabled={Boolean(data.canReorderCoaches) && !previewData && !coachOrderSubmitting}
+                          enabled={
+                            Boolean(data.canReorderCoaches) &&
+                            scheduleDragUnlocked &&
+                            !previewData &&
+                            !coachOrderSubmitting
+                          }
                           mobileActive={selectedCoach === "all" || coach.id === selectedCoach}
                         />
                       </Fragment>

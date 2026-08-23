@@ -43,6 +43,7 @@ import {
   restoreTrialConversionSchema,
   recordPaymentSchema,
   recordPaymentsSchema,
+  reorderScheduleCoachesSchema,
   updatePaymentSchema,
   updateLegacyContractPurchaseDateSchema,
   updateCourseAllocationsSchema,
@@ -1775,6 +1776,39 @@ test("coach reordering synchronizes cached dates and protects late prefetch resp
   assert.match(
     component,
     /requestedCoachOrderRevision !== coachOrderRevisionRef\.current[\s\S]*applyCoachIdOrder\(fetched\.coaches, orderedCoachIds\)/,
+  );
+});
+
+test("coach reordering requires the schedule to be explicitly unlocked", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const coachIds = ["00000000-0000-4000-8000-000000000011"];
+
+  assert.equal(
+    reorderScheduleCoachesSchema.safeParse({
+      action: "reorder_schedule_coaches",
+      coachIds,
+    }).success,
+    false,
+  );
+  assert.equal(
+    reorderScheduleCoachesSchema.safeParse({
+      action: "reorder_schedule_coaches",
+      scheduleUnlocked: true,
+      coachIds,
+    }).success,
+    true,
+  );
+  assert.match(
+    component,
+    /persistCoachOrder[\s\S]*!data\?\.canReorderCoaches \|\| !scheduleDragUnlocked \|\| coachOrderSubmitting/,
+  );
+  assert.match(
+    component,
+    /enabled=\{[\s\S]*Boolean\(data\.canReorderCoaches\)[\s\S]*scheduleDragUnlocked[\s\S]*!coachOrderSubmitting/,
+  );
+  assert.match(
+    component,
+    /action: "reorder_schedule_coaches",[\s\S]*scheduleUnlocked: true/,
   );
 });
 
