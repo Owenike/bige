@@ -148,13 +148,17 @@ begin
   end if;
 
   if not exists (
-    select 1 from public.bige_contract_payments
-    where contract_id = fa_contract_id
-      and method = 'ecpay_installment'
-      and installment_count = 12
-      and status = 'recorded'
+    select 1
+    from public.bige_contract_payments payment
+    where payment.contract_id = fa_contract_id
+      and payment.source_booking_id = fa_booking_id
+      and payment.method = 'ecpay_installment'
+      and payment.installment_count = 12
+      and payment.status = 'recorded'
+      and (payment.paid_at at time zone 'Asia/Taipei')::date =
+        expected_source_date
   ) then
-    raise exception 'FA ECPay installment count was not stored';
+    raise exception 'FA payment source date or ECPay installment count was not stored';
   end if;
 
   create_result := public.bige_create_member_contract_v3(

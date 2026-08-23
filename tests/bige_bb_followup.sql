@@ -252,6 +252,10 @@ begin
       and payment.amount = 5000
       and payment.method = 'cash'
       and payment.status = 'recorded'
+      and (payment.paid_at at time zone 'Asia/Taipei')::date =
+        (select (booking.starts_at at time zone 'Asia/Taipei')::date
+         from public.bookings booking
+         where booking.id = bb_booking_id)
   ) then
     raise exception 'BB conversion did not require and link the formal contract payment flow';
   end if;

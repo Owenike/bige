@@ -3080,8 +3080,9 @@ export async function POST(request: Request) {
         }
       }
     }
-    const result = await operationSupabase.rpc("bige_record_contract_payment_v2", {
+    const result = await operationSupabase.rpc("bige_record_contract_payment_v3", {
       p_contract_id: input.contractId,
+      p_source_booking_id: input.sourceBookingId || null,
       p_schedule_item_id: input.scheduleItemId || null,
       p_payment_kind: input.paymentKind,
       p_amount: input.amount,

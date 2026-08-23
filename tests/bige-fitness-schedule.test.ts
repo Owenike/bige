@@ -2167,7 +2167,8 @@ test("schedule-origin contracts use the source business date and ECPay installme
   );
   assert.match(route, /rpc\("bige_create_member_contract_v6"/);
   assert.match(route, /const trustedSignedOn = trustedSourceBusinessDate \|\| input\.signedOn/);
-  assert.match(route, /rpc\("bige_record_contract_payment_v2"/);
+  assert.match(route, /rpc\("bige_record_contract_payment_v3"/);
+  assert.match(route, /p_source_booking_id: input\.sourceBookingId \|\| null/);
   assert.match(route, /p_installment_count: input\.installmentCount \|\| null/);
 });
 
@@ -2344,6 +2345,59 @@ test("manager and assistant manager payment edits recalculate money and session 
   );
   assert.match(component, /memberDetail\.canEditContractPayment[\s\S]*openPaymentEditor\(payment, contract\)/);
   assert.match(component, /title="修改付款資料"[\s\S]*付款狀態[\s\S]*付款方式[\s\S]*修改原因/);
+});
+
+test("source-linked FA, BB, renewal, and final payments use the schedule business date", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260823210203_align_contract_payment_source_dates.sql",
+    "utf8",
+  );
+  const splitRegression = readFileSync(
+    "tests/bige_split_contract_payments.sql",
+    "utf8",
+  );
+  const bbRegression = readFileSync("tests/bige_bb_followup.sql", "utf8");
+  const faRegression = readFileSync(
+    "tests/bige_fa_signing_installments.sql",
+    "utf8",
+  );
+
+  assert.match(
+    migration,
+    /before insert or update of source_booking_id, paid_at[\s\S]*on public\.bige_contract_payments/,
+  );
+  assert.match(
+    migration,
+    /bige_record_contract_payment_v3[\s\S]*payment_source_booking_invalid[\s\S]*source_booking_id = p_source_booking_id/,
+  );
+  assert.match(
+    migration,
+    /source_business_date[\s\S]*coalesce\(new\.paid_at, now\(\)\)[\s\S]*at time zone 'Asia\/Taipei'/,
+  );
+  assert.match(
+    migration,
+    /new\.idempotency_key like[\s\S]*contract\.converted_from_booking_id[\s\S]*new\.source_booking_id := resolved_source_booking_id/,
+  );
+  assert.match(
+    migration,
+    /payment\.source_booking_id[\s\S]*contract\.converted_from_booking_id[\s\S]*'contract-create:' \|\| contract\.id::text/,
+  );
+  assert.match(
+    migration,
+    /payment_source_booking[\s\S]*event\.status <> 'daily_confirmed'/,
+  );
+  assert.match(
+    splitRegression,
+    /payment\.paid_at at time zone 'Asia\/Taipei'[\s\S]*booking\.starts_at at time zone 'Asia\/Taipei'/,
+  );
+  assert.match(
+    bbRegression,
+    /payment\.paid_at at time zone 'Asia\/Taipei'[\s\S]*booking\.starts_at at time zone 'Asia\/Taipei'/,
+  );
+  assert.match(
+    faRegression,
+    /payment\.source_booking_id = fa_booking_id[\s\S]*payment\.paid_at at time zone 'Asia\/Taipei'/,
+  );
 });
 
 test("paid schedule cells require coaching management and keep platform admins unrestricted", () => {

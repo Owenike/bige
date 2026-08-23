@@ -20,6 +20,7 @@ declare
   canceled_contract_blocked boolean := false;
   result jsonb;
   replay jsonb;
+  single_result jsonb;
   create_result jsonb;
 begin
   insert into auth.users (
@@ -143,6 +144,16 @@ begin
          and unlocked_sessions = 8 and remaining_sessions = 8
          and payment_status = 'deposit_paid' and status = 'active'
      )
+     or exists (
+       select 1
+       from public.bige_contract_payments payment
+       join public.bookings booking
+         on booking.id = payment.source_booking_id
+       where payment.contract_id = split_payment_test.contract_id
+         and (payment.paid_at at time zone 'Asia/Taipei')::date
+           is distinct from
+             (booking.starts_at at time zone 'Asia/Taipei')::date
+     )
      or (select count(*) from public.member_plan_ledger ledger where ledger.contract_id = split_payment_test.contract_id and ledger.source_type = 'grant') <> 1
   then
     raise exception 'split payment did not preserve rows, source booking, or one aggregate unlock';
@@ -193,6 +204,31 @@ begin
   end;
   if not conflict_detected then
     raise exception 'changed split payment replay unexpectedly succeeded';
+  end if;
+
+  single_result := public.bige_record_contract_payment_v3(
+    contract_id,
+    booking_id,
+    null,
+    'balance',
+    2000,
+    'cash',
+    null,
+    now(),
+    'test:single-source-payment',
+    'single payment source-date regression'
+  );
+  if not exists (
+    select 1
+    from public.bige_contract_payments payment
+    join public.bookings booking
+      on booking.id = payment.source_booking_id
+    where payment.id = (single_result->>'paymentId')::uuid
+      and payment.source_booking_id = split_payment_test.booking_id
+      and (payment.paid_at at time zone 'Asia/Taipei')::date =
+        (booking.starts_at at time zone 'Asia/Taipei')::date
+  ) then
+    raise exception 'single source-linked payment did not use the booking date';
   end if;
 
   begin
@@ -272,6 +308,16 @@ begin
        where id = created_contract_id
          and unlocked_sessions = 8 and remaining_sessions = 8
          and payment_status = 'deposit_paid' and status = 'active'
+     )
+     or exists (
+       select 1
+       from public.bige_contract_payments payment
+       join public.bookings booking
+         on booking.id = payment.source_booking_id
+       where payment.contract_id = created_contract_id
+         and (payment.paid_at at time zone 'Asia/Taipei')::date
+           is distinct from
+             (booking.starts_at at time zone 'Asia/Taipei')::date
      )
      or (select count(*) from public.member_plan_ledger ledger where ledger.contract_id = created_contract_id and ledger.source_type = 'grant') <> 1
   then
