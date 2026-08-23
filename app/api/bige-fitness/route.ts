@@ -1311,7 +1311,7 @@ export async function GET(request: Request) {
     ? auth.supabase
         .from("member_plan_contracts")
         .select(
-          "id, member_id, contract_number, ends_at, total_sessions, unlocked_sessions, used_sessions, remaining_sessions, extension_limit_days, extension_used_days, status, payment_status",
+          "id, member_id, contract_number, signed_on, ends_at, total_sessions, unlocked_sessions, used_sessions, remaining_sessions, extension_limit_days, extension_used_days, status, payment_status",
         )
         .eq("tenant_id", tenantId)
         .not("total_sessions", "is", null)
@@ -2810,6 +2810,7 @@ export async function POST(request: Request) {
     let trustedEmailUnavailable = input.emailUnavailable;
     let trustedMemberId = input.memberId || null;
     let trustedSalesOriginCoachId: string | null = null;
+    let trustedSourceBusinessDate: string | null = null;
     let sourceOperationKind: "trial" | "bb" | null = null;
     let sourceMissingProfileFields: string[] = [];
     if (input.sourceBookingId && input.sourceMemberBookingId) {
@@ -2822,7 +2823,7 @@ export async function POST(request: Request) {
       const admin = createSupabaseAdminClient();
       const sourceBookingResult = await admin
         .from("bookings")
-        .select("id, member_id, coach_id, operation_kind")
+        .select("id, member_id, coach_id, operation_kind, starts_at")
         .eq("id", input.sourceMemberBookingId)
         .eq("tenant_id", tenantId)
         .eq("is_bige_schedule", true)
@@ -2852,6 +2853,9 @@ export async function POST(request: Request) {
       trustedEmail = sourceMemberResult.data.email || null;
       trustedEmailUnavailable = Boolean(sourceMemberResult.data.email_unavailable);
       trustedSalesOriginCoachId = sourceBookingResult.data.coach_id || sourceMemberResult.data.primary_coach_id || null;
+      trustedSourceBusinessDate = toTaipeiDateString(
+        new Date(sourceBookingResult.data.starts_at),
+      );
       if (!trustedFullName || !trustedPhone) {
         return apiError(400, "FORBIDDEN", "學員姓名或電話資料不完整，請先由主管補齊");
       }
@@ -2863,7 +2867,7 @@ export async function POST(request: Request) {
       const admin = createSupabaseAdminClient();
       const sourceBookingResult = await admin
         .from("bookings")
-        .select("id, member_id, coach_id, trial_booking_id, operation_kind")
+        .select("id, member_id, coach_id, trial_booking_id, operation_kind, starts_at")
         .eq("id", input.sourceBookingId)
         .eq("tenant_id", tenantId)
         .in("operation_kind", ["trial", "bb"])
@@ -2903,6 +2907,9 @@ export async function POST(request: Request) {
       trustedPhone = identity.phone;
       trustedBirthDate = identity.birthDate || null;
       trustedSalesOriginCoachId = sourceBookingResult.data.coach_id || null;
+      trustedSourceBusinessDate = toTaipeiDateString(
+        new Date(sourceBookingResult.data.starts_at),
+      );
     }
 
     if (sourceOperationKind === "trial" && !input.faFeeRecipientName) {
@@ -2915,7 +2922,7 @@ export async function POST(request: Request) {
       return apiError(400, "FORBIDDEN", "只有 FA 首次付款可以記錄 FA 收款人");
     }
 
-    const trustedSignedOn = input.sourceBookingId ? toTaipeiDateString() : input.signedOn;
+    const trustedSignedOn = trustedSourceBusinessDate || input.signedOn;
     const paymentEntries = input.payments ?? (
       input.initialPayment > 0 && input.paymentMethod
         ? [{

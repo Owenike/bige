@@ -68,6 +68,7 @@ import {
   calculateLegacyContractExpiryDate,
   calculateMinimumDeposit,
   getBigeFaFeeAmount,
+  getBigeContractDisplayName,
   getBigeStudentPaymentBalanceState,
   getBigeTrialContractMissingProfileFields,
   getBigeTrialBookingActionVisibility,
@@ -79,6 +80,7 @@ import {
   nextBigeTrialReminderStatus,
   resolveBigeTrialContractIdentity,
   summarizeBigeMemberCourseSessions,
+  toTaipeiDateString,
   validateCourseAllocationTotal,
   type BigeCourseType,
   type BigeContractCourseType,
@@ -4337,7 +4339,7 @@ export default function BigeFitnessOperations({
         booking?.operation_kind === "trial" && missingProfileFields.length > 0,
       planMode: "builtin",
       planId: data?.plans[0]?.id || "",
-      signedOn: localDate(),
+      signedOn: booking ? toTaipeiDateString(new Date(booking.starts_at)) : localDate(),
       initialPayment: 0,
       paymentMethod: "cash",
       installmentCount: null,
@@ -4504,8 +4506,9 @@ export default function BigeFitnessOperations({
               : null,
           ...contractDraft,
           signedOn:
-            selectedConversionBooking
-              ? localDate()
+            selectedBooking &&
+            (selectedConversionBooking || studentPaymentContext?.paymentType === "renewal")
+              ? toTaipeiDateString(new Date(selectedBooking.starts_at))
               : contractDraft.signedOn,
           notifyManagerProfileChange:
             contractDraft.notifyManagerProfileChange ||
@@ -5864,7 +5867,7 @@ export default function BigeFitnessOperations({
                               : ""}
                           </strong>
                           <div className={styles.muted}>
-                            {reminder.contract_number}｜{reminder.total_sessions}堂方案｜剩餘
+                            {getBigeContractDisplayName(null)}｜{reminder.total_sessions}堂方案｜剩餘
                             {reminder.remaining_sessions}堂
                             {reminder.first_class_at
                               ? `｜今日上課 ${formatDateTime(reminder.first_class_at)}`
@@ -5934,7 +5937,7 @@ export default function BigeFitnessOperations({
                 <div className={styles.list}>
                   {data.expiringContracts.map((contract) => (
                     <article className={styles.warning} key={contract.id}>
-                      {contract.contract_number} · 到期 {formatDateTime(contract.ends_at)} · 可延期餘額{" "}
+                      {getBigeContractDisplayName(contract.signed_on)} · 到期 {formatDateTime(contract.ends_at)} · 可延期餘額{" "}
                       {contract.extension_limit_days - contract.extension_used_days} 天
                     </article>
                   ))}
@@ -6067,7 +6070,9 @@ export default function BigeFitnessOperations({
                       <div className={styles.contractHeading}>
                         <span className={styles.contractEyebrow}>正式課程合約</span>
                         <div className={styles.contractTitleRow}>
-                          <strong className={styles.contractNumber}>{contract.contract_number}</strong>
+                          <strong className={styles.contractNumber}>
+                            {getBigeContractDisplayName(contract.signed_on)}
+                          </strong>
                           <span className={styles.badge}>
                             {labelOrValue(CONTRACT_PAYMENT_STATUS_LABELS, contract.payment_status)}
                           </span>
@@ -6244,7 +6249,7 @@ export default function BigeFitnessOperations({
                 >
                   {scheduleCourseAllocationContracts.map((contract) => (
                     <option value={contract.id} key={contract.id}>
-                      {contract.contract_number}｜{contract.total_sessions} 堂
+                      {getBigeContractDisplayName(contract.signed_on)}｜{contract.total_sessions} 堂
                       {contract.course_allocations_configured_at ? "｜已設定" : "｜尚未設定"}
                     </option>
                   ))}
@@ -7473,7 +7478,9 @@ export default function BigeFitnessOperations({
                 {studentPaymentContext
                   ? studentPaymentContext.paymentType === "new"
                     ? "姓名、手機、生日、Email、款項類型與簽約日已由本堂 FA 資料帶入，付款時不可更改。"
-                    : "姓名、手機、生日與 Email 已由本堂學員資料帶入，付款時不可更改。"
+                    : studentPaymentContext.paymentType === "renewal"
+                      ? "姓名、手機、生日、Email 與簽約日已由本堂課程資料帶入，付款時不可更改。"
+                      : "姓名、手機、生日與 Email 已由本堂學員資料帶入，付款時不可更改。"
                   : selectedBooking?.operation_kind === "bb"
                     ? "姓名、手機、生日與簽約日已由原始 FA／BB 資料帶入，成交時不可直接更改。"
                     : "姓名、手機、生日與簽約日已由 FA 資料帶入，成交時不可直接更改。"}
@@ -7566,7 +7573,7 @@ export default function BigeFitnessOperations({
                       {scheduleOutstandingContracts.length ? (
                         scheduleOutstandingContracts.map((item) => (
                           <option key={item.contract.id} value={item.contract.id}>
-                            {item.contract.contract_number} · 尾款 {formatMoney(item.outstanding)}
+                            {getBigeContractDisplayName(item.contract.signed_on)} · 尾款 {formatMoney(item.outstanding)}
                           </option>
                         ))
                       ) : (
@@ -7698,12 +7705,17 @@ export default function BigeFitnessOperations({
                 required
                 type="date"
                 value={
-                  selectedConversionBooking
-                    ? localDate()
+                  selectedBooking &&
+                  (selectedConversionBooking || studentPaymentContext?.paymentType === "renewal")
+                    ? toTaipeiDateString(new Date(selectedBooking.starts_at))
                     : contractDraft.signedOn
                 }
-                disabled={selectedConversionBooking}
-                aria-readonly={selectedConversionBooking}
+                disabled={
+                  selectedConversionBooking || studentPaymentContext?.paymentType === "renewal"
+                }
+                aria-readonly={
+                  selectedConversionBooking || studentPaymentContext?.paymentType === "renewal"
+                }
                 onChange={(event) => setContractDraft({ ...contractDraft, signedOn: event.target.value })}
               />
             </label>

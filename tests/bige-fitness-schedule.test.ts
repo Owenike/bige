@@ -15,6 +15,7 @@ import {
   calculateLegacyContractExpiryDate,
   flattenBigeMemberPaymentRelations,
   getBigeStudentPaymentBalanceState,
+  getBigeContractDisplayName,
   getBigeFaFeeAmount,
   isBigeAssistantToContent,
   isBigeContractEligibleForPayment,
@@ -58,6 +59,12 @@ import {
 
 const batchCoachId = "00000000-0000-4000-8000-000000000011";
 const batchMemberId = "00000000-0000-4000-8000-000000000012";
+
+test("contract display names use BIGE and the signed business date", () => {
+  assert.equal(getBigeContractDisplayName("2026-08-06"), "BIGE-20260806");
+  assert.equal(getBigeContractDisplayName(null), "BIGE-日期待補");
+  assert.equal(getBigeContractDisplayName("invalid"), "BIGE-日期待補");
+});
 
 test("batch preflight strictly blocks a coach who already has another student", () => {
   const conflict = findBigeScheduleBatchConflict({
@@ -1153,7 +1160,10 @@ test("FA and BB conversions use their source booking while member payments keep 
     submitContract,
     /sourceMemberBookingId:[\s\S]*studentPaymentContext\?\.paymentType === "renewal"[\s\S]*\? studentPaymentContext\.bookingId[\s\S]*: null/,
   );
-  assert.match(route, /select\("id, member_id, coach_id, trial_booking_id, operation_kind"\)/);
+  assert.match(
+    route,
+    /select\("id, member_id, coach_id, trial_booking_id, operation_kind, starts_at"\)/,
+  );
   assert.match(
     route,
     /sourceBookingResult\.data\.operation_kind === "trial"[\s\S]*FA 付款的款項類型固定為新單 New/,
@@ -2093,31 +2103,36 @@ test("FA ECPay conversion and restore remove only conversion-created formal iden
   assert.doesNotMatch(component, /正式會員基本資料會保留/);
 });
 
-test("FA signing date is locked to today and ECPay installments require a stored count", () => {
-  const migration = readFileSync(
+test("schedule-origin contracts use the source business date and ECPay installments keep their count", () => {
+  const installmentMigration = readFileSync(
     "supabase/migrations/20260815225909_lock_fa_signed_date_and_record_ecpay_installments.sql",
+    "utf8",
+  );
+  const sourceDateMigration = readFileSync(
+    "supabase/migrations/20260823201753_align_contract_names_and_source_dates.sql",
     "utf8",
   );
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
 
   assert.match(
-    migration,
-    /when p_source_booking_id is not null[\s\S]*now\(\) at time zone 'Asia\/Taipei'/,
+    sourceDateMigration,
+    /booking\.starts_at at time zone 'Asia\/Taipei'[\s\S]*resolved_signed_on/,
   );
-  assert.match(migration, /add column if not exists installment_count integer/);
-  assert.match(migration, /p_installment_count not between 2 and 60/);
+  assert.match(sourceDateMigration, /bige_align_contract_dates_to_source_booking/);
+  assert.match(installmentMigration, /add column if not exists installment_count integer/);
+  assert.match(sourceDateMigration, /p_installment_count not between 2 and 60/);
   assert.match(component, /請輸入綠界分期期數（2 至 60 期）/);
   assert.match(
     component,
-    /disabled=\{selectedConversionBooking\}/,
+    /selectedConversionBooking \|\| studentPaymentContext\?\.paymentType === "renewal"/,
   );
   assert.match(
     component,
-    /selectedConversionBooking[\s\S]*\? localDate\(\)[\s\S]*: contractDraft\.signedOn/,
+    /toTaipeiDateString\(new Date\(selectedBooking\.starts_at\)\)/,
   );
   assert.match(route, /rpc\("bige_create_member_contract_v6"/);
-  assert.match(route, /const trustedSignedOn = input\.sourceBookingId \? toTaipeiDateString\(\) : input\.signedOn/);
+  assert.match(route, /const trustedSignedOn = trustedSourceBusinessDate \|\| input\.signedOn/);
   assert.match(route, /rpc\("bige_record_contract_payment_v2"/);
   assert.match(route, /p_installment_count: input\.installmentCount \|\| null/);
 });

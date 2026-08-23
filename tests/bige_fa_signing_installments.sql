@@ -13,7 +13,7 @@ declare
   payment_result jsonb;
   fa_contract_id uuid;
   direct_contract_id uuid;
-  expected_today date := (now() at time zone 'Asia/Taipei')::date;
+  expected_source_date date := '2026-08-06';
 begin
   insert into auth.users (
     id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -77,7 +77,7 @@ begin
     course_type, trial_stage, operation_idempotency_key
   ) values (
     fa_booking_id, tenant_id, branch_id, prospect_id, manager_id,
-    'FA Signing', now() - interval '3 hours', now() - interval '1 hour',
+    'FA Signing', '2026-08-06 13:00:00+08', '2026-08-06 15:00:00+08',
     'booked', true, 'trial', 'weight_training', 'FA1', 'test:fa-signing'
   );
 
@@ -137,12 +137,14 @@ begin
   );
   fa_contract_id := (create_result->>'contractId')::uuid;
 
-  if (create_result->>'signedOn')::date <> expected_today
+  if (create_result->>'signedOn')::date <> expected_source_date
      or not exists (
        select 1 from public.member_plan_contracts
-       where id = fa_contract_id and signed_on = expected_today
+       where id = fa_contract_id
+         and signed_on = expected_source_date
+         and (starts_at at time zone 'Asia/Taipei')::date = expected_source_date
      ) then
-    raise exception 'FA signing date was not locked to the current Taiwan date';
+    raise exception 'FA signing date did not use the source booking business date';
   end if;
 
   if not exists (

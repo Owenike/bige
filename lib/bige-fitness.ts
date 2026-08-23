@@ -994,6 +994,13 @@ export function toTaipeiDateString(date = new Date()) {
   }).format(date);
 }
 
+export function getBigeContractDisplayName(signedOn: string | null | undefined) {
+  if (!signedOn || !/^\d{4}-\d{2}-\d{2}$/.test(signedOn)) {
+    return "BIGE-日期待補";
+  }
+  return `BIGE-${signedOn.replace(/-/g, "")}`;
+}
+
 export function formatTaipeiDateTime(value: string | Date) {
   return new Intl.DateTimeFormat("zh-TW", {
     timeZone: BIGE_TIME_ZONE,

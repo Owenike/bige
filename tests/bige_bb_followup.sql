@@ -242,6 +242,7 @@ begin
       and contract.member_id = test_member_id
       and contract.source_trial_booking_id = test_trial_id
       and contract.converted_from_booking_id = bb_booking_id
+      and contract.signed_on = (select (booking.starts_at at time zone 'Asia/Taipei')::date from public.bookings booking where booking.id = bb_booking_id)
       and contract.sales_origin_coach_id = test_manager_id
       and contract.sales_origin_kind = 'bb'
   ) or not exists (
