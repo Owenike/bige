@@ -8,6 +8,7 @@ import {
   canCreateAdministrativeAssistance,
   canCreatePosition,
   canManageBigeContractRefundOrExtension,
+  canManageBigePaidScheduleCells,
   canManagePosition,
   canViewAllCoachSchedules,
   legacyRoleForPosition,
@@ -106,6 +107,35 @@ test("only coaching managers and assistant managers handle contract refunds or e
       role: "coach",
       department: "coaching",
       position: "coach_team_lead",
+    }),
+    false,
+  );
+});
+
+test("paid schedule cells are restricted to coaching management while platform admins stay unrestricted", () => {
+  const assistantManager: OrganizationActor = {
+    role: "supervisor",
+    department: "coaching",
+    position: "coach_assistant_manager",
+  };
+  assert.equal(canManageBigePaidScheduleCells(platformAdmin), true);
+  assert.equal(canManageBigePaidScheduleCells(coachManager), true);
+  assert.equal(canManageBigePaidScheduleCells(coachCityManager), true);
+  assert.equal(canManageBigePaidScheduleCells(assistantManager), true);
+  assert.equal(canManageBigePaidScheduleCells(generalAffairsManager), false);
+  assert.equal(
+    canManageBigePaidScheduleCells({
+      role: "coach",
+      department: "coaching",
+      position: "coach_team_lead",
+    }),
+    false,
+  );
+  assert.equal(
+    canManageBigePaidScheduleCells({
+      role: "frontdesk",
+      department: "general_affairs",
+      position: "frontdesk",
     }),
     false,
   );

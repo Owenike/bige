@@ -2291,10 +2291,49 @@ test("manager and assistant manager payment edits recalculate money and session 
   assert.match(regression, /frontdesk unexpectedly edited an existing payment/);
   assert.match(
     route,
-    /input\.action === "update_payment"[\s\S]*isBigeContractRiskRequester\(operationContext\)[\s\S]*rpc\("bige_update_contract_payment"/,
+    /input\.action === "update_payment"[\s\S]*canManageBigePaidScheduleCells\(operationContext\)[\s\S]*rpc\("bige_update_contract_payment"/,
   );
   assert.match(component, /memberDetail\.canEditContractPayment[\s\S]*openPaymentEditor\(payment, contract\)/);
   assert.match(component, /title="修改付款資料"[\s\S]*付款狀態[\s\S]*付款方式[\s\S]*修改原因/);
+});
+
+test("paid schedule cells require coaching management and keep platform admins unrestricted", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260823173204_protect_paid_schedule_cells.sql",
+    "utf8",
+  );
+  const regression = readFileSync("tests/bige_paid_schedule_access.sql", "utf8");
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+
+  assert.match(
+    migration,
+    /bige_profile_can_manage_paid_schedule_cells[\s\S]*p_actor\.role = 'platform_admin'[\s\S]*'coach_assistant_manager'[\s\S]*'coach_manager'/,
+  );
+  assert.match(migration, /before insert[\s\S]*on public\.bige_contract_payments/);
+  assert.match(
+    migration,
+    /before update of amount, status, source_booking_id[\s\S]*on public\.bige_contract_payments/,
+  );
+  assert.match(migration, /before delete[\s\S]*on public\.bige_contract_payments/);
+  assert.match(
+    migration,
+    /schedule_trash_deleted'[\s\S]*'schedule_drag_overwrite'[\s\S]*paid_schedule_booking_manager_required/,
+  );
+  assert.match(regression, /frontdesk unexpectedly deleted a paid schedule cell/);
+  assert.match(regression, /frontdesk could not delete an unpaid schedule cell/);
+  assert.match(regression, /frontdesk initial split payment was unexpectedly blocked/);
+  assert.match(regression, /platform admin paid-cell access failed/);
+  assert.match(
+    route,
+    /input\.action === "delete_schedule_booking"[\s\S]*readPaidScheduleBookingState[\s\S]*只有教練經理、副理或平台管理員能刪除/,
+  );
+  assert.match(
+    route,
+    /input\.action === "change_trial_conversion_payment"[\s\S]*canManageBigePaidScheduleCells\(operationContext\)/,
+  );
+  assert.match(route, /return canManageBigePaidScheduleCells\(context\)/);
+  assert.match(component, /canManagePaidScheduleCells[\s\S]*付款紀錄也會保留/);
 });
 
 test("voided member contracts render with a strike line and red voided stamp", () => {

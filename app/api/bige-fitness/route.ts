@@ -44,6 +44,7 @@ import { canCreateBigeContract } from "../../../lib/staff-credentials";
 import {
   canDirectlyApproveBigeContractRisk,
   canManageBigeCourseAllocations,
+  canManageBigePaidScheduleCells,
   canManageBigePlansAndDailyReports,
   canRecordBigeContractPayment,
   canViewAllCoachSchedules,
@@ -119,19 +120,7 @@ function isManager(
 function canSeeTrialRevenue(
   context: Pick<ProfileContext, "role" | "department" | "position">,
 ) {
-  if (
-    context.department === "coaching" &&
-    (context.position === "coach_assistant_manager" ||
-      context.position === "coach_manager" ||
-      context.position === "coach_city_manager")
-  ) {
-    return true;
-  }
-  return (
-    !context.department &&
-    !context.position &&
-    (context.role === "manager" || context.role === "branch_manager")
-  );
+  return canManageBigePaidScheduleCells(context);
 }
 
 function faFeeRecipientLabel(profile: {
@@ -321,6 +310,8 @@ function normalizeErrorMessage(message: string) {
     schedule_time_overlap: "調整後的時段已有其他課程，請先取消或調整衝突資料，再進行操作",
     invalid_schedule_move_mode: "無效的課表拖拉方式",
     schedule_drag_forbidden: "您的帳號沒有拖拉課表的權限",
+    paid_schedule_booking_manager_required:
+      "已有付款的課表只能由教練經理、副理或平台管理員刪除或變更金額",
     schedule_booking_not_found: "找不到要移動的課程",
     legacy_schedule_reference_read_only: "舊預約本資料僅供對照，不能移動或覆蓋",
     schedule_target_coach_not_found: "找不到目標教練",
@@ -432,6 +423,49 @@ function normalizeErrorMessage(message: string) {
 
 function handleDatabaseError(error: { message: string } | null, fallback: string) {
   return apiError(400, "FORBIDDEN", normalizeErrorMessage(error?.message || fallback));
+}
+
+type PaidScheduleBookingReference = {
+  id: string;
+  converted_contract_id?: string | null;
+};
+
+async function readPaidScheduleBookingState(
+  tenantId: string,
+  booking: PaidScheduleBookingReference,
+) {
+  const admin = createSupabaseAdminClient();
+  const [linkedPaymentResult, legacyConversionPaymentResult] = await Promise.all([
+    admin
+      .from("bige_contract_payments")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("source_booking_id", booking.id)
+      .eq("status", "recorded")
+      .limit(1)
+      .maybeSingle(),
+    booking.converted_contract_id
+      ? admin
+          .from("bige_contract_payments")
+          .select("id")
+          .eq("tenant_id", tenantId)
+          .eq("contract_id", booking.converted_contract_id)
+          .is("source_booking_id", null)
+          .eq("status", "recorded")
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+
+  return {
+    hasRecordedPayment: Boolean(
+      linkedPaymentResult.data || legacyConversionPaymentResult.data,
+    ),
+    error:
+      linkedPaymentResult.error?.message ||
+      legacyConversionPaymentResult.error?.message ||
+      null,
+  };
 }
 
 async function resolveAuth(request: Request) {
@@ -1155,7 +1189,7 @@ export async function GET(request: Request) {
       extensions: [],
       canViewDetailedPaymentDates: isBigeContractRiskRequester(auth.context),
       canRecordContractPayment: canRecordBigeContractPayment(auth.context),
-      canEditContractPayment: isBigeContractRiskRequester(auth.context),
+      canEditContractPayment: canManageBigePaidScheduleCells(auth.context),
       canManageCourseAllocations: canManageBigeCourseAllocations(auth.context),
     });
   }
@@ -1256,7 +1290,7 @@ export async function GET(request: Request) {
       extensions: extensionsResult.data || [],
       canViewDetailedPaymentDates: isBigeContractRiskRequester(auth.context),
       canRecordContractPayment: canRecordBigeContractPayment(auth.context),
-      canEditContractPayment: isBigeContractRiskRequester(auth.context),
+      canEditContractPayment: canManageBigePaidScheduleCells(auth.context),
       canManageCourseAllocations: canManageBigeCourseAllocations(auth.context),
     });
   }
@@ -1692,7 +1726,7 @@ export async function GET(request: Request) {
     {
       canViewDetailedPaymentDates: isBigeContractRiskRequester(auth.context),
       canRecordContractPayment: canRecordBigeContractPayment(auth.context),
-      canEditContractPayment: isBigeContractRiskRequester(auth.context),
+      canEditContractPayment: canManageBigePaidScheduleCells(auth.context),
       canManageCourseAllocations: canManageBigeCourseAllocations(auth.context),
     },
   );
@@ -1739,12 +1773,13 @@ export async function GET(request: Request) {
     canReorderCoaches: canReorderBigeScheduleCoaches(auth.context),
     canViewScheduleActivity: canViewBigeScheduleActivity(auth.context),
     canSeeTrialRevenue: showTrialRevenue,
+    canManagePaidScheduleCells: canManageBigePaidScheduleCells(auth.context),
     canViewDetailedPaymentDates: isBigeContractRiskRequester(auth.context),
     canRecordContractPayment: canRecordBigeContractPayment(auth.context),
-    canEditContractPayment: isBigeContractRiskRequester(auth.context),
+    canEditContractPayment: canManageBigePaidScheduleCells(auth.context),
     canManageCourseAllocations: canManageBigeCourseAllocations(auth.context),
     canCreateContract: canCreateBigeContract(auth.context.employeeNumber),
-    canChangeTrialConversion: canRecordBigeContractPayment(auth.context),
+    canChangeTrialConversion: canManageBigePaidScheduleCells(auth.context),
     canRestoreTrialConversion: canDirectlyApproveBigeContractRisk(auth.context),
     canManageDailyReports: canManageBigePlansAndDailyReports(auth.context),
     canConfirmDailyReports: canDirectlyApproveBigeContractRisk(auth.context),
@@ -2998,7 +3033,7 @@ export async function POST(request: Request) {
       const [sourceBookingResult, contractResult] = await Promise.all([
         admin
           .from("bookings")
-          .select("id, member_id")
+          .select("id, member_id, converted_contract_id")
           .eq("id", input.sourceBookingId)
           .eq("tenant_id", tenantId)
           .eq("is_bige_schedule", true)
@@ -3020,6 +3055,22 @@ export async function POST(request: Request) {
       }
       if (sourceBookingResult.data.member_id !== contractResult.data.member_id) {
         return apiError(400, "FORBIDDEN", "課程學員與付款合約不一致");
+      }
+      if (!canManageBigePaidScheduleCells(operationContext)) {
+        const paymentState = await readPaidScheduleBookingState(
+          tenantId,
+          sourceBookingResult.data,
+        );
+        if (paymentState.error) {
+          return apiError(500, "INTERNAL_ERROR", paymentState.error);
+        }
+        if (paymentState.hasRecordedPayment) {
+          return apiError(
+            403,
+            "FORBIDDEN",
+            "此課表已有付款，只有教練經理、副理或平台管理員能再變更金額",
+          );
+        }
       }
     }
     const result = await operationSupabase.rpc("bige_record_contract_payment_v2", {
@@ -3046,7 +3097,7 @@ export async function POST(request: Request) {
       const [sourceBookingResult, contractResult] = await Promise.all([
         admin
           .from("bookings")
-          .select("id, member_id")
+          .select("id, member_id, converted_contract_id")
           .eq("id", input.sourceBookingId)
           .eq("tenant_id", tenantId)
           .eq("is_bige_schedule", true)
@@ -3069,6 +3120,22 @@ export async function POST(request: Request) {
       if (sourceBookingResult.data.member_id !== contractResult.data.member_id) {
         return apiError(400, "FORBIDDEN", "課程學員與付款合約不一致");
       }
+      if (!canManageBigePaidScheduleCells(operationContext)) {
+        const paymentState = await readPaidScheduleBookingState(
+          tenantId,
+          sourceBookingResult.data,
+        );
+        if (paymentState.error) {
+          return apiError(500, "INTERNAL_ERROR", paymentState.error);
+        }
+        if (paymentState.hasRecordedPayment) {
+          return apiError(
+            403,
+            "FORBIDDEN",
+            "此課表已有付款，只有教練經理、副理或平台管理員能再變更金額",
+          );
+        }
+      }
     }
     const result = await operationSupabase.rpc("bige_record_contract_payments_v1", {
       p_contract_id: input.contractId,
@@ -3085,7 +3152,7 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "update_payment") {
-    if (!isBigeContractRiskRequester(operationContext)) {
+    if (!canManageBigePaidScheduleCells(operationContext)) {
       return apiError(403, "FORBIDDEN", "只有教練經理或教練副理能修改付款資料");
     }
     const result = await auth.supabase.rpc("bige_update_contract_payment", {
@@ -3103,7 +3170,7 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "reverse_payment") {
-    if (!isBigeContractRiskRequester(operationContext)) {
+    if (!canManageBigePaidScheduleCells(operationContext)) {
       return apiError(403, "FORBIDDEN", "只有教練經理或教練副理能退款或作廢");
     }
 
@@ -3356,8 +3423,12 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "change_trial_conversion_payment") {
-    if (!canRecordBigeContractPayment(operationContext)) {
-      return apiError(403, "FORBIDDEN", "只有櫃台、教練副理或經理能變更 FA 成交金額");
+    if (!canManageBigePaidScheduleCells(operationContext)) {
+      return apiError(
+        403,
+        "FORBIDDEN",
+        "只有教練經理、副理或平台管理員能變更 FA 成交金額",
+      );
     }
     const result = await auth.supabase.rpc("bige_change_fa_conversion_payment", {
       p_booking_id: input.bookingId,
@@ -3429,7 +3500,9 @@ export async function POST(request: Request) {
     }
     const bookingResult = await auth.supabase
       .from("bookings")
-      .select("id, tenant_id, coach_id, operation_kind, starts_at, ends_at, status")
+      .select(
+        "id, tenant_id, coach_id, operation_kind, starts_at, ends_at, status, converted_contract_id",
+      )
       .eq("id", input.bookingId)
       .eq("tenant_id", tenantId)
       .eq("is_bige_schedule", true)
@@ -3440,6 +3513,19 @@ export async function POST(request: Request) {
     const booking = bookingResult.data;
     if (!isScheduleBookingDraggable(booking)) {
       return apiError(409, "FORBIDDEN", "只有尚未執行的預約可以從課表刪除");
+    }
+    if (!canManageBigePaidScheduleCells(operationContext)) {
+      const paymentState = await readPaidScheduleBookingState(tenantId, booking);
+      if (paymentState.error) {
+        return apiError(500, "INTERNAL_ERROR", paymentState.error);
+      }
+      if (paymentState.hasRecordedPayment) {
+        return apiError(
+          403,
+          "FORBIDDEN",
+          "此課表已有付款，只有教練經理、副理或平台管理員能刪除",
+        );
+      }
     }
 
     const statusWindow = getBigeCourseStatusWindow({

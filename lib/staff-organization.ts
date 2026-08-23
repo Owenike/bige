@@ -260,15 +260,33 @@ export function canDirectlyApproveBigeContractRisk(
   );
 }
 
+export function canManageBigePaidScheduleCells(
+  actor: Pick<OrganizationActor, "role"> &
+    Partial<Pick<OrganizationActor, "department" | "position">>,
+) {
+  if (actor.role === "platform_admin") return true;
+  if (actor.department || actor.position) {
+    return (
+      actor.department === "coaching" &&
+      (actor.position === "coach_assistant_manager" ||
+        actor.position === "coach_manager" ||
+        actor.position === "coach_city_manager")
+    );
+  }
+  return (
+    actor.role === "manager" ||
+    actor.role === "supervisor" ||
+    actor.role === "branch_manager" ||
+    actor.role === "store_owner" ||
+    actor.role === "store_manager"
+  );
+}
+
 export function isBigeContractRiskRequester(
   actor: Pick<OrganizationActor, "role"> &
     Partial<Pick<OrganizationActor, "department" | "position">>,
 ) {
-  return (
-    canDirectlyApproveBigeContractRisk(actor) ||
-    (actor.department === "coaching" && actor.position === "coach_assistant_manager") ||
-    (!actor.department && !actor.position && actor.role === "supervisor")
-  );
+  return canManageBigePaidScheduleCells(actor);
 }
 
 export function canRecordBigeContractPayment(

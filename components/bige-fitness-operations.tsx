@@ -419,6 +419,7 @@ export type BoardData = {
   canReorderCoaches?: boolean;
   canViewScheduleActivity?: boolean;
   canSeeTrialRevenue?: boolean;
+  canManagePaidScheduleCells?: boolean;
   canViewDetailedPaymentDates?: boolean;
   canRecordContractPayment?: boolean;
   canEditContractPayment?: boolean;
@@ -2559,9 +2560,17 @@ export default function BigeFitnessOperations({
     options: { closeBookingDialog?: boolean } = {},
   ) => {
     if (!data || scheduleDeleteSubmitting) return;
+    const hasRecordedPayment = typeof booking.booking_payment_amount === "number";
+    if (hasRecordedPayment && !data.canManagePaidScheduleCells) {
+      showOperationAlert(
+        "此課表已有付款，只有教練經理、副理或平台管理員能刪除。",
+        "無法刪除預約",
+      );
+      return;
+    }
     const label = scheduleBookingLabel(booking);
     const confirmed = window.confirm(
-      `確定刪除「${label}」在 ${formatDateTime(booking.starts_at)} 的預約嗎？\n\n只會刪除這筆預約，不會刪除會員資料。`,
+      `確定刪除「${label}」在 ${formatDateTime(booking.starts_at)} 的預約嗎？\n\n只會刪除這筆預約，不會刪除會員資料${hasRecordedPayment ? "；付款紀錄也會保留" : ""}。`,
     );
     if (!confirmed) return;
 
@@ -2786,6 +2795,20 @@ export default function BigeFitnessOperations({
   const executeScheduleMove = async (mode: "move" | "swap" | "overwrite") => {
     if (!pendingScheduleMove || scheduleMoveSubmitting) return;
     const plan = pendingScheduleMove;
+    if (
+      mode === "overwrite" &&
+      plan.targetItems.some(
+        (booking) => typeof booking.booking_payment_amount === "number",
+      ) &&
+      !data?.canManagePaidScheduleCells
+    ) {
+      setPendingScheduleMove(null);
+      setOverwriteConfirmation(false);
+      setScheduleDragNotice(
+        "目標課表已有付款，只有教練經理、副理或平台管理員能取消並覆蓋。",
+      );
+      return;
+    }
     const operationDate = boardDateRef.current;
     const previousData = data;
     const previousCachedData = boardCacheRef.current.get(operationDate);
@@ -5002,6 +5025,11 @@ export default function BigeFitnessOperations({
   const canCancelSelectedBooking =
     canCancelBigeCourseAnytime(sessionIdentity || {}) ||
     !!selectedBookingStatusWindow?.allowed;
+  const selectedBookingPaymentLocked = Boolean(
+    selectedBooking &&
+      typeof selectedBooking.booking_payment_amount === "number" &&
+      !data?.canManagePaidScheduleCells,
+  );
   const contractIdentityLocked =
     selectedConversionBooking || Boolean(studentPaymentContext);
   const missingContractProfileFields = selectedBooking?.operation_kind === "trial"
@@ -7096,7 +7124,16 @@ export default function BigeFitnessOperations({
                       <button
                         type="button"
                         className={`${styles.button} ${styles.danger}`}
-                        disabled={!canCancelSelectedBooking || scheduleDeleteSubmitting}
+                        disabled={
+                          !canCancelSelectedBooking ||
+                          selectedBookingPaymentLocked ||
+                          scheduleDeleteSubmitting
+                        }
+                        title={
+                          selectedBookingPaymentLocked
+                            ? "已有付款的課表只能由教練經理、副理或平台管理員刪除"
+                            : undefined
+                        }
                         onClick={() =>
                           void deleteScheduleBooking(selectedBooking, {
                             closeBookingDialog: true,
