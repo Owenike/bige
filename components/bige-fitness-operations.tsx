@@ -401,10 +401,16 @@ type LineGroupBinding = {
   id: string;
   member_id: string | null;
   group_name: string;
+  verification_code: string | null;
   status: "pending" | "active" | "left" | "disabled";
   verified_at: string | null;
   last_seen_at: string;
 };
+
+function lineGroupVerificationLabel(code: string | null | undefined) {
+  const normalized = String(code || "").trim().toUpperCase();
+  return normalized ? `BG-${normalized}` : "尚未取得驗證碼";
+}
 type LineScheduleNotificationIssue = {
   id: string;
   member_id: string;
@@ -4810,6 +4816,7 @@ export default function BigeFitnessOperations({
               ? `walk-in-renewal:${studentPaymentContext.memberId}:${crypto.randomUUID()}`
               : null,
           ...contractDraft,
+          lineGroupBindingId: contractDraft.lineGroupBindingId || null,
           signedOn:
             selectedBooking &&
             (selectedConversionBooking || studentPaymentContext?.paymentType === "renewal")
@@ -6359,7 +6366,7 @@ export default function BigeFitnessOperations({
                       <strong>LINE 群組</strong>
                       <p className={styles.muted}>
                         {activeMemberLineBinding
-                          ? `目前已綁定：${activeMemberLineBinding.group_name}`
+                          ? `目前已綁定：${activeMemberLineBinding.group_name}｜${lineGroupVerificationLabel(activeMemberLineBinding.verification_code)}`
                           : inactiveMemberLineBinding?.status === "left"
                             ? `原群組「${inactiveMemberLineBinding.group_name}」連線已失效`
                             : inactiveMemberLineBinding?.status === "disabled"
@@ -6381,7 +6388,7 @@ export default function BigeFitnessOperations({
                     </span>
                   </div>
                   <p className={styles.warning}>
-                    群組名稱只作提示，不會依學員姓名自動配對；請人工確認後再儲存。
+                    群組名稱只作提示，不會依學員姓名自動配對；請核對群組內顯示的 BG 驗證碼後再儲存。
                   </p>
                   {selectedMemberLineNotificationIssue ? (
                     <div
@@ -6436,7 +6443,7 @@ export default function BigeFitnessOperations({
                         <option value="">請選擇待綁定群組</option>
                         {availableMemberLineBindings.map((binding) => (
                           <option key={binding.id} value={binding.id}>
-                            {binding.group_name}（{binding.status === "active" ? "目前使用中" : "待綁定"}）
+                            {binding.group_name}｜{lineGroupVerificationLabel(binding.verification_code)}（{binding.status === "active" ? "目前使用中" : "待綁定"}）
                           </option>
                         ))}
                       </select>
@@ -8113,10 +8120,9 @@ export default function BigeFitnessOperations({
               </p>
             ) : null}
             <label className={`${styles.field} ${styles.fieldFull}`}>
-              <span className={styles.label}>學員專屬 LINE 群組</span>
+              <span className={styles.label}>學員專屬 LINE 群組（測試期間可稍後綁定）</span>
               <select
                 className={styles.select}
-                required
                 value={contractDraft.lineGroupBindingId}
                 onChange={(event) =>
                   setContractDraft({
@@ -8128,13 +8134,13 @@ export default function BigeFitnessOperations({
                 <option value="">請人工確認並選擇群組（不會依名稱自動綁定）</option>
                 {availableContractLineBindings.map((binding) => (
                   <option key={binding.id} value={binding.id}>
-                    {binding.group_name}
+                    {binding.group_name}｜{lineGroupVerificationLabel(binding.verification_code)}
                     {binding.status === "active" ? "（已綁定此學員）" : "（待綁定）"}
                   </option>
                 ))}
               </select>
               <small className={styles.fieldHelp}>
-                建立合約時會鎖定一位學員對一個群組；沒有可選項時，請先將「BIG E小幫手」加入學員群組。
+                可先建立合約再至會員資料綁定；但建立正式課程前仍必須完成綁定。群組內輸入「驗證碼」可再次取得 BG 碼。
               </small>
             </label>
             {!studentPaymentContext ? (
@@ -8506,7 +8512,6 @@ export default function BigeFitnessOperations({
                 type="submit"
                 disabled={
                   contractSubmitting ||
-                  !contractDraft.lineGroupBindingId ||
                   missingContractIdentityFields.length > 0 ||
                   (studentPaymentContext?.paymentType === "balance" &&
                     (!scheduleMemberDetail?.canRecordContractPayment ||

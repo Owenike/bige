@@ -9,8 +9,12 @@ import {
   setMemberLineGroupBindingSchema,
 } from "../lib/bige-fitness";
 import {
+  bigeLineGroupVerificationCode,
   bigeLineRetryDelayMinutes,
+  buildBigeLineGroupVerificationMessage,
   buildBigeLineScheduleMessage,
+  formatBigeLineGroupVerificationCode,
+  isBigeLineGroupVerificationCodeRequest,
   verifyBigeLineWebhookSignature,
 } from "../lib/bige-line-schedule";
 
@@ -67,7 +71,7 @@ test("LINE webhook rejects unsigned payloads and accepts the configured HMAC", (
   else process.env.LINE_STUDENT_SCHEDULE_CHANNEL_SECRET = previous;
 });
 
-test("contract creation requires an explicit LINE group binding", () => {
+test("test-mode contract creation permits a deferred LINE group binding", () => {
   const validContract = {
     action: "create_contract" as const,
     lineGroupBindingId: "00000000-0000-4000-8000-000000000099",
@@ -85,7 +89,30 @@ test("contract creation requires an explicit LINE group binding", () => {
   assert.equal(createContractSchema.safeParse(validContract).success, true);
   const withoutBinding = { ...validContract } as Partial<typeof validContract>;
   delete withoutBinding.lineGroupBindingId;
-  assert.equal(createContractSchema.safeParse(withoutBinding).success, false);
+  assert.equal(createContractSchema.safeParse(withoutBinding).success, true);
+  assert.equal(
+    createContractSchema.safeParse({ ...validContract, lineGroupBindingId: null }).success,
+    true,
+  );
+});
+
+test("LINE group verification codes are stable and can be requested from the group", () => {
+  const first = bigeLineGroupVerificationCode("C1234567890");
+  assert.equal(first, bigeLineGroupVerificationCode("C1234567890"));
+  assert.notEqual(first, bigeLineGroupVerificationCode("C0987654321"));
+  assert.match(first, /^[A-F0-9]{8}$/);
+  assert.equal(formatBigeLineGroupVerificationCode(first), `BG-${first}`);
+  assert.equal(isBigeLineGroupVerificationCodeRequest("驗證碼"), true);
+  assert.equal(isBigeLineGroupVerificationCodeRequest("@BIG E小幫手 群組驗證碼"), true);
+  assert.equal(isBigeLineGroupVerificationCodeRequest("今天要上課嗎"), false);
+
+  const message = buildBigeLineGroupVerificationMessage({
+    verificationCode: first,
+    joined: true,
+  });
+  assert.match(message, new RegExp(`BG-${first}`));
+  assert.match(message, /櫃台/);
+  assert.doesNotMatch(message, /教練/);
 });
 
 test("walk-in payment requires an auditable operation and positive tender entries", () => {
@@ -167,6 +194,8 @@ test("member profile exposes manual LINE binding and the audited atomic RPC", ()
   assert.match(route, /bige_set_member_line_group_binding_v1/);
   assert.match(component, /aria-label="學員 LINE 群組設定"/);
   assert.match(component, /群組名稱只作提示，不會依學員姓名自動配對/);
+  assert.match(component, /BG 驗證碼/);
+  assert.match(component, /lineGroupVerificationLabel/);
   assert.match(component, /activeMemberLineBinding[\s\S]*inactiveMemberLineBinding/);
   assert.match(migration, /status = 'disabled'/);
   assert.match(migration, /bige_member_line_group_bound/);
@@ -206,6 +235,7 @@ test("LINE delivery is PT-only, future-only, refreshes latest schedules, and sup
 test("LINE failures are visible without joining the protected daily-board prefetch", () => {
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const line = readFileSync("lib/bige-line-schedule.ts", "utf8");
   assert.match(route, /lineScheduleNotificationIssues/);
   assert.match(route, /input\.action === "retry_line_schedule_notification"/);
   assert.match(route, /status !== "failed"/);
@@ -213,6 +243,46 @@ test("LINE failures are visible without joining the protected daily-board prefet
   assert.match(component, /重新發送目前課表/);
   assert.match(component, /5 分鐘、15 分鐘、1 小時、6 小時/);
   assert.doesNotMatch(component, /requestBoard[\s\S]{0,1200}lineScheduleNotificationIssues/);
+  assert.match(line, /\["coach_assistant_manager", "coach_manager"\]/);
+  assert.match(line, /eventType: "bige_line_schedule_delivery_failed"/);
+  assert.match(line, /inAppOnly: true/);
+  assert.match(line, /bige-line-schedule-failure:\$\{params\.notificationId\}/);
+});
+
+test("LINE webhook stores and replies with a same-name-safe group verification code", () => {
+  const webhook = readFileSync("app/api/line/student-schedule/webhook/route.ts", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260824222613_add_bige_line_group_verification_and_optional_contract_binding.sql",
+    "utf8",
+  );
+  assert.match(webhook, /verification_code: verificationCode/);
+  assert.match(webhook, /\/v2\/bot\/message\/reply/);
+  assert.match(webhook, /event\.type === "join" \|\| verificationRequested/);
+  assert.match(webhook, /isBigeLineGroupVerificationCodeRequest/);
+  assert.match(migration, /verification_code ~ '\^\[A-F0-9\]\{8\}\$'/);
+  assert.match(migration, /bige_line_group_bindings_verification_code_idx/);
+  assert.match(migration, /bige_line_group_verification_code_trigger/);
+  assert.match(migration, /before insert or update of line_group_id, verification_code/);
+});
+
+test("contract binding is optional only in the audited test-mode RPCs", () => {
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260824222613_add_bige_line_group_verification_and_optional_contract_binding.sql",
+    "utf8",
+  );
+  assert.match(route, /bige_create_member_contract_v8/);
+  assert.match(route, /bige_create_bb_member_contract_v3/);
+  assert.match(route, /p_line_binding_id: input\.lineGroupBindingId \|\| null/);
+  assert.match(component, /lineGroupBindingId: contractDraft\.lineGroupBindingId \|\| null/);
+  assert.match(component, /測試期間可稍後綁定/);
+  assert.match(component, /建立正式課程前仍必須完成綁定/);
+  assert.match(migration, /bige_contract_created_without_line_group/);
+  assert.match(migration, /line_binding_test_mode/);
+  assert.match(migration, /lineBindingDeferred/);
+  assert.match(migration, /return public\.bige_create_member_contract_v7/);
+  assert.match(migration, /return public\.bige_create_bb_member_contract_v2/);
 });
 
 test("walk-in dashboard is loaded once outside the protected date prefetch window", () => {

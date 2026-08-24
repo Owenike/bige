@@ -71,6 +71,7 @@ type CreateParams = {
   payload?: Record<string, unknown>;
   dedupeKey?: string | null;
   createdBy?: string | null;
+  inAppOnly?: boolean;
 };
 
 type SweepInput = {
@@ -271,11 +272,13 @@ export async function createInAppNotifications(params: CreateParams) {
           createdBy: row.created_by,
         },
       ];
-      const externalChannels = resolveExternalChannels({
-        eventType: row.event_type,
-        severity: row.severity,
-        recipientRole: row.recipient_role,
-      });
+      const externalChannels = params.inAppOnly
+        ? []
+        : resolveExternalChannels({
+            eventType: row.event_type,
+            severity: row.severity,
+            recipientRole: row.recipient_role,
+          });
       for (const channel of externalChannels) {
         deliveries.push({
           tenantId: row.tenant_id,

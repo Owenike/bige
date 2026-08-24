@@ -1176,7 +1176,7 @@ test("FA and BB conversions use their source booking while member payments keep 
     route,
     /sourceBookingResult\.data\.operation_kind === "trial"[\s\S]*FA 付款的款項類型固定為新單 New/,
   );
-  assert.match(route, /sourceOperationKind === "bb"[\s\S]*bige_create_bb_member_contract_v2/);
+  assert.match(route, /sourceOperationKind === "bb"[\s\S]*bige_create_bb_member_contract_v3/);
 });
 
 test("tablet payment and plan number inputs preserve the in-progress text value", () => {
@@ -1341,7 +1341,7 @@ test("FA payment and not-converted actions capture one atomic fee recipient", ()
   assert.match(component, /list="fa-fee-recipient-options"/);
   assert.match(component, /選擇員工或自行輸入/);
   assert.match(component, /\/api\/bige-fitness\?faFeeRecipients=1/);
-  assert.match(route, /bige_create_member_contract_v7/);
+  assert.match(route, /bige_create_member_contract_v8/);
   assert.match(route, /p_sales_origin_coach_id: trustedSalesOriginCoachId/);
   assert.match(
     route,
@@ -2176,7 +2176,7 @@ test("schedule-origin contracts use the source business date and ECPay installme
     component,
     /toTaipeiDateString\(new Date\(selectedBooking\.starts_at\)\)/,
   );
-  assert.match(route, /rpc\("bige_create_member_contract_v7"/);
+  assert.match(route, /rpc\("bige_create_member_contract_v8"/);
   assert.match(route, /const trustedSignedOn = trustedSourceBusinessDate \|\| input\.signedOn/);
   assert.match(route, /rpc\("bige_record_contract_payment_v3"/);
   assert.match(route, /p_source_booking_id: input\.sourceBookingId \|\| null/);
@@ -2200,7 +2200,7 @@ test("BB is bound to a completed non-converted FA and never becomes a lesson, FA
   assert.match(component, /action: "complete_bb_outcome"/);
   assert.match(component, /BB 成交已完成[\s\S]*本筆不產生 EPO/);
   assert.match(route, /url\.searchParams\.get\("trialScope"\) === "bb"/);
-  assert.match(route, /bige_create_bb_member_contract_v2/);
+  assert.match(route, /bige_create_bb_member_contract_v3/);
   assert.match(route, /bige_complete_bb_outcome_v1/);
   assert.match(migration, /operation_kind = 'bb'/);
   assert.match(migration, /trial_conversion_outcome = 'not_converted'/);

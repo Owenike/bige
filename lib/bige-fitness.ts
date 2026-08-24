@@ -605,7 +605,7 @@ export const createContractSchema = z.object({
   memberId: z.string().uuid().nullable().optional(),
   sourceBookingId: z.string().uuid().nullable().optional(),
   sourceMemberBookingId: z.string().uuid().nullable().optional(),
-  lineGroupBindingId: z.string().uuid(),
+  lineGroupBindingId: z.string().uuid().nullable().optional().default(null),
   walkIn: z.boolean().default(false),
   walkInIdempotencyKey: z.string().trim().min(8).max(180).nullable().optional(),
   fullName: z.string().trim().min(1).max(80),

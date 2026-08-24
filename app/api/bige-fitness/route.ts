@@ -903,7 +903,7 @@ async function loadBigeOperationsDashboard(
     canManageLineSchedules
       ? admin
           .from("bige_line_group_bindings")
-          .select("id, member_id, group_name, status, verified_at, last_seen_at")
+          .select("id, member_id, group_name, verification_code, status, verified_at, last_seen_at")
           .eq("tenant_id", tenantId)
           .in("status", ["pending", "active", "left", "disabled"])
           .order("last_seen_at", { ascending: false })
@@ -3304,12 +3304,12 @@ export async function POST(request: Request) {
       p_payment_schedule: input.paymentSchedule,
     };
     const result = sourceOperationKind === "bb"
-      ? await operationSupabase.rpc("bige_create_bb_member_contract_v2", {
+      ? await operationSupabase.rpc("bige_create_bb_member_contract_v3", {
           ...sharedContractParams,
           p_source_booking_id: input.sourceBookingId,
-          p_line_binding_id: input.lineGroupBindingId,
+          p_line_binding_id: input.lineGroupBindingId || null,
         })
-      : await operationSupabase.rpc("bige_create_member_contract_v7", {
+      : await operationSupabase.rpc("bige_create_member_contract_v8", {
           ...sharedContractParams,
           p_source_booking_id: input.sourceBookingId || null,
           p_future_trial_action: input.futureTrialAction || "none",
@@ -3318,7 +3318,7 @@ export async function POST(request: Request) {
           p_sales_origin_coach_id: trustedSalesOriginCoachId,
           p_sales_origin_kind: sourceOperationKind === "trial" ? "fa" : input.sourceMemberBookingId || input.walkIn ? "renewal" : "manual",
           p_payment_source_booking_id: input.sourceBookingId || input.sourceMemberBookingId || null,
-          p_line_binding_id: input.lineGroupBindingId,
+          p_line_binding_id: input.lineGroupBindingId || null,
           p_walk_in: input.walkIn,
           p_walk_in_idempotency_key: input.walkInIdempotencyKey || null,
         });

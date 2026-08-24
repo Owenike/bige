@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import {
+  bigeLineGroupVerificationCode,
   bigeLineWebhookDedupeKey,
+  buildBigeLineGroupVerificationMessage,
+  isBigeLineGroupVerificationCodeRequest,
   verifyBigeLineWebhookSignature,
 } from "../../../../../lib/bige-line-schedule";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
@@ -10,7 +13,10 @@ export const dynamic = "force-dynamic";
 type LineEvent = {
   type?: string;
   webhookEventId?: string;
+  replyToken?: string;
+  mode?: "active" | "standby";
   source?: { type?: string; groupId?: string };
+  message?: { type?: string; text?: string };
 };
 
 async function readGroupName(groupId: string) {
@@ -23,6 +29,25 @@ async function readGroupName(groupId: string) {
   if (!response.ok) return null;
   const payload = (await response.json().catch(() => null)) as { groupName?: string } | null;
   return payload?.groupName?.trim() || null;
+}
+
+async function replyLineText(replyToken: string | undefined, text: string) {
+  const token = process.env.LINE_STUDENT_SCHEDULE_CHANNEL_ACCESS_TOKEN || "";
+  if (!token || !replyToken) return;
+  const response = await fetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [{ type: "text", text }],
+    }),
+  }).catch(() => null);
+  if (response && !response.ok) {
+    console.warn("[bige-line-webhook] verification reply failed", response.status);
+  }
 }
 
 export async function POST(request: Request) {
@@ -54,6 +79,7 @@ export async function POST(request: Request) {
     }
     if (event.type !== "join" && event.type !== "message") continue;
     const groupName = (await readGroupName(groupId)) || "尚未取得群組名稱";
+    const verificationCode = bigeLineGroupVerificationCode(groupId);
     const existing = await admin
       .from("bige_line_group_bindings")
       .select("id, status")
@@ -64,11 +90,12 @@ export async function POST(request: Request) {
       console.warn("[bige-line-webhook] binding lookup failed", existing.error.message);
       continue;
     }
-    await admin.from("bige_line_group_bindings").upsert(
+    const upsert = await admin.from("bige_line_group_bindings").upsert(
       {
         tenant_id: tenantId,
         line_group_id: groupId,
         group_name: groupName,
+        verification_code: verificationCode,
         status: existing.data?.status === "active" ? "active" : "pending",
         joined_at: event.type === "join" ? new Date().toISOString() : undefined,
         left_at: null,
@@ -78,6 +105,23 @@ export async function POST(request: Request) {
       },
       { onConflict: "tenant_id,line_group_id" },
     );
+    if (upsert.error) {
+      console.warn("[bige-line-webhook] binding upsert failed", upsert.error.message);
+      continue;
+    }
+    const verificationRequested =
+      event.type === "message" &&
+      event.message?.type === "text" &&
+      isBigeLineGroupVerificationCodeRequest(event.message.text);
+    if (event.mode !== "standby" && (event.type === "join" || verificationRequested)) {
+      await replyLineText(
+        event.replyToken,
+        buildBigeLineGroupVerificationMessage({
+          verificationCode,
+          joined: event.type === "join",
+        }),
+      );
+    }
   }
   return NextResponse.json({ ok: true });
 }

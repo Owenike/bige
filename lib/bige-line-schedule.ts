@@ -1,10 +1,40 @@
 import { createHash, timingSafeEqual, createHmac } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BIGE_COURSE_LABELS } from "./bige-fitness";
+import { createInAppNotifications } from "./in-app-notifications";
 import { createSupabaseAdminClient } from "./supabase/admin";
 
 const ACTIVE_BOOKING_STATUSES = ["pending", "confirmed", "booked", "checked_in"];
 const LINE_PUSH_ENDPOINT = "https://api.line.me/v2/bot/message/push";
+
+export function bigeLineGroupVerificationCode(groupId: string) {
+  return createHash("sha256").update(groupId.trim()).digest("hex").slice(0, 8).toUpperCase();
+}
+
+export function formatBigeLineGroupVerificationCode(code: string | null | undefined) {
+  const normalized = String(code || "").trim().toUpperCase();
+  return normalized ? `BG-${normalized}` : "尚未取得";
+}
+
+export function isBigeLineGroupVerificationCodeRequest(text: string | null | undefined) {
+  const normalized = String(text || "")
+    .replace(/\s+/g, "")
+    .replace(/@BIGE小幫手/gi, "")
+    .replace(/BIGE小幫手/gi, "")
+    .toLowerCase();
+  return ["驗證碼", "群組驗證碼", "綁定", "綁定碼"].includes(normalized);
+}
+
+export function buildBigeLineGroupVerificationMessage(params: {
+  verificationCode: string;
+  joined?: boolean;
+}) {
+  return [
+    params.joined ? "BIG E小幫手已加入此群組。" : "此群組的 BIG E 驗證碼如下：",
+    `群組驗證碼：${formatBigeLineGroupVerificationCode(params.verificationCode)}`,
+    "請由櫃台在學員個人資料中核對此碼後完成綁定。",
+  ].join("\n");
+}
 
 export type BigeLineScheduleEventKind = "created" | "updated" | "cancelled";
 
@@ -96,6 +126,55 @@ function safeProviderBody(value: string) {
   }
 }
 
+async function notifyBigeLineDeliveryFailure(params: {
+  supabase: SupabaseClient;
+  notificationId: string;
+  tenantId: string;
+  branchId?: string | null;
+  memberId: string;
+  error: string;
+}) {
+  const [memberResult, recipientsResult] = await Promise.all([
+    params.supabase
+      .from("members")
+      .select("full_name")
+      .eq("tenant_id", params.tenantId)
+      .eq("id", params.memberId)
+      .maybeSingle(),
+    params.supabase
+      .from("profiles")
+      .select("id")
+      .eq("tenant_id", params.tenantId)
+      .eq("department", "coaching")
+      .in("position", ["coach_assistant_manager", "coach_manager"])
+      .eq("is_active", true),
+  ]);
+  if (memberResult.error || recipientsResult.error) return;
+  const recipientUserIds = (recipientsResult.data || []).map((profile) => String(profile.id));
+  if (recipientUserIds.length === 0) return;
+  const memberName = String(memberResult.data?.full_name || "學員");
+  await createInAppNotifications({
+    supabase: params.supabase,
+    tenantId: params.tenantId,
+    branchId: params.branchId || null,
+    recipientUserIds,
+    title: "LINE 課表通知發送失敗",
+    message: `${memberName} 的課表通知尚未成功送達；系統會依排程自動補送，請至日排課表的 LINE 通知查看。`,
+    severity: "critical",
+    eventType: "bige_line_schedule_delivery_failed",
+    targetType: "bige_line_schedule_notification",
+    targetId: params.notificationId,
+    actionUrl: "/manager/fitness",
+    payload: {
+      memberId: params.memberId,
+      memberName,
+      deliveryError: params.error.slice(0, 160),
+    },
+    dedupeKey: `bige-line-schedule-failure:${params.notificationId}`,
+    inAppOnly: true,
+  }).catch(() => null);
+}
+
 async function loadCurrentScheduleSnapshot(params: {
   supabase: SupabaseClient;
   tenantId: string;
@@ -154,6 +233,9 @@ async function loadCurrentScheduleSnapshot(params: {
 async function recordRetryableFailure(params: {
   supabase: SupabaseClient;
   notificationId: string;
+  tenantId: string;
+  branchId?: string | null;
+  memberId: string;
   attempts: number;
   maxAttempts: number;
   attemptedAt: string;
@@ -162,7 +244,7 @@ async function recordRetryableFailure(params: {
   retryable: boolean;
 }) {
   const canRetry = params.retryable && params.attempts < params.maxAttempts;
-  await params.supabase
+  const updated = await params.supabase
     .from("bige_line_schedule_notifications")
     .update({
       status: canRetry ? "retrying" : "failed",
@@ -175,7 +257,19 @@ async function recordRetryableFailure(params: {
       updated_at: params.attemptedAt,
     })
     .eq("id", params.notificationId)
-    .in("status", ["pending", "retrying"]);
+    .in("status", ["pending", "retrying"])
+    .select("id")
+    .maybeSingle();
+  if (updated.data) {
+    await notifyBigeLineDeliveryFailure({
+      supabase: params.supabase,
+      notificationId: params.notificationId,
+      tenantId: params.tenantId,
+      branchId: params.branchId,
+      memberId: params.memberId,
+      error: params.error,
+    });
+  }
   return canRetry;
 }
 
@@ -186,7 +280,7 @@ export async function dispatchBigeLineScheduleNotification(params: {
   const supabase = params.supabase || createSupabaseAdminClient();
   const notificationResult = await supabase
     .from("bige_line_schedule_notifications")
-    .select("id, tenant_id, member_id, event_kind, status, attempts, max_attempts")
+    .select("id, tenant_id, branch_id, member_id, event_kind, status, attempts, max_attempts")
     .eq("id", params.notificationId)
     .maybeSingle();
   if (notificationResult.error || !notificationResult.data) {
@@ -207,7 +301,7 @@ export async function dispatchBigeLineScheduleNotification(params: {
   });
   if (snapshot.ok === false) {
     if (snapshot.terminal === "binding") {
-      await supabase
+      const cancelled = await supabase
         .from("bige_line_schedule_notifications")
         .update({
           status: "cancelled",
@@ -215,12 +309,28 @@ export async function dispatchBigeLineScheduleNotification(params: {
           resolution_reason: "line_group_binding_missing_during_delivery",
           updated_at: attemptedAt,
         })
-        .eq("id", notification.id);
+        .eq("id", notification.id)
+        .in("status", ["pending", "retrying"])
+        .select("id")
+        .maybeSingle();
+      if (cancelled.data) {
+        await notifyBigeLineDeliveryFailure({
+          supabase,
+          notificationId: notification.id,
+          tenantId: String(notification.tenant_id),
+          branchId: notification.branch_id ? String(notification.branch_id) : null,
+          memberId: String(notification.member_id),
+          error: snapshot.error,
+        });
+      }
       return { ok: false as const, error: snapshot.error };
     }
     await recordRetryableFailure({
       supabase,
       notificationId: notification.id,
+      tenantId: String(notification.tenant_id),
+      branchId: notification.branch_id ? String(notification.branch_id) : null,
+      memberId: String(notification.member_id),
       attempts,
       maxAttempts,
       attemptedAt,
@@ -252,6 +362,9 @@ export async function dispatchBigeLineScheduleNotification(params: {
     await recordRetryableFailure({
       supabase,
       notificationId: notification.id,
+      tenantId: String(notification.tenant_id),
+      branchId: notification.branch_id ? String(notification.branch_id) : null,
+      memberId: String(notification.member_id),
       attempts,
       maxAttempts,
       attemptedAt,
@@ -269,6 +382,9 @@ export async function dispatchBigeLineScheduleNotification(params: {
     await recordRetryableFailure({
       supabase,
       notificationId: notification.id,
+      tenantId: String(notification.tenant_id),
+      branchId: notification.branch_id ? String(notification.branch_id) : null,
+      memberId: String(notification.member_id),
       attempts,
       maxAttempts,
       attemptedAt,
@@ -318,6 +434,9 @@ export async function dispatchBigeLineScheduleNotification(params: {
     await recordRetryableFailure({
       supabase,
       notificationId: notification.id,
+      tenantId: String(notification.tenant_id),
+      branchId: notification.branch_id ? String(notification.branch_id) : null,
+      memberId: String(notification.member_id),
       attempts,
       maxAttempts,
       attemptedAt,
@@ -331,6 +450,9 @@ export async function dispatchBigeLineScheduleNotification(params: {
     await recordRetryableFailure({
       supabase,
       notificationId: notification.id,
+      tenantId: String(notification.tenant_id),
+      branchId: notification.branch_id ? String(notification.branch_id) : null,
+      memberId: String(notification.member_id),
       attempts,
       maxAttempts,
       attemptedAt,
