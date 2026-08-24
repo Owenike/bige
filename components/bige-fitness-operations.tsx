@@ -400,7 +400,7 @@ type LineGroupBinding = {
   id: string;
   member_id: string | null;
   group_name: string;
-  status: "pending" | "active";
+  status: "pending" | "active" | "left" | "disabled";
   verified_at: string | null;
   last_seen_at: string;
 };
@@ -1697,6 +1697,10 @@ export default function BigeFitnessOperations({
   });
   const [memberDetail, setMemberDetail] = useState<MemberDetail | null>(null);
   const [memberDetailError, setMemberDetailError] = useState("");
+  const [memberLineBindingDraft, setMemberLineBindingDraft] = useState("");
+  const [memberLineBindingDirty, setMemberLineBindingDirty] = useState(false);
+  const [memberLineBindingSubmitting, setMemberLineBindingSubmitting] = useState(false);
+  const [memberLineBindingError, setMemberLineBindingError] = useState("");
   const [scheduleMemberDetail, setScheduleMemberDetail] = useState<MemberDetail | null>(null);
   const [scheduleMemberDetailLoading, setScheduleMemberDetailLoading] = useState(false);
   const [scheduleMemberDetailError, setScheduleMemberDetailError] = useState("");
@@ -2155,6 +2159,22 @@ export default function BigeFitnessOperations({
   useEffect(() => {
     if (!search.trim()) {
       setSearchResults({ members: [], trials: [] });
+      return;
+    }
+    if (previewData) {
+      const query = search.trim().toLocaleLowerCase("zh-TW");
+      setSearchResults({
+        members: previewData.members.filter((member) =>
+          [member.full_name, member.phone, member.member_code, ...(member.legacy_numbers || [])]
+            .filter(Boolean)
+            .some((value) => String(value).toLocaleLowerCase("zh-TW").includes(query)),
+        ),
+        trials: (previewData.trialBookings || []).filter((trial) =>
+          [trial.name, trial.phone]
+            .filter(Boolean)
+            .some((value) => String(value).toLocaleLowerCase("zh-TW").includes(query)),
+        ),
+      });
       return;
     }
     let cancelled = false;
@@ -3120,6 +3140,8 @@ export default function BigeFitnessOperations({
     memberLoadRequestIdRef.current = requestId;
     setSelectedMember(member);
     setMemberDetailError("");
+    setMemberLineBindingDirty(false);
+    setMemberLineBindingError("");
     setError("");
     if (options.force) scheduleMemberDetailCacheRef.current.delete(member.id);
 
@@ -3141,6 +3163,38 @@ export default function BigeFitnessOperations({
       setMemberDetail(null);
       setMemberDetailError(message);
       setDialog("member");
+    }
+  };
+
+  const saveMemberLineGroupBinding = async () => {
+    if (
+      !selectedMember ||
+      !memberLineBindingDraft ||
+      memberLineBindingSubmitting ||
+      memberLineBindingDraft === activeMemberLineBinding?.id
+    ) {
+      return;
+    }
+    setMemberLineBindingSubmitting(true);
+    setMemberLineBindingError("");
+    try {
+      await post(
+        {
+          action: "set_member_line_group_binding",
+          memberId: selectedMember.id,
+          lineGroupBindingId: memberLineBindingDraft,
+        },
+        { errorPresentation: "inline" },
+      );
+      await loadOperationsDashboard();
+      setMemberLineBindingDirty(false);
+      setSuccess(`已更新 ${selectedMember.full_name} 的 LINE 群組`);
+    } catch (caught) {
+      setMemberLineBindingError(
+        caught instanceof Error ? caught.message : "設定學員 LINE 群組失敗",
+      );
+    } finally {
+      setMemberLineBindingSubmitting(false);
     }
   };
 
@@ -4388,6 +4442,25 @@ export default function BigeFitnessOperations({
         (!binding.member_id || binding.member_id === selectedMember?.id)) ||
       (binding.status === "active" && binding.member_id === selectedMember?.id),
   );
+  const selectedMemberLineBindings = (data?.lineGroupBindings || []).filter(
+    (binding) => binding.member_id === selectedMember?.id,
+  );
+  const activeMemberLineBinding = selectedMemberLineBindings.find(
+    (binding) => binding.status === "active",
+  );
+  const inactiveMemberLineBinding = selectedMemberLineBindings.find(
+    (binding) => binding.status === "left" || binding.status === "disabled",
+  );
+  const availableMemberLineBindings = (data?.lineGroupBindings || []).filter(
+    (binding) =>
+      (binding.status === "pending" &&
+        (!binding.member_id || binding.member_id === selectedMember?.id)) ||
+      (binding.status === "active" && binding.member_id === selectedMember?.id),
+  );
+  useEffect(() => {
+    if (dialog !== "member" || !selectedMember || memberLineBindingDirty) return;
+    setMemberLineBindingDraft(activeMemberLineBinding?.id || "");
+  }, [activeMemberLineBinding?.id, dialog, memberLineBindingDirty, selectedMember]);
   const walkInMemberResults = (data?.members || [])
     .filter((member) => {
       const keyword = walkInMemberSearch.trim().toLowerCase();
@@ -6153,6 +6226,9 @@ export default function BigeFitnessOperations({
             setSelectedContract(null);
             setMemberDetail(null);
             setMemberDetailError("");
+            setMemberLineBindingDraft("");
+            setMemberLineBindingDirty(false);
+            setMemberLineBindingError("");
           }}
         >
           {memberDetailError ? (
@@ -6179,6 +6255,86 @@ export default function BigeFitnessOperations({
                   </button>
                 ) : null}
               </div>
+              {data?.canCreateContract ? (
+                <section className={styles.lineGroupProfileCard} aria-label="學員 LINE 群組設定">
+                  <div className={styles.lineGroupProfileHeader}>
+                    <div>
+                      <strong>LINE 群組</strong>
+                      <p className={styles.muted}>
+                        {activeMemberLineBinding
+                          ? `目前已綁定：${activeMemberLineBinding.group_name}`
+                          : inactiveMemberLineBinding?.status === "left"
+                            ? `原群組「${inactiveMemberLineBinding.group_name}」連線已失效`
+                            : inactiveMemberLineBinding?.status === "disabled"
+                              ? `原群組「${inactiveMemberLineBinding.group_name}」已停用`
+                              : "目前尚未綁定 LINE 群組"}
+                      </p>
+                    </div>
+                    <span
+                      className={styles.lineGroupStatusBadge}
+                      data-status={activeMemberLineBinding ? "active" : inactiveMemberLineBinding?.status || "pending"}
+                    >
+                      {activeMemberLineBinding
+                        ? "已綁定"
+                        : inactiveMemberLineBinding?.status === "left"
+                          ? "已離開群組"
+                          : inactiveMemberLineBinding?.status === "disabled"
+                            ? "已停用"
+                            : "待綁定"}
+                    </span>
+                  </div>
+                  <p className={styles.warning}>
+                    群組名稱只作提示，不會依學員姓名自動配對；請人工確認後再儲存。
+                  </p>
+                  <div className={styles.lineGroupProfileControls}>
+                    <label className={styles.field}>
+                      <span className={styles.label}>選擇這位學員的群組</span>
+                      <select
+                        className={styles.input}
+                        aria-label="選擇這位學員的 LINE 群組"
+                        value={memberLineBindingDraft}
+                        onChange={(event) => {
+                          setMemberLineBindingDraft(event.target.value);
+                          setMemberLineBindingDirty(true);
+                          setMemberLineBindingError("");
+                        }}
+                      >
+                        <option value="">請選擇待綁定群組</option>
+                        {availableMemberLineBindings.map((binding) => (
+                          <option key={binding.id} value={binding.id}>
+                            {binding.group_name}（{binding.status === "active" ? "目前使用中" : "待綁定"}）
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      className={`${styles.button} ${styles.primary}`}
+                      type="button"
+                      disabled={
+                        Boolean(previewData) ||
+                        memberLineBindingSubmitting ||
+                        !memberLineBindingDraft ||
+                        memberLineBindingDraft === activeMemberLineBinding?.id
+                      }
+                      onClick={() => void saveMemberLineGroupBinding()}
+                    >
+                      {memberLineBindingSubmitting
+                        ? "儲存中…"
+                        : activeMemberLineBinding
+                          ? "變更綁定"
+                          : "確認綁定"}
+                    </button>
+                  </div>
+                  {!activeMemberLineBinding && availableMemberLineBindings.length === 0 ? (
+                    <p className={styles.muted}>
+                      尚無可選群組。請先把 BIG E小幫手加入該學員群組，待系統收到群組資料後再設定。
+                    </p>
+                  ) : null}
+                  {memberLineBindingError ? (
+                    <p className={styles.error} role="alert">{memberLineBindingError}</p>
+                  ) : null}
+                </section>
+              ) : null}
               <div className={styles.list}>
                 {memberDetail.contracts.map((contract) => {
                   const contractPayments = memberDetail.payments.filter(

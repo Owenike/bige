@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { createContractSchema, recordWalkInPaymentSchema } from "../lib/bige-fitness";
+import {
+  createContractSchema,
+  recordWalkInPaymentSchema,
+  setMemberLineGroupBindingSchema,
+} from "../lib/bige-fitness";
 import {
   buildBigeLineScheduleMessage,
   verifyBigeLineWebhookSignature,
@@ -105,6 +109,43 @@ test("walk-in payment requires an auditable operation and positive tender entrie
     }).success,
     false,
   );
+});
+
+test("existing member LINE group binding requires explicit member and group ids", () => {
+  assert.equal(
+    setMemberLineGroupBindingSchema.safeParse({
+      action: "set_member_line_group_binding",
+      memberId: "00000000-0000-4000-8000-000000000091",
+      lineGroupBindingId: "00000000-0000-4000-8000-000000000092",
+    }).success,
+    true,
+  );
+  assert.equal(
+    setMemberLineGroupBindingSchema.safeParse({
+      action: "set_member_line_group_binding",
+      memberId: "not-a-member-id",
+      lineGroupBindingId: "00000000-0000-4000-8000-000000000092",
+    }).success,
+    false,
+  );
+});
+
+test("member profile exposes manual LINE binding and the audited atomic RPC", () => {
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260824205036_bige_member_line_group_profile_binding.sql",
+    "utf8",
+  );
+  assert.match(route, /input\.action === "set_member_line_group_binding"/);
+  assert.match(route, /bige_set_member_line_group_binding_v1/);
+  assert.match(component, /aria-label="學員 LINE 群組設定"/);
+  assert.match(component, /群組名稱只作提示，不會依學員姓名自動配對/);
+  assert.match(component, /activeMemberLineBinding[\s\S]*inactiveMemberLineBinding/);
+  assert.match(migration, /status = 'disabled'/);
+  assert.match(migration, /bige_member_line_group_bound/);
+  assert.match(migration, /'bindingSource', 'member_profile'/);
+  assert.match(migration, /revoke all on function public\.bige_set_member_line_group_binding_v1/);
 });
 
 test("LINE delivery is PT-only, future-only, and move notifications cover every changed member", () => {

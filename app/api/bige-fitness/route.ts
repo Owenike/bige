@@ -904,7 +904,7 @@ async function loadBigeOperationsDashboard(
           .from("bige_line_group_bindings")
           .select("id, member_id, group_name, status, verified_at, last_seen_at")
           .eq("tenant_id", tenantId)
-          .in("status", ["pending", "active"])
+          .in("status", ["pending", "active", "left", "disabled"])
           .order("last_seen_at", { ascending: false })
           .limit(1000)
       : Promise.resolve({ data: [], error: null }),
@@ -2054,6 +2054,19 @@ export async function POST(request: Request) {
     ProfileContext,
     "userId" | "role" | "employeeNumber" | "department" | "position" | "tenantId" | "branchId"
   > = auth.context;
+
+  if (input.action === "set_member_line_group_binding") {
+    if (!canCreateBigeContract(operationContext.employeeNumber)) {
+      return apiError(403, "FORBIDDEN", "目前帳號不能設定學員 LINE 群組");
+    }
+    const result = await operationSupabase.rpc("bige_set_member_line_group_binding_v1", {
+      p_tenant_id: tenantId,
+      p_member_id: input.memberId,
+      p_line_binding_id: input.lineGroupBindingId,
+    });
+    if (result.error) return handleDatabaseError(result.error, "設定學員 LINE 群組失敗");
+    return apiSuccess({ item: result.data });
+  }
 
   if (input.action === "update_business_day") {
     const canManageClosure = isManager(auth.context);

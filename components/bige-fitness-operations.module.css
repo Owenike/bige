@@ -1891,6 +1891,68 @@
   border-bottom: 1px solid rgba(118, 132, 153, 0.2);
 }
 
+.lineGroupProfileCard {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(43, 166, 97, 0.24);
+  border-radius: 11px;
+  background: rgba(238, 252, 244, 0.72);
+}
+
+.lineGroupProfileHeader,
+.lineGroupProfileControls {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lineGroupProfileHeader > div {
+  display: grid;
+  gap: 5px;
+}
+
+.lineGroupProfileHeader p,
+.lineGroupProfileCard > p {
+  margin: 0;
+}
+
+.lineGroupProfileControls .field {
+  flex: 1 1 auto;
+}
+
+.lineGroupProfileControls .button {
+  flex: 0 0 auto;
+}
+
+.lineGroupStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  color: #5d4817;
+  border: 1px solid rgba(188, 138, 30, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 242, 195, 0.8);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.lineGroupStatusBadge[data-status="active"] {
+  color: #17613b;
+  border-color: rgba(39, 157, 94, 0.32);
+  background: rgba(218, 249, 231, 0.9);
+}
+
+.lineGroupStatusBadge[data-status="left"],
+.lineGroupStatusBadge[data-status="disabled"] {
+  color: #8a3030;
+  border-color: rgba(185, 63, 63, 0.28);
+  background: rgba(255, 225, 225, 0.84);
+}
+
 .memberDetailDialog .contract {
   display: grid;
   gap: 18px;
@@ -3899,6 +3961,32 @@
     0 18px 46px rgba(0, 0, 0, 0.22);
 }
 
+.managerPage .lineGroupProfileCard {
+  border-color: rgba(103, 213, 153, 0.26);
+  background:
+    linear-gradient(135deg, rgba(63, 177, 116, 0.08), transparent 58%),
+    rgba(8, 18, 24, 0.9);
+}
+
+.managerPage .lineGroupStatusBadge[data-status="active"] {
+  color: #b9f4d2;
+  border-color: rgba(105, 224, 157, 0.38);
+  background: rgba(24, 101, 62, 0.42);
+}
+
+.managerPage .lineGroupStatusBadge[data-status="pending"] {
+  color: #f0d89e;
+  border-color: rgba(229, 191, 102, 0.34);
+  background: rgba(97, 69, 20, 0.34);
+}
+
+.managerPage .lineGroupStatusBadge[data-status="left"],
+.managerPage .lineGroupStatusBadge[data-status="disabled"] {
+  color: #ffc2c2;
+  border-color: rgba(239, 117, 117, 0.34);
+  background: rgba(114, 34, 39, 0.4);
+}
+
 .managerPage .contractEyebrow,
 .managerPage .courseAllocationCard > span,
 .managerPage .courseAllocationSection h4,
@@ -5056,6 +5144,16 @@
   .contractPlanMode,
   .paymentSplitRow {
     grid-template-columns: 1fr;
+  }
+
+  .lineGroupProfileHeader,
+  .lineGroupProfileControls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lineGroupProfileControls .button {
+    width: 100%;
   }
 
   .paymentSplitHeader {

@@ -760,6 +760,12 @@ export const recordWalkInPaymentSchema = z.object({
   note: z.string().trim().max(300).nullable().optional(),
 });
 
+export const setMemberLineGroupBindingSchema = z.object({
+  action: z.literal("set_member_line_group_binding"),
+  memberId: z.string().uuid(),
+  lineGroupBindingId: z.string().uuid(),
+});
+
 export const updatePaymentSchema = z.object({
   action: z.literal("update_payment"),
   paymentId: z.string().uuid(),
@@ -929,6 +935,7 @@ export const bigeFitnessActionSchema = z.discriminatedUnion("action", [
   recordPaymentSchema,
   recordPaymentsSchema,
   recordWalkInPaymentSchema,
+  setMemberLineGroupBindingSchema,
   updatePaymentSchema,
   completeBookingSchema,
   completeTrialOutcomeSchema,
