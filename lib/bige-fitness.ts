@@ -766,6 +766,11 @@ export const setMemberLineGroupBindingSchema = z.object({
   lineGroupBindingId: z.string().uuid(),
 });
 
+export const retryLineScheduleNotificationSchema = z.object({
+  action: z.literal("retry_line_schedule_notification"),
+  notificationId: z.string().uuid(),
+});
+
 export const updatePaymentSchema = z.object({
   action: z.literal("update_payment"),
   paymentId: z.string().uuid(),
@@ -936,6 +941,7 @@ export const bigeFitnessActionSchema = z.discriminatedUnion("action", [
   recordPaymentsSchema,
   recordWalkInPaymentSchema,
   setMemberLineGroupBindingSchema,
+  retryLineScheduleNotificationSchema,
   updatePaymentSchema,
   completeBookingSchema,
   completeTrialOutcomeSchema,

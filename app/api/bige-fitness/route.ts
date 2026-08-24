@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { apiError, apiSuccess, requireProfile, type ProfileContext } from "../../../lib/auth-context";
 import { applyStoredCoachOrder, hasExactCoachSet } from "../../../lib/bige-coach-order";
@@ -898,8 +898,9 @@ async function loadBigeOperationsDashboard(
     employeeNumber: context.employeeNumber,
   });
   const admin = createSupabaseAdminClient();
-  const [lineBindingsResult, walkInOperationsResult] = await Promise.all([
-    canCreateBigeContract(context.employeeNumber)
+  const canManageLineSchedules = canCreateBigeContract(context.employeeNumber);
+  const [lineBindingsResult, lineNotificationIssuesResult, walkInOperationsResult] = await Promise.all([
+    canManageLineSchedules
       ? admin
           .from("bige_line_group_bindings")
           .select("id, member_id, group_name, status, verified_at, last_seen_at")
@@ -907,6 +908,15 @@ async function loadBigeOperationsDashboard(
           .in("status", ["pending", "active", "left", "disabled"])
           .order("last_seen_at", { ascending: false })
           .limit(1000)
+      : Promise.resolve({ data: [], error: null }),
+    canManageLineSchedules
+      ? admin
+          .from("bige_line_schedule_notifications")
+          .select("id, member_id, event_kind, status, attempts, max_attempts, next_retry_at, last_attempt_at, last_error, updated_at, member:members(full_name), binding:bige_line_group_bindings(group_name)")
+          .eq("tenant_id", tenantId)
+          .in("status", ["pending", "retrying", "failed"])
+          .order("updated_at", { ascending: false })
+          .limit(100)
       : Promise.resolve({ data: [], error: null }),
     walkInPaymentAllowed
       ? admin
@@ -920,6 +930,7 @@ async function loadBigeOperationsDashboard(
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (lineBindingsResult.error) throw new Error(lineBindingsResult.error.message);
+  if (lineNotificationIssuesResult.error) throw new Error(lineNotificationIssuesResult.error.message);
   if (walkInOperationsResult.error) throw new Error(walkInOperationsResult.error.message);
 
   const rawWalkInOperations = walkInOperationsResult.data || [];
@@ -952,6 +963,7 @@ async function loadBigeOperationsDashboard(
   return {
     canUseWalkInPayments: walkInPaymentAllowed,
     lineGroupBindings: lineBindingsResult.data || [],
+    lineScheduleNotificationIssues: lineNotificationIssuesResult.data || [],
     walkInPaymentCount: walkInPayments.length,
     walkInPayments,
   };
@@ -2066,6 +2078,48 @@ export async function POST(request: Request) {
     });
     if (result.error) return handleDatabaseError(result.error, "設定學員 LINE 群組失敗");
     return apiSuccess({ item: result.data });
+  }
+
+  if (input.action === "retry_line_schedule_notification") {
+    if (!canCreateBigeContract(operationContext.employeeNumber)) {
+      return apiError(403, "FORBIDDEN", "目前帳號不能補送學員 LINE 課表通知");
+    }
+    const admin = createSupabaseAdminClient();
+    const notificationResult = await admin
+      .from("bige_line_schedule_notifications")
+      .select("id, branch_id, member_id, status")
+      .eq("tenant_id", tenantId)
+      .eq("id", input.notificationId)
+      .maybeSingle();
+    if (notificationResult.error) {
+      return apiError(500, "INTERNAL_ERROR", notificationResult.error.message);
+    }
+    if (!notificationResult.data) {
+      return apiError(404, "FORBIDDEN", "找不到這筆 LINE 通知");
+    }
+    if (notificationResult.data.status !== "failed") {
+      return apiError(409, "FORBIDDEN", "這筆 LINE 通知目前不需要人工補送");
+    }
+    const resend = await queueBigeLineScheduleSnapshot({
+      tenantId,
+      branchId: notificationResult.data.branch_id,
+      memberId: notificationResult.data.member_id,
+      eventKind: "updated",
+      dedupeKey: `manual-resend:${notificationResult.data.id}:${randomUUID()}`,
+      createdBy: operationContext.userId,
+      manualRetryOfNotificationId: notificationResult.data.id,
+      supabase: admin,
+    });
+    if (!resend.notificationId) {
+      return apiError(500, "INTERNAL_ERROR", resend.error || "LINE 課表通知補送失敗");
+    }
+    return apiSuccess({
+      item: {
+        notificationId: resend.notificationId,
+        status: resend.status,
+        delivered: resend.ok,
+      },
+    });
   }
 
   if (input.action === "update_business_day") {

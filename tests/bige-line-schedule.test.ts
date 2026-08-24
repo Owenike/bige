@@ -5,9 +5,11 @@ import test from "node:test";
 import {
   createContractSchema,
   recordWalkInPaymentSchema,
+  retryLineScheduleNotificationSchema,
   setMemberLineGroupBindingSchema,
 } from "../lib/bige-fitness";
 import {
+  bigeLineRetryDelayMinutes,
   buildBigeLineScheduleMessage,
   verifyBigeLineWebhookSignature,
 } from "../lib/bige-line-schedule";
@@ -130,6 +132,30 @@ test("existing member LINE group binding requires explicit member and group ids"
   );
 });
 
+test("manual LINE retry requires an exact failed notification id", () => {
+  assert.equal(
+    retryLineScheduleNotificationSchema.safeParse({
+      action: "retry_line_schedule_notification",
+      notificationId: "00000000-0000-4000-8000-000000000091",
+    }).success,
+    true,
+  );
+  assert.equal(
+    retryLineScheduleNotificationSchema.safeParse({
+      action: "retry_line_schedule_notification",
+      notificationId: "latest",
+    }).success,
+    false,
+  );
+});
+
+test("LINE retry cadence is 5 minutes, 15 minutes, 1 hour, then 6 hours", () => {
+  assert.deepEqual(
+    [1, 2, 3, 4, 5].map(bigeLineRetryDelayMinutes),
+    [5, 15, 60, 360, 360],
+  );
+});
+
 test("member profile exposes manual LINE binding and the audited atomic RPC", () => {
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
@@ -148,20 +174,45 @@ test("member profile exposes manual LINE binding and the audited atomic RPC", ()
   assert.match(migration, /revoke all on function public\.bige_set_member_line_group_binding_v1/);
 });
 
-test("LINE delivery is PT-only, future-only, and move notifications cover every changed member", () => {
+test("LINE delivery is PT-only, future-only, refreshes latest schedules, and supersedes stale work", () => {
   const line = readFileSync("lib/bige-line-schedule.ts", "utf8");
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
   const vercel = readFileSync("vercel.json", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260824214522_harden_bige_line_schedule_retries.sql",
+    "utf8",
+  );
   assert.match(line, /\.eq\("operation_kind", "pt"\)/);
   assert.match(line, /\.gt\("starts_at", new Date\(\)\.toISOString\(\)\)/);
-  assert.match(line, /dispatchBigeLineScheduleNotification\(\{[\s\S]*notificationId: insert\.data\.id/);
+  assert.match(line, /bige_queue_line_schedule_notification_v2/);
+  assert.match(line, /snapshot_refreshed_at/);
+  assert.match(line, /X-Line-Retry-Key/);
+  assert.match(line, /bigeLineRetryDelayMinutes/);
   assert.match(vercel, /"path": "\/api\/cron\/bige-line-schedule"[\s\S]*"schedule": "5 0 \* \* \*"/);
   assert.doesNotMatch(vercel, /"schedule": "\*\/5 \* \* \* \*"/);
+  assert.match(migration, /bige-line-schedule-retry-every-5-minutes/);
+  assert.match(migration, /'\*\/5 \* \* \* \*'/);
+  assert.match(migration, /superseded_by_newer_schedule_change/);
+  assert.match(migration, /pg_advisory_xact_lock/);
+  assert.match(migration, /vault\.decrypted_secrets/);
+  assert.match(migration, /revoke all on function public\.bige_invoke_line_schedule_retry_worker_v1/);
   assert.match(route, /if \(params\.operationKind !== "pt" \|\| !params\.memberId\)/);
   assert.match(route, /notifyScheduleMoveMutation/);
   assert.match(route, /bige_schedule_drag_swap/);
   assert.match(route, /bige_schedule_drag_overwrite/);
   assert.match(route, /restore-cancelled:/);
+});
+
+test("LINE failures are visible without joining the protected daily-board prefetch", () => {
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  assert.match(route, /lineScheduleNotificationIssues/);
+  assert.match(route, /input\.action === "retry_line_schedule_notification"/);
+  assert.match(route, /status !== "failed"/);
+  assert.match(component, /setDialog\("line-notifications"\)/);
+  assert.match(component, /重新發送目前課表/);
+  assert.match(component, /5 分鐘、15 分鐘、1 小時、6 小時/);
+  assert.doesNotMatch(component, /requestBoard[\s\S]{0,1200}lineScheduleNotificationIssues/);
 });
 
 test("walk-in dashboard is loaded once outside the protected date prefetch window", () => {

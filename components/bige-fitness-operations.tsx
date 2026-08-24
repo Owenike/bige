@@ -153,6 +153,7 @@ type DialogName =
   | "monthly-schedule-result"
   | "activity"
   | "walk-in-payment"
+  | "line-notifications"
   | null;
 type SessionIdentity = {
   displayName: string | null;
@@ -404,6 +405,20 @@ type LineGroupBinding = {
   verified_at: string | null;
   last_seen_at: string;
 };
+type LineScheduleNotificationIssue = {
+  id: string;
+  member_id: string;
+  event_kind: "created" | "updated" | "cancelled";
+  status: "pending" | "retrying" | "failed";
+  attempts: number;
+  max_attempts: number;
+  next_retry_at: string | null;
+  last_attempt_at: string | null;
+  last_error: string | null;
+  updated_at: string;
+  member?: { full_name?: string | null } | null;
+  binding?: { group_name?: string | null } | null;
+};
 type WalkInPaymentOperation = {
   id: string;
   member_id: string;
@@ -477,6 +492,7 @@ export type BoardData = {
   trialBookings?: TrialBookingSummary[];
   plans: Plan[];
   lineGroupBindings?: LineGroupBinding[];
+  lineScheduleNotificationIssues?: LineScheduleNotificationIssue[];
   walkInPaymentCount?: number;
   walkInPayments?: WalkInPaymentOperation[];
   closure: null | {
@@ -492,7 +508,11 @@ export type BoardData = {
 
 type OperationsDashboard = Pick<
   BoardData,
-  "canUseWalkInPayments" | "lineGroupBindings" | "walkInPaymentCount" | "walkInPayments"
+  | "canUseWalkInPayments"
+  | "lineGroupBindings"
+  | "lineScheduleNotificationIssues"
+  | "walkInPaymentCount"
+  | "walkInPayments"
 >;
 
 function createPaymentEntryDraft(amount = ""): PaymentEntryDraft {
@@ -536,6 +556,18 @@ function paymentEntryError(entries: PaymentEntryDraft[], required: boolean) {
     return "請先輸入每筆綠界分期的期數";
   }
   return "";
+}
+
+function lineScheduleNotificationErrorLabel(value: string | null) {
+  const error = String(value || "");
+  if (/LINE HTTP 429/.test(error)) return "LINE 暫時限制發送頻率";
+  if (/LINE HTTP 5\d\d/.test(error) || /network|fetch|timeout/i.test(error)) {
+    return "LINE 服務或網路暫時無法連線";
+  }
+  if (/token_missing/.test(error) || /LINE HTTP 40[13]/.test(error)) {
+    return "BIG E小幫手授權設定需要檢查";
+  }
+  return "訊息尚未成功送達";
 }
 
 function customContractPlanFrom(plan?: Plan): CustomContractPlanDraft {
@@ -1653,6 +1685,7 @@ export default function BigeFitnessOperations({
   const operationsDashboardRef = useRef<OperationsDashboard>({
     canUseWalkInPayments: previewData?.canUseWalkInPayments,
     lineGroupBindings: previewData?.lineGroupBindings || [],
+    lineScheduleNotificationIssues: previewData?.lineScheduleNotificationIssues || [],
     walkInPaymentCount: previewData?.walkInPaymentCount || 0,
     walkInPayments: previewData?.walkInPayments || [],
   });
@@ -1701,6 +1734,8 @@ export default function BigeFitnessOperations({
   const [memberLineBindingDirty, setMemberLineBindingDirty] = useState(false);
   const [memberLineBindingSubmitting, setMemberLineBindingSubmitting] = useState(false);
   const [memberLineBindingError, setMemberLineBindingError] = useState("");
+  const [lineNotificationRetryingId, setLineNotificationRetryingId] = useState<string | null>(null);
+  const [lineNotificationError, setLineNotificationError] = useState("");
   const [scheduleMemberDetail, setScheduleMemberDetail] = useState<MemberDetail | null>(null);
   const [scheduleMemberDetailLoading, setScheduleMemberDetailLoading] = useState(false);
   const [scheduleMemberDetailError, setScheduleMemberDetailError] = useState("");
@@ -1822,6 +1857,7 @@ export default function BigeFitnessOperations({
     operationsDashboardRef.current = {
       canUseWalkInPayments: next.canUseWalkInPayments,
       lineGroupBindings: next.lineGroupBindings || [],
+      lineScheduleNotificationIssues: next.lineScheduleNotificationIssues || [],
       walkInPaymentCount: next.walkInPaymentCount || 0,
       walkInPayments: next.walkInPayments || [],
     };
@@ -2049,12 +2085,17 @@ export default function BigeFitnessOperations({
 
   useEffect(() => {
     if (previewData) return;
-    void loadOperationsDashboard().catch((caught) => {
-      console.warn(
-        "[bige-fitness] operations dashboard unavailable",
-        caught instanceof Error ? caught.message : caught,
-      );
-    });
+    const refreshOperations = () => {
+      void loadOperationsDashboard().catch((caught) => {
+        console.warn(
+          "[bige-fitness] operations dashboard unavailable",
+          caught instanceof Error ? caught.message : caught,
+        );
+      });
+    };
+    refreshOperations();
+    const interval = window.setInterval(refreshOperations, 5 * 60_000);
+    return () => window.clearInterval(interval);
   }, [loadOperationsDashboard, previewData]);
 
   useEffect(() => () => {
@@ -3195,6 +3236,33 @@ export default function BigeFitnessOperations({
       );
     } finally {
       setMemberLineBindingSubmitting(false);
+    }
+  };
+
+  const retryLineScheduleNotification = async (notificationId: string) => {
+    if (lineNotificationRetryingId) return;
+    setLineNotificationRetryingId(notificationId);
+    setLineNotificationError("");
+    try {
+      const result = await post(
+        {
+          action: "retry_line_schedule_notification",
+          notificationId,
+        },
+        { errorPresentation: "inline" },
+      );
+      await loadOperationsDashboard();
+      setSuccess(
+        result?.item?.delivered
+          ? "已重新發送最新課表"
+          : "已排入補送，系統會依排程繼續處理",
+      );
+    } catch (caught) {
+      setLineNotificationError(
+        caught instanceof Error ? caught.message : "LINE 課表通知補送失敗",
+      );
+    } finally {
+      setLineNotificationRetryingId(null);
     }
   };
 
@@ -4457,6 +4525,13 @@ export default function BigeFitnessOperations({
         (!binding.member_id || binding.member_id === selectedMember?.id)) ||
       (binding.status === "active" && binding.member_id === selectedMember?.id),
   );
+  const lineScheduleNotificationIssues = data?.lineScheduleNotificationIssues || [];
+  const failedLineScheduleNotificationCount = lineScheduleNotificationIssues.filter(
+    (notification) => notification.status === "failed",
+  ).length;
+  const selectedMemberLineNotificationIssue = lineScheduleNotificationIssues.find(
+    (notification) => notification.member_id === selectedMember?.id,
+  );
   useEffect(() => {
     if (dialog !== "member" || !selectedMember || memberLineBindingDirty) return;
     setMemberLineBindingDraft(activeMemberLineBinding?.id || "");
@@ -5698,6 +5773,28 @@ export default function BigeFitnessOperations({
           </div>
           {data ? (
             <div className={styles.businessDayControls}>
+              {tab === "schedule" && data.canCreateContract && lineScheduleNotificationIssues.length > 0 ? (
+                <button
+                  className={styles.lineNotificationButton}
+                  data-failed={String(failedLineScheduleNotificationCount > 0)}
+                  type="button"
+                  onClick={() => {
+                    setLineNotificationError("");
+                    setDialog("line-notifications");
+                  }}
+                >
+                  <BellRing size={16} aria-hidden="true" />
+                  LINE 通知
+                  <span
+                    className={styles.lineNotificationCountBadge}
+                    aria-label={`LINE 通知待處理 ${lineScheduleNotificationIssues.length} 筆`}
+                  >
+                    {lineScheduleNotificationIssues.length > 99
+                      ? "99+"
+                      : lineScheduleNotificationIssues.length}
+                  </span>
+                </button>
+              ) : null}
               {tab === "schedule" && data.canUseWalkInPayments ? (
                 <button
                   className={styles.walkInPaymentButton}
@@ -6286,6 +6383,43 @@ export default function BigeFitnessOperations({
                   <p className={styles.warning}>
                     群組名稱只作提示，不會依學員姓名自動配對；請人工確認後再儲存。
                   </p>
+                  {selectedMemberLineNotificationIssue ? (
+                    <div
+                      className={styles.lineNotificationMemberIssue}
+                      data-status={selectedMemberLineNotificationIssue.status}
+                    >
+                      <div>
+                        <strong>
+                          {selectedMemberLineNotificationIssue.status === "failed"
+                            ? "LINE 課表通知補送失敗"
+                            : selectedMemberLineNotificationIssue.status === "retrying"
+                              ? "LINE 課表通知正在自動補送"
+                              : "LINE 課表通知等待發送"}
+                        </strong>
+                        <span>
+                          已嘗試 {selectedMemberLineNotificationIssue.attempts}/
+                          {selectedMemberLineNotificationIssue.max_attempts} 次
+                          {selectedMemberLineNotificationIssue.next_retry_at
+                            ? ` · 下次 ${formatDateTime(selectedMemberLineNotificationIssue.next_retry_at)}`
+                            : ""}
+                        </span>
+                      </div>
+                      {selectedMemberLineNotificationIssue.status === "failed" ? (
+                        <button
+                          className={`${styles.button} ${styles.danger}`}
+                          type="button"
+                          disabled={lineNotificationRetryingId !== null}
+                          onClick={() =>
+                            void retryLineScheduleNotification(selectedMemberLineNotificationIssue.id)
+                          }
+                        >
+                          {lineNotificationRetryingId === selectedMemberLineNotificationIssue.id
+                            ? "補送中…"
+                            : "重新發送目前課表"}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className={styles.lineGroupProfileControls}>
                     <label className={styles.field}>
                       <span className={styles.label}>選擇這位學員的群組</span>
@@ -7856,6 +7990,68 @@ export default function BigeFitnessOperations({
                 <p className={styles.muted}>本日尚無現場收款。</p>
               ) : null}
             </section>
+          </div>
+        </Dialog>
+      ) : null}
+
+      {dialog === "line-notifications" && data ? (
+        <Dialog title="LINE 課表通知" onClose={() => setDialog(null)} wide>
+          <div className={styles.lineNotificationWorkspace}>
+            <p className={styles.warning}>
+              暫時失敗會在 5 分鐘、15 分鐘、1 小時、6 小時後自動補送；每次送出前都會重新整理成學員目前最新的未來課表。
+            </p>
+            {lineNotificationError ? (
+              <p className={styles.error} role="alert">{lineNotificationError}</p>
+            ) : null}
+            <div className={styles.lineNotificationIssueList}>
+              {lineScheduleNotificationIssues.map((notification) => (
+                <article
+                  className={styles.lineNotificationIssueRow}
+                  data-status={notification.status}
+                  key={notification.id}
+                >
+                  <div>
+                    <strong>{notification.member?.full_name || "學員"}</strong>
+                    <span>{notification.binding?.group_name || "已綁定群組"}</span>
+                  </div>
+                  <div>
+                    <strong>
+                      {notification.status === "failed"
+                        ? "補送失敗"
+                        : notification.status === "retrying"
+                          ? "自動補送中"
+                          : "等待發送"}
+                    </strong>
+                    <span>
+                      {lineScheduleNotificationErrorLabel(notification.last_error)} · 已嘗試 {notification.attempts}/
+                      {notification.max_attempts} 次
+                    </span>
+                    <span>
+                      {notification.next_retry_at
+                        ? `下次補送：${formatDateTime(notification.next_retry_at)}`
+                        : `最後處理：${formatDateTime(notification.last_attempt_at || notification.updated_at)}`}
+                    </span>
+                  </div>
+                  {notification.status === "failed" ? (
+                    <button
+                      className={`${styles.button} ${styles.danger}`}
+                      type="button"
+                      disabled={lineNotificationRetryingId !== null}
+                      onClick={() => void retryLineScheduleNotification(notification.id)}
+                    >
+                      {lineNotificationRetryingId === notification.id
+                        ? "補送中…"
+                        : "重新發送目前課表"}
+                    </button>
+                  ) : (
+                    <span className={styles.muted}>系統自動處理</span>
+                  )}
+                </article>
+              ))}
+              {lineScheduleNotificationIssues.length === 0 ? (
+                <p className={styles.muted}>目前沒有待處理或失敗的 LINE 課表通知。</p>
+              ) : null}
+            </div>
           </div>
         </Dialog>
       ) : null}

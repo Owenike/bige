@@ -1953,6 +1953,32 @@
   background: rgba(255, 225, 225, 0.84);
 }
 
+.lineNotificationMemberIssue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid rgba(211, 150, 48, 0.32);
+  border-radius: 9px;
+  background: rgba(255, 244, 213, 0.78);
+}
+
+.lineNotificationMemberIssue[data-status="failed"] {
+  border-color: rgba(194, 49, 58, 0.38);
+  background: rgba(255, 226, 229, 0.82);
+}
+
+.lineNotificationMemberIssue > div {
+  display: grid;
+  gap: 3px;
+}
+
+.lineNotificationMemberIssue span {
+  color: #6f6570;
+  font-size: 12px;
+}
+
 .memberDetailDialog .contract {
   display: grid;
   gap: 18px;
@@ -3082,6 +3108,50 @@
   background: linear-gradient(145deg, rgba(126, 91, 31, 0.94), rgba(54, 38, 20, 0.98));
 }
 
+.lineNotificationButton {
+  position: relative;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 12px;
+  color: #fee9b1;
+  border: 1px solid rgba(231, 185, 82, 0.56);
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(94, 66, 23, 0.92), rgba(43, 31, 18, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 241, 195, 0.12), 0 4px 14px rgba(0, 0, 0, 0.2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.lineNotificationButton[data-failed="true"] {
+  color: #fff1f2;
+  border-color: rgba(244, 92, 104, 0.72);
+  background: linear-gradient(145deg, rgba(128, 35, 44, 0.96), rgba(58, 22, 28, 0.98));
+}
+
+.lineNotificationCountBadge {
+  min-width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  color: #231707;
+  border-radius: 999px;
+  background: #f4cb6c;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.lineNotificationButton[data-failed="true"] .lineNotificationCountBadge {
+  color: #fff;
+  background: #e63a46;
+}
+
 .walkInPaymentBadge {
   position: absolute;
   top: -8px;
@@ -3161,6 +3231,43 @@
   border-color: rgba(232, 196, 112, 0.52);
 }
 
+.lineNotificationWorkspace,
+.lineNotificationIssueList {
+  display: grid;
+  gap: 12px;
+}
+
+.lineNotificationIssueList {
+  max-height: 55vh;
+  overflow: auto;
+}
+
+.lineNotificationIssueRow {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.75fr) minmax(220px, 1.5fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid rgba(224, 179, 79, 0.34);
+  border-radius: 10px;
+  background: rgba(15, 23, 33, 0.88);
+}
+
+.lineNotificationIssueRow[data-status="failed"] {
+  border-color: rgba(238, 78, 91, 0.58);
+  background: rgba(68, 23, 30, 0.72);
+}
+
+.lineNotificationIssueRow > div {
+  display: grid;
+  gap: 3px;
+}
+
+.lineNotificationIssueRow span {
+  color: rgba(238, 231, 215, 0.66);
+  font-size: 12px;
+}
+
 @media (max-width: 680px) {
   .walkInMemberRow {
     align-items: stretch;
@@ -3170,6 +3277,16 @@
   .walkInMemberRow .bookingStatusActions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .lineNotificationIssueRow {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .lineNotificationMemberIssue {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

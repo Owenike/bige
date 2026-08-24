@@ -16,6 +16,15 @@ type ScheduleRow = {
   service_name: string | null;
 };
 
+type CurrentScheduleSnapshot = {
+  binding: {
+    id: string;
+    line_group_id: string;
+  };
+  memberName: string;
+  schedules: ScheduleRow[];
+};
+
 function taipeiParts(value: string) {
   const parts = new Intl.DateTimeFormat("zh-TW", {
     timeZone: "Asia/Taipei",
@@ -69,9 +78,13 @@ export function buildBigeLineScheduleMessage(params: {
   ].join("\n");
 }
 
+export function bigeLineRetryDelayMinutes(attempts: number) {
+  const delays = [5, 15, 60, 360] as const;
+  return delays[Math.min(delays.length - 1, Math.max(0, attempts - 1))];
+}
+
 function nextRetryAt(attempts: number) {
-  const minutes = Math.min(60, 2 ** Math.max(0, attempts - 1) * 5);
-  return new Date(Date.now() + minutes * 60_000).toISOString();
+  return new Date(Date.now() + bigeLineRetryDelayMinutes(attempts) * 60_000).toISOString();
 }
 
 function safeProviderBody(value: string) {
@@ -83,138 +96,29 @@ function safeProviderBody(value: string) {
   }
 }
 
-export async function dispatchBigeLineScheduleNotification(params: {
-  notificationId: string;
-  supabase?: SupabaseClient;
-}) {
-  const supabase = params.supabase || createSupabaseAdminClient();
-  const notificationResult = await supabase
-    .from("bige_line_schedule_notifications")
-    .select("id, binding_id, message, status, attempts, max_attempts")
-    .eq("id", params.notificationId)
-    .maybeSingle();
-  if (notificationResult.error || !notificationResult.data) {
-    return { ok: false as const, error: notificationResult.error?.message || "notification_not_found" };
-  }
-  const notification = notificationResult.data;
-  if (!["pending", "retrying"].includes(String(notification.status))) {
-    return { ok: true as const, status: String(notification.status) };
-  }
-  const bindingResult = await supabase
-    .from("bige_line_group_bindings")
-    .select("id, line_group_id, status")
-    .eq("id", notification.binding_id)
-    .maybeSingle();
-  if (bindingResult.error || !bindingResult.data || bindingResult.data.status !== "active") {
-    await supabase
-      .from("bige_line_schedule_notifications")
-      .update({
-        status: "cancelled",
-        last_error: "line_group_binding_inactive",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", notification.id);
-    return { ok: false as const, error: "line_group_binding_inactive" };
-  }
-  const token = process.env.LINE_STUDENT_SCHEDULE_CHANNEL_ACCESS_TOKEN || "";
-  if (!token) return { ok: false as const, error: "line_student_schedule_token_missing" };
-
-  const attempts = Number(notification.attempts || 0) + 1;
-  const attemptedAt = new Date().toISOString();
-  try {
-    const response = await fetch(LINE_PUSH_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "X-Line-Retry-Key": notification.id,
-      },
-      body: JSON.stringify({
-        to: bindingResult.data.line_group_id,
-        messages: [{ type: "text", text: notification.message }],
-      }),
-    });
-    const responseText = await response.text();
-    const providerResponse = {
-      status: response.status,
-      requestId: response.headers.get("x-line-request-id"),
-      ...safeProviderBody(responseText),
-    };
-    if (response.ok || response.status === 409) {
-      await supabase
-        .from("bige_line_schedule_notifications")
-        .update({
-          status: "sent",
-          attempts,
-          last_attempt_at: attemptedAt,
-          next_retry_at: null,
-          sent_at: attemptedAt,
-          last_error: null,
-          provider_response: providerResponse,
-          updated_at: attemptedAt,
-        })
-        .eq("id", notification.id);
-      return { ok: true as const, status: "sent" };
-    }
-    const retryable = response.status === 429 || response.status >= 500;
-    const canRetry = retryable && attempts < Number(notification.max_attempts || 5);
-    await supabase
-      .from("bige_line_schedule_notifications")
-      .update({
-        status: canRetry ? "retrying" : "failed",
-        attempts,
-        last_attempt_at: attemptedAt,
-        next_retry_at: canRetry ? nextRetryAt(attempts) : null,
-        last_error: `LINE HTTP ${response.status}`,
-        provider_response: providerResponse,
-        updated_at: attemptedAt,
-      })
-      .eq("id", notification.id);
-    return { ok: false as const, error: `LINE HTTP ${response.status}` };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "line_push_failed";
-    const canRetry = attempts < Number(notification.max_attempts || 5);
-    await supabase
-      .from("bige_line_schedule_notifications")
-      .update({
-        status: canRetry ? "retrying" : "failed",
-        attempts,
-        last_attempt_at: attemptedAt,
-        next_retry_at: canRetry ? nextRetryAt(attempts) : null,
-        last_error: message,
-        provider_response: { networkError: true },
-        updated_at: attemptedAt,
-      })
-      .eq("id", notification.id);
-    return { ok: false as const, error: message };
-  }
-}
-
-export async function queueBigeLineScheduleSnapshot(params: {
+async function loadCurrentScheduleSnapshot(params: {
+  supabase: SupabaseClient;
   tenantId: string;
-  branchId?: string | null;
   memberId: string;
-  eventKind: BigeLineScheduleEventKind;
-  dedupeKey: string;
-  createdBy?: string | null;
-  supabase?: SupabaseClient;
-}) {
-  const supabase = params.supabase || createSupabaseAdminClient();
+}): Promise<
+  | { ok: true; data: CurrentScheduleSnapshot }
+  | { ok: false; error: string; terminal?: "binding" | "member" }
+> {
   const [bindingResult, memberResult, scheduleResult] = await Promise.all([
-    supabase
+    params.supabase
       .from("bige_line_group_bindings")
-      .select("id, group_name")
+      .select("id, line_group_id")
       .eq("tenant_id", params.tenantId)
       .eq("member_id", params.memberId)
       .eq("status", "active")
       .maybeSingle(),
-    supabase
+    params.supabase
       .from("members")
       .select("id, full_name")
       .eq("tenant_id", params.tenantId)
       .eq("id", params.memberId)
       .maybeSingle(),
-    supabase
+    params.supabase
       .from("bookings")
       .select("id, starts_at, ends_at, course_type, service_name")
       .eq("tenant_id", params.tenantId)
@@ -227,45 +131,268 @@ export async function queueBigeLineScheduleSnapshot(params: {
       .limit(200),
   ]);
   const error = bindingResult.error || memberResult.error || scheduleResult.error;
-  if (error) return { ok: false as const, error: error.message };
-  if (!bindingResult.data) return { ok: false as const, error: "line_group_binding_required", skipped: true as const };
-  if (!memberResult.data) return { ok: false as const, error: "member_not_found" };
-  const schedules = (scheduleResult.data || []) as ScheduleRow[];
-  const message = buildBigeLineScheduleMessage({
-    memberName: String(memberResult.data.full_name || "學員"),
-    eventKind: params.eventKind,
-    schedules,
-  });
-  const insert = await supabase
-    .from("bige_line_schedule_notifications")
-    .upsert(
-      {
-        tenant_id: params.tenantId,
-        branch_id: params.branchId || null,
-        member_id: params.memberId,
-        binding_id: bindingResult.data.id,
-        event_kind: params.eventKind,
-        status: "pending",
-        message,
-        schedule_snapshot: schedules,
-        dedupe_key: params.dedupeKey,
-        created_by: params.createdBy || null,
-        updated_at: new Date().toISOString(),
+  if (error) return { ok: false, error: error.message };
+  if (!bindingResult.data) {
+    return { ok: false, error: "line_group_binding_required", terminal: "binding" };
+  }
+  if (!memberResult.data) {
+    return { ok: false, error: "member_not_found", terminal: "member" };
+  }
+  return {
+    ok: true,
+    data: {
+      binding: {
+        id: String(bindingResult.data.id),
+        line_group_id: String(bindingResult.data.line_group_id),
       },
-      { onConflict: "dedupe_key", ignoreDuplicates: true },
-    )
+      memberName: String(memberResult.data.full_name || "學員"),
+      schedules: (scheduleResult.data || []) as ScheduleRow[],
+    },
+  };
+}
+
+async function recordRetryableFailure(params: {
+  supabase: SupabaseClient;
+  notificationId: string;
+  attempts: number;
+  maxAttempts: number;
+  attemptedAt: string;
+  error: string;
+  providerResponse?: Record<string, unknown>;
+  retryable: boolean;
+}) {
+  const canRetry = params.retryable && params.attempts < params.maxAttempts;
+  await params.supabase
+    .from("bige_line_schedule_notifications")
+    .update({
+      status: canRetry ? "retrying" : "failed",
+      attempts: params.attempts,
+      last_attempt_at: params.attemptedAt,
+      next_retry_at: canRetry ? nextRetryAt(params.attempts) : null,
+      last_error: params.error,
+      provider_response: params.providerResponse || {},
+      resolution_reason: null,
+      updated_at: params.attemptedAt,
+    })
+    .eq("id", params.notificationId)
+    .in("status", ["pending", "retrying"]);
+  return canRetry;
+}
+
+export async function dispatchBigeLineScheduleNotification(params: {
+  notificationId: string;
+  supabase?: SupabaseClient;
+}) {
+  const supabase = params.supabase || createSupabaseAdminClient();
+  const notificationResult = await supabase
+    .from("bige_line_schedule_notifications")
+    .select("id, tenant_id, member_id, event_kind, status, attempts, max_attempts")
+    .eq("id", params.notificationId)
+    .maybeSingle();
+  if (notificationResult.error || !notificationResult.data) {
+    return { ok: false as const, error: notificationResult.error?.message || "notification_not_found" };
+  }
+  const notification = notificationResult.data;
+  if (!["pending", "retrying"].includes(String(notification.status))) {
+    return { ok: true as const, status: String(notification.status) };
+  }
+
+  const attempts = Number(notification.attempts || 0) + 1;
+  const maxAttempts = Number(notification.max_attempts || 5);
+  const attemptedAt = new Date().toISOString();
+  const snapshot = await loadCurrentScheduleSnapshot({
+    supabase,
+    tenantId: String(notification.tenant_id),
+    memberId: String(notification.member_id),
+  });
+  if (snapshot.ok === false) {
+    if (snapshot.terminal === "binding") {
+      await supabase
+        .from("bige_line_schedule_notifications")
+        .update({
+          status: "cancelled",
+          next_retry_at: null,
+          resolution_reason: "line_group_binding_missing_during_delivery",
+          updated_at: attemptedAt,
+        })
+        .eq("id", notification.id);
+      return { ok: false as const, error: snapshot.error };
+    }
+    await recordRetryableFailure({
+      supabase,
+      notificationId: notification.id,
+      attempts,
+      maxAttempts,
+      attemptedAt,
+      error: snapshot.error,
+      retryable: snapshot.terminal !== "member",
+    });
+    return { ok: false as const, error: snapshot.error };
+  }
+
+  const message = buildBigeLineScheduleMessage({
+    memberName: snapshot.data.memberName,
+    eventKind: notification.event_kind as BigeLineScheduleEventKind,
+    schedules: snapshot.data.schedules,
+  });
+  const refreshed = await supabase
+    .from("bige_line_schedule_notifications")
+    .update({
+      binding_id: snapshot.data.binding.id,
+      message,
+      schedule_snapshot: snapshot.data.schedules,
+      snapshot_refreshed_at: attemptedAt,
+      updated_at: attemptedAt,
+    })
+    .eq("id", notification.id)
+    .in("status", ["pending", "retrying"])
     .select("id, status")
     .maybeSingle();
-  if (insert.error) return { ok: false as const, error: insert.error.message };
-  if (!insert.data) return { ok: true as const, status: "deduplicated" };
+  if (refreshed.error) {
+    await recordRetryableFailure({
+      supabase,
+      notificationId: notification.id,
+      attempts,
+      maxAttempts,
+      attemptedAt,
+      error: refreshed.error.message,
+      retryable: true,
+    });
+    return { ok: false as const, error: refreshed.error.message };
+  }
+  if (!refreshed.data) {
+    return { ok: true as const, status: "superseded" };
+  }
+
+  const token = process.env.LINE_STUDENT_SCHEDULE_CHANNEL_ACCESS_TOKEN || "";
+  if (!token) {
+    await recordRetryableFailure({
+      supabase,
+      notificationId: notification.id,
+      attempts,
+      maxAttempts,
+      attemptedAt,
+      error: "line_student_schedule_token_missing",
+      retryable: false,
+    });
+    return { ok: false as const, error: "line_student_schedule_token_missing" };
+  }
+
+  try {
+    const response = await fetch(LINE_PUSH_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "X-Line-Retry-Key": notification.id,
+      },
+      body: JSON.stringify({
+        to: snapshot.data.binding.line_group_id,
+        messages: [{ type: "text", text: message }],
+      }),
+    });
+    const responseText = await response.text();
+    const providerResponse = {
+      status: response.status,
+      requestId: response.headers.get("x-line-request-id"),
+      acceptedRequestId: response.headers.get("x-line-accepted-request-id"),
+      ...safeProviderBody(responseText),
+    };
+    if (response.ok || response.status === 409) {
+      await supabase
+        .from("bige_line_schedule_notifications")
+        .update({
+          status: "sent",
+          attempts,
+          last_attempt_at: attemptedAt,
+          next_retry_at: null,
+          sent_at: attemptedAt,
+          last_error: null,
+          resolution_reason: null,
+          provider_response: providerResponse,
+          updated_at: attemptedAt,
+        })
+        .eq("id", notification.id);
+      return { ok: true as const, status: "sent" };
+    }
+    await recordRetryableFailure({
+      supabase,
+      notificationId: notification.id,
+      attempts,
+      maxAttempts,
+      attemptedAt,
+      error: `LINE HTTP ${response.status}`,
+      providerResponse,
+      retryable: response.status === 429 || response.status >= 500,
+    });
+    return { ok: false as const, error: `LINE HTTP ${response.status}` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "line_push_failed";
+    await recordRetryableFailure({
+      supabase,
+      notificationId: notification.id,
+      attempts,
+      maxAttempts,
+      attemptedAt,
+      error: message,
+      providerResponse: { networkError: true },
+      retryable: true,
+    });
+    return { ok: false as const, error: message };
+  }
+}
+
+export async function queueBigeLineScheduleSnapshot(params: {
+  tenantId: string;
+  branchId?: string | null;
+  memberId: string;
+  eventKind: BigeLineScheduleEventKind;
+  dedupeKey: string;
+  createdBy?: string | null;
+  manualRetryOfNotificationId?: string | null;
+  supabase?: SupabaseClient;
+}) {
+  const supabase = params.supabase || createSupabaseAdminClient();
+  const snapshot = await loadCurrentScheduleSnapshot({
+    supabase,
+    tenantId: params.tenantId,
+    memberId: params.memberId,
+  });
+  if (snapshot.ok === false) {
+    if (snapshot.terminal === "binding") {
+      return { ok: false as const, error: snapshot.error, skipped: true as const };
+    }
+    return { ok: false as const, error: snapshot.error };
+  }
+  const message = buildBigeLineScheduleMessage({
+    memberName: snapshot.data.memberName,
+    eventKind: params.eventKind,
+    schedules: snapshot.data.schedules,
+  });
+  const queued = await supabase.rpc("bige_queue_line_schedule_notification_v2", {
+    p_tenant_id: params.tenantId,
+    p_branch_id: params.branchId || null,
+    p_member_id: params.memberId,
+    p_binding_id: snapshot.data.binding.id,
+    p_event_kind: params.eventKind,
+    p_message: message,
+    p_schedule_snapshot: snapshot.data.schedules,
+    p_dedupe_key: params.dedupeKey,
+    p_created_by: params.createdBy || null,
+    p_manual_retry_of_notification_id: params.manualRetryOfNotificationId || null,
+  });
+  if (queued.error) return { ok: false as const, error: queued.error.message };
+  const row = Array.isArray(queued.data) ? queued.data[0] : queued.data;
+  if (!row?.notification_id) return { ok: false as const, error: "line_notification_queue_failed" };
+  if (!row.inserted) return { ok: true as const, status: "deduplicated" };
   const delivery = await dispatchBigeLineScheduleNotification({
     supabase,
-    notificationId: insert.data.id,
+    notificationId: row.notification_id,
   });
   return {
     ok: delivery.ok,
     status: delivery.ok ? delivery.status : "queued",
-    notificationId: insert.data.id,
+    notificationId: row.notification_id,
     error: delivery.ok ? undefined : delivery.error,
   };
 }
