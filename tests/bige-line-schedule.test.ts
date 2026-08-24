@@ -151,8 +151,12 @@ test("member profile exposes manual LINE binding and the audited atomic RPC", ()
 test("LINE delivery is PT-only, future-only, and move notifications cover every changed member", () => {
   const line = readFileSync("lib/bige-line-schedule.ts", "utf8");
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const vercel = readFileSync("vercel.json", "utf8");
   assert.match(line, /\.eq\("operation_kind", "pt"\)/);
   assert.match(line, /\.gt\("starts_at", new Date\(\)\.toISOString\(\)\)/);
+  assert.match(line, /dispatchBigeLineScheduleNotification\(\{[\s\S]*notificationId: insert\.data\.id/);
+  assert.match(vercel, /"path": "\/api\/cron\/bige-line-schedule"[\s\S]*"schedule": "5 0 \* \* \*"/);
+  assert.doesNotMatch(vercel, /"schedule": "\*\/5 \* \* \* \*"/);
   assert.match(route, /if \(params\.operationKind !== "pt" \|\| !params\.memberId\)/);
   assert.match(route, /notifyScheduleMoveMutation/);
   assert.match(route, /bige_schedule_drag_swap/);

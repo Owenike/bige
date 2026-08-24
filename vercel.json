@@ -18,7 +18,7 @@
     },
     {
       "path": "/api/cron/bige-line-schedule",
-      "schedule": "*/5 * * * *"
+      "schedule": "5 0 * * *"
     }
   ]
 }
