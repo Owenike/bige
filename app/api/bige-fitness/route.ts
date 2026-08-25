@@ -489,6 +489,9 @@ function normalizeErrorMessage(message: string) {
     payment_kind_invalid: "付款類型無效，請重新選擇後再試一次",
     payment_status_invalid: "付款狀態無效，請重新選擇後再試一次",
     payment_not_found: "找不到這筆付款紀錄",
+    invoice_carrier_required: "請輸入發票載具，或勾選載具候補",
+    invoice_carrier_invalid: "發票載具只能包含英文字母、數字與 + - . / 符號",
+    invoice_carrier_pending_conflict: "已勾選載具候補時請不要同時輸入載具",
     payment_edit_reason_required: "修改付款資料必須填寫原因",
     payment_total_exceeds_contract_amount: "修改後的累積已收金額不能超過合約總額",
     invalid_installment_count: "綠界分期期數必須是 2 至 60 期",
@@ -3303,25 +3306,49 @@ export async function POST(request: Request) {
       p_payments: paymentEntries,
       p_payment_schedule: input.paymentSchedule,
     };
+    const invoiceMetadataProvided =
+      input.invoiceCarrier !== undefined || input.invoiceCarrierPending !== undefined;
     const result = sourceOperationKind === "bb"
-      ? await operationSupabase.rpc("bige_create_bb_member_contract_v3", {
-          ...sharedContractParams,
-          p_source_booking_id: input.sourceBookingId,
-          p_line_binding_id: input.lineGroupBindingId || null,
-        })
-      : await operationSupabase.rpc("bige_create_member_contract_v8", {
-          ...sharedContractParams,
-          p_source_booking_id: input.sourceBookingId || null,
-          p_future_trial_action: input.futureTrialAction || "none",
-          p_fa_fee_recipient_profile_id: input.faFeeRecipientProfileId || null,
-          p_fa_fee_recipient_name: input.faFeeRecipientName || null,
-          p_sales_origin_coach_id: trustedSalesOriginCoachId,
-          p_sales_origin_kind: sourceOperationKind === "trial" ? "fa" : input.sourceMemberBookingId || input.walkIn ? "renewal" : "manual",
-          p_payment_source_booking_id: input.sourceBookingId || input.sourceMemberBookingId || null,
-          p_line_binding_id: input.lineGroupBindingId || null,
-          p_walk_in: input.walkIn,
-          p_walk_in_idempotency_key: input.walkInIdempotencyKey || null,
-        });
+      ? await operationSupabase.rpc(
+          invoiceMetadataProvided
+            ? "bige_create_bb_member_contract_v4"
+            : "bige_create_bb_member_contract_v3",
+          {
+            ...sharedContractParams,
+            p_source_booking_id: input.sourceBookingId,
+            p_line_binding_id: input.lineGroupBindingId || null,
+            ...(invoiceMetadataProvided
+              ? {
+                  p_invoice_carrier: input.invoiceCarrier || null,
+                  p_invoice_carrier_pending: Boolean(input.invoiceCarrierPending),
+                }
+              : {}),
+          },
+        )
+      : await operationSupabase.rpc(
+          invoiceMetadataProvided
+            ? "bige_create_member_contract_v9"
+            : "bige_create_member_contract_v8",
+          {
+            ...sharedContractParams,
+            p_source_booking_id: input.sourceBookingId || null,
+            p_future_trial_action: input.futureTrialAction || "none",
+            p_fa_fee_recipient_profile_id: input.faFeeRecipientProfileId || null,
+            p_fa_fee_recipient_name: input.faFeeRecipientName || null,
+            p_sales_origin_coach_id: trustedSalesOriginCoachId,
+            p_sales_origin_kind: sourceOperationKind === "trial" ? "fa" : input.sourceMemberBookingId || input.walkIn ? "renewal" : "manual",
+            p_payment_source_booking_id: input.sourceBookingId || input.sourceMemberBookingId || null,
+            p_line_binding_id: input.lineGroupBindingId || null,
+            p_walk_in: input.walkIn,
+            p_walk_in_idempotency_key: input.walkInIdempotencyKey || null,
+            ...(invoiceMetadataProvided
+              ? {
+                  p_invoice_carrier: input.invoiceCarrier || null,
+                  p_invoice_carrier_pending: Boolean(input.invoiceCarrierPending),
+                }
+              : {}),
+          },
+        );
     if (result.error) return handleDatabaseError(result.error, "建立正式會員失敗");
 
     let profileChangeNotification: { status: "skipped" | "sent" | "failed"; error?: string } = {
@@ -3522,16 +3549,29 @@ export async function POST(request: Request) {
         }
       }
     }
-    const result = await operationSupabase.rpc("bige_record_contract_payments_v1", {
-      p_contract_id: input.contractId,
-      p_source_booking_id: input.sourceBookingId || null,
-      p_schedule_item_id: input.scheduleItemId || null,
-      p_payment_kind: input.paymentKind,
-      p_payments: input.payments,
-      p_paid_at: input.paidAt || new Date().toISOString(),
-      p_idempotency_key: input.idempotencyKey,
-      p_note: input.note || null,
-    });
+    const invoiceMetadataProvided =
+      input.invoiceCarrier !== undefined || input.invoiceCarrierPending !== undefined;
+    const result = await operationSupabase.rpc(
+      invoiceMetadataProvided
+        ? "bige_record_contract_payments_v2"
+        : "bige_record_contract_payments_v1",
+      {
+        p_contract_id: input.contractId,
+        p_source_booking_id: input.sourceBookingId || null,
+        p_schedule_item_id: input.scheduleItemId || null,
+        p_payment_kind: input.paymentKind,
+        p_payments: input.payments,
+        p_paid_at: input.paidAt || new Date().toISOString(),
+        p_idempotency_key: input.idempotencyKey,
+        p_note: input.note || null,
+        ...(invoiceMetadataProvided
+          ? {
+              p_invoice_carrier: input.invoiceCarrier || null,
+              p_invoice_carrier_pending: Boolean(input.invoiceCarrierPending),
+            }
+          : {}),
+      },
+    );
     if (result.error) return handleDatabaseError(result.error, "付款紀錄失敗");
     return apiSuccess({ item: result.data });
   }

@@ -52,8 +52,20 @@ export const BIGE_TRIAL_REMINDER_PENDING_STATUS = "pending" as const;
 export const BIGE_TRIAL_REMINDER_CONFIRMED_STATUS = "reached" as const;
 export const BIGE_FA_DEFAULT_FEE_AMOUNT = 880 as const;
 export const BIGE_FA_SPORTS_MASSAGE_FEE_AMOUNT = 1500 as const;
+export const BIGE_INVOICE_CARRIER_PATTERN = /^[A-Z0-9+./-]{1,80}$/;
 export const BIGE_COMPLETED_BOOKING_EDIT_MESSAGE =
   "本堂已完成並扣課，請先到「課程狀態操作」復原為未扣課，再修改時間、時長、教練或課別。";
+
+export function normalizeBigeInvoiceCarrier(value: unknown) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9+./-]/g, "")
+    .slice(0, 80);
+}
+
+export function isValidBigeInvoiceCarrier(value: unknown) {
+  return BIGE_INVOICE_CARRIER_PATTERN.test(String(value || "").trim().toUpperCase());
+}
 
 export function getBigeFaFeeAmount(service: unknown) {
   return service === "sports_massage"
@@ -576,6 +588,48 @@ const bigePaymentMethodSchema = z.enum([
   "other",
 ]);
 
+const bigeInvoiceCarrierSchema = z
+  .string()
+  .trim()
+  .transform((value) => value.toUpperCase())
+  .pipe(
+    z.string().regex(
+      BIGE_INVOICE_CARRIER_PATTERN,
+      "載具只能包含英文字母、數字與 + - . / 符號",
+    ),
+  );
+
+const bigeInvoiceMetadataShape = {
+  invoiceCarrier: bigeInvoiceCarrierSchema.nullable().optional(),
+  invoiceCarrierPending: z.boolean().optional(),
+};
+
+function validateBigeInvoiceMetadata(
+  input: { invoiceCarrier?: string | null; invoiceCarrierPending?: boolean },
+  context: z.RefinementCtx,
+) {
+  const metadataProvided =
+    input.invoiceCarrier !== undefined || input.invoiceCarrierPending !== undefined;
+  if (!metadataProvided) return;
+  if (input.invoiceCarrierPending) {
+    if (input.invoiceCarrier) {
+      context.addIssue({
+        code: "custom",
+        path: ["invoiceCarrier"],
+        message: "已勾選載具候補時請不要同時輸入載具",
+      });
+    }
+    return;
+  }
+  if (!input.invoiceCarrier) {
+    context.addIssue({
+      code: "custom",
+      path: ["invoiceCarrier"],
+      message: "請輸入載具或勾選載具候補",
+    });
+  }
+}
+
 export const bigePaymentEntrySchema = z
   .object({
     amount: z.coerce.number().int().positive(),
@@ -649,7 +703,9 @@ export const createContractSchema = z.object({
   futureTrialAction: z.enum(["convert_to_pt", "cancel"]).nullable().optional(),
   faFeeRecipientProfileId: z.string().uuid().nullable().optional(),
   faFeeRecipientName: z.string().trim().min(1).max(80).nullable().optional(),
+  ...bigeInvoiceMetadataShape,
 }).superRefine((input, context) => {
+  validateBigeInvoiceMetadata(input, context);
   if (input.walkIn && (!input.walkInIdempotencyKey || input.initialPayment <= 0)) {
     context.addIssue({
       code: "custom",
@@ -746,7 +802,8 @@ export const recordPaymentsSchema = z.object({
   paidAt: z.string().datetime({ offset: true }).optional(),
   idempotencyKey: z.string().trim().min(8).max(160),
   note: z.string().trim().max(300).nullable().optional(),
-});
+  ...bigeInvoiceMetadataShape,
+}).superRefine(validateBigeInvoiceMetadata);
 
 export const recordWalkInPaymentSchema = z.object({
   action: z.literal("record_walk_in_payment"),
@@ -758,7 +815,8 @@ export const recordWalkInPaymentSchema = z.object({
   paidAt: z.string().datetime({ offset: true }).optional(),
   idempotencyKey: z.string().trim().min(8).max(160),
   note: z.string().trim().max(300).nullable().optional(),
-});
+  ...bigeInvoiceMetadataShape,
+}).superRefine(validateBigeInvoiceMetadata);
 
 export const setMemberLineGroupBindingSchema = z.object({
   action: z.literal("set_member_line_group_binding"),

@@ -73,11 +73,13 @@ import {
   getBigeTrialContractMissingProfileFields,
   getBigeTrialBookingActionVisibility,
   getBigeTrialOutcomeVisualState,
+  isValidBigeInvoiceCarrier,
   isBigeContractEligibleForPayment,
   isBigeContractVoidedForDisplay,
   isBigeContractPaymentAmountAllowed,
   isBigeTrialReminderConfirmed,
   nextBigeTrialReminderStatus,
+  normalizeBigeInvoiceCarrier,
   resolveBigeTrialContractIdentity,
   summarizeBigeMemberCourseSessions,
   toTaipeiDateString,
@@ -397,6 +399,13 @@ type StudentPaymentContext = {
   contractId: string;
   source: "schedule" | "walk_in";
 };
+type ContractPaymentWizardStep =
+  | "plan"
+  | "payment"
+  | "carrier"
+  | "recipient"
+  | "group"
+  | "review";
 type LineGroupBinding = {
   id: string;
   member_id: string | null;
@@ -4490,6 +4499,10 @@ export default function BigeFitnessOperations({
   );
   const [contractSubmitting, setContractSubmitting] = useState(false);
   const [contractError, setContractError] = useState("");
+  const [contractPaymentWizardStep, setContractPaymentWizardStep] =
+    useState<ContractPaymentWizardStep>("plan");
+  const [contractInvoiceCarrier, setContractInvoiceCarrier] = useState("");
+  const [contractInvoiceCarrierPending, setContractInvoiceCarrierPending] = useState(false);
   const [studentPaymentContext, setStudentPaymentContext] =
     useState<StudentPaymentContext | null>(null);
   const [walkInMemberSearch, setWalkInMemberSearch] = useState("");
@@ -4542,6 +4555,10 @@ export default function BigeFitnessOperations({
     if (dialog !== "member" || !selectedMember || memberLineBindingDirty) return;
     setMemberLineBindingDraft(activeMemberLineBinding?.id || "");
   }, [activeMemberLineBinding?.id, dialog, memberLineBindingDirty, selectedMember]);
+  useEffect(() => {
+    if (dialog !== "contract" || contractPaymentWizardStep !== "recipient") return;
+    void loadFaFeeRecipientOptions();
+  }, [contractPaymentWizardStep, dialog, loadFaFeeRecipientOptions]);
   const walkInMemberResults = (data?.members || [])
     .filter((member) => {
       const keyword = walkInMemberSearch.trim().toLowerCase();
@@ -4553,6 +4570,7 @@ export default function BigeFitnessOperations({
     .slice(0, 40);
   const selectedConversionBooking =
     selectedBooking?.operation_kind === "trial" || selectedBooking?.operation_kind === "bb";
+  const contractPaymentWizardActive = studentPaymentContext?.source === "schedule";
   const contractPaymentRequired = Boolean(
     studentPaymentContext || selectedConversionBooking,
   );
@@ -4592,6 +4610,11 @@ export default function BigeFitnessOperations({
     }));
     setContractPaymentEntries([createPaymentEntryDraft()]);
     setCustomContractPlan(customContractPlanFrom(data?.plans[0]));
+    setContractPaymentWizardStep("plan");
+    setContractInvoiceCarrier("");
+    setContractInvoiceCarrierPending(false);
+    setFaFeeRecipientName(booking?.fa_fee_recipient_name || "");
+    setFaFeeRecipientOptionsError("");
     setContractError("");
     setContractSubmitting(false);
     setDialog("contract");
@@ -4683,6 +4706,15 @@ export default function BigeFitnessOperations({
     event?.preventDefault();
     if (contractSubmitting) return;
     setContractError("");
+    if (
+      contractPaymentWizardActive &&
+      !contractInvoiceCarrierPending &&
+      !isValidBigeInvoiceCarrier(contractInvoiceCarrier)
+    ) {
+      setContractPaymentWizardStep("carrier");
+      setContractError("請輸入英數載具，或勾選載具候補");
+      return;
+    }
     const requiresInitialPayment = Boolean(
       studentPaymentContext || selectedConversionBooking,
     );
@@ -4741,6 +4773,14 @@ export default function BigeFitnessOperations({
                 payments,
                 idempotencyKey: `student-payment:${studentPaymentContext.bookingId}:${crypto.randomUUID()}`,
                 note: "學員課程付款｜尾款 PTP",
+                ...(contractPaymentWizardActive
+                  ? {
+                      invoiceCarrier: contractInvoiceCarrierPending
+                        ? null
+                        : contractInvoiceCarrier,
+                      invoiceCarrierPending: contractInvoiceCarrierPending,
+                    }
+                  : {}),
               },
           { errorPresentation: "inline" },
         );
@@ -4794,9 +4834,27 @@ export default function BigeFitnessOperations({
       setContractError(message);
       return;
     }
-    if (selectedBooking?.operation_kind === "trial" && !faFeeRecipient) {
-      openFaFeeRecipientPrompt("confirm_payment", selectedBooking);
-      return;
+    let resolvedFaFeeRecipient = faFeeRecipient;
+    if (selectedBooking?.operation_kind === "trial" && !resolvedFaFeeRecipient) {
+      if (contractPaymentWizardActive) {
+        const recipientName = faFeeRecipientName.trim();
+        if (!recipientName) {
+          setContractPaymentWizardStep("recipient");
+          setContractError("請選擇員工或自行輸入收款人");
+          return;
+        }
+        const normalizedRecipientName = recipientName.toLocaleLowerCase("zh-TW");
+        const selectedEmployee = faFeeRecipientOptions.find(
+          (option) => option.label.toLocaleLowerCase("zh-TW") === normalizedRecipientName,
+        );
+        resolvedFaFeeRecipient = {
+          profileId: selectedEmployee?.id || null,
+          name: recipientName,
+        };
+      } else {
+        openFaFeeRecipientPrompt("confirm_payment", selectedBooking);
+        return;
+      }
     }
     setContractSubmitting(true);
     try {
@@ -4844,8 +4902,16 @@ export default function BigeFitnessOperations({
           payments,
           email: contractDraft.email || null,
           paymentSchedule: [],
-          faFeeRecipientProfileId: faFeeRecipient?.profileId || null,
-          faFeeRecipientName: faFeeRecipient?.name || null,
+          faFeeRecipientProfileId: resolvedFaFeeRecipient?.profileId || null,
+          faFeeRecipientName: resolvedFaFeeRecipient?.name || null,
+          ...(contractPaymentWizardActive
+            ? {
+                invoiceCarrier: contractInvoiceCarrierPending
+                  ? null
+                  : contractInvoiceCarrier,
+                invoiceCarrierPending: contractInvoiceCarrierPending,
+              }
+            : {}),
         },
         {
           errorPresentation: "inline",
@@ -5373,6 +5439,126 @@ export default function BigeFitnessOperations({
     : missingContractProfileFields.filter((field) => field !== "生日");
   const forceManagerProfileChangeNotification =
     selectedBooking?.operation_kind === "trial" && missingContractProfileFields.length > 0;
+  const contractPaymentWizardIsFa = Boolean(
+    contractPaymentWizardActive && selectedBooking?.operation_kind === "trial",
+  );
+  const contractPaymentWizardSteps: ContractPaymentWizardStep[] = contractPaymentWizardIsFa
+    ? ["plan", "payment", "carrier", "recipient", "group", "review"]
+    : ["plan", "payment", "carrier", "group", "review"];
+  const contractPaymentWizardStepLabels: Record<ContractPaymentWizardStep, string> = {
+    plan: studentPaymentContext?.paymentType === "balance" ? "尾款合約" : "方案",
+    payment: "本次付款",
+    carrier: "發票載具",
+    recipient: "收款人",
+    group: "LINE 群組",
+    review: "確認",
+  };
+  const contractPaymentWizardStepIndex = Math.max(
+    0,
+    contractPaymentWizardSteps.indexOf(contractPaymentWizardStep),
+  );
+  const selectedContractLineBinding = availableContractLineBindings.find(
+    (binding) => binding.id === contractDraft.lineGroupBindingId,
+  );
+  const selectedFaFeeRecipient = faFeeRecipientOptions.find(
+    (option) =>
+      option.label.toLocaleLowerCase("zh-TW") ===
+      faFeeRecipientName.trim().toLocaleLowerCase("zh-TW"),
+  );
+  const selectedFaService = selectedBooking?.trial_booking_id
+    ? trialBookings.get(selectedBooking.trial_booking_id)?.service
+    : null;
+  const contractWizardFaFeeAmount = getBigeFaFeeAmount(selectedFaService);
+  const contractWizardPlanSummary = studentPaymentContext?.paymentType === "balance"
+    ? studentPaymentTarget
+      ? `${getBigeContractDisplayName(studentPaymentTarget.contract.signed_on)}｜尾款 ${formatMoney(studentPaymentTarget.outstanding)}`
+      : "尚未選擇尾款合約"
+    : contractDraft.planMode === "custom"
+      ? `${customContractPlan.name || "自訂方案"}｜${customContractPlan.totalSessions} 堂｜${formatMoney(customContractPlan.totalAmount)}`
+      : selectedPlan
+        ? `${selectedPlan.name}｜${selectedPlan.total_sessions} 堂｜${formatMoney(selectedPlan.price_amount)}`
+        : "尚未選擇方案";
+
+  const advanceContractPaymentWizard = () => {
+    setContractError("");
+    if (contractPaymentWizardStep === "plan") {
+      if (missingContractIdentityFields.length > 0) {
+        setContractError(
+          `學員資料缺少${missingContractIdentityFields.join("、")}，請先由主管至會員個資補齊後再建立合約。`,
+        );
+        return;
+      }
+      if (studentPaymentContext?.paymentType === "balance") {
+        if (!studentPaymentTarget) {
+          setContractError("目前沒有可支付尾款的合約，請改選續約 Re");
+          return;
+        }
+      } else if (contractDraft.planMode === "builtin") {
+        if (!selectedPlan) {
+          setContractError("請先選擇內建方案");
+          return;
+        }
+      } else if (
+        !customContractPlan.name.trim() ||
+        customContractPlan.totalSessions <= 0 ||
+        customContractPlan.totalAmount <= 0 ||
+        customContractPlan.validityDays <= 0 ||
+        customContractPlan.extensionLimitDays < 0 ||
+        !validateCourseAllocationTotal(
+          customContractPlan.allocations,
+          customContractPlan.totalSessions,
+        )
+      ) {
+        setContractError("請完整填寫自訂方案，且各課別堂數加總必須等於總堂數");
+        return;
+      }
+    }
+    if (contractPaymentWizardStep === "payment") {
+      const entryError = paymentEntryError(contractPaymentEntries, true);
+      if (entryError) {
+        setContractError(entryError);
+        return;
+      }
+      const maximumPayment = studentPaymentContext?.paymentType === "balance"
+        ? studentPaymentTarget?.outstanding || 0
+        : maximumInitialPayment;
+      const minimumPayment = studentPaymentContext?.paymentType === "balance"
+        ? 1
+        : minimumInitialPayment;
+      if (
+        !isBigeContractPaymentAmountAllowed(contractPaymentTotal, maximumPayment, {
+          minimumAmount: minimumPayment,
+        })
+      ) {
+        setContractError(
+          studentPaymentContext?.paymentType === "balance"
+            ? `付款金額必須大於 0，且不能超過尾款 ${formatMoney(maximumPayment)}`
+            : `本次付款最低為 ${formatMoney(minimumPayment)}，且不能超過合約總額 ${formatMoney(maximumPayment)}`,
+        );
+        return;
+      }
+    }
+    if (
+      contractPaymentWizardStep === "carrier" &&
+      !contractInvoiceCarrierPending &&
+      !isValidBigeInvoiceCarrier(contractInvoiceCarrier)
+    ) {
+      setContractError("請輸入英數載具，或勾選載具候補");
+      return;
+    }
+    if (contractPaymentWizardStep === "recipient" && !faFeeRecipientName.trim()) {
+      setContractError("請選擇員工或自行輸入收款人");
+      return;
+    }
+    const nextStep = contractPaymentWizardSteps[contractPaymentWizardStepIndex + 1];
+    if (nextStep) setContractPaymentWizardStep(nextStep);
+  };
+
+  const returnContractPaymentWizard = () => {
+    setContractError("");
+    const previousStep = contractPaymentWizardSteps[contractPaymentWizardStepIndex - 1];
+    if (previousStep) setContractPaymentWizardStep(previousStep);
+  };
   const selectedTrialActionVisibility = getBigeTrialBookingActionVisibility({
     outcomePrompt: trialOutcomePrompt,
     status: selectedBooking?.status,
@@ -8066,8 +8252,13 @@ export default function BigeFitnessOperations({
       {dialog === "contract" && data ? (
         <Dialog
           background={faFeeRecipientPrompt?.action === "confirm_payment"}
+          className={contractPaymentWizardActive ? styles.contractPaymentWizardDialog : undefined}
           title={
-            selectedBooking?.operation_kind === "trial" && !studentPaymentContext
+            contractPaymentWizardActive
+              ? studentPaymentContext?.paymentType === "new"
+                ? "FA 付款"
+                : "學員付款"
+              : selectedBooking?.operation_kind === "trial" && !studentPaymentContext
               ? "FA 成交"
               : selectedBooking?.operation_kind === "bb" && !studentPaymentContext
                 ? "BB 成交"
@@ -8078,12 +8269,59 @@ export default function BigeFitnessOperations({
             setDialog(null);
           }}
         >
-          <form className={styles.formGrid} onSubmit={submitContract}>
+          <form
+            className={`${styles.formGrid} ${contractPaymentWizardActive ? styles.contractPaymentWizardForm : ""}`}
+            onSubmit={(event) => {
+              if (contractPaymentWizardActive && contractPaymentWizardStep !== "review") {
+                event.preventDefault();
+                advanceContractPaymentWizard();
+                return;
+              }
+              void submitContract(event);
+            }}
+          >
+            {contractPaymentWizardActive ? (
+              <>
+                <section
+                  className={`${styles.paymentWizardIdentity} ${styles.fieldFull}`}
+                  aria-label="付款學員資料"
+                >
+                  <div>
+                    <span>學員姓名</span>
+                    <strong>{contractDraft.fullName || "尚未提供"}</strong>
+                  </div>
+                  <div>
+                    <span>電話</span>
+                    <strong>{contractDraft.phone || "尚未提供"}</strong>
+                  </div>
+                </section>
+                <ol className={`${styles.paymentWizardSteps} ${styles.fieldFull}`}>
+                  {contractPaymentWizardSteps.map((step, index) => (
+                    <li
+                      key={step}
+                      data-state={
+                        index === contractPaymentWizardStepIndex
+                          ? "current"
+                          : index < contractPaymentWizardStepIndex
+                            ? "complete"
+                            : "upcoming"
+                      }
+                      aria-current={index === contractPaymentWizardStepIndex ? "step" : undefined}
+                    >
+                      <span>{index + 1}</span>
+                      {contractPaymentWizardStepLabels[step]}
+                    </li>
+                  ))}
+                </ol>
+              </>
+            ) : null}
             {contractError ? (
               <p className={`${styles.error} ${styles.fieldFull}`} role="alert">
                 {contractError}
               </p>
             ) : null}
+            {!contractPaymentWizardActive ? (
+            <>
             <label className={styles.field}>
               <span className={styles.label}>真實姓名</span>
               <input className={styles.input} disabled={contractIdentityLocked} required value={contractDraft.fullName} onChange={(event) => setContractDraft({ ...contractDraft, fullName: event.target.value })} />
@@ -8113,12 +8351,15 @@ export default function BigeFitnessOperations({
                     : "姓名、手機、生日與簽約日已由 FA 資料帶入，成交時不可直接更改。"}
               </p>
             ) : null}
-            {missingContractIdentityFields.length > 0 ? (
+            </>
+            ) : null}
+            {!contractPaymentWizardActive && missingContractIdentityFields.length > 0 ? (
               <p className={`${styles.error} ${styles.fieldFull}`} role="alert">
                 {studentPaymentContext ? "學員資料缺少" : "原始 FA 缺少"}
                 {missingContractIdentityFields.join("、")}，請先由主管至會員個資補齊後再建立合約。
               </p>
             ) : null}
+            {!contractPaymentWizardActive || contractPaymentWizardStep === "group" ? (
             <label className={`${styles.field} ${styles.fieldFull}`}>
               <span className={styles.label}>學員專屬 LINE 群組（測試期間可稍後綁定）</span>
               <select
@@ -8143,6 +8384,7 @@ export default function BigeFitnessOperations({
                 可先建立合約再至會員資料綁定；但建立正式課程前仍必須完成綁定。群組內輸入「驗證碼」可再次取得 BG 碼。
               </small>
             </label>
+            ) : null}
             {!studentPaymentContext ? (
             <div className={`${styles.contractCheckboxRow} ${styles.fieldFull}`}>
               <label className={styles.contractCheckbox}>
@@ -8168,8 +8410,10 @@ export default function BigeFitnessOperations({
               </label>
             </div>
             ) : null}
-            {studentPaymentContext ? (
+            {studentPaymentContext &&
+            (!contractPaymentWizardActive || contractPaymentWizardStep === "plan") ? (
               <>
+                {!contractPaymentWizardActive || studentPaymentContext.paymentType !== "new" ? (
                 <label className={styles.field}>
                   <span className={styles.label}>款項類型</span>
                   <select
@@ -8204,6 +8448,7 @@ export default function BigeFitnessOperations({
                     )}
                   </select>
                 </label>
+                ) : null}
                 {studentPaymentContext.paymentType === "balance" ? (
                   <label className={`${styles.field} ${styles.fieldFull}`}>
                     <span className={styles.label}>尾款合約</span>
@@ -8240,7 +8485,8 @@ export default function BigeFitnessOperations({
                 ) : null}
               </>
             ) : null}
-            {studentPaymentContext?.paymentType !== "balance" ? (
+            {studentPaymentContext?.paymentType !== "balance" &&
+            (!contractPaymentWizardActive || contractPaymentWizardStep === "plan") ? (
             <>
             <div className={`${styles.field} ${styles.fieldFull}`}>
               <span className={styles.label}>方案</span>
@@ -8348,7 +8594,7 @@ export default function BigeFitnessOperations({
             )}
             </>
             ) : null}
-            {studentPaymentContext?.paymentType !== "balance" ? (
+            {!contractPaymentWizardActive && studentPaymentContext?.paymentType !== "balance" ? (
             <label className={styles.field}>
               <span className={styles.label}>簽約日</span>
               <input
@@ -8371,6 +8617,7 @@ export default function BigeFitnessOperations({
               />
             </label>
             ) : null}
+            {!contractPaymentWizardActive || contractPaymentWizardStep === "payment" ? (
             <section className={`${styles.paymentSplitSection} ${styles.fieldFull}`}>
               <div className={styles.paymentSplitHeader}>
                 <div>
@@ -8476,7 +8723,9 @@ export default function BigeFitnessOperations({
                 ＋ 新增一筆付款方式
               </button>
             </section>
-            {selectedBooking?.operation_kind === "trial" && Number(selectedBooking.future_trial_booking_count || 0) > 0 ? (
+            ) : null}
+            {(!contractPaymentWizardActive || contractPaymentWizardStep === "payment") &&
+            selectedBooking?.operation_kind === "trial" && Number(selectedBooking.future_trial_booking_count || 0) > 0 ? (
               <label className={styles.field}>
                 <span className={styles.label}>
                   同一學員後續已排的其他 FA（{selectedBooking.future_trial_booking_count} 筆）
@@ -8490,7 +8739,8 @@ export default function BigeFitnessOperations({
                 </small>
               </label>
             ) : null}
-            {studentPaymentContext?.paymentType !== "balance" && maximumInitialPayment > 0 && contractPlanTotalSessions > 0 ? (
+            {(!contractPaymentWizardActive || contractPaymentWizardStep === "payment") &&
+            studentPaymentContext?.paymentType !== "balance" && maximumInitialPayment > 0 && contractPlanTotalSessions > 0 ? (
               <p className={`${styles.warning} ${styles.fieldFull}`}>
                 {studentPaymentContext || selectedConversionBooking
                   ? "本次付款"
@@ -8506,6 +8756,188 @@ export default function BigeFitnessOperations({
                 )}；目前合計 {formatMoney(contractPaymentTotal)}
               </p>
             ) : null}
+            {contractPaymentWizardActive && contractPaymentWizardStep === "carrier" ? (
+              <section className={`${styles.paymentWizardPanel} ${styles.fieldFull}`}>
+                <div className={styles.paymentWizardPanelHeader}>
+                  <div>
+                    <span className={styles.label}>輸入發票載具</span>
+                    <small>可直接使用條碼掃描器嗶入，欄位只保留英數與載具符號。</small>
+                  </div>
+                </div>
+                <label className={`${styles.field} ${styles.fieldFull}`}>
+                  <span className={styles.label}>手機條碼或發票載具</span>
+                  <input
+                    className={styles.input}
+                    autoFocus
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    spellCheck={false}
+                    inputMode="text"
+                    enterKeyHint="next"
+                    maxLength={80}
+                    pattern="[A-Z0-9+./-]{1,80}"
+                    placeholder="例如 /ABCD123"
+                    disabled={contractInvoiceCarrierPending}
+                    required={!contractInvoiceCarrierPending}
+                    value={contractInvoiceCarrier}
+                    onChange={(event) => {
+                      setContractInvoiceCarrier(normalizeBigeInvoiceCarrier(event.target.value));
+                      setContractError("");
+                    }}
+                  />
+                  <small className={styles.fieldHelp}>
+                    不接受中文；掃描器會像鍵盤輸入一樣直接帶入此欄位。
+                  </small>
+                </label>
+                <label className={styles.paymentWizardPendingChoice}>
+                  <input
+                    type="checkbox"
+                    checked={contractInvoiceCarrierPending}
+                    onChange={(event) => {
+                      const pending = event.target.checked;
+                      setContractInvoiceCarrierPending(pending);
+                      if (pending) setContractInvoiceCarrier("");
+                      setContractError("");
+                    }}
+                  />
+                  <span>
+                    <strong>載具候補</strong>
+                    <small>先完成付款，稍後再補登載具。</small>
+                  </span>
+                </label>
+              </section>
+            ) : null}
+            {contractPaymentWizardActive && contractPaymentWizardStep === "recipient" ? (
+              <section className={`${styles.paymentWizardPanel} ${styles.fieldFull}`}>
+                <div className={styles.paymentWizardPanelHeader}>
+                  <div>
+                    <span className={styles.label}>
+                      ${contractWizardFaFeeAmount.toLocaleString("en-US")} 收款人
+                    </span>
+                    <small>請從員工名單選擇，或直接輸入其他收款人姓名。</small>
+                  </div>
+                </div>
+                <label className={`${styles.field} ${styles.fieldFull}`}>
+                  <span className={styles.label}>收款人</span>
+                  <input
+                    className={styles.input}
+                    autoFocus
+                    required
+                    maxLength={80}
+                    list="contract-wizard-fa-fee-recipient-options"
+                    placeholder="選擇員工或自行輸入"
+                    value={faFeeRecipientName}
+                    onChange={(event) => {
+                      setFaFeeRecipientName(event.target.value);
+                      setFaFeeRecipientOptionsError("");
+                      setContractError("");
+                    }}
+                  />
+                  <datalist id="contract-wizard-fa-fee-recipient-options">
+                    {faFeeRecipientOptions.map((option) => (
+                      <option key={option.id} value={option.label} />
+                    ))}
+                  </datalist>
+                  {faFeeRecipientOptionsLoading ? (
+                    <small className={styles.fieldHelp}>員工名單載入中…</small>
+                  ) : faFeeRecipientOptionsLoaded ? (
+                    <small className={styles.fieldHelp}>
+                      已載入 {faFeeRecipientOptions.length} 位員工；仍可自行輸入文字。
+                    </small>
+                  ) : null}
+                </label>
+                {faFeeRecipientOptionsError ? (
+                  <p className={styles.error} role="alert">{faFeeRecipientOptionsError}</p>
+                ) : null}
+              </section>
+            ) : null}
+            {contractPaymentWizardActive && contractPaymentWizardStep === "review" ? (
+              <section
+                className={`${styles.paymentWizardReview} ${styles.fieldFull}`}
+                aria-label="付款確認摘要"
+              >
+                <h3>確認付款資料</h3>
+                <dl>
+                  <div>
+                    <dt>{studentPaymentContext?.paymentType === "balance" ? "尾款合約" : "方案"}</dt>
+                    <dd>{contractWizardPlanSummary}</dd>
+                  </div>
+                  <div>
+                    <dt>本次付款</dt>
+                    <dd>{formatMoney(contractPaymentTotal)}</dd>
+                  </div>
+                  <div>
+                    <dt>付款方式</dt>
+                    <dd>
+                      {contractPaymentEntries.map((entry) =>
+                        `${formatMoney(Number(entry.amount || 0))} ${labelOrValue(PAYMENT_METHOD_LABELS, entry.method)}`,
+                      ).join("、")}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>發票載具</dt>
+                    <dd>{contractInvoiceCarrierPending ? "載具候補" : contractInvoiceCarrier}</dd>
+                  </div>
+                  {contractPaymentWizardIsFa ? (
+                    <div>
+                      <dt>${contractWizardFaFeeAmount.toLocaleString("en-US")} 收款人</dt>
+                      <dd>
+                        {faFeeRecipientName.trim()}
+                        {selectedFaFeeRecipient ? "（員工）" : "（自行輸入）"}
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div>
+                    <dt>LINE 群組</dt>
+                    <dd>
+                      {selectedContractLineBinding
+                        ? `${selectedContractLineBinding.group_name}｜${lineGroupVerificationLabel(selectedContractLineBinding.verification_code)}`
+                        : "稍後綁定"}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+            ) : null}
+            {contractPaymentWizardActive ? (
+              <div className={`${styles.paymentWizardActions} ${styles.fieldFull}`}>
+                {contractPaymentWizardStepIndex > 0 ? (
+                  <button
+                    className={styles.button}
+                    type="button"
+                    disabled={contractSubmitting}
+                    onClick={returnContractPaymentWizard}
+                  >
+                    <ChevronLeft size={17} /> 上一步
+                  </button>
+                ) : <span />}
+                {contractPaymentWizardStep === "review" ? (
+                  <button
+                    className={`${styles.button} ${styles.primary}`}
+                    type="submit"
+                    disabled={contractSubmitting}
+                  >
+                    {contractSubmitting ? (
+                      <>
+                        <RefreshCw className={styles.processingIcon} size={17} />
+                        付款中…
+                      </>
+                    ) : (
+                      <>
+                        <Check size={17} /> 確認付款
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    className={`${styles.button} ${styles.primary}`}
+                    type="button"
+                    onClick={advanceContractPaymentWizard}
+                  >
+                    下一步 <ChevronRight size={17} />
+                  </button>
+                )}
+              </div>
+            ) : (
             <div className={`${styles.formActions} ${styles.fieldFull}`}>
               <button
                 className={`${styles.button} ${styles.primary}`}
@@ -8550,6 +8982,7 @@ export default function BigeFitnessOperations({
                 )}
               </button>
             </div>
+            )}
           </form>
         </Dialog>
       ) : null}

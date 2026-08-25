@@ -21,12 +21,14 @@ import {
   isBigeContractEligibleForPayment,
   isBigeContractPaymentAmountAllowed,
   isBigeContractVoidedForDisplay,
+  isValidBigeInvoiceCarrier,
   isBigeScheduleNoteUndoAvailable,
   isBigeTrialReminderConfirmed,
   getBigeTrialOutcomeVisualState,
   getBigeTrialBookingActionVisibility,
   getBigeTrialContractMissingProfileFields,
   nextBigeTrialReminderStatus,
+  normalizeBigeInvoiceCarrier,
   normalizeBigeScheduleEndAt,
   resolveBigeTrialContractIdentity,
   summarizeBigeMemberCourseSessions,
@@ -1094,11 +1096,78 @@ test("split payments unlock once and remain linked to their schedule booking", (
   assert.match(migration, /payment_entries_total_mismatch/);
   assert.match(migration, /source_booking_id = p_source_booking_id/);
   assert.match(sourceIndexMigration, /on public\.bige_contract_payments\(source_booking_id\)/);
-  assert.match(route, /rpc\("bige_record_contract_payments_v1"/);
+  assert.match(route, /bige_record_contract_payments_v1/);
   assert.match(route, /p_payment_source_booking_id: input\.sourceBookingId \|\| input\.sourceMemberBookingId \|\| null/);
   assert.match(route, /amountByBookingId[\s\S]*booking_payment_amount: paymentAmount/);
   assert.match(component, /typeof booking\.booking_payment_amount === "number"/);
   assert.match(component, /新增一筆付款方式/);
+});
+
+test("schedule payments use a fixed-identity wizard and persist invoice carrier metadata", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260825071500_add_contract_payment_invoice_carrier.sql",
+    "utf8",
+  );
+
+  assert.equal(normalizeBigeInvoiceCarrier("/ab中c-12.3"), "/ABC-12.3");
+  assert.equal(isValidBigeInvoiceCarrier("/ABC1234"), true);
+  assert.equal(isValidBigeInvoiceCarrier("中文載具"), false);
+
+  const parsedPayment = recordPaymentsSchema.parse({
+    action: "record_payments",
+    contractId: "00000000-0000-4000-8000-000000000001",
+    sourceBookingId: "00000000-0000-4000-8000-000000000002",
+    paymentKind: "balance",
+    payments: [{ amount: 1_000, method: "cash" }],
+    idempotencyKey: "invoice-carrier-payment-test",
+    invoiceCarrier: "/abc1234",
+    invoiceCarrierPending: false,
+  });
+  assert.equal(parsedPayment.invoiceCarrier, "/ABC1234");
+  assert.equal(
+    recordPaymentsSchema.safeParse({
+      action: "record_payments",
+      contractId: "00000000-0000-4000-8000-000000000001",
+      paymentKind: "balance",
+      payments: [{ amount: 1_000, method: "cash" }],
+      idempotencyKey: "invoice-carrier-pending-test",
+      invoiceCarrier: null,
+      invoiceCarrierPending: true,
+    }).success,
+    true,
+  );
+  assert.equal(
+    recordPaymentsSchema.safeParse({
+      action: "record_payments",
+      contractId: "00000000-0000-4000-8000-000000000001",
+      paymentKind: "balance",
+      payments: [{ amount: 1_000, method: "cash" }],
+      idempotencyKey: "invoice-carrier-required-test",
+      invoiceCarrier: null,
+      invoiceCarrierPending: false,
+    }).success,
+    false,
+  );
+
+  assert.match(
+    component,
+    /\["plan", "payment", "carrier", "recipient", "group", "review"\]/,
+  );
+  assert.match(component, /className=\{`\$\{styles\.paymentWizardIdentity\}/);
+  assert.match(component, /pattern="\[A-Z0-9\+\.\/-\]\{1,80\}"/);
+  assert.match(component, /載具候補/);
+  assert.match(component, /可直接使用條碼掃描器嗶入/);
+  assert.match(styles, /\.paymentWizardIdentity[\s\S]*position: sticky/);
+  assert.match(styles, /\.paymentWizardActions[\s\S]*position: sticky/);
+  assert.match(route, /bige_create_member_contract_v9/);
+  assert.match(route, /bige_record_contract_payments_v2/);
+  assert.match(route, /invoice_carrier_invalid: "發票載具只能包含英文字母/);
+  assert.match(migration, /add column if not exists invoice_carrier text/);
+  assert.match(migration, /add column if not exists invoice_carrier_pending boolean/);
+  assert.match(migration, /bige_apply_payment_invoice_metadata_v1/);
 });
 
 test("schedule student payments carry the source booking for server-side identity checks", () => {
@@ -2176,7 +2245,7 @@ test("schedule-origin contracts use the source business date and ECPay installme
     component,
     /toTaipeiDateString\(new Date\(selectedBooking\.starts_at\)\)/,
   );
-  assert.match(route, /rpc\("bige_create_member_contract_v8"/);
+  assert.match(route, /bige_create_member_contract_v8/);
   assert.match(route, /const trustedSignedOn = trustedSourceBusinessDate \|\| input\.signedOn/);
   assert.match(route, /rpc\("bige_record_contract_payment_v3"/);
   assert.match(route, /p_source_booking_id: input\.sourceBookingId \|\| null/);

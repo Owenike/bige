@@ -5079,6 +5079,206 @@
   margin: 0 !important;
 }
 
+.contractPaymentWizardDialog {
+  width: min(820px, 100%);
+  max-height: min(92dvh, 940px);
+}
+
+.contractPaymentWizardForm {
+  position: relative;
+}
+
+.paymentWizardIdentity {
+  position: sticky;
+  z-index: 8;
+  top: -1px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 -2px;
+  padding: 12px;
+  color: #f8f2e8;
+  border: 1px solid rgba(226, 190, 111, 0.42);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 0 0, rgba(224, 187, 99, 0.12), transparent 54%),
+    rgba(8, 13, 20, 0.98);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(18px);
+}
+
+.paymentWizardIdentity > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 5px 8px;
+}
+
+.paymentWizardIdentity span {
+  color: rgba(231, 205, 148, 0.72);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.paymentWizardIdentity strong {
+  overflow: hidden;
+  color: #fff9ed;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paymentWizardSteps {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 2px 0 5px;
+  overflow-x: auto;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.paymentWizardSteps li {
+  display: inline-flex;
+  flex: 1 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: max-content;
+  padding: 7px 10px;
+  color: rgba(208, 216, 225, 0.58);
+  border: 1px solid rgba(157, 171, 188, 0.18);
+  border-radius: 999px;
+  background: rgba(10, 18, 28, 0.62);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.paymentWizardSteps li > span {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(145, 158, 173, 0.18);
+  font-size: 11px;
+}
+
+.paymentWizardSteps li[data-state="current"] {
+  color: #fff2cf;
+  border-color: rgba(235, 198, 111, 0.62);
+  background: rgba(116, 83, 24, 0.42);
+}
+
+.paymentWizardSteps li[data-state="current"] > span,
+.paymentWizardSteps li[data-state="complete"] > span {
+  color: #211708;
+  background: #dfbc68;
+}
+
+.paymentWizardSteps li[data-state="complete"] {
+  color: rgba(239, 218, 170, 0.82);
+  border-color: rgba(209, 177, 101, 0.3);
+}
+
+.paymentWizardPanel,
+.paymentWizardReview {
+  display: grid;
+  gap: 16px;
+  padding: clamp(16px, 2.2vw, 22px);
+  border: 1px solid rgba(225, 190, 112, 0.28);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 100% 0, rgba(224, 187, 99, 0.08), transparent 46%),
+    rgba(15, 24, 35, 0.58);
+}
+
+.paymentWizardPanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.paymentWizardPanelHeader small {
+  display: block;
+  margin-top: 5px;
+  color: rgba(209, 217, 226, 0.7);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.paymentWizardPendingChoice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 14px;
+  cursor: pointer;
+  border: 1px solid rgba(226, 190, 111, 0.28);
+  border-radius: 11px;
+  background: rgba(8, 15, 24, 0.58);
+}
+
+.paymentWizardPendingChoice > span {
+  display: grid;
+  gap: 3px;
+}
+
+.paymentWizardPendingChoice small {
+  color: rgba(209, 217, 226, 0.68);
+  font-size: 12px;
+}
+
+.paymentWizardReview h3 {
+  margin: 0;
+  color: #fff3d2;
+  font-size: 19px;
+}
+
+.paymentWizardReview dl {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.paymentWizardReview dl > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.35fr) minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(214, 190, 137, 0.14);
+}
+
+.paymentWizardReview dl > div:last-child {
+  border-bottom: 0;
+}
+
+.paymentWizardReview dt {
+  color: rgba(231, 205, 148, 0.72);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.paymentWizardReview dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #f7f1e8;
+  font-weight: 700;
+}
+
+.paymentWizardActions {
+  position: sticky;
+  z-index: 7;
+  bottom: -1px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 2px -2px -2px;
+  padding: 12px 2px 2px;
+  background: linear-gradient(180deg, transparent, rgba(8, 13, 20, 0.98) 30%);
+}
+
 .contractPlanMode {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5261,6 +5461,20 @@
   .contractPlanMode,
   .paymentSplitRow {
     grid-template-columns: 1fr;
+  }
+
+  .paymentWizardIdentity strong {
+    font-size: 16px;
+  }
+
+  .paymentWizardReview dl > div {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .paymentWizardActions .button {
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .lineGroupProfileHeader,
