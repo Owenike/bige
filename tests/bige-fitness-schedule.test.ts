@@ -481,6 +481,30 @@ test("monthly schedule UI exposes per-date coach choice, leave confirmation, and
   assert.match(monthlyWorkspace, /正式課程會整合成一則 LINE 取消通知，FA 不會發送 LINE/);
 });
 
+test("monthly schedule confirmation emphasizes every date and closes after a successful batch", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+  const confirmation = component.slice(
+    component.indexOf('{dialog === "monthly-schedule-confirm"'),
+    component.indexOf('{dialog === "activity"'),
+  );
+
+  assert.match(confirmation, /title=\{monthlyPreflight\.available\.length \? "確認預約日期"/);
+  assert.match(confirmation, /請逐筆確認日期、星期、時間與教練/);
+  assert.match(confirmation, /monthlyPreflight\.available\.map\(\(slot, index\) =>/);
+  assert.doesNotMatch(confirmation, /monthlyPerDateMode && monthlyPreflight\.available\.length/);
+  assert.match(confirmation, /formatDate\(slot\.startsAt\)/);
+  assert.match(confirmation, /weekdayLabel\(dateKey\)/);
+  assert.match(confirmation, /slotKey\(slot\.startsAt\)/);
+  assert.match(component, /setDialog\(null\);\s*setSuccess\(/);
+  assert.doesNotMatch(component, /monthly-schedule-result|批次排課結果|monthlyBatchResult/);
+  assert.match(styles, /\.monthlyDateReviewList\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(
+    styles,
+    /@media \(max-width: 560px\)[\s\S]*?\.monthlyBookingReviewSummary,\s*\.monthlyDateReviewList,\s*\.monthlyAssignmentReviewList\s*\{\s*grid-template-columns: 1fr;/,
+  );
+});
+
 test("monthly schedule defaults to per-date coach selection", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
 

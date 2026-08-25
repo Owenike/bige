@@ -152,7 +152,6 @@ type DialogName =
   | "extension"
   | "monthly-schedule"
   | "monthly-schedule-confirm"
-  | "monthly-schedule-result"
   | "activity"
   | "walk-in-payment"
   | "line-notifications"
@@ -678,16 +677,6 @@ type MonthlySchedulePreflight = {
     message: string;
     coachName: string | null;
   }>;
-};
-
-type MonthlyScheduleBatchResult = {
-  created: Array<{
-    startsAt: string;
-    coachId?: string;
-    item?: { warnings?: Array<{ code?: string; existingCount?: number }> };
-  }>;
-  skipped: MonthlyScheduleConflict[];
-  failures: Array<{ startsAt: string; coachId?: string; message: string }>;
 };
 
 type MonthlyCoachAvailability = Coach & {
@@ -1729,7 +1718,6 @@ export default function BigeFitnessOperations({
   const [monthlyPreflight, setMonthlyPreflight] = useState<MonthlySchedulePreflight | null>(null);
   const [monthlyPreflightLoading, setMonthlyPreflightLoading] = useState(false);
   const [monthlyPreflightError, setMonthlyPreflightError] = useState("");
-  const [monthlyBatchResult, setMonthlyBatchResult] = useState<MonthlyScheduleBatchResult | null>(null);
   const [monthlySubmitting, setMonthlySubmitting] = useState(false);
   const [monthlyDeleteMode, setMonthlyDeleteMode] = useState(false);
   const [monthlyDeleteSelectedIds, setMonthlyDeleteSelectedIds] = useState<string[]>([]);
@@ -2552,7 +2540,6 @@ export default function BigeFitnessOperations({
     setMonthlyNote("");
     setMonthlyPreflight(null);
     setMonthlyPreflightError("");
-    setMonthlyBatchResult(null);
     setMonthlyDeleteMode(false);
     setMonthlyDeleteSelectedIds([]);
     setMonthlyDeletePreview(null);
@@ -2621,16 +2608,15 @@ export default function BigeFitnessOperations({
         }>;
         failures?: Array<{ startsAt: string; coachId?: string; message: string }>;
       };
-      const batchResult: MonthlyScheduleBatchResult = {
-        created: result.created || [],
-        skipped: preview.conflicts,
-        failures: result.failures || [],
-      };
-      setMonthlyBatchResult(batchResult);
+      const created = result.created || [];
+      const failures = result.failures || [];
+      const hasLegacyReferenceWarning = created.some((item) =>
+        item.item?.warnings?.some((warning) => warning.code === "legacy_schedule_reference_conflict"),
+      );
       const remainingDates = Array.from(
         new Set([
-          ...batchResult.skipped.map((conflict) => taipeiDateKey(conflict.startsAt)),
-          ...batchResult.failures.map((failure) => taipeiDateKey(failure.startsAt)),
+          ...preview.conflicts.map((conflict) => taipeiDateKey(conflict.startsAt)),
+          ...failures.map((failure) => taipeiDateKey(failure.startsAt)),
         ]),
       ).sort();
       setMonthlyDates(remainingDates);
@@ -2644,7 +2630,23 @@ export default function BigeFitnessOperations({
       boardCacheRef.current.clear();
       await loadMonthlyMemberSchedule(monthlyMember, monthlyMonth);
       if (date.startsWith(monthlyMonth)) void loadBoard({ silent: true });
-      setDialog("monthly-schedule-result");
+      if (failures.length) {
+        setDialog("monthly-schedule");
+        showOperationAlert(
+          `已建立 ${created.length} 筆；另有 ${failures.length} 筆在最後檢查時未建立。未建立日期已保留，請重新確認後再試。`,
+          "部分預約未建立",
+        );
+        return;
+      }
+      setDialog(null);
+      const successMessage = preview.conflicts.length
+        ? `已建立 ${created.length} 筆預約；${preview.conflicts.length} 個衝突日期未建立`
+        : `已建立 ${created.length} 筆預約`;
+      setSuccess(
+        hasLegacyReferenceWarning
+          ? `${successMessage}；舊預約本有資料，已保留並建立`
+          : successMessage,
+      );
     } catch (caught) {
       showOperationAlert(
         caught instanceof Error ? caught.message : "整月排課失敗",
@@ -7702,7 +7704,7 @@ export default function BigeFitnessOperations({
 
       {dialog === "monthly-schedule-confirm" && monthlyMember && monthlyPreflight ? (
         <Dialog
-          title={monthlyPreflight.available.length ? "確認批次排課" : "無法建立批次排課"}
+          title={monthlyPreflight.available.length ? "確認預約日期" : "無法建立批次排課"}
           onClose={() => setDialog("monthly-schedule")}
           wide
         >
@@ -7722,32 +7724,55 @@ export default function BigeFitnessOperations({
               </span>
             </div>
 
-            <div className={styles.monthlyReviewSummary}>
+            <div className={styles.monthlyBookingReviewSummary}>
               <div><span>會員</span><strong>{monthlyMember.full_name}</strong></div>
-              <div><span>教練</span><strong>{monthlyPerDateMode ? "逐日指定" : monthlySelectedCoach ? coachLabel(monthlySelectedCoach) : "未選擇"}</strong></div>
               <div><span>課程</span><strong>{monthlyOperationKind === "trial" ? "FA 體驗" : BIGE_COURSE_LABELS[monthlyCourseType]}</strong></div>
-              <div><span>時間</span><strong>{monthlyTime}（24 小時制）</strong></div>
-              <div data-tone="success"><span>可建立</span><strong>{monthlyPreflight.available.length} 筆</strong></div>
-              <div data-tone={monthlyPreflight.conflicts.length ? "danger" : "neutral"}><span>衝突</span><strong>{monthlyPreflight.conflicts.length} 筆</strong></div>
-              <div data-tone={monthlyPreflight.warnings.length ? "warning" : "neutral"}><span>排休警告</span><strong>{monthlyPreflight.warnings.length} 筆</strong></div>
+              <div><span>教練安排</span><strong>{monthlyPerDateMode ? "逐日指定" : monthlySelectedCoach ? coachLabel(monthlySelectedCoach) : "未選擇"}</strong></div>
             </div>
 
-            {monthlyPerDateMode && monthlyPreflight.available.length ? (
-              <section className={styles.monthlyResultSection}>
-                <h3>逐日教練安排</h3>
-                <div className={styles.monthlyAssignmentReviewList}>
-                  {monthlyPreflight.available.map((slot) => {
-                    const coach = monthlyCoachOptions.find((item) => item.id === slot.coachId);
+            {monthlyPreflight.available.length ? (
+              <section className={styles.monthlyDateReviewSection} aria-labelledby="monthly-date-review-title">
+                <header className={styles.monthlyDateReviewHeader}>
+                  <div>
+                    <h3 id="monthly-date-review-title">預約日期</h3>
+                    <p>請逐筆確認日期、星期、時間與教練</p>
+                  </div>
+                  <strong>{monthlyPreflight.available.length} 筆</strong>
+                </header>
+                <ol className={styles.monthlyDateReviewList}>
+                  {monthlyPreflight.available.map((slot, index) => {
+                    const coach = monthlyPerDateMode
+                      ? monthlyCoachOptions.find((item) => item.id === slot.coachId)
+                      : monthlySelectedCoach;
+                    const dateKey = taipeiDateKey(slot.startsAt);
                     return (
-                      <div key={`${slot.startsAt}-${slot.coachId || "coach"}`}>
-                        <time>{formatDateTime(slot.startsAt)}</time>
-                        <strong>{coach ? coachLabel(coach) : "教練資料已更新"}</strong>
-                      </div>
+                      <li className={styles.monthlyDateReviewItem} key={`${slot.startsAt}-${slot.coachId || "coach"}`}>
+                        <span className={styles.monthlyDateReviewIndex} aria-hidden="true">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <div className={styles.monthlyDateReviewWhen}>
+                          <div>
+                            <time dateTime={slot.startsAt}>{formatDate(slot.startsAt)}</time>
+                            <span>{weekdayLabel(dateKey)}</span>
+                          </div>
+                          <strong>{slotKey(slot.startsAt)}</strong>
+                        </div>
+                        <div className={styles.monthlyDateReviewCoach}>
+                          <span>教練</span>
+                          <strong>{coach ? coachLabel(coach) : "教練資料已更新"}</strong>
+                        </div>
+                      </li>
                     );
                   })}
-                </div>
+                </ol>
               </section>
             ) : null}
+
+            <div className={styles.monthlyReviewCounts} aria-label="排課檢查結果">
+              <span data-tone="success">可建立 {monthlyPreflight.available.length} 筆</span>
+              {monthlyPreflight.conflicts.length ? <span data-tone="danger">衝突 {monthlyPreflight.conflicts.length} 筆</span> : null}
+              {monthlyPreflight.warnings.length ? <span data-tone="warning">排休警告 {monthlyPreflight.warnings.length} 筆</span> : null}
+            </div>
 
             {monthlyPreflight.warnings.length ? (
               <section className={styles.monthlyWarningSection} role="alert">
@@ -7801,75 +7826,9 @@ export default function BigeFitnessOperations({
               </button>
               {monthlyPreflight.available.length ? (
                 <button className={`${styles.button} ${styles.primary}`} type="button" onClick={() => void confirmMonthlySchedule()} disabled={monthlySubmitting}>
-                  {monthlySubmitting ? "建立中…" : `只建立沒有衝突的日期（${monthlyPreflight.available.length} 筆）`}
+                  {monthlySubmitting ? "建立中…" : `確認建立 ${monthlyPreflight.available.length} 筆預約`}
                 </button>
               ) : null}
-            </div>
-          </div>
-        </Dialog>
-      ) : null}
-
-      {dialog === "monthly-schedule-result" && monthlyBatchResult ? (
-        <Dialog title="批次排課結果" onClose={() => setDialog("monthly-schedule")} wide>
-          <div className={styles.monthlyReview}>
-            <div className={styles.monthlyReviewSummary}>
-              <div data-tone="success"><span>建立成功</span><strong>{monthlyBatchResult.created.length} 筆</strong></div>
-              <div data-tone={monthlyBatchResult.skipped.length + monthlyBatchResult.failures.length ? "danger" : "neutral"}>
-                <span>未建立</span>
-                <strong>{monthlyBatchResult.skipped.length + monthlyBatchResult.failures.length} 筆</strong>
-              </div>
-            </div>
-
-            {monthlyBatchResult.created.length ? (
-              <section className={styles.monthlyResultSection}>
-                <h3>已成功建立</h3>
-                <div className={styles.monthlyResultList}>
-                  {monthlyBatchResult.created.map((created) => (
-                    <div data-tone="success" key={created.startsAt}>
-                      {formatDateTime(created.startsAt)}
-                      {created.coachId ? (
-                        <small>{coachLabel(monthlyCoachOptions.find((coach) => coach.id === created.coachId) || { id: "", display_name: null, english_name: null })}</small>
-                      ) : null}
-                      {created.item?.warnings?.some(
-                        (warning) => warning.code === "legacy_schedule_reference_conflict",
-                      ) ? (
-                        <small>舊預約本有資料，已保留並建立</small>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            {monthlyBatchResult.skipped.length || monthlyBatchResult.failures.length ? (
-              <section className={styles.monthlyResultSection}>
-                <h3>未建立（日期已保留選取）</h3>
-                <div className={styles.monthlyConflictList}>
-                  {monthlyBatchResult.skipped.map((conflict) => (
-                    <article className={styles.monthlyConflictItem} key={`skipped-${conflict.startsAt}`}>
-                      <div><time>{formatDateTime(conflict.startsAt)}</time><strong>{conflict.message}</strong></div>
-                    </article>
-                  ))}
-                  {monthlyBatchResult.failures.map((failure) => (
-                    <article className={styles.monthlyConflictItem} key={`failed-${failure.startsAt}`}>
-                      <div><time>{formatDateTime(failure.startsAt)}</time><strong>{failure.message}</strong></div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            ) : (
-              <p className={styles.monthlyAllClear}>全部日期都已建立完成。</p>
-            )}
-
-            <div className={styles.formActions}>
-              {monthlyBatchResult.skipped.length || monthlyBatchResult.failures.length ? (
-                <button className={styles.button} type="button" onClick={() => setDialog("monthly-schedule")}>
-                  返回調整未建立日期
-                </button>
-              ) : null}
-              <button className={`${styles.button} ${styles.primary}`} type="button" onClick={() => setDialog(null)}>
-                完成
-              </button>
             </div>
           </div>
         </Dialog>
