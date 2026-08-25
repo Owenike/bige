@@ -1821,9 +1821,25 @@ test("existing schedule edits keep payment context and primary actions above the
     styles,
     /\.managerPage \.scheduleEditDialog \.dialogHeader \{[\s\S]*?margin-bottom: 4px;[\s\S]*?padding-bottom: 4px;/,
   );
+  assert.doesNotMatch(styles, /\.managerPage \.scheduleEditDialog \.dialogTitle \{/);
+  assert.match(component, /lockedTitleLabel\?: string/);
+  assert.match(
+    component,
+    /lockedTitleLabel=\{[\s\S]*?editingSchedule\?\.kind === "booking"[\s\S]*?scheduleOperationKindLabel/,
+  );
+  assert.match(component, /if \(operationKind === "trial"\) return trialStage \|\| "FA 體驗";/);
+  assert.match(component, /return operationKind === "bb" \? "BB 回訪" : "PT 正式課";/);
+  assert.match(
+    component,
+    /editingSchedule\?\.kind === "booking" \? \([\s\S]*?<ScheduleDurationField[\s\S]*?editingSchedule\?\.kind !== "note"/,
+  );
+  assert.match(
+    component,
+    /editingSchedule\?\.kind !== "booking" \? \([\s\S]*?<label className=\{styles\.field\}>[\s\S]*?<span className=\{styles\.label\}>類型<\/span>/,
+  );
   assert.match(
     styles,
-    /\.managerPage \.scheduleEditDialog \.dialogTitle \{[\s\S]*?font-size: 18px;/,
+    /\.dialogLockedLabel \{[\s\S]*?display: inline-flex;[\s\S]*?white-space: nowrap;/,
   );
   assert.match(
     styles,

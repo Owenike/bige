@@ -1139,6 +1139,14 @@ function scheduleCourseLabel(courseType: BigeCourseType | null) {
     : BIGE_COURSE_LABELS[courseType];
 }
 
+function scheduleOperationKindLabel(
+  operationKind: "pt" | "trial" | "bb",
+  trialStage?: ExplicitTrialStage | null,
+) {
+  if (operationKind === "trial") return trialStage || "FA 體驗";
+  return operationKind === "bb" ? "BB 回訪" : "PT 正式課";
+}
+
 const DIALOG_CLOSE_ANIMATION_MS = 360;
 const DIALOG_CLOSE_FALLBACK_MS = DIALOG_CLOSE_ANIMATION_MS + 120;
 const DIALOG_GENIE_SLICE_COUNT = 30;
@@ -1192,8 +1200,32 @@ function StableNumberInput({
   );
 }
 
+function ScheduleDurationField(props: {
+  value: number;
+  disabled: boolean;
+  onChange: (duration: number) => void;
+}) {
+  return (
+    <label className={styles.field}>
+      <span className={styles.label}>時長</span>
+      <select
+        className={styles.select}
+        value={props.value}
+        disabled={props.disabled}
+        onChange={(event) => props.onChange(Number(event.target.value))}
+      >
+        <option value={30}>30 分鐘</option>
+        <option value={60}>60 分鐘</option>
+        <option value={90}>90 分鐘</option>
+        <option value={120}>120 分鐘</option>
+      </select>
+    </label>
+  );
+}
+
 function Dialog(props: {
   title: string;
+  lockedTitleLabel?: string;
   onClose: () => void;
   onCloseStart?: () => void;
   children: React.ReactNode;
@@ -1366,7 +1398,15 @@ function Dialog(props: {
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className={styles.dialogHeader}>
-          <h2 className={styles.dialogTitle}>{props.title}</h2>
+          <div className={styles.dialogHeading}>
+            <h2 className={styles.dialogTitle}>{props.title}</h2>
+            {props.lockedTitleLabel ? (
+              <span className={styles.dialogLockedLabel} title="原排課類型固定，無法變更">
+                <Lock aria-hidden="true" size={13} />
+                {props.lockedTitleLabel}
+              </span>
+            ) : null}
+          </div>
           <button
             className={styles.iconButton}
             type="button"
@@ -8018,6 +8058,14 @@ export default function BigeFitnessOperations({
                 ? "編輯原排課"
                 : "新增排課"
           }
+          lockedTitleLabel={
+            editingSchedule?.kind === "booking"
+              ? scheduleOperationKindLabel(
+                  scheduleDraft.operationKind,
+                  scheduleDraft.trialStage,
+                )
+              : undefined
+          }
           onClose={() => {
             setEditingSchedule(null);
             setDialog(null);
@@ -8052,59 +8100,67 @@ export default function BigeFitnessOperations({
                 })}
               </select>
             </label>
+            {editingSchedule?.kind === "booking" ? (
+              <ScheduleDurationField
+                value={scheduleDraft.duration}
+                disabled={scheduleDraft.operationKind === "trial"}
+                onChange={(duration) => setScheduleDraft({ ...scheduleDraft, duration })}
+              />
+            ) : null}
             {editingSchedule?.kind !== "note" ? (
               <>
-                <label className={styles.field}>
-                  <span className={styles.label}>類型</span>
-                  <select
-                    className={styles.select}
-                    value={
-                      scheduleDraft.operationKind === "trial" && scheduleDraft.trialStage
-                        ? `trial:${scheduleDraft.trialStage}`
-                        : scheduleDraft.operationKind
-                    }
-                    disabled={Boolean(editingSchedule)}
-                    onChange={(event) => {
-                      const selection = event.target.value;
-                      const operationKind = selection.startsWith("trial")
-                        ? "trial"
-                        : (selection as "pt" | "bb");
-                      const trialStage: ExplicitTrialStage | null =
-                        selection === "trial:FA2"
-                          ? "FA2"
-                          : selection === "trial:FAN"
-                            ? "FAN"
-                            : null;
-                      setScheduleDraft({
-                        ...scheduleDraft,
-                        operationKind,
-                        trialStage,
-                        memberId: "",
-                        trialBookingId: "",
-                        courseType:
-                          operationKind === "bb"
-                            ? null
-                            : scheduleDraft.courseType || "weight_training",
-                        duration:
-                          operationKind === "trial"
-                            ? BIGE_FA_DURATION_MINUTES
-                            : operationKind === "bb"
-                              ? 60
-                              : scheduleDraft.duration,
-                      });
-                      setSelectedScheduleMemberResult(null);
-                      setSelectedScheduleTrialResult(null);
-                      setScheduleSearch("");
-                      setScheduleResults({ members: [], trials: [] });
-                    }}
-                  >
-                    <option value="pt">PT 正式課</option>
-                    <option value="trial">FA 體驗</option>
-                    <option value="trial:FA2">FA2</option>
-                    <option value="trial:FAN">FAN</option>
-                    <option value="bb">BB 回訪</option>
-                  </select>
-                </label>
+                {editingSchedule?.kind !== "booking" ? (
+                  <label className={styles.field}>
+                    <span className={styles.label}>類型</span>
+                    <select
+                      className={styles.select}
+                      value={
+                        scheduleDraft.operationKind === "trial" && scheduleDraft.trialStage
+                          ? `trial:${scheduleDraft.trialStage}`
+                          : scheduleDraft.operationKind
+                      }
+                      onChange={(event) => {
+                        const selection = event.target.value;
+                        const operationKind = selection.startsWith("trial")
+                          ? "trial"
+                          : (selection as "pt" | "bb");
+                        const trialStage: ExplicitTrialStage | null =
+                          selection === "trial:FA2"
+                            ? "FA2"
+                            : selection === "trial:FAN"
+                              ? "FAN"
+                              : null;
+                        setScheduleDraft({
+                          ...scheduleDraft,
+                          operationKind,
+                          trialStage,
+                          memberId: "",
+                          trialBookingId: "",
+                          courseType:
+                            operationKind === "bb"
+                              ? null
+                              : scheduleDraft.courseType || "weight_training",
+                          duration:
+                            operationKind === "trial"
+                              ? BIGE_FA_DURATION_MINUTES
+                              : operationKind === "bb"
+                                ? 60
+                                : scheduleDraft.duration,
+                        });
+                        setSelectedScheduleMemberResult(null);
+                        setSelectedScheduleTrialResult(null);
+                        setScheduleSearch("");
+                        setScheduleResults({ members: [], trials: [] });
+                      }}
+                    >
+                      <option value="pt">PT 正式課</option>
+                      <option value="trial">FA 體驗</option>
+                      <option value="trial:FA2">FA2</option>
+                      <option value="trial:FAN">FAN</option>
+                      <option value="bb">BB 回訪</option>
+                    </select>
+                  </label>
+                ) : null}
                 <label className={styles.field}>
                   <span className={styles.label}>課別</span>
                   <select
@@ -8127,20 +8183,13 @@ export default function BigeFitnessOperations({
                 </label>
               </>
             ) : null}
-            <label className={styles.field}>
-              <span className={styles.label}>時長</span>
-              <select
-                className={styles.select}
+            {editingSchedule?.kind !== "booking" ? (
+              <ScheduleDurationField
                 value={scheduleDraft.duration}
                 disabled={scheduleDraft.operationKind === "trial"}
-                onChange={(event) => setScheduleDraft({ ...scheduleDraft, duration: Number(event.target.value) })}
-              >
-                <option value={30}>30 分鐘</option>
-                <option value={60}>60 分鐘</option>
-                <option value={90}>90 分鐘</option>
-                <option value={120}>120 分鐘</option>
-              </select>
-            </label>
+                onChange={(duration) => setScheduleDraft({ ...scheduleDraft, duration })}
+              />
+            ) : null}
             {editingSchedule?.kind !== "note" ? (
               <>
                 <label className={`${styles.field} ${styles.fieldFull}`}>
