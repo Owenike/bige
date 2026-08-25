@@ -5009,6 +5009,10 @@
   font-size: 13px;
 }
 
+.managerPage .scheduleEditDialog .studentCourseSessionHeader .button {
+  width: 127.2px;
+}
+
 .managerPage .scheduleEditDialog .studentPaymentBalanceRow {
   grid-column: 1;
   align-items: flex-start;
@@ -5838,6 +5842,10 @@
 
   .managerPage .scheduleEditDialog .studentCourseSessionSummary {
     padding-top: 8px;
+  }
+
+  .managerPage .scheduleEditDialog .studentCourseSessionHeader .button {
+    width: 100%;
   }
 }
 

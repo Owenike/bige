@@ -1855,7 +1855,15 @@ test("existing schedule edits keep payment context and primary actions above the
   );
   assert.match(
     styles,
+    /\.managerPage \.scheduleEditDialog \.studentCourseSessionHeader \.button \{\s*width: 127\.2px;\s*\}/,
+  );
+  assert.match(
+    styles,
     /@media \(max-width: 780px\)[\s\S]*?\.managerPage \.scheduleEditDialog \.scheduleEditActions \{[\s\S]*?grid-column: 1 \/ -1;/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 780px\)[\s\S]*?\.managerPage \.scheduleEditDialog \.studentCourseSessionHeader \.button \{\s*width: 100%;\s*\}/,
   );
 });
 
