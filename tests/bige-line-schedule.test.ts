@@ -213,6 +213,10 @@ test("member profile exposes manual LINE binding and the audited atomic RPC", ()
   assert.match(component, /aria-label="學員 LINE 群組設定"/);
   assert.match(component, /群組名稱只作提示，不會依學員姓名自動配對/);
   assert.match(component, /BG 驗證碼/);
+  assert.match(
+    component,
+    /<select[\s\S]{0,120}className=\{styles\.select\}[\s\S]{0,160}aria-label="選擇這位學員的 LINE 群組"/,
+  );
   assert.match(component, /lineGroupVerificationLabel/);
   assert.match(component, /activeMemberLineBinding[\s\S]*inactiveMemberLineBinding/);
   assert.match(migration, /status = 'disabled'/);

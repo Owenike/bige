@@ -6864,7 +6864,7 @@ export default function BigeFitnessOperations({
                     <label className={styles.field}>
                       <span className={styles.label}>選擇這位學員的群組</span>
                       <select
-                        className={styles.input}
+                        className={styles.select}
                         aria-label="選擇這位學員的 LINE 群組"
                         value={memberLineBindingDraft}
                         onChange={(event) => {
