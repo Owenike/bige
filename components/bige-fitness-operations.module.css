@@ -4942,6 +4942,15 @@
   max-height: min(94dvh, 940px);
 }
 
+.managerPage .scheduleEditDialog .dialogHeader {
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+}
+
+.managerPage .scheduleEditDialog .dialogTitle {
+  font-size: 18px;
+}
+
 .managerPage .scheduleEditDialog .formGrid {
   gap: 10px 14px;
 }
@@ -5054,8 +5063,12 @@
 }
 
 .managerPage .scheduleEditDialog .scheduleEditActions .button {
+  display: inline-flex;
+  align-items: center;
   flex: 1 1 138px;
   justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
 }
 
 .contractCheckboxRow {

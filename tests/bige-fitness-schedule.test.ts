@@ -1819,6 +1819,14 @@ test("existing schedule edits keep payment context and primary actions above the
   );
   assert.match(
     styles,
+    /\.managerPage \.scheduleEditDialog \.dialogHeader \{[\s\S]*?margin-bottom: 4px;[\s\S]*?padding-bottom: 4px;/,
+  );
+  assert.match(
+    styles,
+    /\.managerPage \.scheduleEditDialog \.dialogTitle \{[\s\S]*?font-size: 18px;/,
+  );
+  assert.match(
+    styles,
     /\.managerPage \.scheduleEditDialog \.scheduleEditNoteField \{[\s\S]*?grid-column: 1;/,
   );
   assert.match(
@@ -1827,7 +1835,37 @@ test("existing schedule edits keep payment context and primary actions above the
   );
   assert.match(
     styles,
+    /\.managerPage \.scheduleEditDialog \.scheduleEditActions \.button \{[\s\S]*?display: inline-flex;[\s\S]*?align-items: center;[\s\S]*?justify-content: center;[\s\S]*?white-space: nowrap;/,
+  );
+  assert.match(
+    styles,
     /@media \(max-width: 780px\)[\s\S]*?\.managerPage \.scheduleEditDialog \.scheduleEditActions \{[\s\S]*?grid-column: 1 \/ -1;/,
+  );
+});
+
+test("every save-changes button keeps a centered layout", () => {
+  const operations = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const operationsStyles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+  const staff = readFileSync("app/manager/staff/page.tsx", "utf8");
+  const staffStyles = readFileSync("app/manager/staff/page.module.css", "utf8");
+
+  assert.equal((operations.match(/儲存變更/g) ?? []).length, 2);
+  assert.equal((staff.match(/儲存變更/g) ?? []).length, 1);
+  assert.match(
+    operationsStyles,
+    /\.managerPage \.scheduleEditDialog \.scheduleEditActions \.button \{[\s\S]*?display: inline-flex;[\s\S]*?align-items: center;[\s\S]*?white-space: nowrap;/,
+  );
+  assert.match(
+    operations,
+    /trialConversionSubmitting === "change"[\s\S]*?: "儲存變更"/,
+  );
+  assert.match(
+    staff,
+    /<Save size=\{17\} \/>[\s\S]*?儲存變更/,
+  );
+  assert.match(
+    staffStyles,
+    /\.button \{[\s\S]*?display: inline-flex;[\s\S]*?align-items: center;[\s\S]*?justify-content: center;[\s\S]*?gap: 7px;/,
   );
 });
 
