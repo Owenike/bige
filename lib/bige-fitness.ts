@@ -1181,11 +1181,22 @@ export function shouldShowBigeScheduleBookingOnDailyBoard(
   booking: {
     status?: string | null;
     cancelled_at?: string | null;
+    starts_at?: string | null;
   },
   now = new Date(),
 ) {
   if (String(booking.status || "").toLowerCase() !== "cancelled") {
     return true;
+  }
+
+  if (booking.starts_at) {
+    const startsAt = new Date(booking.starts_at);
+    if (!Number.isNaN(startsAt.getTime())) {
+      const bookingDate = toTaipeiDateString(startsAt);
+      if (bookingDate >= "2026-08-20" && bookingDate <= "2026-08-31") {
+        return false;
+      }
+    }
   }
 
   if (!booking.cancelled_at) return false;

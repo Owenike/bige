@@ -70,19 +70,54 @@ import { assignBigeMonthlyDateTimes } from "../lib/bige-monthly-selection";
 const batchCoachId = "00000000-0000-4000-8000-000000000011";
 const batchMemberId = "00000000-0000-4000-8000-000000000012";
 
-test("daily board only shows cancellations made today in Taipei", () => {
+test("daily board hides every cancellation from August 20 through 31", () => {
   const now = new Date("2026-08-26T03:00:00.000Z");
 
   assert.equal(
     shouldShowBigeScheduleBookingOnDailyBoard(
-      { status: "cancelled", cancelled_at: "2026-08-26T01:00:00.000Z" },
+      {
+        status: "cancelled",
+        starts_at: "2026-08-19T16:00:00.000Z",
+        cancelled_at: "2026-08-26T01:00:00.000Z",
+      },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    shouldShowBigeScheduleBookingOnDailyBoard(
+      {
+        status: "cancelled",
+        starts_at: "2026-08-31T15:59:59.000Z",
+        cancelled_at: "2026-08-26T01:00:00.000Z",
+      },
+      now,
+    ),
+    false,
+  );
+});
+
+test("daily board keeps the same-day cancellation rule outside the August window", () => {
+  const now = new Date("2026-08-26T03:00:00.000Z");
+
+  assert.equal(
+    shouldShowBigeScheduleBookingOnDailyBoard(
+      {
+        status: "cancelled",
+        starts_at: "2026-08-19T15:59:59.000Z",
+        cancelled_at: "2026-08-26T01:00:00.000Z",
+      },
       now,
     ),
     true,
   );
   assert.equal(
     shouldShowBigeScheduleBookingOnDailyBoard(
-      { status: "cancelled", cancelled_at: "2026-08-25T16:30:00.000Z" },
+      {
+        status: "cancelled",
+        starts_at: "2026-08-31T16:00:00.000Z",
+        cancelled_at: "2026-08-25T16:30:00.000Z",
+      },
       now,
     ),
     true,
