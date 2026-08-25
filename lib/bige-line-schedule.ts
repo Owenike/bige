@@ -29,8 +29,14 @@ export function buildBigeLineGroupVerificationMessage(params: {
   verificationCode: string;
   joined?: boolean;
 }) {
+  if (params.joined) {
+    return [
+      "嗨嗨大家好～我是 BIG E 小幫手小薇👋✨",
+      "很開心加入群組！之後會在這裡貼心送上課程通知與提醒，一起開心運動吧 💪",
+    ].join("\n");
+  }
   return [
-    params.joined ? "BIG E小幫手已加入此群組。" : "此群組的 BIG E 驗證碼如下：",
+    "此群組的 BIG E 驗證碼如下：",
     `群組驗證碼：${formatBigeLineGroupVerificationCode(params.verificationCode)}`,
     "請由櫃台在學員個人資料中核對此碼後完成綁定。",
   ].join("\n");

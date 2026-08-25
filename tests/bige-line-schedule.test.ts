@@ -103,7 +103,7 @@ test("test-mode contract creation permits a deferred LINE group binding", () => 
   );
 });
 
-test("LINE group verification codes are stable and can be requested from the group", () => {
+test("LINE group join greets members while verification codes remain requestable", () => {
   const first = bigeLineGroupVerificationCode("C1234567890");
   assert.equal(first, bigeLineGroupVerificationCode("C1234567890"));
   assert.notEqual(first, bigeLineGroupVerificationCode("C0987654321"));
@@ -113,13 +113,22 @@ test("LINE group verification codes are stable and can be requested from the gro
   assert.equal(isBigeLineGroupVerificationCodeRequest("@BIG E小幫手 群組驗證碼"), true);
   assert.equal(isBigeLineGroupVerificationCodeRequest("今天要上課嗎"), false);
 
-  const message = buildBigeLineGroupVerificationMessage({
+  const greeting = buildBigeLineGroupVerificationMessage({
     verificationCode: first,
     joined: true,
   });
-  assert.match(message, new RegExp(`BG-${first}`));
-  assert.match(message, /櫃台/);
-  assert.doesNotMatch(message, /教練/);
+  assert.equal(
+    greeting,
+    "嗨嗨大家好～我是 BIG E 小幫手小薇👋✨\n很開心加入群組！之後會在這裡貼心送上課程通知與提醒，一起開心運動吧 💪",
+  );
+  assert.doesNotMatch(greeting, /驗證碼|櫃台|BG-/);
+
+  const verificationMessage = buildBigeLineGroupVerificationMessage({
+    verificationCode: first,
+  });
+  assert.match(verificationMessage, new RegExp(`BG-${first}`));
+  assert.match(verificationMessage, /櫃台/);
+  assert.doesNotMatch(verificationMessage, /教練/);
 });
 
 test("walk-in payment requires an auditable operation and positive tender entries", () => {
