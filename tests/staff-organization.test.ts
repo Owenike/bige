@@ -343,6 +343,29 @@ test("all Becky position surfaces use the display-only position helper", () => {
   assert.match(activation, /positionLabelForEmployee\(profile\.position, profile\.employeeNumber\)/);
 });
 
+test("staff account management keeps the manager fitness visual system", () => {
+  const staffStyles = readFileSync("app/manager/staff/page.module.css", "utf8");
+
+  assert.match(
+    staffStyles,
+    /\.page \{[\s\S]*linear-gradient\(112deg, #183149 0%, #172b3c 45%, #202832 72%, #454542 100%\)/,
+  );
+  assert.match(
+    staffStyles,
+    /\.glassCard \{[\s\S]*border-color: var\(--staff-ice-line\)[\s\S]*var\(--staff-glass\)/,
+  );
+  assert.match(
+    staffStyles,
+    /\.primary,[\s\S]*linear-gradient\(135deg, var\(--staff-gold-bright\) 0%, var\(--staff-gold\) 57%, #b98434 100%\)/,
+  );
+  assert.match(
+    staffStyles,
+    /\.input,[\s\S]*background: rgba\(5, 11, 18, 0\.66\)/,
+  );
+  assert.match(staffStyles, /@media \(max-width: 900px\)[\s\S]*\.stats \{/);
+  assert.match(staffStyles, /@media \(max-width: 560px\)[\s\S]*\.page \{/);
+});
+
 test("platform and legacy management accounts keep all-coach schedule access", () => {
   assert.equal(canViewAllCoachSchedules(platformAdmin), true);
   assert.equal(canViewAllCoachSchedules(generalAffairsManager), true);
