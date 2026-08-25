@@ -235,6 +235,18 @@
   text-decoration: none;
 }
 
+.navigationIconTab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.navigationIconTab svg {
+  flex: 0 0 auto;
+}
+
 .iconButton {
   width: 40px;
   padding: 0;

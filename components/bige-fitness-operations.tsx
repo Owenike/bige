@@ -6191,7 +6191,7 @@ export default function BigeFitnessOperations({
               </button>
             ) : null}
             {managerView ? (
-              <a className={`${styles.tab} ${styles.gold}`} href="/manager/approvals">
+              <a className={`${styles.tab} ${styles.gold} ${styles.navigationIconTab}`} href="/manager/approvals">
                 <ClipboardCheck size={16} />
                 待覆核事項
               </a>

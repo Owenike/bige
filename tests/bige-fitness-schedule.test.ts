@@ -1980,6 +1980,21 @@ test("wide desktop schedule separates navigation from date and daily controls", 
   );
 });
 
+test("approvals navigation keeps its icon and label centered on one row", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+
+  assert.match(
+    component,
+    /styles\.navigationIconTab[\s\S]*?href="\/manager\/approvals"[\s\S]*?<ClipboardCheck size=\{16\} \/>[\s\S]*?待覆核事項/,
+  );
+  assert.match(
+    styles,
+    /\.navigationIconTab \{[\s\S]*?display: inline-flex;[\s\S]*?align-items: center;[\s\S]*?justify-content: center;[\s\S]*?gap: 6px;[\s\S]*?white-space: nowrap;/,
+  );
+  assert.match(styles, /\.navigationIconTab svg \{\s*flex: 0 0 auto;\s*\}/);
+});
+
 test("daily schedule noir-gold palette is color-only and scoped to the active schedule", () => {
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
   const startMarker = "/* Daily schedule noir-gold palette — color-only overrides. */";
