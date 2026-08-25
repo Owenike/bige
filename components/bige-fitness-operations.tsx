@@ -7419,7 +7419,6 @@ export default function BigeFitnessOperations({
                           <option key={time} value={time}>{time}</option>
                         ))}
                       </select>
-                      <small className={styles.fieldHelp}>此時間只套用到接下來新選的日期；已選日期會保留原時間。</small>
                     </label>
                     <label className={`${styles.field} ${styles.fieldFull}`}>
                       <span className={styles.label}>備註（選填）</span>

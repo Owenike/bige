@@ -504,7 +504,7 @@ test("monthly schedule UI exposes per-date coach choice, leave confirmation, and
   assert.match(monthlyWorkspace, /這位教練當天休假/);
   assert.match(monthlyWorkspace, /採全部成功或全部不刪除/);
   assert.match(monthlyWorkspace, /正式課程會整合成一則 LINE 取消通知，FA 不會發送 LINE/);
-  assert.match(monthlyWorkspace, /此時間只套用到接下來新選的日期；已選日期會保留原時間/);
+  assert.doesNotMatch(monthlyWorkspace, /此時間只套用到接下來新選的日期；已選日期會保留原時間/);
   assert.match(monthlyWorkspace, /monthlyDateTimes\[day\]/);
   assert.match(monthlyWorkspace, /className=\{styles\.monthDayTime\}/);
 });
