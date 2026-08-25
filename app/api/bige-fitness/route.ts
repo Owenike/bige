@@ -32,6 +32,7 @@ import {
   isBigeScheduleNoteUndoAvailable,
   normalizeBigeScheduleEndAt,
   resolveBigeTrialContractIdentity,
+  shouldShowBigeScheduleBookingOnDailyBoard,
   toTaipeiDateString,
   validateCourseAllocationTotal,
 } from "../../../lib/bige-fitness";
@@ -1989,7 +1990,7 @@ export async function GET(request: Request) {
   let bookingsQuery = scheduleSupabase
     .from("bookings")
     .select(
-      "id, branch_id, member_id, coach_id, service_name, starts_at, ends_at, status, status_reason, note, operation_kind, course_type, trial_stage, operation_result, trial_conversion_outcome, bb_conversion_outcome, trial_booking_id, group_id, reminder_status, converted_at, converted_contract_id, member_plan_contract_id, requires_contract_followup, import_batch_id, import_row_key, fa_fee_amount, fa_fee_recipient_profile_id, fa_fee_recipient_name, fa_fee_recorded_at, operation_idempotency_key",
+      "id, branch_id, member_id, coach_id, service_name, starts_at, ends_at, status, status_reason, cancelled_at, note, operation_kind, course_type, trial_stage, operation_result, trial_conversion_outcome, bb_conversion_outcome, trial_booking_id, group_id, reminder_status, converted_at, converted_contract_id, member_plan_contract_id, requires_contract_followup, import_batch_id, import_row_key, fa_fee_amount, fa_fee_recipient_profile_id, fa_fee_recipient_name, fa_fee_recorded_at, operation_idempotency_key",
     )
     .eq("tenant_id", tenantId)
     .eq("is_bige_schedule", true)
@@ -2103,7 +2104,9 @@ export async function GET(request: Request) {
   );
   const rawNotes = notesResult.data || [];
   let bookings = (bookingsResult.data || []).filter(
-    (booking: any) => !isScheduleTrashDeletedBooking(booking),
+    (booking: any) =>
+      !isScheduleTrashDeletedBooking(booking) &&
+      shouldShowBigeScheduleBookingOnDailyBoard(booking),
   );
   const showTrialRevenue = canSeeTrialRevenue(auth.context);
   if (showTrialRevenue) {

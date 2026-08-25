@@ -1177,6 +1177,25 @@ export function toTaipeiDateString(date = new Date()) {
   }).format(date);
 }
 
+export function shouldShowBigeScheduleBookingOnDailyBoard(
+  booking: {
+    status?: string | null;
+    cancelled_at?: string | null;
+  },
+  now = new Date(),
+) {
+  if (String(booking.status || "").toLowerCase() !== "cancelled") {
+    return true;
+  }
+
+  if (!booking.cancelled_at) return false;
+
+  const cancelledAt = new Date(booking.cancelled_at);
+  if (Number.isNaN(cancelledAt.getTime())) return false;
+
+  return toTaipeiDateString(cancelledAt) === toTaipeiDateString(now);
+}
+
 export function getBigeContractDisplayName(signedOn: string | null | undefined) {
   if (!signedOn || !/^\d{4}-\d{2}-\d{2}$/.test(signedOn)) {
     return "BIGE-日期待補";

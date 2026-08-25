@@ -31,6 +31,7 @@ import {
   normalizeBigeInvoiceCarrier,
   normalizeBigeScheduleEndAt,
   resolveBigeTrialContractIdentity,
+  shouldShowBigeScheduleBookingOnDailyBoard,
   summarizeBigeMemberCourseSessions,
   deleteScheduleNoteSchema,
   deleteScheduleBookingSchema,
@@ -68,6 +69,65 @@ import { assignBigeMonthlyDateTimes } from "../lib/bige-monthly-selection";
 
 const batchCoachId = "00000000-0000-4000-8000-000000000011";
 const batchMemberId = "00000000-0000-4000-8000-000000000012";
+
+test("daily board only shows cancellations made today in Taipei", () => {
+  const now = new Date("2026-08-26T03:00:00.000Z");
+
+  assert.equal(
+    shouldShowBigeScheduleBookingOnDailyBoard(
+      { status: "cancelled", cancelled_at: "2026-08-26T01:00:00.000Z" },
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldShowBigeScheduleBookingOnDailyBoard(
+      { status: "cancelled", cancelled_at: "2026-08-25T16:30:00.000Z" },
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldShowBigeScheduleBookingOnDailyBoard(
+      { status: "cancelled", cancelled_at: "2026-08-25T15:59:59.000Z" },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    shouldShowBigeScheduleBookingOnDailyBoard(
+      { status: "cancelled", cancelled_at: null },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    shouldShowBigeScheduleBookingOnDailyBoard(
+      { status: "cancelled", cancelled_at: "not-a-date" },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    shouldShowBigeScheduleBookingOnDailyBoard({ status: "booked" }, now),
+    true,
+  );
+  assert.equal(
+    shouldShowBigeScheduleBookingOnDailyBoard({ status: "completed" }, now),
+    true,
+  );
+  assert.equal(
+    shouldShowBigeScheduleBookingOnDailyBoard({ status: "no_show" }, now),
+    true,
+  );
+});
+
+test("daily board route reads the cancellation time and applies the visibility rule", () => {
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+
+  assert.match(route, /status_reason, cancelled_at, note/);
+  assert.match(route, /shouldShowBigeScheduleBookingOnDailyBoard\(booking\)/);
+});
 
 test("walk-in payments hide members until a search starts and omit the introductory notice", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
