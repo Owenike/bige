@@ -145,6 +145,7 @@ import AdministrativeAssistanceBoard from "./administrative-assistance-board";
 import styles from "./bige-fitness-operations.module.css";
 
 type RoleView = "manager" | "frontdesk" | "coach";
+type ExplicitTrialStage = "FA2" | "FAN";
 type Tab = "schedule" | "contracts" | "plans" | "reminders" | "report" | "assistance";
 type DialogName =
   | "member"
@@ -3609,6 +3610,7 @@ export default function BigeFitnessOperations({
       memberId: "",
       trialBookingId: "",
       operationKind: "pt",
+      trialStage: null,
       courseType: "weight_training",
       duration: 60,
       note: "",
@@ -3670,6 +3672,11 @@ export default function BigeFitnessOperations({
         memberId: booking.member_id,
         trialBookingId: "",
         operationKind: booking.operation_kind,
+        trialStage:
+          booking.operation_kind === "trial" &&
+          (booking.trial_stage === "FA2" || booking.trial_stage === "FAN")
+            ? booking.trial_stage
+            : null,
         courseType: booking.course_type,
         duration:
           booking.operation_kind === "trial"
@@ -3692,6 +3699,7 @@ export default function BigeFitnessOperations({
         memberId: "",
         trialBookingId: "",
         operationKind: "pt",
+        trialStage: null,
         courseType: "weight_training",
         duration: Math.max(
           30,
@@ -3709,6 +3717,7 @@ export default function BigeFitnessOperations({
     memberId: "",
     trialBookingId: "",
     operationKind: "pt" as "pt" | "trial" | "bb",
+    trialStage: null as ExplicitTrialStage | null,
     courseType: "weight_training" as BigeCourseType | null,
     duration: 60,
     note: "",
@@ -4025,7 +4034,8 @@ export default function BigeFitnessOperations({
       note: scheduleDraft.note || null,
       operation_kind: scheduleDraft.operationKind,
       course_type: scheduleDraft.courseType,
-      trial_stage: null,
+      trial_stage:
+        scheduleDraft.operationKind === "trial" ? scheduleDraft.trialStage : null,
       operation_result: null,
       reminder_status: "pending",
       converted_at: null,
@@ -4055,6 +4065,8 @@ export default function BigeFitnessOperations({
       trialBookingId:
         scheduleDraft.operationKind !== "pt" ? scheduleDraft.trialBookingId || null : null,
       operationKind: scheduleDraft.operationKind,
+      trialStage:
+        scheduleDraft.operationKind === "trial" ? scheduleDraft.trialStage : null,
       courseType: scheduleDraft.courseType,
       startsAt,
       endsAt,
@@ -8043,13 +8055,27 @@ export default function BigeFitnessOperations({
                   <span className={styles.label}>類型</span>
                   <select
                     className={styles.select}
-                    value={scheduleDraft.operationKind}
+                    value={
+                      scheduleDraft.operationKind === "trial" && scheduleDraft.trialStage
+                        ? `trial:${scheduleDraft.trialStage}`
+                        : scheduleDraft.operationKind
+                    }
                     disabled={Boolean(editingSchedule)}
                     onChange={(event) => {
-                      const operationKind = event.target.value as "pt" | "trial" | "bb";
+                      const selection = event.target.value;
+                      const operationKind = selection.startsWith("trial")
+                        ? "trial"
+                        : (selection as "pt" | "bb");
+                      const trialStage: ExplicitTrialStage | null =
+                        selection === "trial:FA2"
+                          ? "FA2"
+                          : selection === "trial:FAN"
+                            ? "FAN"
+                            : null;
                       setScheduleDraft({
                         ...scheduleDraft,
                         operationKind,
+                        trialStage,
                         memberId: "",
                         trialBookingId: "",
                         courseType:
@@ -8071,6 +8097,8 @@ export default function BigeFitnessOperations({
                   >
                     <option value="pt">PT 正式課</option>
                     <option value="trial">FA 體驗</option>
+                    <option value="trial:FA2">FA2</option>
+                    <option value="trial:FAN">FAN</option>
                     <option value="bb">BB 回訪</option>
                   </select>
                 </label>

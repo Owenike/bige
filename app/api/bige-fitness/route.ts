@@ -2695,13 +2695,14 @@ export async function POST(request: Request) {
       const bindingError = await requireFormalScheduleLineBinding(tenantId, input.memberId);
       if (bindingError) return apiError(409, "FORBIDDEN", bindingError);
     }
-    const result = await auth.supabase.rpc("bige_create_schedule_booking_v2", {
+    const result = await auth.supabase.rpc("bige_create_schedule_booking_v3", {
       p_tenant_id: tenantId,
       p_branch_id: input.branchId || auth.context.branchId,
       p_member_id: input.memberId || null,
       p_trial_booking_id: input.trialBookingId || null,
       p_coach_id: input.coachId,
       p_operation_kind: input.operationKind,
+      p_trial_stage: input.trialStage || null,
       p_course_type: input.courseType,
       p_starts_at: input.startsAt,
       p_ends_at: endsAt,

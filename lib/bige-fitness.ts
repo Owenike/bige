@@ -48,6 +48,7 @@ export const BIGE_COURSE_LABELS: Record<BigeCourseType, string> = {
 
 export const BIGE_OPERATION_KINDS = ["pt", "trial", "bb"] as const;
 export const BIGE_BATCH_OPERATION_KINDS = ["pt", "trial"] as const;
+export const BIGE_EXPLICIT_TRIAL_STAGES = ["FA2", "FAN"] as const;
 export const BIGE_TRIAL_REMINDER_PENDING_STATUS = "pending" as const;
 export const BIGE_TRIAL_REMINDER_CONFIRMED_STATUS = "reached" as const;
 export const BIGE_FA_DEFAULT_FEE_AMOUNT = 880 as const;
@@ -380,6 +381,7 @@ export function getBigeTrialContractMissingProfileFields(identity: {
   ].filter((field): field is string => Boolean(field));
 }
 export type BigeOperationKind = (typeof BIGE_OPERATION_KINDS)[number];
+export type BigeExplicitTrialStage = (typeof BIGE_EXPLICIT_TRIAL_STAGES)[number];
 export const BIGE_FA_DURATION_MINUTES = 120;
 
 export function normalizeBigeScheduleEndAt(
@@ -437,6 +439,7 @@ export const createScheduleSchema = z.object({
   trialBookingId: z.string().uuid().nullable().optional(),
   coachId: z.string().uuid(),
   operationKind: z.enum(BIGE_OPERATION_KINDS),
+  trialStage: z.enum(BIGE_EXPLICIT_TRIAL_STAGES).nullable().optional(),
   courseType: z.enum(BIGE_COURSE_TYPES).nullable(),
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
@@ -444,6 +447,13 @@ export const createScheduleSchema = z.object({
   groupId: z.string().uuid().nullable().optional(),
   idempotencyKey: z.string().trim().min(8).max(180),
 }).superRefine((input, context) => {
+  if (input.operationKind !== "trial" && input.trialStage) {
+    context.addIssue({
+      code: "custom",
+      path: ["trialStage"],
+      message: "只有 FA 體驗可以指定 FA2 或 FAN",
+    });
+  }
   if (input.operationKind === "bb" && input.courseType !== null) {
     context.addIssue({ code: "custom", path: ["courseType"], message: "BB 回訪不應設定課別" });
   }

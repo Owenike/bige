@@ -19,6 +19,7 @@ npx tsc `
   tests/bige-line-schedule.test.ts `
   tests/bige-shared-contract.test.ts `
   tests/bige-fitness-schedule.test.ts `
+  tests/bige-explicit-fa-stage.test.ts `
   tests/bige-course-status-window.test.ts `
   tests/bige-coach-order.test.ts `
   tests/bige-schedule-drag.test.ts `
