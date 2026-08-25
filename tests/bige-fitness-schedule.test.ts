@@ -481,6 +481,33 @@ test("monthly schedule UI exposes per-date coach choice, leave confirmation, and
   assert.match(monthlyWorkspace, /正式課程會整合成一則 LINE 取消通知，FA 不會發送 LINE/);
 });
 
+test("monthly schedule defaults to per-date coach selection", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+
+  assert.match(
+    component,
+    /\[monthlyCoachId, setMonthlyCoachId\] = useState\(MONTHLY_COACH_PER_DATE\)/,
+  );
+  assert.match(
+    component,
+    /const openMonthlySchedule = \(\) => \{[\s\S]*?setMonthlyCoachId\(MONTHLY_COACH_PER_DATE\)/,
+  );
+  assert.match(
+    component,
+    /setMonthlyMember\(member\);[\s\S]*?setMonthlyCoachId\(MONTHLY_COACH_PER_DATE\)/,
+  );
+  assert.match(
+    component,
+    /if \(current === MONTHLY_COACH_PER_DATE\) return current;[\s\S]*?return MONTHLY_COACH_PER_DATE;/,
+  );
+  assert.match(
+    component,
+    /if \(monthlyPerDateMode\) \{[\s\S]*?setMonthlyDates\(\(current\) =>[\s\S]*?openMonthlyCoachPicker\(day\)/,
+  );
+  assert.match(component, /monthlyPerDateMode && selected[\s\S]*?"待選教練"/);
+  assert.match(component, /monthlyDates\.includes\(monthlyCoachPickerDay\)/);
+});
+
 test("monthly batch deletion is atomic, payment-aware, audited, and service-role only", () => {
   const migration = readFileSync(
     "supabase/migrations/20260825143813_bige_monthly_coach_assignment_and_batch_delete.sql",

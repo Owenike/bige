@@ -1714,7 +1714,7 @@ export default function BigeFitnessOperations({
   const [monthlyMonth, setMonthlyMonth] = useState(() => localDate().slice(0, 7));
   const [monthlyData, setMonthlyData] = useState<MonthlyScheduleData | null>(null);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
-  const [monthlyCoachId, setMonthlyCoachId] = useState("");
+  const [monthlyCoachId, setMonthlyCoachId] = useState(MONTHLY_COACH_PER_DATE);
   const [monthlyOperationKind, setMonthlyOperationKind] = useState<"pt" | "trial">("pt");
   const [monthlyCourseType, setMonthlyCourseType] = useState<BigeCourseType>("weight_training");
   const [monthlyTime, setMonthlyTime] = useState("09:00");
@@ -2431,7 +2431,7 @@ export default function BigeFitnessOperations({
       if (!response.ok) throw new Error(apiMessage(payload, "讀取會員月排課失敗"));
       const next = (payload.data || payload) as MonthlyScheduleData;
       setMonthlyData(next);
-      setMonthlyCoachId((current) => current || next.coaches[0]?.id || "");
+      setMonthlyCoachId((current) => current || MONTHLY_COACH_PER_DATE);
     } catch (caught) {
       setMonthlyData(null);
       showOperationAlert(
@@ -2541,7 +2541,7 @@ export default function BigeFitnessOperations({
     setMonthlySearchResults([]);
     setMonthlyMember(null);
     setMonthlyData(null);
-    setMonthlyCoachId("");
+    setMonthlyCoachId(MONTHLY_COACH_PER_DATE);
     setMonthlyMonth(date.slice(0, 7));
     setMonthlyDates([]);
     setMonthlyCoachAssignments({});
@@ -2916,7 +2916,7 @@ export default function BigeFitnessOperations({
     setMonthlyCoachId((current) => {
       if (current === MONTHLY_COACH_PER_DATE) return current;
       if (current && monthlyCoachOptions.some((coach) => coach.id === current)) return current;
-      return monthlyCoachOptions[0]?.id || "";
+      return MONTHLY_COACH_PER_DATE;
     });
   }, [monthlyCoachOptions]);
 
@@ -7260,7 +7260,7 @@ export default function BigeFitnessOperations({
                     onClick={() => {
                       setMonthlyMember(member);
                       setMonthlyData(null);
-                      setMonthlyCoachId("");
+                      setMonthlyCoachId(MONTHLY_COACH_PER_DATE);
                       setMonthlyCoachAssignments({});
                       setMonthlyDeleteMode(false);
                       setMonthlyDeleteSelectedIds([]);
@@ -7288,7 +7288,7 @@ export default function BigeFitnessOperations({
                   onClick={() => {
                     setMonthlyMember(null);
                     setMonthlyData(null);
-                    setMonthlyCoachId("");
+                    setMonthlyCoachId(MONTHLY_COACH_PER_DATE);
                     setMonthlyDates([]);
                     setMonthlyCoachAssignments({});
                     setMonthlyDeleteMode(false);
@@ -7404,6 +7404,9 @@ export default function BigeFitnessOperations({
                           aria-label={`${day}${conflict ? `，衝突：${conflict.message}` : selected ? "，已選取" : ""}${assignedCoach ? `，${coachLabel(assignedCoach)}` : ""}`}
                           onClick={() => {
                             if (monthlyPerDateMode) {
+                              setMonthlyDates((current) =>
+                                Array.from(new Set([...current, day])).sort(),
+                              );
                               void openMonthlyCoachPicker(day);
                               return;
                             }
@@ -7411,7 +7414,13 @@ export default function BigeFitnessOperations({
                           }}
                         >
                           <strong>{Number(day.slice(-2))}</strong>
-                          <span>{assignedCoach ? coachLabel(assignedCoach) : weekdayLabel(day).replace("週", "")}</span>
+                          <span>
+                            {assignedCoach
+                              ? coachLabel(assignedCoach)
+                              : monthlyPerDateMode && selected
+                                ? "待選教練"
+                                : weekdayLabel(day).replace("週", "")}
+                          </span>
                         </button>
                       );
                     })}
@@ -7609,7 +7618,7 @@ export default function BigeFitnessOperations({
               </div>
             ) : null}
             <div className={styles.formActions}>
-              {monthlyCoachAssignments[monthlyCoachPickerDay] ? (
+              {monthlyDates.includes(monthlyCoachPickerDay) ? (
                 <button
                   className={`${styles.button} ${styles.dangerButton}`}
                   type="button"
