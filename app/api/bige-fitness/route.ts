@@ -72,6 +72,11 @@ import {
 import { createSupabaseAdminClient } from "../../../lib/supabase/admin";
 import { buildBigeClassroomConflicts } from "../../../lib/bige-classroom-conflicts";
 import { resolveBigeMemberSearchRule } from "../../../lib/bige-member-search";
+import {
+  PAST_EMPLOYEE_BOOKING_ERROR,
+  canManagePastEmployeeBookings,
+  isPastEmployeeBookingBlocked,
+} from "../../../lib/employee-booking-date-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -682,6 +687,7 @@ function normalizeErrorMessage(message: string) {
     return "教練在這個時段已有其他預約，請重新整理課表後再試一次";
   }
   const messages: Record<string, string> = {
+    past_employee_booking_requires_manager: PAST_EMPLOYEE_BOOKING_ERROR,
     forbidden: "您沒有此操作權限",
     invalid_time_range: "結束時間必須晚於開始時間",
     outside_business_hours: "排課時間必須介於 09:00 到 24:00，並使用整點或 30 分",
@@ -803,8 +809,23 @@ function normalizeErrorMessage(message: string) {
   return messages[key] || key;
 }
 
+function pastEmployeeBookingError(
+  context: ProfileContext,
+  startsAt: string | string[],
+) {
+  const values = Array.isArray(startsAt) ? startsAt : [startsAt];
+  return values.some((value) => isPastEmployeeBookingBlocked(context, value))
+    ? apiError(403, "FORBIDDEN", PAST_EMPLOYEE_BOOKING_ERROR)
+    : null;
+}
+
 function handleDatabaseError(error: { message: string } | null, fallback: string) {
-  return apiError(400, "FORBIDDEN", normalizeErrorMessage(error?.message || fallback));
+  const message = error?.message || fallback;
+  return apiError(
+    message.includes("past_employee_booking_requires_manager") ? 403 : 400,
+    "FORBIDDEN",
+    normalizeErrorMessage(message),
+  );
 }
 
 type PaidScheduleBookingReference = {
@@ -2400,6 +2421,7 @@ export async function GET(request: Request) {
     canManageFrontdesk:
       isManager(auth.context) || auth.context.role === "frontdesk",
     canManageSchedule: canManageBigeSchedule(auth.context),
+    canManagePastBookings: canManagePastEmployeeBookings(auth.context),
     canReorderCoaches: canReorderBigeScheduleCoaches(auth.context),
     canViewScheduleActivity: canViewBigeScheduleActivity(auth.context),
     canSeeTrialRevenue: showTrialRevenue,
@@ -2655,6 +2677,8 @@ export async function POST(request: Request) {
     if (!canManageBigeSchedule(auth.context)) {
       return apiError(403, "FORBIDDEN", "此帳號只有課表檢視權限");
     }
+    const pastDateError = pastEmployeeBookingError(auth.context, input.startsAt);
+    if (pastDateError) return pastDateError;
     const endsAt = normalizeBigeScheduleEndAt(
       input.operationKind,
       input.startsAt,
@@ -2702,6 +2726,8 @@ export async function POST(request: Request) {
     if (!canManageBigeSchedule(auth.context)) {
       return apiError(403, "FORBIDDEN", "您沒有批次安排課程的權限");
     }
+    const pastDateError = pastEmployeeBookingError(auth.context, input.startsAt);
+    if (pastDateError) return pastDateError;
     const admin = createSupabaseAdminClient();
     let coachesQuery = admin
       .from("profiles")
@@ -2776,6 +2802,11 @@ export async function POST(request: Request) {
     if (!canManageBigeSchedule(auth.context)) {
       return apiError(403, "FORBIDDEN", "您沒有批次安排課程的權限");
     }
+    const pastDateError = pastEmployeeBookingError(
+      auth.context,
+      input.assignments.map((assignment) => assignment.startsAt),
+    );
+    if (pastDateError) return pastDateError;
     try {
       const preview = await previewScheduleBatch({
         tenantId,
@@ -2802,6 +2833,8 @@ export async function POST(request: Request) {
     if (!canManageBigeSchedule(auth.context)) {
       return apiError(403, "FORBIDDEN", "您沒有批次安排課程的權限");
     }
+    const pastDateError = pastEmployeeBookingError(auth.context, input.startsAt);
+    if (pastDateError) return pastDateError;
 
     const startsAtValues = [...new Set(input.startsAt)].sort();
     const slots = startsAtValues.map((startsAt) => ({
@@ -2996,6 +3029,8 @@ export async function POST(request: Request) {
     if (!canManageBigeSchedule(auth.context)) {
       return apiError(403, "FORBIDDEN", "此帳號只有課表檢視權限");
     }
+    const pastDateError = pastEmployeeBookingError(auth.context, input.startsAt);
+    if (pastDateError) return pastDateError;
 
     const startsAtValues = [...new Set(input.startsAt)].sort();
     if (input.operationKind === "pt") {
@@ -3092,6 +3127,11 @@ export async function POST(request: Request) {
     if (!canManageBigeSchedule(auth.context)) {
       return apiError(403, "FORBIDDEN", "此帳號只有課表檢視權限");
     }
+    const pastDateError = pastEmployeeBookingError(
+      auth.context,
+      input.assignments.map((assignment) => assignment.startsAt),
+    );
+    if (pastDateError) return pastDateError;
     if (input.operationKind === "pt") {
       const bindingError = await requireFormalScheduleLineBinding(tenantId, input.memberId);
       if (bindingError) return apiError(409, "FORBIDDEN", bindingError);
@@ -3244,6 +3284,13 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (bookingResult.error || !bookingResult.data) {
       return apiError(404, "FORBIDDEN", "找不到這筆排課");
+    }
+    if (
+      new Date(input.startsAt).getTime() !==
+        new Date(bookingResult.data.starts_at).getTime() &&
+      isPastEmployeeBookingBlocked(auth.context, input.startsAt)
+    ) {
+      return apiError(403, "FORBIDDEN", PAST_EMPLOYEE_BOOKING_ERROR);
     }
     if (!canEditBigeScheduleBooking(bookingResult.data.status)) {
       return apiError(409, "FORBIDDEN", BIGE_COMPLETED_BOOKING_EDIT_MESSAGE);
@@ -3597,6 +3644,8 @@ export async function POST(request: Request) {
     if (!canManageBigeSchedule(auth.context)) {
       return apiError(403, "FORBIDDEN", "此帳號只有課表檢視權限");
     }
+    const pastDateError = pastEmployeeBookingError(auth.context, input.targetStartsAt);
+    if (pastDateError) return pastDateError;
     const openDay = await ensureScheduleDateOpen(tenantId, input.targetStartsAt);
     if (!openDay.open) {
       return apiError(409, "FORBIDDEN", openDay.setting?.closure_label || "當日館休，不能拖拉課程");

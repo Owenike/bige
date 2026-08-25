@@ -87,6 +87,7 @@ export type BookingOverviewSummary = {
 
 export type BookingOverviewResponse = {
   items: BookingOverviewItem[];
+  canManagePastBookings: boolean;
   filters: BookingOverviewFilters;
   summary: BookingOverviewSummary;
 };

@@ -14,6 +14,11 @@ import {
 import { sendLineScheduledTrialBookingNotification } from "../../../../lib/line-push";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 import {
+  PAST_EMPLOYEE_BOOKING_ERROR,
+  canManagePastEmployeeBookings,
+  isPastEmployeeBookingBlocked,
+} from "../../../../lib/employee-booking-date-policy";
+import {
   trialBookingSourceLabel,
   trialBookingSourceValues,
 } from "../../../../lib/trial-booking-sources";
@@ -375,7 +380,13 @@ export async function GET(request: Request) {
       contactHistoryCount: booking.contact_history.length,
     }, workflowGroup)).slice(0, 100);
 
-    return NextResponse.json({ ok: true, bookings, stats, coaches });
+    return NextResponse.json({
+      ok: true,
+      bookings,
+      stats,
+      coaches,
+      canManagePastBookings: canManagePastEmployeeBookings(auth.context),
+    });
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Failed to load trial bookings" },
@@ -400,6 +411,13 @@ export async function POST(request: Request) {
     const tenantId = auth.context.tenantId;
     if (!tenantId) {
       return NextResponse.json({ ok: false, error: "Missing tenant context" }, { status: 400 });
+    }
+    const startsAt = `${data.appointmentDate}T${data.appointmentTime}:00+08:00`;
+    if (isPastEmployeeBookingBlocked(auth.context, startsAt)) {
+      return NextResponse.json(
+        { ok: false, error: PAST_EMPLOYEE_BOOKING_ERROR },
+        { status: 403 },
+      );
     }
     const coachResult = await admin
       .from("profiles")

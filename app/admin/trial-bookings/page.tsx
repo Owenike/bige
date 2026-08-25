@@ -15,6 +15,7 @@ import {
   trialBookingSourceLabels,
   type TrialBookingSource,
 } from "../../../lib/trial-booking-sources";
+import { PAST_EMPLOYEE_BOOKING_ERROR } from "../../../lib/employee-booking-date-policy";
 
 type PaymentMethod = "cash_on_site" | "online_payment";
 type PaymentStatus = "pending_cash" | "pending_payment" | "paid" | "failed" | "cancelled";
@@ -81,6 +82,7 @@ type TrialBookingResponse = {
   bookings?: TrialBookingRow[];
   stats?: TrialBookingStats;
   coaches?: CoachOption[];
+  canManagePastBookings?: boolean;
   error?: string;
 };
 
@@ -426,6 +428,7 @@ export default function TrialBookingsAdminPage() {
   const [statsFrom, setStatsFrom] = useState(defaultStatsFrom);
   const [statsTo, setStatsTo] = useState(todayDateInputValue);
   const [isLoading, setIsLoading] = useState(true);
+  const [canManagePastBookings, setCanManagePastBookings] = useState(false);
   const [error, setError] = useState("");
   const [accessState, setAccessState] = useState<TrialAdminAccessState>("checking");
   const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
@@ -516,6 +519,7 @@ export default function TrialBookingsAdminPage() {
       setBookings(payload.bookings || []);
       setStats(payload.stats || emptyStats);
       setCoachOptions(payload.coaches || []);
+      setCanManagePastBookings(Boolean(payload.canManagePastBookings));
       setCoachOptionsError(payload.coaches?.length ? "" : "目前沒有可用的教練帳號。");
     } catch {
       setError("讀取資料時發生錯誤，請稍後再試。");
@@ -884,6 +888,18 @@ export default function TrialBookingsAdminPage() {
     if (isSavingSchedule || !modalMode) return;
     if (!validateScheduleForm()) {
       setModalError("請填寫預約日期、時間、項目、姓名、電話、預約教練與執行教練。");
+      return;
+    }
+    const changesScheduledTime =
+      modalMode === "create" ||
+      scheduleForm.appointmentDate !== activeBooking?.appointment_date ||
+      scheduleForm.appointmentTime !== activeBooking?.appointment_time;
+    if (
+      !canManagePastBookings &&
+      changesScheduledTime &&
+      scheduleForm.appointmentDate < todayDateInputValue()
+    ) {
+      setModalError(PAST_EMPLOYEE_BOOKING_ERROR);
       return;
     }
 
@@ -1754,7 +1770,12 @@ export default function TrialBookingsAdminPage() {
             <div className="trialAdminModalGrid">
               <label className="trialAdminField">
                 <span>預約日期</span>
-                <input type="date" value={scheduleForm.appointmentDate} onChange={(event) => updateScheduleField("appointmentDate", event.target.value)} />
+                <input
+                  type="date"
+                  min={canManagePastBookings ? undefined : todayDateInputValue()}
+                  value={scheduleForm.appointmentDate}
+                  onChange={(event) => updateScheduleField("appointmentDate", event.target.value)}
+                />
               </label>
               <label className="trialAdminField">
                 <span>預約時間</span>

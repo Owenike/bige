@@ -14,6 +14,10 @@ import {
   releasePackageForBooking,
 } from "../../../../lib/booking-commerce";
 import { listBookingNotificationSummary, scheduleBookingNotifications, summarizeBookingNotifications } from "../../../../lib/booking-notifications";
+import {
+  PAST_EMPLOYEE_BOOKING_ERROR,
+  isPastEmployeeBookingBlocked,
+} from "../../../../lib/employee-booking-date-policy";
 import { mapBookingConflictError, validateBookingSchedule } from "../../../../lib/therapist-scheduling";
 import type { BookingDetailResponse, BookingOverviewItem, BookingStatusLogItem } from "../../../../types/booking-management";
 
@@ -606,6 +610,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const nextNote = note !== null ? note : existingResult.data.note;
   const movingTimeOrCoach = Boolean(startsAt || endsAt || coachId);
 
+  if (
+    startsAt &&
+    new Date(startsAt).getTime() !== new Date(existingResult.data.starts_at).getTime() &&
+    isPastEmployeeBookingBlocked(auth.context, startsAt)
+  ) {
+    return apiError(403, "FORBIDDEN", PAST_EMPLOYEE_BOOKING_ERROR);
+  }
+
   if (new Date(nextEndsAt).getTime() <= new Date(nextStartsAt).getTime()) {
     return apiError(400, "FORBIDDEN", "endsAt must be after startsAt");
   }
@@ -690,6 +702,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const { data, error } = await query.maybeSingle();
 
   if (error) {
+    if (error.message.includes("past_employee_booking_requires_manager")) {
+      return apiError(403, "FORBIDDEN", PAST_EMPLOYEE_BOOKING_ERROR);
+    }
     const mapped = mapBookingConflictError(error);
     if (mapped) return apiError(409, "FORBIDDEN", mapped.message);
     return apiError(500, "INTERNAL_ERROR", error.message);

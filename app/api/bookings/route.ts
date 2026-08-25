@@ -10,6 +10,11 @@ import {
   reservePackageForBooking,
 } from "../../../lib/booking-commerce";
 import { scheduleBookingNotifications, summarizeBookingNotifications } from "../../../lib/booking-notifications";
+import {
+  PAST_EMPLOYEE_BOOKING_ERROR,
+  canManagePastEmployeeBookings,
+  isPastEmployeeBookingBlocked,
+} from "../../../lib/employee-booking-date-policy";
 import { BOOKING_THERAPIST_ROLES, mapBookingConflictError, validateBookingSchedule } from "../../../lib/therapist-scheduling";
 import type { BookingOverviewItem, BookingOverviewResponse, BookingPaymentStatus } from "../../../types/booking-management";
 
@@ -567,6 +572,7 @@ export async function GET(request: Request) {
 
   return apiSuccess<BookingOverviewResponse>({
     items,
+    canManagePastBookings: canManagePastEmployeeBookings(auth.context),
     filters: {
       branches: filterBranches,
       therapists: filterTherapists,
@@ -616,6 +622,9 @@ export async function POST(request: Request) {
 
   if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
     return apiError(400, "FORBIDDEN", "endsAt must be after startsAt");
+  }
+  if (isPastEmployeeBookingBlocked(auth.context, startsAt)) {
+    return apiError(403, "FORBIDDEN", PAST_EMPLOYEE_BOOKING_ERROR);
   }
 
   const memberResult = await auth.supabase
@@ -713,6 +722,9 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (error) {
+    if (error.message.includes("past_employee_booking_requires_manager")) {
+      return apiError(403, "FORBIDDEN", PAST_EMPLOYEE_BOOKING_ERROR);
+    }
     const mapped = mapBookingConflictError(error);
     if (mapped) return apiError(409, "FORBIDDEN", mapped.message);
     return apiError(500, "INTERNAL_ERROR", error.message);

@@ -87,6 +87,7 @@ import {
   type BigeCourseType,
   type BigeContractCourseType,
 } from "../lib/bige-fitness";
+import { PAST_EMPLOYEE_BOOKING_ERROR } from "../lib/employee-booking-date-policy";
 import {
   canCancelBigeCourseAnytime,
   getBigeCourseStatusWindow,
@@ -471,6 +472,7 @@ export type BoardData = {
   canManageBusinessClosure?: boolean;
   canManageFrontdesk?: boolean;
   canManageSchedule?: boolean;
+  canManagePastBookings?: boolean;
   canReorderCoaches?: boolean;
   canViewScheduleActivity?: boolean;
   canSeeTrialRevenue?: boolean;
@@ -2439,6 +2441,12 @@ export default function BigeFitnessOperations({
 
   const requestMonthlySchedulePreflight = useCallback(async (signal?: AbortSignal) => {
     if (!monthlyMember || !monthlyCoachId || monthlyDates.length === 0) return null;
+    if (
+      !data?.canManagePastBookings &&
+      monthlyDates.some((day) => day < toTaipeiDateString())
+    ) {
+      throw new Error(PAST_EMPLOYEE_BOOKING_ERROR);
+    }
     const perDate = monthlyCoachId === MONTHLY_COACH_PER_DATE;
     if (perDate && monthlyDates.some((day) => !monthlyCoachAssignments[day])) return null;
     const response = await fetch("/api/bige-fitness", {
@@ -2477,6 +2485,7 @@ export default function BigeFitnessOperations({
     monthlyMember,
     monthlyOperationKind,
     monthlyTime,
+    data?.canManagePastBookings,
   ]);
 
   useEffect(() => {
@@ -2898,6 +2907,7 @@ export default function BigeFitnessOperations({
     [monthlyCoachId, monthlyCoachOptions],
   );
   const monthlyPerDateMode = monthlyCoachId === MONTHLY_COACH_PER_DATE;
+  const canManagePastBookings = Boolean(data?.canManagePastBookings);
   const monthlyConflictByDate = useMemo(
     () =>
       new Map(
@@ -6446,10 +6456,15 @@ export default function BigeFitnessOperations({
                         members={members}
                         trialBookings={trialBookings}
                         showTrialRevenue={Boolean(data.canSeeTrialRevenue)}
-                        canCreate={Boolean(data.canManageSchedule) && !isBusinessClosed}
+                        canCreate={
+                          Boolean(data.canManageSchedule) &&
+                          !isBusinessClosed &&
+                          (Boolean(data.canManagePastBookings) || date >= toTaipeiDateString())
+                        }
                         canDrag={
                           Boolean(data.canManageSchedule) &&
                           !isBusinessClosed &&
+                          (Boolean(data.canManagePastBookings) || date >= toTaipeiDateString()) &&
                           scheduleDragUnlocked &&
                           !scheduleDeleteSubmitting
                         }
@@ -7371,6 +7386,7 @@ export default function BigeFitnessOperations({
                         title={monthlyPerDateMode ? "不指定模式請逐日選擇教練" : undefined}
                         onClick={() => {
                           const candidates = monthDateValues(monthlyMonth).filter((day) => {
+                            if (!canManagePastBookings && day < toTaipeiDateString()) return false;
                             const [year, month, dateNumber] = day.split("-").map(Number);
                             return new Date(Date.UTC(year, month - 1, dateNumber)).getUTCDay() === weekday;
                           });
@@ -7391,6 +7407,7 @@ export default function BigeFitnessOperations({
                   <div className={styles.monthCalendar}>
                     {monthDateValues(monthlyMonth).map((day) => {
                       const selected = monthlyDates.includes(day);
+                      const pastDateDisabled = !canManagePastBookings && day < toTaipeiDateString();
                       const conflict = monthlyConflictByDate.get(day);
                       const assignedCoach = monthlyPerDateMode
                         ? monthlyCoachOptions.find((coach) => coach.id === monthlyCoachAssignments[day])
@@ -7402,8 +7419,9 @@ export default function BigeFitnessOperations({
                           data-conflict={String(Boolean(conflict))}
                           type="button"
                           key={day}
-                          title={conflict?.message}
-                          aria-label={`${day}${conflict ? `，衝突：${conflict.message}` : selected ? "，已選取" : ""}${assignedCoach ? `，${coachLabel(assignedCoach)}` : ""}`}
+                          disabled={pastDateDisabled}
+                          title={pastDateDisabled ? PAST_EMPLOYEE_BOOKING_ERROR : conflict?.message}
+                          aria-label={`${day}${pastDateDisabled ? "，已過日期不可新增預約" : conflict ? `，衝突：${conflict.message}` : selected ? "，已選取" : ""}${assignedCoach ? `，${coachLabel(assignedCoach)}` : ""}`}
                           onClick={() => {
                             if (monthlyPerDateMode) {
                               setMonthlyDates((current) =>
@@ -10204,6 +10222,7 @@ function ScheduleDropZone(props: {
   minute: 0 | 30;
   coachId: string;
   activeDragMinute: 0 | 30 | null;
+  enabled: boolean;
 }) {
   const startsAt = scheduleSlotIso(props.date, props.hour, props.minute);
   const isValidAlignment = props.activeDragMinute === props.minute;
@@ -10215,7 +10234,7 @@ function ScheduleDropZone(props: {
       startsAt,
       minute: props.minute,
     } satisfies ScheduleDropPayload,
-    disabled: !isValidAlignment,
+    disabled: !props.enabled || !isValidAlignment,
   });
   return (
     <span
@@ -10446,6 +10465,7 @@ function HourRow(props: {
                 minute={0}
                 coachId={coach.id}
                 activeDragMinute={props.activeDragMinute}
+                enabled={props.canCreate}
               />
               {undoHere ? (
                 <button
@@ -10490,6 +10510,7 @@ function HourRow(props: {
                 minute={30}
                 coachId={coach.id}
                 activeDragMinute={props.activeDragMinute}
+                enabled={props.canCreate}
               />
               {booking && entryStartsHere ? (
                 <DraggableScheduleEntry

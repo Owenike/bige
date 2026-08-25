@@ -16,6 +16,11 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import {
+  PAST_EMPLOYEE_BOOKING_ERROR,
+  isPastTaipeiBookingDate,
+  taipeiDateString,
+} from "../../../lib/employee-booking-date-policy";
 
 interface BookingItem {
   id: string;
@@ -526,6 +531,7 @@ export default function FrontdeskBookingsPage() {
   const zh = locale !== "en";
 
   const [items, setItems] = useState<BookingItem[]>([]);
+  const [canManagePastBookings, setCanManagePastBookings] = useState(false);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [coaches, setCoaches] = useState<CoachItem[]>([]);
   const [auditItems, setAuditItems] = useState<AuditItem[]>([]);
@@ -805,6 +811,7 @@ export default function FrontdeskBookingsPage() {
         throw new Error(payload?.error || (zh ? "載入預約失敗" : "Load bookings failed"));
       }
       setItems(((payload.items || []) as Array<BookingApiItem | BookingItem>).map(normalizeBookingApiItem));
+      setCanManagePastBookings(Boolean(payload.canManagePastBookings));
     },
     [zh],
   );
@@ -1305,6 +1312,21 @@ export default function FrontdeskBookingsPage() {
 
     if (!startsAt || !endsAt) {
       setDraftError(zh ? "請提供有效的時間。" : "Please provide valid start/end time.");
+      setSaving(false);
+      return;
+    }
+    const existingStart =
+      draft.mode === "reschedule" && draft.sourceBookingId
+        ? items.find((item) => item.id === draft.sourceBookingId)?.starts_at
+        : null;
+    const changesScheduledTime =
+      !existingStart || new Date(existingStart).getTime() !== new Date(startsAt).getTime();
+    if (
+      !canManagePastBookings &&
+      changesScheduledTime &&
+      isPastTaipeiBookingDate(startsAt)
+    ) {
+      setDraftError(PAST_EMPLOYEE_BOOKING_ERROR);
       setSaving(false);
       return;
     }
@@ -2044,7 +2066,7 @@ export default function FrontdeskBookingsPage() {
                   {coaches.map((coach) => (<option key={coach.id} value={coach.id}>{coach.displayName || coach.id}</option>))}
                 </select>
               </label>
-              <label className="fdInventoryField"><span className="kvLabel">{zh ? "日期時間" : "Date & Time"}</span><input type="datetime-local" className="input" value={draft.startsLocal} onChange={(event) => setDraft((prev) => (prev ? { ...prev, startsLocal: event.target.value } : prev))} /></label>
+              <label className="fdInventoryField"><span className="kvLabel">{zh ? "日期時間" : "Date & Time"}</span><input type="datetime-local" className="input" min={canManagePastBookings ? undefined : `${taipeiDateString()}T00:00`} value={draft.startsLocal} onChange={(event) => setDraft((prev) => (prev ? { ...prev, startsLocal: event.target.value } : prev))} /></label>
               <label className="fdInventoryField">
                 <span className="kvLabel">{zh ? "時長（分鐘）" : "Duration (min)"}</span>
                 <select className="input" value={String(draft.durationMinutes)} onChange={(event) => setDraft((prev) => (prev ? { ...prev, durationMinutes: Number(event.target.value) } : prev))}>

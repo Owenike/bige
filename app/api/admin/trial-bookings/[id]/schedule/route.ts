@@ -9,6 +9,10 @@ import {
 import { sendLineScheduledTrialBookingNotification } from "../../../../../../lib/line-push";
 import { createSupabaseAdminClient } from "../../../../../../lib/supabase/admin";
 import {
+  PAST_EMPLOYEE_BOOKING_ERROR,
+  isPastEmployeeBookingBlocked,
+} from "../../../../../../lib/employee-booking-date-policy";
+import {
   createTrialBookingScheduleNotePatch,
   TRIAL_BOOKING_SCHEDULE_NOTE_MAX_LENGTH,
 } from "../../../../../../lib/trial-booking-schedule-note";
@@ -103,6 +107,9 @@ type ScheduleWarning = {
 
 function scheduleErrorMessage(error: string) {
   const code = error.split("\n")[0]?.trim() || "";
+  if (code.includes("past_employee_booking_requires_manager")) {
+    return PAST_EMPLOYEE_BOOKING_ERROR;
+  }
   if (code.includes("member_time_conflict")) {
     return "這位客戶在同一時段已有正式預約，請確認日期與時間。";
   }
@@ -215,7 +222,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             : "weight_training";
     const existingSchedule = await auth.supabase
       .from("bookings")
-      .select("id")
+      .select("id, starts_at")
       .eq("tenant_id", tenantId)
       .eq("trial_booking_id", bookingId)
       .eq("is_bige_schedule", true)
@@ -225,6 +232,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       .maybeSingle();
     if (existingSchedule.error) {
       return NextResponse.json({ ok: false, error: existingSchedule.error.message }, { status: 500 });
+    }
+    if (
+      (!existingSchedule.data ||
+        new Date(existingSchedule.data.starts_at).getTime() !== new Date(startsAt).getTime()) &&
+      isPastEmployeeBookingBlocked(auth.context, startsAt)
+    ) {
+      return NextResponse.json(
+        { ok: false, error: PAST_EMPLOYEE_BOOKING_ERROR },
+        { status: 403 },
+      );
     }
 
     const scheduleResult = existingSchedule.data

@@ -23,6 +23,7 @@ npx tsc `
   tests/bige-coach-order.test.ts `
   tests/bige-schedule-drag.test.ts `
   tests/bige-schedule-permissions.test.ts `
+  tests/employee-booking-date-policy.test.ts `
   tests/giveme-invoice.test.ts `
   tests/line-push.test.ts `
   tests/legacy-schedule-reference.test.ts `
@@ -66,6 +67,7 @@ npx tsc `
   lib/bige-coach-order.ts `
   lib/bige-schedule-drag.ts `
   lib/bige-schedule-permissions.ts `
+  lib/employee-booking-date-policy.ts `
   lib/integrations/giveme-invoice.ts `
   lib/auth-capabilities.ts `
   lib/member-progress-feedback.ts `
