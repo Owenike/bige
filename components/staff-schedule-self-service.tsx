@@ -250,7 +250,7 @@ export default function StaffScheduleSelfService() {
         <div><p>巨挺健身館 · 員工專區</p><h1 className={styles.greeting} lang="en">Hi! {greetingName}</h1></div>
         <div className={styles.headerActions}>
           <label>月份<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>
-          <a href="/staff/notifications">站內通知</a>
+          <a href="/staff/fitness">日排課表</a>
           <a href="/staff/attendance">打卡確認</a>
           <a href="/staff/leave">請假</a>
           <a href="/staff/payroll">薪資單</a>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireProfile } from "../../../lib/auth-context";
 
 export async function GET(request: Request) {
-  const auth = await requireProfile(["platform_admin", "manager", "frontdesk"], request);
+  const auth = await requireProfile(["platform_admin", "manager", "frontdesk", "coach"], request);
 
   if (!auth.ok) {
     const url = new URL(auth.response.status === 401 ? "/login/staff" : "/forbidden", request.url);
@@ -10,6 +10,11 @@ export async function GET(request: Request) {
     return NextResponse.redirect(url);
   }
 
-  const destination = auth.context.role === "frontdesk" ? "/frontdesk/fitness" : "/manager/fitness";
+  const destination =
+    auth.context.role === "frontdesk"
+      ? "/frontdesk/fitness"
+      : auth.context.role === "coach" || auth.context.role === "therapist"
+        ? "/coach/fitness"
+        : "/manager/fitness";
   return NextResponse.redirect(new URL(destination, request.url));
 }

@@ -4,6 +4,7 @@ import test from "node:test";
 
 const page = readFileSync("app/admin/trial-bookings/page.tsx", "utf8");
 const staffFitnessRoute = readFileSync("app/staff/fitness/route.ts", "utf8");
+const staffScheduleSelfService = readFileSync("components/staff-schedule-self-service.tsx", "utf8");
 const styles = readFileSync("app/globals.css", "utf8");
 
 test("trial booking admin header exposes a same-origin daily schedule link", () => {
@@ -15,15 +16,25 @@ test("trial booking admin header exposes a same-origin daily schedule link", () 
   assert.ok(page.indexOf("trialAdminScheduleLink") < page.indexOf("BIGE ADMIN"));
 });
 
-test("daily schedule resolver preserves the signed-in staff role destination", () => {
+test("staff schedule replaces the redundant notification link with the daily schedule", () => {
+  assert.match(staffScheduleSelfService, /<a href="\/staff\/fitness">日排課表<\/a>/);
+  assert.doesNotMatch(staffScheduleSelfService, /<a href="\/staff\/notifications">站內通知<\/a>/);
+});
+
+test("daily schedule resolver preserves each signed-in staff role destination", () => {
   assert.match(
     staffFitnessRoute,
-    /requireProfile\(\["platform_admin", "manager", "frontdesk"\], request\)/,
+    /requireProfile\(\["platform_admin", "manager", "frontdesk", "coach"\], request\)/,
   );
   assert.match(
     staffFitnessRoute,
-    /auth\.context\.role === "frontdesk"\s*\? "\/frontdesk\/fitness"\s*:\s*"\/manager\/fitness"/,
+    /auth\.context\.role === "frontdesk"[\s\S]*?\? "\/frontdesk\/fitness"/,
   );
+  assert.match(
+    staffFitnessRoute,
+    /auth\.context\.role === "coach" \|\| auth\.context\.role === "therapist"[\s\S]*?\? "\/coach\/fitness"/,
+  );
+  assert.match(staffFitnessRoute, /:\s*"\/manager\/fitness"/);
   assert.match(
     staffFitnessRoute,
     /url\.searchParams\.set\("returnTo", "\/staff\/fitness"\)/,
