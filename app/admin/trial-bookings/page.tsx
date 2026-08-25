@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   paymentMatchesStatusFilter,
@@ -1214,12 +1215,12 @@ export default function TrialBookingsAdminPage() {
       <section className="trialAdminShell">
         <header className="trialAdminHeader">
           <div className="trialAdminHeaderIntro">
-            <a
+            <Link
               className="trialAdminButton trialAdminScheduleLink"
-              href="https://www.bigefitness.com/login/staff"
+              href="/staff/fitness"
             >
               日排課表
-            </a>
+            </Link>
             <p className="trialAdminEyebrow">BIGE ADMIN</p>
             <h1>首次體驗預約管理</h1>
             <p>查看首次體驗預約、安排體驗時段，並統計各項預約來源。</p>
