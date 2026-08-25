@@ -4559,15 +4559,14 @@ export default function BigeFitnessOperations({
     if (dialog !== "contract" || contractPaymentWizardStep !== "recipient") return;
     void loadFaFeeRecipientOptions();
   }, [contractPaymentWizardStep, dialog, loadFaFeeRecipientOptions]);
-  const walkInMemberResults = (data?.members || [])
-    .filter((member) => {
-      const keyword = walkInMemberSearch.trim().toLowerCase();
-      if (!keyword) return true;
-      return [member.full_name, member.phone, member.member_code, ...(member.legacy_numbers || [])]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(keyword));
-    })
-    .slice(0, 40);
+  const walkInMemberKeyword = walkInMemberSearch.trim().toLowerCase();
+  const walkInMemberResults = walkInMemberKeyword
+    ? (data?.members || []).filter((member) => {
+        return [member.full_name, member.phone, member.member_code, ...(member.legacy_numbers || [])]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(walkInMemberKeyword));
+      }).slice(0, 40)
+    : [];
   const selectedConversionBooking =
     selectedBooking?.operation_kind === "trial" || selectedBooking?.operation_kind === "bb";
   const contractPaymentWizardActive = studentPaymentContext?.source === "schedule";
@@ -8109,9 +8108,6 @@ export default function BigeFitnessOperations({
       {dialog === "walk-in-payment" && data ? (
         <Dialog title={`現場收款｜${data.businessDate}`} onClose={() => setDialog(null)} wide>
           <div className={styles.walkInWorkspace}>
-            <p className={styles.warning}>
-              此處只建立付款紀錄，不占用課表、不扣堂，也不會發送 LINE 課程通知。
-            </p>
             {walkInError ? <p className={styles.error} role="alert">{walkInError}</p> : null}
             <div className={styles.searchBox}>
               <Search size={18} aria-hidden="true" />
@@ -8150,7 +8146,7 @@ export default function BigeFitnessOperations({
                   </div>
                 </div>
               ))}
-              {walkInMemberResults.length === 0 ? (
+              {walkInMemberKeyword && walkInMemberResults.length === 0 ? (
                 <p className={styles.muted}>找不到符合的正式學員。</p>
               ) : null}
             </div>

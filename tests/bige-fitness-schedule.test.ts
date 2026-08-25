@@ -63,6 +63,29 @@ import {
 const batchCoachId = "00000000-0000-4000-8000-000000000011";
 const batchMemberId = "00000000-0000-4000-8000-000000000012";
 
+test("walk-in payments hide members until a search starts and omit the introductory notice", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const memberResults = component.slice(
+    component.indexOf("const walkInMemberKeyword ="),
+    component.indexOf("const selectedConversionBooking ="),
+  );
+  const walkInDialog = component.slice(
+    component.indexOf('{dialog === "walk-in-payment"'),
+    component.indexOf('{dialog === "line-notifications"'),
+  );
+
+  assert.match(memberResults, /const walkInMemberResults = walkInMemberKeyword[\s\S]*: \[\];/);
+  assert.doesNotMatch(memberResults, /if \(!keyword\) return true/);
+  assert.match(
+    walkInDialog,
+    /walkInMemberKeyword && walkInMemberResults\.length === 0/,
+  );
+  assert.doesNotMatch(
+    walkInDialog,
+    /此處只建立付款紀錄，不占用課表、不扣堂，也不會發送 LINE 課程通知/,
+  );
+});
+
 test("contract display names use BIGE and the signed business date", () => {
   assert.equal(getBigeContractDisplayName("2026-08-06"), "BIGE-20260806");
   assert.equal(getBigeContractDisplayName(null), "BIGE-日期待補");
