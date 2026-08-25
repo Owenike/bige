@@ -123,7 +123,8 @@ import {
 } from "../lib/bige-coach-order";
 import {
   normalizeStaffPosition,
-  positionLabel,
+  positionLabelForEmployee,
+  staffPositionForDisplay,
 } from "../lib/staff-organization";
 import {
   CUSTOM_EMPLOYEE_NUMBER_MANAGER,
@@ -887,7 +888,7 @@ function coachLabel(coach: Coach) {
 }
 
 function coachPositionShortLabel(coach: Coach) {
-  const position = normalizeStaffPosition(coach.position);
+  const position = staffPositionForDisplay(coach.position, coach.employee_number);
   if (position === "coach_team_lead") return "組長";
   if (position === "coach_director") return "主任";
   if (position === "coach_assistant_manager") return "副理";
@@ -5668,7 +5669,10 @@ export default function BigeFitnessOperations({
   const normalizedSessionPosition = normalizeStaffPosition(sessionIdentity?.position);
   const sessionPositionLabel = sessionIdentity
     ? normalizedSessionPosition
-      ? positionLabel(normalizedSessionPosition)
+      ? positionLabelForEmployee(
+          normalizedSessionPosition,
+          sessionIdentity.employeeNumber,
+        )
       : ({
           platform_admin: "系統管理員",
           store_owner: "店主管理員",

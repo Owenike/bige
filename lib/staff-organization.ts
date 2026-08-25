@@ -89,6 +89,27 @@ export function positionLabel(position: StaffPosition | null | undefined) {
   return position ? labels[position] : "尚未設定";
 }
 
+const HIDDEN_TEAM_LEAD_TITLE_EMPLOYEE_NUMBERS = new Set(["E000002"]);
+
+/**
+ * Returns the position that may be shown in the UI. Permission checks must
+ * continue to use the raw profile position instead of this display-only value.
+ */
+export function staffPositionForDisplay(position: unknown, employeeNumber: unknown) {
+  const normalizedPosition = normalizeStaffPosition(position);
+  if (
+    normalizedPosition === "coach_team_lead" &&
+    HIDDEN_TEAM_LEAD_TITLE_EMPLOYEE_NUMBERS.has(normalizeEmployeeNumber(employeeNumber))
+  ) {
+    return "coach";
+  }
+  return normalizedPosition;
+}
+
+export function positionLabelForEmployee(position: unknown, employeeNumber: unknown) {
+  return positionLabel(staffPositionForDisplay(position, employeeNumber));
+}
+
 export function legacyRoleForPosition(position: StaffPosition): AppRole {
   if (position === "frontdesk" || position === "administrative_director") return "frontdesk";
   if (position === "coach" || position === "coach_team_lead" || position === "coach_director") {

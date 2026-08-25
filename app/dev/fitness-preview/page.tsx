@@ -18,7 +18,14 @@ const preview: BoardData = {
   canManageDailyReports: true,
   canConfirmDailyReports: true,
   coaches: [
-    { id: "10000000-0000-4000-8000-000000000001", display_name: "林", english_name: "Becky" },
+    {
+      id: "10000000-0000-4000-8000-000000000001",
+      display_name: "林",
+      english_name: "Becky",
+      employee_number: "E000002",
+      department: "coaching",
+      position: "coach_team_lead",
+    },
     { id: "10000000-0000-4000-8000-000000000002", display_name: "杜于薇", english_name: "Wiwi" },
     { id: "10000000-0000-4000-8000-000000000003", display_name: "林純葳", english_name: "Lili" },
     { id: "10000000-0000-4000-8000-000000000004", display_name: "歐文", english_name: "Owen" },

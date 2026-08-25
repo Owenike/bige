@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import styles from "../app/staff/performance/page.module.css";
-import { normalizeStaffPosition, positionLabel } from "../lib/staff-organization";
+import {
+  normalizeStaffPosition,
+  positionLabel,
+  staffPositionForDisplay,
+} from "../lib/staff-organization";
 
 type CoachSummary = {
   id: string;
@@ -188,7 +192,10 @@ function coachIdentityParts(coach: CoachSummary | null | undefined) {
     }
   }
   if (!names.length && coach.employee_number?.trim()) names.push(coach.employee_number.trim());
-  return { names: names.length ? names : ["尚未分配"], position: normalizeStaffPosition(coach.position) };
+  return {
+    names: names.length ? names : ["尚未分配"],
+    position: staffPositionForDisplay(coach.position, coach.employee_number),
+  };
 }
 
 function coachIdentityLabel(coach: CoachSummary | null | undefined) {

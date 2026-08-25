@@ -287,7 +287,10 @@ test("daily, history, and monthly coach identities show Chinese, English, and co
   const component = readFileSync("components/staff-performance-dashboard.tsx", "utf8");
   const styles = readFileSync("app/staff/performance/page.module.css", "utf8");
   assert.match(component, /\[coach\.display_name, coach\.english_name\]/);
-  assert.match(component, /normalizeStaffPosition\(coach\.position\)/);
+  assert.match(
+    component,
+    /staffPositionForDisplay\(coach\.position, coach\.employee_number\)/,
+  );
   assert.match(component, /function CoachIdentityPresentation/);
   assert.match(component, /aria-label=\{coachIdentityLabel\(coach\)\}/);
   assert.match(component, /dailyCoachIdentity[\s\S]*<CoachIdentityPresentation coach=\{coachMap\.get\(coach\.employeeId\)\}/);

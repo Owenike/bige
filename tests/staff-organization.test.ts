@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { canManageBigeSchedule } from "../lib/bige-schedule-permissions";
+import { canPerformInContext } from "../lib/permissions";
 import {
   canManageBigeCourseAllocations,
   canManageBigePlansAndDailyReports,
@@ -15,6 +18,8 @@ import {
   legacyRoleForPosition,
   roleForOrganizationAssignment,
   positionLabel,
+  positionLabelForEmployee,
+  staffPositionForDisplay,
   type OrganizationActor,
 } from "../lib/staff-organization";
 
@@ -294,6 +299,48 @@ test("coaching position labels include the coaching profession", () => {
   assert.equal(positionLabel("coach_assistant_manager"), "教練副理");
   assert.equal(positionLabel("coach_manager"), "教練經理");
   assert.equal(positionLabel("coach_city_manager"), "教練城市經理");
+});
+
+test("Becky keeps team-lead permissions while her visible title stays coach", () => {
+  const rawPosition = "coach_team_lead" as const;
+  assert.equal(staffPositionForDisplay(rawPosition, "E000002"), "coach");
+  assert.equal(positionLabelForEmployee(rawPosition, "02"), "教練");
+  assert.equal(
+    canManageBigeSchedule({
+      role: "coach",
+      department: "coaching",
+      position: rawPosition,
+      employeeNumber: "E000002",
+    }),
+    true,
+  );
+  assert.equal(
+    canPerformInContext(
+      { role: "coach", department: "coaching", position: rawPosition },
+      "reports.read",
+    ),
+    true,
+  );
+});
+
+test("the team-lead title remains visible for every other account", () => {
+  assert.equal(staffPositionForDisplay("coach_team_lead", "E000003"), "coach_team_lead");
+  assert.equal(positionLabelForEmployee("coach_team_lead", "E000003"), "教練組長");
+  assert.equal(positionLabelForEmployee("coach_assistant_manager", "E000002"), "教練副理");
+});
+
+test("all Becky position surfaces use the display-only position helper", () => {
+  const schedule = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const performance = readFileSync("components/staff-performance-dashboard.tsx", "utf8");
+  const staff = readFileSync("app/manager/staff/page.tsx", "utf8");
+  const activation = readFileSync("app/staff/activate/page.tsx", "utf8");
+
+  assert.match(schedule, /staffPositionForDisplay\(coach\.position, coach\.employee_number\)/);
+  assert.match(schedule, /positionLabelForEmployee\([\s\S]{0,120}sessionIdentity\.employeeNumber/);
+  assert.match(performance, /staffPositionForDisplay\(coach\.position, coach\.employee_number\)/);
+  assert.match(staff, /positionLabelForEmployee\(item\.position, item\.employee_number\)/);
+  assert.match(staff, /positionLabelForEmployee\(position, editing\.employee_number\)/);
+  assert.match(activation, /positionLabelForEmployee\(profile\.position, profile\.employeeNumber\)/);
 });
 
 test("platform and legacy management accounts keep all-coach schedule access", () => {

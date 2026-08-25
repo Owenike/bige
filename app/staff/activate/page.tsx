@@ -4,7 +4,7 @@ import { Check, LogOut, ShieldCheck, UserCheck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   departmentLabel,
-  positionLabel,
+  positionLabelForEmployee,
   type StaffDepartment,
   type StaffPosition,
 } from "../../../lib/staff-organization";
@@ -141,7 +141,7 @@ export default function StaffActivatePage() {
               <div>
                 <dt>部門／職務</dt>
                 <dd>
-                  {departmentLabel(profile.department)}／{positionLabel(profile.position)}
+                  {departmentLabel(profile.department)}／{positionLabelForEmployee(profile.position, profile.employeeNumber)}
                 </dd>
               </div>
             </dl>

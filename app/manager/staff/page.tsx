@@ -32,6 +32,7 @@ import {
   canManagePosition,
   departmentLabel,
   positionLabel,
+  positionLabelForEmployee,
   type StaffDepartment,
   type StaffPosition,
 } from "../../../lib/staff-organization";
@@ -754,7 +755,7 @@ export default function ManagerStaffPage() {
                   <span className={styles.staffEmail}>首次啟用：{activationLabel(item.staff_activation_status)}</span>
                 </div>
                 <span className={styles.role}>
-                  {departmentLabel(item.department)} · {positionLabel(item.position)}
+                  {departmentLabel(item.department)} · {positionLabelForEmployee(item.position, item.employee_number)}
                 </span>
                 <div>
                   <span className={styles.meta}>分店：{item.branch_id ? branchNames.get(item.branch_id) || "未知分店" : "未指定"}</span>
@@ -1009,7 +1010,7 @@ export default function ManagerStaffPage() {
                 <label className={styles.field}>
                   <span className={styles.label}>職務</span>
                   <select className={styles.select} value={editPosition} onChange={(event) => setEditPosition(event.target.value as StaffPosition)}>
-                    {editPositions.map((position) => <option value={position} key={position}>{positionLabel(position)}</option>)}
+                    {editPositions.map((position) => <option value={position} key={position}>{positionLabelForEmployee(position, editing.employee_number)}</option>)}
                   </select>
                 </label>
                 <label className={styles.field}>
