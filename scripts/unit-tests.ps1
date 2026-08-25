@@ -55,6 +55,7 @@ npx tsc `
   tests/trial-booking-coaches.test.ts `
   tests/trial-booking-filters.test.ts `
   tests/trial-booking-schedule-note.test.ts `
+  tests/trial-booking-admin-navigation.test.ts `
   tests/trial-booking-staff-note.test.ts `
   tests/trial-booking-sources.test.ts `
   lib/member-progress-events.ts `

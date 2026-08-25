@@ -9657,6 +9657,13 @@ body.fdPageDark .fdModal.fdModalLight .fdHandoverBtnPrimary{
   justify-content: flex-end;
   gap: 10px;
 }
+.trialAdminHeaderIntro{
+  min-width: 0;
+}
+.trialAdminScheduleLink{
+  width: fit-content;
+  margin-bottom: 20px;
+}
 .trialAdminHeader h1{
   margin: 0;
   font-size: clamp(28px, 4vw, 44px);

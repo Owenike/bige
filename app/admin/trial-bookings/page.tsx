@@ -1197,7 +1197,13 @@ export default function TrialBookingsAdminPage() {
     <main className="trialAdminPage">
       <section className="trialAdminShell">
         <header className="trialAdminHeader">
-          <div>
+          <div className="trialAdminHeaderIntro">
+            <a
+              className="trialAdminButton trialAdminScheduleLink"
+              href="https://www.bigefitness.com/login/staff"
+            >
+              日排課表
+            </a>
             <p className="trialAdminEyebrow">BIGE ADMIN</p>
             <h1>首次體驗預約管理</h1>
             <p>查看首次體驗預約、安排體驗時段，並統計各項預約來源。</p>
