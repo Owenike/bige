@@ -333,6 +333,7 @@ const preview: BoardData = {
     },
   ],
   walkInPaymentCount: 2,
+  walkInPaymentTotal: 42_000,
   walkInPayments: [
     {
       id: "a0000000-0000-4000-8000-000000000001",

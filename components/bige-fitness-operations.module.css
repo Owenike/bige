@@ -3153,16 +3153,15 @@
 }
 
 .walkInPaymentBadge {
-  position: absolute;
-  top: -8px;
-  right: -8px;
+  position: static;
   min-width: 20px;
-  height: 20px;
+  height: 18px;
   display: grid;
   place-items: center;
   padding: 0 5px;
+  white-space: nowrap;
   color: #fff;
-  border: 2px solid #111821;
+  border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: 999px;
   background: #e63a46;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.38);

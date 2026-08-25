@@ -895,6 +895,7 @@ async function attachScheduleMemberRelationships(tenantId: string, members: any[
 async function loadBigeOperationsDashboard(
   tenantId: string,
   context: ProfileContext,
+  businessDate: string,
 ) {
   const walkInPaymentAllowed = canUseBigeWalkInPayments({
     ...context,
@@ -926,7 +927,7 @@ async function loadBigeOperationsDashboard(
           .from("bige_walk_in_payment_operations")
           .select("id, member_id, contract_id, payment_ids, payment_type, status, total_amount, business_date, actor_employee_number, actor_name, created_at, member:members(full_name)")
           .eq("tenant_id", tenantId)
-          .eq("business_date", toTaipeiDateString())
+          .eq("business_date", businessDate)
           .eq("status", "recorded")
           .order("created_at", { ascending: false })
           .limit(500)
@@ -964,10 +965,15 @@ async function loadBigeOperationsDashboard(
   });
 
   return {
+    businessDate,
     canUseWalkInPayments: walkInPaymentAllowed,
     lineGroupBindings: lineBindingsResult.data || [],
     lineScheduleNotificationIssues: lineNotificationIssuesResult.data || [],
     walkInPaymentCount: walkInPayments.length,
+    walkInPaymentTotal: walkInPayments.reduce(
+      (sum: number, operation: any) => sum + Number(operation.total_amount || 0),
+      0,
+    ),
     walkInPayments,
   };
 }
@@ -1000,7 +1006,7 @@ export async function GET(request: Request) {
     : requestedBranchId || auth.context.branchId;
   if (url.searchParams.get("operations") === "1") {
     try {
-      return apiSuccess(await loadBigeOperationsDashboard(tenantId, auth.context));
+      return apiSuccess(await loadBigeOperationsDashboard(tenantId, auth.context, businessDate));
     } catch (error) {
       return apiError(
         500,
@@ -3415,7 +3421,7 @@ export async function POST(request: Request) {
       p_contract_id: input.contractId,
       p_payment_kind: input.paymentKind,
       p_payments: input.payments,
-      p_paid_at: input.paidAt || new Date().toISOString(),
+      p_paid_at: `${input.businessDate}T12:00:00+08:00`,
       p_idempotency_key: input.idempotencyKey,
       p_note: input.note || "現場收款｜尾款 PTP",
     });

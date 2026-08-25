@@ -121,6 +121,7 @@ test("walk-in payment requires an auditable operation and positive tender entrie
       action: "record_walk_in_payment",
       memberId: "00000000-0000-4000-8000-000000000091",
       contractId: "00000000-0000-4000-8000-000000000092",
+      businessDate: "2026-08-03",
       paymentKind: "balance",
       payments: [{ amount: 3000, method: "cash", installmentCount: null }],
       idempotencyKey: "walk-in-test-0001",
@@ -132,6 +133,7 @@ test("walk-in payment requires an auditable operation and positive tender entrie
       action: "record_walk_in_payment",
       memberId: "00000000-0000-4000-8000-000000000091",
       contractId: "00000000-0000-4000-8000-000000000092",
+      businessDate: "2026-08-03",
       paymentKind: "balance",
       payments: [],
       idempotencyKey: "short",
@@ -285,14 +287,38 @@ test("contract binding is optional only in the audited test-mode RPCs", () => {
   assert.match(migration, /return public\.bige_create_bb_member_contract_v2/);
 });
 
-test("walk-in dashboard is loaded once outside the protected date prefetch window", () => {
+test("walk-in dashboard follows the selected date outside the protected date prefetch window", () => {
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   assert.match(route, /searchParams\.get\("operations"\) === "1"/);
-  assert.match(component, /fetch\("\/api\/bige-fitness\?operations=1"/);
+  assert.match(component, /operations=1&date=\$\{encodeURIComponent\(targetDate\)\}/);
+  assert.match(route, /loadBigeOperationsDashboard\(tenantId, auth\.context, businessDate\)/);
+  assert.match(route, /\.eq\("business_date", businessDate\)/);
   assert.doesNotMatch(component, /requestBoard[\s\S]{0,1200}operations=1/);
   assert.ok(component.indexOf("styles.walkInPaymentButton") < component.indexOf("styles.frontdeskStatus"));
-  assert.match(component, /Number\(data\.walkInPaymentCount \|\| 0\) > 99 \? "99\+"/);
+  assert.match(route, /walkInPaymentTotal: walkInPayments\.reduce/);
+  assert.match(component, /本日現場收款總額 \$\{formatMoney\(data\.walkInPaymentTotal \|\| 0\)\}/);
+  assert.match(component, /formatMoney\(data\.walkInPaymentTotal \|\| 0\)/);
+});
+
+test("walk-in payment writes the date selected when the payment dialog opened", () => {
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  assert.equal(
+    recordWalkInPaymentSchema.safeParse({
+      action: "record_walk_in_payment",
+      memberId: "00000000-0000-4000-8000-000000000091",
+      contractId: "00000000-0000-4000-8000-000000000092",
+      paymentKind: "balance",
+      payments: [{ amount: 3000, method: "cash", installmentCount: null }],
+      idempotencyKey: "walk-in-test-0002",
+    }).success,
+    false,
+  );
+  assert.match(component, /const businessDate = boardDateRef\.current/);
+  assert.match(component, /businessDate: studentPaymentContext\.businessDate/);
+  assert.match(component, /studentPaymentContext\?\.source === "walk_in"[\s\S]{0,120}\? studentPaymentContext\.businessDate/);
+  assert.match(route, /p_paid_at: `\$\{input\.businessDate\}T12:00:00\+08:00`/);
 });
 
 test("database migration enforces one active group and one counted operation per receipt", () => {

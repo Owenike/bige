@@ -394,6 +394,7 @@ type MemberDetail = {
 type StudentPaymentContext = {
   bookingId: string | null;
   memberId: string;
+  businessDate: string;
   paymentType: "new" | "renewal" | "balance";
   amount: string;
   contractId: string;
@@ -509,6 +510,7 @@ export type BoardData = {
   lineGroupBindings?: LineGroupBinding[];
   lineScheduleNotificationIssues?: LineScheduleNotificationIssue[];
   walkInPaymentCount?: number;
+  walkInPaymentTotal?: number;
   walkInPayments?: WalkInPaymentOperation[];
   closure: null | {
     id: string;
@@ -523,10 +525,12 @@ export type BoardData = {
 
 type OperationsDashboard = Pick<
   BoardData,
+  | "businessDate"
   | "canUseWalkInPayments"
   | "lineGroupBindings"
   | "lineScheduleNotificationIssues"
   | "walkInPaymentCount"
+  | "walkInPaymentTotal"
   | "walkInPayments"
 >;
 
@@ -1698,10 +1702,12 @@ export default function BigeFitnessOperations({
   const boardRequestsRef = useRef<Map<string, Promise<BoardData>>>(new Map());
   const boardRevisionRef = useRef(new Map<string, number>());
   const operationsDashboardRef = useRef<OperationsDashboard>({
+    businessDate: previewData?.businessDate || date,
     canUseWalkInPayments: previewData?.canUseWalkInPayments,
     lineGroupBindings: previewData?.lineGroupBindings || [],
     lineScheduleNotificationIssues: previewData?.lineScheduleNotificationIssues || [],
     walkInPaymentCount: previewData?.walkInPaymentCount || 0,
+    walkInPaymentTotal: previewData?.walkInPaymentTotal || 0,
     walkInPayments: previewData?.walkInPayments || [],
   });
   const boardPrefetchQueueRef = useRef<BigeBoardPrefetchQueue | null>(null);
@@ -1841,7 +1847,17 @@ export default function BigeFitnessOperations({
   );
 
   const applyBoardData = useCallback((next: BoardData) => {
-    const merged = { ...next, ...operationsDashboardRef.current };
+    const operations = operationsDashboardRef.current;
+    const walkInMatchesDate = operations.businessDate === next.businessDate;
+    const merged = {
+      ...next,
+      canUseWalkInPayments: operations.canUseWalkInPayments,
+      lineGroupBindings: operations.lineGroupBindings,
+      lineScheduleNotificationIssues: operations.lineScheduleNotificationIssues,
+      walkInPaymentCount: walkInMatchesDate ? operations.walkInPaymentCount : 0,
+      walkInPaymentTotal: walkInMatchesDate ? operations.walkInPaymentTotal : 0,
+      walkInPayments: walkInMatchesDate ? operations.walkInPayments : [],
+    };
     hasBoardRef.current = true;
     for (const [memberId, detail] of Object.entries(
       merged.paymentDetailsByMemberId || {},
@@ -1863,23 +1879,32 @@ export default function BigeFitnessOperations({
     });
   }, []);
 
-  const loadOperationsDashboard = useCallback(async () => {
+  const loadOperationsDashboard = useCallback(async (targetDate = boardDateRef.current) => {
     if (previewData) return operationsDashboardRef.current;
-    const response = await fetch("/api/bige-fitness?operations=1", { cache: "no-store" });
+    const response = await fetch(
+      `/api/bige-fitness?operations=1&date=${encodeURIComponent(targetDate)}`,
+      { cache: "no-store" },
+    );
     const payload = await response.json().catch(() => null);
     if (!response.ok) throw new Error(apiMessage(payload, "讀取現場收款資料失敗"));
     const next = (payload.data || payload) as OperationsDashboard;
-    operationsDashboardRef.current = {
+    const dashboard: OperationsDashboard = {
+      businessDate: next.businessDate || targetDate,
       canUseWalkInPayments: next.canUseWalkInPayments,
       lineGroupBindings: next.lineGroupBindings || [],
       lineScheduleNotificationIssues: next.lineScheduleNotificationIssues || [],
       walkInPaymentCount: next.walkInPaymentCount || 0,
+      walkInPaymentTotal: next.walkInPaymentTotal || 0,
       walkInPayments: next.walkInPayments || [],
     };
+    if (boardDateRef.current !== targetDate) return dashboard;
+    operationsDashboardRef.current = dashboard;
     startTransition(() => {
-      setData((current) => current ? { ...current, ...operationsDashboardRef.current } : current);
+      setData((current) =>
+        current?.businessDate === targetDate ? { ...current, ...dashboard } : current,
+      );
     });
-    return operationsDashboardRef.current;
+    return dashboard;
   }, [previewData]);
 
   const requestBoard = useCallback(async (targetDate: string, preferCache = false) => {
@@ -1994,6 +2019,18 @@ export default function BigeFitnessOperations({
     setError("");
     animateBoardDate(resolvedDirection);
     if (cached) applyBoardData(cached);
+    else {
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              walkInPaymentCount: 0,
+              walkInPaymentTotal: 0,
+              walkInPayments: [],
+            }
+          : current,
+      );
+    }
     setDate(nextDate);
   }, [animateBoardDate, applyBoardData]);
 
@@ -2101,7 +2138,7 @@ export default function BigeFitnessOperations({
   useEffect(() => {
     if (previewData) return;
     const refreshOperations = () => {
-      void loadOperationsDashboard().catch((caught) => {
+      void loadOperationsDashboard(date).catch((caught) => {
         console.warn(
           "[bige-fitness] operations dashboard unavailable",
           caught instanceof Error ? caught.message : caught,
@@ -2111,7 +2148,7 @@ export default function BigeFitnessOperations({
     refreshOperations();
     const interval = window.setInterval(refreshOperations, 5 * 60_000);
     return () => window.clearInterval(interval);
-  }, [loadOperationsDashboard, previewData]);
+  }, [date, loadOperationsDashboard, previewData]);
 
   useEffect(() => () => {
     boardPrefetchQueueRef.current?.clear();
@@ -4644,6 +4681,7 @@ export default function BigeFitnessOperations({
     setStudentPaymentContext({
       bookingId: booking.id,
       memberId: member.id,
+      businessDate: toTaipeiDateString(new Date(booking.starts_at)),
       paymentType:
         booking.operation_kind === "trial"
           ? "new"
@@ -4682,9 +4720,12 @@ export default function BigeFitnessOperations({
         throw new Error("這位學員目前沒有可支付的尾款，請改選續約 Re");
       }
       openContract(undefined, member);
+      const businessDate = boardDateRef.current;
+      setContractDraft((current) => ({ ...current, signedOn: businessDate }));
       setStudentPaymentContext({
         bookingId: null,
         memberId: member.id,
+        businessDate,
         paymentType,
         amount: "",
         contractId: outstandingContracts[0]?.contract.id || "",
@@ -4759,6 +4800,7 @@ export default function BigeFitnessOperations({
                 action: "record_walk_in_payment",
                 memberId: studentPaymentContext.memberId,
                 contractId: targetContract.id,
+                businessDate: studentPaymentContext.businessDate,
                 paymentKind: "balance",
                 payments,
                 idempotencyKey: `walk-in-balance:${studentPaymentContext.memberId}:${crypto.randomUUID()}`,
@@ -4875,7 +4917,9 @@ export default function BigeFitnessOperations({
           ...contractDraft,
           lineGroupBindingId: contractDraft.lineGroupBindingId || null,
           signedOn:
-            selectedBooking &&
+            studentPaymentContext?.source === "walk_in"
+              ? studentPaymentContext.businessDate
+              : selectedBooking &&
             (selectedConversionBooking || studentPaymentContext?.paymentType === "renewal")
               ? toTaipeiDateString(new Date(selectedBooking.starts_at))
               : contractDraft.signedOn,
@@ -6000,9 +6044,12 @@ export default function BigeFitnessOperations({
                 >
                   <CircleDollarSign size={16} aria-hidden="true" />
                   現場收款
-                  {Number(data.walkInPaymentCount || 0) > 0 ? (
-                    <span className={styles.walkInPaymentBadge} aria-label={`本日已收款 ${data.walkInPaymentCount} 筆`}>
-                      {Number(data.walkInPaymentCount || 0) > 99 ? "99+" : data.walkInPaymentCount}
+                  {Number(data.walkInPaymentTotal || 0) > 0 ? (
+                    <span
+                      className={styles.walkInPaymentBadge}
+                      aria-label={`本日現場收款總額 ${formatMoney(data.walkInPaymentTotal || 0)}`}
+                    >
+                      {formatMoney(data.walkInPaymentTotal || 0)}
                     </span>
                   ) : null}
                 </button>
