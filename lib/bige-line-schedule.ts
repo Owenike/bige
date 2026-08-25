@@ -38,6 +38,12 @@ export function buildBigeLineGroupVerificationMessage(params: {
 
 export type BigeLineScheduleEventKind = "created" | "updated" | "cancelled";
 
+export function bigeLineScheduleAnnouncementTitle(eventKind: BigeLineScheduleEventKind) {
+  if (eventKind === "created") return "課程預約公告";
+  if (eventKind === "cancelled") return "課程取消／更新公告";
+  return "課程異動公告";
+}
+
 type ScheduleRow = {
   id: string;
   starts_at: string;

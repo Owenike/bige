@@ -9,6 +9,7 @@ import {
   setMemberLineGroupBindingSchema,
 } from "../lib/bige-fitness";
 import {
+  bigeLineScheduleAnnouncementTitle,
   bigeLineGroupVerificationCode,
   bigeLineRetryDelayMinutes,
   buildBigeLineGroupVerificationMessage,
@@ -57,6 +58,12 @@ test("cancellation message clearly reports when no future PT remains", () => {
   assert.match(message, /課程取消／更新通知/);
   assert.match(message, /目前沒有尚未開始的正式課程/);
   assert.doesNotMatch(message, /教練/);
+});
+
+test("LINE schedule events use clear member announcement titles", () => {
+  assert.equal(bigeLineScheduleAnnouncementTitle("created"), "課程預約公告");
+  assert.equal(bigeLineScheduleAnnouncementTitle("updated"), "課程異動公告");
+  assert.equal(bigeLineScheduleAnnouncementTitle("cancelled"), "課程取消／更新公告");
 });
 
 test("LINE webhook rejects unsigned payloads and accepts the configured HMAC", () => {
@@ -232,6 +239,19 @@ test("LINE delivery is PT-only, future-only, refreshes latest schedules, and sup
   assert.match(route, /bige_schedule_drag_swap/);
   assert.match(route, /bige_schedule_drag_overwrite/);
   assert.match(route, /restore-cancelled:/);
+});
+
+test("successfully sent LINE schedule messages also appear as member announcements", () => {
+  const route = readFileSync("app/api/member/notifications/route.ts", "utf8");
+  const page = readFileSync("app/member/notifications/page.tsx", "utf8");
+  assert.match(route, /createSupabaseAdminClient/);
+  assert.match(route, /\.from\("bige_line_schedule_notifications"\)/);
+  assert.match(route, /\.eq\("tenant_id", tenantId\)[\s\S]{0,160}\.eq\("member_id", memberId\)[\s\S]{0,160}\.eq\("status", "sent"\)/);
+  assert.match(route, /id: `announcement:\$\{announcement\.id\}`/);
+  assert.match(route, /message: String\(announcement\.message\)/);
+  assert.match(page, /type: "announcement"/);
+  assert.match(page, /setTypeFilter\("announcement"\)/);
+  assert.match(page, /whiteSpace: "pre-wrap"/);
 });
 
 test("LINE failures are visible without joining the protected daily-board prefetch", () => {

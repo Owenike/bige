@@ -6,7 +6,7 @@ import { MemberTabs } from "../_components/MemberTabs";
 
 type NotificationItem = {
   id: string;
-  type: "booking_reminder" | "membership_expiry" | "pass_expiry" | "system_log";
+  type: "announcement" | "booking_reminder" | "membership_expiry" | "pass_expiry" | "system_log";
   level: "info" | "warning";
   title: string;
   message: string;
@@ -22,7 +22,7 @@ type NotificationResponse = {
 };
 
 type ReadFilter = "all" | "unread" | "read";
-type TypeFilter = "all" | "class" | "expiry" | "system";
+type TypeFilter = "all" | "announcement" | "class" | "expiry" | "system";
 
 function fmtDateTime(value: string) {
   const date = new Date(value);
@@ -31,6 +31,7 @@ function fmtDateTime(value: string) {
 }
 
 function mapNotificationType(type: NotificationItem["type"]): Exclude<TypeFilter, "all"> {
+  if (type === "announcement") return "announcement";
   if (type === "booking_reminder") return "class";
   if (type === "membership_expiry" || type === "pass_expiry") return "expiry";
   return "system";
@@ -89,6 +90,7 @@ export default function MemberNotificationsPage() {
   const typeCounts = useMemo(
     () => ({
       all: items.length,
+      announcement: items.filter((item) => mapNotificationType(item.type) === "announcement").length,
       class: items.filter((item) => mapNotificationType(item.type) === "class").length,
       expiry: items.filter((item) => mapNotificationType(item.type) === "expiry").length,
       system: items.filter((item) => mapNotificationType(item.type) === "system").length,
@@ -168,7 +170,7 @@ export default function MemberNotificationsPage() {
           <strong>{item.title}</strong>
           <span className="fdChip">{item.isRead ? (zh ? "已讀" : "Read") : (zh ? "未讀" : "Unread")}</span>
         </div>
-        <p className="sub" style={{ marginTop: 6, marginBottom: 0 }}>{item.message}</p>
+        <p className="sub" style={{ marginTop: 6, marginBottom: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{item.message}</p>
         <p className="sub" style={{ marginTop: 6, marginBottom: 0 }}>{fmtDateTime(item.at)}</p>
         <div className="actions" style={{ marginTop: 8 }}>
           <button type="button" className="btn" disabled={busy} onClick={() => void markOne(item, !item.isRead)}>
@@ -186,7 +188,7 @@ export default function MemberNotificationsPage() {
           <div className="kvLabel">{zh ? "通知中心" : "NOTIFICATIONS"}</div>
           <h1 className="h1" style={{ marginTop: 10, fontSize: 34 }}>{zh ? "通知中心" : "Notification Center"}</h1>
           <p className="sub">
-            {zh ? "課程提醒、扣款提醒、會籍到期提醒都會顯示在這裡。" : "Class reminders, billing reminders, and membership expiry reminders are shown here."}
+            {zh ? "課表公告、課程提醒、扣款提醒、會籍到期提醒都會顯示在這裡。" : "Schedule announcements, class reminders, billing reminders, and membership expiry reminders are shown here."}
           </p>
           <MemberTabs />
 
@@ -207,6 +209,9 @@ export default function MemberNotificationsPage() {
           <div className="actions" style={{ marginTop: 8 }}>
             <button type="button" className={typeFilter === "all" ? "btn btnPrimary" : "btn"} onClick={() => setTypeFilter("all")}>
               {zh ? "全部類型" : "All Types"} ({typeCounts.all})
+            </button>
+            <button type="button" className={typeFilter === "announcement" ? "btn btnPrimary" : "btn"} onClick={() => setTypeFilter("announcement")}>
+              {zh ? "公告" : "Announcements"} ({typeCounts.announcement})
             </button>
             <button type="button" className={typeFilter === "class" ? "btn btnPrimary" : "btn"} onClick={() => setTypeFilter("class")}>
               {zh ? "課程" : "Classes"} ({typeCounts.class})

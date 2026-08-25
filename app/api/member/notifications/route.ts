@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../lib/auth-context";
+import {
+  bigeLineScheduleAnnouncementTitle,
+  type BigeLineScheduleEventKind,
+} from "../../../../lib/bige-line-schedule";
+import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 type NotificationItem = {
   id: string;
-  type: "booking_reminder" | "membership_expiry" | "pass_expiry" | "system_log";
+  type: "announcement" | "booking_reminder" | "membership_expiry" | "pass_expiry" | "system_log";
   level: "info" | "warning";
   title: string;
   message: string;
@@ -80,11 +85,12 @@ export async function GET(request: Request) {
   const memberContext = await loadMemberContext(request);
   if (!memberContext.ok) return memberContext.response;
   const { memberId, memberName, tenantId, supabase } = memberContext.value;
+  const admin = createSupabaseAdminClient();
 
   const nowIso = new Date().toISOString();
   const in24hIso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-  const [bookingRes, subRes, passRes, notifyLogRes, notificationReadRes] = await Promise.all([
+  const [bookingRes, subRes, passRes, notifyLogRes, scheduleAnnouncementRes, notificationReadRes] = await Promise.all([
     supabase
       .from("bookings")
       .select("id, service_name, starts_at, status")
@@ -118,6 +124,14 @@ export async function GET(request: Request) {
       .eq("member_id", memberId)
       .order("created_at", { ascending: false })
       .limit(10),
+    admin
+      .from("bige_line_schedule_notifications")
+      .select("id, event_kind, message, created_at, sent_at")
+      .eq("tenant_id", tenantId)
+      .eq("member_id", memberId)
+      .eq("status", "sent")
+      .order("sent_at", { ascending: false })
+      .limit(10),
     supabase
       .from("member_notification_reads")
       .select("notification_id, read_at")
@@ -127,7 +141,7 @@ export async function GET(request: Request) {
       .limit(1000),
   ]);
 
-  if (bookingRes.error || subRes.error || passRes.error || notifyLogRes.error) {
+  if (bookingRes.error || subRes.error || passRes.error || notifyLogRes.error || scheduleAnnouncementRes.error) {
     return NextResponse.json(
       {
         error: "Failed to load notifications",
@@ -136,6 +150,7 @@ export async function GET(request: Request) {
           subscriptions: subRes.error?.message || null,
           passes: passRes.error?.message || null,
           notificationLogs: notifyLogRes.error?.message || null,
+          scheduleAnnouncements: scheduleAnnouncementRes.error?.message || null,
         },
       },
       { status: 500 },
@@ -202,6 +217,20 @@ export async function GET(request: Request) {
           ? `Your ${pass.pass_type || "pass"} has expired.`
           : `${pass.pass_type || "Pass"} expires in ${days} day(s). Remaining: ${Number(pass.remaining || 0)}.`,
       at: pass.expires_at,
+      isRead: false,
+      readAt: null,
+    });
+  }
+
+  for (const announcement of scheduleAnnouncementRes.data || []) {
+    const eventKind = announcement.event_kind as BigeLineScheduleEventKind;
+    items.push({
+      id: `announcement:${announcement.id}`,
+      type: "announcement",
+      level: "info",
+      title: bigeLineScheduleAnnouncementTitle(eventKind),
+      message: String(announcement.message),
+      at: announcement.sent_at || announcement.created_at,
       isRead: false,
       readAt: null,
     });
