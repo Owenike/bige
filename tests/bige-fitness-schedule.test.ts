@@ -64,6 +64,7 @@ import {
   BigeBoardPrefetchQueue,
   buildBigeBoardPrefetchDates,
 } from "../lib/bige-board-prefetch";
+import { assignBigeMonthlyDateTimes } from "../lib/bige-monthly-selection";
 
 const batchCoachId = "00000000-0000-4000-8000-000000000011";
 const batchMemberId = "00000000-0000-4000-8000-000000000012";
@@ -436,6 +437,30 @@ test("monthly per-date coach assignments require one coach for each unique time"
   );
 });
 
+test("monthly date selections retain the time used when each date was selected", () => {
+  let dateTimes = assignBigeMonthlyDateTimes(
+    {},
+    ["2026-09-01", "2026-09-03", "2026-09-05", "2026-09-07"],
+    "10:00",
+  );
+  dateTimes = assignBigeMonthlyDateTimes(
+    dateTimes,
+    ["2026-09-09", "2026-09-10", "2026-09-15"],
+    "11:00",
+  );
+  dateTimes = assignBigeMonthlyDateTimes(dateTimes, ["2026-09-01"], "12:00");
+
+  assert.deepEqual(dateTimes, {
+    "2026-09-01": "10:00",
+    "2026-09-03": "10:00",
+    "2026-09-05": "10:00",
+    "2026-09-07": "10:00",
+    "2026-09-09": "11:00",
+    "2026-09-10": "11:00",
+    "2026-09-15": "11:00",
+  });
+});
+
 test("monthly batch delete rejects duplicate ids and requires an idempotency key", () => {
   const bookingId = "00000000-0000-4000-8000-000000000001";
   assert.equal(
@@ -479,6 +504,9 @@ test("monthly schedule UI exposes per-date coach choice, leave confirmation, and
   assert.match(monthlyWorkspace, /這位教練當天休假/);
   assert.match(monthlyWorkspace, /採全部成功或全部不刪除/);
   assert.match(monthlyWorkspace, /正式課程會整合成一則 LINE 取消通知，FA 不會發送 LINE/);
+  assert.match(monthlyWorkspace, /此時間只套用到接下來新選的日期；已選日期會保留原時間/);
+  assert.match(monthlyWorkspace, /monthlyDateTimes\[day\]/);
+  assert.match(monthlyWorkspace, /className=\{styles\.monthDayTime\}/);
 });
 
 test("monthly schedule confirmation emphasizes every date and closes after a successful batch", () => {
@@ -526,7 +554,7 @@ test("monthly schedule defaults to per-date coach selection", () => {
   );
   assert.match(
     component,
-    /if \(monthlyPerDateMode\) \{[\s\S]*?setMonthlyDates\(\(current\) =>[\s\S]*?openMonthlyCoachPicker\(day\)/,
+    /if \(monthlyPerDateMode\) \{[\s\S]*?setMonthlyDates\(\(current\) =>[\s\S]*?openMonthlyCoachPicker\(day, time\)/,
   );
   assert.match(component, /monthlyPerDateMode && selected[\s\S]*?"待選教練"/);
   assert.match(component, /monthlyDates\.includes\(monthlyCoachPickerDay\)/);
