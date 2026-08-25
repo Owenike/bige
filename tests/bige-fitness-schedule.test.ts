@@ -1162,6 +1162,10 @@ test("schedule payments use a fixed-identity wizard and persist invoice carrier 
   assert.match(component, /可直接使用條碼掃描器嗶入/);
   assert.match(styles, /\.paymentWizardIdentity[\s\S]*position: sticky/);
   assert.match(styles, /\.paymentWizardActions[\s\S]*position: sticky/);
+  assert.match(
+    styles,
+    /\.paymentWizardActions \.button\s*\{[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*justify-content: center;[\s\S]*white-space: nowrap;/,
+  );
   assert.match(route, /bige_create_member_contract_v9/);
   assert.match(route, /bige_record_contract_payments_v2/);
   assert.match(route, /invoice_carrier_invalid: "發票載具只能包含英文字母/);

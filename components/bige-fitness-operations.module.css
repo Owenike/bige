@@ -5279,6 +5279,14 @@
   background: linear-gradient(180deg, transparent, rgba(8, 13, 20, 0.98) 30%);
 }
 
+.paymentWizardActions .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
 .contractPlanMode {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
