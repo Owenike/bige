@@ -212,6 +212,9 @@ test("daily workbench presents one four-step flow and a consolidated allocation 
   assert.match(dashboard, /實收淨額/);
   assert.match(dashboard, />已分配</);
   assert.match(dashboard, />尚未分配</);
+  assert.match(dashboard, />待分配 \{money\(remaining\)\}</);
+  assert.match(dashboard, /`尚有 \$\{money\(selectedRemaining\)\} 待分配`/);
+  assert.doesNotMatch(dashboard, />尚差 \{money\(remaining\)\}</);
   assert.match(dashboard, /<progress max="100" value=\{allocationProgress\}/);
   assert.match(dashboardStyles, /\.taskList \{[^}]*repeat\(4/);
   assert.match(dashboardStyles, /\.salesProgressSummary/);

@@ -673,7 +673,7 @@ export default function StaffPerformanceDashboard({
       </div>
       <div className={styles.eventAllocation}>
         <strong className={event.amount < 0 ? styles.negative : ""}>{money(event.amount)}</strong>
-        {event.source_type !== "refund" && Math.abs(remaining) > 0.001 ? <small className={styles.pending}>尚差 {money(remaining)}</small> : <small>{event.allocations.length ? `${event.allocations.length} 位教練` : "查看明細"}</small>}
+        {event.source_type !== "refund" && Math.abs(remaining) > 0.001 ? <small className={styles.pending}>待分配 {money(remaining)}</small> : <small>{event.allocations.length ? `${event.allocations.length} 位教練` : "查看明細"}</small>}
       </div>
     </button>;
   }
@@ -1007,7 +1007,7 @@ export default function StaffPerformanceDashboard({
               </div>
 
               {activeModal === "sales" ? <footer className={`${styles.modalFooter} ${styles.salesModalFooter}`}>
-                <div className={styles.salesFooterStatus}>{selectedEvent ? <><span>{editingEventId === selectedEvent.id ? "目前這筆" : STATUS_LABELS[selectedEvent.status] || selectedEvent.status}</span><strong className={Math.abs(selectedRemaining) > 0.001 ? styles.pending : ""}>{Math.abs(selectedRemaining) > 0.001 ? `尚有 ${money(selectedRemaining)} 未分配` : "分配金額已完整"}</strong></> : <strong>這一天沒有業績紀錄</strong>}</div>
+                <div className={styles.salesFooterStatus}>{selectedEvent ? <><span>{editingEventId === selectedEvent.id ? "目前這筆" : STATUS_LABELS[selectedEvent.status] || selectedEvent.status}</span><strong className={Math.abs(selectedRemaining) > 0.001 ? styles.pending : ""}>{Math.abs(selectedRemaining) > 0.001 ? `尚有 ${money(selectedRemaining)} 待分配` : "分配金額已完整"}</strong></> : <strong>這一天沒有業績紀錄</strong>}</div>
                 <div className={styles.salesFooterActions}>
                   <button type="button" onClick={() => closeModal()}>關閉</button>
                   {selectedEvent && editingEventId === selectedEvent.id ? <><button type="button" disabled={busy} onClick={() => { setEditingEventId(null); setAllocationDraft({}); }}>取消調整</button><button className={styles.primary} type="button" disabled={busy || Math.abs(selectedRemaining) > 0.001} onClick={() => void saveAllocations(selectedEvent, true)}>{actionableSalesEvents.some((event) => event.id !== selectedEvent.id) ? "儲存並處理下一筆" : "儲存並完成"}</button></> : selectedEvent ? <>
