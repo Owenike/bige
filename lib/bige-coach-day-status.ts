@@ -54,6 +54,10 @@ export function readCoachShiftRangeStatus(content: unknown): Exclude<BigeCoachDa
   return startHour * 60 + startMinute < 13 * 60 ? "early" : "late";
 }
 
+export function isCoachDayStatusNote(content: unknown) {
+  return Boolean(readCoachDayStatusMarker(content) || readCoachShiftRangeStatus(content));
+}
+
 export function collectCoachDayStatuses(
   notes: readonly CoachDayStatusNote[],
   activeCoachIds: ReadonlySet<string>,

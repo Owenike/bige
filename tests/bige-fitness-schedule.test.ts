@@ -34,6 +34,11 @@ import {
   summarizeBigeMemberCourseSessions,
   deleteScheduleNoteSchema,
   deleteScheduleBookingSchema,
+  checkScheduleBatchAssignmentsSchema,
+  createScheduleBatchAssignmentsSchema,
+  getScheduleCoachOptionsSchema,
+  checkScheduleDeleteBatchSchema,
+  deleteScheduleBookingsBatchSchema,
   restoreScheduleNoteSchema,
   undoScheduleBookingMoveSchema,
   restoreCancelledBookingSchema,
@@ -179,6 +184,31 @@ test("batch preflight blocks overlapping coach notes but permits adjacent or ina
     }],
   });
   assert.equal(noteConflict?.kind, "coach_note");
+});
+
+test("batch preflight treats shift and leave markers as warnings instead of conflicts", () => {
+  const base = {
+    coachId: batchCoachId,
+    memberId: batchMemberId,
+    startsAt: "2026-08-20T10:00:00+08:00",
+    endsAt: "2026-08-20T11:00:00+08:00",
+    bookings: [],
+  };
+  for (const content of ["休", "早", "晚", "10:00-19:00"]) {
+    assert.equal(
+      findBigeScheduleBatchConflict({
+        ...base,
+        notes: [{
+          id: `status-${content}`,
+          coach_id: batchCoachId,
+          starts_at: "2026-08-20T09:00:00+08:00",
+          ends_at: "2026-08-20T19:00:00+08:00",
+          content,
+        }],
+      }),
+      null,
+    );
+  }
 });
 
 test("batch preflight treats imported appointment-book rows and notes as occupied slots", () => {
@@ -366,6 +396,119 @@ test("schedule trash deletion requires one valid booking id", () => {
     }).success,
     false,
   );
+});
+
+test("monthly per-date coach assignments require one coach for each unique time", () => {
+  const assignment = {
+    coachId: batchCoachId,
+    startsAt: "2026-09-03T10:00:00+08:00",
+  };
+  assert.equal(
+    checkScheduleBatchAssignmentsSchema.safeParse({
+      action: "check_schedule_batch_assignments",
+      memberId: batchMemberId,
+      operationKind: "pt",
+      courseType: "weight_training",
+      assignments: [assignment],
+    }).success,
+    true,
+  );
+  assert.equal(
+    createScheduleBatchAssignmentsSchema.safeParse({
+      action: "create_schedule_batch_assignments",
+      memberId: batchMemberId,
+      operationKind: "pt",
+      courseType: "weight_training",
+      assignments: [assignment, assignment],
+      idempotencyKey: "monthly-assignment-test",
+    }).success,
+    false,
+  );
+  assert.equal(
+    getScheduleCoachOptionsSchema.safeParse({
+      action: "get_schedule_coach_options",
+      memberId: batchMemberId,
+      operationKind: "pt",
+      courseType: "weight_training",
+      startsAt: assignment.startsAt,
+    }).success,
+    true,
+  );
+});
+
+test("monthly batch delete rejects duplicate ids and requires an idempotency key", () => {
+  const bookingId = "00000000-0000-4000-8000-000000000001";
+  assert.equal(
+    checkScheduleDeleteBatchSchema.safeParse({
+      action: "check_schedule_delete_batch",
+      memberId: batchMemberId,
+      bookingIds: [bookingId],
+    }).success,
+    true,
+  );
+  assert.equal(
+    deleteScheduleBookingsBatchSchema.safeParse({
+      action: "delete_schedule_bookings_batch",
+      memberId: batchMemberId,
+      bookingIds: [bookingId, bookingId],
+      idempotencyKey: "monthly-delete-test",
+    }).success,
+    false,
+  );
+  assert.equal(
+    deleteScheduleBookingsBatchSchema.safeParse({
+      action: "delete_schedule_bookings_batch",
+      memberId: batchMemberId,
+      bookingIds: [bookingId],
+      idempotencyKey: "short",
+    }).success,
+    false,
+  );
+});
+
+test("monthly schedule UI exposes per-date coach choice, leave confirmation, and all-or-none deletion", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const monthlyWorkspace = component.slice(
+    component.indexOf('{dialog === "monthly-schedule"'),
+    component.indexOf('{dialog === "activity"'),
+  );
+
+  assert.match(monthlyWorkspace, /<option value=\{MONTHLY_COACH_PER_DATE\}>不指定<\/option>/);
+  assert.match(monthlyWorkspace, /不指定模式請逐日點日期並選擇教練/);
+  assert.match(monthlyWorkspace, /排休教練仍可選，但會要求再次確認/);
+  assert.match(monthlyWorkspace, /這位教練當天休假/);
+  assert.match(monthlyWorkspace, /採全部成功或全部不刪除/);
+  assert.match(monthlyWorkspace, /正式課程會整合成一則 LINE 取消通知，FA 不會發送 LINE/);
+});
+
+test("monthly batch deletion is atomic, payment-aware, audited, and service-role only", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260825143813_bige_monthly_coach_assignment_and_batch_delete.sql",
+    "utf8",
+  );
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+
+  assert.match(migration, /order by booking\.id\s+for update/);
+  assert.match(migration, /affected_count <> requested_count/);
+  assert.match(migration, /paid_schedule_booking_manager_required/);
+  assert.match(migration, /bige_schedule_batch_deleted/);
+  assert.match(migration, /revoke all on function public\.bige_delete_schedule_bookings_batch_v1[\s\S]*from public, anon, authenticated/);
+  assert.match(migration, /grant execute on function public\.bige_delete_schedule_bookings_batch_v1[\s\S]*to service_role/);
+  assert.match(route, /input\.action === "delete_schedule_bookings_batch"[\s\S]*preview\.blocked\.length > 0[\s\S]*bige_delete_schedule_bookings_batch_v1/);
+  assert.match(route, /formalBooking[\s\S]*operation_kind === "pt"[\s\S]*eventKind: "cancelled"/);
+});
+
+test("leave markers are warnings at preflight and are ignored only on the booking side of the database guard", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260825143813_bige_monthly_coach_assignment_and_batch_delete.sql",
+    "utf8",
+  );
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+
+  assert.match(route, /kind: "coach_off"/);
+  assert.match(route, /當天排休，仍可安排/);
+  assert.match(migration, /btrim\(coalesce\(note\.content, ''\)\) not in \('早', '晚', '休'\)/);
+  assert.match(migration, /tg_table_name = 'bookings'[\s\S]*schedule_time_overlap/);
 });
 
 test("FA schedules always occupy two hours", () => {

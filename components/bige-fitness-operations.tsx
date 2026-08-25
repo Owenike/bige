@@ -645,6 +645,7 @@ type MonthlyScheduleData = {
 };
 
 type MonthlyScheduleSlot = {
+  coachId?: string;
   startsAt: string;
   endsAt: string;
 };
@@ -672,16 +673,46 @@ type MonthlySchedulePreflight = {
   requestedCount: number;
   available: MonthlyScheduleSlot[];
   conflicts: MonthlyScheduleConflict[];
+  warnings: Array<MonthlyScheduleSlot & {
+    kind: "coach_off";
+    message: string;
+    coachName: string | null;
+  }>;
 };
 
 type MonthlyScheduleBatchResult = {
   created: Array<{
     startsAt: string;
+    coachId?: string;
     item?: { warnings?: Array<{ code?: string; existingCount?: number }> };
   }>;
   skipped: MonthlyScheduleConflict[];
-  failures: Array<{ startsAt: string; message: string }>;
+  failures: Array<{ startsAt: string; coachId?: string; message: string }>;
 };
+
+type MonthlyCoachAvailability = Coach & {
+  available: boolean;
+  conflict: MonthlyScheduleConflict | null;
+  dayStatus: {
+    coach_id: string;
+    status: "early" | "late" | "off";
+    label: "早班" | "晚班" | "休假";
+  } | null;
+};
+
+type MonthlyDeletePreview = {
+  requestedCount: number;
+  allOrNone: true;
+  deletable: Array<Booking & { hasRecordedPayment: boolean }>;
+  blocked: Array<{
+    id: string;
+    startsAt: string | null;
+    code: string;
+    reason: string;
+  }>;
+};
+
+const MONTHLY_COACH_PER_DATE = "__per_date__";
 
 type ScheduleActivityData = {
   businessDate: string;
@@ -1688,12 +1719,24 @@ export default function BigeFitnessOperations({
   const [monthlyCourseType, setMonthlyCourseType] = useState<BigeCourseType>("weight_training");
   const [monthlyTime, setMonthlyTime] = useState("09:00");
   const [monthlyDates, setMonthlyDates] = useState<string[]>([]);
+  const [monthlyCoachAssignments, setMonthlyCoachAssignments] = useState<Record<string, string>>({});
+  const [monthlyCoachPickerDay, setMonthlyCoachPickerDay] = useState<string | null>(null);
+  const [monthlyCoachPickerOptions, setMonthlyCoachPickerOptions] = useState<MonthlyCoachAvailability[]>([]);
+  const [monthlyCoachPickerLoading, setMonthlyCoachPickerLoading] = useState(false);
+  const [monthlyCoachPickerError, setMonthlyCoachPickerError] = useState("");
+  const [monthlyPendingOffCoachId, setMonthlyPendingOffCoachId] = useState<string | null>(null);
   const [monthlyNote, setMonthlyNote] = useState("");
   const [monthlyPreflight, setMonthlyPreflight] = useState<MonthlySchedulePreflight | null>(null);
   const [monthlyPreflightLoading, setMonthlyPreflightLoading] = useState(false);
   const [monthlyPreflightError, setMonthlyPreflightError] = useState("");
   const [monthlyBatchResult, setMonthlyBatchResult] = useState<MonthlyScheduleBatchResult | null>(null);
   const [monthlySubmitting, setMonthlySubmitting] = useState(false);
+  const [monthlyDeleteMode, setMonthlyDeleteMode] = useState(false);
+  const [monthlyDeleteSelectedIds, setMonthlyDeleteSelectedIds] = useState<string[]>([]);
+  const [monthlyDeletePreview, setMonthlyDeletePreview] = useState<MonthlyDeletePreview | null>(null);
+  const [monthlyDeleteConfirmOpen, setMonthlyDeleteConfirmOpen] = useState(false);
+  const [monthlyDeleteSubmitting, setMonthlyDeleteSubmitting] = useState(false);
+  const [monthlyDeleteNotice, setMonthlyDeleteNotice] = useState("");
   const [activityData, setActivityData] = useState<ScheduleActivityData | null>(null);
   const [activityLoading, setActivityLoading] = useState(false);
   const boardDateRef = useRef(date);
@@ -2408,26 +2451,39 @@ export default function BigeFitnessOperations({
 
   const requestMonthlySchedulePreflight = useCallback(async (signal?: AbortSignal) => {
     if (!monthlyMember || !monthlyCoachId || monthlyDates.length === 0) return null;
+    const perDate = monthlyCoachId === MONTHLY_COACH_PER_DATE;
+    if (perDate && monthlyDates.some((day) => !monthlyCoachAssignments[day])) return null;
     const response = await fetch("/api/bige-fitness", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "check_schedule_batch",
+        action: perDate ? "check_schedule_batch_assignments" : "check_schedule_batch",
         memberId: monthlyMember.id,
-        coachId: monthlyCoachId,
+        ...(perDate
+          ? {
+              assignments: monthlyDates.map((day) => ({
+                coachId: monthlyCoachAssignments[day],
+                startsAt: new Date(`${day}T${monthlyTime}:00+08:00`).toISOString(),
+              })),
+            }
+          : {
+              coachId: monthlyCoachId,
+              startsAt: monthlyDates.map((day) =>
+                new Date(`${day}T${monthlyTime}:00+08:00`).toISOString(),
+              ),
+            }),
         operationKind: monthlyOperationKind,
         courseType: monthlyCourseType,
-        startsAt: monthlyDates.map((day) =>
-          new Date(`${day}T${monthlyTime}:00+08:00`).toISOString(),
-        ),
       }),
       signal,
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) throw new Error(apiMessage(payload, "檢查排課衝突失敗"));
-    return (payload.data || payload) as MonthlySchedulePreflight;
+    const preview = (payload.data || payload) as MonthlySchedulePreflight;
+    return { ...preview, warnings: preview.warnings || [] };
   }, [
     monthlyCoachId,
+    monthlyCoachAssignments,
     monthlyCourseType,
     monthlyDates,
     monthlyMember,
@@ -2437,7 +2493,13 @@ export default function BigeFitnessOperations({
 
   useEffect(() => {
     if (dialog !== "monthly-schedule") return;
-    if (!monthlyMember || !monthlyCoachId || monthlyDates.length === 0) {
+    if (
+      !monthlyMember ||
+      !monthlyCoachId ||
+      monthlyDates.length === 0 ||
+      (monthlyCoachId === MONTHLY_COACH_PER_DATE &&
+        monthlyDates.some((day) => !monthlyCoachAssignments[day]))
+    ) {
       setMonthlyPreflight(null);
       setMonthlyPreflightError("");
       setMonthlyPreflightLoading(false);
@@ -2468,7 +2530,8 @@ export default function BigeFitnessOperations({
   }, [
     dialog,
     monthlyCoachId,
-    monthlyDates.length,
+    monthlyCoachAssignments,
+    monthlyDates,
     monthlyMember,
     requestMonthlySchedulePreflight,
   ]);
@@ -2481,16 +2544,32 @@ export default function BigeFitnessOperations({
     setMonthlyCoachId("");
     setMonthlyMonth(date.slice(0, 7));
     setMonthlyDates([]);
+    setMonthlyCoachAssignments({});
+    setMonthlyCoachPickerDay(null);
+    setMonthlyCoachPickerOptions([]);
+    setMonthlyCoachPickerError("");
+    setMonthlyPendingOffCoachId(null);
     setMonthlyNote("");
     setMonthlyPreflight(null);
     setMonthlyPreflightError("");
     setMonthlyBatchResult(null);
+    setMonthlyDeleteMode(false);
+    setMonthlyDeleteSelectedIds([]);
+    setMonthlyDeletePreview(null);
+    setMonthlyDeleteConfirmOpen(false);
+    setMonthlyDeleteNotice("");
     setDialog("monthly-schedule");
   };
 
   const submitMonthlySchedule = async (event: FormEvent) => {
     event.preventDefault();
-    if (!monthlyMember || !monthlyCoachId || monthlyDates.length === 0) return;
+    if (
+      !monthlyMember ||
+      !monthlyCoachId ||
+      monthlyDates.length === 0 ||
+      (monthlyCoachId === MONTHLY_COACH_PER_DATE &&
+        monthlyDates.some((day) => !monthlyCoachAssignments[day]))
+    ) return;
     setMonthlySubmitting(true);
     setError("");
     try {
@@ -2515,21 +2594,32 @@ export default function BigeFitnessOperations({
     setError("");
     try {
       const preview = monthlyPreflight;
+      const perDate = monthlyCoachId === MONTHLY_COACH_PER_DATE;
       const result = (await post({
-        action: "create_schedule_batch",
+        action: perDate ? "create_schedule_batch_assignments" : "create_schedule_batch",
         memberId: monthlyMember.id,
-        coachId: monthlyCoachId,
+        ...(perDate
+          ? {
+              assignments: preview.available.map((slot) => ({
+                coachId: slot.coachId || monthlyCoachAssignments[taipeiDateKey(slot.startsAt)],
+                startsAt: slot.startsAt,
+              })),
+            }
+          : {
+              coachId: monthlyCoachId,
+              startsAt: preview.available.map((slot) => slot.startsAt),
+            }),
         operationKind: monthlyOperationKind,
         courseType: monthlyCourseType,
-        startsAt: preview.available.map((slot) => slot.startsAt),
         note: monthlyNote.trim() || null,
         idempotencyKey: `month-${monthlyMember.id}-${Date.now()}`,
       })) as {
         created?: Array<{
           startsAt: string;
+          coachId?: string;
           item?: { warnings?: Array<{ code?: string; existingCount?: number }> };
         }>;
-        failures?: Array<{ startsAt: string; message: string }>;
+        failures?: Array<{ startsAt: string; coachId?: string; message: string }>;
       };
       const batchResult: MonthlyScheduleBatchResult = {
         created: result.created || [],
@@ -2537,14 +2627,20 @@ export default function BigeFitnessOperations({
         failures: result.failures || [],
       };
       setMonthlyBatchResult(batchResult);
-      setMonthlyDates(
-        Array.from(
-          new Set([
-            ...batchResult.skipped.map((conflict) => taipeiDateKey(conflict.startsAt)),
-            ...batchResult.failures.map((failure) => taipeiDateKey(failure.startsAt)),
-          ]),
-        ).sort(),
-      );
+      const remainingDates = Array.from(
+        new Set([
+          ...batchResult.skipped.map((conflict) => taipeiDateKey(conflict.startsAt)),
+          ...batchResult.failures.map((failure) => taipeiDateKey(failure.startsAt)),
+        ]),
+      ).sort();
+      setMonthlyDates(remainingDates);
+      if (perDate) {
+        setMonthlyCoachAssignments((current) =>
+          Object.fromEntries(
+            remainingDates.flatMap((day) => current[day] ? [[day, current[day]]] : []),
+          ),
+        );
+      }
       boardCacheRef.current.clear();
       await loadMonthlyMemberSchedule(monthlyMember, monthlyMonth);
       if (date.startsWith(monthlyMonth)) void loadBoard({ silent: true });
@@ -2556,6 +2652,109 @@ export default function BigeFitnessOperations({
       );
     } finally {
       setMonthlySubmitting(false);
+    }
+  };
+
+  const chooseMonthlyCoachForDay = useCallback((day: string, coachId: string) => {
+    const selectedCoach = monthlyCoachPickerOptions.find((coach) => coach.id === coachId);
+    if (selectedCoach) {
+      setMonthlyData((current) => current ? {
+        ...current,
+        coaches: current.coaches.some((coach) => coach.id === selectedCoach.id)
+          ? current.coaches
+          : [...current.coaches, selectedCoach],
+      } : current);
+    }
+    setMonthlyCoachAssignments((current) => ({ ...current, [day]: coachId }));
+    setMonthlyDates((current) => Array.from(new Set([...current, day])).sort());
+    setMonthlyCoachPickerDay(null);
+    setMonthlyPendingOffCoachId(null);
+  }, [monthlyCoachPickerOptions]);
+
+  const openMonthlyCoachPicker = useCallback(async (day: string) => {
+    if (!monthlyMember) return;
+    setMonthlyCoachPickerDay(day);
+    setMonthlyCoachPickerOptions([]);
+    setMonthlyCoachPickerError("");
+    setMonthlyPendingOffCoachId(null);
+    setMonthlyCoachPickerLoading(true);
+    try {
+      const response = await fetch("/api/bige-fitness", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "get_schedule_coach_options",
+          memberId: monthlyMember.id,
+          operationKind: monthlyOperationKind,
+          courseType: monthlyCourseType,
+          startsAt: new Date(`${day}T${monthlyTime}:00+08:00`).toISOString(),
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(apiMessage(payload, "讀取可安排教練失敗"));
+      setMonthlyCoachPickerOptions(((payload.data || payload)?.options || []) as MonthlyCoachAvailability[]);
+    } catch (caught) {
+      setMonthlyCoachPickerError(
+        caught instanceof Error ? caught.message : "讀取可安排教練失敗",
+      );
+    } finally {
+      setMonthlyCoachPickerLoading(false);
+    }
+  }, [monthlyCourseType, monthlyMember, monthlyOperationKind, monthlyTime]);
+
+  const checkMonthlyDeleteSelection = async () => {
+    if (!monthlyMember || monthlyDeleteSelectedIds.length === 0) return;
+    setMonthlyDeleteSubmitting(true);
+    setMonthlyDeleteNotice("");
+    try {
+      const result = (await post({
+        action: "check_schedule_delete_batch",
+        memberId: monthlyMember.id,
+        bookingIds: monthlyDeleteSelectedIds,
+      })) as MonthlyDeletePreview;
+      setMonthlyDeletePreview(result);
+      setMonthlyDeleteConfirmOpen(true);
+    } catch (caught) {
+      showOperationAlert(
+        caught instanceof Error ? caught.message : "檢查多筆刪除失敗",
+        "無法檢查所選預約",
+      );
+    } finally {
+      setMonthlyDeleteSubmitting(false);
+    }
+  };
+
+  const confirmMonthlyDeleteSelection = async () => {
+    if (
+      !monthlyMember ||
+      !monthlyDeletePreview ||
+      monthlyDeletePreview.blocked.length > 0 ||
+      monthlyDeletePreview.deletable.length !== monthlyDeleteSelectedIds.length
+    ) return;
+    setMonthlyDeleteSubmitting(true);
+    try {
+      await post({
+        action: "delete_schedule_bookings_batch",
+        memberId: monthlyMember.id,
+        bookingIds: monthlyDeleteSelectedIds,
+        idempotencyKey: `month-delete-${monthlyMember.id}-${Date.now()}`,
+      });
+      const deletedCount = monthlyDeleteSelectedIds.length;
+      setMonthlyDeleteConfirmOpen(false);
+      setMonthlyDeletePreview(null);
+      setMonthlyDeleteSelectedIds([]);
+      setMonthlyDeleteMode(false);
+      setMonthlyDeleteNotice(`已刪除 ${deletedCount} 筆預約；正式課程的 LINE 取消通知已整合為一則。`);
+      boardCacheRef.current.clear();
+      await loadMonthlyMemberSchedule(monthlyMember, monthlyMonth);
+      if (date.startsWith(monthlyMonth)) void loadBoard({ silent: true });
+    } catch (caught) {
+      showOperationAlert(
+        caught instanceof Error ? caught.message : "多筆刪除預約失敗",
+        "沒有刪除任何預約",
+      );
+    } finally {
+      setMonthlyDeleteSubmitting(false);
     }
   };
 
@@ -2696,6 +2895,7 @@ export default function BigeFitnessOperations({
     () => monthlyCoachOptions.find((coach) => coach.id === monthlyCoachId) || null,
     [monthlyCoachId, monthlyCoachOptions],
   );
+  const monthlyPerDateMode = monthlyCoachId === MONTHLY_COACH_PER_DATE;
   const monthlyConflictByDate = useMemo(
     () =>
       new Map(
@@ -2714,6 +2914,7 @@ export default function BigeFitnessOperations({
 
   useEffect(() => {
     setMonthlyCoachId((current) => {
+      if (current === MONTHLY_COACH_PER_DATE) return current;
       if (current && monthlyCoachOptions.some((coach) => coach.id === current)) return current;
       return monthlyCoachOptions[0]?.id || "";
     });
@@ -7060,6 +7261,10 @@ export default function BigeFitnessOperations({
                       setMonthlyMember(member);
                       setMonthlyData(null);
                       setMonthlyCoachId("");
+                      setMonthlyCoachAssignments({});
+                      setMonthlyDeleteMode(false);
+                      setMonthlyDeleteSelectedIds([]);
+                      setMonthlyDeleteNotice("");
                       setMonthlySearch(member.full_name);
                     }}
                   >
@@ -7085,6 +7290,10 @@ export default function BigeFitnessOperations({
                     setMonthlyData(null);
                     setMonthlyCoachId("");
                     setMonthlyDates([]);
+                    setMonthlyCoachAssignments({});
+                    setMonthlyDeleteMode(false);
+                    setMonthlyDeleteSelectedIds([]);
+                    setMonthlyDeleteNotice("");
                     setMonthlySearch("");
                   }}
                 >
@@ -7101,8 +7310,21 @@ export default function BigeFitnessOperations({
                   <div className={styles.formGrid}>
                     <label className={styles.field}>
                       <span className={styles.label}>教練</span>
-                      <select className={styles.select} value={monthlyCoachId} onChange={(event) => setMonthlyCoachId(event.target.value)} required>
+                      <select
+                        className={styles.select}
+                        value={monthlyCoachId}
+                        onChange={(event) => {
+                          const nextCoachId = event.target.value;
+                          setMonthlyCoachId(nextCoachId);
+                          setMonthlyDates([]);
+                          setMonthlyCoachAssignments({});
+                          setMonthlyPreflight(null);
+                          setMonthlyPreflightError("");
+                        }}
+                        required
+                      >
                         {monthlyCoachOptions.map((coach) => <option key={coach.id} value={coach.id}>{coachLabel(coach)}</option>)}
+                        <option value={MONTHLY_COACH_PER_DATE}>不指定</option>
                       </select>
                     </label>
                     <label className={styles.field}>
@@ -7143,6 +7365,8 @@ export default function BigeFitnessOperations({
                         className={styles.miniButton}
                         type="button"
                         key={label}
+                        disabled={monthlyPerDateMode}
+                        title={monthlyPerDateMode ? "不指定模式請逐日選擇教練" : undefined}
                         onClick={() => {
                           const candidates = monthDateValues(monthlyMonth).filter((day) => {
                             const [year, month, dateNumber] = day.split("-").map(Number);
@@ -7152,12 +7376,23 @@ export default function BigeFitnessOperations({
                         }}
                       >{label}</button>
                     ))}
-                    <button className={styles.miniButton} type="button" onClick={() => setMonthlyDates([])}>清除</button>
+                    <button
+                      className={styles.miniButton}
+                      type="button"
+                      onClick={() => {
+                        setMonthlyDates([]);
+                        setMonthlyCoachAssignments({});
+                      }}
+                    >清除</button>
+                    {monthlyPerDateMode ? <small>不指定模式請逐日點日期並選擇教練。</small> : null}
                   </div>
                   <div className={styles.monthCalendar}>
                     {monthDateValues(monthlyMonth).map((day) => {
                       const selected = monthlyDates.includes(day);
                       const conflict = monthlyConflictByDate.get(day);
+                      const assignedCoach = monthlyPerDateMode
+                        ? monthlyCoachOptions.find((coach) => coach.id === monthlyCoachAssignments[day])
+                        : null;
                       return (
                         <button
                           className={styles.monthDay}
@@ -7166,10 +7401,17 @@ export default function BigeFitnessOperations({
                           type="button"
                           key={day}
                           title={conflict?.message}
-                          aria-label={`${day}${conflict ? `，衝突：${conflict.message}` : selected ? "，已選取" : ""}`}
-                          onClick={() => setMonthlyDates((current) => selected ? current.filter((item) => item !== day) : [...current, day].sort())}
+                          aria-label={`${day}${conflict ? `，衝突：${conflict.message}` : selected ? "，已選取" : ""}${assignedCoach ? `，${coachLabel(assignedCoach)}` : ""}`}
+                          onClick={() => {
+                            if (monthlyPerDateMode) {
+                              void openMonthlyCoachPicker(day);
+                              return;
+                            }
+                            setMonthlyDates((current) => selected ? current.filter((item) => item !== day) : [...current, day].sort());
+                          }}
                         >
-                          <strong>{Number(day.slice(-2))}</strong><span>{weekdayLabel(day).replace("週", "")}</span>
+                          <strong>{Number(day.slice(-2))}</strong>
+                          <span>{assignedCoach ? coachLabel(assignedCoach) : weekdayLabel(day).replace("週", "")}</span>
                         </button>
                       );
                     })}
@@ -7183,6 +7425,9 @@ export default function BigeFitnessOperations({
                           <span data-tone={monthlyPreflight.conflicts.length ? "danger" : "neutral"}>
                             衝突 {monthlyPreflight.conflicts.length} 筆
                           </span>
+                          {monthlyPreflight.warnings.length ? (
+                            <span data-tone="warning">排休警告 {monthlyPreflight.warnings.length} 筆</span>
+                          ) : null}
                           {monthlyPreflight.conflicts.length ? <small>紅色日期不會被覆蓋。</small> : null}
                         </>
                       ) : null}
@@ -7192,26 +7437,257 @@ export default function BigeFitnessOperations({
                   <button
                     className={`${styles.button} ${styles.primary}`}
                     type="submit"
-                    disabled={monthlySubmitting || monthlyPreflightLoading || monthlyDates.length === 0}
+                    disabled={
+                      monthlySubmitting ||
+                      monthlyPreflightLoading ||
+                      monthlyDates.length === 0 ||
+                      (monthlyPerDateMode && monthlyDates.some((day) => !monthlyCoachAssignments[day]))
+                    }
                   >
                     {monthlySubmitting ? "檢查中…" : `檢查 ${monthlyDates.length} 筆排課`}
                   </button>
                 </form>
                 <section className={styles.monthlyBookingList}>
-                  <h3>{monthlyMonth.replace("-", " 年 ")} 月已排行程</h3>
+                  <header className={styles.monthlyBookingHeader}>
+                    <h3>{monthlyMonth.replace("-", " 年 ")} 月已排行程</h3>
+                    {!monthlyDeleteMode ? (
+                      <button
+                        className={styles.miniButton}
+                        type="button"
+                        onClick={() => {
+                          setMonthlyDeleteMode(true);
+                          setMonthlyDeleteSelectedIds([]);
+                          setMonthlyDeleteNotice("");
+                        }}
+                        disabled={!(monthlyData?.bookings || []).some((booking) =>
+                          isScheduleBookingDraggable(booking) &&
+                          new Date(booking.starts_at).getTime() > Date.now()
+                        )}
+                      >
+                        <Trash2 size={14} aria-hidden="true" /> 多筆刪除
+                      </button>
+                    ) : (
+                      <div>
+                        <button
+                          className={styles.miniButton}
+                          type="button"
+                          onClick={() => setMonthlyDeleteSelectedIds(
+                            (monthlyData?.bookings || [])
+                              .filter((booking) =>
+                                isScheduleBookingDraggable(booking) &&
+                                new Date(booking.starts_at).getTime() > Date.now()
+                              )
+                              .map((booking) => booking.id),
+                          )}
+                        >全選可刪除</button>
+                        <button
+                          className={styles.miniButton}
+                          type="button"
+                          onClick={() => {
+                            setMonthlyDeleteMode(false);
+                            setMonthlyDeleteSelectedIds([]);
+                            setMonthlyDeletePreview(null);
+                          }}
+                        >取消</button>
+                      </div>
+                    )}
+                  </header>
+                  {monthlyDeleteNotice ? (
+                    <p className={styles.monthlyDeleteNotice} role="status">{monthlyDeleteNotice}</p>
+                  ) : null}
                   {monthlyLoading ? <p className={styles.muted}>讀取中…</p> : null}
                   {!monthlyLoading && !monthlyData?.bookings.length ? <p className={styles.muted}>本月尚無排課。</p> : null}
-                  {(monthlyData?.bookings || []).map((booking) => (
-                    <article className={styles.monthlyBookingItem} key={booking.id}>
-                      <time>{new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(booking.starts_at))}</time>
-                      <strong>{booking.operation_kind === "trial" ? "FA" : booking.operation_kind === "bb" ? "BB 回訪" : scheduleCourseLabel(booking.course_type)}</strong>
-                      <span>{coachLabel(monthlyCoachOptions.find((coach) => coach.id === booking.coach_id) || { id: "", display_name: null, english_name: null })} · {booking.status}</span>
-                    </article>
-                  ))}
+                  {(monthlyData?.bookings || []).map((booking) => {
+                    const selectable = isScheduleBookingDraggable(booking) &&
+                      new Date(booking.starts_at).getTime() > Date.now();
+                    const selected = monthlyDeleteSelectedIds.includes(booking.id);
+                    return (
+                      <label
+                        className={styles.monthlyBookingItem}
+                        data-delete-mode={String(monthlyDeleteMode)}
+                        data-delete-disabled={String(monthlyDeleteMode && !selectable)}
+                        key={booking.id}
+                      >
+                        {monthlyDeleteMode ? (
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            disabled={!selectable}
+                            onChange={(event) => setMonthlyDeleteSelectedIds((current) =>
+                              event.target.checked
+                                ? Array.from(new Set([...current, booking.id]))
+                                : current.filter((id) => id !== booking.id)
+                            )}
+                            aria-label={`選取 ${formatDateTime(booking.starts_at)} 預約`}
+                          />
+                        ) : null}
+                        <div>
+                          <time>{new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(booking.starts_at))}</time>
+                          <strong>{booking.operation_kind === "trial" ? "FA" : booking.operation_kind === "bb" ? "BB 回訪" : scheduleCourseLabel(booking.course_type)}</strong>
+                          <span>{coachLabel(monthlyCoachOptions.find((coach) => coach.id === booking.coach_id) || { id: "", display_name: null, english_name: null })} · {booking.status}</span>
+                          {monthlyDeleteMode && !selectable ? <small>已開始、已完成或已鎖定，不能多筆刪除</small> : null}
+                        </div>
+                      </label>
+                    );
+                  })}
+                  {monthlyDeleteMode ? (
+                    <div className={styles.monthlyDeleteActions}>
+                      <strong>已選 {monthlyDeleteSelectedIds.length} 筆</strong>
+                      <button
+                        className={`${styles.button} ${styles.dangerButton}`}
+                        type="button"
+                        disabled={monthlyDeleteSubmitting || monthlyDeleteSelectedIds.length === 0}
+                        onClick={() => void checkMonthlyDeleteSelection()}
+                      >
+                        {monthlyDeleteSubmitting ? "檢查中…" : "檢查並刪除所選預約"}
+                      </button>
+                    </div>
+                  ) : null}
                 </section>
               </div>
             </div>
           )}
+        </Dialog>
+      ) : null}
+
+      {dialog === "monthly-schedule" && monthlyCoachPickerDay ? (
+        <Dialog
+          title={`${monthlyCoachPickerDay} ${monthlyTime} 選擇教練`}
+          onClose={() => {
+            setMonthlyCoachPickerDay(null);
+            setMonthlyPendingOffCoachId(null);
+          }}
+          compact
+        >
+          <div className={styles.monthlyCoachPicker}>
+            <p className={styles.muted}>有課程或人工備註衝突的教練不能選；排休教練仍可選，但會要求再次確認。</p>
+            {monthlyCoachPickerLoading ? <p className={styles.muted}>正在檢查每位教練的時段…</p> : null}
+            {monthlyCoachPickerError ? <p className={styles.error}>{monthlyCoachPickerError}</p> : null}
+            {!monthlyCoachPickerLoading && !monthlyCoachPickerError ? (
+              <div className={styles.monthlyCoachOptionList}>
+                {monthlyCoachPickerOptions.map((coach) => {
+                  const current = monthlyCoachAssignments[monthlyCoachPickerDay] === coach.id;
+                  const pendingOff = monthlyPendingOffCoachId === coach.id;
+                  return (
+                    <div className={styles.monthlyCoachOptionWrap} key={coach.id}>
+                      <button
+                        className={styles.monthlyCoachOption}
+                        data-current={String(current)}
+                        data-off={String(coach.dayStatus?.status === "off")}
+                        type="button"
+                        disabled={!coach.available}
+                        onClick={() => {
+                          if (coach.dayStatus?.status === "off") {
+                            setMonthlyPendingOffCoachId(coach.id);
+                            return;
+                          }
+                          chooseMonthlyCoachForDay(monthlyCoachPickerDay, coach.id);
+                        }}
+                      >
+                        <span>
+                          <strong>{coachLabel(coach)}</strong>
+                          {coach.dayStatus ? (
+                            <small data-status={coach.dayStatus.status}>{coach.dayStatus.label}</small>
+                          ) : <small>當日未標示班別</small>}
+                        </span>
+                        <span>{coach.available ? current ? "目前安排" : "可安排" : coach.conflict?.message || "時段衝突"}</span>
+                      </button>
+                      {pendingOff ? (
+                        <div className={styles.monthlyOffCoachWarning} role="alert">
+                          <TriangleAlert size={19} aria-hidden="true" />
+                          <p><strong>這位教練當天休假</strong><span>仍可安排，但請先確認教練已同意上課。</span></p>
+                          <div>
+                            <button className={styles.button} type="button" onClick={() => setMonthlyPendingOffCoachId(null)}>返回</button>
+                            <button className={`${styles.button} ${styles.primary}`} type="button" onClick={() => chooseMonthlyCoachForDay(monthlyCoachPickerDay, coach.id)}>仍要選擇</button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {!monthlyCoachPickerOptions.length ? <p className={styles.muted}>目前沒有可顯示的教練。</p> : null}
+              </div>
+            ) : null}
+            <div className={styles.formActions}>
+              {monthlyCoachAssignments[monthlyCoachPickerDay] ? (
+                <button
+                  className={`${styles.button} ${styles.dangerButton}`}
+                  type="button"
+                  onClick={() => {
+                    setMonthlyCoachAssignments((current) => {
+                      const next = { ...current };
+                      delete next[monthlyCoachPickerDay];
+                      return next;
+                    });
+                    setMonthlyDates((current) => current.filter((day) => day !== monthlyCoachPickerDay));
+                    setMonthlyCoachPickerDay(null);
+                  }}
+                >移除此日期</button>
+              ) : null}
+              <button className={styles.button} type="button" onClick={() => setMonthlyCoachPickerDay(null)}>關閉</button>
+            </div>
+          </div>
+        </Dialog>
+      ) : null}
+
+      {dialog === "monthly-schedule" && monthlyDeleteConfirmOpen && monthlyDeletePreview ? (
+        <Dialog
+          title={monthlyDeletePreview.blocked.length ? "部分預約不能刪除" : "確認多筆刪除預約"}
+          onClose={() => setMonthlyDeleteConfirmOpen(false)}
+          wide
+        >
+          <div className={styles.monthlyReview}>
+            <div
+              className={styles.monthlyReviewNotice}
+              data-tone={monthlyDeletePreview.blocked.length ? "danger" : "warning"}
+              role="alert"
+            >
+              <strong>{monthlyDeletePreview.blocked.length ? "沒有刪除任何預約" : `將一次刪除 ${monthlyDeletePreview.deletable.length} 筆預約`}</strong>
+              <span>採全部成功或全部不刪除；正式課程會整合成一則 LINE 取消通知，FA 不會發送 LINE。</span>
+            </div>
+            <div className={styles.monthlyReviewSummary}>
+              <div data-tone="success"><span>可刪除</span><strong>{monthlyDeletePreview.deletable.length} 筆</strong></div>
+              <div data-tone={monthlyDeletePreview.blocked.length ? "danger" : "neutral"}><span>被阻擋</span><strong>{monthlyDeletePreview.blocked.length} 筆</strong></div>
+              <div><span>處理方式</span><strong>全部成功或全部不刪除</strong></div>
+            </div>
+            {monthlyDeletePreview.deletable.length ? (
+              <section className={styles.monthlyResultSection}>
+                <h3>可刪除</h3>
+                <div className={styles.monthlyAssignmentReviewList}>
+                  {monthlyDeletePreview.deletable.map((booking) => (
+                    <div key={booking.id}>
+                      <time>{formatDateTime(booking.starts_at)}</time>
+                      <strong>{booking.operation_kind === "trial" ? "FA" : scheduleCourseLabel(booking.course_type)}</strong>
+                      {booking.hasRecordedPayment ? <small>含付款紀錄；已通過主管權限檢查</small> : null}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            {monthlyDeletePreview.blocked.length ? (
+              <section className={styles.monthlyConflictSection}>
+                <h3>被阻擋，請返回取消勾選</h3>
+                <div className={styles.monthlyConflictList}>
+                  {monthlyDeletePreview.blocked.map((blocked) => (
+                    <article className={styles.monthlyConflictItem} key={blocked.id}>
+                      <div>
+                        <time>{blocked.startsAt ? formatDateTime(blocked.startsAt) : "預約資料已變更"}</time>
+                        <strong>{blocked.reason}</strong>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            <div className={styles.formActions}>
+              <button className={styles.button} type="button" onClick={() => setMonthlyDeleteConfirmOpen(false)} disabled={monthlyDeleteSubmitting}>返回調整</button>
+              {!monthlyDeletePreview.blocked.length ? (
+                <button className={`${styles.button} ${styles.dangerButton}`} type="button" onClick={() => void confirmMonthlyDeleteSelection()} disabled={monthlyDeleteSubmitting}>
+                  {monthlyDeleteSubmitting ? "刪除中…" : `確認刪除 ${monthlyDeletePreview.deletable.length} 筆`}
+                </button>
+              ) : null}
+            </div>
+          </div>
         </Dialog>
       ) : null}
 
@@ -7239,12 +7715,44 @@ export default function BigeFitnessOperations({
 
             <div className={styles.monthlyReviewSummary}>
               <div><span>會員</span><strong>{monthlyMember.full_name}</strong></div>
-              <div><span>教練</span><strong>{monthlySelectedCoach ? coachLabel(monthlySelectedCoach) : "未選擇"}</strong></div>
+              <div><span>教練</span><strong>{monthlyPerDateMode ? "逐日指定" : monthlySelectedCoach ? coachLabel(monthlySelectedCoach) : "未選擇"}</strong></div>
               <div><span>課程</span><strong>{monthlyOperationKind === "trial" ? "FA 體驗" : BIGE_COURSE_LABELS[monthlyCourseType]}</strong></div>
               <div><span>時間</span><strong>{monthlyTime}（24 小時制）</strong></div>
               <div data-tone="success"><span>可建立</span><strong>{monthlyPreflight.available.length} 筆</strong></div>
               <div data-tone={monthlyPreflight.conflicts.length ? "danger" : "neutral"}><span>衝突</span><strong>{monthlyPreflight.conflicts.length} 筆</strong></div>
+              <div data-tone={monthlyPreflight.warnings.length ? "warning" : "neutral"}><span>排休警告</span><strong>{monthlyPreflight.warnings.length} 筆</strong></div>
             </div>
+
+            {monthlyPerDateMode && monthlyPreflight.available.length ? (
+              <section className={styles.monthlyResultSection}>
+                <h3>逐日教練安排</h3>
+                <div className={styles.monthlyAssignmentReviewList}>
+                  {monthlyPreflight.available.map((slot) => {
+                    const coach = monthlyCoachOptions.find((item) => item.id === slot.coachId);
+                    return (
+                      <div key={`${slot.startsAt}-${slot.coachId || "coach"}`}>
+                        <time>{formatDateTime(slot.startsAt)}</time>
+                        <strong>{coach ? coachLabel(coach) : "教練資料已更新"}</strong>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+
+            {monthlyPreflight.warnings.length ? (
+              <section className={styles.monthlyWarningSection} role="alert">
+                <h3>排休教練仍可安排，請再次確認</h3>
+                <div>
+                  {monthlyPreflight.warnings.map((warning) => (
+                    <article key={`${warning.startsAt}-${warning.coachId || warning.coachName || "off"}`}>
+                      <TriangleAlert size={18} aria-hidden="true" />
+                      <span><strong>{formatDateTime(warning.startsAt)}</strong>{warning.message}</span>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             {monthlyPreflight.conflicts.length ? (
               <section className={styles.monthlyConflictSection}>
@@ -7310,6 +7818,9 @@ export default function BigeFitnessOperations({
                   {monthlyBatchResult.created.map((created) => (
                     <div data-tone="success" key={created.startsAt}>
                       {formatDateTime(created.startsAt)}
+                      {created.coachId ? (
+                        <small>{coachLabel(monthlyCoachOptions.find((coach) => coach.id === created.coachId) || { id: "", display_name: null, english_name: null })}</small>
+                      ) : null}
                       {created.item?.warnings?.some(
                         (warning) => warning.code === "legacy_schedule_reference_conflict",
                       ) ? (

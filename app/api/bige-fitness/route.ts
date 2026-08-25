@@ -84,6 +84,7 @@ type AuthContext = Awaited<ReturnType<typeof requireProfile>> extends infer Resu
 const ACTIVE_BOOKING_STATUSES = ["pending", "confirmed", "booked", "checked_in"];
 
 type ScheduleBatchPreviewConflict = {
+  coachId?: string;
   startsAt: string;
   endsAt: string;
   kind:
@@ -102,6 +103,18 @@ type ScheduleBatchPreviewConflict = {
   conflictCourseType?: string | null;
   conflictServiceName?: string | null;
   conflictNote?: string | null;
+};
+
+type ScheduleBatchRequestedSlot = {
+  coachId: string;
+  startsAt: string;
+  endsAt: string;
+};
+
+type ScheduleBatchPreviewWarning = ScheduleBatchRequestedSlot & {
+  kind: "coach_off";
+  message: string;
+  coachName: string | null;
 };
 // Preserve the legacy auth-linked placeholder row, but never surface it as a
 // selectable member in fitness operations or contract search.
@@ -370,6 +383,237 @@ async function ensureScheduleDateOpen(tenantId: string, timestamp: string) {
   };
 }
 
+function normalizeScheduleBatchSlot(
+  operationKind: "pt" | "trial",
+  coachId: string,
+  startsAt: string,
+): ScheduleBatchRequestedSlot {
+  return {
+    coachId,
+    startsAt,
+    endsAt: normalizeBigeScheduleEndAt(
+      operationKind,
+      startsAt,
+      new Date(
+        new Date(startsAt).getTime() + (operationKind === "trial" ? 120 : 60) * 60_000,
+      ).toISOString(),
+    ),
+  };
+}
+
+async function previewScheduleBatch(params: {
+  tenantId: string;
+  memberId: string;
+  slots: ScheduleBatchRequestedSlot[];
+}) {
+  const slots = [...params.slots].sort((first, second) =>
+    first.startsAt === second.startsAt
+      ? first.coachId.localeCompare(second.coachId)
+      : first.startsAt.localeCompare(second.startsAt),
+  );
+  const rangeStart = slots[0]?.startsAt;
+  const rangeEnd = slots.reduce(
+    (latest, slot) => (slot.endsAt > latest ? slot.endsAt : latest),
+    slots[0]?.endsAt || "",
+  );
+  if (!rangeStart || !rangeEnd) throw new Error("請至少選擇一個排課日期");
+
+  const firstDate = taipeiDateTimeParts(rangeStart).date;
+  const lastDate = slots.reduce((latest, slot) => {
+    const slotDate = taipeiDateTimeParts(slot.startsAt).date;
+    return slotDate > latest ? slotDate : latest;
+  }, firstDate);
+  const noteRangeStart = `${firstDate}T00:00:00+08:00`;
+  const noteRangeEnd = `${addDays(lastDate, 1)}T00:00:00+08:00`;
+  const requestedCoachIds = [...new Set(slots.map((slot) => slot.coachId))];
+  const admin = createSupabaseAdminClient();
+  const openDayPromises = new Map<string, ReturnType<typeof ensureScheduleDateOpen>>();
+  for (const slot of slots) {
+    const day = taipeiDateTimeParts(slot.startsAt).date;
+    if (!openDayPromises.has(day)) {
+      openDayPromises.set(day, ensureScheduleDateOpen(params.tenantId, slot.startsAt));
+    }
+  }
+
+  const [bookingsResult, notesResult, openDayEntries] = await Promise.all([
+    admin
+      .from("bookings")
+      .select(
+        "id, member_id, coach_id, service_name, starts_at, ends_at, status, course_type, is_bige_schedule, operation_idempotency_key",
+      )
+      .eq("tenant_id", params.tenantId)
+      .in("status", ACTIVE_BOOKING_STATUSES)
+      .lt("starts_at", rangeEnd)
+      .gt("ends_at", rangeStart)
+      .limit(5000),
+    admin
+      .from("bige_schedule_notes")
+      .select("id, coach_id, starts_at, ends_at, content, source")
+      .eq("tenant_id", params.tenantId)
+      .in("coach_id", requestedCoachIds)
+      .gte("starts_at", noteRangeStart)
+      .lt("starts_at", noteRangeEnd)
+      .limit(5000),
+    Promise.all(
+      [...openDayPromises.entries()].map(async ([day, promise]) => [day, await promise] as const),
+    ),
+  ]);
+  const queryError = bookingsResult.error || notesResult.error;
+  if (queryError) throw new Error(queryError.message);
+
+  const bookings = (bookingsResult.data || []) as BigeScheduleBatchBookingCandidate[];
+  const notes = (notesResult.data || []) as BigeScheduleBatchNoteCandidate[];
+  const memberIds = Array.from(
+    new Set(
+      bookings
+        .map((booking) => booking.member_id)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const coachIds = Array.from(
+    new Set([
+      ...requestedCoachIds,
+      ...bookings
+        .map((booking) => booking.coach_id)
+        .filter((value): value is string => Boolean(value)),
+    ]),
+  );
+  const [membersResult, coachesResult] = await Promise.all([
+    memberIds.length
+      ? admin.from("members").select("id, full_name").eq("tenant_id", params.tenantId).in("id", memberIds)
+      : Promise.resolve({ data: [], error: null }),
+    coachIds.length
+      ? admin
+          .from("profiles")
+          .select("id, display_name, english_name")
+          .eq("tenant_id", params.tenantId)
+          .in("id", coachIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const lookupError = membersResult.error || coachesResult.error;
+  if (lookupError) throw new Error(lookupError.message);
+
+  const memberNames = new Map(
+    (membersResult.data || []).map((member) => [member.id, member.full_name]),
+  );
+  const coachNames = new Map(
+    (coachesResult.data || []).map((coach) => [
+      coach.id,
+      coach.english_name || coach.display_name || "未命名教練",
+    ]),
+  );
+  const openDays = new Map(openDayEntries);
+  const statusesByDate = new Map<
+    string,
+    ReturnType<typeof collectCoachDayStatuses>
+  >();
+  for (const day of new Set(slots.map((slot) => taipeiDateTimeParts(slot.startsAt).date))) {
+    statusesByDate.set(
+      day,
+      collectCoachDayStatuses(
+        notes.filter((note) => taipeiDateTimeParts(note.starts_at).date === day),
+        new Set(requestedCoachIds),
+      ),
+    );
+  }
+
+  const conflicts: ScheduleBatchPreviewConflict[] = [];
+  const available: ScheduleBatchRequestedSlot[] = [];
+  const warnings: ScheduleBatchPreviewWarning[] = [];
+  for (const slot of slots) {
+    const day = taipeiDateTimeParts(slot.startsAt).date;
+    const openDay = openDays.get(day);
+    if (!isValidScheduleWindow(slot.startsAt, slot.endsAt)) {
+      conflicts.push({
+        ...slot,
+        kind: "outside_hours",
+        message: normalizeErrorMessage("outside_business_hours"),
+      });
+      continue;
+    }
+    if (!openDay?.open) {
+      conflicts.push({
+        ...slot,
+        kind: "closed_day",
+        message: openDay?.setting?.closure_label || "該日期已設定為不營業日",
+      });
+      continue;
+    }
+
+    const conflict = findBigeScheduleBatchConflict({
+      memberId: params.memberId,
+      coachId: slot.coachId,
+      startsAt: slot.startsAt,
+      endsAt: slot.endsAt,
+      bookings,
+      notes,
+    });
+    if (!conflict) {
+      available.push(slot);
+      const dayStatus = statusesByDate
+        .get(day)
+        ?.find((status) => status.coach_id === slot.coachId);
+      if (dayStatus?.status === "off") {
+        const coachName = coachNames.get(slot.coachId) || null;
+        warnings.push({
+          ...slot,
+          kind: "coach_off",
+          coachName,
+          message: `${coachName || "此教練"}當天排休，仍可安排，但請先確認教練已同意上課`,
+        });
+      }
+      continue;
+    }
+
+    if (conflict.kind === "coach_note") {
+      conflicts.push({
+        ...slot,
+        kind: conflict.kind,
+        message: `該教練同時段已有「${conflict.item.content}」排課資料`,
+        conflictStartsAt: conflict.item.starts_at,
+        conflictEndsAt: conflict.item.ends_at,
+        conflictCoachId: conflict.item.coach_id,
+        conflictCoachName: coachNames.get(conflict.item.coach_id) || null,
+        conflictNote: conflict.item.content,
+      });
+      continue;
+    }
+
+    const conflictMemberName = conflict.item.member_id
+      ? memberNames.get(conflict.item.member_id) || null
+      : null;
+    const conflictCoachName = conflict.item.coach_id
+      ? coachNames.get(conflict.item.coach_id) || null
+      : null;
+    conflicts.push({
+      ...slot,
+      kind: conflict.kind,
+      message:
+        conflict.kind === "coach_booking"
+          ? `該教練同時段已安排${conflictMemberName ? `「${conflictMemberName}」` : "其他學員"}`
+          : `該學員同時段已有${conflictCoachName ? `「${conflictCoachName}」教練的` : "其他"}課程`,
+      conflictStartsAt: conflict.item.starts_at,
+      conflictEndsAt: conflict.item.ends_at,
+      conflictMemberId: conflict.item.member_id,
+      conflictMemberName,
+      conflictCoachId: conflict.item.coach_id,
+      conflictCoachName,
+      conflictCourseType: conflict.item.course_type || null,
+      conflictServiceName: conflict.item.service_name || null,
+    });
+  }
+
+  return {
+    requestedCount: slots.length,
+    available,
+    conflicts,
+    warnings,
+    coachDayStatuses: [...statusesByDate.entries()].flatMap(([businessDate, statuses]) =>
+      statuses.map((status) => ({ businessDate, ...status })),
+    ),
+  };
+}
+
 async function loadScheduleEditConflict(params: {
   supabase: AuthContext["supabase"];
   tenantId: string;
@@ -603,6 +847,157 @@ async function readPaidScheduleBookingState(
       linkedPaymentResult.error?.message ||
       legacyConversionPaymentResult.error?.message ||
       null,
+  };
+}
+
+type ScheduleBatchDeleteBooking = {
+  id: string;
+  tenant_id: string;
+  branch_id: string | null;
+  member_id: string | null;
+  coach_id: string | null;
+  operation_kind: string | null;
+  course_type: string | null;
+  starts_at: string;
+  ends_at: string;
+  status: string;
+  converted_contract_id: string | null;
+  operation_idempotency_key: string | null;
+};
+
+async function inspectScheduleDeleteBatch(params: {
+  tenantId: string;
+  memberId: string;
+  bookingIds: string[];
+  canManagePaid: boolean;
+  canDeleteAnytime: boolean;
+  now?: number;
+}) {
+  const admin = createSupabaseAdminClient();
+  const bookingResult = await admin
+    .from("bookings")
+    .select(
+      "id, tenant_id, branch_id, member_id, coach_id, operation_kind, course_type, starts_at, ends_at, status, converted_contract_id, operation_idempotency_key",
+    )
+    .eq("tenant_id", params.tenantId)
+    .in("id", params.bookingIds);
+  if (bookingResult.error) throw new Error(bookingResult.error.message);
+  const bookings = (bookingResult.data || []) as ScheduleBatchDeleteBooking[];
+  const convertedContractIds = [
+    ...new Set(
+      bookings
+        .map((booking) => booking.converted_contract_id)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
+  const [sourcePaymentsResult, convertedPaymentsResult] = await Promise.all([
+    admin
+      .from("bige_contract_payments")
+      .select("source_booking_id")
+      .eq("tenant_id", params.tenantId)
+      .in("source_booking_id", params.bookingIds)
+      .eq("status", "recorded"),
+    convertedContractIds.length
+      ? admin
+          .from("bige_contract_payments")
+          .select("contract_id")
+          .eq("tenant_id", params.tenantId)
+          .in("contract_id", convertedContractIds)
+          .is("source_booking_id", null)
+          .eq("status", "recorded")
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (sourcePaymentsResult.error || convertedPaymentsResult.error) {
+    throw new Error(
+      sourcePaymentsResult.error?.message ||
+        convertedPaymentsResult.error?.message ||
+        "讀取課程付款狀態失敗",
+    );
+  }
+
+  const paidBookingIds = new Set(
+    (sourcePaymentsResult.data || []).map((payment) => String(payment.source_booking_id)),
+  );
+  const paidContractIds = new Set(
+    (convertedPaymentsResult.data || []).map((payment) => String(payment.contract_id)),
+  );
+  const byId = new Map(bookings.map((booking) => [booking.id, booking]));
+  const now = params.now ?? Date.now();
+  const deletable: Array<ScheduleBatchDeleteBooking & { hasRecordedPayment: boolean }> = [];
+  const blocked: Array<{
+    id: string;
+    startsAt: string | null;
+    reason: string;
+    code: string;
+  }> = [];
+
+  for (const bookingId of params.bookingIds) {
+    const booking = byId.get(bookingId);
+    if (!booking || booking.member_id !== params.memberId) {
+      blocked.push({
+        id: bookingId,
+        startsAt: booking?.starts_at || null,
+        code: "booking_not_found",
+        reason: "預約不存在或不屬於目前會員",
+      });
+      continue;
+    }
+    if (!isScheduleBookingDraggable(booking)) {
+      blocked.push({
+        id: booking.id,
+        startsAt: booking.starts_at,
+        code: "booking_locked",
+        reason: "只有尚未執行的正式預約可以批次刪除",
+      });
+      continue;
+    }
+    if (new Date(booking.starts_at).getTime() <= now) {
+      blocked.push({
+        id: booking.id,
+        startsAt: booking.starts_at,
+        code: "booking_started",
+        reason: "月排多筆刪除只處理尚未開始的預約",
+      });
+      continue;
+    }
+    const hasRecordedPayment =
+      paidBookingIds.has(booking.id) ||
+      Boolean(
+        booking.converted_contract_id && paidContractIds.has(booking.converted_contract_id),
+      );
+    if (hasRecordedPayment && !params.canManagePaid) {
+      blocked.push({
+        id: booking.id,
+        startsAt: booking.starts_at,
+        code: "paid_booking_manager_required",
+        reason: "此課表已有付款，只有教練經理、副理或平台管理員能刪除",
+      });
+      continue;
+    }
+    if (
+      !params.canDeleteAnytime &&
+      !getBigeCourseStatusWindow({
+        startsAt: booking.starts_at,
+        endsAt: booking.ends_at,
+        now,
+      }).allowed
+    ) {
+      blocked.push({
+        id: booking.id,
+        startsAt: booking.starts_at,
+        code: "outside_operation_window",
+        reason: "此帳號只能在預約前 30 分鐘至結束後 30 分鐘內刪除",
+      });
+      continue;
+    }
+    deletable.push({ ...booking, hasRecordedPayment });
+  }
+
+  return {
+    requestedCount: params.bookingIds.length,
+    deletable,
+    blocked,
+    allOrNone: true as const,
   };
 }
 
@@ -1233,7 +1628,7 @@ export async function GET(request: Request) {
       admin
         .from("bookings")
         .select(
-          "id, coach_id, service_name, starts_at, ends_at, status, status_reason, operation_kind, course_type, trial_stage, operation_result, note",
+          "id, coach_id, service_name, starts_at, ends_at, status, status_reason, operation_kind, course_type, trial_stage, operation_result, note, operation_idempotency_key",
         )
         .eq("tenant_id", tenantId)
         .eq("member_id", memberScheduleMemberId)
@@ -2303,6 +2698,106 @@ export async function POST(request: Request) {
     return apiSuccess({ item: result.data, lineNotification });
   }
 
+  if (input.action === "get_schedule_coach_options") {
+    if (!canManageBigeSchedule(auth.context)) {
+      return apiError(403, "FORBIDDEN", "您沒有批次安排課程的權限");
+    }
+    const admin = createSupabaseAdminClient();
+    let coachesQuery = admin
+      .from("profiles")
+      .select("id, branch_id, display_name, english_name, employee_number, department, position")
+      .eq("tenant_id", tenantId)
+      .or("role.in.(coach,therapist),department.eq.coaching")
+      .eq("is_active", true)
+      .order("english_name", { nullsFirst: false })
+      .order("display_name");
+    const targetBranchId = input.branchId || auth.context.branchId;
+    if (targetBranchId) {
+      coachesQuery = coachesQuery.or(`branch_id.eq.${targetBranchId},branch_id.is.null`);
+    }
+    const [coachesResult, coachOrderResult] = await Promise.all([
+      coachesQuery,
+      admin
+        .from("bige_schedule_coach_order")
+        .select("coach_id, sort_order")
+        .eq("tenant_id", tenantId)
+        .order("sort_order", { ascending: true }),
+    ]);
+    if (coachesResult.error || coachOrderResult.error) {
+      return apiError(
+        500,
+        "INTERNAL_ERROR",
+        coachesResult.error?.message || coachOrderResult.error?.message || "讀取教練名單失敗",
+      );
+    }
+    const coaches = applyStoredCoachOrder(
+      coachesResult.data || [],
+      coachOrderResult.data || [],
+    );
+    if (coaches.length === 0) return apiSuccess({ businessDate: taipeiDateTimeParts(input.startsAt).date, options: [] });
+
+    try {
+      const preview = await previewScheduleBatch({
+        tenantId,
+        memberId: input.memberId,
+        slots: coaches.map((coach) =>
+          normalizeScheduleBatchSlot(input.operationKind, coach.id, input.startsAt),
+        ),
+      });
+      const availableCoachIds = new Set(preview.available.map((slot) => slot.coachId));
+      const conflictByCoachId = new Map(
+        preview.conflicts.map((conflict) => [conflict.coachId || "", conflict]),
+      );
+      const businessDate = taipeiDateTimeParts(input.startsAt).date;
+      const statusByCoachId = new Map(
+        preview.coachDayStatuses
+          .filter((status) => status.businessDate === businessDate)
+          .map((status) => [status.coach_id, status]),
+      );
+      return apiSuccess({
+        businessDate,
+        options: coaches.map((coach) => ({
+          ...coach,
+          available: availableCoachIds.has(coach.id),
+          conflict: conflictByCoachId.get(coach.id) || null,
+          dayStatus: statusByCoachId.get(coach.id) || null,
+        })),
+      });
+    } catch (caught) {
+      return apiError(
+        500,
+        "INTERNAL_ERROR",
+        caught instanceof Error ? caught.message : "讀取可安排教練失敗",
+      );
+    }
+  }
+
+  if (input.action === "check_schedule_batch_assignments") {
+    if (!canManageBigeSchedule(auth.context)) {
+      return apiError(403, "FORBIDDEN", "您沒有批次安排課程的權限");
+    }
+    try {
+      const preview = await previewScheduleBatch({
+        tenantId,
+        memberId: input.memberId,
+        slots: input.assignments.map((assignment) =>
+          normalizeScheduleBatchSlot(
+            input.operationKind,
+            assignment.coachId,
+            assignment.startsAt,
+          ),
+        ),
+      });
+      return apiSuccess(preview);
+    } catch (caught) {
+      return apiError(
+        500,
+        "INTERNAL_ERROR",
+        caught instanceof Error ? caught.message : "檢查排課衝突失敗",
+      );
+    }
+  }
+
   if (input.action === "check_schedule_batch") {
     if (!canManageBigeSchedule(auth.context)) {
       return apiError(403, "FORBIDDEN", "您沒有批次安排課程的權限");
@@ -2325,6 +2820,10 @@ export async function POST(request: Request) {
     if (!rangeStart || !rangeEnd) {
       return apiError(400, "FORBIDDEN", "請至少選擇一個排課日期");
     }
+    const firstDate = taipeiDateTimeParts(rangeStart).date;
+    const lastDate = taipeiDateTimeParts(slots.at(-1)!.startsAt).date;
+    const noteRangeStart = `${firstDate}T00:00:00+08:00`;
+    const noteRangeEnd = `${addDays(lastDate, 1)}T00:00:00+08:00`;
 
     const admin = createSupabaseAdminClient();
     const [bookingsResult, notesResult, openDays] = await Promise.all([
@@ -2343,8 +2842,8 @@ export async function POST(request: Request) {
         .select("id, coach_id, starts_at, ends_at, content, source")
         .eq("tenant_id", tenantId)
         .eq("coach_id", input.coachId)
-        .lt("starts_at", rangeEnd)
-        .gt("ends_at", rangeStart)
+        .gte("starts_at", noteRangeStart)
+        .lt("starts_at", noteRangeEnd)
         .limit(2000),
       Promise.all(slots.map((slot) => ensureScheduleDateOpen(tenantId, slot.startsAt))),
     ]);
@@ -2390,6 +2889,15 @@ export async function POST(request: Request) {
     );
     const conflicts: ScheduleBatchPreviewConflict[] = [];
     const available: Array<{ startsAt: string; endsAt: string }> = [];
+    const statusesByDate = new Map(
+      [...new Set(slots.map((slot) => taipeiDateTimeParts(slot.startsAt).date))].map((day) => [
+        day,
+        collectCoachDayStatuses(
+          notes.filter((note) => taipeiDateTimeParts(note.starts_at).date === day),
+          new Set([input.coachId]),
+        ),
+      ]),
+    );
 
     for (const [index, slot] of slots.entries()) {
       if (!isValidScheduleWindow(slot.startsAt, slot.endsAt)) {
@@ -2460,10 +2968,27 @@ export async function POST(request: Request) {
       });
     }
 
+    const warnings: ScheduleBatchPreviewWarning[] = available.flatMap((slot) => {
+      const day = taipeiDateTimeParts(slot.startsAt).date;
+      const status = statusesByDate
+        .get(day)
+        ?.find((item) => item.coach_id === input.coachId);
+      if (status?.status !== "off") return [];
+      const coachName = coachNames.get(input.coachId) || null;
+      return [{
+        ...slot,
+        coachId: input.coachId,
+        kind: "coach_off" as const,
+        coachName,
+        message: `${coachName || "此教練"}當天排休，仍可安排，但請先確認教練已同意上課`,
+      }];
+    });
+
     return apiSuccess({
       requestedCount: slots.length,
       available,
       conflicts,
+      warnings,
     });
   }
 
@@ -2557,6 +3082,116 @@ export async function POST(request: Request) {
           operationKind: input.operationKind,
           eventKind: "created",
           dedupeKey: `batch:${input.idempotencyKey}`,
+          actorId: auth.context.userId,
+        })
+      : { ok: true as const, status: "no_created_bookings" };
+    return apiSuccess({ created, failures, lineNotification });
+  }
+
+  if (input.action === "create_schedule_batch_assignments") {
+    if (!canManageBigeSchedule(auth.context)) {
+      return apiError(403, "FORBIDDEN", "此帳號只有課表檢視權限");
+    }
+    if (input.operationKind === "pt") {
+      const bindingError = await requireFormalScheduleLineBinding(tenantId, input.memberId);
+      if (bindingError) return apiError(409, "FORBIDDEN", bindingError);
+    }
+
+    const assignments = [...input.assignments].sort((first, second) =>
+      first.startsAt.localeCompare(second.startsAt),
+    );
+    const requestedCoachIds = [...new Set(assignments.map((assignment) => assignment.coachId))];
+    const coachesResult = await createSupabaseAdminClient()
+      .from("profiles")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true)
+      .in("id", requestedCoachIds);
+    if (coachesResult.error) {
+      return apiError(500, "INTERNAL_ERROR", coachesResult.error.message);
+    }
+    if ((coachesResult.data || []).length !== requestedCoachIds.length) {
+      return apiError(409, "FORBIDDEN", "教練名單已更新，請重新選擇教練");
+    }
+
+    const created: Array<{ startsAt: string; coachId: string; item: unknown }> = [];
+    const failures: Array<{ startsAt: string; coachId: string; message: string }> = [];
+    for (const [index, assignment] of assignments.entries()) {
+      const endsAt = normalizeBigeScheduleEndAt(
+        input.operationKind,
+        assignment.startsAt,
+        new Date(
+          new Date(assignment.startsAt).getTime() +
+            (input.operationKind === "trial" ? 120 : 60) * 60_000,
+        ).toISOString(),
+      );
+      if (!isValidScheduleWindow(assignment.startsAt, endsAt)) {
+        failures.push({
+          ...assignment,
+          message: normalizeErrorMessage("outside_business_hours"),
+        });
+        continue;
+      }
+      const openDay = await ensureScheduleDateOpen(tenantId, assignment.startsAt);
+      if (!openDay.open) {
+        failures.push({
+          ...assignment,
+          message: openDay.setting?.closure_label || "當日館休，不能新增排課",
+        });
+        continue;
+      }
+
+      const result = await auth.supabase.rpc("bige_create_schedule_booking_v2", {
+        p_tenant_id: tenantId,
+        p_branch_id: input.branchId || auth.context.branchId,
+        p_member_id: input.memberId,
+        p_trial_booking_id: null,
+        p_coach_id: assignment.coachId,
+        p_operation_kind: input.operationKind,
+        p_course_type: input.courseType,
+        p_starts_at: assignment.startsAt,
+        p_ends_at: endsAt,
+        p_note: input.note || null,
+        p_group_id: null,
+        p_idempotency_key: `${input.idempotencyKey}:${index}:${assignment.startsAt}:${assignment.coachId}`,
+      });
+      if (result.error) {
+        failures.push({
+          ...assignment,
+          message: normalizeErrorMessage(result.error.message || "建立排課失敗"),
+        });
+        continue;
+      }
+      created.push({ ...assignment, item: result.data });
+    }
+
+    await createSupabaseAdminClient().from("audit_logs").insert({
+      tenant_id: tenantId,
+      actor_id: auth.context.userId,
+      action: "bige_schedule_batch_created",
+      target_type: "member",
+      target_id: input.memberId,
+      reason: null,
+      payload: {
+        assignmentMode: "per_date",
+        assignments,
+        operationKind: input.operationKind,
+        courseType: input.courseType,
+        requestedCount: assignments.length,
+        createdCount: created.length,
+        failureCount: failures.length,
+        failures,
+      },
+    });
+
+    const lineNotification = created.length
+      ? await notifyFormalScheduleMutation({
+          tenantId,
+          branchId: input.branchId || auth.context.branchId,
+          memberId: input.memberId,
+          operationKind: input.operationKind,
+          eventKind: "created",
+          dedupeKey: `batch-assignments:${input.idempotencyKey}`,
           actorId: auth.context.userId,
         })
       : { ok: true as const, status: "no_created_bookings" };
@@ -3940,6 +4575,86 @@ export async function POST(request: Request) {
     });
     if (result.error) return handleDatabaseError(result.error, "復原未出席狀態失敗");
     return apiSuccess({ item: result.data });
+  }
+
+  if (input.action === "check_schedule_delete_batch") {
+    if (!canManageBigeSchedule(auth.context)) {
+      return apiError(403, "FORBIDDEN", "此帳號只有課表檢視權限");
+    }
+    try {
+      const preview = await inspectScheduleDeleteBatch({
+        tenantId,
+        memberId: input.memberId,
+        bookingIds: input.bookingIds,
+        canManagePaid: canManageBigePaidScheduleCells(operationContext),
+        canDeleteAnytime: canCancelBigeCourseAnytime(operationContext),
+      });
+      return apiSuccess(preview);
+    } catch (caught) {
+      return apiError(
+        500,
+        "INTERNAL_ERROR",
+        caught instanceof Error ? caught.message : "檢查多筆刪除失敗",
+      );
+    }
+  }
+
+  if (input.action === "delete_schedule_bookings_batch") {
+    if (!canManageBigeSchedule(auth.context)) {
+      return apiError(403, "FORBIDDEN", "此帳號只有課表檢視權限");
+    }
+    let preview: Awaited<ReturnType<typeof inspectScheduleDeleteBatch>>;
+    try {
+      preview = await inspectScheduleDeleteBatch({
+        tenantId,
+        memberId: input.memberId,
+        bookingIds: input.bookingIds,
+        canManagePaid: canManageBigePaidScheduleCells(operationContext),
+        canDeleteAnytime: canCancelBigeCourseAnytime(operationContext),
+      });
+    } catch (caught) {
+      return apiError(
+        500,
+        "INTERNAL_ERROR",
+        caught instanceof Error ? caught.message : "檢查多筆刪除失敗",
+      );
+    }
+    if (preview.blocked.length > 0 || preview.deletable.length !== input.bookingIds.length) {
+      return apiError(
+        409,
+        "FORBIDDEN",
+        preview.blocked[0]?.reason || "部分預約已變更，未刪除任何資料",
+      );
+    }
+
+    const result = await createSupabaseAdminClient().rpc(
+      "bige_delete_schedule_bookings_batch_v1",
+      {
+        p_tenant_id: tenantId,
+        p_member_id: input.memberId,
+        p_booking_ids: input.bookingIds,
+        p_actor_id: auth.context.userId,
+        p_allow_paid: canManageBigePaidScheduleCells(operationContext),
+        p_idempotency_key: input.idempotencyKey,
+      },
+    );
+    if (result.error) return handleDatabaseError(result.error, "多筆刪除預約失敗");
+
+    const formalBooking = preview.deletable.find(
+      (booking) => booking.operation_kind === "pt",
+    );
+    const lineNotification = formalBooking
+      ? await notifyFormalScheduleMutation({
+          tenantId,
+          branchId: formalBooking.branch_id || auth.context.branchId,
+          memberId: input.memberId,
+          operationKind: "pt",
+          eventKind: "cancelled",
+          dedupeKey: `batch-delete:${input.idempotencyKey}`,
+          actorId: auth.context.userId,
+        })
+      : { ok: true as const, status: "not_applicable" };
+    return apiSuccess({ item: result.data, preview, lineNotification });
   }
 
   if (input.action === "delete_schedule_booking") {

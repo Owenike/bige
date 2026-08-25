@@ -1,3 +1,5 @@
+import { isCoachDayStatusNote } from "./bige-coach-day-status";
+
 export const BIGE_ACTIVE_BOOKING_STATUSES = [
   "pending",
   "confirmed",
@@ -72,6 +74,7 @@ export function findBigeScheduleBatchConflict(params: {
   const coachNote = params.notes.find(
     (note) =>
       note.coach_id === params.coachId &&
+      !isCoachDayStatusNote(note.content) &&
       rangesOverlap(params.startsAt, params.endsAt, note.starts_at, note.ends_at),
   );
   if (coachNote) return { kind: "coach_note", item: coachNote };

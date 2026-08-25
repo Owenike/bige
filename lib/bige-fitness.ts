@@ -480,6 +480,54 @@ export const checkScheduleBatchSchema = z.object({
   startsAt: z.array(z.string().datetime({ offset: true })).min(1).max(62),
 });
 
+const scheduleCoachAssignmentSchema = z.object({
+  coachId: z.string().uuid(),
+  startsAt: z.string().datetime({ offset: true }),
+});
+
+export const getScheduleCoachOptionsSchema = z.object({
+  action: z.literal("get_schedule_coach_options"),
+  branchId: z.string().uuid().nullable().optional(),
+  memberId: z.string().uuid(),
+  operationKind: z.enum(BIGE_BATCH_OPERATION_KINDS).default("pt"),
+  courseType: z.enum(BIGE_COURSE_TYPES),
+  startsAt: z.string().datetime({ offset: true }),
+});
+
+export const checkScheduleBatchAssignmentsSchema = z.object({
+  action: z.literal("check_schedule_batch_assignments"),
+  branchId: z.string().uuid().nullable().optional(),
+  memberId: z.string().uuid(),
+  operationKind: z.enum(BIGE_BATCH_OPERATION_KINDS).default("pt"),
+  courseType: z.enum(BIGE_COURSE_TYPES),
+  assignments: z
+    .array(scheduleCoachAssignmentSchema)
+    .min(1)
+    .max(62)
+    .refine(
+      (assignments) => new Set(assignments.map((assignment) => assignment.startsAt)).size === assignments.length,
+      { message: "每個上課時間只能指定一位教練" },
+    ),
+});
+
+export const createScheduleBatchAssignmentsSchema = z.object({
+  action: z.literal("create_schedule_batch_assignments"),
+  branchId: z.string().uuid().nullable().optional(),
+  memberId: z.string().uuid(),
+  operationKind: z.enum(BIGE_BATCH_OPERATION_KINDS).default("pt"),
+  courseType: z.enum(BIGE_COURSE_TYPES),
+  assignments: z
+    .array(scheduleCoachAssignmentSchema)
+    .min(1)
+    .max(62)
+    .refine(
+      (assignments) => new Set(assignments.map((assignment) => assignment.startsAt)).size === assignments.length,
+      { message: "每個上課時間只能指定一位教練" },
+    ),
+  note: z.string().trim().max(500).nullable().optional(),
+  idempotencyKey: z.string().trim().min(8).max(120),
+});
+
 export const createScheduleNoteSchema = z.object({
   action: z.literal("create_note"),
   branchId: z.string().uuid().nullable().optional(),
@@ -516,6 +564,31 @@ export const deleteScheduleNoteSchema = z.object({
 export const deleteScheduleBookingSchema = z.object({
   action: z.literal("delete_schedule_booking"),
   bookingId: z.string().uuid(),
+});
+
+export const checkScheduleDeleteBatchSchema = z.object({
+  action: z.literal("check_schedule_delete_batch"),
+  memberId: z.string().uuid(),
+  bookingIds: z
+    .array(z.string().uuid())
+    .min(1)
+    .max(62)
+    .refine((bookingIds) => new Set(bookingIds).size === bookingIds.length, {
+      message: "刪除清單不能包含重複預約",
+    }),
+});
+
+export const deleteScheduleBookingsBatchSchema = z.object({
+  action: z.literal("delete_schedule_bookings_batch"),
+  memberId: z.string().uuid(),
+  bookingIds: z
+    .array(z.string().uuid())
+    .min(1)
+    .max(62)
+    .refine((bookingIds) => new Set(bookingIds).size === bookingIds.length, {
+      message: "刪除清單不能包含重複預約",
+    }),
+  idempotencyKey: z.string().trim().min(8).max(120),
 });
 
 export const restoreScheduleNoteSchema = z.object({
@@ -981,11 +1054,16 @@ export const bigeFitnessActionSchema = z.discriminatedUnion("action", [
   createScheduleSchema,
   checkScheduleBatchSchema,
   createScheduleBatchSchema,
+  getScheduleCoachOptionsSchema,
+  checkScheduleBatchAssignmentsSchema,
+  createScheduleBatchAssignmentsSchema,
   createScheduleNoteSchema,
   editScheduleBookingSchema,
   editScheduleNoteSchema,
   deleteScheduleNoteSchema,
   deleteScheduleBookingSchema,
+  checkScheduleDeleteBatchSchema,
+  deleteScheduleBookingsBatchSchema,
   restoreScheduleNoteSchema,
   moveScheduleBookingSchema,
   undoScheduleBookingMoveSchema,
