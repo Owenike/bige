@@ -105,10 +105,17 @@ export default function StaffSchedulePrint({ month }: { month: string }) {
                 </th>
                 {dates.map((date) => {
                   const entry = entryMap.get(`${employee.id}:${date}`);
+                  const cellClass = entry?.entryKind === "off"
+                    ? styles.off
+                    : ["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"].includes(entry?.shiftCode || "")
+                      ? styles.early
+                      : entry?.shiftCode === "COACH_PARTTIME_WEEKDAY"
+                        ? styles.late
+                        : "";
                   return (
                     <td
                       key={date}
-                      className={entry?.entryKind === "off" ? styles.off : ""}
+                      className={cellClass}
                     >
                       {entry?.entryKind === "off" ? (
                         staffScheduleEntryOffLabel(entry)

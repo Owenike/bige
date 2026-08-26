@@ -206,8 +206,12 @@ test("schedule display uses only the agreed plain-language shift and off labels"
 
 test("manager cleanup preserves drag-and-drop and both holiday decisions", () => {
   const source = readFileSync(resolve(process.cwd(), "components/staff-schedule-manager.tsx"), "utf8");
+  const selfSource = readFileSync(resolve(process.cwd(), "components/staff-schedule-self-service.tsx"), "utf8");
   const apiSource = readFileSync(resolve(process.cwd(), "app/api/staff-scheduling/route.ts"), "utf8");
+  const exportSource = readFileSync(resolve(process.cwd(), "app/api/staff-scheduling/export/route.ts"), "utf8");
   const styles = readFileSync(resolve(process.cwd(), "app/manager/staff-scheduling/page.module.css"), "utf8");
+  const printStyles = readFileSync(resolve(process.cwd(), "app/manager/staff-scheduling/print/page.module.css"), "utf8");
+  const selfStyles = readFileSync(resolve(process.cwd(), "app/staff/schedule/page.module.css"), "utf8");
   const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260826223530_add_staff_leave_balances_and_una_shift.sql"), "utf8");
   const unaDraftMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260826224221_align_una_existing_draft_shift.sql"), "utf8");
   assert.match(source, /holidayRuleGroups\.map/);
@@ -224,11 +228,27 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(styles, /\.nameCell small\{margin-top:4px;color:#65758a;font-size:13px\}/);
   assert.match(source, /員工自選休假日期/);
   assert.match(source, /此草稿仍含舊規則補排的例假或休假/);
-  assert.match(source, /shiftDragStart\(event, "DEFAULT"\)[\s\S]*shiftDragStart\(event, "COACH_EARLY"\)[\s\S]*shiftDragStart\(event, "COACH_MIDDLE"\)[\s\S]*shiftDragStart\(event, "COACH_PARTTIME_WEEKDAY"\)/);
+  assert.doesNotMatch(source, />恢復固定班<\/b>/);
+  assert.match(source, /shiftDragStart\(event, "COACH_EARLY"\)[\s\S]*shiftDragStart\(event, "COACH_MIDDLE"\)[\s\S]*shiftDragStart\(event, "COACH_PARTTIME_WEEKDAY"\)/);
+  assert.match(source, /setData\(\(current\) => applyShiftPreview\(current, employeeId, workDate, shiftCode\)\)/);
+  assert.match(source, /班別已套用，正在儲存並檢查規則/);
+  assert.match(apiSource, /compactMutation = \{/);
+  assert.match(apiSource, /if \(compactMutation\) \{[\s\S]*return apiSuccess\(compactMutation\)/);
   assert.match(source, /staffScheduleGridWorkLabel\(entry, employee\.employeeNumber, date\)/);
   assert.doesNotMatch(source, /<small>\{entry\.startsAt\}–\{entry\.endsAt\}<\/small>/);
   assert.match(source, /特休 \{formatDays\(employee\.employment\?\.annual_leave_balance_days\)\}/);
   assert.match(source, /積假 \{formatDays\(employee\.employment\?\.accrued_leave_balance_days\)\}/);
+  assert.match(styles, /\.scheduleTable \.offCell\{background:#fee2e2\}/);
+  assert.match(styles, /\.scheduleTable \.earlyShiftCell\{background:#ffedd5\}/);
+  assert.match(styles, /\.scheduleTable \.lateShiftCell\{background:#dbeafe\}/);
+  assert.match(styles, /\.nameSummary\{display:grid;grid-template-columns:minmax\(0,1fr\) auto/);
+  assert.match(printStyles, /\.off \{\s*background: #fee2e2;/);
+  assert.match(printStyles, /\.early \{\s*background: #ffedd5;/);
+  assert.match(printStyles, /\.late \{\s*background: #dbeafe;/);
+  assert.match(exportSource, /fgColor: \{ argb: "FFFEE2E2" \}/);
+  assert.match(selfSource, /styles\.earlyEntry/);
+  assert.match(selfSource, /styles\.lateEntry/);
+  assert.match(selfStyles, /\.scheduleList \.offEntry\{background:#fee2e2/);
   assert.match(migration, /annual_leave_balance_days numeric\(5,1\)/);
   assert.match(migration, /accrued_leave_balance_days numeric\(5,1\)/);
   assert.match(migration, /profile\.employee_number = 'E000012'/);

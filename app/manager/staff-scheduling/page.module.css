@@ -69,10 +69,11 @@
 }
 
 .settingFields input{min-height:42px;border:1px solid #cbd6e5;border-radius:12px;background:#fff;padding:8px 11px;color:#172235;font:inherit}
-.scheduleTable .nameCell{width:238px;min-width:238px}
-.nameSummary{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.nameSummary>span:first-child{min-width:0}
-.leaveBalances{display:grid;gap:4px;flex:0 0 auto;text-align:right}
+.scheduleTable .nameCell{width:178px;min-width:178px}
+.nameSummary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:8px;row-gap:5px}
+.nameSummary>strong{min-width:0}
+.nameSummary>small{margin:0;text-align:right}
+.leaveBalances{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left}
 .leaveBalances i{border-radius:999px;background:#eaf2ff;color:#285b99;padding:3px 7px;font-size:11px;font-style:normal;font-weight:900;white-space:nowrap}
 .preferenceSummary{display:grid;grid-template-columns:auto 1fr;align-items:start;gap:12px;margin:0 0 14px;padding:12px;border:1px solid #d7e0ec;border-radius:15px;background:#f8fafc}
 .preferenceSummary>strong{padding-top:5px;color:#5f7086;font-size:12px;white-space:nowrap}
@@ -85,8 +86,16 @@
 .shiftPalette>button span{grid-row:1/3;width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:#e7f0ff;color:#1d62c9;font-weight:900}
 .shiftPalette>button b{font-size:13px}
 .shiftPalette>button small{color:#738297;font-size:11px}
+.scheduleTable .offCell{background:#fee2e2}
+.scheduleTable .offCell strong{color:#991b1b}
+.scheduleTable .earlyShiftCell{background:#ffedd5}
+.scheduleTable .earlyShiftCell span{color:#9a3412}
+.scheduleTable .lateShiftCell{background:#dbeafe}
+.scheduleTable .lateShiftCell span{color:#1e40af}
+.scheduleTable tbody tr:hover td.earlyShiftCell{background:#fed7aa}
+.scheduleTable tbody tr:hover td.lateShiftCell{background:#bfdbfe}
 
 @media(max-width:620px){
-  .scheduleTable .nameCell{width:218px;min-width:218px}
+  .scheduleTable .nameCell{width:170px;min-width:170px}
   .preferenceSummary{grid-template-columns:1fr}
 }

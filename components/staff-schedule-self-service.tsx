@@ -28,6 +28,7 @@ type SelfState = {
     employeeId: string;
     workDate: string;
     entryKind: "work" | "off";
+    shiftCode: string | null;
     shiftLabel: string | null;
     startsAt: string | null;
     endsAt: string | null;
@@ -293,12 +294,19 @@ export default function StaffScheduleSelfService() {
           </section>
 
           <section className={styles.scheduleList}>
-            {sortedEntries.map((entry) => (
-              <article key={entry.id} className={entry.entryKind === "off" ? styles.offEntry : styles.workEntry}>
+            {sortedEntries.map((entry) => {
+              const entryClass = entry.entryKind === "off"
+                ? styles.offEntry
+                : ["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"].includes(entry.shiftCode || "")
+                  ? styles.earlyEntry
+                  : entry.shiftCode === "COACH_PARTTIME_WEEKDAY"
+                    ? styles.lateEntry
+                    : styles.workEntry;
+              return <article key={entry.id} className={entryClass}>
                 <div><strong>{Number(entry.workDate.slice(-2))}</strong><span>{formatDate(entry.workDate).split("週").at(-1)}</span></div>
                 <div>{entry.entryKind === "work" ? <><h3>{staffScheduleShiftLabel(entry)}</h3><p>{entry.startsAt}–{entry.endsAt}{entry.employeeVisibleNote ? ` · ${entry.employeeVisibleNote}` : ""}</p></> : <><h3>{staffScheduleEntryOffLabel(entry)}</h3><p>{entry.employeeVisibleNote || "本日不上班"}</p></>}</div>
-              </article>
-            ))}
+              </article>;
+            })}
           </section>
 
           {data.holidayAdjustments.length > 0 ? (

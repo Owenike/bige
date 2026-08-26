@@ -62,7 +62,16 @@
   background: #f7f9fc;
 }
 .off {
-  background: #ffe49a;
+  background: #fee2e2;
+  color: #991b1b;
+}
+.early {
+  background: #ffedd5;
+  color: #9a3412;
+}
+.late {
+  background: #dbeafe;
+  color: #1e40af;
 }
 .page small {
   display: block;

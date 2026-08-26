@@ -233,8 +233,12 @@ export async function GET(request: Request) {
           cell.fill = {
             type: "pattern",
             pattern: "solid",
-            fgColor: { argb: "FFFFE49A" },
+            fgColor: { argb: "FFFEE2E2" },
           };
+        else if (["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"].includes(String(entry?.shift_code || "")))
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFEDD5" } };
+        else if (entry?.shift_code === "COACH_PARTTIME_WEEKDAY")
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDBEAFE" } };
       });
     }
     sheet.getColumn(1).width = 23;

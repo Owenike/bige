@@ -612,12 +612,14 @@ export async function POST(request: Request) {
   if (!parsed.success) return apiError(400, "FORBIDDEN", "操作內容格式錯誤");
 
   const body = parsed.data;
+  const requestStartedAt = Date.now();
   const admin = createSupabaseAdminClient();
   try {
     const profile = await getProfile(admin, auth.context.userId);
     const tenantId = profile.tenant_id;
     if (!tenantId) throw new Error("此帳號尚未設定館別");
     const monthStart = monthStartFromInput(typeof body.monthStart === "string" ? body.monthStart : null);
+    let compactMutation: Record<string, unknown> | null = null;
 
     if (body.action === "initialize_period") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有開放排休月份的權限" });
@@ -1026,14 +1028,17 @@ export async function POST(request: Request) {
       const employeeId = z.string().uuid().parse(body.employeeId);
       const workDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(body.workDate);
       const shiftChoice = z.enum(["COACH_EARLY", "COACH_MIDDLE", "COACH_PARTTIME_WEEKDAY", "DEFAULT"]).parse(body.shiftCode);
-      let version = await getLatestVersion(admin, period.id);
-      if (!version) throw new Error("尚未建立班表草稿");
-      version = await clonePublishedVersionForEmployee({ admin, period, version, employeeId, actorId: profile.id, changeSummary: "發布後調整個別班次；受影響員工須重新簽名" });
-      const activeVersion = version!;
-      const [employees, employments] = await Promise.all([
+      const [latestVersion, employees, employments, shiftIds] = await Promise.all([
+        getLatestVersion(admin, period.id),
         listEmployees(admin, tenantId, profile.branch_id),
         admin.from("staff_employment_profiles").select("*").eq("tenant_id", tenantId),
+        loadShiftIds(admin, tenantId, profile.branch_id),
       ]);
+      let version = latestVersion;
+      if (!version) throw new Error("尚未建立班表草稿");
+      const useCompactResponse = body.compactResponse === true && version.status !== "published";
+      version = await clonePublishedVersionForEmployee({ admin, period, version, employeeId, actorId: profile.id, changeSummary: "發布後調整個別班次；受影響員工須重新簽名" });
+      const activeVersion = version!;
       if (employments.error) throw new Error(employments.error.message);
       const employee = employees.find((item) => item.id === employeeId);
       const employment = ((employments.data || []) as EmploymentRow[]).find((item) => item.employee_id === employeeId);
@@ -1041,14 +1046,10 @@ export async function POST(request: Request) {
       if (shiftChoice === "COACH_EARLY" && !employment.can_cover_early_shift && !employment.is_original_early_shift) {
         throw new Error("此員工尚未由主管設定「可支援早班」，不能排入支援早班");
       }
-      const target = await admin.from("staff_schedule_entries").select("entry_kind").eq("version_id", String(activeVersion.id)).eq("employee_id", employeeId).eq("work_date", workDate).maybeSingle();
-      if (target.error || !target.data) throw new Error("找不到目標班表格");
-      if (target.data.entry_kind !== "work") throw new Error("休假日不能直接覆蓋成班次；請先調整休假日期");
       const config = configFromRows(employee, employment);
       const shiftMap = new Map(DEFAULT_SHIFT_DEFINITIONS.map((item) => [item.code, item]));
       const shift = shiftChoice === "DEFAULT" ? shiftForEmployeeDate(config, workDate, shiftMap) : shiftMap.get(shiftChoice);
       if (!shift) throw new Error("找不到指定班別");
-      const shiftIds = await loadShiftIds(admin, tenantId, profile.branch_id);
       const update = await admin.from("staff_schedule_entries").update({
         shift_template_id: shiftIds.get(shift.code) || null,
         shift_code: shift.code,
@@ -1062,27 +1063,32 @@ export async function POST(request: Request) {
         source: "supervisor",
         requires_resign: true,
         updated_by: profile.id,
-      }).eq("version_id", String(activeVersion.id)).eq("employee_id", employeeId).eq("work_date", workDate);
+      }).eq("version_id", String(activeVersion.id)).eq("employee_id", employeeId).eq("work_date", workDate).eq("entry_kind", "work").select("*").maybeSingle();
       if (update.error) throw new Error(update.error.message);
-      const entriesResult = await admin.from("staff_schedule_entries").select("*").eq("version_id", String(activeVersion.id));
-      if (entriesResult.error) throw new Error(entriesResult.error.message);
+      if (!update.data) throw new Error("找不到目標上班格；休假日不能直接覆蓋成班次");
       const allConfigs = employees.map((item) => {
         const terms = ((employments.data || []) as EmploymentRow[]).find((row) => row.employee_id === item.id);
         return terms ? configFromRows(item, terms) : null;
       }).filter((item): item is EmployeeScheduleConfig => !!item);
       const monthEnd = listMonthDates(monthStart).at(-1) || monthStart;
-      const holidayResult = await admin.from("staff_holiday_calendar").select("holiday_date, holiday_name").or(`tenant_id.is.null,tenant_id.eq.${tenantId}`).gte("holiday_date", monthStart).lte("holiday_date", monthEnd);
+      const [entriesResult, holidayResult, contextEntries] = await Promise.all([
+        admin.from("staff_schedule_entries").select("*").eq("version_id", String(activeVersion.id)),
+        admin.from("staff_holiday_calendar").select("holiday_date, holiday_name").or(`tenant_id.is.null,tenant_id.eq.${tenantId}`).gte("holiday_date", monthStart).lte("holiday_date", monthEnd),
+        loadBoundaryScheduleEntries(admin, tenantId, monthStart),
+      ]);
+      if (entriesResult.error) throw new Error(entriesResult.error.message);
       if (holidayResult.error) throw new Error(holidayResult.error.message);
       const rules = validateSchedule({
         monthStart,
         employees: allConfigs,
         entries: (entriesResult.data || []).map((row) => mapEntry(row)),
-        contextEntries: await loadBoundaryScheduleEntries(admin, tenantId, monthStart),
+        contextEntries,
         preferenceDailyLimit: period.middle_preference_daily_limit,
         holidays: (holidayResult.data || []).map((row) => ({ date: String(row.holiday_date), name: String(row.holiday_name) })),
       });
-      await admin.from("staff_schedule_rule_results").delete().eq("version_id", String(activeVersion.id));
-      const ruleInsert = await admin.from("staff_schedule_rule_results").insert(rules.map((rule) => ({
+      const ruleDelete = await admin.from("staff_schedule_rule_results").delete().eq("version_id", String(activeVersion.id));
+      if (ruleDelete.error) throw new Error(ruleDelete.error.message);
+      const [ruleInsert, periodUpdate] = await Promise.all([admin.from("staff_schedule_rule_results").insert(rules.map((rule) => ({
         version_id: activeVersion.id,
         period_id: period.id,
         tenant_id: tenantId,
@@ -1093,9 +1099,32 @@ export async function POST(request: Request) {
         passed: rule.passed,
         message: rule.message,
         details: rule.details,
-      })));
+      }))).select("*"), admin.from("staff_schedule_periods").update({ status: "drafting" }).eq("id", period.id)]);
       if (ruleInsert.error) throw new Error(ruleInsert.error.message);
-      await admin.from("staff_schedule_periods").update({ status: "drafting" }).eq("id", period.id);
+      if (periodUpdate.error) throw new Error(periodUpdate.error.message);
+      if (useCompactResponse) {
+        const entry = update.data as Record<string, unknown>;
+        compactMutation = {
+          action: "assign_shift",
+          entry: {
+            id: entry.id,
+            employeeId: entry.employee_id,
+            workDate: entry.work_date,
+            entryKind: entry.entry_kind,
+            shiftCode: entry.shift_code,
+            shiftLabel: entry.shift_label,
+            startsAt: entry.starts_at ? String(entry.starts_at).slice(0, 5) : null,
+            endsAt: entry.ends_at ? String(entry.ends_at).slice(0, 5) : null,
+            offKind: entry.off_kind,
+            source: entry.source,
+            employeeVisibleNote: entry.employee_visible_note,
+            requiresResign: entry.requires_resign,
+          },
+          ruleResults: ruleInsert.data || [],
+          version: activeVersion,
+          periodStatus: "drafting",
+        };
+      }
     } else if (body.action === "make_holiday_day_off") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有調整國定假日班表的權限" });
       const period = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
@@ -1456,6 +1485,11 @@ export async function POST(request: Request) {
       return apiError(400, "FORBIDDEN", "不支援的班表操作");
     }
 
+    if (compactMutation) {
+      console.info("[staff-scheduling] assign_shift completed", { durationMs: Date.now() - requestStartedAt, response: "compact" });
+      return apiSuccess(compactMutation);
+    }
+
     const state = await buildState({
       admin,
       profile,
@@ -1463,6 +1497,9 @@ export async function POST(request: Request) {
       monthStart,
       view: normalizeStaffScheduleView(body.view),
     });
+    if (body.action === "assign_shift") {
+      console.info("[staff-scheduling] assign_shift completed", { durationMs: Date.now() - requestStartedAt, response: "full" });
+    }
     return apiSuccess(state);
   } catch (error) {
     const message = error instanceof z.ZodError

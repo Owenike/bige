@@ -52,6 +52,12 @@ type ScheduleEntry = {
 
 type ShiftChoice = "COACH_EARLY" | "COACH_MIDDLE" | "COACH_PARTTIME_WEEKDAY" | "DEFAULT";
 
+const SHIFT_PREVIEWS: Record<Exclude<ShiftChoice, "DEFAULT">, Pick<ScheduleEntry, "shiftCode" | "shiftLabel" | "startsAt" | "endsAt">> = {
+  COACH_EARLY: { shiftCode: "COACH_EARLY", shiftLabel: "早班", startsAt: "10:00", endsAt: "19:00" },
+  COACH_MIDDLE: { shiftCode: "COACH_MIDDLE", shiftLabel: "中班", startsAt: "13:00", endsAt: "22:00" },
+  COACH_PARTTIME_WEEKDAY: { shiftCode: "COACH_PARTTIME_WEEKDAY", shiftLabel: "晚班", startsAt: "18:00", endsAt: "22:00" },
+};
+
 type RuleResult = {
   id: string;
   employee_id: string | null;
@@ -105,6 +111,14 @@ type ScheduleState = {
   }>;
 };
 
+type AssignShiftPatch = {
+  action: "assign_shift";
+  entry: ScheduleEntry;
+  ruleResults: RuleResult[];
+  version: ScheduleState["version"];
+  periodStatus: string;
+};
+
 function nextMonthValue() {
   const now = new Date();
   const target = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -149,10 +163,39 @@ function formatDays(value: number | null | undefined) {
   return Number.isInteger(days) ? String(days) : days.toFixed(1);
 }
 
-async function parseResponse(response: Response) {
+async function parseResponse<T = ScheduleState>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) throw new Error(payload?.message || payload?.error?.message || "操作失敗");
-  return payload.data as ScheduleState;
+  return payload.data as T;
+}
+
+function scheduleTone(entry: ScheduleEntry | undefined) {
+  if (!entry || entry.entryKind === "off") return "off";
+  if (["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"].includes(entry.shiftCode || "")) return "early";
+  if (entry.shiftCode === "COACH_PARTTIME_WEEKDAY") return "late";
+  return "middle";
+}
+
+function applyShiftPreview(current: ScheduleState | null, employeeId: string, workDate: string, shiftCode: ShiftChoice) {
+  if (!current || shiftCode === "DEFAULT") return current;
+  const preview = SHIFT_PREVIEWS[shiftCode];
+  return {
+    ...current,
+    scheduleEntries: current.scheduleEntries.map((entry) => entry.employeeId === employeeId && entry.workDate === workDate
+      ? { ...entry, ...preview, source: "supervisor", requiresResign: true }
+      : entry),
+  };
+}
+
+function applyAssignShiftPatch(current: ScheduleState | null, patch: AssignShiftPatch) {
+  if (!current) return current;
+  return {
+    ...current,
+    version: patch.version,
+    period: current.period ? { ...current.period, status: patch.periodStatus } : current.period,
+    scheduleEntries: current.scheduleEntries.map((entry) => entry.employeeId === patch.entry.employeeId && entry.workDate === patch.entry.workDate ? patch.entry : entry),
+    ruleResults: patch.ruleResults,
+  };
 }
 
 export default function StaffScheduleManager() {
@@ -218,6 +261,45 @@ export default function StaffScheduleManager() {
       return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "操作失敗");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assignShift(employeeId: string, workDate: string, shiftCode: ShiftChoice) {
+    const previousData = data;
+    setBusy(true);
+    setError("");
+    setNotice("班別已套用，正在儲存並檢查規則…");
+    setData((current) => applyShiftPreview(current, employeeId, workDate, shiftCode));
+    try {
+      const response = await fetch("/api/staff-scheduling", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "assign_shift",
+          monthStart: `${month}-01`,
+          view: "team",
+          employeeId,
+          workDate,
+          shiftCode,
+          confirmed: true,
+          compactResponse: data?.version?.status !== "published",
+        }),
+      });
+      const result = await parseResponse<ScheduleState | AssignShiftPatch>(response);
+      if ((result as AssignShiftPatch).action === "assign_shift") {
+        setData((current) => applyAssignShiftPatch(current, result as AssignShiftPatch));
+      } else {
+        setData(result as ScheduleState);
+      }
+      setNotice("個別班次已更新，合法性檢查已重新執行");
+      return true;
+    } catch (caught) {
+      setData(previousData);
+      setNotice("");
+      setError(caught instanceof Error ? `${caught.message}；班別已恢復原狀。` : "操作失敗；班別已恢復原狀。");
       return false;
     } finally {
       setBusy(false);
@@ -293,7 +375,7 @@ export default function StaffScheduleManager() {
 
   function exportPng() {
     if (!data?.version || visibleEmployees.length === 0) return;
-    const nameWidth = 230;
+    const nameWidth = 190;
     const cellWidth = 96;
     const headerHeight = 62;
     const rowHeight = 72;
@@ -310,7 +392,7 @@ export default function StaffScheduleManager() {
     context.textAlign = "center"; context.textBaseline = "middle";
     dates.forEach((date, index) => { const x = nameWidth + index * cellWidth; const weekend = [0, 6].includes(new Date(`${date}T12:00:00+08:00`).getDay()); context.fillStyle = weekend ? "#ffe7e1" : "#eaf0f7"; context.fillRect(x, top, cellWidth, headerHeight); context.fillStyle = weekend ? "#9c322b" : "#26384e"; context.font = "bold 14px sans-serif"; context.fillText(`${Number(date.slice(-2))}（${weekday(date)}）`, x + cellWidth / 2, top + headerHeight / 2); });
     context.fillStyle = "#eaf0f7"; context.fillRect(0, top, nameWidth, headerHeight); context.fillStyle = "#26384e"; context.fillText("員工", nameWidth / 2, top + headerHeight / 2);
-    visibleEmployees.forEach((employee, rowIndex) => { const y = top + headerHeight + rowIndex * rowHeight; context.fillStyle = "#f8fafc"; context.fillRect(0, y, nameWidth, rowHeight); context.textAlign = "left"; context.fillStyle = "#172235"; context.font = "bold 15px sans-serif"; context.fillText(employee.displayName, 10, y + 20); context.font = "13px sans-serif"; context.fillStyle = "#66778e"; context.fillText(employee.englishName || "未設定英文名", 10, y + 40); context.font = "12px sans-serif"; context.fillStyle = "#315b8b"; context.fillText(`特休 ${formatDays(employee.employment?.annual_leave_balance_days)} 天｜積假 ${formatDays(employee.employment?.accrued_leave_balance_days)} 天`, 10, y + 60); dates.forEach((date, index) => { const entry = entryMap.get(`${employee.id}:${date}`); const x = nameWidth + index * cellWidth; context.fillStyle = entry?.entryKind === "off" ? "#ffe49a" : "#ffffff"; context.fillRect(x, y, cellWidth, rowHeight); context.textAlign = "center"; context.fillStyle = "#26384e"; context.font = "bold 14px sans-serif"; const title = entry?.entryKind === "off" ? staffScheduleEntryOffLabel(entry) : staffScheduleGridWorkLabel(entry || {}, employee.employeeNumber, date); context.fillText(title.slice(0, 12), x + cellWidth / 2, y + rowHeight / 2); }); });
+    visibleEmployees.forEach((employee, rowIndex) => { const y = top + headerHeight + rowIndex * rowHeight; context.fillStyle = "#f8fafc"; context.fillRect(0, y, nameWidth, rowHeight); context.textAlign = "left"; context.fillStyle = "#172235"; context.font = "bold 15px sans-serif"; context.fillText(employee.displayName, 10, y + 20); context.font = "13px sans-serif"; context.fillStyle = "#66778e"; context.fillText(employee.englishName || "未設定英文名", 96, y + 20); context.font = "12px sans-serif"; context.fillStyle = "#315b8b"; context.fillText(`特休 ${formatDays(employee.employment?.annual_leave_balance_days)}`, 10, y + 51); context.fillText(`積假 ${formatDays(employee.employment?.accrued_leave_balance_days)}`, 96, y + 51); dates.forEach((date, index) => { const entry = entryMap.get(`${employee.id}:${date}`); const x = nameWidth + index * cellWidth; const tone = scheduleTone(entry); context.fillStyle = tone === "off" ? "#fee2e2" : tone === "early" ? "#ffedd5" : tone === "late" ? "#dbeafe" : "#ffffff"; context.fillRect(x, y, cellWidth, rowHeight); context.textAlign = "center"; context.fillStyle = tone === "off" ? "#991b1b" : tone === "early" ? "#9a3412" : tone === "late" ? "#1e40af" : "#26384e"; context.font = "bold 14px sans-serif"; const title = entry?.entryKind === "off" ? staffScheduleEntryOffLabel(entry) : staffScheduleGridWorkLabel(entry || {}, employee.employeeNumber, date); context.fillText(title.slice(0, 12), x + cellWidth / 2, y + rowHeight / 2); }); });
     context.strokeStyle = "#cfd8e5"; context.lineWidth = 1; for (let x = 0; x <= canvas.width; x += x === 0 ? nameWidth : cellWidth) { context.beginPath(); context.moveTo(x, top); context.lineTo(x, canvas.height); context.stroke(); if (x === 0) x = nameWidth - cellWidth; } for (let y = top; y <= canvas.height; y += y === top ? headerHeight : rowHeight) { context.beginPath(); context.moveTo(0, y); context.lineTo(canvas.width, y); context.stroke(); if (y === top) y = top + headerHeight - rowHeight; }
     canvas.toBlob((blob) => { if (!blob) return; const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `巨挺健身館-${month}-班表.png`; anchor.click(); URL.revokeObjectURL(url); }, "image/png");
   }
@@ -353,7 +435,7 @@ export default function StaffScheduleManager() {
         COACH_PARTTIME_WEEKDAY: "晚班 18:00–22:00",
       }[payload.shiftCode];
       if (!window.confirm(`確認將 ${employee?.displayName || "此員工"} 的 ${toDate} 改為「${label}」？\n\n系統會重新執行法規與人數檢查；若班表已發布，只有受影響員工需要重新簽名。`)) return;
-      await act("assign_shift", { employeeId, workDate: toDate, shiftCode: payload.shiftCode, confirmed: true }, "個別班次已更新，合法性檢查已重新執行");
+      await assignShift(employeeId, toDate, payload.shiftCode);
       return;
     }
     if (payload.employeeId !== employeeId || payload.fromDate === toDate) return;
@@ -557,7 +639,6 @@ export default function StaffScheduleManager() {
             </div> : null}
             {data.version ? <div className={styles.shiftPalette}>
               <strong>可拖進表格的班次</strong>
-              <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "DEFAULT")}><span>↺</span><b>恢復固定班</b><small>依員工原本班別與日期恢復</small></button>
               <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_EARLY")}><span>早</span><b>早班</b><small>10:00–19:00 · 需具早班資格</small></button>
               <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_MIDDLE")}><span>中</span><b>中班</b><small>13:00–22:00</small></button>
               <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_PARTTIME_WEEKDAY")}><span>晚</span><b>晚班</b><small>18:00–22:00</small></button>
@@ -569,14 +650,15 @@ export default function StaffScheduleManager() {
                   <tbody>
                     {visibleEmployees.map((employee) => (
                       <tr key={employee.id}>
-                        <th className={styles.nameCell}><div className={styles.nameSummary}><span><strong>{employee.displayName}</strong><small>{employee.englishName || "未設定英文名"}</small></span><span className={styles.leaveBalances}><i>特休 {formatDays(employee.employment?.annual_leave_balance_days)}</i><i>積假 {formatDays(employee.employment?.accrued_leave_balance_days)}</i></span></div></th>
+                        <th className={styles.nameCell}><div className={styles.nameSummary}><strong>{employee.displayName}</strong><small>{employee.englishName || "未設定英文名"}</small><span className={styles.leaveBalances}><i>特休 {formatDays(employee.employment?.annual_leave_balance_days)}</i><i>積假 {formatDays(employee.employment?.accrued_leave_balance_days)}</i></span></div></th>
                         {dates.map((date) => {
                           const entry = entryMap.get(`${employee.id}:${date}`);
                           const isOff = entry?.entryKind === "off";
+                          const tone = scheduleTone(entry);
                           return (
                             <td
                               key={date}
-                              className={`${isOff ? styles.offCell : styles.workCell} ${entry?.requiresResign ? styles.resignCell : ""}`}
+                              className={`${isOff ? styles.offCell : styles.workCell} ${tone === "early" ? styles.earlyShiftCell : ""} ${tone === "late" ? styles.lateShiftCell : ""} ${entry?.requiresResign ? styles.resignCell : ""}`}
                               onDragOver={(event) => event.preventDefault()}
                               onDrop={(event) => void dropOn(event, employee.id, date)}
                               title={isOff ? `${entry ? staffScheduleEntryOffLabel(entry) : "休假"}（可拖曳）` : `${entry ? staffScheduleShiftLabel(entry) : "未排班"} ${entry?.startsAt || ""}–${entry?.endsAt || ""}`}
