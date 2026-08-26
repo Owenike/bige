@@ -6,3 +6,44 @@
 @media(max-width:620px){.ruleBlock,.ruleWarn{align-items:flex-start;display:grid}.ruleWarn button{width:100%}}
 .filterBar{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:11px;border:1px solid #d7e0ec;border-radius:14px;background:#f8fafc}.filterBar label{display:grid;gap:4px;color:#607087;font-size:11px;font-weight:800}.filterBar input,.filterBar select{min-height:38px;border:1px solid #cbd6e5;border-radius:10px;background:#fff;padding:7px 10px;font:inherit;color:#172235}.filterBar strong{margin-left:auto;padding:9px 5px;color:#315b8b}.scheduleTable tfoot th,.scheduleTable tfoot td{height:36px;background:#eef4fb;font-weight:900}.scheduleTable tfoot .nameCell{z-index:2}@media(max-width:620px){.filterBar{display:grid;grid-template-columns:1fr 1fr}.filterBar label:first-child,.filterBar strong{grid-column:1/-1;margin-left:0}.filterBar input,.filterBar select{width:100%}}
 .holidayChips{display:flex;gap:6px;flex-wrap:wrap}.holidayChips>span{display:inline-flex;align-items:center;gap:5px;border-radius:999px;background:#fff4d3;border:1px solid #e9ce80;padding:5px 8px;font-size:11px}.holidayChips button{border:0;background:transparent;color:#9a342c;font-size:16px;cursor:pointer;padding:0}
+
+.notice{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.notice button{width:30px;height:30px;display:grid;place-items:center;flex:0 0 auto;border:0;border-radius:9px;background:rgba(22,102,60,.1);color:inherit;font-size:20px;line-height:1;cursor:pointer}
+.scheduleTable th,.scheduleTable td{width:72px;min-width:72px;height:58px}
+.scheduleTable .nameCell{width:138px;min-width:138px}
+.scheduleTable tbody tr:hover td:not(.offCell),.scheduleTable tbody tr:hover .nameCell{background:#f3f8ff}
+.workCell span,.offCell strong{white-space:nowrap}
+.holidayIntro{margin:-4px 0 14px;color:#6d4c47;font-size:13px;line-height:1.55}
+.holidayList{gap:14px}
+.holidayGroup{overflow:hidden;border:1px solid #efb4ad;border-radius:16px;background:#fff;content-visibility:auto;contain-intrinsic-size:auto 260px}
+.holidayGroupHeader{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;background:#fff1ee;border-bottom:1px solid #f1c5bf}
+.holidayGroupHeader>div{display:grid;gap:3px}
+.holidayGroupHeader strong{color:#922f28;font-size:15px}
+.holidayGroupHeader small{color:#80645f}
+.holidayGroupHeader>span{flex:0 0 auto;border-radius:999px;background:#fff;color:#a4372e;border:1px solid #e9aaa2;padding:5px 9px;font-size:11px;font-weight:900}
+.holidayRows{display:grid}
+.holidayRuleRow{display:grid;grid-template-columns:minmax(110px,.65fr) auto 24px minmax(210px,1fr) auto;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid #edf0f4}
+.holidayRuleRow:first-child{border-top:0}
+.holidayEmployee{display:grid;gap:3px;min-width:0}
+.holidayEmployee strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.holidayEmployee small{overflow:hidden;color:#748397;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.holidayRuleRow select{width:100%;min-height:40px;border:1px solid #cbd6e5;border-radius:11px;background:#fff;padding:8px 10px;color:#172235;font:inherit}
+.holidayRuleRow button{min-height:40px;padding:8px 12px;white-space:nowrap}
+.holidayOr{text-align:center;color:#8b6d68;font-size:12px;font-weight:900}
+
+@media(max-width:1000px){
+  .holidayRuleRow{grid-template-columns:minmax(110px,.7fr) auto 20px minmax(190px,1fr)}
+  .holidayRuleRow .dangerButton{grid-column:4}
+}
+
+@media(max-width:620px){
+  .scheduleTable th,.scheduleTable td{width:66px;min-width:66px;height:56px}
+  .scheduleTable .nameCell{width:112px;min-width:112px}
+  .holidayGroupHeader{align-items:flex-start}
+  .holidayRuleRow{grid-template-columns:1fr 1fr;padding:12px}
+  .holidayEmployee{grid-column:1/-1}
+  .holidayOr{display:none}
+  .holidayRuleRow select{grid-column:1/-1}
+  .holidayRuleRow .dangerButton{grid-column:1/-1;width:100%}
+  .holidayRuleRow .secondaryButton{grid-column:1/-1;width:100%}
+}

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import test from "node:test";
 import {
   assertValidPreferenceDates,
@@ -8,6 +10,8 @@ import {
   paidMinutesForEntry,
   normalizeStaffScheduleView,
   resolveStaffScheduleDataScope,
+  staffScheduleOffLabel,
+  staffScheduleShiftLabel,
   validateSchedule,
   type EmployeeScheduleConfig,
 } from "../lib/staff-scheduling";
@@ -163,4 +167,27 @@ test("team schedule remains available only to authorized managers", () => {
 test("unspecified or invalid schedule views default to least-privilege self view", () => {
   assert.equal(normalizeStaffScheduleView(undefined), "self");
   assert.equal(normalizeStaffScheduleView("unexpected"), "self");
+});
+
+test("schedule display uses only the agreed plain-language shift and off labels", () => {
+  assert.equal(staffScheduleShiftLabel({ shiftCode: "FRONTDESK_DAY", shiftLabel: "櫃台班", startsAt: "09:30" }), "早班");
+  assert.equal(staffScheduleShiftLabel({ shiftCode: "COACH_EARLY_WED", shiftLabel: "週三早班", startsAt: "12:00" }), "早班");
+  assert.equal(staffScheduleShiftLabel({ shiftCode: "COACH_PARTTIME_WEEKEND", shiftLabel: "兼職假日班", startsAt: "13:00" }), "中班");
+  assert.equal(staffScheduleShiftLabel({ shiftCode: "COACH_PARTTIME_WEEKDAY", shiftLabel: "兼職晚班", startsAt: "18:00" }), "晚班");
+  assert.equal(staffScheduleOffLabel("regular_day_off"), "例假");
+  assert.equal(staffScheduleOffLabel("rest_day"), "休假");
+  assert.equal(staffScheduleOffLabel("preferred_off"), "休假");
+  assert.equal(staffScheduleOffLabel("facility_closure"), "館休");
+  assert.equal(staffScheduleOffLabel("holiday_adjustment"), "國休");
+  assert.equal(staffScheduleOffLabel("national_holiday"), "國休");
+});
+
+test("manager cleanup preserves drag-and-drop and both holiday decisions", () => {
+  const source = readFileSync(resolve(process.cwd(), "components/staff-schedule-manager.tsx"), "utf8");
+  assert.match(source, /holidayRuleGroups\.map/);
+  assert.match(source, /window\.setTimeout\(\(\) => setNotice\(""\), 4500\)/);
+  assert.match(source, /onDrop=\{\(event\) => void dropOn/);
+  assert.match(source, /"make_holiday_day_off"/);
+  assert.match(source, /"arrange_holiday_adjustment"/);
+  assert.doesNotMatch(source, /employee\.employment\?\.default_shift_code \|\| "未設定"/);
 });

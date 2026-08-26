@@ -1372,7 +1372,7 @@ export async function POST(request: Request) {
       ]);
       if (entriesResult.error) throw new Error(entriesResult.error.message);
       if (adjustmentsResult.error) throw new Error(adjustmentsResult.error.message);
-      const statement = "本人已逐日確認本月份正式班表、例假日、休息日及所列國定假日調移內容，並以本次手機簽名確認。";
+      const statement = "本人已逐日確認本月份正式班表、例假日、休息日及所列國休安排，並以本次手機簽名確認。";
       const contentSha256 = createHash("sha256").update(JSON.stringify({
         versionId: version.id,
         entries: entriesResult.data || [],

@@ -21,6 +21,43 @@ export type OffKind =
   | "official_leave"
   | "other_leave";
 
+const STAFF_SCHEDULE_OFF_LABELS: Record<string, string> = {
+  regular_day_off: "例假",
+  rest_day: "休假",
+  facility_closure: "館休",
+  preferred_off: "休假",
+  national_holiday: "國休",
+  holiday_adjustment: "國休",
+  annual_leave: "特休",
+  sick_leave: "病假",
+  personal_leave: "事假",
+  family_care_leave: "家庭照顧假",
+  marriage_leave: "婚假",
+  bereavement_leave: "喪假",
+  official_leave: "公假",
+  other_leave: "其他假",
+};
+
+export function staffScheduleOffLabel(offKind: string | null | undefined) {
+  return STAFF_SCHEDULE_OFF_LABELS[offKind || ""] || "休假";
+}
+
+type StaffScheduleShiftLabelInput = {
+  shiftCode?: string | null;
+  shiftLabel?: string | null;
+  startsAt?: string | null;
+};
+
+export function staffScheduleShiftLabel({ shiftCode, shiftLabel, startsAt }: StaffScheduleShiftLabelInput) {
+  if (shiftCode === "FRONTDESK_DAY" || shiftCode === "COACH_EARLY" || shiftCode === "COACH_EARLY_WED") return "早班";
+  if (shiftCode === "COACH_MIDDLE" || shiftCode === "COACH_PARTTIME_WEEKEND") return "中班";
+  if (shiftCode === "COACH_PARTTIME_WEEKDAY") return "晚班";
+  if (shiftLabel?.includes("早班") || startsAt === "09:30" || startsAt === "10:00" || startsAt === "12:00") return "早班";
+  if (shiftLabel?.includes("晚班") || startsAt === "18:00") return "晚班";
+  if (shiftLabel?.includes("中班") || shiftLabel?.includes("假日班") || startsAt === "13:00") return "中班";
+  return shiftLabel || "上班";
+}
+
 export type ShiftDefinition = {
   code: string;
   label: string;

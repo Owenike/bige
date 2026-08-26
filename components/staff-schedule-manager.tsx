@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { staffScheduleOffLabel, staffScheduleShiftLabel } from "../lib/staff-scheduling";
 import styles from "../app/manager/staff-scheduling/page.module.css";
 
 type Employment = {
@@ -93,23 +94,6 @@ type ScheduleState = {
   }>;
 };
 
-const OFF_LABELS: Record<string, string> = {
-  regular_day_off: "例假",
-  rest_day: "休息日",
-  facility_closure: "館休",
-  preferred_off: "排休",
-  holiday_adjustment: "國定假日調休",
-  national_holiday: "國定假日",
-  annual_leave: "特休",
-  sick_leave: "病假",
-  personal_leave: "事假",
-  family_care_leave: "家庭照顧假",
-  marriage_leave: "婚假",
-  bereavement_leave: "喪假",
-  official_leave: "公假",
-  other_leave: "其他假",
-};
-
 function nextMonthValue() {
   const now = new Date();
   const target = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -197,6 +181,12 @@ export default function StaffScheduleManager() {
     if (data?.period) setMiddleDailyLimit(data.period.middle_preference_daily_limit);
   }, [data?.period]);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(""), 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   async function act(action: string, values: Record<string, unknown> = {}, successMessage = "已完成") {
     setBusy(true);
     setError("");
@@ -232,6 +222,15 @@ export default function StaffScheduleManager() {
   const blockingRules = data?.ruleResults.filter((rule) => !rule.passed && rule.severity === "blocking") || [];
   const warningRules = data?.ruleResults.filter((rule) => !rule.passed && rule.severity === "warning") || [];
   const holidayRules = blockingRules.filter((rule) => rule.rule_code === "HOLIDAY_ADJUSTMENT_REQUIRED");
+  const holidayRuleGroups = Array.from(holidayRules.reduce((groups, rule) => {
+    const holiday = data?.holidays.find((item) => item.holiday_date === rule.work_date);
+    const holidayName = holiday?.holiday_name || String(rule.details.holidayName || "國定假日");
+    const key = `${rule.work_date || "unknown"}:${holidayName}`;
+    const group = groups.get(key) || { workDate: rule.work_date, holidayName, rules: [] as RuleResult[] };
+    group.rules.push(rule);
+    groups.set(key, group);
+    return groups;
+  }, new Map<string, { workDate: string | null; holidayName: string; rules: RuleResult[] }>()).values());
   const visibleEmployees = useMemo(() => (data?.employees || []).filter((employee) => {
     const searchText = `${employee.displayName} ${employee.employeeNumber || ""}`.toLowerCase();
     if (!searchText.includes(employeeSearch.trim().toLowerCase())) return false;
@@ -279,7 +278,7 @@ export default function StaffScheduleManager() {
     context.textAlign = "center"; context.textBaseline = "middle";
     dates.forEach((date, index) => { const x = nameWidth + index * cellWidth; const weekend = [0, 6].includes(new Date(`${date}T12:00:00+08:00`).getDay()); context.fillStyle = weekend ? "#ffe7e1" : "#eaf0f7"; context.fillRect(x, top, cellWidth, headerHeight); context.fillStyle = weekend ? "#9c322b" : "#26384e"; context.font = "bold 14px sans-serif"; context.fillText(`${Number(date.slice(-2))}（${weekday(date)}）`, x + cellWidth / 2, top + headerHeight / 2); });
     context.fillStyle = "#eaf0f7"; context.fillRect(0, top, nameWidth, headerHeight); context.fillStyle = "#26384e"; context.fillText("員工", nameWidth / 2, top + headerHeight / 2);
-    visibleEmployees.forEach((employee, rowIndex) => { const y = top + headerHeight + rowIndex * rowHeight; context.fillStyle = "#f8fafc"; context.fillRect(0, y, nameWidth, rowHeight); context.textAlign = "left"; context.fillStyle = "#172235"; context.font = "bold 14px sans-serif"; context.fillText(employee.displayName, 10, y + 21); context.font = "11px sans-serif"; context.fillStyle = "#66778e"; context.fillText(employee.employeeNumber || "無編號", 10, y + 42); dates.forEach((date, index) => { const entry = entryMap.get(`${employee.id}:${date}`); const x = nameWidth + index * cellWidth; context.fillStyle = entry?.entryKind === "off" ? "#ffe49a" : "#ffffff"; context.fillRect(x, y, cellWidth, rowHeight); context.textAlign = "center"; context.fillStyle = "#26384e"; context.font = "bold 11px sans-serif"; const title = entry?.entryKind === "off" ? OFF_LABELS[entry.offKind || ""] || "休" : entry?.shiftLabel || "—"; context.fillText(title.slice(0, 8), x + cellWidth / 2, y + 22); if (entry?.entryKind === "work") { context.font = "10px sans-serif"; context.fillStyle = "#66778e"; context.fillText(`${entry.startsAt}–${entry.endsAt}`, x + cellWidth / 2, y + 41); } }); });
+    visibleEmployees.forEach((employee, rowIndex) => { const y = top + headerHeight + rowIndex * rowHeight; context.fillStyle = "#f8fafc"; context.fillRect(0, y, nameWidth, rowHeight); context.textAlign = "left"; context.fillStyle = "#172235"; context.font = "bold 14px sans-serif"; context.fillText(employee.displayName, 10, y + 21); context.font = "11px sans-serif"; context.fillStyle = "#66778e"; context.fillText(employee.employeeNumber || "無編號", 10, y + 42); dates.forEach((date, index) => { const entry = entryMap.get(`${employee.id}:${date}`); const x = nameWidth + index * cellWidth; context.fillStyle = entry?.entryKind === "off" ? "#ffe49a" : "#ffffff"; context.fillRect(x, y, cellWidth, rowHeight); context.textAlign = "center"; context.fillStyle = "#26384e"; context.font = "bold 11px sans-serif"; const title = entry?.entryKind === "off" ? staffScheduleOffLabel(entry.offKind) : staffScheduleShiftLabel(entry || {}); context.fillText(title.slice(0, 8), x + cellWidth / 2, y + 22); if (entry?.entryKind === "work") { context.font = "10px sans-serif"; context.fillStyle = "#66778e"; context.fillText(`${entry.startsAt}–${entry.endsAt}`, x + cellWidth / 2, y + 41); } }); });
     context.strokeStyle = "#cfd8e5"; context.lineWidth = 1; for (let x = 0; x <= canvas.width; x += x === 0 ? nameWidth : cellWidth) { context.beginPath(); context.moveTo(x, top); context.lineTo(x, canvas.height); context.stroke(); if (x === 0) x = nameWidth - cellWidth; } for (let y = top; y <= canvas.height; y += y === top ? headerHeight : rowHeight) { context.beginPath(); context.moveTo(0, y); context.lineTo(canvas.width, y); context.stroke(); if (y === top) y = top + headerHeight - rowHeight; }
     canvas.toBlob((blob) => { if (!blob) return; const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `巨挺健身館-${month}-班表.png`; anchor.click(); URL.revokeObjectURL(url); }, "image/png");
   }
@@ -327,7 +326,7 @@ export default function StaffScheduleManager() {
       return;
     }
     const confirmed = window.confirm(
-      `確認調整 ${employee?.displayName || "此員工"}？\n\n${payload.fromDate} ${OFF_LABELS[source?.offKind || ""] || "休假"} → ${toDate}\n\n原日期會恢復固定班別，系統將重新檢查例假、休息日、連續出勤及人數限制。`,
+      `確認調整 ${employee?.displayName || "此員工"}？\n\n${payload.fromDate} ${staffScheduleOffLabel(source?.offKind)} → ${toDate}\n\n原日期會恢復固定班別，系統將重新檢查例假、休息日、連續出勤及人數限制。`,
     );
     if (!confirmed) return;
     await act("move_day_off", {
@@ -365,7 +364,7 @@ export default function StaffScheduleManager() {
       </header>
 
       {error ? <div className={styles.error} role="alert">{error}</div> : null}
-      {notice ? <div className={styles.notice}>{notice}</div> : null}
+      {notice ? <div className={styles.notice} role="status"><span>{notice}</span><button type="button" aria-label="關閉提示" onClick={() => setNotice("")}>×</button></div> : null}
 
       {!data?.period ? (
         <section className={styles.emptyPanel}>
@@ -471,10 +470,10 @@ export default function StaffScheduleManager() {
                         </label>
                         <label>固定班別
                           <select value={terms.default_shift_code} onChange={(event) => void saveEmployee(employee, { default_shift_code: event.target.value })}>
-                            <option value="FRONTDESK_DAY">櫃台 09:30–16:30</option>
+                            <option value="FRONTDESK_DAY">早班 09:30–16:30（櫃台）</option>
                             <option value="COACH_EARLY">早班 10:00–19:00</option>
                             <option value="COACH_MIDDLE">中班 13:00–22:00</option>
-                            <option value="COACH_PARTTIME_WEEKDAY">兼職平日 18:00–22:00</option>
+                            <option value="COACH_PARTTIME_WEEKDAY">晚班 18:00–22:00</option>
                           </select>
                         </label>
                         <label className={styles.checkField}><input type="checkbox" checked={terms.is_original_early_shift} onChange={(event) => void saveEmployee(employee, { is_original_early_shift: event.target.checked, default_shift_code: event.target.checked ? "COACH_EARLY" : terms.default_shift_code })} />原固定早班（週三 12:00–21:00）</label>
@@ -500,7 +499,7 @@ export default function StaffScheduleManager() {
             <div className={styles.filterBar}>
               <label>搜尋員工<input value={employeeSearch} onChange={(event) => setEmployeeSearch(event.target.value)} placeholder="姓名或員工編號" /></label>
               <label>身分類型<select value={employmentFilter} onChange={(event) => setEmploymentFilter(event.target.value)}><option value="all">全部</option><option value="full_time">正職</option><option value="part_time">兼職</option></select></label>
-              <label>固定班別<select value={shiftFilter} onChange={(event) => setShiftFilter(event.target.value)}><option value="all">全部</option><option value="FRONTDESK_DAY">櫃台</option><option value="COACH_EARLY">早班</option><option value="COACH_MIDDLE">中班</option><option value="COACH_PARTTIME_WEEKDAY">兼職平日</option></select></label>
+              <label>固定班別<select value={shiftFilter} onChange={(event) => setShiftFilter(event.target.value)}><option value="all">全部</option><option value="FRONTDESK_DAY">早班 09:30</option><option value="COACH_EARLY">早班 10:00</option><option value="COACH_MIDDLE">中班</option><option value="COACH_PARTTIME_WEEKDAY">晚班</option></select></label>
               <strong>目前顯示 {visibleEmployees.length} 人</strong>
             </div>
             <p className={styles.gridHelp}>拖曳有顏色的休假格到同一員工的上班日；每次放開前都會再次確認。左右滑動可看完整月份。</p>
@@ -516,7 +515,7 @@ export default function StaffScheduleManager() {
                   <tbody>
                     {visibleEmployees.map((employee) => (
                       <tr key={employee.id}>
-                        <th className={styles.nameCell}><strong>{employee.displayName}</strong><small>{employee.employment?.default_shift_code || "未設定"}</small></th>
+                        <th className={styles.nameCell}><strong>{employee.displayName}</strong><small>{employee.employment ? `固定：${staffScheduleShiftLabel({ shiftCode: employee.employment.default_shift_code })}` : "未設定"}</small></th>
                         {dates.map((date) => {
                           const entry = entryMap.get(`${employee.id}:${date}`);
                           const isOff = entry?.entryKind === "off";
@@ -526,11 +525,11 @@ export default function StaffScheduleManager() {
                               className={`${isOff ? styles.offCell : styles.workCell} ${entry?.requiresResign ? styles.resignCell : ""}`}
                               onDragOver={(event) => event.preventDefault()}
                               onDrop={(event) => void dropOn(event, employee.id, date)}
-                              title={isOff ? `${OFF_LABELS[entry?.offKind || ""] || "休假"}（可拖曳）` : `${entry?.shiftLabel || "未排班"} ${entry?.startsAt || ""}–${entry?.endsAt || ""}`}
+                              title={isOff ? `${staffScheduleOffLabel(entry?.offKind)}（可拖曳）` : `${entry ? staffScheduleShiftLabel(entry) : "未排班"} ${entry?.startsAt || ""}–${entry?.endsAt || ""}`}
                             >
                               {entry ? (
                                 <div draggable={isOff} onDragStart={(event) => dragStart(event, entry)}>
-                                  {isOff ? <strong>{OFF_LABELS[entry.offKind || ""] || "休"}</strong> : <><span>{entry.shiftLabel}</span><small>{entry.startsAt}–{entry.endsAt}</small></>}
+                                  {isOff ? <strong>{staffScheduleOffLabel(entry.offKind)}</strong> : <><span>{staffScheduleShiftLabel(entry)}</span><small>{entry.startsAt}–{entry.endsAt}</small></>}
                                 </div>
                               ) : <span className={styles.emptyCell}>—</span>}
                             </td>
@@ -548,41 +547,47 @@ export default function StaffScheduleManager() {
           {holidayRules.length > 0 ? (
             <section className={`${styles.panel} ${styles.holidayPanel}`}>
               <div className={styles.panelHeading}><div><span className={styles.step}>!</span><h2>國定假日必須逐筆處理</h2></div><span className={styles.blockingBadge}>發布前必須完成</span></div>
+              <p className={styles.holidayIntro}>每個日期只說明一次；請逐位選擇「當天國休」或保留出勤並指定另一個國休日。</p>
               <div className={styles.holidayList}>
-                {holidayRules.map((rule) => {
-                  const employee = rule.employee_id ? employeeMap.get(rule.employee_id) : null;
-                  const holiday = data.holidays.find((item) => item.holiday_date === rule.work_date);
-                  const workDays = data.scheduleEntries.filter((entry) => entry.employeeId === rule.employee_id && entry.entryKind === "work" && entry.workDate !== rule.work_date);
-                  return (
-                    <article key={rule.id} className={styles.holidayCard}>
-                      <h3>⚠️ {employee?.displayName || "此員工"}在國定假日被排到上班</h3>
-                      <dl><div><dt>國定假日</dt><dd>{rule.work_date}　{holiday?.holiday_name || String(rule.details.holidayName || "")}</dd></div><div><dt>目前班次</dt><dd>{String(rule.details.shift || "")}</dd></div></dl>
-                      <p>請立刻決定：當天改休假，或讓員工當天出勤並指定另一個「原本有排班的工作日」作為國定假日調休日。</p>
-                      <div className={styles.holidayActions}>
-                        <button className={styles.secondaryButton} disabled={busy} onClick={() => {
-                          if (window.confirm(`確認將 ${employee?.displayName || "此員工"} 的 ${rule.work_date} 改為「${holiday?.holiday_name || "國定假日"}休假」？`)) {
-                            void act("make_holiday_day_off", {
+                {holidayRuleGroups.map((group) => (
+                  <section key={`${group.workDate}:${group.holidayName}`} className={styles.holidayGroup}>
+                    <header className={styles.holidayGroupHeader}>
+                      <div><strong>{group.workDate?.slice(5)}　{group.holidayName}</strong><small>當天排班者需要安排國休</small></div>
+                      <span>{group.rules.length} 人待處理</span>
+                    </header>
+                    <div className={styles.holidayRows}>
+                      {group.rules.map((rule) => {
+                        const employee = rule.employee_id ? employeeMap.get(rule.employee_id) : null;
+                        const workDays = data.scheduleEntries.filter((entry) => entry.employeeId === rule.employee_id && entry.entryKind === "work" && entry.workDate !== rule.work_date);
+                        return (
+                          <div key={rule.id} className={styles.holidayRuleRow}>
+                            <div className={styles.holidayEmployee}><strong>{employee?.displayName || "此員工"}</strong><small>{String(rule.details.shift || "目前已排班")}</small></div>
+                            <button className={styles.secondaryButton} disabled={busy} onClick={() => {
+                              if (window.confirm(`確認將 ${employee?.displayName || "此員工"} 的 ${rule.work_date} 改為「${group.holidayName}國休」？`)) {
+                                void act("make_holiday_day_off", {
+                                  employeeId: rule.employee_id,
+                                  holidayDate: rule.work_date,
+                                  holidayName: group.holidayName,
+                                }, "國定假日當天已改為國休");
+                              }
+                            }}>{group.workDate?.slice(5)} 當天國休</button>
+                            <span className={styles.holidayOr}>或</span>
+                            <select aria-label={`${employee?.displayName || "此員工"}的其他國休日期`} value={adjustedDates[rule.id] || ""} onChange={(event) => setAdjustedDates((current) => ({ ...current, [rule.id]: event.target.value }))}>
+                              <option value="">選擇另一個國休日期</option>
+                              {workDays.map((entry) => <option key={entry.workDate} value={entry.workDate}>{entry.workDate.slice(5)} · {staffScheduleShiftLabel(entry)}</option>)}
+                            </select>
+                            <button className={styles.dangerButton} disabled={busy || !adjustedDates[rule.id]} onClick={() => void act("arrange_holiday_adjustment", {
                               employeeId: rule.employee_id,
                               holidayDate: rule.work_date,
-                              holidayName: holiday?.holiday_name || String(rule.details.holidayName || "國定假日"),
-                            }, "國定假日當天已改為休假");
-                          }
-                        }}>改成 {rule.work_date?.slice(5)} 休假</button>
-                        <span>或</span>
-                        <select value={adjustedDates[rule.id] || ""} onChange={(event) => setAdjustedDates((current) => ({ ...current, [rule.id]: event.target.value }))}>
-                          <option value="">選擇調休日（只列原工作日）</option>
-                          {workDays.map((entry) => <option key={entry.workDate} value={entry.workDate}>{entry.workDate} · {entry.shiftLabel}</option>)}
-                        </select>
-                        <button className={styles.dangerButton} disabled={busy || !adjustedDates[rule.id]} onClick={() => void act("arrange_holiday_adjustment", {
-                          employeeId: rule.employee_id,
-                          holidayDate: rule.work_date,
-                          holidayName: holiday?.holiday_name || String(rule.details.holidayName || "國定假日"),
-                          adjustedDayOff: adjustedDates[rule.id],
-                        }, "國定假日與調休日已建立一對一對應")}>確認安排調休日</button>
-                      </div>
-                    </article>
-                  );
-                })}
+                              holidayName: group.holidayName,
+                              adjustedDayOff: adjustedDates[rule.id],
+                            }, "國休日已安排完成")}>確認其他國休日</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
               </div>
             </section>
           ) : null}
@@ -611,8 +616,8 @@ export default function StaffScheduleManager() {
 
           {data.holidayAdjustments.some((item) => item.status === "draft") && data.actor.canFinalApprove ? (
             <section className={styles.panel}>
-              <h2>國定假日調移逐筆核准</h2>
-              {data.holidayAdjustments.filter((item) => item.status === "draft").map((item) => <div className={styles.approvalRow} key={item.id}><span>{employeeMap.get(item.employee_id)?.displayName}：{item.holiday_date} {item.holiday_name} → {item.adjusted_day_off} 休假</span><button className={styles.primaryButton} onClick={() => void act("approve_holiday_adjustment", { adjustmentId: item.id }, "此筆國定假日調移已由經理核准")}>經理核准此筆</button></div>)}
+              <h2>國休安排逐筆核准</h2>
+              {data.holidayAdjustments.filter((item) => item.status === "draft").map((item) => <div className={styles.approvalRow} key={item.id}><span>{employeeMap.get(item.employee_id)?.displayName}：{item.holiday_date} {item.holiday_name} → {item.adjusted_day_off} 國休</span><button className={styles.primaryButton} onClick={() => void act("approve_holiday_adjustment", { adjustmentId: item.id }, "此筆國休安排已由經理核准")}>經理核准此筆</button></div>)}
             </section>
           ) : null}
 
@@ -621,7 +626,7 @@ export default function StaffScheduleManager() {
               <div><span className={styles.step}>4</span><div><h2>正式班表兩次審核</h2><p>初審完成才會送經理；經理發布後，員工只看得到自己的班表。</p></div></div>
               <div className={styles.actionRow}>
                 <button className={styles.secondaryButton} disabled={busy || data.version.status === "published"} onClick={() => {
-                  if (window.confirm("確認副理已逐日檢查班別、例假、休息日、人力與國定假日調移？")) void act("assistant_approve", {}, "副理初審完成，已通知經理");
+                  if (window.confirm("確認副理已逐日檢查班別、例假、休息日、人力與國休安排？")) void act("assistant_approve", {}, "副理初審完成，已通知經理");
                 }}>副理完成初審</button>
                 {data.actor.canFinalApprove ? <button className={styles.primaryButton} disabled={busy || data.version.status !== "manager_review"} onClick={() => {
                   if (window.confirm("確認經理已逐筆終審？發布後會立即通知所有員工在 3 天內簽名。")) void act("manager_publish", {}, "正式班表已發布並通知員工");

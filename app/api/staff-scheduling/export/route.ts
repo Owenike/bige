@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { apiError, requireProfile } from "../../../../lib/auth-context";
 import { requireStaffPermission } from "../../../../lib/staff-operation-permissions";
 import { writeStaffAudit } from "../../../../lib/staff-audit";
+import { staffScheduleOffLabel, staffScheduleShiftLabel } from "../../../../lib/staff-scheduling";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -18,23 +19,6 @@ const STAFF_ROLES = [
   "therapist",
   "sales",
 ] as const;
-const OFF_LABELS: Record<string, string> = {
-  regular_day_off: "例假",
-  rest_day: "休息日",
-  facility_closure: "館休",
-  preferred_off: "自選休假",
-  national_holiday: "國定假日",
-  holiday_adjustment: "國定假日調休",
-  annual_leave: "特休",
-  sick_leave: "病假",
-  personal_leave: "事假",
-  family_care_leave: "家庭照顧假",
-  marriage_leave: "婚假",
-  bereavement_leave: "喪假",
-  official_leave: "公假",
-  other_leave: "其他假",
-};
-
 function safeCell(value: unknown) {
   const text = String(value ?? "");
   return /^[=+\-@]/.test(text) ? `'${text}` : text;
@@ -217,8 +201,8 @@ export async function GET(request: Request) {
           );
           if (!entry) return "—";
           return entry.entry_kind === "off"
-            ? OFF_LABELS[String(entry.off_kind)] || "休"
-            : `${safeCell(entry.shift_label || "上班")}\n${String(entry.starts_at).slice(0, 5)}–${String(entry.ends_at).slice(0, 5)}`;
+            ? staffScheduleOffLabel(String(entry.off_kind || ""))
+            : `${safeCell(staffScheduleShiftLabel({ shiftCode: String(entry.shift_code || ""), shiftLabel: String(entry.shift_label || ""), startsAt: String(entry.starts_at || "").slice(0, 5) }))}\n${String(entry.starts_at).slice(0, 5)}–${String(entry.ends_at).slice(0, 5)}`;
         }),
       ]);
       row.height = 42;

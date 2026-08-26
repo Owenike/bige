@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { staffScheduleOffLabel, staffScheduleShiftLabel } from "../lib/staff-scheduling";
 import styles from "../app/staff/schedule/page.module.css";
 
 type SelfState = {
@@ -42,23 +43,6 @@ type SelfState = {
     status: string;
   }>;
   acknowledgement: null | { status: string; signed_at: string | null; objection_reason: string | null };
-};
-
-const OFF_LABELS: Record<string, string> = {
-  regular_day_off: "例假",
-  rest_day: "休息日",
-  facility_closure: "館休",
-  preferred_off: "排休",
-  holiday_adjustment: "國定假日調休",
-  national_holiday: "國定假日",
-  annual_leave: "特休",
-  sick_leave: "病假",
-  personal_leave: "事假",
-  family_care_leave: "家庭照顧假",
-  marriage_leave: "婚假",
-  bereavement_leave: "喪假",
-  official_leave: "公假",
-  other_leave: "其他假",
 };
 
 function nextMonthValue() {
@@ -277,7 +261,7 @@ export default function StaffScheduleSelfService() {
             <div><span className={styles.kicker}>自選排休</span><h2>{month.replace("-", " 年 ")} 月</h2><p>{selectionOpen ? "截止日前可隨時更改；送出後仍可在 20 日 23:59 前重新儲存。" : "選取期限已截止；如需修改，請直接聯絡副理。"}</p></div>
             <div className={`${styles.counter} ${remaining === 0 ? styles.counterDone : ""}`}><strong>{combinedCount}</strong><span>/ {requiredCount} 天</span><small>{remaining === 0 ? "已選滿" : `還差 ${remaining} 天`}</small></div>
           </div>
-          <div className={styles.legend}><span><i className={styles.selectedMark} />我選的排休</span><span><i className={styles.closureMark} />館休（已計入）</span><span>只選日期，例假／休息日由合法班表安排</span></div>
+          <div className={styles.legend}><span><i className={styles.selectedMark} />我選的排休</span><span><i className={styles.closureMark} />館休（已計入）</span><span>只選日期，例假／休假由合法班表安排</span></div>
           <div className={styles.calendar}>
             {["日", "一", "二", "三", "四", "五", "六"].map((label) => <div className={styles.weekday} key={label}>{label}</div>)}
             {calendarCells.map((date, index) => date ? (
@@ -312,22 +296,22 @@ export default function StaffScheduleSelfService() {
             {sortedEntries.map((entry) => (
               <article key={entry.id} className={entry.entryKind === "off" ? styles.offEntry : styles.workEntry}>
                 <div><strong>{Number(entry.workDate.slice(-2))}</strong><span>{formatDate(entry.workDate).split("週").at(-1)}</span></div>
-                <div>{entry.entryKind === "work" ? <><h3>{entry.shiftLabel || "上班"}</h3><p>{entry.startsAt}–{entry.endsAt}{entry.employeeVisibleNote ? ` · ${entry.employeeVisibleNote}` : ""}</p></> : <><h3>{OFF_LABELS[entry.offKind || ""] || "休假"}</h3><p>{entry.employeeVisibleNote || "本日不上班"}</p></>}</div>
+                <div>{entry.entryKind === "work" ? <><h3>{staffScheduleShiftLabel(entry)}</h3><p>{entry.startsAt}–{entry.endsAt}{entry.employeeVisibleNote ? ` · ${entry.employeeVisibleNote}` : ""}</p></> : <><h3>{staffScheduleOffLabel(entry.offKind)}</h3><p>{entry.employeeVisibleNote || "本日不上班"}</p></>}</div>
               </article>
             ))}
           </section>
 
           {data.holidayAdjustments.length > 0 ? (
             <section className={styles.holidayBox}>
-              <h2>國定假日調移（請逐筆確認）</h2>
+              <h2>國休安排（請逐筆確認）</h2>
               <p>下列原國定假日改為出勤，並將指定的原工作日調整為休假；本次簽名會同時確認這些對應。</p>
-              {data.holidayAdjustments.map((item) => <div key={`${item.holiday_date}:${item.adjusted_day_off}`}><span><strong>{item.holiday_date}</strong>　{item.holiday_name}</span><b>當日出勤 {item.original_shift_summary}</b><i>→</i><span><strong>{item.adjusted_day_off}</strong>　國定假日調休</span></div>)}
+              {data.holidayAdjustments.map((item) => <div key={`${item.holiday_date}:${item.adjusted_day_off}`}><span><strong>{item.holiday_date}</strong>　{item.holiday_name}</span><b>當日出勤 {item.original_shift_summary}</b><i>→</i><span><strong>{item.adjusted_day_off}</strong>　國休</span></div>)}
             </section>
           ) : null}
 
           {!data.acknowledgement ? (
             <section className={styles.signPanel}>
-              <div><span className={styles.kicker}>手機簽署</span><h2>確認正式班表</h2><p>本人已逐日確認本月份正式班表、例假日、休息日及上方所列國定假日調移內容，並以本次手機簽名確認。</p></div>
+              <div><span className={styles.kicker}>手機簽署</span><h2>確認正式班表</h2><p>本人已逐日確認本月份正式班表、例假日、休息日及上方所列國休安排，並以本次手機簽名確認。</p></div>
               <label className={styles.confirmCheck}><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已閱讀並確認上方全部內容</span></label>
               <SignaturePad onChange={setSignature} />
               <div className={styles.signActions}>
