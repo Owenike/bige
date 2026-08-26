@@ -615,6 +615,7 @@ function customContractPlanFrom(plan?: Plan): CustomContractPlanDraft {
       reformer_pilates: plan?.course_allocations.reformer_pilates || 0,
       sports_cupping: plan?.course_allocations.sports_cupping || 0,
       fascia_knife: plan?.course_allocations.fascia_knife || 0,
+      boxing: plan?.course_allocations.boxing || 0,
     },
   };
 }
@@ -626,6 +627,7 @@ function emptyCourseAllocationDraft(): Record<BigeContractCourseType, number> {
     reformer_pilates: 0,
     sports_cupping: 0,
     fascia_knife: 0,
+    boxing: 0,
   };
 }
 
@@ -5340,6 +5342,7 @@ export default function BigeFitnessOperations({
     reformer_pilates: 0,
     sports_cupping: 0,
     fascia_knife: 0,
+    boxing: 0,
     description: "",
   });
   const [planError, setPlanError] = useState("");
@@ -5361,6 +5364,7 @@ export default function BigeFitnessOperations({
             reformer_pilates: Number(planDraft.reformer_pilates),
             sports_cupping: Number(planDraft.sports_cupping),
             fascia_knife: Number(planDraft.fascia_knife),
+            boxing: Number(planDraft.boxing),
           },
           description: planDraft.description || null,
           isCustom: false,
@@ -6672,8 +6676,11 @@ export default function BigeFitnessOperations({
                       {plan.total_sessions} 堂 · 效期 {terms.validityDays} 天 · 最多延期 {terms.extensionLimitDays} 天
                     </p>
                     <p className={styles.muted}>
-                      重訓 {plan.course_allocations.weight_training || 0} / 放鬆 {plan.course_allocations.relaxation || 0} / 皮拉提斯{" "}
-                      {plan.course_allocations.reformer_pilates || 0}
+                      {BIGE_CONTRACT_COURSE_TYPES.filter(
+                        (course) => Number(plan.course_allocations[course] || 0) > 0,
+                      ).map(
+                        (course) => `${BIGE_COURSE_LABELS[course]} ${plan.course_allocations[course]} 堂`,
+                      ).join(" / ") || "尚未分配課別"}
                     </p>
                   </article>
                 );

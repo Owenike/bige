@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  BIGE_CONTRACT_COURSE_TYPES,
+  BIGE_COURSE_LABELS,
+  BIGE_COURSE_TYPES,
   BIGE_FA_DURATION_MINUTES,
   BIGE_SCHEDULE_MOVE_UNDO_WINDOW_MS,
   BIGE_SCHEDULE_NOTE_UNDO_WINDOW_MS,
@@ -46,6 +49,7 @@ import {
   restoreNoShowBookingSchema,
   createContractSchema,
   completeTrialOutcomeSchema,
+  createScheduleSchema,
   changeTrialConversionPaymentSchema,
   changeTrialConversionOutcomeSchema,
   restoreTrialConversionSchema,
@@ -1132,7 +1136,7 @@ test("legacy members keep overall usage while specialties remain unset at zero",
   assert.equal(summary.used.weight_training, 0);
 });
 
-test("specialty allocation updates require all five non-negative integer counters", () => {
+test("specialty allocation updates accept all six non-negative integer counters", () => {
   const valid = {
     action: "update_course_allocations",
     contractId: "00000000-0000-4000-8000-000000000001",
@@ -1142,6 +1146,7 @@ test("specialty allocation updates require all five non-negative integer counter
       reformer_pilates: 24,
       sports_cupping: 0,
       fascia_knife: 0,
+      boxing: 0,
     },
   };
   assert.equal(updateCourseAllocationsSchema.safeParse(valid).success, true);
@@ -1294,11 +1299,12 @@ test("missing original FA profile data forces a locked manager-change notificati
 
 test("custom contract plans support all course allocations and an independent profile-change notice", () => {
   const allocations = {
-    weight_training: 4,
+    weight_training: 3,
     relaxation: 2,
     reformer_pilates: 2,
     sports_cupping: 1,
     fascia_knife: 1,
+    boxing: 1,
   };
   assert.equal(validateCourseAllocationTotal(allocations, 10), true);
   assert.equal(
@@ -1328,6 +1334,57 @@ test("custom contract plans support all course allocations and an independent pr
     }).success,
     true,
   );
+});
+
+test("boxing is available across scheduling, allocation, persistence, and existing trial conversion", () => {
+  assert.equal(BIGE_COURSE_TYPES.includes("boxing"), true);
+  assert.equal(BIGE_CONTRACT_COURSE_TYPES.includes("boxing"), true);
+  assert.equal(BIGE_COURSE_LABELS.boxing, "拳擊 Boxing");
+  assert.equal(
+    createScheduleSchema.safeParse({
+      action: "create_schedule",
+      memberId: "00000000-0000-4000-8000-000000000012",
+      coachId: "00000000-0000-4000-8000-000000000011",
+      operationKind: "pt",
+      courseType: "boxing",
+      startsAt: "2026-08-27T02:00:00.000Z",
+      endsAt: "2026-08-27T03:00:00.000Z",
+      idempotencyKey: "boxing-schedule-test-20260826",
+    }).success,
+    true,
+  );
+  assert.equal(
+    validateCourseAllocationTotal(
+      {
+        weight_training: 0,
+        relaxation: 0,
+        reformer_pilates: 0,
+        sports_cupping: 0,
+        fascia_knife: 0,
+        boxing: 12,
+      },
+      12,
+    ),
+    true,
+  );
+
+  const migration = readFileSync(
+    "supabase/migrations/20260826142642_add_boxing_course_type.sql",
+    "utf8",
+  );
+  const trialScheduleRoute = readFileSync(
+    "app/api/admin/trial-bookings/[id]/schedule/route.ts",
+    "utf8",
+  );
+  const fitnessRoute = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+
+  assert.match(migration, /bookings_course_type_check[\s\S]*'boxing'/);
+  assert.match(migration, /bige_validate_course_allocations[\s\S]*p_allocations->>'boxing'/);
+  assert.match(migration, /allowed_courses[\s\S]*'boxing'/);
+  assert.match(migration, /bige_create_schedule_booking_v2[\s\S]*when 'boxing' then '拳擊 Boxing'/);
+  assert.match(migration, /bige_reschedule_schedule_booking_v2[\s\S]*when 'boxing' then '拳擊 Boxing'/);
+  assert.match(trialScheduleRoute, /data\.service === "boxing_fitness"[\s\S]*\? "boxing"/);
+  assert.match(fitnessRoute, /completedCourseLabel[\s\S]*BIGE_COURSE_LABELS/);
 });
 
 test("contract payment records accept the new ECPay methods and legacy card terminal records", () => {

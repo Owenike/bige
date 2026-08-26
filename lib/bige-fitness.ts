@@ -16,6 +16,7 @@ export const BIGE_COURSE_TYPES = [
   "reformer_pilates",
   "sports_cupping",
   "fascia_knife",
+  "boxing",
   "onsite_assessment",
 ] as const;
 export type BigeCourseType = (typeof BIGE_COURSE_TYPES)[number];
@@ -26,6 +27,7 @@ export const BIGE_CONTRACT_COURSE_TYPES = [
   "reformer_pilates",
   "sports_cupping",
   "fascia_knife",
+  "boxing",
 ] as const;
 export type BigeContractCourseType = (typeof BIGE_CONTRACT_COURSE_TYPES)[number];
 
@@ -33,6 +35,7 @@ export const BIGE_TRIAL_COURSE_TYPES = [
   "weight_training",
   "relaxation",
   "reformer_pilates",
+  "boxing",
   "onsite_assessment",
 ] as const;
 export type BigeTrialCourseType = (typeof BIGE_TRIAL_COURSE_TYPES)[number];
@@ -43,6 +46,7 @@ export const BIGE_COURSE_LABELS: Record<BigeCourseType, string> = {
   reformer_pilates: "器械皮拉提斯",
   sports_cupping: "運動拔罐",
   fascia_knife: "筋膜刀",
+  boxing: "拳擊 Boxing",
   onsite_assessment: "現場評估",
 };
 
@@ -422,6 +426,7 @@ export const courseAllocationsSchema = z
     reformer_pilates: z.coerce.number().int().min(0),
     sports_cupping: z.coerce.number().int().min(0).default(0),
     fascia_knife: z.coerce.number().int().min(0).default(0),
+    boxing: z.coerce.number().int().min(0).default(0),
   })
   .superRefine((value, context) => {
     if (Object.values(value).every((count) => count === 0)) {

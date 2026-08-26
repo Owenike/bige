@@ -217,6 +217,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         ? "reformer_pilates"
         : data.service === "sports_massage"
           ? "relaxation"
+          : data.service === "boxing_fitness"
+            ? "boxing"
           : data.service === "onsite_assessment"
             ? "onsite_assessment"
             : "weight_training";

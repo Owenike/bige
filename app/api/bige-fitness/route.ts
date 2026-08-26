@@ -3722,7 +3722,7 @@ export async function POST(request: Request) {
       return apiError(403, "FORBIDDEN", "只有教練經理、副理或城市經理能建立方案");
     }
     if (!validateCourseAllocationTotal(input.allocations, input.totalSessions)) {
-      return apiError(400, "FORBIDDEN", "三種課別分配加總必須等於總堂數");
+      return apiError(400, "FORBIDDEN", "各課別分配加總必須等於總堂數");
     }
     const terms = calculateContractTerms(input.totalSessions);
     const result = await operationSupabase
@@ -4381,6 +4381,9 @@ export async function POST(request: Request) {
     if (result.error) return handleDatabaseError(result.error, "完成上課失敗");
 
     const item = result.data as Record<string, any>;
+    const completedCourseLabel =
+      BIGE_COURSE_LABELS[item.courseType as keyof typeof BIGE_COURSE_LABELS] ||
+      String(item.courseType || "未標示");
     let emailDelivery: { status: string; error?: string | null } = { status: "skipped" };
     if (!item.replayed && item.memberEmail && !item.emailUnavailable) {
       const notifyResult = await sendNotification({
@@ -4394,7 +4397,7 @@ export async function POST(request: Request) {
             timeZone: "Asia/Taipei",
             dateStyle: "long",
             timeStyle: "short",
-          }).format(new Date(item.startsAt))} 完成 ${String(item.courseType)} 課程。`,
+          }).format(new Date(item.startsAt))} 完成 ${completedCourseLabel} 課程。`,
           "這次的投入已經替自己累積了一步，謝謝您今天認真完成訓練。",
           "",
           "BIG E FITNESS",
