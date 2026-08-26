@@ -69,7 +69,12 @@ import {
   BigeBoardPrefetchQueue,
   buildBigeBoardPrefetchDates,
 } from "../lib/bige-board-prefetch";
-import { assignBigeMonthlyDateTimes } from "../lib/bige-monthly-selection";
+import {
+  assignBigeMonthlyDateCourseTypes,
+  assignBigeMonthlyDateTimes,
+  removeBigeMonthlyDateCourseType,
+  retainBigeMonthlyDateCourseTypes,
+} from "../lib/bige-monthly-selection";
 
 const batchCoachId = "00000000-0000-4000-8000-000000000011";
 const batchMemberId = "00000000-0000-4000-8000-000000000012";
@@ -534,6 +539,47 @@ test("monthly per-date coach assignments require one coach for each unique time"
     }).success,
     true,
   );
+
+  const mixedCourseAssignments = [
+    { ...assignment, courseType: "relaxation" },
+    {
+      ...assignment,
+      startsAt: "2026-09-10T11:00:00+08:00",
+      courseType: "boxing",
+    },
+  ];
+  assert.equal(
+    checkScheduleBatchAssignmentsSchema.safeParse({
+      action: "check_schedule_batch_assignments",
+      memberId: batchMemberId,
+      operationKind: "pt",
+      courseType: "weight_training",
+      assignments: mixedCourseAssignments,
+    }).success,
+    true,
+  );
+  assert.equal(
+    createScheduleBatchAssignmentsSchema.safeParse({
+      action: "create_schedule_batch_assignments",
+      memberId: batchMemberId,
+      operationKind: "pt",
+      courseType: "weight_training",
+      assignments: mixedCourseAssignments,
+      idempotencyKey: "monthly-mixed-course-test",
+    }).success,
+    true,
+  );
+  assert.equal(
+    createScheduleBatchAssignmentsSchema.safeParse({
+      action: "create_schedule_batch_assignments",
+      memberId: batchMemberId,
+      operationKind: "pt",
+      courseType: "weight_training",
+      assignments: [{ ...assignment, courseType: "not-a-course" }],
+      idempotencyKey: "monthly-invalid-course-test",
+    }).success,
+    false,
+  );
 });
 
 test("monthly date selections retain the time used when each date was selected", () => {
@@ -558,6 +604,47 @@ test("monthly date selections retain the time used when each date was selected",
     "2026-09-10": "11:00",
     "2026-09-15": "11:00",
   });
+});
+
+test("monthly date selections retain the specialty used when each date was selected", () => {
+  let dateCourseTypes = assignBigeMonthlyDateCourseTypes(
+    {},
+    ["2026-09-01", "2026-09-03"],
+    "weight_training",
+  );
+  dateCourseTypes = assignBigeMonthlyDateCourseTypes(
+    dateCourseTypes,
+    ["2026-09-03", "2026-09-10"],
+    "relaxation",
+  );
+  dateCourseTypes = removeBigeMonthlyDateCourseType(
+    dateCourseTypes,
+    "2026-09-01",
+  );
+  dateCourseTypes = retainBigeMonthlyDateCourseTypes(dateCourseTypes, [
+    "2026-09-03",
+    "2026-09-10",
+  ]);
+
+  assert.deepEqual(dateCourseTypes, {
+    "2026-09-03": "weight_training",
+    "2026-09-10": "relaxation",
+  });
+});
+
+test("monthly assignment creation persists each date specialty through the booking RPC", () => {
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const assignmentAction = route.slice(
+    route.indexOf('input.action === "create_schedule_batch_assignments"'),
+    route.indexOf('input.action === "create_note"'),
+  );
+
+  assert.match(
+    assignmentAction,
+    /courseType: assignment\.courseType \|\| input\.courseType/,
+  );
+  assert.match(assignmentAction, /p_course_type: assignment\.courseType/);
+  assert.match(assignmentAction, /courseTypes: \[\.\.\.new Set/);
 });
 
 test("monthly batch delete rejects duplicate ids and requires an idempotency key", () => {
@@ -605,6 +692,9 @@ test("monthly schedule UI exposes per-date coach choice, leave confirmation, and
   assert.match(monthlyWorkspace, /正式課程會整合成一則 LINE 取消通知，FA 不會發送 LINE/);
   assert.doesNotMatch(monthlyWorkspace, /此時間只套用到接下來新選的日期；已選日期會保留原時間/);
   assert.match(monthlyWorkspace, /monthlyDateTimes\[day\]/);
+  assert.match(monthlyWorkspace, /monthlyDateCourseTypes\[day\]/);
+  assert.match(monthlyWorkspace, /selectedCourseLabel/);
+  assert.match(monthlyWorkspace, /openMonthlyCoachPicker\(day, time, courseType\)/);
   assert.match(monthlyWorkspace, /className=\{styles\.monthDayTime\}/);
 });
 
@@ -617,12 +707,19 @@ test("monthly schedule confirmation emphasizes every date and closes after a suc
   );
 
   assert.match(confirmation, /title=\{monthlyPreflight\.available\.length \? "確認預約日期"/);
-  assert.match(confirmation, /請逐筆確認日期、星期、時間與教練/);
+  assert.match(confirmation, /請逐筆確認日期、星期、時間、專項與教練/);
   assert.match(confirmation, /monthlyPreflight\.available\.map\(\(slot, index\) =>/);
   assert.doesNotMatch(confirmation, /monthlyPerDateMode && monthlyPreflight\.available\.length/);
   assert.match(confirmation, /formatDate\(slot\.startsAt\)/);
   assert.match(confirmation, /weekdayLabel\(dateKey\)/);
   assert.match(confirmation, /slotKey\(slot\.startsAt\)/);
+  assert.match(confirmation, /BIGE_COURSE_LABELS\[courseType\]/);
+  assert.match(styles, /\.monthlyDateReviewCourse/);
+  assert.match(component, /assignments: availableAssignments/);
+  assert.match(
+    component,
+    /courseType: monthlyDateCourseTypes\[day\] \|\| monthlyCourseType/,
+  );
   assert.match(component, /setDialog\(null\);\s*setSuccess\(/);
   assert.doesNotMatch(component, /monthly-schedule-result|批次排課結果|monthlyBatchResult/);
   assert.match(styles, /\.monthlyDateReviewList\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
@@ -653,7 +750,7 @@ test("monthly schedule defaults to per-date coach selection", () => {
   );
   assert.match(
     component,
-    /if \(monthlyPerDateMode\) \{[\s\S]*?setMonthlyDates\(\(current\) =>[\s\S]*?openMonthlyCoachPicker\(day, time\)/,
+    /if \(monthlyPerDateMode\) \{[\s\S]*?setMonthlyDates\(\(current\) =>[\s\S]*?openMonthlyCoachPicker\(day, time, courseType\)/,
   );
   assert.match(component, /monthlyPerDateMode && selected[\s\S]*?"待選教練"/);
   assert.match(component, /monthlyDates\.includes\(monthlyCoachPickerDay\)/);

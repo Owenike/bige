@@ -3141,9 +3141,12 @@ export async function POST(request: Request) {
       if (bindingError) return apiError(409, "FORBIDDEN", bindingError);
     }
 
-    const assignments = [...input.assignments].sort((first, second) =>
-      first.startsAt.localeCompare(second.startsAt),
-    );
+    const assignments = input.assignments
+      .map((assignment) => ({
+        ...assignment,
+        courseType: assignment.courseType || input.courseType,
+      }))
+      .sort((first, second) => first.startsAt.localeCompare(second.startsAt));
     const requestedCoachIds = [...new Set(assignments.map((assignment) => assignment.coachId))];
     const coachesResult = await createSupabaseAdminClient()
       .from("profiles")
@@ -3158,8 +3161,18 @@ export async function POST(request: Request) {
       return apiError(409, "FORBIDDEN", "教練名單已更新，請重新選擇教練");
     }
 
-    const created: Array<{ startsAt: string; coachId: string; item: unknown }> = [];
-    const failures: Array<{ startsAt: string; coachId: string; message: string }> = [];
+    const created: Array<{
+      startsAt: string;
+      coachId: string;
+      courseType: keyof typeof BIGE_COURSE_LABELS;
+      item: unknown;
+    }> = [];
+    const failures: Array<{
+      startsAt: string;
+      coachId: string;
+      courseType: keyof typeof BIGE_COURSE_LABELS;
+      message: string;
+    }> = [];
     for (const [index, assignment] of assignments.entries()) {
       const endsAt = normalizeBigeScheduleEndAt(
         input.operationKind,
@@ -3192,7 +3205,7 @@ export async function POST(request: Request) {
         p_trial_booking_id: null,
         p_coach_id: assignment.coachId,
         p_operation_kind: input.operationKind,
-        p_course_type: input.courseType,
+        p_course_type: assignment.courseType,
         p_starts_at: assignment.startsAt,
         p_ends_at: endsAt,
         p_note: input.note || null,
@@ -3221,6 +3234,7 @@ export async function POST(request: Request) {
         assignments,
         operationKind: input.operationKind,
         courseType: input.courseType,
+        courseTypes: [...new Set(assignments.map((assignment) => assignment.courseType))],
         requestedCount: assignments.length,
         createdCount: created.length,
         failureCount: failures.length,

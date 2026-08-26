@@ -498,6 +498,7 @@ export const checkScheduleBatchSchema = z.object({
 const scheduleCoachAssignmentSchema = z.object({
   coachId: z.string().uuid(),
   startsAt: z.string().datetime({ offset: true }),
+  courseType: z.enum(BIGE_COURSE_TYPES).optional(),
 });
 
 export const getScheduleCoachOptionsSchema = z.object({

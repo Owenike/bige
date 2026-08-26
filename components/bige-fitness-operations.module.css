@@ -6362,6 +6362,20 @@
   font-variant-numeric: tabular-nums;
 }
 
+.monthlyDateReviewCourse {
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px 7px;
+  overflow: hidden;
+  color: rgba(239, 244, 248, 0.82);
+  border-radius: 999px;
+  background: rgba(181, 197, 211, 0.12);
+  font-size: 11px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .monthlyDateReviewCoach {
   display: grid;
   gap: 4px;
