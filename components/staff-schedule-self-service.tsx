@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { staffScheduleOffLabel, staffScheduleShiftLabel } from "../lib/staff-scheduling";
+import { staffScheduleEntryOffLabel, staffScheduleShiftLabel } from "../lib/staff-scheduling";
 import styles from "../app/staff/schedule/page.module.css";
 
 type SelfState = {
@@ -296,7 +296,7 @@ export default function StaffScheduleSelfService() {
             {sortedEntries.map((entry) => (
               <article key={entry.id} className={entry.entryKind === "off" ? styles.offEntry : styles.workEntry}>
                 <div><strong>{Number(entry.workDate.slice(-2))}</strong><span>{formatDate(entry.workDate).split("週").at(-1)}</span></div>
-                <div>{entry.entryKind === "work" ? <><h3>{staffScheduleShiftLabel(entry)}</h3><p>{entry.startsAt}–{entry.endsAt}{entry.employeeVisibleNote ? ` · ${entry.employeeVisibleNote}` : ""}</p></> : <><h3>{staffScheduleOffLabel(entry.offKind)}</h3><p>{entry.employeeVisibleNote || "本日不上班"}</p></>}</div>
+                <div>{entry.entryKind === "work" ? <><h3>{staffScheduleShiftLabel(entry)}</h3><p>{entry.startsAt}–{entry.endsAt}{entry.employeeVisibleNote ? ` · ${entry.employeeVisibleNote}` : ""}</p></> : <><h3>{staffScheduleEntryOffLabel(entry)}</h3><p>{entry.employeeVisibleNote || "本日不上班"}</p></>}</div>
               </article>
             ))}
           </section>

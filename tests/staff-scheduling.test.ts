@@ -10,6 +10,8 @@ import {
   paidMinutesForEntry,
   normalizeStaffScheduleView,
   resolveStaffScheduleDataScope,
+  staffScheduleEntryOffLabel,
+  staffScheduleGridWorkLabel,
   staffScheduleOffLabel,
   staffScheduleShiftLabel,
   validateSchedule,
@@ -37,13 +39,23 @@ test("next-month preference window is open from the 1st through the 20th 23:59 T
 test("facility closure counts toward the required eight preferred days", () => {
   const dates = assertValidPreferenceDates({
     monthStart: "2026-10-01",
-    selectedDates: ["2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08"],
-    facilityClosureDates: ["2026-10-01"],
+    selectedDates: ["2026-10-04", "2026-10-05", "2026-10-06", "2026-10-12", "2026-10-13", "2026-10-19", "2026-10-20"],
+    facilityClosureDates: ["2026-10-03"],
   });
   assert.equal(dates.length, 8);
   assert.throws(
     () => assertValidPreferenceDates({ monthStart: "2026-10-01", selectedDates: dates.slice(0, 7) }),
     /必須選滿 8 天/,
+  );
+});
+
+test("eight selected days must cover every complete Monday-Sunday week", () => {
+  assert.throws(
+    () => assertValidPreferenceDates({
+      monthStart: "2026-10-01",
+      selectedDates: ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08"],
+    }),
+    /這一週至少要選 2 天/,
   );
 });
 
@@ -56,6 +68,7 @@ test("monthly generator gives complete weeks one regular day off and one rest da
     },
   });
   assert.equal(entries.length, listMonthDates("2026-10-01").length);
+  assert.equal(entries.filter((entry) => entry.entryKind === "off").length, 8);
   const validation = validateSchedule({ monthStart: "2026-10-01", employees: [middleCoach], entries });
   const fullWeekResults = validation.filter((item) => item.ruleCode === "WEEKLY_REGULAR_AND_REST_DAY");
   assert.ok(fullWeekResults.length > 0);
@@ -180,12 +193,23 @@ test("schedule display uses only the agreed plain-language shift and off labels"
   assert.equal(staffScheduleOffLabel("facility_closure"), "館休");
   assert.equal(staffScheduleOffLabel("holiday_adjustment"), "國休");
   assert.equal(staffScheduleOffLabel("national_holiday"), "國休");
+  assert.equal(staffScheduleEntryOffLabel({ offKind: "regular_day_off", source: "facility_closure" }), "館休");
+  assert.equal(
+    staffScheduleGridWorkLabel({ shiftCode: "COACH_EARLY_WED", startsAt: "12:00", endsAt: "21:00" }, "E000012", "2026-09-02"),
+    "12:00–21:00",
+  );
+  assert.equal(
+    staffScheduleGridWorkLabel({ shiftCode: "COACH_EARLY", startsAt: "10:00", endsAt: "19:00" }, "E000012", "2026-09-03"),
+    "早班",
+  );
 });
 
 test("manager cleanup preserves drag-and-drop and both holiday decisions", () => {
   const source = readFileSync(resolve(process.cwd(), "components/staff-schedule-manager.tsx"), "utf8");
   const apiSource = readFileSync(resolve(process.cwd(), "app/api/staff-scheduling/route.ts"), "utf8");
   const styles = readFileSync(resolve(process.cwd(), "app/manager/staff-scheduling/page.module.css"), "utf8");
+  const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260826223530_add_staff_leave_balances_and_una_shift.sql"), "utf8");
+  const unaDraftMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260826224221_align_una_existing_draft_shift.sql"), "utf8");
   assert.match(source, /holidayRuleGroups\.map/);
   assert.match(source, /window\.setTimeout\(\(\) => setNotice\(""\), 4500\)/);
   assert.match(source, /onDrop=\{\(event\) => void dropOn/);
@@ -198,4 +222,17 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(styles, /\.scheduleTable\{font-size:14px\}/);
   assert.match(styles, /\.workCell small\{color:#66778e;font-size:12px\}/);
   assert.match(styles, /\.nameCell small\{margin-top:4px;color:#65758a;font-size:13px\}/);
+  assert.match(source, /員工自選休假日期/);
+  assert.match(source, /此草稿仍含舊規則補排的例假或休假/);
+  assert.match(source, /shiftDragStart\(event, "DEFAULT"\)[\s\S]*shiftDragStart\(event, "COACH_EARLY"\)[\s\S]*shiftDragStart\(event, "COACH_MIDDLE"\)[\s\S]*shiftDragStart\(event, "COACH_PARTTIME_WEEKDAY"\)/);
+  assert.match(source, /staffScheduleGridWorkLabel\(entry, employee\.employeeNumber, date\)/);
+  assert.doesNotMatch(source, /<small>\{entry\.startsAt\}–\{entry\.endsAt\}<\/small>/);
+  assert.match(source, /特休 \{formatDays\(employee\.employment\?\.annual_leave_balance_days\)\}/);
+  assert.match(source, /積假 \{formatDays\(employee\.employment\?\.accrued_leave_balance_days\)\}/);
+  assert.match(migration, /annual_leave_balance_days numeric\(5,1\)/);
+  assert.match(migration, /accrued_leave_balance_days numeric\(5,1\)/);
+  assert.match(migration, /profile\.employee_number = 'E000012'/);
+  assert.match(unaDraftMigration, /profile\.employee_number = 'E000012'/);
+  assert.match(unaDraftMigration, /version\.status in \('draft', 'assistant_review', 'manager_review'\)/);
+  assert.match(unaDraftMigration, /extract\(isodow from entry\.work_date\) = 3/);
 });

@@ -42,6 +42,15 @@ export function staffScheduleOffLabel(offKind: string | null | undefined) {
   return STAFF_SCHEDULE_OFF_LABELS[offKind || ""] || "休假";
 }
 
+export function staffScheduleEntryOffLabel(entry: {
+  offKind?: string | null;
+  source?: string | null;
+  employeeVisibleNote?: string | null;
+}) {
+  if (entry.source === "facility_closure" || entry.employeeVisibleNote === "館休") return "館休";
+  return staffScheduleOffLabel(entry.offKind);
+}
+
 type StaffScheduleShiftLabelInput = {
   shiftCode?: string | null;
   shiftLabel?: string | null;
@@ -56,6 +65,23 @@ export function staffScheduleShiftLabel({ shiftCode, shiftLabel, startsAt }: Sta
   if (shiftLabel?.includes("晚班") || startsAt === "18:00") return "晚班";
   if (shiftLabel?.includes("中班") || shiftLabel?.includes("假日班") || startsAt === "13:00") return "中班";
   return shiftLabel || "上班";
+}
+
+export function staffScheduleGridWorkLabel(
+  entry: StaffScheduleShiftLabelInput & { endsAt?: string | null },
+  employeeNumber?: string | null,
+  workDate?: string | null,
+) {
+  if (
+    employeeNumber === "E000012" &&
+    workDate &&
+    parseIsoDate(workDate).getUTCDay() === 3 &&
+    entry.startsAt === "12:00" &&
+    entry.endsAt === "21:00"
+  ) {
+    return "12:00–21:00";
+  }
+  return staffScheduleShiftLabel(entry);
 }
 
 export type ShiftDefinition = {
@@ -252,6 +278,23 @@ export function assertValidPreferenceDates(params: {
   for (const date of combined) {
     if (!monthDates.has(date)) throw new Error("排休日期必須位於指定月份");
   }
+
+  const completeWeeks = new Map<string, string[]>();
+  for (const date of monthDates) {
+    const weekStart = mondayOfWeek(date);
+    const weekDates = completeWeeks.get(weekStart) || [];
+    weekDates.push(date);
+    completeWeeks.set(weekStart, weekDates);
+  }
+  for (const weekDates of completeWeeks.values()) {
+    if (weekDates.length !== 7) continue;
+    const selectedInWeek = weekDates.filter((date) => combined.has(date));
+    if (selectedInWeek.length < 2) {
+      throw new Error(
+        `${Number(weekDates[0].slice(-2))}–${Number(weekDates[6].slice(-2))} 日這一週至少要選 2 天，才能自動安排例假與休假`,
+      );
+    }
+  }
   return Array.from(combined).sort();
 }
 
@@ -270,17 +313,6 @@ export function shiftForEmployeeDate(
     code = day === 3 ? "COACH_EARLY_WED" : "COACH_EARLY";
   }
   return shifts.get(code) || shifts.get("COACH_MIDDLE") || DEFAULT_SHIFT_DEFINITIONS[0];
-}
-
-function chooseExtraOffDate(weekDates: string[], entries: Map<string, ScheduleEntryDraft>) {
-  const priority = [...weekDates].sort((a, b) => {
-    const aDay = parseIsoDate(a).getUTCDay();
-    const bDay = parseIsoDate(b).getUTCDay();
-    const aScore = aDay === 0 ? 0 : aDay === 6 ? 1 : 2;
-    const bScore = bDay === 0 ? 0 : bDay === 6 ? 1 : 2;
-    return aScore - bScore || a.localeCompare(b);
-  });
-  return priority.find((date) => entries.get(date)?.entryKind === "work") || null;
 }
 
 function labelWeeklyDaysOff(entries: Map<string, ScheduleEntryDraft>, weekDates: string[]) {
@@ -332,6 +364,7 @@ export function generateMonthlySchedule(params: {
           countsTowardMiddleLimit: false,
           offKind: isClosure ? "facility_closure" : "preferred_off",
           source: isClosure ? "facility_closure" : "preference",
+          employeeVisibleNote: isClosure ? "館休" : null,
         });
         continue;
       }
@@ -360,31 +393,7 @@ export function generateMonthlySchedule(params: {
       dates.push(date);
       weeks.set(key, dates);
     }
-    for (const weekDates of weeks.values()) {
-      // A complete Monday-Sunday cycle must contain one regular day off and one rest day.
-      if (weekDates.length === 7) {
-        while (weekDates.filter((date) => byDate.get(date)?.entryKind === "off").length < 2) {
-          const extraDate = chooseExtraOffDate(weekDates, byDate);
-          if (!extraDate) break;
-          byDate.set(extraDate, {
-            employeeId: employee.employeeId,
-            workDate: extraDate,
-            entryKind: "off",
-            shiftCode: null,
-            shiftLabel: null,
-            startsAt: null,
-            endsAt: null,
-            breakMinutes: 0,
-            paidBreak: false,
-            breakHiddenFromEmployee: true,
-            countsTowardMiddleLimit: false,
-            offKind: "rest_day",
-            source: "supervisor",
-          });
-        }
-      }
-      labelWeeklyDaysOff(byDate, weekDates);
-    }
+    for (const weekDates of weeks.values()) labelWeeklyDaysOff(byDate, weekDates);
     entries.push(...monthDates.map((date) => byDate.get(date)).filter((entry): entry is ScheduleEntryDraft => !!entry));
   }
   return entries;

@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import { apiError, requireProfile } from "../../../../lib/auth-context";
 import { requireStaffPermission } from "../../../../lib/staff-operation-permissions";
 import { writeStaffAudit } from "../../../../lib/staff-audit";
-import { staffScheduleOffLabel, staffScheduleShiftLabel } from "../../../../lib/staff-scheduling";
+import { staffScheduleEntryOffLabel, staffScheduleGridWorkLabel } from "../../../../lib/staff-scheduling";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -201,8 +201,17 @@ export async function GET(request: Request) {
           );
           if (!entry) return "—";
           return entry.entry_kind === "off"
-            ? staffScheduleOffLabel(String(entry.off_kind || ""))
-            : `${safeCell(staffScheduleShiftLabel({ shiftCode: String(entry.shift_code || ""), shiftLabel: String(entry.shift_label || ""), startsAt: String(entry.starts_at || "").slice(0, 5) }))}\n${String(entry.starts_at).slice(0, 5)}–${String(entry.ends_at).slice(0, 5)}`;
+            ? staffScheduleEntryOffLabel({
+                offKind: String(entry.off_kind || ""),
+                source: String(entry.source || ""),
+                employeeVisibleNote: entry.employee_visible_note ? String(entry.employee_visible_note) : null,
+              })
+            : safeCell(staffScheduleGridWorkLabel({
+                shiftCode: String(entry.shift_code || ""),
+                shiftLabel: String(entry.shift_label || ""),
+                startsAt: String(entry.starts_at || "").slice(0, 5),
+                endsAt: String(entry.ends_at || "").slice(0, 5),
+              }, employee?.employee_number ? String(employee.employee_number) : null, date));
         }),
       ]);
       row.height = 42;

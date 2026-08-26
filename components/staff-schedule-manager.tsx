@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { staffScheduleOffLabel, staffScheduleShiftLabel } from "../lib/staff-scheduling";
+import {
+  staffScheduleEntryOffLabel,
+  staffScheduleGridWorkLabel,
+  staffScheduleOffLabel,
+  staffScheduleShiftLabel,
+} from "../lib/staff-scheduling";
 import styles from "../app/manager/staff-scheduling/page.module.css";
 
 type Employment = {
@@ -16,6 +21,8 @@ type Employment = {
   can_cover_early_shift: boolean;
   counts_toward_middle_limit: boolean;
   insurance_status: string;
+  annual_leave_balance_days: number;
+  accrued_leave_balance_days: number;
 };
 
 type Employee = {
@@ -39,8 +46,11 @@ type ScheduleEntry = {
   endsAt: string | null;
   offKind: string | null;
   source: string;
+  employeeVisibleNote?: string | null;
   requiresResign: boolean;
 };
+
+type ShiftChoice = "COACH_EARLY" | "COACH_MIDDLE" | "COACH_PARTTIME_WEEKDAY" | "DEFAULT";
 
 type RuleResult = {
   id: string;
@@ -132,6 +142,11 @@ function stateLabel(status: string) {
     draft: "草稿",
     assistant_review: "副理初審",
   }[status] || status;
+}
+
+function formatDays(value: number | null | undefined) {
+  const days = Number(value || 0);
+  return Number.isInteger(days) ? String(days) : days.toFixed(1);
 }
 
 async function parseResponse(response: Response) {
@@ -243,6 +258,20 @@ export default function StaffScheduleManager() {
     const rows = visibleEmployees.map((employee) => entryMap.get(`${employee.id}:${date}`)).filter(Boolean);
     return [date, { work: rows.filter((entry) => entry?.entryKind === "work").length, off: rows.filter((entry) => entry?.entryKind === "off").length }];
   })), [dates, entryMap, visibleEmployees]);
+  const selectedPreferenceRows = useMemo(() => (data?.preferences || []).flatMap((preference) => {
+    const selectedDates = (preference.staff_time_off_preference_dates || [])
+      .filter((item) => item.source === "employee")
+      .map((item) => item.requested_date)
+      .sort();
+    if (selectedDates.length === 0) return [];
+    const employee = data?.employees.find((item) => item.id === preference.employee_id);
+    return employee ? [{ employee, selectedDates }] : [];
+  }), [data?.employees, data?.preferences]);
+  const containsLegacyGeneratedDaysOff = (data?.scheduleEntries || []).some((entry) =>
+    entry.entryKind === "off" &&
+    entry.source === "supervisor" &&
+    ["regular_day_off", "rest_day"].includes(entry.offKind || ""),
+  );
 
   async function saveEmployee(employee: Employee, patch: Partial<Employment>) {
     const current = { ...employee.employment, ...patch } as Employment;
@@ -257,15 +286,17 @@ export default function StaffScheduleManager() {
       isOriginalEarlyShift: current.is_original_early_shift,
       canCoverEarlyShift: current.can_cover_early_shift,
       countsTowardMiddleLimit: current.counts_toward_middle_limit,
+      annualLeaveBalanceDays: current.annual_leave_balance_days,
+      accruedLeaveBalanceDays: current.accrued_leave_balance_days,
     }, `${employee.displayName}的班別設定已更新`);
   }
 
   function exportPng() {
     if (!data?.version || visibleEmployees.length === 0) return;
-    const nameWidth = 180;
+    const nameWidth = 230;
     const cellWidth = 96;
     const headerHeight = 62;
-    const rowHeight = 64;
+    const rowHeight = 72;
     const canvas = document.createElement("canvas");
     canvas.width = nameWidth + dates.length * cellWidth;
     canvas.height = 76 + headerHeight + visibleEmployees.length * rowHeight;
@@ -279,7 +310,7 @@ export default function StaffScheduleManager() {
     context.textAlign = "center"; context.textBaseline = "middle";
     dates.forEach((date, index) => { const x = nameWidth + index * cellWidth; const weekend = [0, 6].includes(new Date(`${date}T12:00:00+08:00`).getDay()); context.fillStyle = weekend ? "#ffe7e1" : "#eaf0f7"; context.fillRect(x, top, cellWidth, headerHeight); context.fillStyle = weekend ? "#9c322b" : "#26384e"; context.font = "bold 14px sans-serif"; context.fillText(`${Number(date.slice(-2))}（${weekday(date)}）`, x + cellWidth / 2, top + headerHeight / 2); });
     context.fillStyle = "#eaf0f7"; context.fillRect(0, top, nameWidth, headerHeight); context.fillStyle = "#26384e"; context.fillText("員工", nameWidth / 2, top + headerHeight / 2);
-    visibleEmployees.forEach((employee, rowIndex) => { const y = top + headerHeight + rowIndex * rowHeight; context.fillStyle = "#f8fafc"; context.fillRect(0, y, nameWidth, rowHeight); context.textAlign = "left"; context.fillStyle = "#172235"; context.font = "bold 15px sans-serif"; context.fillText(employee.displayName, 10, y + 23); context.font = "13px sans-serif"; context.fillStyle = "#66778e"; context.fillText(employee.englishName || "未設定英文名", 10, y + 46); dates.forEach((date, index) => { const entry = entryMap.get(`${employee.id}:${date}`); const x = nameWidth + index * cellWidth; context.fillStyle = entry?.entryKind === "off" ? "#ffe49a" : "#ffffff"; context.fillRect(x, y, cellWidth, rowHeight); context.textAlign = "center"; context.fillStyle = "#26384e"; context.font = "bold 14px sans-serif"; const title = entry?.entryKind === "off" ? staffScheduleOffLabel(entry.offKind) : staffScheduleShiftLabel(entry || {}); context.fillText(title.slice(0, 8), x + cellWidth / 2, y + 24); if (entry?.entryKind === "work") { context.font = "12px sans-serif"; context.fillStyle = "#66778e"; context.fillText(`${entry.startsAt}–${entry.endsAt}`, x + cellWidth / 2, y + 46); } }); });
+    visibleEmployees.forEach((employee, rowIndex) => { const y = top + headerHeight + rowIndex * rowHeight; context.fillStyle = "#f8fafc"; context.fillRect(0, y, nameWidth, rowHeight); context.textAlign = "left"; context.fillStyle = "#172235"; context.font = "bold 15px sans-serif"; context.fillText(employee.displayName, 10, y + 20); context.font = "13px sans-serif"; context.fillStyle = "#66778e"; context.fillText(employee.englishName || "未設定英文名", 10, y + 40); context.font = "12px sans-serif"; context.fillStyle = "#315b8b"; context.fillText(`特休 ${formatDays(employee.employment?.annual_leave_balance_days)} 天｜積假 ${formatDays(employee.employment?.accrued_leave_balance_days)} 天`, 10, y + 60); dates.forEach((date, index) => { const entry = entryMap.get(`${employee.id}:${date}`); const x = nameWidth + index * cellWidth; context.fillStyle = entry?.entryKind === "off" ? "#ffe49a" : "#ffffff"; context.fillRect(x, y, cellWidth, rowHeight); context.textAlign = "center"; context.fillStyle = "#26384e"; context.font = "bold 14px sans-serif"; const title = entry?.entryKind === "off" ? staffScheduleEntryOffLabel(entry) : staffScheduleGridWorkLabel(entry || {}, employee.employeeNumber, date); context.fillText(title.slice(0, 12), x + cellWidth / 2, y + rowHeight / 2); }); });
     context.strokeStyle = "#cfd8e5"; context.lineWidth = 1; for (let x = 0; x <= canvas.width; x += x === 0 ? nameWidth : cellWidth) { context.beginPath(); context.moveTo(x, top); context.lineTo(x, canvas.height); context.stroke(); if (x === 0) x = nameWidth - cellWidth; } for (let y = top; y <= canvas.height; y += y === top ? headerHeight : rowHeight) { context.beginPath(); context.moveTo(0, y); context.lineTo(canvas.width, y); context.stroke(); if (y === top) y = top + headerHeight - rowHeight; }
     canvas.toBlob((blob) => { if (!blob) return; const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `巨挺健身館-${month}-班表.png`; anchor.click(); URL.revokeObjectURL(url); }, "image/png");
   }
@@ -290,14 +321,14 @@ export default function StaffScheduleManager() {
     event.dataTransfer.setData("application/json", JSON.stringify({ kind: "day_off", employeeId: entry.employeeId, fromDate: entry.workDate }));
   }
 
-  function shiftDragStart(event: React.DragEvent, shiftCode: "COACH_EARLY" | "DEFAULT") {
+  function shiftDragStart(event: React.DragEvent, shiftCode: ShiftChoice) {
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData("application/json", JSON.stringify({ kind: "shift", shiftCode }));
   }
 
   async function dropOn(event: React.DragEvent, employeeId: string, toDate: string) {
     event.preventDefault();
-    let payload: { kind: "day_off"; employeeId: string; fromDate: string } | { kind: "shift"; shiftCode: "COACH_EARLY" | "DEFAULT" } | null = null;
+    let payload: { kind: "day_off"; employeeId: string; fromDate: string } | { kind: "shift"; shiftCode: ShiftChoice } | null = null;
     try {
       payload = JSON.parse(event.dataTransfer.getData("application/json"));
     } catch {
@@ -315,7 +346,12 @@ export default function StaffScheduleManager() {
         setError("此員工尚未設定「可支援早班」，請先在固定班別設定中勾選資格。");
         return;
       }
-      const label = payload.shiftCode === "COACH_EARLY" ? "支援早班 10:00–19:00" : "員工原固定班別";
+      const label = {
+        DEFAULT: "員工原固定班別",
+        COACH_EARLY: "早班 10:00–19:00",
+        COACH_MIDDLE: "中班 13:00–22:00",
+        COACH_PARTTIME_WEEKDAY: "晚班 18:00–22:00",
+      }[payload.shiftCode];
       if (!window.confirm(`確認將 ${employee?.displayName || "此員工"} 的 ${toDate} 改為「${label}」？\n\n系統會重新執行法規與人數檢查；若班表已發布，只有受影響員工需要重新簽名。`)) return;
       await act("assign_shift", { employeeId, workDate: toDate, shiftCode: payload.shiftCode, confirmed: true }, "個別班次已更新，合法性檢查已重新執行");
       return;
@@ -480,6 +516,12 @@ export default function StaffScheduleManager() {
                         <label className={styles.checkField}><input type="checkbox" checked={terms.is_original_early_shift} onChange={(event) => void saveEmployee(employee, { is_original_early_shift: event.target.checked, default_shift_code: event.target.checked ? "COACH_EARLY" : terms.default_shift_code })} />原固定早班（週三 12:00–21:00）</label>
                         <label className={styles.checkField}><input type="checkbox" checked={terms.can_cover_early_shift} onChange={(event) => void saveEmployee(employee, { can_cover_early_shift: event.target.checked })} />主管指定可支援早班</label>
                         <label className={styles.checkField}><input type="checkbox" checked={terms.counts_toward_middle_limit} onChange={(event) => void saveEmployee(employee, { counts_toward_middle_limit: event.target.checked })} />自選排休納入中班每日上限</label>
+                        <label>特休餘額（天）
+                          <input key={`${employee.id}:annual:${terms.annual_leave_balance_days}`} type="number" min={0} max={365} step={0.5} defaultValue={terms.annual_leave_balance_days} disabled={busy} onBlur={(event) => void saveEmployee(employee, { annual_leave_balance_days: Number(event.target.value) })} />
+                        </label>
+                        <label>積假餘額（天）
+                          <input key={`${employee.id}:accrued:${terms.accrued_leave_balance_days}`} type="number" min={0} max={365} step={0.5} defaultValue={terms.accrued_leave_balance_days} disabled={busy} onBlur={(event) => void saveEmployee(employee, { accrued_leave_balance_days: Number(event.target.value) })} />
+                        </label>
                       </div>
                     </details>
                   );
@@ -504,10 +546,21 @@ export default function StaffScheduleManager() {
               <strong>目前顯示 {visibleEmployees.length} 人</strong>
             </div>
             <p className={styles.gridHelp}>拖曳有顏色的休假格到同一員工的上班日；每次放開前都會再次確認。左右滑動可看完整月份。</p>
+            {containsLegacyGeneratedDaysOff ? <div className={styles.legacyDraftWarning} role="status">
+              此草稿仍含舊規則補排的例假或休假。請先讓員工完成合法分布的 8 天自選排休，再按「依排休重建新版本」套用新規則。
+            </div> : null}
+            {selectedPreferenceRows.length > 0 ? <div className={styles.preferenceSummary}>
+              <strong>員工自選休假日期</strong>
+              <div>{selectedPreferenceRows.map(({ employee, selectedDates }) => (
+                <span key={employee.id}><b>{employee.displayName}{employee.englishName ? ` ${employee.englishName}` : ""}</b>{selectedDates.map((date) => Number(date.slice(-2))).join("、")} 日</span>
+              ))}</div>
+            </div> : null}
             {data.version ? <div className={styles.shiftPalette}>
               <strong>可拖進表格的班次</strong>
-              <div draggable onDragStart={(event) => shiftDragStart(event, "COACH_EARLY")}><span>早</span><b>支援早班</b><small>10:00–19:00 · 僅限已設定資格員工</small></div>
-              <div draggable onDragStart={(event) => shiftDragStart(event, "DEFAULT")}><span>↺</span><b>恢復固定班</b><small>依員工原本班別與日期恢復</small></div>
+              <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "DEFAULT")}><span>↺</span><b>恢復固定班</b><small>依員工原本班別與日期恢復</small></button>
+              <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_EARLY")}><span>早</span><b>早班</b><small>10:00–19:00 · 需具早班資格</small></button>
+              <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_MIDDLE")}><span>中</span><b>中班</b><small>13:00–22:00</small></button>
+              <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_PARTTIME_WEEKDAY")}><span>晚</span><b>晚班</b><small>18:00–22:00</small></button>
             </div> : null}
             {data.version ? (
               <div className={styles.scheduleScroller}>
@@ -516,7 +569,7 @@ export default function StaffScheduleManager() {
                   <tbody>
                     {visibleEmployees.map((employee) => (
                       <tr key={employee.id}>
-                        <th className={styles.nameCell}><strong>{employee.displayName}</strong><small>{employee.englishName || "未設定英文名"}</small></th>
+                        <th className={styles.nameCell}><div className={styles.nameSummary}><span><strong>{employee.displayName}</strong><small>{employee.englishName || "未設定英文名"}</small></span><span className={styles.leaveBalances}><i>特休 {formatDays(employee.employment?.annual_leave_balance_days)}</i><i>積假 {formatDays(employee.employment?.accrued_leave_balance_days)}</i></span></div></th>
                         {dates.map((date) => {
                           const entry = entryMap.get(`${employee.id}:${date}`);
                           const isOff = entry?.entryKind === "off";
@@ -526,11 +579,11 @@ export default function StaffScheduleManager() {
                               className={`${isOff ? styles.offCell : styles.workCell} ${entry?.requiresResign ? styles.resignCell : ""}`}
                               onDragOver={(event) => event.preventDefault()}
                               onDrop={(event) => void dropOn(event, employee.id, date)}
-                              title={isOff ? `${staffScheduleOffLabel(entry?.offKind)}（可拖曳）` : `${entry ? staffScheduleShiftLabel(entry) : "未排班"} ${entry?.startsAt || ""}–${entry?.endsAt || ""}`}
+                              title={isOff ? `${entry ? staffScheduleEntryOffLabel(entry) : "休假"}（可拖曳）` : `${entry ? staffScheduleShiftLabel(entry) : "未排班"} ${entry?.startsAt || ""}–${entry?.endsAt || ""}`}
                             >
                               {entry ? (
                                 <div draggable={isOff} onDragStart={(event) => dragStart(event, entry)}>
-                                  {isOff ? <strong>{staffScheduleOffLabel(entry.offKind)}</strong> : <><span>{staffScheduleShiftLabel(entry)}</span><small>{entry.startsAt}–{entry.endsAt}</small></>}
+                                  {isOff ? <strong>{staffScheduleEntryOffLabel(entry)}</strong> : <span>{staffScheduleGridWorkLabel(entry, employee.employeeNumber, date)}</span>}
                                 </div>
                               ) : <span className={styles.emptyCell}>—</span>}
                             </td>

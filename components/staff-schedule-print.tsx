@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { staffScheduleOffLabel, staffScheduleShiftLabel } from "../lib/staff-scheduling";
+import { staffScheduleEntryOffLabel, staffScheduleGridWorkLabel } from "../lib/staff-scheduling";
 import styles from "../app/manager/staff-scheduling/print/page.module.css";
 
 type State = {
@@ -16,10 +16,13 @@ type State = {
     employeeId: string;
     workDate: string;
     entryKind: string;
+    shiftCode: string | null;
     shiftLabel: string | null;
     startsAt: string | null;
     endsAt: string | null;
     offKind: string | null;
+    source: string;
+    employeeVisibleNote?: string | null;
   }>;
 };
 export default function StaffSchedulePrint({ month }: { month: string }) {
@@ -108,14 +111,9 @@ export default function StaffSchedulePrint({ month }: { month: string }) {
                       className={entry?.entryKind === "off" ? styles.off : ""}
                     >
                       {entry?.entryKind === "off" ? (
-                        staffScheduleOffLabel(entry.offKind)
+                        staffScheduleEntryOffLabel(entry)
                       ) : entry ? (
-                        <>
-                          {staffScheduleShiftLabel(entry)}
-                          <small>
-                            {entry.startsAt}–{entry.endsAt}
-                          </small>
-                        </>
+                        staffScheduleGridWorkLabel(entry, employee.employeeNumber, date)
                       ) : (
                         "—"
                       )}

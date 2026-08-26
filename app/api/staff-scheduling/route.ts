@@ -65,6 +65,8 @@ type EmploymentRow = {
   can_cover_early_shift: boolean;
   counts_toward_middle_limit: boolean;
   insurance_status: string;
+  annual_leave_balance_days: number;
+  accrued_leave_balance_days: number;
 };
 
 type PeriodRow = {
@@ -213,6 +215,7 @@ async function listEmployees(admin: AdminClient, tenantId: string, branchId: str
 
 function inferEmployment(profile: ProfileRow, actorId: string) {
   const frontdesk = profile.position === "frontdesk" || profile.department === "general_affairs";
+  const originalEarlyShift = profile.employee_number === "E000012";
   return {
     employee_id: profile.id,
     tenant_id: profile.tenant_id,
@@ -222,10 +225,12 @@ function inferEmployment(profile: ProfileRow, actorId: string) {
     work_group: frontdesk ? "frontdesk" : "coach",
     monthly_salary: 29500,
     hourly_rate: 196,
-    default_shift_code: frontdesk ? "FRONTDESK_DAY" : "COACH_MIDDLE",
-    is_original_early_shift: false,
+    default_shift_code: frontdesk ? "FRONTDESK_DAY" : originalEarlyShift ? "COACH_EARLY" : "COACH_MIDDLE",
+    is_original_early_shift: originalEarlyShift,
     can_cover_early_shift: false,
     counts_toward_middle_limit: !frontdesk,
+    annual_leave_balance_days: 0,
+    accrued_leave_balance_days: 0,
     configured_by: actorId,
   };
 }
@@ -717,6 +722,8 @@ export async function POST(request: Request) {
         isOriginalEarlyShift: z.boolean(),
         canCoverEarlyShift: z.boolean(),
         countsTowardMiddleLimit: z.boolean(),
+        annualLeaveBalanceDays: z.coerce.number().min(0).max(365),
+        accruedLeaveBalanceDays: z.coerce.number().min(0).max(365),
       }).parse(body);
       const target = await admin.from("profiles").select("id").eq("id", employeeId).eq("tenant_id", tenantId).maybeSingle();
       if (target.error || !target.data) throw new Error("找不到此館員工");
@@ -733,6 +740,8 @@ export async function POST(request: Request) {
         is_original_early_shift: values.isOriginalEarlyShift,
         can_cover_early_shift: values.canCoverEarlyShift,
         counts_toward_middle_limit: values.countsTowardMiddleLimit,
+        annual_leave_balance_days: values.annualLeaveBalanceDays,
+        accrued_leave_balance_days: values.accruedLeaveBalanceDays,
         configured_by: profile.id,
       }, { onConflict: "employee_id" });
       if (update.error) throw new Error(update.error.message);
@@ -1016,7 +1025,7 @@ export async function POST(request: Request) {
       if (!period) throw new Error("找不到排班月份");
       const employeeId = z.string().uuid().parse(body.employeeId);
       const workDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(body.workDate);
-      const shiftChoice = z.enum(["COACH_EARLY", "DEFAULT"]).parse(body.shiftCode);
+      const shiftChoice = z.enum(["COACH_EARLY", "COACH_MIDDLE", "COACH_PARTTIME_WEEKDAY", "DEFAULT"]).parse(body.shiftCode);
       let version = await getLatestVersion(admin, period.id);
       if (!version) throw new Error("尚未建立班表草稿");
       version = await clonePublishedVersionForEmployee({ admin, period, version, employeeId, actorId: profile.id, changeSummary: "發布後調整個別班次；受影響員工須重新簽名" });
@@ -1037,7 +1046,7 @@ export async function POST(request: Request) {
       if (target.data.entry_kind !== "work") throw new Error("休假日不能直接覆蓋成班次；請先調整休假日期");
       const config = configFromRows(employee, employment);
       const shiftMap = new Map(DEFAULT_SHIFT_DEFINITIONS.map((item) => [item.code, item]));
-      const shift = shiftChoice === "DEFAULT" ? shiftForEmployeeDate(config, workDate, shiftMap) : shiftMap.get("COACH_EARLY");
+      const shift = shiftChoice === "DEFAULT" ? shiftForEmployeeDate(config, workDate, shiftMap) : shiftMap.get(shiftChoice);
       if (!shift) throw new Error("找不到指定班別");
       const shiftIds = await loadShiftIds(admin, tenantId, profile.branch_id);
       const update = await admin.from("staff_schedule_entries").update({

@@ -67,3 +67,26 @@
   .scheduleTable th,.scheduleTable td{width:76px;min-width:76px;height:64px}
   .scheduleTable .nameCell{width:148px;min-width:148px}
 }
+
+.settingFields input{min-height:42px;border:1px solid #cbd6e5;border-radius:12px;background:#fff;padding:8px 11px;color:#172235;font:inherit}
+.scheduleTable .nameCell{width:238px;min-width:238px}
+.nameSummary{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.nameSummary>span:first-child{min-width:0}
+.leaveBalances{display:grid;gap:4px;flex:0 0 auto;text-align:right}
+.leaveBalances i{border-radius:999px;background:#eaf2ff;color:#285b99;padding:3px 7px;font-size:11px;font-style:normal;font-weight:900;white-space:nowrap}
+.preferenceSummary{display:grid;grid-template-columns:auto 1fr;align-items:start;gap:12px;margin:0 0 14px;padding:12px;border:1px solid #d7e0ec;border-radius:15px;background:#f8fafc}
+.preferenceSummary>strong{padding-top:5px;color:#5f7086;font-size:12px;white-space:nowrap}
+.preferenceSummary>div{display:flex;gap:7px;flex-wrap:wrap}
+.preferenceSummary span{display:inline-flex;align-items:center;gap:7px;border:1px solid #c8d7ea;border-radius:999px;background:#fff;padding:5px 9px;color:#425b78;font-size:12px}
+.preferenceSummary b{color:#173b67}
+.legacyDraftWarning{margin:0 0 14px;padding:11px 13px;border:1px solid #edcc7a;border-radius:13px;background:#fff8df;color:#76550e;font-size:13px;font-weight:800;line-height:1.55}
+.shiftPalette>button{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center;padding:8px 11px;border:1px solid #bfd0e6;border-radius:12px;background:#fff;color:#172235;font:inherit;text-align:left;cursor:grab;box-shadow:0 4px 10px rgba(54,83,120,.07)}
+.shiftPalette>button:active{cursor:grabbing}
+.shiftPalette>button span{grid-row:1/3;width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:#e7f0ff;color:#1d62c9;font-weight:900}
+.shiftPalette>button b{font-size:13px}
+.shiftPalette>button small{color:#738297;font-size:11px}
+
+@media(max-width:620px){
+  .scheduleTable .nameCell{width:218px;min-width:218px}
+  .preferenceSummary{grid-template-columns:1fr}
+}
