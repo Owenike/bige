@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { normalizeBigeScheduleEndAt } from "../../../../lib/bige-fitness";
 import { requireTrialBookingAdmin } from "../../../../lib/trial-booking-admin-auth";
 import {
   trialBookingCoachLabel,
@@ -137,6 +138,55 @@ function lineError(result: { error?: string; skipped?: boolean; status?: number 
   if (result.skipped) return "missing_line_env";
   if (result.status) return `line_push_failed_${result.status}`;
   return (result.error || "line_push_failed").slice(0, 220);
+}
+
+type ScheduleWarning = {
+  code?: string;
+  existingCount?: number;
+};
+
+function scheduleErrorMessage(error: string) {
+  const code = error.split("\n")[0]?.trim() || "";
+  if (code.includes("past_employee_booking_requires_manager")) {
+    return PAST_EMPLOYEE_BOOKING_ERROR;
+  }
+  if (code.includes("member_time_conflict")) {
+    return "這位客戶在同一時段已有正式預約，請確認日期與時間。";
+  }
+  if (code.includes("schedule_time_overlap") || code.includes("schedule_cell_occupied")) {
+    return "所選教練在同一時段已有正式安排，請確認教練與時間。";
+  }
+  if (code.includes("coach_capacity_exceeded")) {
+    return "所選教練在同一時段已達可服務人數上限。";
+  }
+  if (code.includes("group_course_type_mismatch")) {
+    return "同一團體課程的課別必須一致，請確認課別。";
+  }
+  if (code.includes("outside_business_hours")) {
+    return "預約時間不在可排課時段內。";
+  }
+  return code || "無法加入教練日表";
+}
+
+function scheduleSuccessMessage(base: string, warnings: ScheduleWarning[]) {
+  const messages: string[] = [];
+  const legacyReferenceWarning = warnings.find(
+    (warning) => warning?.code === "legacy_schedule_reference_conflict",
+  );
+  if (legacyReferenceWarning) {
+    const count = Number(legacyReferenceWarning.existingCount || 0);
+    messages.push(
+      count > 0
+        ? `同時段有 ${count} 筆舊預約本資料，僅供對照，本次安排已保留`
+        : "同時段有舊預約本資料，僅供對照，本次安排已保留",
+    );
+  }
+  if (warnings.some((warning) => warning?.code === "classroom_conflict")) {
+    messages.push("此時段有教室衝突，請到課表確認");
+  }
+  return messages.length > 0
+    ? `${base.replace(/[。；]+$/u, "")}；${messages.join("；")}。`
+    : base;
 }
 
 function emptyStats() {
@@ -474,6 +524,54 @@ export async function POST(request: Request) {
     }
     const insertedBooking = insertResult.data as unknown as { id: string } & Record<string, unknown>;
 
+    const endsAt = normalizeBigeScheduleEndAt("trial", startsAt, startsAt);
+    const courseType =
+      data.service === "pilates"
+        ? "reformer_pilates"
+        : data.service === "sports_massage"
+          ? "relaxation"
+          : data.service === "boxing_fitness"
+            ? "boxing"
+            : data.service === "onsite_assessment"
+              ? "onsite_assessment"
+              : "weight_training";
+    const scheduleResult = await auth.supabase.rpc("bige_create_schedule_booking_v2", {
+      p_tenant_id: tenantId,
+      p_branch_id: coachResult.data.branch_id || auth.context.branchId,
+      p_member_id: null,
+      p_trial_booking_id: insertedBooking.id,
+      p_coach_id: coachResult.data.id,
+      p_operation_kind: "trial",
+      p_course_type: courseType,
+      p_starts_at: startsAt,
+      p_ends_at: endsAt,
+      p_note: data.note || null,
+      p_group_id: null,
+      p_idempotency_key: `trial-admin-schedule:${insertedBooking.id}`,
+    });
+    if (scheduleResult.error) {
+      const rollbackResult = await admin
+        .from("trial_bookings")
+        .delete()
+        .eq("tenant_id", tenantId)
+        .eq("id", insertedBooking.id);
+      if (rollbackResult.error) {
+        return NextResponse.json(
+          { ok: false, error: "建立教練課表失敗，且無法清除未完成的體驗預約，請聯絡管理員。" },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json(
+        { ok: false, error: scheduleErrorMessage(scheduleResult.error.message) },
+        { status: 409 },
+      );
+    }
+    const scheduleWarnings = Array.isArray(
+      (scheduleResult.data as { warnings?: unknown } | null)?.warnings,
+    )
+      ? ((scheduleResult.data as { warnings: ScheduleWarning[] }).warnings || [])
+      : [];
+
     const lineResult = await sendLineScheduledTrialBookingNotification({
       appointmentDate: data.appointmentDate,
       appointmentTime: data.appointmentTime,
@@ -506,7 +604,11 @@ export async function POST(request: Request) {
       ok: true,
       booking: updateResult.data || insertedBooking,
       lineNotification: lineOk ? "sent" : "failed",
-      message: lineOk ? "體驗預約已建立並發送 LINE 通知。" : "資料已儲存，但 LINE 通知發送失敗。",
+      warnings: scheduleWarnings,
+      message: scheduleSuccessMessage(
+        lineOk ? "體驗預約已建立、加入教練課表並發送 LINE 通知。" : "資料已儲存並加入教練課表，但 LINE 通知發送失敗。",
+        scheduleWarnings,
+      ),
     });
   } catch (error) {
     return NextResponse.json(
