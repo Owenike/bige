@@ -4,6 +4,7 @@ import {
   canChooseStaffEmployeeNumber,
   canUseStaffAccountSettings,
   canUseStaffNotificationCenter,
+  canUseStaffScheduleNavigation,
   isEmployeeNumber,
   isStaffPlaceholderEmail,
   normalizeEmployeeNumber,
@@ -47,6 +48,14 @@ test("notification center is available to every numbered employee except 06", ()
   assert.equal(canUseStaffNotificationCenter("06"), false);
   assert.equal(canUseStaffNotificationCenter("E000006"), false);
   assert.equal(canUseStaffNotificationCenter(null), true);
+});
+
+test("staff schedule navigation is available to everyone except 06", () => {
+  assert.equal(canUseStaffScheduleNavigation("01"), true);
+  assert.equal(canUseStaffScheduleNavigation("E000005"), true);
+  assert.equal(canUseStaffScheduleNavigation("06"), false);
+  assert.equal(canUseStaffScheduleNavigation("E000006"), false);
+  assert.equal(canUseStaffScheduleNavigation(null), true);
 });
 
 test("placeholder emails are deterministic and identifiable", () => {

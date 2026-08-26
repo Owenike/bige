@@ -129,6 +129,7 @@ import {
 import {
   CUSTOM_EMPLOYEE_NUMBER_MANAGER,
   canUseStaffAccountSettings,
+  canUseStaffScheduleNavigation,
   normalizeEmployeeNumber,
 } from "../lib/staff-credentials";
 import { getBigeMemberDisplayNumber } from "../lib/bige-member-search";
@@ -5732,6 +5733,9 @@ export default function BigeFitnessOperations({
   const canOpenAccountSettings = canUseStaffAccountSettings(
     sessionIdentity?.employeeNumber,
   );
+  const canOpenStaffSchedule =
+    Boolean(previewData || sessionIdentity) &&
+    canUseStaffScheduleNavigation(sessionIdentity?.employeeNumber);
   const selectedBookingStatusWindow = selectedBooking
     ? getBigeCourseStatusWindow({
         startsAt: selectedBooking.starts_at,
@@ -6170,6 +6174,11 @@ export default function BigeFitnessOperations({
             <button className={`${styles.tab} ${tab === "schedule" ? styles.activeTab : ""}`} onClick={() => setTab("schedule")}>
               日排課表
             </button>
+            {canOpenStaffSchedule ? (
+              <a className={styles.tab} href="/staff/schedule">
+                我的班表
+              </a>
+            ) : null}
             {canOpenTrialBookings ? (
               <a className={`${styles.tab} ${styles.gold}`} href="/admin/trial-bookings">
                 首次體驗預約管理

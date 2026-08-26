@@ -5,6 +5,7 @@ import test from "node:test";
 const page = readFileSync("app/admin/trial-bookings/page.tsx", "utf8");
 const staffFitnessRoute = readFileSync("app/staff/fitness/route.ts", "utf8");
 const staffScheduleSelfService = readFileSync("components/staff-schedule-self-service.tsx", "utf8");
+const fitnessOperations = readFileSync("components/bige-fitness-operations.tsx", "utf8");
 const styles = readFileSync("app/globals.css", "utf8");
 
 test("trial booking admin header exposes a same-origin daily schedule link", () => {
@@ -19,6 +20,17 @@ test("trial booking admin header exposes a same-origin daily schedule link", () 
 test("staff schedule replaces the redundant notification link with the daily schedule", () => {
   assert.match(staffScheduleSelfService, /<a href="\/staff\/fitness">日排課表<\/a>/);
   assert.doesNotMatch(staffScheduleSelfService, /<a href="\/staff\/notifications">站內通知<\/a>/);
+});
+
+test("daily schedule navigation places the personal schedule immediately after it and excludes account 06", () => {
+  assert.match(
+    fitnessOperations,
+    /<button[^>]*onClick=\{\(\) => setTab\("schedule"\)\}[^>]*>\s*日排課表\s*<\/button>\s*\{canOpenStaffSchedule \? \(\s*<a className=\{styles\.tab\} href="\/staff\/schedule">\s*我的班表\s*<\/a>\s*\) : null\}/s,
+  );
+  assert.match(
+    fitnessOperations,
+    /const canOpenStaffSchedule =\s*Boolean\(previewData \|\| sessionIdentity\) &&\s*canUseStaffScheduleNavigation\(sessionIdentity\?\.employeeNumber\)/s,
+  );
 });
 
 test("daily schedule resolver preserves each signed-in staff role destination", () => {

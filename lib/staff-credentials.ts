@@ -2,6 +2,7 @@ export const STAFF_PLACEHOLDER_EMAIL_DOMAIN = "staff.bigefitness.invalid";
 export const CUSTOM_EMPLOYEE_NUMBER_MANAGER = "E000001";
 export const STAFF_ACCOUNT_SETTINGS_EXCLUDED = "E000006";
 export const STAFF_NOTIFICATION_CENTER_EXCLUDED = "E000006";
+export const STAFF_SCHEDULE_NAVIGATION_EXCLUDED = "E000006";
 
 export function normalizeEmployeeNumber(value: unknown) {
   if (typeof value !== "string") return "";
@@ -34,6 +35,10 @@ export function canCreateBigeContract(value: unknown) {
 
 export function canUseStaffNotificationCenter(value: unknown) {
   return normalizeEmployeeNumber(value) !== STAFF_NOTIFICATION_CENTER_EXCLUDED;
+}
+
+export function canUseStaffScheduleNavigation(value: unknown) {
+  return normalizeEmployeeNumber(value) !== STAFF_SCHEDULE_NAVIGATION_EXCLUDED;
 }
 
 export function staffPlaceholderEmail(employeeNumber: string) {
