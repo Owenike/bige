@@ -184,10 +184,18 @@ test("schedule display uses only the agreed plain-language shift and off labels"
 
 test("manager cleanup preserves drag-and-drop and both holiday decisions", () => {
   const source = readFileSync(resolve(process.cwd(), "components/staff-schedule-manager.tsx"), "utf8");
+  const apiSource = readFileSync(resolve(process.cwd(), "app/api/staff-scheduling/route.ts"), "utf8");
+  const styles = readFileSync(resolve(process.cwd(), "app/manager/staff-scheduling/page.module.css"), "utf8");
   assert.match(source, /holidayRuleGroups\.map/);
   assert.match(source, /window\.setTimeout\(\(\) => setNotice\(""\), 4500\)/);
   assert.match(source, /onDrop=\{\(event\) => void dropOn/);
   assert.match(source, /"make_holiday_day_off"/);
   assert.match(source, /"arrange_holiday_adjustment"/);
   assert.doesNotMatch(source, /employee\.employment\?\.default_shift_code \|\| "未設定"/);
+  assert.doesNotMatch(source, /`固定：\$\{staffScheduleShiftLabel/);
+  assert.match(source, /employee\.englishName \|\| "未設定英文名"/);
+  assert.match(apiSource, /englishName: employee\.english_name/);
+  assert.match(styles, /\.scheduleTable\{font-size:14px\}/);
+  assert.match(styles, /\.workCell small\{color:#66778e;font-size:12px\}/);
+  assert.match(styles, /\.nameCell small\{margin-top:4px;color:#65758a;font-size:13px\}/);
 });

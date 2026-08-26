@@ -533,6 +533,7 @@ async function buildState(params: {
     employees: employees.map((employee) => ({
       id: employee.id,
       displayName: employee.display_name || employee.english_name || employee.employee_number || "未命名員工",
+      englishName: employee.english_name,
       employeeNumber: employee.employee_number,
       department: employee.department,
       position: employee.position,

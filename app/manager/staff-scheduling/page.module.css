@@ -47,3 +47,23 @@
   .holidayRuleRow .dangerButton{grid-column:1/-1;width:100%}
   .holidayRuleRow .secondaryButton{grid-column:1/-1;width:100%}
 }
+
+/* The month grid is intentionally readable at normal browser zoom. */
+.scheduleTable{font-size:14px}
+.scheduleTable th,.scheduleTable td{width:76px;min-width:76px;height:64px;padding:5px}
+.scheduleTable thead th{height:48px;font-size:14px}
+.scheduleTable thead th small{margin-top:2px;font-size:12px}
+.scheduleTable .nameCell{width:158px;min-width:158px}
+.nameCell strong{font-size:15px}
+.nameCell small{margin-top:4px;color:#65758a;font-size:13px}
+.workCell div{gap:4px}
+.workCell span{font-size:14px}
+.workCell small{color:#66778e;font-size:12px}
+.offCell strong{font-size:14px}
+.emptyCell{font-size:14px;color:#8998aa}
+.scheduleTable tfoot th,.scheduleTable tfoot td{font-size:13px}
+
+@media(max-width:620px){
+  .scheduleTable th,.scheduleTable td{width:76px;min-width:76px;height:64px}
+  .scheduleTable .nameCell{width:148px;min-width:148px}
+}

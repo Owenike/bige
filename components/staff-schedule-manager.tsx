@@ -21,6 +21,7 @@ type Employment = {
 type Employee = {
   id: string;
   displayName: string;
+  englishName: string | null;
   employeeNumber: string | null;
   department: string | null;
   position: string | null;
@@ -232,7 +233,7 @@ export default function StaffScheduleManager() {
     return groups;
   }, new Map<string, { workDate: string | null; holidayName: string; rules: RuleResult[] }>()).values());
   const visibleEmployees = useMemo(() => (data?.employees || []).filter((employee) => {
-    const searchText = `${employee.displayName} ${employee.employeeNumber || ""}`.toLowerCase();
+    const searchText = `${employee.displayName} ${employee.englishName || ""} ${employee.employeeNumber || ""}`.toLowerCase();
     if (!searchText.includes(employeeSearch.trim().toLowerCase())) return false;
     if (employmentFilter !== "all" && employee.employment?.employment_type !== employmentFilter) return false;
     if (shiftFilter !== "all" && employee.employment?.default_shift_code !== shiftFilter) return false;
@@ -262,9 +263,9 @@ export default function StaffScheduleManager() {
   function exportPng() {
     if (!data?.version || visibleEmployees.length === 0) return;
     const nameWidth = 180;
-    const cellWidth = 92;
+    const cellWidth = 96;
     const headerHeight = 62;
-    const rowHeight = 58;
+    const rowHeight = 64;
     const canvas = document.createElement("canvas");
     canvas.width = nameWidth + dates.length * cellWidth;
     canvas.height = 76 + headerHeight + visibleEmployees.length * rowHeight;
@@ -278,7 +279,7 @@ export default function StaffScheduleManager() {
     context.textAlign = "center"; context.textBaseline = "middle";
     dates.forEach((date, index) => { const x = nameWidth + index * cellWidth; const weekend = [0, 6].includes(new Date(`${date}T12:00:00+08:00`).getDay()); context.fillStyle = weekend ? "#ffe7e1" : "#eaf0f7"; context.fillRect(x, top, cellWidth, headerHeight); context.fillStyle = weekend ? "#9c322b" : "#26384e"; context.font = "bold 14px sans-serif"; context.fillText(`${Number(date.slice(-2))}（${weekday(date)}）`, x + cellWidth / 2, top + headerHeight / 2); });
     context.fillStyle = "#eaf0f7"; context.fillRect(0, top, nameWidth, headerHeight); context.fillStyle = "#26384e"; context.fillText("員工", nameWidth / 2, top + headerHeight / 2);
-    visibleEmployees.forEach((employee, rowIndex) => { const y = top + headerHeight + rowIndex * rowHeight; context.fillStyle = "#f8fafc"; context.fillRect(0, y, nameWidth, rowHeight); context.textAlign = "left"; context.fillStyle = "#172235"; context.font = "bold 14px sans-serif"; context.fillText(employee.displayName, 10, y + 21); context.font = "11px sans-serif"; context.fillStyle = "#66778e"; context.fillText(employee.employeeNumber || "無編號", 10, y + 42); dates.forEach((date, index) => { const entry = entryMap.get(`${employee.id}:${date}`); const x = nameWidth + index * cellWidth; context.fillStyle = entry?.entryKind === "off" ? "#ffe49a" : "#ffffff"; context.fillRect(x, y, cellWidth, rowHeight); context.textAlign = "center"; context.fillStyle = "#26384e"; context.font = "bold 11px sans-serif"; const title = entry?.entryKind === "off" ? staffScheduleOffLabel(entry.offKind) : staffScheduleShiftLabel(entry || {}); context.fillText(title.slice(0, 8), x + cellWidth / 2, y + 22); if (entry?.entryKind === "work") { context.font = "10px sans-serif"; context.fillStyle = "#66778e"; context.fillText(`${entry.startsAt}–${entry.endsAt}`, x + cellWidth / 2, y + 41); } }); });
+    visibleEmployees.forEach((employee, rowIndex) => { const y = top + headerHeight + rowIndex * rowHeight; context.fillStyle = "#f8fafc"; context.fillRect(0, y, nameWidth, rowHeight); context.textAlign = "left"; context.fillStyle = "#172235"; context.font = "bold 15px sans-serif"; context.fillText(employee.displayName, 10, y + 23); context.font = "13px sans-serif"; context.fillStyle = "#66778e"; context.fillText(employee.englishName || "未設定英文名", 10, y + 46); dates.forEach((date, index) => { const entry = entryMap.get(`${employee.id}:${date}`); const x = nameWidth + index * cellWidth; context.fillStyle = entry?.entryKind === "off" ? "#ffe49a" : "#ffffff"; context.fillRect(x, y, cellWidth, rowHeight); context.textAlign = "center"; context.fillStyle = "#26384e"; context.font = "bold 14px sans-serif"; const title = entry?.entryKind === "off" ? staffScheduleOffLabel(entry.offKind) : staffScheduleShiftLabel(entry || {}); context.fillText(title.slice(0, 8), x + cellWidth / 2, y + 24); if (entry?.entryKind === "work") { context.font = "12px sans-serif"; context.fillStyle = "#66778e"; context.fillText(`${entry.startsAt}–${entry.endsAt}`, x + cellWidth / 2, y + 46); } }); });
     context.strokeStyle = "#cfd8e5"; context.lineWidth = 1; for (let x = 0; x <= canvas.width; x += x === 0 ? nameWidth : cellWidth) { context.beginPath(); context.moveTo(x, top); context.lineTo(x, canvas.height); context.stroke(); if (x === 0) x = nameWidth - cellWidth; } for (let y = top; y <= canvas.height; y += y === top ? headerHeight : rowHeight) { context.beginPath(); context.moveTo(0, y); context.lineTo(canvas.width, y); context.stroke(); if (y === top) y = top + headerHeight - rowHeight; }
     canvas.toBlob((blob) => { if (!blob) return; const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `巨挺健身館-${month}-班表.png`; anchor.click(); URL.revokeObjectURL(url); }, "image/png");
   }
@@ -515,7 +516,7 @@ export default function StaffScheduleManager() {
                   <tbody>
                     {visibleEmployees.map((employee) => (
                       <tr key={employee.id}>
-                        <th className={styles.nameCell}><strong>{employee.displayName}</strong><small>{employee.employment ? `固定：${staffScheduleShiftLabel({ shiftCode: employee.employment.default_shift_code })}` : "未設定"}</small></th>
+                        <th className={styles.nameCell}><strong>{employee.displayName}</strong><small>{employee.englishName || "未設定英文名"}</small></th>
                         {dates.map((date) => {
                           const entry = entryMap.get(`${employee.id}:${date}`);
                           const isOff = entry?.entryKind === "off";
