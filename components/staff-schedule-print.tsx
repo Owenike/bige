@@ -42,7 +42,7 @@ export default function StaffSchedulePrint({ month }: { month: string }) {
   const [data, setData] = useState<State | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    void fetch(`/api/staff-scheduling?month=${month}`, { cache: "no-store" })
+    void fetch(`/api/staff-scheduling?month=${month}&view=team`, { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json();
         if (!response.ok || !payload.ok)

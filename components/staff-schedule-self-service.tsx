@@ -34,6 +34,7 @@ type SelfState = {
     employeeVisibleNote?: string | null;
   }>;
   holidayAdjustments: Array<{
+    employee_id: string;
     holiday_date: string;
     holiday_name: string;
     original_shift_summary: string;
@@ -88,7 +89,15 @@ function formatTime(value: string | null | undefined) {
 async function parseResponse(response: Response) {
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) throw new Error(payload?.message || payload?.error?.message || "操作失敗");
-  return payload.data as SelfState;
+  const data = payload.data as SelfState;
+  return {
+    ...data,
+    employees: data.employees.filter((employee) => employee.id === data.actor.id),
+    preferences: data.preferences.filter((preference) => preference.employee_id === data.actor.id),
+    version: data.version?.status === "published" ? data.version : null,
+    scheduleEntries: data.scheduleEntries.filter((entry) => entry.employeeId === data.actor.id),
+    holidayAdjustments: data.holidayAdjustments.filter((adjustment) => adjustment.employee_id === data.actor.id),
+  };
 }
 
 function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
@@ -182,7 +191,7 @@ export default function StaffScheduleSelfService() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/staff-scheduling?month=${month}`, { cache: "no-store" });
+      const response = await fetch(`/api/staff-scheduling?month=${month}&view=self`, { cache: "no-store" });
       const next = await parseResponse(response);
       setData(next);
       const preference = next.preferences.find((item) => item.employee_id === next.actor.id);
@@ -206,7 +215,7 @@ export default function StaffScheduleSelfService() {
       const response = await fetch("/api/staff-scheduling", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, monthStart: `${month}-01`, ...values }),
+        body: JSON.stringify({ action, monthStart: `${month}-01`, view: "self", ...values }),
       });
       const next = await parseResponse(response);
       setData(next);

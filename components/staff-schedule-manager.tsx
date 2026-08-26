@@ -176,7 +176,7 @@ export default function StaffScheduleManager() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/staff-scheduling?month=${month}`, { cache: "no-store" });
+      const response = await fetch(`/api/staff-scheduling?month=${month}&view=team`, { cache: "no-store" });
       setData(await parseResponse(response));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "讀取失敗");
@@ -205,7 +205,7 @@ export default function StaffScheduleManager() {
       const response = await fetch("/api/staff-scheduling", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, monthStart: `${month}-01`, ...values }),
+        body: JSON.stringify({ action, monthStart: `${month}-01`, view: "team", ...values }),
       });
       setData(await parseResponse(response));
       setNotice(successMessage);

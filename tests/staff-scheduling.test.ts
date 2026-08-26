@@ -6,6 +6,8 @@ import {
   generateMonthlySchedule,
   listMonthDates,
   paidMinutesForEntry,
+  normalizeStaffScheduleView,
+  resolveStaffScheduleDataScope,
   validateSchedule,
   type EmployeeScheduleConfig,
 } from "../lib/staff-scheduling";
@@ -116,4 +118,49 @@ test("daily and weekly legal work-hour checks are blocking", () => {
   assert.ok(validation.some((item) => item.ruleCode === "CONTINUOUS_WORK_BREAK_REQUIRED" && !item.passed));
   assert.ok(validation.some((item) => item.ruleCode === "DAILY_NORMAL_HOURS_EXCEEDED" && !item.passed));
   assert.ok(validation.some((item) => item.ruleCode === "WEEKLY_NORMAL_HOURS" && !item.passed));
+});
+
+test("manager self-service receives only the manager's published schedule", () => {
+  const scope = resolveStaffScheduleDataScope({
+    view: normalizeStaffScheduleView("self"),
+    canViewTeam: true,
+    actorId: "manager-1",
+    allEmployeeIds: ["manager-1", "coach-1", "coach-2"],
+  });
+
+  assert.deepEqual(scope, {
+    teamView: false,
+    employeeIds: ["manager-1"],
+    publishedOnly: true,
+  });
+});
+
+test("team schedule remains available only to authorized managers", () => {
+  assert.deepEqual(
+    resolveStaffScheduleDataScope({
+      view: normalizeStaffScheduleView("team"),
+      canViewTeam: true,
+      actorId: "manager-1",
+      allEmployeeIds: ["manager-1", "coach-1"],
+    }),
+    {
+      teamView: true,
+      employeeIds: ["manager-1", "coach-1"],
+      publishedOnly: false,
+    },
+  );
+  assert.throws(
+    () => resolveStaffScheduleDataScope({
+      view: normalizeStaffScheduleView("team"),
+      canViewTeam: false,
+      actorId: "coach-1",
+      allEmployeeIds: ["coach-1", "coach-2"],
+    }),
+    /沒有查看全員班表的權限/,
+  );
+});
+
+test("unspecified or invalid schedule views default to least-privilege self view", () => {
+  assert.equal(normalizeStaffScheduleView(undefined), "self");
+  assert.equal(normalizeStaffScheduleView("unexpected"), "self");
 });

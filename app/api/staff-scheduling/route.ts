@@ -11,7 +11,9 @@ import {
   generateMonthlySchedule,
   listMonthDates,
   moveDayOff,
+  normalizeStaffScheduleView,
   normalizeMonthStart,
+  resolveStaffScheduleDataScope,
   shiftForEmployeeDate,
   validateSchedule,
   type EmployeeScheduleConfig,
@@ -405,6 +407,7 @@ async function buildState(params: {
   profile: ProfileRow;
   context: ProfileContext;
   monthStart: string;
+  view: "self" | "team";
 }) {
   const tenantId = params.profile.tenant_id;
   if (!tenantId) throw new Error("此帳號尚未設定館別，無法使用員工班表");
@@ -421,6 +424,15 @@ async function buildState(params: {
     employeeId: params.profile.id,
     context: params.context,
     permission: "publish_schedule",
+  });
+  const allEmployees = params.view === "team"
+    ? await listEmployees(params.admin, tenantId, params.profile.branch_id)
+    : [params.profile];
+  const scope = resolveStaffScheduleDataScope({
+    view: params.view,
+    canViewTeam: manager,
+    actorId: params.profile.id,
+    allEmployeeIds: allEmployees.map((employee) => employee.id),
   });
   const period = await getPeriod(params.admin, tenantId, params.profile.branch_id, params.monthStart);
   if (!period) {
@@ -447,9 +459,7 @@ async function buildState(params: {
     };
   }
 
-  const employees = manager
-    ? await listEmployees(params.admin, tenantId, params.profile.branch_id)
-    : [params.profile];
+  const employees = scope.teamView ? allEmployees : [params.profile];
   const employments = await ensureEmploymentProfiles(params.admin, employees, params.profile.id);
   const employeeIds = employees.map((item) => item.id);
   const [closureResult, preferenceResult, holidayResult] = await Promise.all([
@@ -471,24 +481,24 @@ async function buildState(params: {
   if (preferenceResult.error) throw new Error(preferenceResult.error.message);
   if (holidayResult.error) throw new Error(holidayResult.error.message);
 
-  const version = await getLatestVersion(params.admin, period.id, !manager);
+  const version = await getLatestVersion(params.admin, period.id, scope.publishedOnly);
   let scheduleEntries: Record<string, unknown>[] = [];
   let ruleResults: Record<string, unknown>[] = [];
   let holidayAdjustments: Record<string, unknown>[] = [];
   let acknowledgement: Record<string, unknown> | null = null;
   if (version) {
     let entryQuery = params.admin.from("staff_schedule_entries").select("*").eq("version_id", String(version.id));
-    if (!manager) entryQuery = entryQuery.eq("employee_id", params.profile.id);
+    if (!scope.teamView) entryQuery = entryQuery.eq("employee_id", params.profile.id);
     const [entriesResult, rulesResult, adjustmentResult, acknowledgementResult] = await Promise.all([
       entryQuery.order("work_date"),
-      manager
+      scope.teamView
         ? params.admin.from("staff_schedule_rule_results").select("*").eq("version_id", String(version.id)).order("created_at")
         : Promise.resolve({ data: [], error: null }),
       params.admin
         .from("staff_holiday_adjustments")
         .select("*")
         .eq("version_id", String(version.id))
-        .in("employee_id", manager ? employeeIds : [params.profile.id])
+        .in("employee_id", scope.employeeIds)
         .order("holiday_date"),
       params.admin
         .from("staff_schedule_acknowledgements")
@@ -545,7 +555,7 @@ async function buildState(params: {
       source: entry.source,
       employeeVisibleNote: entry.employee_visible_note,
       requiresResign: entry.requires_resign,
-      ...(manager ? { internalNote: entry.internal_note } : {}),
+      ...(scope.teamView ? { internalNote: entry.internal_note } : {}),
     })),
     ruleResults,
     holidayAdjustments,
@@ -579,9 +589,10 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const monthStart = monthStartFromInput(url.searchParams.get("month"));
+    const view = normalizeStaffScheduleView(url.searchParams.get("view"));
     const admin = createSupabaseAdminClient();
     const profile = await getProfile(admin, auth.context.userId);
-    const state = await buildState({ admin, profile, context: auth.context, monthStart });
+    const state = await buildState({ admin, profile, context: auth.context, monthStart, view });
     return apiSuccess(state);
   } catch (error) {
     return apiError(400, "FORBIDDEN", error instanceof Error ? error.message : "無法讀取員工班表");
@@ -1435,7 +1446,13 @@ export async function POST(request: Request) {
       return apiError(400, "FORBIDDEN", "不支援的班表操作");
     }
 
-    const state = await buildState({ admin, profile, context: auth.context, monthStart });
+    const state = await buildState({
+      admin,
+      profile,
+      context: auth.context,
+      monthStart,
+      view: normalizeStaffScheduleView(body.view),
+    });
     return apiSuccess(state);
   } catch (error) {
     const message = error instanceof z.ZodError

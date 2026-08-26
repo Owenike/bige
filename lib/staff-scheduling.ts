@@ -618,3 +618,27 @@ export function paidMinutesForEntry(entry: Pick<ScheduleEntryDraft, "entryKind" 
 export function dateAfter(value: string, days: number) {
   return addDays(value, days);
 }
+
+export type StaffScheduleView = "self" | "team";
+
+export function normalizeStaffScheduleView(value: unknown): StaffScheduleView {
+  return value === "team" ? "team" : "self";
+}
+
+export function resolveStaffScheduleDataScope(params: {
+  view: StaffScheduleView;
+  canViewTeam: boolean;
+  actorId: string;
+  allEmployeeIds: string[];
+}) {
+  const teamView = params.view === "team";
+  if (teamView && !params.canViewTeam) {
+    throw new Error("您沒有查看全員班表的權限");
+  }
+
+  return {
+    teamView,
+    employeeIds: teamView ? [...params.allEmployeeIds] : [params.actorId],
+    publishedOnly: !teamView,
+  };
+}
