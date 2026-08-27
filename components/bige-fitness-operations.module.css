@@ -6946,6 +6946,20 @@
   }
 }
 
+/* Manager desktop schedule: let the 15 hour rows use the available viewport
+   height so the date/actions row sits at the top when the page reaches the
+   bottom. Touch-only tablet layouts retain their dedicated density rules. */
+@media (min-width: 1280px) and (hover: hover) and (pointer: fine) {
+  .page[data-role-view="manager"][data-daily-schedule-active="true"]:not([data-ipad-schedule-overview="true"]) .board {
+    --schedule-row-height: max(46px, calc((100dvh - 150px) / 15));
+  }
+
+  .page[data-role-view="manager"][data-daily-schedule-active="true"]:not([data-ipad-schedule-overview="true"]) .timeCell,
+  .page[data-role-view="manager"][data-daily-schedule-active="true"]:not([data-ipad-schedule-overview="true"]) .slotCell {
+    min-height: var(--schedule-row-height);
+  }
+}
+
 /*
  * iPad daily schedule overview
  *

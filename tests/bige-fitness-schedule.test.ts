@@ -2102,6 +2102,7 @@ test("iPad Pro landscape keeps the desktop schedule overview and fills the viewp
 });
 
 test("wide desktop schedule separates navigation from date and daily controls", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
   const desktopStart = styles.indexOf("/* Wide desktop schedule:");
   const desktopEnd = styles.indexOf("/*\n * iPad daily schedule overview", desktopStart);
@@ -2131,6 +2132,11 @@ test("wide desktop schedule separates navigation from date and daily controls", 
   assert.match(
     desktopLayout,
     /Wide desktop schedule:[\s\S]*two deliberate rows[\s\S]*without horizontal scrolling/,
+  );
+  assert.match(component, /data-role-view=\{view\}/);
+  assert.match(
+    desktopLayout,
+    /@media \(min-width: 1280px\) and \(hover: hover\) and \(pointer: fine\)[\s\S]*data-role-view="manager"\]\[data-daily-schedule-active="true"\]:not\(\[data-ipad-schedule-overview="true"\]\) \.board \{[\s\S]*--schedule-row-height: max\(46px, calc\(\(100dvh - 150px\) \/ 15\)\)[\s\S]*min-height: var\(--schedule-row-height\)/,
   );
 });
 

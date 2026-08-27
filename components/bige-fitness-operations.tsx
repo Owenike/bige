@@ -6209,6 +6209,7 @@ export default function BigeFitnessOperations({
       data-ipad-schedule-overview={useIpadScheduleOverview ? "true" : undefined}
       data-ipad-pro-desktop-layout={useIpadProDesktopLayout ? "true" : undefined}
       data-daily-schedule-active={tab === "schedule" ? "true" : undefined}
+      data-role-view={view}
     >
       <div className={styles.shell}>
         <header className={styles.header}>
