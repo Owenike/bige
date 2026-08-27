@@ -152,7 +152,10 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
         <footer className="footer">
           <div className="footerInner">
             <div>© {new Date().getFullYear()} BigE Fitness. All rights reserved.</div>
-            <div className="footerTagline">巨挺健身館 BigE｜器械皮拉提斯・重量訓練・運動按摩｜高雄市仁武區八德北路728號｜0972-484686</div>
+            <div className="footerTagline">
+              <span>巨挺健身館 BigE｜器械皮拉提斯・重量訓練・運動按摩｜</span>
+              <span>高雄市仁武區八德北路728號｜0972-484686</span>
+            </div>
           </div>
         </footer>
       ) : null}

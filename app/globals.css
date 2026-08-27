@@ -3425,6 +3425,9 @@ a:hover{ text-decoration: underline; text-underline-offset: 3px; }
   color: rgba(255,255,255,.56);
   text-align: right;
 }
+.footerTagline span{
+  display: block;
+}
 @media (max-width: 780px){
   .footerInner{
     flex-direction: column;

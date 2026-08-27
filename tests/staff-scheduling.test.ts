@@ -271,6 +271,28 @@ test("shared BIGE front-desk account is excluded without hiding individual staff
   assert.equal(isSharedFrontdeskScheduleAccount(null), false);
 });
 
+test("staff self-service leave picker keeps its mobile layout and selection display accurate", () => {
+  const source = readFileSync(resolve(process.cwd(), "components/staff-schedule-self-service.tsx"), "utf8");
+  const styles = readFileSync(resolve(process.cwd(), "app/staff/schedule/page.module.css"), "utf8");
+  const layout = readFileSync(resolve(process.cwd(), "app/layout-chrome.tsx"), "utf8");
+  const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+
+  assert.match(source, /const trailingCellCount = \(7 - \(cells\.length % 7\)\) % 7/);
+  assert.match(source, /const selectedDaysLabel = selected\.slice\(\)\.sort\(\)/);
+  assert.match(source, /<span>\{selectedDaysLabel\}<\/span>/);
+  assert.doesNotMatch(source, /只選日期，例假／休假由合法班表安排/);
+  assert.match(source, />儲存<\/button>/);
+  assert.doesNotMatch(source, /儲存我的 \{requiredCount\} 天排休/);
+  assert.match(styles, /\.headerActions a\{width:90px;/);
+  assert.match(styles, /\.headerActions input\{width:100%;min-width:0;max-width:100%\}/);
+  assert.match(styles, /grid-template-columns:minmax\(0,1\.6fr\) repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(styles, /grid-template-columns:128px repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(styles, /\.selectionHeader\{display:grid;grid-template-columns:minmax\(0,1fr\) auto/);
+  assert.match(styles, /\.counter\{width:90px;height:90px;position:static/);
+  assert.match(layout, /<span>巨挺健身館 BigE｜器械皮拉提斯・重量訓練・運動按摩｜<\/span>[\s\S]*?<span>高雄市仁武區八德北路728號｜0972-484686<\/span>/);
+  assert.match(globalStyles, /\.footerTagline span\{\s*display: block;/);
+});
+
 test("manager cleanup preserves drag-and-drop and both holiday decisions", () => {
   const source = readFileSync(resolve(process.cwd(), "components/staff-schedule-manager.tsx"), "utf8");
   const selfSource = readFileSync(resolve(process.cwd(), "components/staff-schedule-self-service.tsx"), "utf8");

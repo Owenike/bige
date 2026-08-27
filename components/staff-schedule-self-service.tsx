@@ -56,10 +56,12 @@ function listCalendarCells(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
   const days = new Date(year, monthNumber, 0).getDate();
   const offset = new Date(year, monthNumber - 1, 1).getDay();
-  return [
+  const cells = [
     ...Array.from({ length: offset }, () => null),
     ...Array.from({ length: days }, (_, index) => `${month}-${String(index + 1).padStart(2, "0")}`),
   ];
+  const trailingCellCount = (7 - (cells.length % 7)) % 7;
+  return [...cells, ...Array.from({ length: trailingCellCount }, () => null)];
 }
 
 function formatDate(value: string) {
@@ -217,6 +219,7 @@ export default function StaffScheduleSelfService() {
   const requiredCount = data?.period?.preferred_days_required || 8;
   const combinedCount = new Set([...selected, ...closureDates]).size;
   const remaining = Math.max(0, requiredCount - combinedCount);
+  const selectedDaysLabel = selected.slice().sort().map((date) => `${Number(date.slice(-2))} 日`).join("、") || "尚未選擇";
   const selectionOpen = data?.period
     ? Date.now() >= new Date(data.period.selection_opens_at).getTime() && Date.now() <= new Date(data.period.selection_closes_at).getTime()
     : false;
@@ -248,7 +251,7 @@ export default function StaffScheduleSelfService() {
           <a href="/staff/attendance">打卡確認</a>
           <a href="/staff/leave">請假</a>
           <a href="/staff/payroll">薪資單</a>
-          {data?.actor.canManage ? <a href="/manager/staff-scheduling">主管控制台</a> : null}
+          {data?.actor.canManage ? <a className={styles.managerAction} href="/manager/staff-scheduling">主管控制台</a> : null}
         </div>
       </header>
       {error ? <div className={styles.error} role="alert">{error}</div> : null}
@@ -262,7 +265,7 @@ export default function StaffScheduleSelfService() {
             <div><span className={styles.kicker}>自選排休</span><h2>{month.replace("-", " 年 ")} 月</h2><p>{selectionOpen ? "截止日前可隨時更改；送出後仍可在 20 日 23:59 前重新儲存。" : "選取期限已截止；如需修改，請直接聯絡副理。"}</p></div>
             <div className={`${styles.counter} ${remaining === 0 ? styles.counterDone : ""}`}><strong>{combinedCount}</strong><span>/ {requiredCount} 天</span><small>{remaining === 0 ? "已選滿" : `還差 ${remaining} 天`}</small></div>
           </div>
-          <div className={styles.legend}><span><i className={styles.selectedMark} />我選的排休</span><span><i className={styles.closureMark} />館休（已計入）</span><span>只選日期，例假／休假由合法班表安排</span></div>
+          <div className={styles.legend}><span><i className={styles.selectedMark} />我選的排休</span><span><i className={styles.closureMark} />館休（已計入）</span></div>
           <div className={styles.calendar}>
             {["日", "一", "二", "三", "四", "五", "六"].map((label) => <div className={styles.weekday} key={label}>{label}</div>)}
             {calendarCells.map((date, index) => date ? (
@@ -280,10 +283,10 @@ export default function StaffScheduleSelfService() {
             ) : <div className={styles.blankDay} key={`blank-${index}`} />)}
           </div>
           <div className={styles.selectionFooter}>
-            <div><strong>目前選擇：</strong><span>{[...new Set([...selected, ...closureDates])].sort().map((date) => `${Number(date.slice(-2))} 日`).join("、") || "尚未選擇"}</span></div>
+            <div><strong>目前選擇：</strong><span>{selectedDaysLabel}</span></div>
             <button type="button" disabled={busy || !selectionOpen || combinedCount !== requiredCount} onClick={() => {
               if (window.confirm(`確認儲存 ${month} 的 ${requiredCount} 天排休日期？截止前仍可再修改。`)) void act("save_preferences", { selectedDates: selected }, "排休日期已儲存");
-            }}>儲存我的 {requiredCount} 天排休</button>
+            }}>儲存</button>
           </div>
         </section>
       ) : (
