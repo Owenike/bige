@@ -1656,7 +1656,7 @@ export default function BigeFitnessOperations({
 }) {
   const managerView = view === "manager";
   const coachView = view === "coach";
-  const viewCopy: Record<RoleView, { title: string; subtitle: string }> = {
+  const viewCopy: Record<RoleView, { title: string; subtitle?: string }> = {
     manager: {
       title: "主管營運後台",
       subtitle: "排課、FA 成交、方案、付款解鎖、合約期限與營運報表",
@@ -1667,7 +1667,6 @@ export default function BigeFitnessOperations({
     },
     coach: {
       title: "教練營運後台",
-      subtitle: "查看課表、確認到店結果與學員密碼扣堂",
     },
   };
   const [tab, setTab] = useState<Tab>("schedule");
@@ -5814,6 +5813,8 @@ export default function BigeFitnessOperations({
   const canOpenStaffSchedule =
     Boolean(previewData || sessionIdentity) &&
     canUseStaffScheduleNavigation(sessionIdentity?.employeeNumber);
+  const canUseScheduleOverviewControls =
+    managerView || data?.coachScheduleScope === "all";
   const selectedBookingStatusWindow = selectedBooking
     ? getBigeCourseStatusWindow({
         startsAt: selectedBooking.starts_at,
@@ -6216,7 +6217,9 @@ export default function BigeFitnessOperations({
           <div>
             <p className={styles.eyebrow}>BIG E FITNESS OPERATIONS</p>
             <h1 className={styles.title}>{viewCopy[view].title}</h1>
-            <p className={styles.subtitle}>{viewCopy[view].subtitle}</p>
+            {viewCopy[view].subtitle ? (
+              <p className={styles.subtitle}>{viewCopy[view].subtitle}</p>
+            ) : null}
           </div>
           <div className={styles.headerActions}>
             {!previewData ? (
@@ -6433,12 +6436,14 @@ export default function BigeFitnessOperations({
                   ) : null}
                 </button>
               ) : null}
-              <span
-                className={styles.frontdeskStatus}
-                title="櫃台人員將由班表自動帶入，此處不可修改"
-              >
-                櫃台：<strong>{frontdeskName || "未設定"}</strong>
-              </span>
+              {canUseScheduleOverviewControls ? (
+                <span
+                  className={styles.frontdeskStatus}
+                  title="櫃台人員將由班表自動帶入，此處不可修改"
+                >
+                  櫃台：<strong>{frontdeskName || "未設定"}</strong>
+                </span>
+              ) : null}
               {tab === "schedule" && data.canManageSchedule && !previewData ? (
                 <button
                   className={styles.scheduleLockButton}
@@ -6472,7 +6477,7 @@ export default function BigeFitnessOperations({
                   月排課／查詢
                 </button>
               ) : null}
-              {tab === "schedule" ? (
+              {tab === "schedule" && canUseScheduleOverviewControls ? (
                 <button
                   className={styles.scheduleToolButton}
                   data-active={String(hideOffCoaches)}
@@ -6532,19 +6537,21 @@ export default function BigeFitnessOperations({
         {!loading && data && tab === "schedule" ? (
           visibleCoaches.length ? (
             <>
-              <div className={styles.mobileCoach}>
-                <label className={styles.label}>手機顯示方式</label>
-                <select className={styles.select} value={selectedCoach} onChange={(event) => setSelectedCoach(event.target.value)}>
-                  {data.coachScheduleScope === "all" ? (
-                    <option value="all">全部教練</option>
-                  ) : null}
-                  {visibleCoaches.map((coach) => (
-                    <option value={coach.id} key={coach.id}>
-                      {coachLabel(coach)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {canUseScheduleOverviewControls ? (
+                <div className={styles.mobileCoach}>
+                  <label className={styles.label}>手機顯示方式</label>
+                  <select className={styles.select} value={selectedCoach} onChange={(event) => setSelectedCoach(event.target.value)}>
+                    {data.coachScheduleScope === "all" ? (
+                      <option value="all">全部教練</option>
+                    ) : null}
+                    {visibleCoaches.map((coach) => (
+                      <option value={coach.id} key={coach.id}>
+                        {coachLabel(coach)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <DndContext
                 id="bige-daily-schedule"
                 sensors={scheduleDragSensors}

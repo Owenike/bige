@@ -3201,3 +3201,39 @@ test("voided contracts are excluded from balance payment and rejected by the pay
   assert.match(migration, /raise exception 'voided_contract_payment_not_allowed'/);
   assert.match(route, /voided_contract_payment_not_allowed: "此合約已作廢，不能再登記付款"/);
 });
+
+test("coach mobile header stays compact and overview controls require manager schedule scope", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+
+  assert.doesNotMatch(component, /查看課表、確認到店結果與學員密碼扣堂/);
+  assert.match(
+    component,
+    /const canUseScheduleOverviewControls =\s*managerView \|\| data\?\.coachScheduleScope === "all";/,
+  );
+  assert.match(
+    component,
+    /canUseScheduleOverviewControls \? \([\s\S]*className=\{styles\.frontdeskStatus\}/,
+  );
+  assert.match(
+    component,
+    /tab === "schedule" && canUseScheduleOverviewControls \? \([\s\S]*setHideOffCoaches/,
+  );
+  assert.match(
+    component,
+    /canUseScheduleOverviewControls \? \([\s\S]*className=\{styles\.mobileCoach\}/,
+  );
+  assert.match(styles, /\.businessDayControls:empty \{[\s\S]*display: none;/);
+  assert.match(
+    styles,
+    /\.frontdeskM2A \.dateToolbar \{[\s\S]*grid-template-columns: 40px minmax\(138px, 1fr\) auto 40px 40px;[\s\S]*column-gap: 7px;/,
+  );
+  assert.match(
+    styles,
+    /data-role-view="coach"\] \.sessionActions \{[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/,
+  );
+  assert.match(
+    styles,
+    /data-role-view="coach"\] \.sessionIdentity \{[\s\S]*flex-direction: row;/,
+  );
+});

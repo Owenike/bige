@@ -6960,6 +6960,42 @@
   }
 }
 
+.businessDayControls:empty {
+  display: none;
+}
+
+@media (max-width: 780px) {
+  .frontdeskM2A .dateToolbar {
+    grid-template-columns: 40px minmax(138px, 1fr) auto 40px 40px;
+    column-gap: 7px;
+  }
+
+  .frontdeskM2A .dateToolbar .input {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding-inline: 8px;
+    font-size: 14px;
+  }
+
+  .page[data-role-view="coach"] .sessionActions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .page[data-role-view="coach"] .sessionIdentity {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .page[data-role-view="coach"] .sessionActions .button {
+    min-width: 0;
+    padding-inline: 7px;
+    white-space: nowrap;
+  }
+}
+
 /*
  * iPad daily schedule overview
  *
