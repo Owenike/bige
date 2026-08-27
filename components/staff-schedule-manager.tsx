@@ -58,6 +58,8 @@ const SHIFT_PREVIEWS: Record<Exclude<ShiftChoice, "DEFAULT">, Pick<ScheduleEntry
   COACH_PARTTIME_WEEKDAY: { shiftCode: "COACH_PARTTIME_WEEKDAY", shiftLabel: "晚班", startsAt: "18:00", endsAt: "22:00" },
 };
 
+const SCHEDULE_LOAD_TIMEOUT_MS = 20_000;
+
 type RuleResult = {
   id: string;
   employee_id: string | null;
@@ -218,12 +220,24 @@ export default function StaffScheduleManager() {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), SCHEDULE_LOAD_TIMEOUT_MS);
     try {
-      const response = await fetch(`/api/staff-scheduling?month=${month}&view=team`, { cache: "no-store" });
+      const response = await fetch(`/api/staff-scheduling?month=${month}&view=team`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
       setData(await parseResponse(response));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "讀取失敗");
+      setError(
+        caught instanceof DOMException && caught.name === "AbortError"
+          ? "班表讀取超過 20 秒，已停止等待。請按下方按鈕重新讀取。"
+          : caught instanceof Error
+            ? caught.message
+            : "讀取失敗",
+      );
     } finally {
+      window.clearTimeout(timeout);
       setLoading(false);
     }
   }, [month]);
@@ -454,6 +468,20 @@ export default function StaffScheduleManager() {
 
   if (loading) {
     return <main className={styles.page}><div className={styles.loading}>正在整理員工排休與班表…</div></main>;
+  }
+
+  if (!data) {
+    return (
+      <main className={styles.page}>
+        <div className={`${styles.loading} ${styles.loadFailure}`} role="alert">
+          <h2>班表目前無法載入</h2>
+          <p>{error || "讀取班表時發生問題。"}</p>
+          <button type="button" className={styles.primaryButton} onClick={() => void load()}>
+            重新讀取班表
+          </button>
+        </div>
+      </main>
+    );
   }
 
   return (

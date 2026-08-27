@@ -118,6 +118,17 @@ test("student check-in admin authorization is capability-only", () => {
   );
 });
 
+test("shared staff auth verifies JWT claims without a per-request Auth user lookup", () => {
+  const authContextSource = readFileSync(resolve(process.cwd(), "lib/auth-context.ts"), "utf8");
+  const proxySource = readFileSync(resolve(process.cwd(), "proxy.ts"), "utf8");
+
+  assert.match(proxySource, /candidate\.auth\.getClaims\(\)/);
+  assert.doesNotMatch(proxySource, /candidate\.auth\.getUser\(\)/);
+  assert.match(authContextSource, /\.auth\.getClaims\(bearerToken\)/);
+  assert.match(authContextSource, /supabase\.auth\.getClaims\(\)/);
+  assert.doesNotMatch(authContextSource, /supabase\.auth\.getUser\(\)/);
+});
+
 test("generic recovery uses the captured bearer token instead of shared browser session state", () => {
   const pageSource = readFileSync(resolve(process.cwd(), "app/reset-password/page.tsx"), "utf8");
   const routeSource = readFileSync(

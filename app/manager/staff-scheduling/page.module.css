@@ -94,6 +94,9 @@
 .scheduleTable .lateShiftCell span{color:#1e40af}
 .scheduleTable tbody tr:hover td.earlyShiftCell{background:#fed7aa}
 .scheduleTable tbody tr:hover td.lateShiftCell{background:#bfdbfe}
+.loadFailure{max-width:620px;margin:10vh auto;display:grid;justify-items:center;gap:14px;text-align:center}
+.loadFailure h2,.loadFailure p{margin:0}
+.loadFailure p{line-height:1.65}
 
 @media(max-width:620px){
   .scheduleTable .nameCell{width:220px;min-width:220px}

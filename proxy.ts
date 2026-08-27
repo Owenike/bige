@@ -111,7 +111,8 @@ async function loadSessionContext(
     ? studentCheckinAdminCookieCandidates()
     : [undefined] as const;
   let supabase: ReturnType<typeof createServerClient> | null = null;
-  let user: Awaited<ReturnType<ReturnType<typeof createServerClient>["auth"]["getUser"]>>["data"]["user"] = null;
+  let userId: string | null = null;
+  let appMetadata: unknown = null;
 
   for (const cookieName of cookieNames) {
     const candidate = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -121,32 +122,34 @@ async function loadSessionContext(
         setAll: (cookiesToSet) => {
           for (const cookie of cookiesToSet) {
             const options = cookie.options as Parameters<typeof response.cookies.set>[2];
+            request.cookies.set(cookie.name, cookie.value);
             response.cookies.set(cookie.name, cookie.value, options);
           }
         },
       },
     });
-    const authResult = await candidate.auth.getUser();
-    if (!authResult.error && authResult.data.user) {
+    const claimsResult = await candidate.auth.getClaims();
+    if (!claimsResult.error && claimsResult.data?.claims.sub) {
       supabase = candidate;
-      user = authResult.data.user;
+      userId = claimsResult.data.claims.sub;
+      appMetadata = claimsResult.data.claims.app_metadata;
       break;
     }
   }
-  if (!supabase || !user) return null;
+  if (!supabase || !userId) return null;
 
-  const isStudentCheckinAdmin = hasAuthCapability(user.app_metadata, "student_checkin_admin");
+  const isStudentCheckinAdmin = hasAuthCapability(appMetadata, "student_checkin_admin");
 
   const profileResult = await supabase
     .from("profiles")
     .select("id, role, is_active, tenant_id, branch_id, must_change_password")
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle();
 
   if (profileResult.error || !profileResult.data) {
     if (isStudentCheckinAdmin) {
       return {
-        userId: user.id,
+        userId,
         role: "student_checkin_admin",
         isActive: true,
         tenantId: null,
@@ -158,7 +161,7 @@ async function loadSessionContext(
       };
     }
     return {
-      userId: user.id,
+      userId,
       role: null,
       isActive: false,
       tenantId: null,

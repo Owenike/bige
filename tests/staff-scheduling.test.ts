@@ -229,6 +229,11 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   const creditMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260827000727_add_monthly_accrued_leave_credits.sql"), "utf8");
   assert.match(source, /holidayRuleGroups\.map/);
   assert.match(source, /window\.setTimeout\(\(\) => setNotice\(""\), 4500\)/);
+  assert.match(source, /const SCHEDULE_LOAD_TIMEOUT_MS = 20_000/);
+  assert.match(source, /window\.setTimeout\(\(\) => controller\.abort\(\), SCHEDULE_LOAD_TIMEOUT_MS\)/);
+  assert.match(source, /重新讀取班表/);
+  assert.match(source, /if \(!data\) \{/);
+  assert.match(styles, /\.loadFailure\{/);
   assert.match(source, /onDrop=\{\(event\) => void dropOn/);
   assert.match(source, /"make_holiday_day_off"/);
   assert.match(source, /"arrange_holiday_adjustment"/);

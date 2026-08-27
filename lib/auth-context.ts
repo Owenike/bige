@@ -236,23 +236,24 @@ export async function requireProfile(
   }
 
   const bearerToken = readBearerToken(request);
-  const authResult = bearerToken
+  const claimsResult = bearerToken
     ? await createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL || "",
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
         { auth: { persistSession: false, autoRefreshToken: false } },
-      ).auth.getUser(bearerToken)
-    : await supabase.auth.getUser();
-  const user = authResult.data.user;
+      ).auth.getClaims(bearerToken)
+    : await supabase.auth.getClaims();
+  const claims = claimsResult.data?.claims;
+  const userId = claims?.sub;
 
-  if (authResult.error || !user) {
+  if (claimsResult.error || !userId) {
     return { ok: false as const, response: jsonError(401, "Unauthorized") };
   }
 
   const profileResult = await supabase
     .from("profiles")
     .select("id, role, employee_number, department, position, tenant_id, branch_id, is_active, staff_activation_status")
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle();
 
   const profile = (profileResult.data as ProfileRow | null) ?? null;
@@ -410,7 +411,7 @@ export async function requireProfile(
     userId: profile.id,
     role,
     employeeNumber: profile.employee_number,
-    authCapabilities: readAuthCapabilities(user.app_metadata),
+    authCapabilities: readAuthCapabilities(claims.app_metadata),
     department: normalizeStaffDepartment(profile.department),
     position: normalizeStaffPosition(profile.position),
     tenantId: profile.tenant_id,
