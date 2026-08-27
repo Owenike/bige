@@ -390,6 +390,7 @@
 .salesModal .allocationEditor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; gap: 9px; }
 .salesModal .allocationEditor label { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, .7fr); align-items: center; min-width: 0; gap: 10px; padding: 11px 12px; border: 1px solid #dce4de; border-radius: 11px; background: #fafbfa; }
 .salesModal .allocationEditor label > span { display: flex; align-items: center; min-width: 0; gap: 6px; font-weight: 800; }
+.coachBilingualName { min-width: 0; overflow-wrap: anywhere; }
 .salesModal .allocationEditor label > span b { padding: 3px 6px; border-radius: 999px; color: #6f5217; background: #fff0ca; font-size: 10px; white-space: nowrap; }
 .salesModal .allocationEditor label > div { display: flex; align-items: center; overflow: hidden; border: 1px solid #cdd8d0; border-radius: 9px; background: #fff; }
 .salesModal .allocationEditor label > div > span { padding-left: 9px; color: #77847c; font-size: 11px; }

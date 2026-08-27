@@ -305,6 +305,17 @@ test("daily, history, and monthly coach identities show Chinese, English, and co
   assert.match(styles, /\.coachIdentity strong \{[^}]*overflow-wrap: anywhere/);
 });
 
+test("sales allocation and EPO labels show every coach's Chinese and English names", () => {
+  assert.match(
+    dashboard,
+    /const coachName = \(id: string \| null\) => \{[\s\S]*return coachIdentityParts\(coach\)\.names\.join\("｜"\)/,
+  );
+  assert.match(dashboard, /styles\.coachBilingualName\}>\{coachName\(coach\.id\)\}/);
+  assert.match(dashboard, /styles\.coachBilingualName\}>\{coachName\(allocation\.employee_id\)\}/);
+  assert.match(dashboard, /<option key=\{coach\.id\} value=\{coach\.id\}>\{coachName\(coach\.id\)\}<\/option>/);
+  assert.match(dashboardStyles, /\.coachBilingualName \{[^}]*overflow-wrap: anywhere/);
+});
+
 test("new contracts snapshot the original coach for default allocation and EPO evidence", () => {
   assert.match(contractRoute, /bige_create_member_contract_v8/);
   assert.match(contractRoute, /p_sales_origin_coach_id: trustedSalesOriginCoachId/);

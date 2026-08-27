@@ -473,7 +473,7 @@ export default function StaffPerformanceDashboard({
   const coachMap = useMemo(() => new Map((data?.coaches || []).map((coach) => [coach.id, coach])), [data?.coaches]);
   const coachName = (id: string | null) => {
     const coach = id ? coachMap.get(id) : null;
-    return coach?.display_name || coach?.english_name || coach?.employee_number || "尚未分配";
+    return coachIdentityParts(coach).names.join("｜");
   };
   const dayEvents = (data?.events || []).filter((item) => item.business_date === date);
   const dayEpo = (data?.epoAwards || []).filter((item) => item.business_date === date);
@@ -937,8 +937,8 @@ export default function StaffPerformanceDashboard({
                         </div>
                         <div className={styles.salesEditorHeading}><strong>{editingEventId === selectedEvent.id ? "分配給教練" : "分配明細"}</strong><span>{editingEventId === selectedEvent.id ? "輸入各教練分配金額，合計必須等於實收金額。" : selectedEvent.allocations.length ? `${selectedEvent.allocations.length} 位教練` : "尚未建立分配"}</span></div>
                         {editingEventId === selectedEvent.id ? <div className={styles.allocationEditor}>
-                          {data.coaches.map((coach) => <label key={coach.id}><span>{coachName(coach.id)}{selectedEvent.origin_employee_id === coach.id ? <b>原成交</b> : null}</span><div><span>NT$</span><input type="number" min="0" step="1" value={allocationDraft[coach.id] || ""} onChange={(change) => setAllocationDraft((current) => ({ ...current, [coach.id]: change.target.value }))} placeholder="0" /></div></label>)}
-                        </div> : selectedEvent.allocations.length ? <div className={styles.allocationList}>{selectedEvent.allocations.map((allocation) => <span key={allocation.id}><b>{coachName(allocation.employee_id)}</b><span>{money(allocation.amount)}{allocation.allocation_kind === "origin_default" ? "（預設 50%）" : allocation.allocation_kind === "refund_reversal" ? "（原分配扣回）" : ""}</span></span>)}</div> : <div className={styles.empty}>這筆業績尚未分配。</div>}
+                          {data.coaches.map((coach) => <label key={coach.id}><span><span className={styles.coachBilingualName}>{coachName(coach.id)}</span>{selectedEvent.origin_employee_id === coach.id ? <b>原成交</b> : null}</span><div><span>NT$</span><input type="number" min="0" step="1" value={allocationDraft[coach.id] || ""} onChange={(change) => setAllocationDraft((current) => ({ ...current, [coach.id]: change.target.value }))} placeholder="0" /></div></label>)}
+                        </div> : selectedEvent.allocations.length ? <div className={styles.allocationList}>{selectedEvent.allocations.map((allocation) => <span key={allocation.id}><b className={styles.coachBilingualName}>{coachName(allocation.employee_id)}</b><span>{money(allocation.amount)}{allocation.allocation_kind === "origin_default" ? "（預設 50%）" : allocation.allocation_kind === "refund_reversal" ? "（原分配扣回）" : ""}</span></span>)}</div> : <div className={styles.empty}>這筆業績尚未分配。</div>}
                         {selectedEvent.source_type === "refund" ? <div className={styles.infoBox}>退款分配已鎖定，只能按原正式分配扣回，不可改給其他人。</div> : selectedEvent.allocation_note ? <div className={styles.infoBox}>{selectedEvent.allocation_note}</div> : null}
                         {selectedEvent.review_note ? <div className={styles.infoBox}>覆核備註：{selectedEvent.review_note}</div> : null}
                       </> : <div className={styles.salesDetailEmpty}><strong>這一天沒有業績紀錄</strong><span>有新收款或退款後會出現在這裡。</span></div>}
