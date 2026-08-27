@@ -70,11 +70,11 @@
 
 .settingFields input{min-height:42px;border:1px solid #cbd6e5;border-radius:12px;background:#fff;padding:8px 11px;color:#172235;font:inherit}
 .scheduleTable .nameCell{width:230px;min-width:230px}
-.nameSummary{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.nameSummary{display:flex;align-items:center;gap:5px;width:100%;min-width:0;white-space:nowrap}
 .nameSummary>strong{flex:0 0 auto}
-.nameSummary>small{display:inline;margin:0;color:#607087}
-.leaveBalances{display:inline-flex;align-items:center;gap:4px;margin-left:2px;text-align:left}
-.leaveBalances i{color:#285b99;font-size:11px;font-style:normal;font-weight:900;white-space:nowrap}
+.nameSummary>small{display:inline;min-width:0;margin:0;overflow:hidden;color:#607087;text-overflow:ellipsis}
+.leaveBalances{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;margin-left:auto;text-align:right}
+.leaveBalances i{display:inline-flex;align-items:center;justify-content:center;min-height:22px;padding:2px 7px;border:1px solid #c7d9ee;border-radius:999px;background:#edf5ff;color:#285b99;font-size:11px;font-style:normal;font-weight:900;line-height:1;white-space:nowrap}
 .preferenceSummary{display:grid;grid-template-columns:auto 1fr;align-items:start;gap:12px;margin:0 0 14px;padding:12px;border:1px solid #d7e0ec;border-radius:15px;background:#f8fafc}
 .preferenceSummary>strong{padding-top:5px;color:#5f7086;font-size:12px;white-space:nowrap}
 .preferenceSummary>div{display:flex;gap:7px;flex-wrap:wrap}

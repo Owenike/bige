@@ -269,8 +269,9 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.doesNotMatch(source, /\["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"\]\.includes/);
   assert.doesNotMatch(selfSource, /\["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"\]\.includes/);
   assert.doesNotMatch(printSource, /\["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"\]\.includes/);
-  assert.match(styles, /\.nameSummary\{display:flex;align-items:center;gap:5px;white-space:nowrap\}/);
-  assert.match(styles, /\.leaveBalances\{display:inline-flex;align-items:center;gap:4px;margin-left:2px/);
+  assert.match(styles, /\.nameSummary\{display:flex;align-items:center;gap:5px;width:100%;min-width:0;white-space:nowrap\}/);
+  assert.match(styles, /\.leaveBalances\{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;margin-left:auto;text-align:right\}/);
+  assert.match(styles, /\.leaveBalances i\{display:inline-flex;align-items:center;justify-content:center;min-height:22px;padding:2px 7px;border:1px solid #c7d9ee;border-radius:999px;background:#edf5ff/);
   assert.match(printStyles, /\.off \{\s*background: #fee2e2;/);
   assert.match(printStyles, /\.early \{\s*background: #ffedd5;/);
   assert.match(printStyles, /\.late \{\s*background: #dbeafe;/);
