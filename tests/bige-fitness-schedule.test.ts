@@ -3230,6 +3230,10 @@ test("coach mobile header stays compact and overview controls require manager sc
   );
   assert.match(
     styles,
+    /\.frontdeskM2A \.dateToolbar \.input \{[\s\S]*width: calc\(100% - 10px\);[\s\S]*max-width: calc\(100% - 10px\);[\s\S]*justify-self: start;/,
+  );
+  assert.match(
+    styles,
     /data-role-view="coach"\] \.sessionActions \{[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/,
   );
   assert.match(

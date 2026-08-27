@@ -6971,9 +6971,10 @@
   }
 
   .frontdeskM2A .dateToolbar .input {
-    width: 100%;
-    max-width: 100%;
+    width: calc(100% - 10px);
+    max-width: calc(100% - 10px);
     min-width: 0;
+    justify-self: start;
     padding-inline: 8px;
     font-size: 14px;
   }
