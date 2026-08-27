@@ -10,6 +10,8 @@ import {
   dateAfter,
   generateMonthlySchedule,
   listMonthDates,
+  monthlyAccruedLeaveCreditDays,
+  monthlyDaysOffEntitlement,
   moveDayOff,
   normalizeStaffScheduleView,
   normalizeMonthStart,
@@ -248,6 +250,32 @@ async function ensureEmploymentProfiles(admin: AdminClient, employees: ProfileRo
     rows.push(...((insert.data || []) as EmploymentRow[]));
   }
   return rows;
+}
+
+async function applyMonthlyAccruedLeaveCredits(params: {
+  admin: AdminClient;
+  period: PeriodRow;
+  employees: ProfileRow[];
+  monthStart: string;
+  tenantId: string;
+  actorId: string;
+}) {
+  const creditedDays = monthlyAccruedLeaveCreditDays(params.monthStart);
+  if (creditedDays === 0 || params.employees.length === 0) return;
+  const monthlyDaysOff = monthlyDaysOffEntitlement(params.monthStart);
+  const result = await params.admin.from("staff_accrued_leave_monthly_credits").upsert(
+    params.employees.map((employee) => ({
+      period_id: params.period.id,
+      tenant_id: params.tenantId,
+      employee_id: employee.id,
+      month_start: params.monthStart,
+      monthly_days_off: monthlyDaysOff,
+      credited_days: creditedDays,
+      created_by: params.actorId,
+    })),
+    { onConflict: "period_id,employee_id", ignoreDuplicates: true },
+  );
+  if (result.error) throw new Error(result.error.message);
 }
 
 function configFromRows(profile: ProfileRow, employment: EmploymentRow): EmployeeScheduleConfig {
@@ -942,6 +970,14 @@ export async function POST(request: Request) {
         details: rule.details,
       })));
       if (ruleInsert.error) throw new Error(ruleInsert.error.message);
+      await applyMonthlyAccruedLeaveCredits({
+        admin,
+        period,
+        employees,
+        monthStart,
+        tenantId,
+        actorId: profile.id,
+      });
       await admin.from("staff_schedule_periods").update({ status: "drafting" }).eq("id", period.id);
     } else if (body.action === "move_day_off") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有調整班表的權限" });
@@ -1043,9 +1079,6 @@ export async function POST(request: Request) {
       const employee = employees.find((item) => item.id === employeeId);
       const employment = ((employments.data || []) as EmploymentRow[]).find((item) => item.employee_id === employeeId);
       if (!employee || !employment) throw new Error("找不到員工班別設定");
-      if (shiftChoice === "COACH_EARLY" && !employment.can_cover_early_shift && !employment.is_original_early_shift) {
-        throw new Error("此員工尚未由主管設定「可支援早班」，不能排入支援早班");
-      }
       const config = configFromRows(employee, employment);
       const shiftMap = new Map(DEFAULT_SHIFT_DEFINITIONS.map((item) => [item.code, item]));
       const shift = shiftChoice === "DEFAULT" ? shiftForEmployeeDate(config, workDate, shiftMap) : shiftMap.get(shiftChoice);

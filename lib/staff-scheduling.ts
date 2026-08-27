@@ -261,6 +261,17 @@ export function isPreferenceWindowOpen(monthStart: string, now = new Date()) {
   return time >= new Date(window.opensAt).getTime() && time <= new Date(window.closesAt).getTime();
 }
 
+export function monthlyDaysOffEntitlement(monthStart: string) {
+  return listMonthDates(monthStart).filter((date) => {
+    const day = parseIsoDate(date).getUTCDay();
+    return day === 0 || day === 6;
+  }).length;
+}
+
+export function monthlyAccruedLeaveCreditDays(monthStart: string, monthlyLimit = PREFERRED_DAYS_REQUIRED) {
+  return Math.max(0, monthlyDaysOffEntitlement(monthStart) - monthlyLimit);
+}
+
 export function assertValidPreferenceDates(params: {
   monthStart: string;
   selectedDates: string[];

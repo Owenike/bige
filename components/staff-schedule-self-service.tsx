@@ -297,7 +297,7 @@ export default function StaffScheduleSelfService() {
             {sortedEntries.map((entry) => {
               const entryClass = entry.entryKind === "off"
                 ? styles.offEntry
-                : ["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"].includes(entry.shiftCode || "")
+                : ["FRONTDESK_DAY", "COACH_EARLY"].includes(entry.shiftCode || "")
                   ? styles.earlyEntry
                   : entry.shiftCode === "COACH_PARTTIME_WEEKDAY"
                     ? styles.lateEntry

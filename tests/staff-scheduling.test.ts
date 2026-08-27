@@ -7,6 +7,8 @@ import {
   buildSelectionWindow,
   generateMonthlySchedule,
   listMonthDates,
+  monthlyAccruedLeaveCreditDays,
+  monthlyDaysOffEntitlement,
   paidMinutesForEntry,
   normalizeStaffScheduleView,
   resolveStaffScheduleDataScope,
@@ -47,6 +49,15 @@ test("facility closure counts toward the required eight preferred days", () => {
     () => assertValidPreferenceDates({ monthStart: "2026-10-01", selectedDates: dates.slice(0, 7) }),
     /必須選滿 8 天/,
   );
+});
+
+test("monthly Saturday and Sunday days beyond eight become accrued leave", () => {
+  assert.equal(monthlyDaysOffEntitlement("2026-09-01"), 8);
+  assert.equal(monthlyAccruedLeaveCreditDays("2026-09-01"), 0);
+  assert.equal(monthlyDaysOffEntitlement("2026-10-01"), 9);
+  assert.equal(monthlyAccruedLeaveCreditDays("2026-10-01"), 1);
+  assert.equal(monthlyDaysOffEntitlement("2026-08-01"), 10);
+  assert.equal(monthlyAccruedLeaveCreditDays("2026-08-01"), 2);
 });
 
 test("eight selected days must cover every complete Monday-Sunday week", () => {
@@ -207,6 +218,7 @@ test("schedule display uses only the agreed plain-language shift and off labels"
 test("manager cleanup preserves drag-and-drop and both holiday decisions", () => {
   const source = readFileSync(resolve(process.cwd(), "components/staff-schedule-manager.tsx"), "utf8");
   const selfSource = readFileSync(resolve(process.cwd(), "components/staff-schedule-self-service.tsx"), "utf8");
+  const printSource = readFileSync(resolve(process.cwd(), "components/staff-schedule-print.tsx"), "utf8");
   const apiSource = readFileSync(resolve(process.cwd(), "app/api/staff-scheduling/route.ts"), "utf8");
   const exportSource = readFileSync(resolve(process.cwd(), "app/api/staff-scheduling/export/route.ts"), "utf8");
   const styles = readFileSync(resolve(process.cwd(), "app/manager/staff-scheduling/page.module.css"), "utf8");
@@ -214,6 +226,7 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   const selfStyles = readFileSync(resolve(process.cwd(), "app/staff/schedule/page.module.css"), "utf8");
   const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260826223530_add_staff_leave_balances_and_una_shift.sql"), "utf8");
   const unaDraftMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260826224221_align_una_existing_draft_shift.sql"), "utf8");
+  const creditMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260827000727_add_monthly_accrued_leave_credits.sql"), "utf8");
   assert.match(source, /holidayRuleGroups\.map/);
   assert.match(source, /window\.setTimeout\(\(\) => setNotice\(""\), 4500\)/);
   assert.match(source, /onDrop=\{\(event\) => void dropOn/);
@@ -236,12 +249,23 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(apiSource, /if \(compactMutation\) \{[\s\S]*return apiSuccess\(compactMutation\)/);
   assert.match(source, /staffScheduleGridWorkLabel\(entry, employee\.employeeNumber, date\)/);
   assert.doesNotMatch(source, /<small>\{entry\.startsAt\}–\{entry\.endsAt\}<\/small>/);
-  assert.match(source, /特休 \{formatDays\(employee\.employment\?\.annual_leave_balance_days\)\}/);
-  assert.match(source, /積假 \{formatDays\(employee\.employment\?\.accrued_leave_balance_days\)\}/);
+  assert.match(source, /特休\{formatDays\(employee\.employment\?\.annual_leave_balance_days\)\}/);
+  assert.match(source, /積假\{formatDays\(employee\.employment\?\.accrued_leave_balance_days\)\}/);
+  assert.doesNotMatch(source, /需具早班資格|主管指定可支援早班|尚未設定「可支援早班」/);
+  assert.doesNotMatch(apiSource, /不能排入支援早班/);
+  assert.match(apiSource, /staff_accrued_leave_monthly_credits/);
+  assert.match(apiSource, /ignoreDuplicates: true/);
   assert.match(styles, /\.scheduleTable \.offCell\{background:#fee2e2\}/);
   assert.match(styles, /\.scheduleTable \.earlyShiftCell\{background:#ffedd5\}/);
   assert.match(styles, /\.scheduleTable \.lateShiftCell\{background:#dbeafe\}/);
-  assert.match(styles, /\.nameSummary\{display:grid;grid-template-columns:minmax\(0,1fr\) auto/);
+  assert.match(source, /if \(\["FRONTDESK_DAY", "COACH_EARLY"\]\.includes/);
+  assert.match(selfSource, /\["FRONTDESK_DAY", "COACH_EARLY"\]\.includes/);
+  assert.match(printSource, /\["FRONTDESK_DAY", "COACH_EARLY"\]\.includes/);
+  assert.doesNotMatch(source, /\["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"\]\.includes/);
+  assert.doesNotMatch(selfSource, /\["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"\]\.includes/);
+  assert.doesNotMatch(printSource, /\["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"\]\.includes/);
+  assert.match(styles, /\.nameSummary\{display:flex;align-items:center;gap:5px;white-space:nowrap\}/);
+  assert.match(styles, /\.leaveBalances\{display:inline-flex;align-items:center;gap:4px;margin-left:2px/);
   assert.match(printStyles, /\.off \{\s*background: #fee2e2;/);
   assert.match(printStyles, /\.early \{\s*background: #ffedd5;/);
   assert.match(printStyles, /\.late \{\s*background: #dbeafe;/);
@@ -255,4 +279,7 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(unaDraftMigration, /profile\.employee_number = 'E000012'/);
   assert.match(unaDraftMigration, /version\.status in \('draft', 'assistant_review', 'manager_review'\)/);
   assert.match(unaDraftMigration, /extract\(isodow from entry\.work_date\) = 3/);
+  assert.match(creditMigration, /create table if not exists public\.staff_accrued_leave_monthly_credits/);
+  assert.match(creditMigration, /unique\(period_id, employee_id\)/);
+  assert.match(creditMigration, /after insert on public\.staff_accrued_leave_monthly_credits/);
 });

@@ -171,7 +171,7 @@ async function parseResponse<T = ScheduleState>(response: Response): Promise<T> 
 
 function scheduleTone(entry: ScheduleEntry | undefined) {
   if (!entry || entry.entryKind === "off") return "off";
-  if (["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"].includes(entry.shiftCode || "")) return "early";
+  if (["FRONTDESK_DAY", "COACH_EARLY"].includes(entry.shiftCode || "")) return "early";
   if (entry.shiftCode === "COACH_PARTTIME_WEEKDAY") return "late";
   return "middle";
 }
@@ -375,7 +375,7 @@ export default function StaffScheduleManager() {
 
   function exportPng() {
     if (!data?.version || visibleEmployees.length === 0) return;
-    const nameWidth = 190;
+    const nameWidth = 250;
     const cellWidth = 96;
     const headerHeight = 62;
     const rowHeight = 72;
@@ -392,7 +392,7 @@ export default function StaffScheduleManager() {
     context.textAlign = "center"; context.textBaseline = "middle";
     dates.forEach((date, index) => { const x = nameWidth + index * cellWidth; const weekend = [0, 6].includes(new Date(`${date}T12:00:00+08:00`).getDay()); context.fillStyle = weekend ? "#ffe7e1" : "#eaf0f7"; context.fillRect(x, top, cellWidth, headerHeight); context.fillStyle = weekend ? "#9c322b" : "#26384e"; context.font = "bold 14px sans-serif"; context.fillText(`${Number(date.slice(-2))}（${weekday(date)}）`, x + cellWidth / 2, top + headerHeight / 2); });
     context.fillStyle = "#eaf0f7"; context.fillRect(0, top, nameWidth, headerHeight); context.fillStyle = "#26384e"; context.fillText("員工", nameWidth / 2, top + headerHeight / 2);
-    visibleEmployees.forEach((employee, rowIndex) => { const y = top + headerHeight + rowIndex * rowHeight; context.fillStyle = "#f8fafc"; context.fillRect(0, y, nameWidth, rowHeight); context.textAlign = "left"; context.fillStyle = "#172235"; context.font = "bold 15px sans-serif"; context.fillText(employee.displayName, 10, y + 20); context.font = "13px sans-serif"; context.fillStyle = "#66778e"; context.fillText(employee.englishName || "未設定英文名", 96, y + 20); context.font = "12px sans-serif"; context.fillStyle = "#315b8b"; context.fillText(`特休 ${formatDays(employee.employment?.annual_leave_balance_days)}`, 10, y + 51); context.fillText(`積假 ${formatDays(employee.employment?.accrued_leave_balance_days)}`, 96, y + 51); dates.forEach((date, index) => { const entry = entryMap.get(`${employee.id}:${date}`); const x = nameWidth + index * cellWidth; const tone = scheduleTone(entry); context.fillStyle = tone === "off" ? "#fee2e2" : tone === "early" ? "#ffedd5" : tone === "late" ? "#dbeafe" : "#ffffff"; context.fillRect(x, y, cellWidth, rowHeight); context.textAlign = "center"; context.fillStyle = tone === "off" ? "#991b1b" : tone === "early" ? "#9a3412" : tone === "late" ? "#1e40af" : "#26384e"; context.font = "bold 14px sans-serif"; const title = entry?.entryKind === "off" ? staffScheduleEntryOffLabel(entry) : staffScheduleGridWorkLabel(entry || {}, employee.employeeNumber, date); context.fillText(title.slice(0, 12), x + cellWidth / 2, y + rowHeight / 2); }); });
+    visibleEmployees.forEach((employee, rowIndex) => { const y = top + headerHeight + rowIndex * rowHeight; context.fillStyle = "#f8fafc"; context.fillRect(0, y, nameWidth, rowHeight); context.textAlign = "left"; context.fillStyle = "#172235"; context.font = "bold 14px sans-serif"; context.fillText(`${employee.displayName}${employee.englishName || "未設定英文名"}　特休${formatDays(employee.employment?.annual_leave_balance_days)}　積假${formatDays(employee.employment?.accrued_leave_balance_days)}`, 10, y + rowHeight / 2); dates.forEach((date, index) => { const entry = entryMap.get(`${employee.id}:${date}`); const x = nameWidth + index * cellWidth; const tone = scheduleTone(entry); context.fillStyle = tone === "off" ? "#fee2e2" : tone === "early" ? "#ffedd5" : tone === "late" ? "#dbeafe" : "#ffffff"; context.fillRect(x, y, cellWidth, rowHeight); context.textAlign = "center"; context.fillStyle = tone === "off" ? "#991b1b" : tone === "early" ? "#9a3412" : tone === "late" ? "#1e40af" : "#26384e"; context.font = "bold 14px sans-serif"; const title = entry?.entryKind === "off" ? staffScheduleEntryOffLabel(entry) : staffScheduleGridWorkLabel(entry || {}, employee.employeeNumber, date); context.fillText(title.slice(0, 12), x + cellWidth / 2, y + rowHeight / 2); }); });
     context.strokeStyle = "#cfd8e5"; context.lineWidth = 1; for (let x = 0; x <= canvas.width; x += x === 0 ? nameWidth : cellWidth) { context.beginPath(); context.moveTo(x, top); context.lineTo(x, canvas.height); context.stroke(); if (x === 0) x = nameWidth - cellWidth; } for (let y = top; y <= canvas.height; y += y === top ? headerHeight : rowHeight) { context.beginPath(); context.moveTo(0, y); context.lineTo(canvas.width, y); context.stroke(); if (y === top) y = top + headerHeight - rowHeight; }
     canvas.toBlob((blob) => { if (!blob) return; const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `巨挺健身館-${month}-班表.png`; anchor.click(); URL.revokeObjectURL(url); }, "image/png");
   }
@@ -422,10 +422,6 @@ export default function StaffScheduleManager() {
     if (payload.kind === "shift") {
       if (target?.entryKind !== "work") {
         setError("休假日不能直接覆蓋成班次；請先調整休假日期。");
-        return;
-      }
-      if (payload.shiftCode === "COACH_EARLY" && !employee?.employment?.can_cover_early_shift && !employee?.employment?.is_original_early_shift) {
-        setError("此員工尚未設定「可支援早班」，請先在固定班別設定中勾選資格。");
         return;
       }
       const label = {
@@ -596,7 +592,6 @@ export default function StaffScheduleManager() {
                           </select>
                         </label>
                         <label className={styles.checkField}><input type="checkbox" checked={terms.is_original_early_shift} onChange={(event) => void saveEmployee(employee, { is_original_early_shift: event.target.checked, default_shift_code: event.target.checked ? "COACH_EARLY" : terms.default_shift_code })} />原固定早班（週三 12:00–21:00）</label>
-                        <label className={styles.checkField}><input type="checkbox" checked={terms.can_cover_early_shift} onChange={(event) => void saveEmployee(employee, { can_cover_early_shift: event.target.checked })} />主管指定可支援早班</label>
                         <label className={styles.checkField}><input type="checkbox" checked={terms.counts_toward_middle_limit} onChange={(event) => void saveEmployee(employee, { counts_toward_middle_limit: event.target.checked })} />自選排休納入中班每日上限</label>
                         <label>特休餘額（天）
                           <input key={`${employee.id}:annual:${terms.annual_leave_balance_days}`} type="number" min={0} max={365} step={0.5} defaultValue={terms.annual_leave_balance_days} disabled={busy} onBlur={(event) => void saveEmployee(employee, { annual_leave_balance_days: Number(event.target.value) })} />
@@ -639,7 +634,7 @@ export default function StaffScheduleManager() {
             </div> : null}
             {data.version ? <div className={styles.shiftPalette}>
               <strong>可拖進表格的班次</strong>
-              <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_EARLY")}><span>早</span><b>早班</b><small>10:00–19:00 · 需具早班資格</small></button>
+              <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_EARLY")}><span>早</span><b>早班</b><small>10:00–19:00</small></button>
               <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_MIDDLE")}><span>中</span><b>中班</b><small>13:00–22:00</small></button>
               <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_PARTTIME_WEEKDAY")}><span>晚</span><b>晚班</b><small>18:00–22:00</small></button>
             </div> : null}
@@ -650,7 +645,7 @@ export default function StaffScheduleManager() {
                   <tbody>
                     {visibleEmployees.map((employee) => (
                       <tr key={employee.id}>
-                        <th className={styles.nameCell}><div className={styles.nameSummary}><strong>{employee.displayName}</strong><small>{employee.englishName || "未設定英文名"}</small><span className={styles.leaveBalances}><i>特休 {formatDays(employee.employment?.annual_leave_balance_days)}</i><i>積假 {formatDays(employee.employment?.accrued_leave_balance_days)}</i></span></div></th>
+                        <th className={styles.nameCell}><div className={styles.nameSummary}><strong>{employee.displayName}</strong><small>{employee.englishName || "未設定英文名"}</small><span className={styles.leaveBalances}><i>特休{formatDays(employee.employment?.annual_leave_balance_days)}</i><i>積假{formatDays(employee.employment?.accrued_leave_balance_days)}</i></span></div></th>
                         {dates.map((date) => {
                           const entry = entryMap.get(`${employee.id}:${date}`);
                           const isOff = entry?.entryKind === "off";
