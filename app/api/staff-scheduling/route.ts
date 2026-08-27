@@ -9,12 +9,14 @@ import {
   buildSelectionWindow,
   dateAfter,
   generateMonthlySchedule,
+  isSharedFrontdeskScheduleAccount,
   listMonthDates,
   monthlyAccruedLeaveCreditDays,
   monthlyDaysOffEntitlement,
   moveDayOff,
   normalizeStaffScheduleView,
   normalizeMonthStart,
+  normalizeUnselectedPreferenceEntry,
   resolveStaffScheduleDataScope,
   shiftForEmployeeDate,
   validateSchedule,
@@ -212,7 +214,7 @@ async function listEmployees(admin: AdminClient, tenantId: string, branchId: str
   if (branchId) query = query.or(`branch_id.is.null,branch_id.eq.${branchId}`);
   const result = await query;
   if (result.error) throw new Error(result.error.message);
-  return (result.data || []) as ProfileRow[];
+  return ((result.data || []) as ProfileRow[]).filter((employee) => !isSharedFrontdeskScheduleAccount(employee.employee_number));
 }
 
 function inferEmployment(profile: ProfileRow, actorId: string) {
@@ -525,7 +527,7 @@ async function buildState(params: {
     const [entriesResult, rulesResult, adjustmentResult, acknowledgementResult] = await Promise.all([
       entryQuery.order("work_date"),
       scope.teamView
-        ? params.admin.from("staff_schedule_rule_results").select("*").eq("version_id", String(version.id)).order("created_at")
+        ? params.admin.from("staff_schedule_rule_results").select("*").eq("version_id", String(version.id)).in("employee_id", scope.employeeIds).order("created_at")
         : Promise.resolve({ data: [], error: null }),
       params.admin
         .from("staff_holiday_adjustments")
@@ -551,6 +553,30 @@ async function buildState(params: {
   }
 
   const employmentMap = new Map(employments.map((item) => [item.employee_id, item]));
+  const configMap = new Map(employees.flatMap((employee) => {
+    const employment = employmentMap.get(employee.id);
+    return employment ? [[employee.id, configFromRows(employee, employment)] as const] : [];
+  }));
+  const selectedPreferenceKeys = new Set((preferenceResult.data || [])
+    .filter((preference) => preference.status === "submitted")
+    .flatMap((preference) => (preference.staff_time_off_preference_dates || [])
+      .filter((date: { source?: string }) => date.source === "employee")
+      .map((date: { requested_date: string }) => `${preference.employee_id}:${date.requested_date}`)));
+  const displayScheduleEntries = scheduleEntries.map((rawEntry) => {
+    const entry = mapEntry(rawEntry);
+    const employee = configMap.get(entry.employeeId);
+    return {
+      rawEntry,
+      entry: scope.teamView && employee
+        ? normalizeUnselectedPreferenceEntry({
+            entry,
+            employee,
+            preferenceDateSelected: selectedPreferenceKeys.has(`${entry.employeeId}:${entry.workDate}`),
+            manualOverride: Boolean(rawEntry.requires_resign),
+          })
+        : entry,
+    };
+  });
   return {
     actor: {
       id: params.profile.id,
@@ -576,20 +602,20 @@ async function buildState(params: {
     facilityClosures: closureResult.data || [],
     holidays: holidayResult.data || [],
     version,
-    scheduleEntries: scheduleEntries.map((entry) => ({
-      id: entry.id,
-      employeeId: entry.employee_id,
-      workDate: entry.work_date,
-      entryKind: entry.entry_kind,
-      shiftCode: entry.shift_code,
-      shiftLabel: entry.shift_label,
-      startsAt: entry.starts_at ? String(entry.starts_at).slice(0, 5) : null,
-      endsAt: entry.ends_at ? String(entry.ends_at).slice(0, 5) : null,
-      offKind: entry.off_kind,
+    scheduleEntries: displayScheduleEntries.map(({ rawEntry, entry }) => ({
+      id: rawEntry.id,
+      employeeId: entry.employeeId,
+      workDate: entry.workDate,
+      entryKind: entry.entryKind,
+      shiftCode: entry.shiftCode,
+      shiftLabel: entry.shiftLabel,
+      startsAt: entry.startsAt,
+      endsAt: entry.endsAt,
+      offKind: entry.offKind,
       source: entry.source,
-      employeeVisibleNote: entry.employee_visible_note,
-      requiresResign: entry.requires_resign,
-      ...(scope.teamView ? { internalNote: entry.internal_note } : {}),
+      employeeVisibleNote: entry.employeeVisibleNote,
+      requiresResign: rawEntry.requires_resign,
+      ...(scope.teamView ? { internalNote: rawEntry.internal_note } : {}),
     })),
     ruleResults,
     holidayAdjustments,
@@ -833,10 +859,20 @@ export async function POST(request: Request) {
       await seedKnownHolidays(admin, tenantId, monthStart, profile.id);
       const employees = await listEmployees(admin, tenantId, profile.branch_id);
       const employments = await ensureEmploymentProfiles(admin, employees, profile.id);
-      const preferencesResult = await admin
-        .from("staff_time_off_preference_dates")
-        .select("employee_id, requested_date")
-        .eq("period_id", period.id);
+      const submittedPreferences = await admin
+        .from("staff_time_off_preferences")
+        .select("id, employee_id")
+        .eq("period_id", period.id)
+        .eq("status", "submitted");
+      if (submittedPreferences.error) throw new Error(submittedPreferences.error.message);
+      const submittedPreferenceIds = (submittedPreferences.data || []).map((preference) => String(preference.id));
+      const preferencesResult = submittedPreferenceIds.length > 0
+        ? await admin
+            .from("staff_time_off_preference_dates")
+            .select("employee_id, requested_date")
+            .in("preference_id", submittedPreferenceIds)
+            .eq("source", "employee")
+        : { data: [], error: null };
       if (preferencesResult.error) throw new Error(preferencesResult.error.message);
       const preferencesByEmployee: Record<string, string[]> = {};
       for (const row of preferencesResult.data || []) {
@@ -1091,7 +1127,22 @@ export async function POST(request: Request) {
         .maybeSingle();
       if (targetEntry.error) throw new Error(targetEntry.error.message);
       if (!targetEntry.data) throw new Error("找不到目標班表格");
-      if (shiftChoice !== "DEFAULT" && targetEntry.data.entry_kind !== "work") {
+      let mayReplaceUnsubmittedPreferenceOff = false;
+      if (
+        shiftChoice !== "DEFAULT" &&
+        targetEntry.data.entry_kind === "off" &&
+        ["preferred_off", "regular_day_off", "rest_day"].includes(String(targetEntry.data.off_kind || ""))
+      ) {
+        const submittedPreference = await admin.from("staff_time_off_preferences")
+          .select("id")
+          .eq("period_id", period.id)
+          .eq("employee_id", employeeId)
+          .eq("status", "submitted")
+          .maybeSingle();
+        if (submittedPreference.error) throw new Error(submittedPreference.error.message);
+        mayReplaceUnsubmittedPreferenceOff = !submittedPreference.data;
+      }
+      if (shiftChoice !== "DEFAULT" && targetEntry.data.entry_kind !== "work" && !mayReplaceUnsubmittedPreferenceOff) {
         throw new Error("休假日不能直接覆蓋成班次；請使用復原或先調整休假日期");
       }
       if (shiftChoice === "DEFAULT" && targetEntry.data.entry_kind === "off" && !["rest_day", "regular_day_off"].includes(String(targetEntry.data.off_kind || ""))) {
@@ -1183,6 +1234,14 @@ export async function POST(request: Request) {
       const employeeId = z.string().uuid().parse(body.employeeId);
       const workDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(body.workDate);
       const offKind = z.enum(["rest_day", "regular_day_off"]).parse(body.offKind);
+      const submittedPreference = await admin.from("staff_time_off_preferences")
+        .select("id")
+        .eq("period_id", period.id)
+        .eq("employee_id", employeeId)
+        .eq("status", "submitted")
+        .maybeSingle();
+      if (submittedPreference.error) throw new Error(submittedPreference.error.message);
+      if (!submittedPreference.data) throw new Error("此員工尚未完成 8 天排休，完成後才能安排休假或例假");
       const [latestVersion, employees, employments] = await Promise.all([
         getLatestVersion(admin, period.id),
         listEmployees(admin, tenantId, profile.branch_id),
@@ -1407,9 +1466,24 @@ export async function POST(request: Request) {
       const period = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
       const version = period ? await getLatestVersion(admin, period.id) : null;
       if (!period || !version) throw new Error("找不到班表草稿");
+      const scheduleEmployees = await listEmployees(admin, tenantId, profile.branch_id);
+      const submittedPreferences = scheduleEmployees.length > 0
+        ? await admin.from("staff_time_off_preferences")
+            .select("employee_id")
+            .eq("period_id", period.id)
+            .eq("status", "submitted")
+            .in("employee_id", scheduleEmployees.map((employee) => employee.id))
+        : { data: [], error: null };
+      if (submittedPreferences.error) throw new Error(submittedPreferences.error.message);
+      const submittedEmployeeIds = new Set((submittedPreferences.data || []).map((preference) => String(preference.employee_id)));
+      const incompleteEmployees = scheduleEmployees.filter((employee) => !submittedEmployeeIds.has(employee.id));
+      if (incompleteEmployees.length > 0) {
+        throw new Error(`尚有 ${incompleteEmployees.length} 位員工未完成 8 天排休，不能送經理審核`);
+      }
+      const scheduleEmployeeIds = scheduleEmployees.map((employee) => employee.id);
       const [blocking, unoverriddenWarnings] = await Promise.all([
-        admin.from("staff_schedule_rule_results").select("id, message").eq("version_id", String(version.id)).eq("severity", "blocking").eq("passed", false).limit(20),
-        admin.from("staff_schedule_rule_results").select("id, message").eq("version_id", String(version.id)).eq("severity", "warning").eq("passed", false).is("overridden_at", null).limit(20),
+        admin.from("staff_schedule_rule_results").select("id, message").eq("version_id", String(version.id)).in("employee_id", scheduleEmployeeIds).eq("severity", "blocking").eq("passed", false).limit(20),
+        admin.from("staff_schedule_rule_results").select("id, message").eq("version_id", String(version.id)).in("employee_id", scheduleEmployeeIds).eq("severity", "warning").eq("passed", false).is("overridden_at", null).limit(20),
       ]);
       if (blocking.error || unoverriddenWarnings.error) throw new Error(blocking.error?.message || unoverriddenWarnings.error?.message || "規則檢查失敗");
       if ((blocking.data || []).length > 0) throw new Error(`尚有 ${(blocking.data || []).length} 項法規阻擋，不能送經理審核`);
@@ -1448,10 +1522,13 @@ export async function POST(request: Request) {
       const assistantApproval = await admin.from("staff_schedule_approvals").select("id, decided_by").eq("version_id", String(version.id)).eq("stage", "assistant_manager").eq("decision", "approved").maybeSingle();
       if (assistantApproval.error || !assistantApproval.data) throw new Error("正式班表必須先由副理初審");
       if (String(assistantApproval.data.decided_by) === profile.id) throw new Error("副理初審與經理終審必須由不同帳號完成");
+      const scheduleEmployees = await listEmployees(admin, tenantId, profile.branch_id);
+      const scheduleEmployeeIds = new Set(scheduleEmployees.map((employee) => employee.id));
+      const scheduleEmployeeIdList = Array.from(scheduleEmployeeIds);
       const [blocking, unoverriddenWarnings, pendingAdjustments] = await Promise.all([
-        admin.from("staff_schedule_rule_results").select("id").eq("version_id", String(version.id)).eq("severity", "blocking").eq("passed", false),
-        admin.from("staff_schedule_rule_results").select("id").eq("version_id", String(version.id)).eq("severity", "warning").eq("passed", false).is("overridden_at", null),
-        admin.from("staff_holiday_adjustments").select("id").eq("version_id", String(version.id)).neq("status", "manager_approved"),
+        admin.from("staff_schedule_rule_results").select("id").eq("version_id", String(version.id)).in("employee_id", scheduleEmployeeIdList).eq("severity", "blocking").eq("passed", false),
+        admin.from("staff_schedule_rule_results").select("id").eq("version_id", String(version.id)).in("employee_id", scheduleEmployeeIdList).eq("severity", "warning").eq("passed", false).is("overridden_at", null),
+        admin.from("staff_holiday_adjustments").select("id").eq("version_id", String(version.id)).in("employee_id", scheduleEmployeeIdList).neq("status", "manager_approved"),
       ]);
       if (blocking.error) throw new Error(blocking.error.message);
       if (unoverriddenWarnings.error) throw new Error(unoverriddenWarnings.error.message);
@@ -1473,7 +1550,9 @@ export async function POST(request: Request) {
       if (approval.error) throw new Error(approval.error.message);
       const employeesResult = await admin.from("staff_schedule_entries").select("*").eq("version_id", String(version.id));
       if (employeesResult.error) throw new Error(employeesResult.error.message);
-      const employeeIds = Array.from(new Set((employeesResult.data || []).map((row) => String(row.employee_id))));
+      const employeeIds = Array.from(new Set((employeesResult.data || [])
+        .map((row) => String(row.employee_id))
+        .filter((employeeId) => scheduleEmployeeIds.has(employeeId))));
       const affectedEmployeeIds = new Set((employeesResult.data || []).filter((row) => row.requires_resign).map((row) => String(row.employee_id)));
       const carriedForwardEmployeeIds = new Set<string>();
       if (version.based_on_version_id) {

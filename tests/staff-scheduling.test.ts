@@ -6,11 +6,13 @@ import {
   assertValidPreferenceDates,
   buildSelectionWindow,
   generateMonthlySchedule,
+  isSharedFrontdeskScheduleAccount,
   listMonthDates,
   monthlyAccruedLeaveCreditDays,
   monthlyDaysOffEntitlement,
   paidMinutesForEntry,
   normalizeStaffScheduleView,
+  normalizeUnselectedPreferenceEntry,
   resolveStaffScheduleDataScope,
   staffScheduleEntryOffLabel,
   staffScheduleGridWorkLabel,
@@ -215,6 +217,60 @@ test("schedule display uses only the agreed plain-language shift and off labels"
   );
 });
 
+test("manager schedule hides unselected legacy days off but preserves real selections and closures", () => {
+  const generated = generateMonthlySchedule({
+    monthStart: "2026-09-01",
+    employees: [middleCoach],
+    preferencesByEmployee: { "coach-1": [] },
+  });
+  const legacyOff = {
+    ...generated[0],
+    entryKind: "off" as const,
+    shiftCode: null,
+    shiftLabel: null,
+    startsAt: null,
+    endsAt: null,
+    offKind: "rest_day" as const,
+    source: "supervisor" as const,
+  };
+
+  const hiddenLegacyOff = normalizeUnselectedPreferenceEntry({
+    entry: legacyOff,
+    employee: middleCoach,
+    preferenceDateSelected: false,
+  });
+  assert.equal(hiddenLegacyOff.entryKind, "work");
+  assert.equal(hiddenLegacyOff.shiftCode, "COACH_MIDDLE");
+
+  const selectedOff = normalizeUnselectedPreferenceEntry({
+    entry: { ...legacyOff, source: "preference" },
+    employee: middleCoach,
+    preferenceDateSelected: true,
+  });
+  assert.equal(selectedOff.entryKind, "off");
+
+  const facilityClosure = normalizeUnselectedPreferenceEntry({
+    entry: { ...legacyOff, source: "facility_closure" },
+    employee: middleCoach,
+    preferenceDateSelected: false,
+  });
+  assert.equal(facilityClosure.entryKind, "off");
+
+  const managerOverride = normalizeUnselectedPreferenceEntry({
+    entry: legacyOff,
+    employee: middleCoach,
+    preferenceDateSelected: false,
+    manualOverride: true,
+  });
+  assert.equal(managerOverride.entryKind, "off");
+});
+
+test("shared BIGE front-desk account is excluded without hiding individual staff accounts", () => {
+  assert.equal(isSharedFrontdeskScheduleAccount("E000006"), true);
+  assert.equal(isSharedFrontdeskScheduleAccount("E000001"), false);
+  assert.equal(isSharedFrontdeskScheduleAccount(null), false);
+});
+
 test("manager cleanup preserves drag-and-drop and both holiday decisions", () => {
   const source = readFileSync(resolve(process.cwd(), "components/staff-schedule-manager.tsx"), "utf8");
   const selfSource = readFileSync(resolve(process.cwd(), "components/staff-schedule-self-service.tsx"), "utf8");
@@ -245,11 +301,20 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(styles, /\.workCell small\{color:#66778e;font-size:12px\}/);
   assert.match(styles, /\.nameCell small\{margin-top:4px;color:#65758a;font-size:13px\}/);
   assert.match(source, /員工自選休假日期/);
+  assert.match(source, /preference\.status !== "submitted"/);
+  assert.match(source, /const scheduleEmployees = useMemo/);
+  assert.match(source, /isSharedFrontdeskScheduleAccount\(employee\.employeeNumber\)/);
+  assert.doesNotMatch(source, /employee\.employment\?\.work_group !== "frontdesk"/);
   assert.match(source, /此草稿仍含舊規則補排的例假或休假/);
   assert.match(source, /shiftDragStart\(event, "DEFAULT"\)[\s\S]*>復原<\/b>[\s\S]*shiftDragStart\(event, "COACH_EARLY"\)[\s\S]*shiftDragStart\(event, "COACH_MIDDLE"\)[\s\S]*shiftDragStart\(event, "COACH_PARTTIME_WEEKDAY"\)[\s\S]*dayOffDragStart\(event, "rest_day"\)[\s\S]*dayOffDragStart\(event, "regular_day_off"\)/);
   assert.match(source, /payload\.shiftCode !== "DEFAULT"/);
   assert.match(source, /action: "assign_day_off"/);
   assert.match(apiSource, /body\.action === "assign_day_off"/);
+  assert.match(apiSource, /尚有 \$\{incompleteEmployees\.length\} 位員工未完成 8 天排休/);
+  assert.match(apiSource, /normalizeUnselectedPreferenceEntry/);
+  assert.match(apiSource, /preferenceDateSelected: selectedPreferenceKeys\.has/);
+  assert.match(exportSource, /normalizeUnselectedPreferenceEntry/);
+  assert.match(exportSource, /isSharedFrontdeskScheduleAccount/);
   assert.match(apiSource, /z\.enum\(\["rest_day", "regular_day_off"\]\)/);
   assert.match(apiSource, /shiftChoice === "DEFAULT"[\s\S]*\["rest_day", "regular_day_off"\]/);
   assert.match(source, /setData\(\(current\) => applyShiftPreview\(current, employeeId, workDate, shiftCode\)\)/);

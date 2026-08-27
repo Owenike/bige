@@ -2,7 +2,14 @@ import ExcelJS from "exceljs";
 import { apiError, requireProfile } from "../../../../lib/auth-context";
 import { requireStaffPermission } from "../../../../lib/staff-operation-permissions";
 import { writeStaffAudit } from "../../../../lib/staff-audit";
-import { staffScheduleEntryOffLabel, staffScheduleGridWorkLabel } from "../../../../lib/staff-scheduling";
+import {
+  isSharedFrontdeskScheduleAccount,
+  normalizeUnselectedPreferenceEntry,
+  staffScheduleEntryOffLabel,
+  staffScheduleGridWorkLabel,
+  type EmployeeScheduleConfig,
+  type ScheduleEntryDraft,
+} from "../../../../lib/staff-scheduling";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -86,7 +93,7 @@ export async function GET(request: Request) {
     const employeeIds = Array.from(
       new Set((entries.data || []).map((row) => String(row.employee_id))),
     );
-    const [employees, employments] = await Promise.all([
+    const [employees, employments, submittedPreferences] = await Promise.all([
       employeeIds.length
         ? admin
             .from("profiles")
@@ -98,14 +105,22 @@ export async function GET(request: Request) {
       employeeIds.length
         ? admin
             .from("staff_employment_profiles")
-            .select("employee_id, employment_type, work_group")
+            .select(
+              "employee_id, employment_type, work_group, default_shift_code, is_original_early_shift, can_cover_early_shift, counts_toward_middle_limit",
+            )
             .in("employee_id", employeeIds)
         : Promise.resolve({ data: [], error: null }),
+      admin
+        .from("staff_time_off_preferences")
+        .select("employee_id, staff_time_off_preference_dates(requested_date, source)")
+        .eq("period_id", period.data.id)
+        .eq("status", "submitted"),
     ]);
-    if (employees.error || employments.error)
+    if (employees.error || employments.error || submittedPreferences.error)
       throw new Error(
         employees.error?.message ||
           employments.error?.message ||
+          submittedPreferences.error?.message ||
           "員工資料讀取失敗",
       );
     const employeeMap = new Map(
@@ -114,8 +129,81 @@ export async function GET(request: Request) {
     const employmentMap = new Map(
       (employments.data || []).map((row) => [String(row.employee_id), row]),
     );
+    const selectedPreferenceKeys = new Set(
+      (submittedPreferences.data || []).flatMap((preference) =>
+        (preference.staff_time_off_preference_dates || [])
+          .filter((date) => date.source === "employee")
+          .map((date) => `${preference.employee_id}:${date.requested_date}`),
+      ),
+    );
+    const scheduleEntries = (entries.data || [])
+      .filter((row) => {
+        const employee = employeeMap.get(String(row.employee_id));
+        return !isSharedFrontdeskScheduleAccount(employee?.employee_number);
+      })
+      .map((row) => {
+        const employeeId = String(row.employee_id);
+        const employee = employeeMap.get(employeeId);
+        const employment = employmentMap.get(employeeId);
+        if (!employee || !employment) return row;
+        const config: EmployeeScheduleConfig = {
+          employeeId,
+          displayName:
+            employee.display_name ||
+            employee.english_name ||
+            employee.employee_number ||
+            "未命名員工",
+          employmentType: employment.employment_type,
+          workGroup: employment.work_group,
+          defaultShiftCode: employment.default_shift_code,
+          isOriginalEarlyShift: Boolean(employment.is_original_early_shift),
+          canCoverEarlyShift: Boolean(employment.can_cover_early_shift),
+          countsTowardMiddleLimit: Boolean(employment.counts_toward_middle_limit),
+        };
+        const normalized = normalizeUnselectedPreferenceEntry({
+          entry: {
+            employeeId,
+            workDate: String(row.work_date),
+            entryKind: row.entry_kind as ScheduleEntryDraft["entryKind"],
+            shiftCode: row.shift_code ? String(row.shift_code) : null,
+            shiftLabel: row.shift_label ? String(row.shift_label) : null,
+            startsAt: row.starts_at ? String(row.starts_at).slice(0, 5) : null,
+            endsAt: row.ends_at ? String(row.ends_at).slice(0, 5) : null,
+            breakMinutes: Number(row.break_minutes || 0),
+            paidBreak: Boolean(row.paid_break),
+            breakHiddenFromEmployee: Boolean(row.break_hidden_from_employee),
+            countsTowardMiddleLimit: Boolean(row.counts_toward_middle_limit),
+            offKind: (row.off_kind as ScheduleEntryDraft["offKind"]) || null,
+            source: row.source as ScheduleEntryDraft["source"],
+            employeeVisibleNote: row.employee_visible_note
+              ? String(row.employee_visible_note)
+              : null,
+          },
+          employee: config,
+          preferenceDateSelected: selectedPreferenceKeys.has(`${employeeId}:${row.work_date}`),
+          manualOverride: Boolean(row.requires_resign),
+        });
+        return {
+          ...row,
+          entry_kind: normalized.entryKind,
+          shift_code: normalized.shiftCode,
+          shift_label: normalized.shiftLabel,
+          starts_at: normalized.startsAt,
+          ends_at: normalized.endsAt,
+          break_minutes: normalized.breakMinutes,
+          paid_break: normalized.paidBreak,
+          break_hidden_from_employee: normalized.breakHiddenFromEmployee,
+          counts_toward_middle_limit: normalized.countsTowardMiddleLimit,
+          off_kind: normalized.offKind,
+          source: normalized.source,
+          employee_visible_note: normalized.employeeVisibleNote,
+        };
+      });
+    const exportEmployeeIds = Array.from(
+      new Set(scheduleEntries.map((row) => String(row.employee_id))),
+    );
     const dates = Array.from(
-      new Set((entries.data || []).map((row) => String(row.work_date))),
+      new Set(scheduleEntries.map((row) => String(row.work_date))),
     ).sort();
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "巨挺健身館班表系統";
@@ -188,14 +276,14 @@ export async function GET(request: Request) {
         wrapText: true,
       };
     });
-    for (const employeeId of employeeIds) {
+    for (const employeeId of exportEmployeeIds) {
       const employee = employeeMap.get(employeeId);
       const employment = employmentMap.get(employeeId);
       const label = `${safeCell(employee?.display_name || employee?.english_name || "未命名")}\n${safeCell(employee?.employee_number || "無編號")} · ${employment?.employment_type === "part_time" ? "兼職" : "正職"}`;
       const row = sheet.addRow([
         label,
         ...dates.map((date) => {
-          const entry = (entries.data || []).find(
+          const entry = scheduleEntries.find(
             (item) =>
               item.employee_id === employeeId && item.work_date === date,
           );
@@ -218,7 +306,7 @@ export async function GET(request: Request) {
       row.eachCell((cell, col) => {
         const entry =
           col > 1
-            ? (entries.data || []).find(
+            ? scheduleEntries.find(
                 (item) =>
                   item.employee_id === employeeId &&
                   item.work_date === dates[col - 2],
@@ -266,7 +354,7 @@ export async function GET(request: Request) {
       { header: "早班上班", key: "early", width: 12 },
     ];
     for (const date of dates) {
-      const rows = (entries.data || []).filter(
+      const rows = scheduleEntries.filter(
         (item) => item.work_date === date,
       );
       stats.addRow({
@@ -300,7 +388,7 @@ export async function GET(request: Request) {
       { header: "狀態", key: "status", width: 18 },
       { header: "完成時間", key: "signedAt", width: 24 },
     ];
-    for (const employeeId of employeeIds) {
+    for (const employeeId of exportEmployeeIds) {
       const employee = employeeMap.get(employeeId);
       const ack = (acknowledgements.data || []).find(
         (item) => item.employee_id === employeeId,

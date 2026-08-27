@@ -1,6 +1,7 @@
 export const STAFF_TIME_ZONE = "Asia/Taipei";
 export const PREFERRED_DAYS_REQUIRED = 8;
 export const DEFAULT_MIDDLE_PREFERENCE_LIMIT = 2;
+export const SHARED_FRONTDESK_EMPLOYEE_NUMBER = "E000006";
 
 export type EmploymentType = "full_time" | "part_time";
 export type WorkGroup = "frontdesk" | "coach" | "other";
@@ -20,6 +21,10 @@ export type OffKind =
   | "bereavement_leave"
   | "official_leave"
   | "other_leave";
+
+export function isSharedFrontdeskScheduleAccount(employeeNumber: string | null | undefined) {
+  return employeeNumber === SHARED_FRONTDESK_EMPLOYEE_NUMBER;
+}
 
 const STAFF_SCHEDULE_OFF_LABELS: Record<string, string> = {
   regular_day_off: "例假",
@@ -324,6 +329,43 @@ export function shiftForEmployeeDate(
     code = day === 3 ? "COACH_EARLY_WED" : "COACH_EARLY";
   }
   return shifts.get(code) || shifts.get("COACH_MIDDLE") || DEFAULT_SHIFT_DEFINITIONS[0];
+}
+
+export function normalizeUnselectedPreferenceEntry(params: {
+  entry: ScheduleEntryDraft;
+  employee: EmployeeScheduleConfig;
+  preferenceDateSelected: boolean;
+  manualOverride?: boolean;
+  shifts?: ShiftDefinition[];
+}) {
+  const preferenceOffKinds: OffKind[] = ["preferred_off", "regular_day_off", "rest_day"];
+  const preferenceSources: ScheduleEntryDraft["source"][] = ["preference", "supervisor"];
+  if (
+    params.preferenceDateSelected ||
+    params.manualOverride ||
+    params.entry.entryKind !== "off" ||
+    !preferenceSources.includes(params.entry.source) ||
+    !preferenceOffKinds.includes(params.entry.offKind || "other_leave")
+  ) {
+    return params.entry;
+  }
+  const shiftMap = new Map((params.shifts || [...DEFAULT_SHIFT_DEFINITIONS]).map((shift) => [shift.code, shift]));
+  const shift = shiftForEmployeeDate(params.employee, params.entry.workDate, shiftMap);
+  return {
+    ...params.entry,
+    entryKind: "work" as const,
+    shiftCode: shift.code,
+    shiftLabel: shift.label,
+    startsAt: shift.startsAt,
+    endsAt: shift.endsAt,
+    breakMinutes: shift.breakMinutes,
+    paidBreak: shift.paidBreak,
+    breakHiddenFromEmployee: shift.breakHiddenFromEmployee,
+    countsTowardMiddleLimit: shift.countsTowardMiddleLimit,
+    offKind: null,
+    source: "generated" as const,
+    employeeVisibleNote: null,
+  };
 }
 
 function labelWeeklyDaysOff(entries: Map<string, ScheduleEntryDraft>, weekDates: string[]) {

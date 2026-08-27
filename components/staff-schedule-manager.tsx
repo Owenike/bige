@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  isSharedFrontdeskScheduleAccount,
   staffScheduleEntryOffLabel,
   staffScheduleGridWorkLabel,
   staffScheduleOffLabel,
@@ -384,9 +385,12 @@ export default function StaffScheduleManager() {
     () => new Map((data?.scheduleEntries || []).map((entry) => [`${entry.employeeId}:${entry.workDate}`, entry])),
     [data?.scheduleEntries],
   );
-  const employeeMap = useMemo(() => new Map((data?.employees || []).map((employee) => [employee.id, employee])), [data?.employees]);
-  const completeCount = data?.employees.filter((employee) => preferenceMap.get(employee.id)?.status === "submitted").length || 0;
-  const incompleteEmployees = data?.employees.filter((employee) => preferenceMap.get(employee.id)?.status !== "submitted") || [];
+  const scheduleEmployees = useMemo(() => (data?.employees || []).filter((employee) =>
+    !isSharedFrontdeskScheduleAccount(employee.employeeNumber)
+  ), [data?.employees]);
+  const employeeMap = useMemo(() => new Map(scheduleEmployees.map((employee) => [employee.id, employee])), [scheduleEmployees]);
+  const completeCount = scheduleEmployees.filter((employee) => preferenceMap.get(employee.id)?.status === "submitted").length;
+  const incompleteEmployees = scheduleEmployees.filter((employee) => preferenceMap.get(employee.id)?.status !== "submitted");
   const blockingRules = data?.ruleResults.filter((rule) => !rule.passed && rule.severity === "blocking") || [];
   const warningRules = data?.ruleResults.filter((rule) => !rule.passed && rule.severity === "warning") || [];
   const holidayRules = blockingRules.filter((rule) => rule.rule_code === "HOLIDAY_ADJUSTMENT_REQUIRED");
@@ -399,26 +403,27 @@ export default function StaffScheduleManager() {
     groups.set(key, group);
     return groups;
   }, new Map<string, { workDate: string | null; holidayName: string; rules: RuleResult[] }>()).values());
-  const visibleEmployees = useMemo(() => (data?.employees || []).filter((employee) => {
+  const visibleEmployees = useMemo(() => scheduleEmployees.filter((employee) => {
     const searchText = `${employee.displayName} ${employee.englishName || ""} ${employee.employeeNumber || ""}`.toLowerCase();
     if (!searchText.includes(employeeSearch.trim().toLowerCase())) return false;
     if (employmentFilter !== "all" && employee.employment?.employment_type !== employmentFilter) return false;
     if (shiftFilter !== "all" && employee.employment?.default_shift_code !== shiftFilter) return false;
     return true;
-  }), [data?.employees, employeeSearch, employmentFilter, shiftFilter]);
+  }), [scheduleEmployees, employeeSearch, employmentFilter, shiftFilter]);
   const dailyStats = useMemo(() => new Map(dates.map((date) => {
     const rows = visibleEmployees.map((employee) => entryMap.get(`${employee.id}:${date}`)).filter(Boolean);
     return [date, { work: rows.filter((entry) => entry?.entryKind === "work").length, off: rows.filter((entry) => entry?.entryKind === "off").length }];
   })), [dates, entryMap, visibleEmployees]);
   const selectedPreferenceRows = useMemo(() => (data?.preferences || []).flatMap((preference) => {
+    if (preference.status !== "submitted") return [];
     const selectedDates = (preference.staff_time_off_preference_dates || [])
       .filter((item) => item.source === "employee")
       .map((item) => item.requested_date)
       .sort();
     if (selectedDates.length === 0) return [];
-    const employee = data?.employees.find((item) => item.id === preference.employee_id);
+    const employee = scheduleEmployees.find((item) => item.id === preference.employee_id);
     return employee ? [{ employee, selectedDates }] : [];
-  }), [data?.employees, data?.preferences]);
+  }), [data?.preferences, scheduleEmployees]);
   const containsLegacyGeneratedDaysOff = (data?.scheduleEntries || []).some((entry) =>
     entry.entryKind === "off" &&
     entry.source === "supervisor" &&
@@ -526,6 +531,10 @@ export default function StaffScheduleManager() {
         setError("找不到這個日期的班表格，請重新整理後再試一次。");
         return;
       }
+      if (preferenceMap.get(employeeId)?.status !== "submitted") {
+        setError("此員工尚未完成 8 天排休，完成後才能安排休假或例假。");
+        return;
+      }
       if (target.entryKind === "off" && !["rest_day", "regular_day_off"].includes(target.offKind || "")) {
         setError("館休、國休或國定假日調休日不能改成一般休假或例假。");
         return;
@@ -607,7 +616,7 @@ export default function StaffScheduleManager() {
         <>
           <section className={styles.stats}>
             <article><span>流程狀態</span><strong>{stateLabel(data.period.status)}</strong></article>
-            <article><span>已選滿 8 天</span><strong>{completeCount} / {data.employees.length}</strong></article>
+            <article><span>已選滿 8 天</span><strong>{completeCount} / {scheduleEmployees.length}</strong></article>
             <article className={incompleteEmployees.length ? styles.warnStat : ""}><span>尚未完成</span><strong>{incompleteEmployees.length}</strong></article>
             <article className={blockingRules.length ? styles.blockStat : ""}><span>法規阻擋</span><strong>{blockingRules.length}</strong></article>
             <article><span>班表版本</span><strong>{data.version ? `V${data.version.version_number} · ${stateLabel(data.version.status)}` : "尚未建立"}</strong></article>
@@ -668,7 +677,7 @@ export default function StaffScheduleManager() {
                 <span className={styles.hint}>不用顯示休息時段給員工</span>
               </div>
               <div className={styles.employeeSettings}>
-                {data.employees.map((employee) => {
+                {scheduleEmployees.map((employee) => {
                   const terms = employee.employment;
                   if (!terms) return null;
                   return (
