@@ -51,6 +51,7 @@ type ScheduleEntry = {
 };
 
 type ShiftChoice = "COACH_EARLY" | "COACH_MIDDLE" | "COACH_PARTTIME_WEEKDAY" | "DEFAULT";
+type DayOffChoice = "rest_day" | "regular_day_off";
 
 const SHIFT_PREVIEWS: Record<Exclude<ShiftChoice, "DEFAULT">, Pick<ScheduleEntry, "shiftCode" | "shiftLabel" | "startsAt" | "endsAt">> = {
   COACH_EARLY: { shiftCode: "COACH_EARLY", shiftLabel: "早班", startsAt: "10:00", endsAt: "19:00" },
@@ -113,8 +114,8 @@ type ScheduleState = {
   }>;
 };
 
-type AssignShiftPatch = {
-  action: "assign_shift";
+type ScheduleEntryPatch = {
+  action: "assign_shift" | "assign_day_off";
   entry: ScheduleEntry;
   ruleResults: RuleResult[];
   version: ScheduleState["version"];
@@ -189,7 +190,7 @@ function applyShiftPreview(current: ScheduleState | null, employeeId: string, wo
   };
 }
 
-function applyAssignShiftPatch(current: ScheduleState | null, patch: AssignShiftPatch) {
+function applyScheduleEntryPatch(current: ScheduleState | null, patch: ScheduleEntryPatch) {
   if (!current) return current;
   return {
     ...current,
@@ -302,9 +303,9 @@ export default function StaffScheduleManager() {
           compactResponse: data?.version?.status !== "published",
         }),
       });
-      const result = await parseResponse<ScheduleState | AssignShiftPatch>(response);
-      if ((result as AssignShiftPatch).action === "assign_shift") {
-        setData((current) => applyAssignShiftPatch(current, result as AssignShiftPatch));
+      const result = await parseResponse<ScheduleState | ScheduleEntryPatch>(response);
+      if ((result as ScheduleEntryPatch).action === "assign_shift") {
+        setData((current) => applyScheduleEntryPatch(current, result as ScheduleEntryPatch));
       } else {
         setData(result as ScheduleState);
       }
@@ -314,6 +315,61 @@ export default function StaffScheduleManager() {
       setData(previousData);
       setNotice("");
       setError(caught instanceof Error ? `${caught.message}；班別已恢復原狀。` : "操作失敗；班別已恢復原狀。");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assignDayOff(employeeId: string, workDate: string, offKind: DayOffChoice) {
+    const previousData = data;
+    setBusy(true);
+    setError("");
+    setNotice("休假已套用，正在儲存並檢查規則…");
+    setData((current) => current ? {
+      ...current,
+      scheduleEntries: current.scheduleEntries.map((entry) => entry.employeeId === employeeId && entry.workDate === workDate
+        ? {
+            ...entry,
+            entryKind: "off",
+            shiftCode: null,
+            shiftLabel: null,
+            startsAt: null,
+            endsAt: null,
+            offKind,
+            source: "supervisor",
+            employeeVisibleNote: null,
+            requiresResign: true,
+          }
+        : entry),
+    } : current);
+    try {
+      const response = await fetch("/api/staff-scheduling", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "assign_day_off",
+          monthStart: `${month}-01`,
+          view: "team",
+          employeeId,
+          workDate,
+          offKind,
+          confirmed: true,
+          compactResponse: data?.version?.status !== "published",
+        }),
+      });
+      const result = await parseResponse<ScheduleState | ScheduleEntryPatch>(response);
+      if ((result as ScheduleEntryPatch).action === "assign_day_off") {
+        setData((current) => applyScheduleEntryPatch(current, result as ScheduleEntryPatch));
+      } else {
+        setData(result as ScheduleState);
+      }
+      setNotice(`${offKind === "regular_day_off" ? "例假" : "休假"}已更新，合法性檢查已重新執行`);
+      return true;
+    } catch (caught) {
+      setData(previousData);
+      setNotice("");
+      setError(caught instanceof Error ? `${caught.message}；休假設定已恢復原狀。` : "操作失敗；休假設定已恢復原狀。");
       return false;
     } finally {
       setBusy(false);
@@ -422,9 +478,18 @@ export default function StaffScheduleManager() {
     event.dataTransfer.setData("application/json", JSON.stringify({ kind: "shift", shiftCode }));
   }
 
+  function dayOffDragStart(event: React.DragEvent, offKind: DayOffChoice) {
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("application/json", JSON.stringify({ kind: "assign_day_off", offKind }));
+  }
+
   async function dropOn(event: React.DragEvent, employeeId: string, toDate: string) {
     event.preventDefault();
-    let payload: { kind: "day_off"; employeeId: string; fromDate: string } | { kind: "shift"; shiftCode: ShiftChoice } | null = null;
+    let payload:
+      | { kind: "day_off"; employeeId: string; fromDate: string }
+      | { kind: "shift"; shiftCode: ShiftChoice }
+      | { kind: "assign_day_off"; offKind: DayOffChoice }
+      | null = null;
     try {
       payload = JSON.parse(event.dataTransfer.getData("application/json"));
     } catch {
@@ -434,7 +499,15 @@ export default function StaffScheduleManager() {
     const employee = employeeMap.get(employeeId);
     const target = entryMap.get(`${employeeId}:${toDate}`);
     if (payload.kind === "shift") {
-      if (target?.entryKind !== "work") {
+      if (!target) {
+        setError("找不到這個日期的班表格，請重新整理後再試一次。");
+        return;
+      }
+      if (payload.shiftCode === "DEFAULT" && target.entryKind === "off" && !["rest_day", "regular_day_off"].includes(target.offKind || "")) {
+        setError("館休、國休或國定假日調休日不能用復原覆蓋。");
+        return;
+      }
+      if (target.entryKind !== "work" && payload.shiftCode !== "DEFAULT") {
         setError("休假日不能直接覆蓋成班次；請先調整休假日期。");
         return;
       }
@@ -446,6 +519,20 @@ export default function StaffScheduleManager() {
       }[payload.shiftCode];
       if (!window.confirm(`確認將 ${employee?.displayName || "此員工"} 的 ${toDate} 改為「${label}」？\n\n系統會重新執行法規與人數檢查；若班表已發布，只有受影響員工需要重新簽名。`)) return;
       await assignShift(employeeId, toDate, payload.shiftCode);
+      return;
+    }
+    if (payload.kind === "assign_day_off") {
+      if (!target) {
+        setError("找不到這個日期的班表格，請重新整理後再試一次。");
+        return;
+      }
+      if (target.entryKind === "off" && !["rest_day", "regular_day_off"].includes(target.offKind || "")) {
+        setError("館休、國休或國定假日調休日不能改成一般休假或例假。");
+        return;
+      }
+      const label = payload.offKind === "regular_day_off" ? "例假" : "休假";
+      if (!window.confirm(`確認將 ${employee?.displayName || "此員工"} 的 ${toDate} 改為「${label}」？\n\n系統會重新執行例假、休息日、連續出勤及人數檢查；若班表已發布，只有受影響員工需要重新簽名。`)) return;
+      await assignDayOff(employeeId, toDate, payload.offKind);
       return;
     }
     if (payload.employeeId !== employeeId || payload.fromDate === toDate) return;
@@ -661,10 +748,13 @@ export default function StaffScheduleManager() {
               ))}</div>
             </div> : null}
             {data.version ? <div className={styles.shiftPalette}>
-              <strong>可拖進表格的班次</strong>
-              <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_EARLY")}><span>早</span><b>早班</b><small>10:00–19:00</small></button>
-              <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_MIDDLE")}><span>中</span><b>中班</b><small>13:00–22:00</small></button>
-              <button type="button" draggable onDragStart={(event) => shiftDragStart(event, "COACH_PARTTIME_WEEKDAY")}><span>晚</span><b>晚班</b><small>18:00–22:00</small></button>
+              <strong>可拖進表格</strong>
+              <button type="button" className={styles.restorePaletteButton} disabled={busy} draggable={!busy} onDragStart={(event) => shiftDragStart(event, "DEFAULT")}><span>↺</span><b>復原</b><small>回到原固定班別</small></button>
+              <button type="button" disabled={busy} draggable={!busy} onDragStart={(event) => shiftDragStart(event, "COACH_EARLY")}><span>早</span><b>早班</b><small>10:00–19:00</small></button>
+              <button type="button" disabled={busy} draggable={!busy} onDragStart={(event) => shiftDragStart(event, "COACH_MIDDLE")}><span>中</span><b>中班</b><small>13:00–22:00</small></button>
+              <button type="button" disabled={busy} draggable={!busy} onDragStart={(event) => shiftDragStart(event, "COACH_PARTTIME_WEEKDAY")}><span>晚</span><b>晚班</b><small>18:00–22:00</small></button>
+              <button type="button" className={styles.dayOffPaletteButton} disabled={busy} draggable={!busy} onDragStart={(event) => dayOffDragStart(event, "rest_day")}><span>休</span><b>休假</b><small>排為休息日</small></button>
+              <button type="button" className={styles.dayOffPaletteButton} disabled={busy} draggable={!busy} onDragStart={(event) => dayOffDragStart(event, "regular_day_off")}><span>例</span><b>例假</b><small>排為例假日</small></button>
             </div> : null}
             {data.version ? (
               <div className={styles.scheduleScroller}>

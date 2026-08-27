@@ -1083,7 +1083,22 @@ export async function POST(request: Request) {
       const shiftMap = new Map(DEFAULT_SHIFT_DEFINITIONS.map((item) => [item.code, item]));
       const shift = shiftChoice === "DEFAULT" ? shiftForEmployeeDate(config, workDate, shiftMap) : shiftMap.get(shiftChoice);
       if (!shift) throw new Error("找不到指定班別");
+      const targetEntry = await admin.from("staff_schedule_entries")
+        .select("entry_kind, off_kind")
+        .eq("version_id", String(activeVersion.id))
+        .eq("employee_id", employeeId)
+        .eq("work_date", workDate)
+        .maybeSingle();
+      if (targetEntry.error) throw new Error(targetEntry.error.message);
+      if (!targetEntry.data) throw new Error("找不到目標班表格");
+      if (shiftChoice !== "DEFAULT" && targetEntry.data.entry_kind !== "work") {
+        throw new Error("休假日不能直接覆蓋成班次；請使用復原或先調整休假日期");
+      }
+      if (shiftChoice === "DEFAULT" && targetEntry.data.entry_kind === "off" && !["rest_day", "regular_day_off"].includes(String(targetEntry.data.off_kind || ""))) {
+        throw new Error("館休、國休或國定假日調休日不能用復原覆蓋");
+      }
       const update = await admin.from("staff_schedule_entries").update({
+        entry_kind: "work",
         shift_template_id: shiftIds.get(shift.code) || null,
         shift_code: shift.code,
         shift_label: shift.label,
@@ -1093,12 +1108,14 @@ export async function POST(request: Request) {
         paid_break: shift.paidBreak,
         break_hidden_from_employee: shift.breakHiddenFromEmployee,
         counts_toward_middle_limit: shift.countsTowardMiddleLimit,
+        off_kind: null,
         source: "supervisor",
+        employee_visible_note: null,
         requires_resign: true,
         updated_by: profile.id,
-      }).eq("version_id", String(activeVersion.id)).eq("employee_id", employeeId).eq("work_date", workDate).eq("entry_kind", "work").select("*").maybeSingle();
+      }).eq("version_id", String(activeVersion.id)).eq("employee_id", employeeId).eq("work_date", workDate).select("*").maybeSingle();
       if (update.error) throw new Error(update.error.message);
-      if (!update.data) throw new Error("找不到目標上班格；休假日不能直接覆蓋成班次");
+      if (!update.data) throw new Error("找不到目標班表格");
       const allConfigs = employees.map((item) => {
         const terms = ((employments.data || []) as EmploymentRow[]).find((row) => row.employee_id === item.id);
         return terms ? configFromRows(item, terms) : null;
@@ -1139,6 +1156,117 @@ export async function POST(request: Request) {
         const entry = update.data as Record<string, unknown>;
         compactMutation = {
           action: "assign_shift",
+          entry: {
+            id: entry.id,
+            employeeId: entry.employee_id,
+            workDate: entry.work_date,
+            entryKind: entry.entry_kind,
+            shiftCode: entry.shift_code,
+            shiftLabel: entry.shift_label,
+            startsAt: entry.starts_at ? String(entry.starts_at).slice(0, 5) : null,
+            endsAt: entry.ends_at ? String(entry.ends_at).slice(0, 5) : null,
+            offKind: entry.off_kind,
+            source: entry.source,
+            employeeVisibleNote: entry.employee_visible_note,
+            requiresResign: entry.requires_resign,
+          },
+          ruleResults: ruleInsert.data || [],
+          version: activeVersion,
+          periodStatus: "drafting",
+        };
+      }
+    } else if (body.action === "assign_day_off") {
+      await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有調整個別休假的權限" });
+      if (body.confirmed !== true) throw new Error("每次調整休假都必須先確認，避免誤操作");
+      const period = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
+      if (!period) throw new Error("找不到排班月份");
+      const employeeId = z.string().uuid().parse(body.employeeId);
+      const workDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(body.workDate);
+      const offKind = z.enum(["rest_day", "regular_day_off"]).parse(body.offKind);
+      const [latestVersion, employees, employments] = await Promise.all([
+        getLatestVersion(admin, period.id),
+        listEmployees(admin, tenantId, profile.branch_id),
+        admin.from("staff_employment_profiles").select("*").eq("tenant_id", tenantId),
+      ]);
+      let version = latestVersion;
+      if (!version) throw new Error("尚未建立班表草稿");
+      const useCompactResponse = body.compactResponse === true && version.status !== "published";
+      version = await clonePublishedVersionForEmployee({ admin, period, version, employeeId, actorId: profile.id, changeSummary: "發布後調整個別休假；受影響員工須重新簽名" });
+      const activeVersion = version!;
+      if (employments.error) throw new Error(employments.error.message);
+      const employee = employees.find((item) => item.id === employeeId);
+      const employment = ((employments.data || []) as EmploymentRow[]).find((item) => item.employee_id === employeeId);
+      if (!employee || !employment) throw new Error("找不到員工班別設定");
+      const targetEntry = await admin.from("staff_schedule_entries")
+        .select("entry_kind, off_kind")
+        .eq("version_id", String(activeVersion.id))
+        .eq("employee_id", employeeId)
+        .eq("work_date", workDate)
+        .maybeSingle();
+      if (targetEntry.error) throw new Error(targetEntry.error.message);
+      if (!targetEntry.data) throw new Error("找不到目標班表格");
+      if (targetEntry.data.entry_kind === "off" && !["rest_day", "regular_day_off"].includes(String(targetEntry.data.off_kind || ""))) {
+        throw new Error("館休、國休或國定假日調休日不能改成一般休假或例假");
+      }
+      const update = await admin.from("staff_schedule_entries").update({
+        entry_kind: "off",
+        shift_template_id: null,
+        shift_code: null,
+        shift_label: null,
+        starts_at: null,
+        ends_at: null,
+        break_minutes: 0,
+        paid_break: false,
+        break_hidden_from_employee: false,
+        counts_toward_middle_limit: false,
+        off_kind: offKind,
+        source: "supervisor",
+        employee_visible_note: null,
+        requires_resign: true,
+        updated_by: profile.id,
+      }).eq("version_id", String(activeVersion.id)).eq("employee_id", employeeId).eq("work_date", workDate).select("*").maybeSingle();
+      if (update.error) throw new Error(update.error.message);
+      if (!update.data) throw new Error("找不到目標班表格");
+      const allConfigs = employees.map((item) => {
+        const terms = ((employments.data || []) as EmploymentRow[]).find((row) => row.employee_id === item.id);
+        return terms ? configFromRows(item, terms) : null;
+      }).filter((item): item is EmployeeScheduleConfig => !!item);
+      const monthEnd = listMonthDates(monthStart).at(-1) || monthStart;
+      const [entriesResult, holidayResult, contextEntries] = await Promise.all([
+        admin.from("staff_schedule_entries").select("*").eq("version_id", String(activeVersion.id)),
+        admin.from("staff_holiday_calendar").select("holiday_date, holiday_name").or(`tenant_id.is.null,tenant_id.eq.${tenantId}`).gte("holiday_date", monthStart).lte("holiday_date", monthEnd),
+        loadBoundaryScheduleEntries(admin, tenantId, monthStart),
+      ]);
+      if (entriesResult.error) throw new Error(entriesResult.error.message);
+      if (holidayResult.error) throw new Error(holidayResult.error.message);
+      const rules = validateSchedule({
+        monthStart,
+        employees: allConfigs,
+        entries: (entriesResult.data || []).map((row) => mapEntry(row)),
+        contextEntries,
+        preferenceDailyLimit: period.middle_preference_daily_limit,
+        holidays: (holidayResult.data || []).map((row) => ({ date: String(row.holiday_date), name: String(row.holiday_name) })),
+      });
+      const ruleDelete = await admin.from("staff_schedule_rule_results").delete().eq("version_id", String(activeVersion.id));
+      if (ruleDelete.error) throw new Error(ruleDelete.error.message);
+      const [ruleInsert, periodUpdate] = await Promise.all([admin.from("staff_schedule_rule_results").insert(rules.map((rule) => ({
+        version_id: activeVersion.id,
+        period_id: period.id,
+        tenant_id: tenantId,
+        employee_id: rule.employeeId,
+        work_date: rule.workDate,
+        rule_code: rule.ruleCode,
+        severity: rule.severity,
+        passed: rule.passed,
+        message: rule.message,
+        details: rule.details,
+      }))).select("*"), admin.from("staff_schedule_periods").update({ status: "drafting" }).eq("id", period.id)]);
+      if (ruleInsert.error) throw new Error(ruleInsert.error.message);
+      if (periodUpdate.error) throw new Error(periodUpdate.error.message);
+      if (useCompactResponse) {
+        const entry = update.data as Record<string, unknown>;
+        compactMutation = {
+          action: "assign_day_off",
           entry: {
             id: entry.id,
             employeeId: entry.employee_id,

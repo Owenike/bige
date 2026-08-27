@@ -246,8 +246,12 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(styles, /\.nameCell small\{margin-top:4px;color:#65758a;font-size:13px\}/);
   assert.match(source, /員工自選休假日期/);
   assert.match(source, /此草稿仍含舊規則補排的例假或休假/);
-  assert.doesNotMatch(source, />恢復固定班<\/b>/);
-  assert.match(source, /shiftDragStart\(event, "COACH_EARLY"\)[\s\S]*shiftDragStart\(event, "COACH_MIDDLE"\)[\s\S]*shiftDragStart\(event, "COACH_PARTTIME_WEEKDAY"\)/);
+  assert.match(source, /shiftDragStart\(event, "DEFAULT"\)[\s\S]*>復原<\/b>[\s\S]*shiftDragStart\(event, "COACH_EARLY"\)[\s\S]*shiftDragStart\(event, "COACH_MIDDLE"\)[\s\S]*shiftDragStart\(event, "COACH_PARTTIME_WEEKDAY"\)[\s\S]*dayOffDragStart\(event, "rest_day"\)[\s\S]*dayOffDragStart\(event, "regular_day_off"\)/);
+  assert.match(source, /payload\.shiftCode !== "DEFAULT"/);
+  assert.match(source, /action: "assign_day_off"/);
+  assert.match(apiSource, /body\.action === "assign_day_off"/);
+  assert.match(apiSource, /z\.enum\(\["rest_day", "regular_day_off"\]\)/);
+  assert.match(apiSource, /shiftChoice === "DEFAULT"[\s\S]*\["rest_day", "regular_day_off"\]/);
   assert.match(source, /setData\(\(current\) => applyShiftPreview\(current, employeeId, workDate, shiftCode\)\)/);
   assert.match(source, /班別已套用，正在儲存並檢查規則/);
   assert.match(apiSource, /compactMutation = \{/);

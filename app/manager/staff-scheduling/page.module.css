@@ -83,9 +83,14 @@
 .legacyDraftWarning{margin:0 0 14px;padding:11px 13px;border:1px solid #edcc7a;border-radius:13px;background:#fff8df;color:#76550e;font-size:13px;font-weight:800;line-height:1.55}
 .shiftPalette>button{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center;padding:8px 11px;border:1px solid #bfd0e6;border-radius:12px;background:#fff;color:#172235;font:inherit;text-align:left;cursor:grab;box-shadow:0 4px 10px rgba(54,83,120,.07)}
 .shiftPalette>button:active{cursor:grabbing}
+.shiftPalette>button:disabled{cursor:not-allowed;opacity:.55}
 .shiftPalette>button span{grid-row:1/3;width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:#e7f0ff;color:#1d62c9;font-weight:900}
 .shiftPalette>button b{font-size:13px}
 .shiftPalette>button small{color:#738297;font-size:11px}
+.shiftPalette>button.restorePaletteButton{border-style:dashed;background:#f8fafc}
+.shiftPalette>button.restorePaletteButton span{background:#e5e7eb;color:#475569}
+.shiftPalette>button.dayOffPaletteButton{border-color:#efb4ad;background:#fff4f4}
+.shiftPalette>button.dayOffPaletteButton span{background:#fee2e2;color:#991b1b}
 .scheduleTable .offCell{background:#fee2e2}
 .scheduleTable .offCell strong{color:#991b1b}
 .scheduleTable .earlyShiftCell{background:#ffedd5}
