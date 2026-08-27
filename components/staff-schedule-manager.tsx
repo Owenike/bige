@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   isSharedFrontdeskScheduleAccount,
   staffScheduleEntryOffLabel,
@@ -61,6 +61,11 @@ const SHIFT_PREVIEWS: Record<Exclude<ShiftChoice, "DEFAULT">, Pick<ScheduleEntry
 };
 
 const SCHEDULE_LOAD_TIMEOUT_MS = 20_000;
+const SCHEDULE_CHANGE_HIGHLIGHT_MS = 60_000;
+
+function scheduleEntryKey(employeeId: string, workDate: string) {
+  return `${employeeId}:${workDate}`;
+}
 
 type RuleResult = {
   id: string;
@@ -217,7 +222,41 @@ export default function StaffScheduleManager() {
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [employmentFilter, setEmploymentFilter] = useState("all");
   const [shiftFilter, setShiftFilter] = useState("all");
+  const [recentlyChangedEntryKeys, setRecentlyChangedEntryKeys] = useState<Set<string>>(() => new Set());
+  const recentChangeTimersRef = useRef(new Map<string, number>());
   const dates = useMemo(() => monthDates(month), [month]);
+
+  const highlightChangedEntries = useCallback((entries: Array<{ employeeId: string; workDate: string }>) => {
+    const keys = entries.map((entry) => scheduleEntryKey(entry.employeeId, entry.workDate));
+    setRecentlyChangedEntryKeys((current) => {
+      const next = new Set(current);
+      keys.forEach((key) => next.add(key));
+      return next;
+    });
+
+    keys.forEach((key) => {
+      const existingTimer = recentChangeTimersRef.current.get(key);
+      if (existingTimer !== undefined) window.clearTimeout(existingTimer);
+      const timer = window.setTimeout(() => {
+        recentChangeTimersRef.current.delete(key);
+        setRecentlyChangedEntryKeys((current) => {
+          if (!current.has(key)) return current;
+          const next = new Set(current);
+          next.delete(key);
+          return next;
+        });
+      }, SCHEDULE_CHANGE_HIGHLIGHT_MS);
+      recentChangeTimersRef.current.set(key, timer);
+    });
+  }, []);
+
+  useEffect(() => {
+    const timers = recentChangeTimersRef.current;
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      timers.clear();
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -523,7 +562,9 @@ export default function StaffScheduleManager() {
         COACH_PARTTIME_WEEKDAY: "晚班 18:00–22:00",
       }[payload.shiftCode];
       if (!window.confirm(`確認將 ${employee?.displayName || "此員工"} 的 ${toDate} 改為「${label}」？\n\n系統會重新執行法規與人數檢查；若班表已發布，只有受影響員工需要重新簽名。`)) return;
-      await assignShift(employeeId, toDate, payload.shiftCode);
+      if (await assignShift(employeeId, toDate, payload.shiftCode)) {
+        highlightChangedEntries([{ employeeId, workDate: toDate }]);
+      }
       return;
     }
     if (payload.kind === "assign_day_off") {
@@ -541,7 +582,9 @@ export default function StaffScheduleManager() {
       }
       const label = payload.offKind === "regular_day_off" ? "例假" : "休假";
       if (!window.confirm(`確認將 ${employee?.displayName || "此員工"} 的 ${toDate} 改為「${label}」？\n\n系統會重新執行例假、休息日、連續出勤及人數檢查；若班表已發布，只有受影響員工需要重新簽名。`)) return;
-      await assignDayOff(employeeId, toDate, payload.offKind);
+      if (await assignDayOff(employeeId, toDate, payload.offKind)) {
+        highlightChangedEntries([{ employeeId, workDate: toDate }]);
+      }
       return;
     }
     if (payload.employeeId !== employeeId || payload.fromDate === toDate) return;
@@ -554,12 +597,17 @@ export default function StaffScheduleManager() {
       `確認調整 ${employee?.displayName || "此員工"}？\n\n${payload.fromDate} ${staffScheduleOffLabel(source?.offKind)} → ${toDate}\n\n原日期會恢復固定班別，系統將重新檢查例假、休息日、連續出勤及人數限制。`,
     );
     if (!confirmed) return;
-    await act("move_day_off", {
+    if (await act("move_day_off", {
       employeeId,
       fromDate: payload.fromDate,
       toDate,
       confirmed: true,
-    }, "休假已拖移，合法性檢查已重新執行");
+    }, "休假已拖移，合法性檢查已重新執行")) {
+      highlightChangedEntries([
+        { employeeId, workDate: payload.fromDate },
+        { employeeId, workDate: toDate },
+      ]);
+    }
   }
 
   if (loading) {
@@ -774,13 +822,14 @@ export default function StaffScheduleManager() {
                       <tr key={employee.id}>
                         <th className={styles.nameCell}><div className={styles.nameSummary}><strong>{employee.displayName}</strong><small>{employee.englishName || "未設定英文名"}</small><span className={styles.leaveBalances}><i>特休{formatDays(employee.employment?.annual_leave_balance_days)}</i><i>積假{formatDays(employee.employment?.accrued_leave_balance_days)}</i></span></div></th>
                         {dates.map((date) => {
-                          const entry = entryMap.get(`${employee.id}:${date}`);
+                          const entryKey = scheduleEntryKey(employee.id, date);
+                          const entry = entryMap.get(entryKey);
                           const isOff = entry?.entryKind === "off";
                           const tone = scheduleTone(entry);
                           return (
                             <td
                               key={date}
-                              className={`${isOff ? styles.offCell : styles.workCell} ${tone === "early" ? styles.earlyShiftCell : ""} ${tone === "late" ? styles.lateShiftCell : ""} ${entry?.requiresResign ? styles.resignCell : ""}`}
+                              className={`${isOff ? styles.offCell : styles.workCell} ${tone === "early" ? styles.earlyShiftCell : ""} ${tone === "late" ? styles.lateShiftCell : ""} ${recentlyChangedEntryKeys.has(entryKey) ? styles.resignCell : ""}`}
                               onDragOver={(event) => event.preventDefault()}
                               onDrop={(event) => void dropOn(event, employee.id, date)}
                               title={isOff ? `${entry ? staffScheduleEntryOffLabel(entry) : "休假"}（可拖曳）` : `${entry ? staffScheduleShiftLabel(entry) : "未排班"} ${entry?.startsAt || ""}–${entry?.endsAt || ""}`}
@@ -820,13 +869,16 @@ export default function StaffScheduleManager() {
                         return (
                           <div key={rule.id} className={styles.holidayRuleRow}>
                             <div className={styles.holidayEmployee}><strong>{employee?.displayName || "此員工"}</strong><small>{String(rule.details.shift || "目前已排班")}</small></div>
-                            <button className={styles.secondaryButton} disabled={busy} onClick={() => {
+                            <button className={styles.secondaryButton} disabled={busy} onClick={async () => {
                               if (window.confirm(`確認將 ${employee?.displayName || "此員工"} 的 ${rule.work_date} 改為「${group.holidayName}國休」？`)) {
-                                void act("make_holiday_day_off", {
+                                const changed = await act("make_holiday_day_off", {
                                   employeeId: rule.employee_id,
                                   holidayDate: rule.work_date,
                                   holidayName: group.holidayName,
                                 }, "國定假日當天已改為國休");
+                                if (changed && rule.employee_id && rule.work_date) {
+                                  highlightChangedEntries([{ employeeId: rule.employee_id, workDate: rule.work_date }]);
+                                }
                               }
                             }}>{group.workDate?.slice(5)} 當天國休</button>
                             <span className={styles.holidayOr}>或</span>
@@ -834,12 +886,18 @@ export default function StaffScheduleManager() {
                               <option value="">選擇另一個國休日期</option>
                               {workDays.map((entry) => <option key={entry.workDate} value={entry.workDate}>{entry.workDate.slice(5)} · {staffScheduleShiftLabel(entry)}</option>)}
                             </select>
-                            <button className={styles.dangerButton} disabled={busy || !adjustedDates[rule.id]} onClick={() => void act("arrange_holiday_adjustment", {
-                              employeeId: rule.employee_id,
-                              holidayDate: rule.work_date,
-                              holidayName: group.holidayName,
-                              adjustedDayOff: adjustedDates[rule.id],
-                            }, "國休日已安排完成")}>確認其他國休日</button>
+                            <button className={styles.dangerButton} disabled={busy || !adjustedDates[rule.id]} onClick={async () => {
+                              const adjustedDayOff = adjustedDates[rule.id];
+                              const changed = await act("arrange_holiday_adjustment", {
+                                employeeId: rule.employee_id,
+                                holidayDate: rule.work_date,
+                                holidayName: group.holidayName,
+                                adjustedDayOff,
+                              }, "國休日已安排完成");
+                              if (changed && rule.employee_id && adjustedDayOff) {
+                                highlightChangedEntries([{ employeeId: rule.employee_id, workDate: adjustedDayOff }]);
+                              }
+                            }}>確認其他國休日</button>
                           </div>
                         );
                       })}

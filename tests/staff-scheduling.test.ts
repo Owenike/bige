@@ -287,6 +287,13 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(source, /window\.setTimeout\(\(\) => setNotice\(""\), 4500\)/);
   assert.match(source, /const SCHEDULE_LOAD_TIMEOUT_MS = 20_000/);
   assert.match(source, /window\.setTimeout\(\(\) => controller\.abort\(\), SCHEDULE_LOAD_TIMEOUT_MS\)/);
+  assert.match(source, /const SCHEDULE_CHANGE_HIGHLIGHT_MS = 60_000/);
+  assert.match(source, /window\.setTimeout\(\(\) => \{[\s\S]*?SCHEDULE_CHANGE_HIGHLIGHT_MS\)/);
+  assert.match(source, /recentlyChangedEntryKeys\.has\(entryKey\) \? styles\.resignCell/);
+  assert.doesNotMatch(source, /entry\?\.requiresResign \? styles\.resignCell/);
+  assert.match(source, /requiresResign: true/);
+  assert.match(source, /make_holiday_day_off[\s\S]*?highlightChangedEntries/);
+  assert.match(source, /arrange_holiday_adjustment[\s\S]*?highlightChangedEntries/);
   assert.match(source, /重新讀取班表/);
   assert.match(source, /if \(!data\) \{/);
   assert.match(styles, /\.loadFailure\{/);
