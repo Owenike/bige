@@ -7,6 +7,7 @@ const staffFitnessRoute = readFileSync("app/staff/fitness/route.ts", "utf8");
 const staffScheduleSelfService = readFileSync("components/staff-schedule-self-service.tsx", "utf8");
 const fitnessOperations = readFileSync("components/bige-fitness-operations.tsx", "utf8");
 const styles = readFileSync("app/globals.css", "utf8");
+const staffScheduleStyles = readFileSync("app/staff/schedule/page.module.css", "utf8");
 
 test("trial booking admin header exposes a same-origin daily schedule link", () => {
   assert.match(
@@ -20,6 +21,10 @@ test("trial booking admin header exposes a same-origin daily schedule link", () 
 test("staff schedule replaces the redundant notification link with the daily schedule", () => {
   assert.match(staffScheduleSelfService, /<a className=\{styles\.stackedHeaderAction\} href="\/staff\/fitness" aria-label="日排課表"><span>日排<\/span><span>課表<\/span><\/a>/);
   assert.doesNotMatch(staffScheduleSelfService, /<a href="\/staff\/notifications">站內通知<\/a>/);
+});
+
+test("staff schedule mobile page ends after its content instead of adding a viewport-height scroll gap", () => {
+  assert.match(staffScheduleStyles, /@media\(max-width:560px\)\{\.page\{min-height:0;padding:12px\}/);
 });
 
 test("daily schedule navigation places the personal schedule immediately after it and excludes account 06", () => {
