@@ -145,6 +145,10 @@ function weekday(date: string) {
   return ["日", "一", "二", "三", "四", "五", "六"][new Date(`${date}T12:00:00+08:00`).getDay()];
 }
 
+function dateColumnClass(date: string) {
+  return Number(date.slice(-2)) % 2 === 0 ? styles.evenDateColumn : styles.oddDateColumn;
+}
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("zh-TW", {
@@ -843,7 +847,7 @@ export default function StaffScheduleManager() {
             {data.version ? (
               <div className={styles.scheduleScroller}>
                 <table className={styles.scheduleTable}>
-                  <thead><tr><th className={styles.nameCell}>員工</th>{dates.map((date) => <th key={date} className={weekday(date) === "六" || weekday(date) === "日" ? styles.weekend : ""}><span>{Number(date.slice(-2))}</span><small>{weekday(date)}</small></th>)}</tr></thead>
+                  <thead><tr><th className={styles.nameCell}>員工</th>{dates.map((date) => <th key={date} className={`${dateColumnClass(date)} ${weekday(date) === "六" || weekday(date) === "日" ? styles.weekend : ""}`}><span>{Number(date.slice(-2))}</span><small>{weekday(date)}</small></th>)}</tr></thead>
                   <tbody>
                     {visibleEmployees.map((employee) => (
                       <tr key={employee.id}>
@@ -856,7 +860,7 @@ export default function StaffScheduleManager() {
                           return (
                             <td
                               key={date}
-                              className={`${isOff ? styles.offCell : styles.workCell} ${recentlyChangedEntryKeys.has(entryKey) ? styles.resignCell : ""}`}
+                              className={`${isOff ? styles.offCell : styles.workCell} ${dateColumnClass(date)} ${recentlyChangedEntryKeys.has(entryKey) ? styles.resignCell : ""}`}
                               onDragOver={(event) => event.preventDefault()}
                               onDrop={(event) => void dropOn(event, employee.id, date)}
                               title={isOff ? `${entry ? staffScheduleEntryOffLabel(entry) : "休假"}（可拖曳）` : `${entry ? staffScheduleShiftLabel(entry) : "未排班"} ${entry?.startsAt || ""}–${entry?.endsAt || ""}`}
@@ -874,7 +878,7 @@ export default function StaffScheduleManager() {
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot><tr><th className={styles.nameCell}>上班人數</th>{dates.map((date) => <td key={date}>{dailyStats.get(date)?.work || 0}</td>)}</tr><tr><th className={styles.nameCell}>休假人數</th>{dates.map((date) => <td key={date}>{dailyStats.get(date)?.off || 0}</td>)}</tr></tfoot>
+                  <tfoot><tr><th className={styles.nameCell}>上班人數</th>{dates.map((date) => <td key={date} className={dateColumnClass(date)}>{dailyStats.get(date)?.work || 0}</td>)}</tr><tr><th className={styles.nameCell}>休假人數</th>{dates.map((date) => <td key={date} className={dateColumnClass(date)}>{dailyStats.get(date)?.off || 0}</td>)}</tr></tfoot>
                 </table>
               </div>
             ) : <div className={styles.placeholder}>員工選休完成後，點「產生正式班表草稿」即可看到這張表。</div>}

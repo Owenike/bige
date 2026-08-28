@@ -431,8 +431,16 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(printStyles, /\.early \{\s*background: #ffedd5;/);
   assert.match(printStyles, /\.late \{\s*background: #dbeafe;/);
   assert.match(styles, /--schedule-manager-gold:#d8b669/);
+  assert.match(styles, /\.page\{width:100%;min-width:0\}/);
   assert.match(styles, /\.monthField input\{font-size:16px;font-weight:800/);
   assert.match(styles, /\.scheduleTable \.workCell,\.scheduleTable \.offCell\{background:rgba\(12,21,32,\.94\)\}/);
+  assert.match(source, /function dateColumnClass\(date: string\)/);
+  assert.equal(source.match(/dateColumnClass\(date\)/g)?.length, 4);
+  assert.match(styles, /\.scheduleTable thead \.oddDateColumn,\.scheduleTable tfoot \.oddDateColumn\{background:#152332\}/);
+  assert.match(styles, /\.scheduleTable thead \.evenDateColumn,\.scheduleTable tfoot \.evenDateColumn\{background:#1b2e40\}/);
+  assert.match(styles, /\.scheduleTable tbody \.oddDateColumn\{background:rgba\(12,21,32,\.96\)\}/);
+  assert.match(styles, /\.scheduleTable tbody \.evenDateColumn\{background:rgba\(18,32,46,\.96\)\}/);
+  assert.match(styles, /\.weekend\{background:#3a2024!important;color:#ffb9b5\}/);
   assert.match(styles, /\.scheduleTable \.offBadge\{border-color:rgba\(205,91,100,\.52\)/);
   assert.match(printStyles, /@media print \{[\s\S]*?color-scheme: light;/);
   assert.match(exportSource, /fgColor: \{ argb: "FFFEE2E2" \}/);

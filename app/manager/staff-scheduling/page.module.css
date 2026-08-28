@@ -187,14 +187,19 @@
 .shiftPalette>button.restorePaletteButton span{background:#344152;color:#e5edf5}
 .shiftPalette>button.dayOffPaletteButton{border-color:#a84a52;background:rgba(76,27,34,.86)}
 .shiftPalette>button.dayOffPaletteButton span{background:#7f3039;color:#ffe1e3}
+.page{width:100%;min-width:0}
 .scheduleScroller{border-color:var(--schedule-manager-line);background:rgba(5,10,17,.88);scrollbar-color:var(--schedule-manager-gold) rgba(10,17,27,.9)}
 .scheduleTable{color:var(--schedule-manager-text)}
 .scheduleTable th,.scheduleTable td{border-color:rgba(126,151,171,.24)}
 .scheduleTable thead th,.scheduleTable tfoot th,.scheduleTable tfoot td{background:#152332;color:#e8eef3}
+.scheduleTable thead .oddDateColumn,.scheduleTable tfoot .oddDateColumn{background:#152332}
+.scheduleTable thead .evenDateColumn,.scheduleTable tfoot .evenDateColumn{background:#1b2e40}
 .weekend{background:#3a2024!important;color:#ffb9b5}
 .scheduleTable .nameCell{background:#101d2a;color:#fff8e9}
 .scheduleTable .nameCell small{color:#91a4b5}
 .scheduleTable .workCell,.scheduleTable .offCell{background:rgba(12,21,32,.94)}
+.scheduleTable tbody .oddDateColumn{background:rgba(12,21,32,.96)}
+.scheduleTable tbody .evenDateColumn{background:rgba(18,32,46,.96)}
 .scheduleTable tbody tr:hover td{background:rgba(30,45,60,.96)!important}
 .scheduleTable tbody tr:hover .nameCell{background:#192b3b!important}
 .scheduleTable .earlyShiftBadge{border-color:rgba(221,164,84,.48);background:rgba(108,65,20,.42);color:#ffdca8}
