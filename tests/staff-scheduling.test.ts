@@ -281,6 +281,7 @@ test("staff self-service leave picker keeps its mobile layout and selection disp
   assert.match(source, /const selectedDaysLabel = selected\.slice\(\)\.sort\(\)/);
   assert.match(source, /<span>\{selectedDaysLabel\}<\/span>/);
   assert.doesNotMatch(source, /只選日期，例假／休假由合法班表安排/);
+  assert.doesNotMatch(source, /還差 \$\{remaining\} 天/);
   assert.match(source, />儲存<\/button>/);
   assert.doesNotMatch(source, /儲存我的 \{requiredCount\} 天排休/);
   assert.match(source, /className=\{styles\.monthField\}>月份<span className=\{styles\.monthControl\}><input type="month"/);

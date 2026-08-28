@@ -263,7 +263,7 @@ export default function StaffScheduleSelfService() {
         <section className={styles.selectionSection}>
           <div className={styles.selectionHeader}>
             <div><span className={styles.kicker}>自選排休</span><h2>{month.replace("-", " 年 ")} 月</h2><p className={`${styles.selectionNotice} ${selectionOpen ? styles.selectionNoticeOpen : styles.selectionNoticeClosed}`}>{selectionOpen ? "截止日前可隨時更改；送出後仍可在 20 日 23:59 前重新儲存。" : "選取期限已截止；如需修改，請直接聯絡副理。"}</p></div>
-            <div className={`${styles.counter} ${remaining === 0 ? styles.counterDone : ""}`}><strong>{combinedCount}</strong><span>/ {requiredCount} 天</span><small>{remaining === 0 ? "已選滿" : `還差 ${remaining} 天`}</small></div>
+            <div className={`${styles.counter} ${remaining === 0 ? styles.counterDone : ""}`}><strong>{combinedCount}</strong><span>/ {requiredCount} 天</span></div>
           </div>
           <div className={styles.legend}><span><i className={styles.selectedMark} />我選的排休</span><span><i className={styles.closureMark} />館休（已計入）</span></div>
           <div className={styles.calendar}>
