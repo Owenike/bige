@@ -283,8 +283,14 @@ test("staff self-service leave picker keeps its mobile layout and selection disp
   assert.doesNotMatch(source, /只選日期，例假／休假由合法班表安排/);
   assert.match(source, />儲存<\/button>/);
   assert.doesNotMatch(source, /儲存我的 \{requiredCount\} 天排休/);
-  assert.match(styles, /\.headerActions a\{width:90px;/);
-  assert.match(styles, /\.headerActions input\{width:100%;min-width:0;max-width:100%\}/);
+  assert.match(source, /className=\{styles\.monthField\}>月份<span className=\{styles\.monthControl\}><input type="month"/);
+  assert.match(source, /aria-label="日排課表"><span>日排<\/span><span>課表<\/span>/);
+  assert.match(source, /aria-label="打卡確認"><span>打卡<\/span><span>確認<\/span>/);
+  assert.match(source, /styles\.selectionNoticeClosed/);
+  assert.match(styles, /\.monthControl\{[^}]*height:52px;min-height:52px;max-height:52px;[^}]*overflow:hidden/);
+  assert.match(styles, /\.monthControl,\.headerActions a\{width:100%;height:64px;min-height:64px;max-height:64px\}/);
+  assert.match(styles, /\.headerActions \.stackedHeaderAction\{flex-direction:column;/);
+  assert.match(styles, /\.selectionNoticeClosed\{color:#79530a!important;border-color:#dfbf6a!important;background:#fff7dd\}/);
   assert.match(styles, /grid-template-columns:minmax\(0,1\.6fr\) repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(styles, /grid-template-columns:128px repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(styles, /\.selectionHeader\{display:grid;grid-template-columns:minmax\(0,1fr\) auto/);

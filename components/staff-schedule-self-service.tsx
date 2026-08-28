@@ -246,9 +246,9 @@ export default function StaffScheduleSelfService() {
       <header className={styles.header}>
         <div><p>巨挺健身館 · 員工專區</p><h1 className={styles.greeting} lang="en">Hi! {greetingName}</h1></div>
         <div className={styles.headerActions}>
-          <label>月份<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>
-          <a href="/staff/fitness">日排課表</a>
-          <a href="/staff/attendance">打卡確認</a>
+          <label className={styles.monthField}>月份<span className={styles.monthControl}><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></span></label>
+          <a className={styles.stackedHeaderAction} href="/staff/fitness" aria-label="日排課表"><span>日排</span><span>課表</span></a>
+          <a className={styles.stackedHeaderAction} href="/staff/attendance" aria-label="打卡確認"><span>打卡</span><span>確認</span></a>
           <a href="/staff/leave">請假</a>
           <a href="/staff/payroll">薪資單</a>
           {data?.actor.canManage ? <a className={styles.managerAction} href="/manager/staff-scheduling">主管控制台</a> : null}
@@ -262,7 +262,7 @@ export default function StaffScheduleSelfService() {
       ) : !data.version ? (
         <section className={styles.selectionSection}>
           <div className={styles.selectionHeader}>
-            <div><span className={styles.kicker}>自選排休</span><h2>{month.replace("-", " 年 ")} 月</h2><p>{selectionOpen ? "截止日前可隨時更改；送出後仍可在 20 日 23:59 前重新儲存。" : "選取期限已截止；如需修改，請直接聯絡副理。"}</p></div>
+            <div><span className={styles.kicker}>自選排休</span><h2>{month.replace("-", " 年 ")} 月</h2><p className={`${styles.selectionNotice} ${selectionOpen ? styles.selectionNoticeOpen : styles.selectionNoticeClosed}`}>{selectionOpen ? "截止日前可隨時更改；送出後仍可在 20 日 23:59 前重新儲存。" : "選取期限已截止；如需修改，請直接聯絡副理。"}</p></div>
             <div className={`${styles.counter} ${remaining === 0 ? styles.counterDone : ""}`}><strong>{combinedCount}</strong><span>/ {requiredCount} 天</span><small>{remaining === 0 ? "已選滿" : `還差 ${remaining} 天`}</small></div>
           </div>
           <div className={styles.legend}><span><i className={styles.selectedMark} />我選的排休</span><span><i className={styles.closureMark} />館休（已計入）</span></div>

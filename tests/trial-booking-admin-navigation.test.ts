@@ -18,7 +18,7 @@ test("trial booking admin header exposes a same-origin daily schedule link", () 
 });
 
 test("staff schedule replaces the redundant notification link with the daily schedule", () => {
-  assert.match(staffScheduleSelfService, /<a href="\/staff\/fitness">日排課表<\/a>/);
+  assert.match(staffScheduleSelfService, /<a className=\{styles\.stackedHeaderAction\} href="\/staff\/fitness" aria-label="日排課表"><span>日排<\/span><span>課表<\/span><\/a>/);
   assert.doesNotMatch(staffScheduleSelfService, /<a href="\/staff\/notifications">站內通知<\/a>/);
 });
 
