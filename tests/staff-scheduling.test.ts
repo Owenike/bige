@@ -299,6 +299,9 @@ test("staff self-service leave picker keeps its mobile layout and selection disp
   assert.match(styles, /\.page::before\{[\s\S]*?linear-gradient\(145deg,#04070c 0%,#0a101a 48%,#05080f 100%\)/);
   assert.match(styles, /\.headerActions \.monthControl input\{[\s\S]*?font-size:16px;[\s\S]*?font-weight:800/);
   assert.match(styles, /grid-template-columns:145px repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(layout, /isStaffScheduleSurfaceRoute \? "shellStaffSchedule" : ""/);
+  assert.match(globalStyles, /\.shellStaffSchedule:not\(\.shellEmbedded\)\{[\s\S]*?min-height: 100dvh;[\s\S]*?background-color: #05080f;/);
+  assert.match(globalStyles, /body:has\(\.shellStaffSchedule:not\(\.shellEmbedded\)\)\{[\s\S]*?background-color: #05080f;/);
   assert.match(layout, /<span>巨挺健身館 BigE｜器械皮拉提斯・重量訓練・運動按摩｜<\/span>[\s\S]*?<span>高雄市仁武區八德北路728號｜0972-484686<\/span>/);
   assert.match(globalStyles, /\.footerTagline span\{\s*display: block;/);
 });

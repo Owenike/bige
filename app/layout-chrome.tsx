@@ -31,6 +31,8 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
     pathname === "/manager/staff-scheduling" ||
     pathname === "/staff/attendance" ||
     pathname === "/manager/staff-attendance";
+  const isStaffScheduleSurfaceRoute =
+    pathname === "/staff/schedule" || pathname?.startsWith("/manager/staff-scheduling");
   const isStaffPayrollRoute = pathname === "/staff/payroll" || pathname === "/manager/staff-payroll";
   const isStaffPerformanceRoute = pathname === "/staff/performance" || pathname === "/manager/staff-performance";
   const isStaffLeaveRoute = pathname === "/staff/leave" || pathname === "/manager/staff-leave";
@@ -101,6 +103,7 @@ export default function LayoutChrome({ children }: { children: React.ReactNode }
     "shell",
     isEmbedded ? "shellEmbedded" : "",
     isWorkspaceRoute ? "shellWorkspace" : "",
+    isStaffScheduleSurfaceRoute ? "shellStaffSchedule" : "",
     isFrontdeskRoute ? "shellFrontdesk" : "",
     isStudentCheckInAdminLogin ? "shellStudentCheckInLogin" : "",
   ]
