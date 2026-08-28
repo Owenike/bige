@@ -91,11 +91,11 @@
 .shiftPalette>button.dayOffPaletteButton{border-color:#efb4ad;background:#fff4f4}
 .shiftPalette>button.dayOffPaletteButton span{background:#fee2e2;color:#991b1b}
 .scheduleTable .offCell{background:#fff;cursor:grab}
-.shiftBadge,.offBadge{display:inline-flex;min-width:46px;align-items:center;justify-content:center;padding:5px 8px;border:1px solid transparent;border-radius:999px;font-size:12px;font-weight:900;line-height:1;white-space:nowrap}
-.scheduleTable .earlyShiftBadge{border-color:#e7bd82;background:#fff3df;color:#8b4d10}
-.scheduleTable .middleShiftBadge{border-color:#b9c7d8;background:#eef3f8;color:#364b63}
-.scheduleTable .lateShiftBadge{border-color:#9cbce2;background:#eaf3ff;color:#24558f}
-.scheduleTable .offBadge{border-color:#e5a7ab;background:#fff0f1;color:#9a3038}
+.shiftBadge,.offBadge{display:inline;font-size:13px;font-weight:900;line-height:1.2;white-space:nowrap}
+.scheduleTable .earlyShiftBadge{color:#8b4d10}
+.scheduleTable .middleShiftBadge{color:#364b63}
+.scheduleTable .lateShiftBadge{color:#24558f}
+.scheduleTable .offBadge{color:#9a3038}
 .loadFailure{max-width:620px;margin:10vh auto;display:grid;justify-items:center;gap:14px;text-align:center}
 .loadFailure h2,.loadFailure p{margin:0}
 .loadFailure p{line-height:1.65}
@@ -190,22 +190,22 @@
 .page{width:100%;min-width:0}
 .scheduleScroller{border-color:var(--schedule-manager-line);background:rgba(5,10,17,.88);scrollbar-color:var(--schedule-manager-gold) rgba(10,17,27,.9)}
 .scheduleTable{color:var(--schedule-manager-text)}
-.scheduleTable th,.scheduleTable td{border-color:rgba(126,151,171,.24)}
-.scheduleTable thead th,.scheduleTable tfoot th,.scheduleTable tfoot td{background:#152332;color:#e8eef3}
-.scheduleTable thead .oddDateColumn,.scheduleTable tfoot .oddDateColumn{background:#152332}
-.scheduleTable thead .evenDateColumn,.scheduleTable tfoot .evenDateColumn{background:#1b2e40}
-.weekend{background:#3a2024!important;color:#ffb9b5}
+.scheduleTable th,.scheduleTable td{border-color:rgba(126,151,171,.16)}
+.scheduleTable thead th,.scheduleTable tfoot th,.scheduleTable tfoot td{background:#14212e;color:#dce4eb}
+.scheduleTable thead .oddDateColumn,.scheduleTable tfoot .oddDateColumn{background:#14212e}
+.scheduleTable thead .evenDateColumn,.scheduleTable tfoot .evenDateColumn{background:#172635}
+.weekend{background:#312329!important;color:#d7a8a6}
 .scheduleTable .nameCell{background:#101d2a;color:#fff8e9}
 .scheduleTable .nameCell small{color:#91a4b5}
 .scheduleTable .workCell,.scheduleTable .offCell{background:rgba(12,21,32,.94)}
-.scheduleTable tbody .oddDateColumn{background:rgba(12,21,32,.96)}
-.scheduleTable tbody .evenDateColumn{background:rgba(18,32,46,.96)}
-.scheduleTable tbody tr:hover td{background:rgba(30,45,60,.96)!important}
+.scheduleTable tbody .oddDateColumn{background:rgba(12,21,32,.94)}
+.scheduleTable tbody .evenDateColumn{background:rgba(15,27,39,.94)}
+.scheduleTable tbody tr:hover td{background:rgba(24,38,51,.94)!important}
 .scheduleTable tbody tr:hover .nameCell{background:#192b3b!important}
-.scheduleTable .earlyShiftBadge{border-color:rgba(221,164,84,.48);background:rgba(108,65,20,.42);color:#ffdca8}
-.scheduleTable .middleShiftBadge{border-color:rgba(140,164,185,.38);background:rgba(54,72,89,.55);color:#e4edf4}
-.scheduleTable .lateShiftBadge{border-color:rgba(91,146,202,.48);background:rgba(34,76,116,.5);color:#dcecff}
-.scheduleTable .offBadge{border-color:rgba(205,91,100,.52);background:rgba(111,39,47,.62);color:#ffd8db}
+.scheduleTable .earlyShiftBadge{color:#d9bd92}
+.scheduleTable .middleShiftBadge{color:#c0cad2}
+.scheduleTable .lateShiftBadge{color:#a9c5e0}
+.scheduleTable .offBadge{color:#d8a8ac}
 .leaveBalances i{border:1px solid rgba(216,182,105,.38);background:rgba(216,182,105,.13);color:var(--schedule-manager-gold-bright)}
 .holidayPanel{border-color:#a84a52;background:linear-gradient(145deg,rgba(70,25,31,.94),rgba(27,11,16,.94))}
 .holidayGroup{border-color:rgba(207,99,105,.46);background:rgba(42,17,22,.82)}
