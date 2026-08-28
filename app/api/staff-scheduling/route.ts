@@ -11,6 +11,7 @@ import {
   generateMonthlySchedule,
   isSharedFrontdeskScheduleAccount,
   listMonthDates,
+  missingScheduleCellKeys,
   monthlyAccruedLeaveCreditDays,
   monthlyDaysOffEntitlement,
   moveDayOff,
@@ -119,6 +120,64 @@ function monthStartFromInput(input: string | null | undefined) {
 
 function taiwanDate(value: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+}
+
+type ApprovedLeaveRow = {
+  employee_id: string;
+  leave_type: string;
+  starts_at: string;
+  unit: string;
+};
+
+const LEAVE_KINDS: Record<string, ScheduleEntryDraft["offKind"]> = {
+  annual: "annual_leave",
+  sick: "sick_leave",
+  personal: "personal_leave",
+  family_care: "family_care_leave",
+  marriage: "marriage_leave",
+  bereavement: "bereavement_leave",
+  official: "official_leave",
+  other: "other_leave",
+};
+
+const LEAVE_LABELS: Record<string, string> = {
+  annual: "特休",
+  sick: "病假",
+  personal: "事假",
+  family_care: "家庭照顧假",
+  marriage: "婚假",
+  bereavement: "喪假",
+  official: "公假",
+  other: "其他假",
+};
+
+function applyApprovedLeaves(entries: ScheduleEntryDraft[], approvedLeaves: ApprovedLeaveRow[]) {
+  const leaveByCell = new Map(approvedLeaves.map((leave) => [
+    `${leave.employee_id}:${taiwanDate(String(leave.starts_at))}`,
+    leave,
+  ]));
+  return entries.map((entry) => {
+    const leave = leaveByCell.get(`${entry.employeeId}:${entry.workDate}`);
+    if (!leave) return entry;
+    const leaveLabel = LEAVE_LABELS[leave.leave_type] || "請假";
+    if (leave.unit !== "full_day") {
+      return { ...entry, source: "leave" as const, employeeVisibleNote: `${leaveLabel}（部分時段）` };
+    }
+    return {
+      ...entry,
+      entryKind: "off" as const,
+      shiftCode: null,
+      shiftLabel: null,
+      startsAt: null,
+      endsAt: null,
+      breakMinutes: 0,
+      paidBreak: false,
+      countsTowardMiddleLimit: false,
+      offKind: LEAVE_KINDS[leave.leave_type] || "other_leave",
+      source: "leave" as const,
+      employeeVisibleNote: leaveLabel,
+    };
+  });
 }
 
 async function getProfile(admin: AdminClient, userId: string) {
@@ -910,43 +969,7 @@ export async function POST(request: Request) {
         .gte("starts_at", `${monthStart}T00:00:00+08:00`)
         .lte("starts_at", `${monthEnd}T23:59:59+08:00`);
       if (approvedLeaves.error) throw new Error(approvedLeaves.error.message);
-      const leaveKinds: Record<string, ScheduleEntryDraft["offKind"]> = {
-        annual: "annual_leave",
-        sick: "sick_leave",
-        personal: "personal_leave",
-        family_care: "family_care_leave",
-        marriage: "marriage_leave",
-        bereavement: "bereavement_leave",
-        official: "official_leave",
-        other: "other_leave",
-      };
-      const leaveLabels: Record<string, string> = {
-        annual: "特休", sick: "病假", personal: "事假", family_care: "家庭照顧假",
-        marriage: "婚假", bereavement: "喪假", official: "公假", other: "其他假",
-      };
-      for (const leave of approvedLeaves.data || []) {
-        const leaveDate = taiwanDate(String(leave.starts_at));
-        entries = entries.map((entry) => {
-          if (entry.employeeId !== leave.employee_id || entry.workDate !== leaveDate) return entry;
-          if (leave.unit !== "full_day") {
-            return { ...entry, source: "leave", employeeVisibleNote: `${leaveLabels[leave.leave_type] || "請假"}（部分時段）` };
-          }
-          return {
-            ...entry,
-            entryKind: "off",
-            shiftCode: null,
-            shiftLabel: null,
-            startsAt: null,
-            endsAt: null,
-            breakMinutes: 0,
-            paidBreak: false,
-            countsTowardMiddleLimit: false,
-            offKind: leaveKinds[leave.leave_type] || "other_leave",
-            source: "leave",
-            employeeVisibleNote: leaveLabels[leave.leave_type] || "請假",
-          };
-        });
-      }
+      entries = applyApprovedLeaves(entries, (approvedLeaves.data || []) as ApprovedLeaveRow[]);
       const rules = validateSchedule({
         monthStart,
         employees: configs,
@@ -1015,6 +1038,123 @@ export async function POST(request: Request) {
         actorId: profile.id,
       });
       await admin.from("staff_schedule_periods").update({ status: "drafting" }).eq("id", period.id);
+    } else if (body.action === "sync_missing_draft_cells") {
+      await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有同步班表草稿的權限" });
+      const period = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
+      if (!period) throw new Error("找不到排班月份");
+      const version = await getLatestVersion(admin, period.id);
+      if (!version) throw new Error("尚未建立班表草稿");
+      if (version.status !== "draft") throw new Error("只會同步尚未發布的草稿，正式班表不會自動變更");
+
+      await ensureDefaultShifts(admin, tenantId, profile.branch_id, profile.id);
+      const employees = await listEmployees(admin, tenantId, profile.branch_id);
+      const employments = await ensureEmploymentProfiles(admin, employees, profile.id);
+      const employmentMap = new Map(employments.map((row) => [row.employee_id, row]));
+      const configs = employees.flatMap((employee) => {
+        const employment = employmentMap.get(employee.id);
+        return employment ? [configFromRows(employee, employment)] : [];
+      });
+      const monthEnd = listMonthDates(monthStart).at(-1) || monthStart;
+      const [entriesResult, closureResult, preferenceResult, approvedLeaves, holidayResult, contextEntries] = await Promise.all([
+        admin.from("staff_schedule_entries").select("*").eq("version_id", String(version.id)),
+        admin.from("staff_facility_closures").select("closure_date").eq("period_id", period.id),
+        admin
+          .from("staff_time_off_preferences")
+          .select("employee_id, staff_time_off_preference_dates(requested_date, source)")
+          .eq("period_id", period.id)
+          .eq("status", "submitted"),
+        admin
+          .from("staff_leave_requests")
+          .select("employee_id, leave_type, starts_at, unit")
+          .eq("tenant_id", tenantId)
+          .eq("status", "approved")
+          .gte("starts_at", `${monthStart}T00:00:00+08:00`)
+          .lte("starts_at", `${monthEnd}T23:59:59+08:00`),
+        admin
+          .from("staff_holiday_calendar")
+          .select("holiday_date, holiday_name")
+          .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
+          .gte("holiday_date", monthStart)
+          .lte("holiday_date", monthEnd),
+        loadBoundaryScheduleEntries(admin, tenantId, monthStart),
+      ]);
+      const queryError = entriesResult.error || closureResult.error || preferenceResult.error || approvedLeaves.error || holidayResult.error;
+      if (queryError) throw new Error(queryError.message);
+
+      const currentEntries = (entriesResult.data || []).map((row) => mapEntry(row));
+      const missingKeys = new Set(missingScheduleCellKeys({
+        monthStart,
+        employeeIds: configs.map((config) => config.employeeId),
+        entries: currentEntries,
+      }));
+      if (missingKeys.size > 0) {
+        const preferencesByEmployee: Record<string, string[]> = {};
+        for (const preference of preferenceResult.data || []) {
+          const employeeId = String(preference.employee_id);
+          const dates = (preference.staff_time_off_preference_dates || []) as Array<{ requested_date: string; source: string }>;
+          preferencesByEmployee[employeeId] = dates
+            .filter((date) => date.source === "employee")
+            .map((date) => String(date.requested_date));
+        }
+        const generatedEntries = applyApprovedLeaves(generateMonthlySchedule({
+          monthStart,
+          employees: configs,
+          preferencesByEmployee,
+          facilityClosureDates: (closureResult.data || []).map((row) => String(row.closure_date)),
+        }), (approvedLeaves.data || []) as ApprovedLeaveRow[]);
+        const missingEntries = generatedEntries.filter((entry) => missingKeys.has(`${entry.employeeId}:${entry.workDate}`));
+        const shiftIds = await loadShiftIds(admin, tenantId, profile.branch_id);
+        const inserted = await admin.from("staff_schedule_entries").upsert(missingEntries.map((draft) => ({
+          ...entryInsertRow({
+            draft,
+            versionId: String(version.id),
+            periodId: period.id,
+            tenantId,
+            actorId: profile.id,
+            shiftIds,
+          }),
+          requires_resign: false,
+        })), { onConflict: "version_id,employee_id,work_date", ignoreDuplicates: true });
+        if (inserted.error) throw new Error(inserted.error.message);
+
+        const rules = validateSchedule({
+          monthStart,
+          employees: configs,
+          entries: [...currentEntries, ...missingEntries],
+          contextEntries,
+          preferenceDailyLimit: period.middle_preference_daily_limit,
+          holidays: (holidayResult.data || []).map((row) => ({ date: String(row.holiday_date), name: String(row.holiday_name) })),
+        });
+        const deletedRules = await admin.from("staff_schedule_rule_results").delete().eq("version_id", String(version.id));
+        if (deletedRules.error) throw new Error(deletedRules.error.message);
+        if (rules.length > 0) {
+          const insertedRules = await admin.from("staff_schedule_rule_results").insert(rules.map((rule) => ({
+            version_id: version.id,
+            period_id: period.id,
+            tenant_id: tenantId,
+            employee_id: rule.employeeId,
+            work_date: rule.workDate,
+            rule_code: rule.ruleCode,
+            severity: rule.severity,
+            passed: rule.passed,
+            message: rule.message,
+            details: rule.details,
+          })));
+          if (insertedRules.error) throw new Error(insertedRules.error.message);
+        }
+        await writeAudit(admin, {
+          tenantId,
+          actorId: profile.id,
+          action: "staff_schedule_draft_missing_cells_synced",
+          targetType: "staff_schedule_version",
+          targetId: String(version.id),
+          payload: {
+            monthStart,
+            insertedCellCount: missingEntries.length,
+            employeeIds: Array.from(new Set(missingEntries.map((entry) => entry.employeeId))),
+          },
+        });
+      }
     } else if (body.action === "move_day_off") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有調整班表的權限" });
       if (body.confirmed !== true) throw new Error("每次拖移都必須先確認，避免誤操作");

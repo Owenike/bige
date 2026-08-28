@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   isSharedFrontdeskScheduleAccount,
+  missingScheduleCellKeys,
   staffScheduleEntryOffLabel,
   staffScheduleGridWorkLabel,
   staffScheduleOffLabel,
@@ -56,7 +57,7 @@ type DayOffChoice = "rest_day" | "regular_day_off";
 
 const SHIFT_PREVIEWS: Record<Exclude<ShiftChoice, "DEFAULT">, Pick<ScheduleEntry, "shiftCode" | "shiftLabel" | "startsAt" | "endsAt">> = {
   COACH_EARLY: { shiftCode: "COACH_EARLY", shiftLabel: "早班", startsAt: "10:00", endsAt: "19:00" },
-  COACH_MIDDLE: { shiftCode: "COACH_MIDDLE", shiftLabel: "中班", startsAt: "13:00", endsAt: "22:00" },
+  COACH_MIDDLE: { shiftCode: "COACH_MIDDLE", shiftLabel: "中班", startsAt: "14:00", endsAt: "23:00" },
   COACH_PARTTIME_WEEKDAY: { shiftCode: "COACH_PARTTIME_WEEKDAY", shiftLabel: "晚班", startsAt: "18:00", endsAt: "22:00" },
 };
 
@@ -220,11 +221,9 @@ export default function StaffScheduleManager() {
   const [holidayName, setHolidayName] = useState("");
   const [middleDailyLimit, setMiddleDailyLimit] = useState(2);
   const [adjustedDates, setAdjustedDates] = useState<Record<string, string>>({});
-  const [employeeSearch, setEmployeeSearch] = useState("");
-  const [employmentFilter, setEmploymentFilter] = useState("all");
-  const [shiftFilter, setShiftFilter] = useState("all");
   const [recentlyChangedEntryKeys, setRecentlyChangedEntryKeys] = useState<Set<string>>(() => new Set());
   const recentChangeTimersRef = useRef(new Map<string, number>());
+  const syncedDraftVersionsRef = useRef(new Set<string>());
   const setupDialogRef = useRef<HTMLDialogElement>(null);
   const dates = useMemo(() => monthDates(month), [month]);
 
@@ -450,13 +449,7 @@ export default function StaffScheduleManager() {
     groups.set(key, group);
     return groups;
   }, new Map<string, { workDate: string | null; holidayName: string; rules: RuleResult[] }>()).values());
-  const visibleEmployees = useMemo(() => scheduleEmployees.filter((employee) => {
-    const searchText = `${employee.displayName} ${employee.englishName || ""} ${employee.employeeNumber || ""}`.toLowerCase();
-    if (!searchText.includes(employeeSearch.trim().toLowerCase())) return false;
-    if (employmentFilter !== "all" && employee.employment?.employment_type !== employmentFilter) return false;
-    if (shiftFilter !== "all" && employee.employment?.default_shift_code !== shiftFilter) return false;
-    return true;
-  }), [scheduleEmployees, employeeSearch, employmentFilter, shiftFilter]);
+  const visibleEmployees = scheduleEmployees;
   const dailyStats = useMemo(() => new Map(dates.map((date) => {
     const rows = visibleEmployees.map((employee) => entryMap.get(`${employee.id}:${date}`)).filter(Boolean);
     return [date, { work: rows.filter((entry) => entry?.entryKind === "work").length, off: rows.filter((entry) => entry?.entryKind === "off").length }];
@@ -471,11 +464,22 @@ export default function StaffScheduleManager() {
     const employee = scheduleEmployees.find((item) => item.id === preference.employee_id);
     return employee ? [{ employee, selectedDates }] : [];
   }), [data?.preferences, scheduleEmployees]);
-  const containsLegacyGeneratedDaysOff = (data?.scheduleEntries || []).some((entry) =>
-    entry.entryKind === "off" &&
-    entry.source === "supervisor" &&
-    ["regular_day_off", "rest_day"].includes(entry.offKind || ""),
-  );
+  const missingScheduleCellCount = data?.version
+    ? missingScheduleCellKeys({
+        monthStart: `${month}-01`,
+        employeeIds: scheduleEmployees.map((employee) => employee.id),
+        entries: data.scheduleEntries,
+      }).length
+    : 0;
+
+  useEffect(() => {
+    const version = data?.version;
+    if (!version || version.status !== "draft" || missingScheduleCellCount === 0 || busy) return;
+    const syncKey = `${month}:${version.id}`;
+    if (syncedDraftVersionsRef.current.has(syncKey)) return;
+    syncedDraftVersionsRef.current.add(syncKey);
+    void act("sync_missing_draft_cells", {}, "已將新進員工補入目前草稿，既有排班保持不變");
+  }, [busy, data?.version, missingScheduleCellCount, month]);
 
   async function saveEmployee(employee: Employee, patch: Partial<Employment>) {
     const current = { ...employee.employment, ...patch } as Employment;
@@ -566,7 +570,7 @@ export default function StaffScheduleManager() {
       const label = {
         DEFAULT: "員工原固定班別",
         COACH_EARLY: "早班 10:00–19:00",
-        COACH_MIDDLE: "中班 13:00–22:00",
+        COACH_MIDDLE: "中班 14:00–23:00",
         COACH_PARTTIME_WEEKDAY: "晚班 18:00–22:00",
       }[payload.shiftCode];
       if (!window.confirm(`確認將 ${employee?.displayName || "此員工"} 的 ${toDate} 改為「${label}」？\n\n系統會重新執行法規與人數檢查；若班表已發布，只有受影響員工需要重新簽名。`)) return;
@@ -790,7 +794,7 @@ export default function StaffScheduleManager() {
                               <select value={terms.default_shift_code} onChange={(event) => void saveEmployee(employee, { default_shift_code: event.target.value })}>
                                 <option value="FRONTDESK_DAY">早班 09:30–16:30（櫃台）</option>
                                 <option value="COACH_EARLY">早班 10:00–19:00</option>
-                                <option value="COACH_MIDDLE">中班 13:00–22:00</option>
+                                <option value="COACH_MIDDLE">中班 14:00–23:00</option>
                                 <option value="COACH_PARTTIME_WEEKDAY">晚班 18:00–22:00</option>
                               </select>
                             </label>
@@ -821,16 +825,6 @@ export default function StaffScheduleManager() {
                 <button className={styles.primaryButton} disabled={busy} onClick={() => void act("create_draft", {}, data.version ? "已依最新排休重建新版本" : "正式班表草稿已建立")}>{data.version ? "依排休重建新版本" : "產生正式班表草稿"}</button>
               </div>
             </div>
-            <div className={styles.filterBar}>
-              <label>搜尋員工<input value={employeeSearch} onChange={(event) => setEmployeeSearch(event.target.value)} placeholder="姓名或員工編號" /></label>
-              <label>身分類型<select value={employmentFilter} onChange={(event) => setEmploymentFilter(event.target.value)}><option value="all">全部</option><option value="full_time">正職</option><option value="part_time">兼職</option></select></label>
-              <label>固定班別<select value={shiftFilter} onChange={(event) => setShiftFilter(event.target.value)}><option value="all">全部</option><option value="FRONTDESK_DAY">早班 09:30</option><option value="COACH_EARLY">早班 10:00</option><option value="COACH_MIDDLE">中班</option><option value="COACH_PARTTIME_WEEKDAY">晚班</option></select></label>
-              <strong>目前顯示 {visibleEmployees.length} 人</strong>
-            </div>
-            <p className={styles.gridHelp}>拖曳有顏色的休假格到同一員工的上班日；每次放開前都會再次確認。左右滑動可看完整月份。</p>
-            {containsLegacyGeneratedDaysOff ? <div className={styles.legacyDraftWarning} role="status">
-              此草稿仍含舊規則補排的例假或休假。請先讓員工完成合法分布的 8 天自選排休，再按「依排休重建新版本」套用新規則。
-            </div> : null}
             {selectedPreferenceRows.length > 0 ? <div className={styles.preferenceSummary}>
               <strong>員工自選休假日期</strong>
               <div>{selectedPreferenceRows.map(({ employee, selectedDates }) => (
@@ -841,7 +835,7 @@ export default function StaffScheduleManager() {
               <strong>可拖進表格</strong>
               <button type="button" className={styles.restorePaletteButton} disabled={busy} draggable={!busy} onDragStart={(event) => shiftDragStart(event, "DEFAULT")}><span>↺</span><b>復原</b><small>回到原固定班別</small></button>
               <button type="button" disabled={busy} draggable={!busy} onDragStart={(event) => shiftDragStart(event, "COACH_EARLY")}><span>早</span><b>早班</b><small>10:00–19:00</small></button>
-              <button type="button" disabled={busy} draggable={!busy} onDragStart={(event) => shiftDragStart(event, "COACH_MIDDLE")}><span>中</span><b>中班</b><small>13:00–22:00</small></button>
+              <button type="button" disabled={busy} draggable={!busy} onDragStart={(event) => shiftDragStart(event, "COACH_MIDDLE")}><span>中</span><b>中班</b><small>14:00–23:00</small></button>
               <button type="button" disabled={busy} draggable={!busy} onDragStart={(event) => shiftDragStart(event, "COACH_PARTTIME_WEEKDAY")}><span>晚</span><b>晚班</b><small>18:00–22:00</small></button>
               <button type="button" className={styles.dayOffPaletteButton} disabled={busy} draggable={!busy} onDragStart={(event) => dayOffDragStart(event, "rest_day")}><span>休</span><b>休假</b><small>排為休息日</small></button>
               <button type="button" className={styles.dayOffPaletteButton} disabled={busy} draggable={!busy} onDragStart={(event) => dayOffDragStart(event, "regular_day_off")}><span>例</span><b>例假</b><small>排為例假日</small></button>
@@ -862,14 +856,16 @@ export default function StaffScheduleManager() {
                           return (
                             <td
                               key={date}
-                              className={`${isOff ? styles.offCell : styles.workCell} ${tone === "early" ? styles.earlyShiftCell : ""} ${tone === "late" ? styles.lateShiftCell : ""} ${recentlyChangedEntryKeys.has(entryKey) ? styles.resignCell : ""}`}
+                              className={`${isOff ? styles.offCell : styles.workCell} ${recentlyChangedEntryKeys.has(entryKey) ? styles.resignCell : ""}`}
                               onDragOver={(event) => event.preventDefault()}
                               onDrop={(event) => void dropOn(event, employee.id, date)}
                               title={isOff ? `${entry ? staffScheduleEntryOffLabel(entry) : "休假"}（可拖曳）` : `${entry ? staffScheduleShiftLabel(entry) : "未排班"} ${entry?.startsAt || ""}–${entry?.endsAt || ""}`}
                             >
                               {entry ? (
                                 <div draggable={isOff} onDragStart={(event) => dragStart(event, entry)}>
-                                  {isOff ? <strong>{staffScheduleEntryOffLabel(entry)}</strong> : <span>{staffScheduleGridWorkLabel(entry, employee.employeeNumber, date)}</span>}
+                                  {isOff
+                                    ? <strong className={styles.offBadge}>{staffScheduleEntryOffLabel(entry)}</strong>
+                                    : <span className={`${styles.shiftBadge} ${tone === "early" ? styles.earlyShiftBadge : tone === "late" ? styles.lateShiftBadge : styles.middleShiftBadge}`}>{staffScheduleGridWorkLabel(entry, employee.employeeNumber, date)}</span>}
                                 </div>
                               ) : <span className={styles.emptyCell}>—</span>}
                             </td>

@@ -134,8 +134,8 @@ export const DEFAULT_SHIFT_DEFINITIONS: readonly ShiftDefinition[] = [
   {
     code: "COACH_MIDDLE",
     label: "中班",
-    startsAt: "13:00",
-    endsAt: "22:00",
+    startsAt: "14:00",
+    endsAt: "23:00",
     breakMinutes: 60,
     paidBreak: false,
     breakHiddenFromEmployee: true,
@@ -450,6 +450,19 @@ export function generateMonthlySchedule(params: {
     entries.push(...monthDates.map((date) => byDate.get(date)).filter((entry): entry is ScheduleEntryDraft => !!entry));
   }
   return entries;
+}
+
+export function missingScheduleCellKeys(params: {
+  monthStart: string;
+  employeeIds: string[];
+  entries: Array<{ employeeId: string; workDate: string }>;
+}) {
+  const existingKeys = new Set(params.entries.map((entry) => `${entry.employeeId}:${entry.workDate}`));
+  return params.employeeIds.flatMap((employeeId) =>
+    listMonthDates(params.monthStart)
+      .map((workDate) => `${employeeId}:${workDate}`)
+      .filter((key) => !existingKeys.has(key)),
+  );
 }
 
 export function validateSchedule(params: {

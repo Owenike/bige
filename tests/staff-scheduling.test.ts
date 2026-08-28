@@ -8,6 +8,7 @@ import {
   generateMonthlySchedule,
   isSharedFrontdeskScheduleAccount,
   listMonthDates,
+  missingScheduleCellKeys,
   monthlyAccruedLeaveCreditDays,
   monthlyDaysOffEntitlement,
   paidMinutesForEntry,
@@ -86,6 +87,33 @@ test("monthly generator gives complete weeks one regular day off and one rest da
   const fullWeekResults = validation.filter((item) => item.ruleCode === "WEEKLY_REGULAR_AND_REST_DAY");
   assert.ok(fullWeekResults.length > 0);
   assert.ok(fullWeekResults.every((item) => item.passed));
+});
+
+test("middle shift uses the requested 14:00-23:00 hours", () => {
+  const entry = generateMonthlySchedule({
+    monthStart: "2026-09-01",
+    employees: [middleCoach],
+    preferencesByEmployee: { "coach-1": [] },
+  })[0];
+  assert.equal(entry.shiftCode, "COACH_MIDDLE");
+  assert.equal(entry.startsAt, "14:00");
+  assert.equal(entry.endsAt, "23:00");
+});
+
+test("draft synchronization finds every missing date for staff added after the version", () => {
+  const existingEntries = generateMonthlySchedule({
+    monthStart: "2026-09-01",
+    employees: [middleCoach],
+    preferencesByEmployee: { "coach-1": [] },
+  });
+  const missing = missingScheduleCellKeys({
+    monthStart: "2026-09-01",
+    employeeIds: ["coach-1", "hailey"],
+    entries: existingEntries,
+  });
+  assert.equal(missing.length, 30);
+  assert.equal(missing[0], "hailey:2026-09-01");
+  assert.equal(missing[missing.length - 1], "hailey:2026-09-30");
 });
 
 test("front desk paid break keeps all seven scheduled hours payable", () => {
@@ -319,6 +347,7 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260826223530_add_staff_leave_balances_and_una_shift.sql"), "utf8");
   const unaDraftMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260826224221_align_una_existing_draft_shift.sql"), "utf8");
   const creditMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260827000727_add_monthly_accrued_leave_credits.sql"), "utf8");
+  const middleShiftMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260828201642_update_coach_middle_shift_time.sql"), "utf8");
   assert.match(source, /className=\{styles\.titleRow\}[\s\S]*?全員班表控制台[\s\S]*?className=\{styles\.workflowBadge\}[\s\S]*?流程狀態[\s\S]*?stateLabel\(data\.period\.status\)/);
   assert.doesNotMatch(source, /className=\{styles\.stats\}/);
   assert.doesNotMatch(source, /<span>已選滿 8 天<\/span>|<span>尚未完成<\/span>|<span>法規阻擋<\/span>|<span>班表版本<\/span>/);
@@ -354,11 +383,15 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(styles, /\.workCell small\{color:#66778e;font-size:12px\}/);
   assert.match(styles, /\.nameCell small\{margin-top:4px;color:#65758a;font-size:13px\}/);
   assert.match(source, /員工自選休假日期/);
+  assert.doesNotMatch(source, /className=\{styles\.filterBar\}|className=\{styles\.gridHelp\}|此草稿仍含舊規則補排/);
   assert.match(source, /preference\.status !== "submitted"/);
   assert.match(source, /const scheduleEmployees = useMemo/);
   assert.match(source, /isSharedFrontdeskScheduleAccount\(employee\.employeeNumber\)/);
   assert.doesNotMatch(source, /employee\.employment\?\.work_group !== "frontdesk"/);
-  assert.match(source, /此草稿仍含舊規則補排的例假或休假/);
+  assert.match(source, /sync_missing_draft_cells/);
+  assert.match(apiSource, /body\.action === "sync_missing_draft_cells"/);
+  assert.match(apiSource, /version\.status !== "draft"/);
+  assert.match(apiSource, /missingScheduleCellKeys/);
   assert.match(source, /shiftDragStart\(event, "DEFAULT"\)[\s\S]*>復原<\/b>[\s\S]*shiftDragStart\(event, "COACH_EARLY"\)[\s\S]*shiftDragStart\(event, "COACH_MIDDLE"\)[\s\S]*shiftDragStart\(event, "COACH_PARTTIME_WEEKDAY"\)[\s\S]*dayOffDragStart\(event, "rest_day"\)[\s\S]*dayOffDragStart\(event, "regular_day_off"\)/);
   assert.match(source, /payload\.shiftCode !== "DEFAULT"/);
   assert.match(source, /action: "assign_day_off"/);
@@ -382,9 +415,9 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.doesNotMatch(apiSource, /不能排入支援早班/);
   assert.match(apiSource, /staff_accrued_leave_monthly_credits/);
   assert.match(apiSource, /ignoreDuplicates: true/);
-  assert.match(styles, /\.scheduleTable \.offCell\{background:#fee2e2\}/);
-  assert.match(styles, /\.scheduleTable \.earlyShiftCell\{background:#ffedd5\}/);
-  assert.match(styles, /\.scheduleTable \.lateShiftCell\{background:#dbeafe\}/);
+  assert.match(styles, /\.shiftBadge,\.offBadge\{/);
+  assert.match(styles, /\.middleShiftBadge\{/);
+  assert.doesNotMatch(styles, /\.scheduleTable \.earlyShiftCell\{background:#ffedd5\}/);
   assert.match(source, /if \(\["FRONTDESK_DAY", "COACH_EARLY"\]\.includes/);
   assert.match(selfSource, /\["FRONTDESK_DAY", "COACH_EARLY"\]\.includes/);
   assert.match(printSource, /\["FRONTDESK_DAY", "COACH_EARLY"\]\.includes/);
@@ -399,7 +432,8 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(printStyles, /\.late \{\s*background: #dbeafe;/);
   assert.match(styles, /--schedule-manager-gold:#d8b669/);
   assert.match(styles, /\.monthField input\{font-size:16px;font-weight:800/);
-  assert.match(styles, /\.scheduleTable \.offCell\{background:rgba\(94,31,39,\.88\)\}/);
+  assert.match(styles, /\.scheduleTable \.workCell,\.scheduleTable \.offCell\{background:rgba\(12,21,32,\.94\)\}/);
+  assert.match(styles, /\.scheduleTable \.offBadge\{border-color:rgba\(205,91,100,\.52\)/);
   assert.match(printStyles, /@media print \{[\s\S]*?color-scheme: light;/);
   assert.match(exportSource, /fgColor: \{ argb: "FFFEE2E2" \}/);
   assert.match(selfSource, /styles\.earlyEntry/);
@@ -414,4 +448,8 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(creditMigration, /create table if not exists public\.staff_accrued_leave_monthly_credits/);
   assert.match(creditMigration, /unique\(period_id, employee_id\)/);
   assert.match(creditMigration, /after insert on public\.staff_accrued_leave_monthly_credits/);
+  assert.match(middleShiftMigration, /code = 'COACH_MIDDLE'/);
+  assert.match(middleShiftMigration, /starts_at = time '14:00'/);
+  assert.match(middleShiftMigration, /ends_at = time '23:00'/);
+  assert.match(middleShiftMigration, /version\.status = 'draft'/);
 });
