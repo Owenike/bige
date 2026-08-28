@@ -212,6 +212,7 @@ export default function StaffScheduleManager() {
   const [data, setData] = useState<ScheduleState | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [setupDialog, setSetupDialog] = useState<"progress" | "shifts" | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [closureDate, setClosureDate] = useState("");
@@ -224,6 +225,7 @@ export default function StaffScheduleManager() {
   const [shiftFilter, setShiftFilter] = useState("all");
   const [recentlyChangedEntryKeys, setRecentlyChangedEntryKeys] = useState<Set<string>>(() => new Set());
   const recentChangeTimersRef = useRef(new Map<string, number>());
+  const setupDialogRef = useRef<HTMLDialogElement>(null);
   const dates = useMemo(() => monthDates(month), [month]);
 
   const highlightChangedEntries = useCallback((entries: Array<{ employeeId: string; workDate: string }>) => {
@@ -257,6 +259,13 @@ export default function StaffScheduleManager() {
       timers.clear();
     };
   }, []);
+
+  useEffect(() => {
+    const dialog = setupDialogRef.current;
+    if (!dialog) return;
+    if (setupDialog && !dialog.open) dialog.showModal();
+    if (!setupDialog && dialog.open) dialog.close();
+  }, [setupDialog]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -428,7 +437,6 @@ export default function StaffScheduleManager() {
     !isSharedFrontdeskScheduleAccount(employee.employeeNumber)
   ), [data?.employees]);
   const employeeMap = useMemo(() => new Map(scheduleEmployees.map((employee) => [employee.id, employee])), [scheduleEmployees]);
-  const completeCount = scheduleEmployees.filter((employee) => preferenceMap.get(employee.id)?.status === "submitted").length;
   const incompleteEmployees = scheduleEmployees.filter((employee) => preferenceMap.get(employee.id)?.status !== "submitted");
   const blockingRules = data?.ruleResults.filter((rule) => !rule.passed && rule.severity === "blocking") || [];
   const warningRules = data?.ruleResults.filter((rule) => !rule.passed && rule.severity === "warning") || [];
@@ -633,7 +641,14 @@ export default function StaffScheduleManager() {
       <header className={styles.header}>
         <div>
           <p className={styles.eyebrow}>巨挺健身館 · 員工排班</p>
-          <h1>全員班表控制台</h1>
+          <div className={styles.titleRow}>
+            <h1>全員班表控制台</h1>
+            <span className={styles.workflowBadge}>
+              <i aria-hidden="true" />
+              <span>流程狀態</span>
+              <strong>{data.period ? stateLabel(data.period.status) : "尚未開放"}</strong>
+            </span>
+          </div>
           <p>副理統整與初審，經理逐筆終審；發布後的實質修改會產生新版本並要求受影響員工重簽。</p>
         </div>
         <div className={styles.headerActions}>
@@ -662,122 +677,140 @@ export default function StaffScheduleManager() {
         </section>
       ) : (
         <>
-          <section className={styles.stats}>
-            <article><span>流程狀態</span><strong>{stateLabel(data.period.status)}</strong></article>
-            <article><span>已選滿 8 天</span><strong>{completeCount} / {scheduleEmployees.length}</strong></article>
-            <article className={incompleteEmployees.length ? styles.warnStat : ""}><span>尚未完成</span><strong>{incompleteEmployees.length}</strong></article>
-            <article className={blockingRules.length ? styles.blockStat : ""}><span>法規阻擋</span><strong>{blockingRules.length}</strong></article>
-            <article><span>班表版本</span><strong>{data.version ? `V${data.version.version_number} · ${stateLabel(data.version.status)}` : "尚未建立"}</strong></article>
+          <section className={styles.setupActions} aria-label="排班前置設定">
+            <button type="button" className={styles.setupActionButton} onClick={() => setSetupDialog("progress")}>
+              <span className={styles.setupActionIcon} aria-hidden="true">休</span>
+              <span><strong>館休與選休進度</strong><small>設定館休日並查看員工選休</small></span>
+              <b aria-hidden="true">›</b>
+            </button>
+            <button type="button" className={styles.setupActionButton} onClick={() => setSetupDialog("shifts")}>
+              <span className={styles.setupActionIcon} aria-hidden="true">班</span>
+              <span><strong>固定班別設定</strong><small>調整員工預設班別與工時</small></span>
+              <b aria-hidden="true">›</b>
+            </button>
           </section>
 
-          <section className={styles.setupGrid}>
-            <article className={styles.panel}>
-              <div className={styles.panelHeading}>
-                <div><span className={styles.step}>1</span><h2>館休與選休進度</h2></div>
-                <span className={styles.deadline}>截止 {formatDateTime(data.period.selection_closes_at)}</span>
+          <dialog
+            ref={setupDialogRef}
+            className={styles.setupDialog}
+            aria-labelledby="setup-dialog-title"
+            onClose={() => setSetupDialog(null)}
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setSetupDialog(null);
+            }}
+          >
+            <div className={styles.setupDialogCard}>
+              <div className={styles.setupDialogHeader}>
+                <div>
+                  <span>{setupDialog === "progress" ? "排休設定" : "員工設定"}</span>
+                  <h2 id="setup-dialog-title">{setupDialog === "progress" ? "館休與選休進度" : "固定班別設定"}</h2>
+                  <p>{setupDialog === "progress" ? `選休截止 ${formatDateTime(data.period.selection_closes_at)}` : "設定員工平日預設班別與休假餘額"}</p>
+                </div>
+                <button type="button" className={styles.dialogCloseButton} aria-label="關閉設定視窗" onClick={() => setSetupDialog(null)}>×</button>
               </div>
-              <label className={styles.field}>
-                <span>本月館休日（自動計入員工 8 天）</span>
-                <div className={styles.inlineField}>
-                  <input type="date" min={`${month}-01`} max={dates.at(-1)} value={closureDate} onChange={(event) => setClosureDate(event.target.value)} />
-                  <button className={styles.secondaryButton} disabled={busy || !closureDate} onClick={() => void act("set_facility_closure", { closureDate }, "館休日已更新")}>儲存館休</button>
-                </div>
-              </label>
-              <label className={styles.field}>
-                <span>中班人員同一天最多可自選休假人數</span>
-                <div className={styles.inlineField}>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={middleDailyLimit}
-                    onChange={(event) => setMiddleDailyLimit(Number(event.target.value))}
-                  />
-                  <button
-                    className={styles.secondaryButton}
-                    disabled={busy || middleDailyLimit < 1 || middleDailyLimit > 20}
-                    onClick={() => void act("update_schedule_rules", { middlePreferenceDailyLimit: middleDailyLimit }, "中班每日自選休假上限已更新")}
-                  >儲存人數上限</button>
-                </div>
-                <small>早班不計入；星期六、日 13:00–22:00 的兼職教練會計入。</small>
-              </label>
-              <div className={styles.field}>
-                <span>當年度國定假日行事曆</span>
-                <div className={styles.inlineField}>
-                  <input type="date" min={`${month}-01`} max={dates.at(-1)} value={holidayDate} onChange={(event) => setHolidayDate(event.target.value)} />
-                  <input value={holidayName} onChange={(event) => setHolidayName(event.target.value)} placeholder="例如：中秋節" />
-                  <button className={styles.secondaryButton} disabled={busy || !holidayDate || holidayName.trim().length < 2} onClick={() => void act("upsert_holiday", { holidayDate, holidayName }, "國定假日行事曆已更新")}>加入／更新</button>
-                </div>
-                <small>2026 已內建；未來年度由主管依官方行事曆逐筆加入，不需先設定當天誰出勤。</small>
-                {data.holidays.length ? <div className={styles.holidayChips}>{data.holidays.map((holiday) => <span key={holiday.holiday_date}>{holiday.holiday_date.slice(5)} {holiday.holiday_name}<button title="移除本館自行設定項目" onClick={() => { if (window.confirm(`確認移除 ${holiday.holiday_date} ${holiday.holiday_name}？`)) void act("remove_holiday", { holidayDate: holiday.holiday_date }, "國定假日項目已移除"); }}>×</button></span>)}</div> : null}
-              </div>
-              {incompleteEmployees.length > 0 ? (
-                <div className={styles.reminderBox}>
-                  <strong>15 日起每天提醒副理：</strong>
-                  <span>{incompleteEmployees.map((employee) => employee.displayName).join("、")}</span>
-                </div>
-              ) : <div className={styles.successBox}>全部員工都已完成自選排休。</div>}
-            </article>
 
-            <article className={styles.panel}>
-              <div className={styles.panelHeading}>
-                <div><span className={styles.step}>2</span><h2>固定班別設定</h2></div>
-                <span className={styles.hint}>不用顯示休息時段給員工</span>
-              </div>
-              <div className={styles.employeeSettings}>
-                {scheduleEmployees.map((employee) => {
-                  const terms = employee.employment;
-                  if (!terms) return null;
-                  return (
-                    <details key={employee.id} className={styles.employeeSetting}>
-                      <summary>
-                        <span><strong>{employee.displayName}</strong><small>{employee.employeeNumber || "無員工編號"}</small></span>
-                        <span>{terms.employment_type === "full_time" ? "正職" : "兼職"} · {terms.work_group === "frontdesk" ? "櫃台" : "教練"}</span>
-                      </summary>
-                      <div className={styles.settingFields}>
-                        <label>身分類型
-                          <select value={terms.employment_type} onChange={(event) => void saveEmployee(employee, {
-                            employment_type: event.target.value as Employment["employment_type"],
-                            pay_basis: event.target.value === "part_time" ? "hourly" : "monthly",
-                          })}>
-                            <option value="full_time">正職</option><option value="part_time">兼職</option>
-                          </select>
-                        </label>
-                        <label>工作類別
-                          <select value={terms.work_group} onChange={(event) => {
-                            const workGroup = event.target.value as Employment["work_group"];
-                            void saveEmployee(employee, {
-                              work_group: workGroup,
-                              default_shift_code: workGroup === "frontdesk" ? "FRONTDESK_DAY" : "COACH_MIDDLE",
-                              counts_toward_middle_limit: workGroup === "coach",
-                            });
-                          }}>
-                            <option value="frontdesk">櫃台</option><option value="coach">教練</option><option value="other">其他</option>
-                          </select>
-                        </label>
-                        <label>固定班別
-                          <select value={terms.default_shift_code} onChange={(event) => void saveEmployee(employee, { default_shift_code: event.target.value })}>
-                            <option value="FRONTDESK_DAY">早班 09:30–16:30（櫃台）</option>
-                            <option value="COACH_EARLY">早班 10:00–19:00</option>
-                            <option value="COACH_MIDDLE">中班 13:00–22:00</option>
-                            <option value="COACH_PARTTIME_WEEKDAY">晚班 18:00–22:00</option>
-                          </select>
-                        </label>
-                        <label className={styles.checkField}><input type="checkbox" checked={terms.is_original_early_shift} onChange={(event) => void saveEmployee(employee, { is_original_early_shift: event.target.checked, default_shift_code: event.target.checked ? "COACH_EARLY" : terms.default_shift_code })} />原固定早班（週三 12:00–21:00）</label>
-                        <label className={styles.checkField}><input type="checkbox" checked={terms.counts_toward_middle_limit} onChange={(event) => void saveEmployee(employee, { counts_toward_middle_limit: event.target.checked })} />自選排休納入中班每日上限</label>
-                        <label>特休餘額（天）
-                          <input key={`${employee.id}:annual:${terms.annual_leave_balance_days}`} type="number" min={0} max={365} step={0.5} defaultValue={terms.annual_leave_balance_days} disabled={busy} onBlur={(event) => void saveEmployee(employee, { annual_leave_balance_days: Number(event.target.value) })} />
-                        </label>
-                        <label>積假餘額（天）
-                          <input key={`${employee.id}:accrued:${terms.accrued_leave_balance_days}`} type="number" min={0} max={365} step={0.5} defaultValue={terms.accrued_leave_balance_days} disabled={busy} onBlur={(event) => void saveEmployee(employee, { accrued_leave_balance_days: Number(event.target.value) })} />
-                        </label>
+              <div className={styles.setupDialogBody}>
+                {setupDialog === "progress" ? (
+                  <div className={styles.progressSettings}>
+                    <label className={styles.field}>
+                      <span>本月館休日（自動計入員工 8 天）</span>
+                      <div className={styles.inlineField}>
+                        <input type="date" min={`${month}-01`} max={dates.at(-1)} value={closureDate} onChange={(event) => setClosureDate(event.target.value)} />
+                        <button className={styles.secondaryButton} disabled={busy || !closureDate} onClick={() => void act("set_facility_closure", { closureDate }, "館休日已更新")}>儲存館休</button>
                       </div>
-                    </details>
-                  );
-                })}
+                    </label>
+                    <label className={styles.field}>
+                      <span>中班人員同一天最多可自選休假人數</span>
+                      <div className={styles.inlineField}>
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={middleDailyLimit}
+                          onChange={(event) => setMiddleDailyLimit(Number(event.target.value))}
+                        />
+                        <button
+                          className={styles.secondaryButton}
+                          disabled={busy || middleDailyLimit < 1 || middleDailyLimit > 20}
+                          onClick={() => void act("update_schedule_rules", { middlePreferenceDailyLimit: middleDailyLimit }, "中班每日自選休假上限已更新")}
+                        >儲存人數上限</button>
+                      </div>
+                      <small>早班不計入；星期六、日 13:00–22:00 的兼職教練會計入。</small>
+                    </label>
+                    <div className={styles.field}>
+                      <span>當年度國定假日行事曆</span>
+                      <div className={styles.inlineField}>
+                        <input type="date" min={`${month}-01`} max={dates.at(-1)} value={holidayDate} onChange={(event) => setHolidayDate(event.target.value)} />
+                        <input value={holidayName} onChange={(event) => setHolidayName(event.target.value)} placeholder="例如：中秋節" />
+                        <button className={styles.secondaryButton} disabled={busy || !holidayDate || holidayName.trim().length < 2} onClick={() => void act("upsert_holiday", { holidayDate, holidayName }, "國定假日行事曆已更新")}>加入／更新</button>
+                      </div>
+                      <small>2026 已內建；未來年度由主管依官方行事曆逐筆加入，不需先設定當天誰出勤。</small>
+                      {data.holidays.length ? <div className={styles.holidayChips}>{data.holidays.map((holiday) => <span key={holiday.holiday_date}>{holiday.holiday_date.slice(5)} {holiday.holiday_name}<button title="移除本館自行設定項目" onClick={() => { if (window.confirm(`確認移除 ${holiday.holiday_date} ${holiday.holiday_name}？`)) void act("remove_holiday", { holidayDate: holiday.holiday_date }, "國定假日項目已移除"); }}>×</button></span>)}</div> : null}
+                    </div>
+                    {incompleteEmployees.length > 0 ? (
+                      <div className={styles.reminderBox}>
+                        <strong>15 日起每天提醒副理：</strong>
+                        <span>{incompleteEmployees.map((employee) => employee.displayName).join("、")}</span>
+                      </div>
+                    ) : <div className={styles.successBox}>全部員工都已完成自選排休。</div>}
+                  </div>
+                ) : setupDialog === "shifts" ? (
+                  <div className={styles.employeeSettings}>
+                    {scheduleEmployees.map((employee) => {
+                      const terms = employee.employment;
+                      if (!terms) return null;
+                      return (
+                        <details key={employee.id} className={styles.employeeSetting}>
+                          <summary>
+                            <span><strong>{employee.displayName}</strong><small>{employee.employeeNumber || "無員工編號"}</small></span>
+                            <span>{terms.employment_type === "full_time" ? "正職" : "兼職"} · {terms.work_group === "frontdesk" ? "櫃台" : "教練"}</span>
+                          </summary>
+                          <div className={styles.settingFields}>
+                            <label>身分類型
+                              <select value={terms.employment_type} onChange={(event) => void saveEmployee(employee, {
+                                employment_type: event.target.value as Employment["employment_type"],
+                                pay_basis: event.target.value === "part_time" ? "hourly" : "monthly",
+                              })}>
+                                <option value="full_time">正職</option><option value="part_time">兼職</option>
+                              </select>
+                            </label>
+                            <label>工作類別
+                              <select value={terms.work_group} onChange={(event) => {
+                                const workGroup = event.target.value as Employment["work_group"];
+                                void saveEmployee(employee, {
+                                  work_group: workGroup,
+                                  default_shift_code: workGroup === "frontdesk" ? "FRONTDESK_DAY" : "COACH_MIDDLE",
+                                  counts_toward_middle_limit: workGroup === "coach",
+                                });
+                              }}>
+                                <option value="frontdesk">櫃台</option><option value="coach">教練</option><option value="other">其他</option>
+                              </select>
+                            </label>
+                            <label>固定班別
+                              <select value={terms.default_shift_code} onChange={(event) => void saveEmployee(employee, { default_shift_code: event.target.value })}>
+                                <option value="FRONTDESK_DAY">早班 09:30–16:30（櫃台）</option>
+                                <option value="COACH_EARLY">早班 10:00–19:00</option>
+                                <option value="COACH_MIDDLE">中班 13:00–22:00</option>
+                                <option value="COACH_PARTTIME_WEEKDAY">晚班 18:00–22:00</option>
+                              </select>
+                            </label>
+                            <label className={styles.checkField}><input type="checkbox" checked={terms.is_original_early_shift} onChange={(event) => void saveEmployee(employee, { is_original_early_shift: event.target.checked, default_shift_code: event.target.checked ? "COACH_EARLY" : terms.default_shift_code })} />原固定早班（週三 12:00–21:00）</label>
+                            <label className={styles.checkField}><input type="checkbox" checked={terms.counts_toward_middle_limit} onChange={(event) => void saveEmployee(employee, { counts_toward_middle_limit: event.target.checked })} />自選排休納入中班每日上限</label>
+                            <label>特休餘額（天）
+                              <input key={`${employee.id}:annual:${terms.annual_leave_balance_days}`} type="number" min={0} max={365} step={0.5} defaultValue={terms.annual_leave_balance_days} disabled={busy} onBlur={(event) => void saveEmployee(employee, { annual_leave_balance_days: Number(event.target.value) })} />
+                            </label>
+                            <label>積假餘額（天）
+                              <input key={`${employee.id}:accrued:${terms.accrued_leave_balance_days}`} type="number" min={0} max={365} step={0.5} defaultValue={terms.accrued_leave_balance_days} disabled={busy} onBlur={(event) => void saveEmployee(employee, { accrued_leave_balance_days: Number(event.target.value) })} />
+                            </label>
+                          </div>
+                        </details>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
-            </article>
-          </section>
+            </div>
+          </dialog>
 
           <section className={styles.panel}>
             <div className={styles.panelHeading}>

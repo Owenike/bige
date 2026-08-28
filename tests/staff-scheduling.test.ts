@@ -318,6 +318,16 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260826223530_add_staff_leave_balances_and_una_shift.sql"), "utf8");
   const unaDraftMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260826224221_align_una_existing_draft_shift.sql"), "utf8");
   const creditMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260827000727_add_monthly_accrued_leave_credits.sql"), "utf8");
+  assert.match(source, /className=\{styles\.titleRow\}[\s\S]*?全員班表控制台[\s\S]*?className=\{styles\.workflowBadge\}[\s\S]*?流程狀態[\s\S]*?stateLabel\(data\.period\.status\)/);
+  assert.doesNotMatch(source, /className=\{styles\.stats\}/);
+  assert.doesNotMatch(source, /<span>已選滿 8 天<\/span>|<span>尚未完成<\/span>|<span>法規阻擋<\/span>|<span>班表版本<\/span>/);
+  assert.match(source, /className=\{styles\.setupActions\}[\s\S]*?setSetupDialog\("progress"\)[\s\S]*?館休與選休進度[\s\S]*?setSetupDialog\("shifts"\)[\s\S]*?固定班別設定/);
+  assert.match(source, /setupDialogRef\.current[\s\S]*?dialog\.showModal\(\)/);
+  assert.match(source, /<dialog[\s\S]*?aria-labelledby="setup-dialog-title"[\s\S]*?aria-label="關閉設定視窗"/);
+  assert.match(styles, /\.workflowBadge\{[^}]*border-radius:999px/);
+  assert.match(styles, /\.setupActions\{[^}]*grid-template-columns:repeat\(2,minmax\(240px,1fr\)\)/);
+  assert.match(styles, /\.setupDialog::backdrop\{[^}]*backdrop-filter:blur\(8px\)/);
+  assert.match(styles, /@media\(max-width:620px\)\{[\s\S]*?\.setupActions\{grid-template-columns:1fr/);
   assert.match(source, /holidayRuleGroups\.map/);
   assert.match(source, /window\.setTimeout\(\(\) => setNotice\(""\), 4500\)/);
   assert.match(source, /const SCHEDULE_LOAD_TIMEOUT_MS = 20_000/);

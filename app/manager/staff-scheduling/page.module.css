@@ -231,3 +231,51 @@
 .emptyPanel h2{color:#fff8e9}
 .page button:focus-visible,.page a:focus-visible,.page input:focus-visible,.page select:focus-visible,.page textarea:focus-visible{outline:3px solid rgba(240,212,147,.62);outline-offset:2px}
 @media(max-width:760px){.monthField input{font-size:15px}}
+
+/* Compact schedule setup controls and focused modal workspaces. */
+.titleRow{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.titleRow h1{flex:0 1 auto}
+.workflowBadge{display:inline-flex;align-items:center;gap:8px;margin:0 0 4px;padding:8px 12px;border:1px solid rgba(216,182,105,.42);border-radius:999px;background:linear-gradient(180deg,rgba(72,54,19,.78),rgba(38,28,11,.82));color:#ead9a7;box-shadow:inset 0 1px rgba(255,255,255,.05);font-size:12px;line-height:1;white-space:nowrap}
+.workflowBadge i{width:8px;height:8px;border-radius:50%;background:var(--schedule-manager-gold-bright);box-shadow:0 0 0 4px rgba(216,182,105,.12)}
+.workflowBadge span{color:#c6b98f;font-weight:700}
+.workflowBadge strong{color:#fff4d6;font-size:13px}
+.setupActions{display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:12px;max-width:820px;margin:0 0 16px}
+.setupActionButton{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;min-height:76px;padding:13px 15px;border:1px solid var(--schedule-manager-gold-line);border-radius:18px;background:linear-gradient(145deg,rgba(15,31,45,.95),rgba(7,13,22,.94));color:var(--schedule-manager-text);box-shadow:0 14px 34px rgba(0,0,0,.2),inset 0 1px rgba(255,255,255,.035);font:inherit;text-align:left;cursor:pointer;transition:border-color .18s ease,transform .18s ease,box-shadow .18s ease}
+.setupActionButton:hover{transform:translateY(-1px);border-color:rgba(216,182,105,.72);box-shadow:0 18px 38px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.05)}
+.setupActionButton>span:nth-child(2){display:grid;gap:4px;min-width:0}
+.setupActionButton strong{color:#fff8e9;font-size:15px}
+.setupActionButton small{overflow:hidden;color:var(--schedule-manager-muted);font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.setupActionButton>b{color:var(--schedule-manager-gold-bright);font-size:26px;font-weight:400;line-height:1}
+.setupActionIcon{display:grid;width:40px;height:40px;place-items:center;border:1px solid rgba(216,182,105,.32);border-radius:13px;background:rgba(216,182,105,.14);color:var(--schedule-manager-gold-bright);font-size:15px;font-weight:900}
+.setupDialog{width:min(940px,calc(100vw - 40px));max-width:none;max-height:min(88dvh,920px);margin:auto;padding:0;overflow:hidden;border:1px solid rgba(216,182,105,.48);border-radius:24px;background:#08111b;color:var(--schedule-manager-text);box-shadow:0 34px 110px rgba(0,0,0,.68),inset 0 1px rgba(255,255,255,.045)}
+.setupDialog::backdrop{background:rgba(1,4,8,.78);backdrop-filter:blur(8px)}
+.setupDialogCard{display:grid;grid-template-rows:auto minmax(0,1fr);max-height:min(88dvh,920px);background:radial-gradient(circle at 4% 0,rgba(216,182,105,.1),transparent 28%),linear-gradient(145deg,rgba(13,28,41,.99),rgba(5,11,18,.99))}
+.setupDialogHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:20px 22px;border-bottom:1px solid var(--schedule-manager-line);background:rgba(8,16,25,.94)}
+.setupDialogHeader>div{display:grid;gap:4px}
+.setupDialogHeader span{color:var(--schedule-manager-gold-bright);font-size:11px;font-weight:900;letter-spacing:.12em}
+.setupDialogHeader h2{margin:0;color:#fff8e9;font-size:24px;letter-spacing:-.02em}
+.setupDialogHeader p{margin:0;color:var(--schedule-manager-muted);font-size:13px;line-height:1.5}
+.dialogCloseButton{display:grid;width:40px;height:40px;flex:0 0 auto;place-items:center;border:1px solid var(--schedule-manager-line);border-radius:12px;background:rgba(20,30,42,.9);color:#f5f0e6;font:inherit;font-size:24px;line-height:1;cursor:pointer}
+.dialogCloseButton:hover{border-color:var(--schedule-manager-gold);color:var(--schedule-manager-gold-bright)}
+.setupDialogBody{max-height:calc(min(88dvh,920px) - 103px);padding:22px;overflow-y:auto;overscroll-behavior:contain;scrollbar-color:var(--schedule-manager-gold) rgba(10,17,27,.9)}
+.progressSettings{display:grid;gap:18px}
+.progressSettings>.field{padding:0 0 18px;border-bottom:1px solid var(--schedule-manager-line)}
+.progressSettings>.field:last-of-type{padding-bottom:0;border-bottom:0}
+.progressSettings .field>span{color:#fff4d6;font-size:14px}
+.progressSettings .field>small{color:var(--schedule-manager-muted);font-weight:500;line-height:1.55}
+.setupDialogBody .employeeSettings{max-height:none;overflow:visible}
+
+@media(max-width:620px){
+  .titleRow{display:grid;justify-items:start;gap:2px}
+  .workflowBadge{margin:0 0 10px}
+  .setupActions{grid-template-columns:1fr;max-width:none}
+  .setupActionButton{min-height:72px}
+  .setupDialog{width:calc(100vw - 18px);max-height:calc(100dvh - 18px);border-radius:18px}
+  .setupDialogCard{max-height:calc(100dvh - 18px)}
+  .setupDialogHeader{padding:16px}
+  .setupDialogHeader h2{font-size:21px}
+  .setupDialogBody{max-height:calc(100dvh - 107px);padding:16px}
+  .progressSettings .inlineField{align-items:stretch;display:grid}
+  .progressSettings .inlineField>*{width:100%}
+  .employeeSetting summary{align-items:flex-start}
+}
