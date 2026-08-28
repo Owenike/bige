@@ -42,6 +42,7 @@ npx tsc `
   tests/staff-payroll.test.ts `
   tests/staff-performance-settlement.test.ts `
   tests/staff-performance-workflow.test.ts `
+  tests/staff-leave-self-service.test.ts `
   tests/student-membership-period.test.ts `
   tests/student-password-recovery-url.test.ts `
   tests/student-checkin-entry.test.ts `

@@ -36,6 +36,15 @@ const LABELS: Record<string, string> = {
   official: "公假",
   other: "其他假",
 };
+const SUBMIT_LEAVE_TYPES = [
+  "annual",
+  "sick",
+  "personal",
+  "marriage",
+  "bereavement",
+  "official",
+  "other",
+] as const;
 const PROOF_TYPES = new Set([
   "sick",
   "family_care",
@@ -195,7 +204,7 @@ export default function StaffLeaveSelfService() {
         <div>
           <h2>新增請假單</h2>
           <p>
-            特休只能整天；病假、事假可整天或半天；家庭照顧假可按小時；婚喪公假依實際期間。
+            特休只能整天；病假、事假可整天或半天；婚喪公假依實際期間。
           </p>
         </div>
         <div className={styles.fields}>
@@ -205,9 +214,9 @@ export default function StaffLeaveSelfService() {
               value={type}
               onChange={(event) => setType(event.target.value)}
             >
-              {Object.entries(LABELS).map(([value, label]) => (
+              {SUBMIT_LEAVE_TYPES.map((value) => (
                 <option value={value} key={value}>
-                  {label}
+                  {LABELS[value]}
                 </option>
               ))}
             </select>
