@@ -8,3 +8,123 @@
 .selectionHeader .selectionNotice{display:inline-flex;box-sizing:border-box;align-items:center;width:fit-content;max-width:100%;margin-top:9px;padding:7px 10px;border:1px solid transparent;border-radius:14px;font-size:12px;font-weight:800;line-height:1.5}.selectionNoticeOpen{color:#245ea9!important;border-color:#b7ceef!important;background:#edf5ff}.selectionNoticeClosed{color:#79530a!important;border-color:#dfbf6a!important;background:#fff7dd}
 @media(max-width:800px){.headerActions{display:grid;grid-template-columns:minmax(0,1.6fr) repeat(4,minmax(0,1fr));align-items:end;width:100%;gap:8px}.headerActions>*{min-width:0}.headerActions .monthField{width:auto}.monthControl,.headerActions a{width:100%;height:64px;min-height:64px;max-height:64px}.headerActions .monthControl input{padding:8px 6px}.headerActions .managerAction{grid-column:1/-1;width:100%;height:52px;min-height:52px;max-height:none}}
 @media(max-width:560px){.headerActions{grid-template-columns:128px repeat(4,minmax(0,1fr));gap:5px}.headerActions .monthControl input{padding:6px 4px;font-size:12px}.headerActions a{font-size:14px}.selectionHeader{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px}.selectionHeader>div:first-child{min-width:0}.counter{width:90px;height:90px;position:static;right:auto;justify-self:end}}
+
+/* Match the scheduling workspace to the manager operations visual language. */
+.page{
+  --schedule-gold:#d8b669;
+  --schedule-gold-bright:#f0d493;
+  --schedule-gold-line:rgba(221,189,118,.32);
+  --schedule-surface:rgba(8,14,23,.86);
+  --schedule-surface-soft:rgba(15,24,36,.86);
+  --schedule-line:rgba(148,177,196,.28);
+  --schedule-text:#f5f0e6;
+  --schedule-muted:#aebdca;
+  position:relative;
+  isolation:isolate;
+  color:var(--schedule-text);
+  color-scheme:dark;
+}
+.page::before{
+  position:fixed;
+  z-index:-1;
+  inset:0;
+  content:"";
+  background:
+    radial-gradient(circle at 8% -8%,rgba(213,178,100,.2),transparent 30%),
+    radial-gradient(circle at 92% 5%,rgba(46,101,118,.18),transparent 28%),
+    radial-gradient(circle at 52% 76%,rgba(173,126,49,.1),transparent 34%),
+    linear-gradient(145deg,#04070c 0%,#0a101a 48%,#05080f 100%);
+}
+.header{
+  border:1px solid var(--schedule-gold-line);
+  border-radius:22px;
+  background:linear-gradient(135deg,rgba(19,42,59,.92),rgba(8,14,23,.9));
+  box-shadow:0 24px 70px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.04);
+  padding:22px;
+}
+.header h1,.empty h2{color:#fffaf0}
+.header p,.kicker,.selectionHeader p,.publishedHeader p,.scheduleList p,.holidayBox p,.signPanel p,.signPanel li,.signedPanel p,.objectedPanel p,.empty p{color:var(--schedule-muted)}
+.eyebrow,.kicker{color:var(--schedule-gold-bright)}
+.headerActions label{color:#dcc57e}
+.monthControl,.headerActions a{
+  border-color:var(--schedule-line);
+  background:linear-gradient(180deg,rgba(22,30,42,.94),rgba(12,19,29,.94));
+  color:var(--schedule-text);
+  box-shadow:inset 0 1px rgba(255,255,255,.035);
+}
+.headerActions a:hover{
+  border-color:var(--schedule-gold);
+  background:linear-gradient(180deg,rgba(43,48,51,.98),rgba(19,25,32,.98));
+  color:var(--schedule-gold-bright);
+}
+.headerActions .monthField{width:148px}
+.headerActions .monthControl input{
+  color:#fff8e9;
+  font-size:16px;
+  font-weight:800;
+  letter-spacing:.01em;
+}
+.monthControl input::-webkit-calendar-picker-indicator{filter:invert(83%) sepia(38%) saturate(536%) hue-rotate(358deg) brightness(98%)}
+.selectionSection,.publishedHeader,.holidayBox,.signPanel,.signedPanel,.objectedPanel,.empty,.loading{
+  border-color:var(--schedule-gold-line);
+  background:linear-gradient(145deg,rgba(13,25,37,.96),rgba(7,13,22,.94));
+  box-shadow:0 24px 70px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.035);
+}
+.selectionHeader h2,.publishedHeader h2,.holidayBox h2,.signPanel h2,.signedPanel h2,.objectedPanel h2{color:#fff8e9}
+.counter{border-color:rgba(216,182,105,.46);background:rgba(10,20,31,.9);color:#fff8e9}
+.counterDone{border-color:#73d79a;background:rgba(18,71,47,.62);color:#d9ffe9}
+.legend{color:var(--schedule-muted)}
+.selectedMark{background:var(--schedule-gold)}
+.closureMark{background:#a8454e}
+.calendar{border-color:var(--schedule-line);background:rgba(6,12,20,.72)}
+.weekday{border-color:var(--schedule-line);background:rgba(18,29,42,.96);color:#dcc57e}
+.day,.blankDay{border-color:var(--schedule-line);background:rgba(11,19,29,.86);color:var(--schedule-text)}
+.day span{color:#8fa5b8}
+.day:hover:not(:disabled){border-color:var(--schedule-gold);background:rgba(49,43,29,.88);color:#fff3ca}
+.selectedDay{border-color:#f2d588!important;background:linear-gradient(145deg,#e6c46f,#b88431)!important;color:#17120a!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
+.selectedDay span{color:#31230e!important}
+.closureDay{border-color:#bc5660!important;background:linear-gradient(145deg,#6f2932,#40161d)!important;color:#ffe4e4!important}
+.closureDay span{color:#ffc7c9!important}
+.selectionNoticeOpen{border-color:#51799d!important;background:rgba(21,57,85,.72)!important;color:#d9edff!important}
+.selectionNoticeClosed{border-color:#b68c39!important;background:rgba(79,57,14,.74)!important;color:#ffe4a0!important}
+.selectionFooter{color:var(--schedule-muted)}
+.selectionFooter button,.saveButton,.signActions button:not(.objectionButton){
+  border-color:#f2d58d;
+  background:linear-gradient(135deg,#f6e4af 0%,#d9b45e 55%,#b98432 100%);
+  color:#1d1609;
+  box-shadow:0 10px 24px rgba(185,132,50,.22);
+}
+.selectionFooter button:hover,.saveButton:hover,.signActions button:not(.objectionButton):hover{filter:brightness(1.06)}
+.selectionFooter button:disabled{border-color:var(--schedule-line);background:rgba(41,50,61,.82);color:#758694;box-shadow:none}
+.statusBadge,.confirmCheck{border-color:var(--schedule-gold-line);background:rgba(216,182,105,.12);color:var(--schedule-gold-bright)}
+.scheduleList article{border-color:var(--schedule-line);background:rgba(14,23,34,.9)}
+.scheduleList article h3{color:#fff8e9}
+.scheduleList .offEntry{border-color:#a84a52;background:rgba(94,31,39,.75)}
+.scheduleList .offEntry h3{color:#ffd5d8}
+.scheduleList .earlyEntry{border-color:#b16f30;background:rgba(97,53,17,.72)}
+.scheduleList .earlyEntry h3{color:#ffdaaa}
+.scheduleList .lateEntry{border-color:#4778aa;background:rgba(25,58,94,.76)}
+.scheduleList .lateEntry h3{color:#d9eaff}
+.holidayBox>div{border-color:var(--schedule-line);background:rgba(12,20,30,.88)}
+.holidayBox strong,.holidayBox b,.publishedHeader strong{color:#fff8e9}
+.signaturePad>div{color:var(--schedule-muted)}
+.signaturePad button{color:var(--schedule-gold-bright)}
+.signaturePad canvas{border-color:#6f7f8d;background:#fff}
+.signActions .objectionButton{border-color:#a9585e;background:rgba(96,31,37,.78);color:#ffd8da}
+.objectionForm{background:rgba(72,27,32,.78)}
+.objectionForm textarea{border-color:#98535a;background:rgba(19,13,18,.92);color:#fff1f2}
+.signedPanel{border-color:#3d9769;background:linear-gradient(145deg,rgba(18,68,47,.92),rgba(8,30,23,.94))}
+.objectedPanel{border-color:#a84a52;background:linear-gradient(145deg,rgba(91,31,38,.92),rgba(36,14,19,.94))}
+.notice{border-color:#aa8237;background:rgba(73,52,13,.88);color:#ffe3a0}
+.error{border-color:#a84a52;background:rgba(83,27,34,.9);color:#ffd9dc}
+.page button:focus-visible,.page a:focus-visible,.page input:focus-visible,.page textarea:focus-visible{outline:3px solid rgba(240,212,147,.62);outline-offset:2px}
+@media(max-width:800px){
+  .header{padding:18px}
+  .headerActions{grid-template-columns:minmax(148px,1.6fr) repeat(4,minmax(0,1fr))}
+  .headerActions .monthField{width:auto}
+}
+@media(max-width:560px){
+  .header{padding:14px;border-radius:18px}
+  .headerActions{grid-template-columns:145px repeat(4,minmax(0,1fr))}
+  .headerActions .monthControl input{padding:6px 8px;font-size:15px}
+}

@@ -295,6 +295,10 @@ test("staff self-service leave picker keeps its mobile layout and selection disp
   assert.match(styles, /grid-template-columns:128px repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(styles, /\.selectionHeader\{display:grid;grid-template-columns:minmax\(0,1fr\) auto/);
   assert.match(styles, /\.counter\{width:90px;height:90px;position:static/);
+  assert.match(styles, /--schedule-gold:#d8b669/);
+  assert.match(styles, /\.page::before\{[\s\S]*?linear-gradient\(145deg,#04070c 0%,#0a101a 48%,#05080f 100%\)/);
+  assert.match(styles, /\.headerActions \.monthControl input\{[\s\S]*?font-size:16px;[\s\S]*?font-weight:800/);
+  assert.match(styles, /grid-template-columns:145px repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(layout, /<span>巨挺健身館 BigE｜器械皮拉提斯・重量訓練・運動按摩｜<\/span>[\s\S]*?<span>高雄市仁武區八德北路728號｜0972-484686<\/span>/);
   assert.match(globalStyles, /\.footerTagline span\{\s*display: block;/);
 });
@@ -379,6 +383,10 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(printStyles, /\.off \{\s*background: #fee2e2;/);
   assert.match(printStyles, /\.early \{\s*background: #ffedd5;/);
   assert.match(printStyles, /\.late \{\s*background: #dbeafe;/);
+  assert.match(styles, /--schedule-manager-gold:#d8b669/);
+  assert.match(styles, /\.monthField input\{font-size:16px;font-weight:800/);
+  assert.match(styles, /\.scheduleTable \.offCell\{background:rgba\(94,31,39,\.88\)\}/);
+  assert.match(printStyles, /@media print \{[\s\S]*?color-scheme: light;/);
   assert.match(exportSource, /fgColor: \{ argb: "FFFEE2E2" \}/);
   assert.match(selfSource, /styles\.earlyEntry/);
   assert.match(selfSource, /styles\.lateEntry/);

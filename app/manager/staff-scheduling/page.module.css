@@ -107,3 +107,127 @@
   .scheduleTable .nameCell{width:220px;min-width:220px}
   .preferenceSummary{grid-template-columns:1fr}
 }
+
+/* Premium operations theme shared with the member and contract workspace. */
+.page{
+  --schedule-manager-gold:#d8b669;
+  --schedule-manager-gold-bright:#f0d493;
+  --schedule-manager-gold-line:rgba(221,189,118,.32);
+  --schedule-manager-surface:rgba(8,14,23,.88);
+  --schedule-manager-surface-soft:rgba(15,24,36,.9);
+  --schedule-manager-line:rgba(148,177,196,.28);
+  --schedule-manager-text:#f5f0e6;
+  --schedule-manager-muted:#aebdca;
+  position:relative;
+  isolation:isolate;
+  color:var(--schedule-manager-text);
+  color-scheme:dark;
+}
+.page::before{
+  position:fixed;
+  z-index:-1;
+  inset:0;
+  content:"";
+  background:
+    radial-gradient(circle at 8% -8%,rgba(213,178,100,.2),transparent 30%),
+    radial-gradient(circle at 92% 5%,rgba(46,101,118,.18),transparent 28%),
+    radial-gradient(circle at 52% 76%,rgba(173,126,49,.1),transparent 34%),
+    linear-gradient(145deg,#04070c 0%,#0a101a 48%,#05080f 100%);
+}
+.header,.panel,.stats article{
+  border-color:var(--schedule-manager-gold-line);
+  background:linear-gradient(145deg,rgba(15,31,45,.95),rgba(7,13,22,.94));
+  box-shadow:0 24px 70px rgba(0,0,0,.3),inset 0 1px rgba(255,255,255,.035);
+}
+.header h1,.panel h2,.employeeSetting h3,.holidayPanel h2,.rulePanel h2,.approvalPanel h2,.stats strong,.loadFailure h2{color:#fff8e9}
+.header p,.panel p,.employeeSetting p,.holidayPanel p,.rulePanel p,.approvalPanel p,.stats span,.loadFailure p{color:var(--schedule-manager-muted)}
+.headerActions label,.field label,.settingFields label,.filterBar label,.eyebrow{color:#dcc57e}
+.monthField,.monthField input,.field input,.field select,.inlineField input,.settingFields input,.settingFields select,.filterBar input,.filterBar select,.holidayActions select,.holidayRuleRow select,.objectionRow textarea{
+  border-color:var(--schedule-manager-line);
+  background:linear-gradient(180deg,rgba(20,29,41,.96),rgba(10,17,27,.96));
+  color:var(--schedule-manager-text);
+}
+.monthField input{font-size:16px;font-weight:800;letter-spacing:.01em}
+.monthField input::-webkit-calendar-picker-indicator{filter:invert(83%) sepia(38%) saturate(536%) hue-rotate(358deg) brightness(98%)}
+.primaryButton{
+  border-color:#f2d58d;
+  background:linear-gradient(135deg,#f6e4af 0%,#d9b45e 55%,#b98432 100%);
+  color:#1d1609;
+  box-shadow:0 10px 24px rgba(185,132,50,.22);
+}
+.primaryButton:hover{filter:brightness(1.06)}
+.secondaryButton,.headerActions a,.actionRow button:not(.primaryButton):not(.dangerButton),.toolbar button:not(.primaryButton):not(.dangerButton){
+  border-color:var(--schedule-manager-line);
+  background:linear-gradient(180deg,rgba(22,30,42,.94),rgba(12,19,29,.94));
+  color:var(--schedule-manager-text);
+}
+.secondaryButton:hover,.headerActions a:hover,.actionRow button:not(.primaryButton):not(.dangerButton):hover,.toolbar button:not(.primaryButton):not(.dangerButton):hover{border-color:var(--schedule-manager-gold);color:var(--schedule-manager-gold-bright)}
+.dangerButton{border-color:#a84a52;background:linear-gradient(180deg,#8b343e,#5d2028);color:#fff1f2}
+.stats .warnStat{border-color:#a67c31!important;background:linear-gradient(145deg,rgba(86,59,13,.92),rgba(42,29,9,.94))!important}
+.stats .blockStat{border-color:#a84a52!important;background:linear-gradient(145deg,rgba(86,29,36,.92),rgba(42,13,18,.94))!important}
+.employeeSetting,.filterBar,.preferenceSummary,.shiftPalette,.holidayGroup,.ruleItem,.approvalItem,.objectionRow,.reminderBox,.successBox,.placeholder,.loading,.emptyPanel{
+  border-color:var(--schedule-manager-line);
+  background:rgba(10,18,28,.82);
+  color:var(--schedule-manager-text);
+}
+.employeeSetting summary{color:#fff8e9}
+.employeeSetting summary small,.gridHelp,.deadline,.hint,.holidayIntro,.holidayEmployee small{color:var(--schedule-manager-muted)}
+.employeeSetting[open]{background:rgba(13,24,36,.9)}
+.settingFields,.preferenceSummary{border-color:var(--schedule-manager-line)}
+.preferenceSummary span,.preferenceSummary strong{color:var(--schedule-manager-text)}
+.preferenceSummary b,.filterBar strong{color:var(--schedule-manager-gold-bright)}
+.step{background:rgba(216,182,105,.18);color:var(--schedule-manager-gold-bright)}
+.shiftPalette>strong{color:var(--schedule-manager-muted)}
+.shiftPalette>button{
+  border-color:var(--schedule-manager-line);
+  background:linear-gradient(180deg,rgba(22,31,43,.96),rgba(11,18,28,.96));
+  color:var(--schedule-manager-text);
+  box-shadow:inset 0 1px rgba(255,255,255,.035);
+}
+.shiftPalette>button:hover{border-color:var(--schedule-manager-gold);box-shadow:0 8px 20px rgba(0,0,0,.2)}
+.shiftPalette>button.restorePaletteButton{border-color:#718292;background:rgba(18,27,39,.92)}
+.shiftPalette>button.restorePaletteButton span{background:#344152;color:#e5edf5}
+.shiftPalette>button.dayOffPaletteButton{border-color:#a84a52;background:rgba(76,27,34,.86)}
+.shiftPalette>button.dayOffPaletteButton span{background:#7f3039;color:#ffe1e3}
+.scheduleScroller{border-color:var(--schedule-manager-line);background:rgba(5,10,17,.88);scrollbar-color:var(--schedule-manager-gold) rgba(10,17,27,.9)}
+.scheduleTable{color:var(--schedule-manager-text)}
+.scheduleTable th,.scheduleTable td{border-color:rgba(126,151,171,.24)}
+.scheduleTable thead th,.scheduleTable tfoot th,.scheduleTable tfoot td{background:#152332;color:#e8eef3}
+.weekend{background:#3a2024!important;color:#ffb9b5}
+.scheduleTable .nameCell{background:#101d2a;color:#fff8e9}
+.scheduleTable .nameCell small{color:#91a4b5}
+.scheduleTable .workCell{background:rgba(12,21,32,.94)}
+.scheduleTable .workCell span{color:#dce6ee}
+.scheduleTable tbody tr:hover td.workCell:not(.offCell):not(.earlyShiftCell):not(.lateShiftCell){background:rgba(30,45,60,.96)!important}
+.scheduleTable tbody tr:hover .nameCell{background:#192b3b!important}
+.scheduleTable .offCell{background:rgba(94,31,39,.88)}
+.scheduleTable .offCell strong{color:#ffd5d8}
+.scheduleTable .earlyShiftCell{background:rgba(97,53,17,.86)}
+.scheduleTable .earlyShiftCell span{color:#ffdaaa}
+.scheduleTable .lateShiftCell{background:rgba(25,58,94,.88)}
+.scheduleTable .lateShiftCell span{color:#d9eaff}
+.scheduleTable tbody tr:hover td.earlyShiftCell{background:rgba(123,69,22,.94)}
+.scheduleTable tbody tr:hover td.lateShiftCell{background:rgba(31,75,119,.96)}
+.leaveBalances i{border:1px solid rgba(216,182,105,.38);background:rgba(216,182,105,.13);color:var(--schedule-manager-gold-bright)}
+.holidayPanel{border-color:#a84a52;background:linear-gradient(145deg,rgba(70,25,31,.94),rgba(27,11,16,.94))}
+.holidayGroup{border-color:rgba(207,99,105,.46);background:rgba(42,17,22,.82)}
+.holidayGroupHeader{border-color:rgba(207,99,105,.34);background:rgba(74,28,34,.92)}
+.holidayGroupHeader strong{color:#ffd5d8}
+.holidayGroupHeader small{color:#d7b0b3}
+.holidayGroupHeader>span{border-color:#a84a52;background:rgba(31,13,17,.78);color:#ffd5d8}
+.holidayRuleRow,.ruleBlock,.ruleWarn,.approvalRow{border-color:var(--schedule-manager-line)}
+.holidayOr,.holidayActions span{color:#d7b0b3}
+.holidayChips>span{border-color:#9f7934;background:rgba(81,57,14,.76);color:#ffe3a0}
+.holidayChips button{color:#ffb9b5}
+.rulePanel{border-color:#a67c31;background:linear-gradient(145deg,rgba(68,49,15,.92),rgba(31,23,10,.94))}
+.approvalPanel{border-color:#3c7b8c;background:linear-gradient(145deg,rgba(17,48,61,.92),rgba(8,23,31,.94))}
+.approvalPanel .step{background:rgba(216,182,105,.18);color:var(--schedule-manager-gold-bright)}
+.blockingBadge{background:#8f3039;color:#fff0f1}
+.notice,.reminderBox{border-color:#a67c31;background:rgba(73,52,13,.88);color:#ffe3a0}
+.error{border-color:#a84a52;background:rgba(83,27,34,.9);color:#ffd9dc}
+.successBox{border-color:#3d9769;background:rgba(18,68,47,.86);color:#d9ffe9}
+.legacyDraftWarning{border-color:#a67c31!important;background:rgba(73,52,13,.88)!important;color:#ffe3a0!important}
+.notice button{background:rgba(216,182,105,.16);color:inherit}
+.emptyPanel h2{color:#fff8e9}
+.page button:focus-visible,.page a:focus-visible,.page input:focus-visible,.page select:focus-visible,.page textarea:focus-visible{outline:3px solid rgba(240,212,147,.62);outline-offset:2px}
+@media(max-width:760px){.monthField input{font-size:15px}}
