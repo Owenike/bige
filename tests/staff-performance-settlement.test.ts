@@ -55,14 +55,57 @@ test("each qualifying new or renewal contract receives one threshold EPO", () =>
 
 test("daily top uses pre-allocation actual receipts, excludes refunds, and exposes ties", () => {
   const top = evaluateDailyTop([
-    { employeeId: "a", amount: 50_000 },
-    { employeeId: "a", amount: 20_000 },
-    { employeeId: "b", amount: 70_000 },
-    { employeeId: "c", amount: 200_000, refunded: true },
+    { employeeId: "a", amount: 50_000, sourceType: "fa", contractId: "contract-a", contractSessions: 24 },
+    { employeeId: "a", amount: 20_000, sourceType: "final_payment", contractId: "contract-a", contractSessions: 24 },
+    { employeeId: "b", amount: 70_000, sourceType: "renewal", contractId: "contract-b", contractSessions: 24 },
+    { employeeId: "c", amount: 200_000, sourceType: "fa", contractId: "contract-c", contractSessions: 72, refunded: true },
   ]);
   assert.equal(top.status, "tie");
   assert.equal(top.amount, 70_000);
   assert.deepEqual(top.candidateEmployeeIds, ["a", "b"]);
+  assert.equal(top.totals.find((item) => item.employeeId === "a")?.sessions, 24);
+});
+
+test("daily top combines separate orders toward the 24-session and 38112 amount thresholds", () => {
+  const top = evaluateDailyTop([
+    { employeeId: "a", amount: 20_000, sourceType: "fa", contractId: "contract-a-1", contractSessions: 12 },
+    { employeeId: "a", amount: 18_112, sourceType: "renewal", contractId: "contract-a-2", contractSessions: 12 },
+    { employeeId: "b", amount: 37_000, sourceType: "fa", contractId: "contract-b", contractSessions: 24 },
+  ]);
+  assert.equal(top.status, "unique");
+  assert.equal(top.amount, 38_112);
+  assert.deepEqual(top.candidateEmployeeIds, ["a"]);
+  assert.deepEqual(top.totals[0], { employeeId: "a", amount: 38_112, sessions: 24, eligible: true });
+});
+
+test("daily top does not double-count sessions for split payments on the same order", () => {
+  const top = evaluateDailyTop([
+    { employeeId: "a", amount: 20_000, sourceType: "fa", contractId: "contract-a", contractSessions: 12 },
+    { employeeId: "a", amount: 20_000, sourceType: "final_payment", contractId: "contract-a", contractSessions: 12 },
+  ]);
+  assert.equal(top.status, "none");
+  assert.equal(top.amount, 40_000);
+  assert.deepEqual(top.candidateEmployeeIds, []);
+  assert.equal(top.totals[0].sessions, 12);
+});
+
+test("a final payment from an earlier order does not count as sessions opened today", () => {
+  const top = evaluateDailyTop([
+    { employeeId: "a", amount: 40_000, sourceType: "final_payment", contractId: "contract-a", contractSessions: 24 },
+  ]);
+  assert.equal(top.status, "none");
+  assert.equal(top.amount, 40_000);
+  assert.equal(top.totals[0].sessions, 0);
+});
+
+test("daily top is withheld when the highest performer misses either eligibility threshold", () => {
+  const top = evaluateDailyTop([
+    { employeeId: "a", amount: 50_000, sourceType: "fa", contractId: "contract-a", contractSessions: 12 },
+    { employeeId: "b", amount: 45_000, sourceType: "fa", contractId: "contract-b", contractSessions: 24 },
+  ]);
+  assert.equal(top.status, "none");
+  assert.equal(top.amount, 50_000);
+  assert.deepEqual(top.candidateEmployeeIds, []);
 });
 
 test("session-load EPO counts only completed PT sessions supplied to the shift classifier", () => {

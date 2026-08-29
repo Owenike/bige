@@ -111,6 +111,12 @@ test("manager workbench presents EPO rules inside the EPO decision dialog", () =
   assert.match(dashboard, /showEpoRules \? <div id="epo-rules-panel"/);
   assert.doesNotMatch(dashboard, /setActiveModal\("epoRules"\)/);
   assert.match(dashboard, /每日數字最高/);
+  assert.match(dashboard, /當日開單合計達 <b>24 堂以上<\/b>/);
+  assert.match(dashboard, /成交金額合計達 <b>NT\$38,112 以上<\/b>/);
+  assert.match(dashboard, /多張開單可合併計算/);
+  const epoSync = readFileSync("lib/staff-epo-sync.ts", "utf8");
+  assert.match(epoSync, /sourceType: event\.source_type,[\s\S]*contractId: event\.contract_id[\s\S]*contractSessions: event\.contract_sessions/);
+  assert.match(epoSync, /sourceFingerprint = fingerprint\(\{[\s\S]*ruleVersion: STAFF_EPO_RULE_VERSION,[\s\S]*minimumContractSessions: DAILY_TOP_MIN_SESSIONS/);
   assert.match(dashboard, /上班時間內滿 <b>6 堂<\/b>，且上班時間外再滿 <b>2 堂<\/b>/);
   assert.match(dashboard, /上班時間內滿 <b>3 堂<\/b>，且上班時間外再滿 <b>1 堂<\/b>/);
   assert.match(dashboard, /自第 <b>6 張證照<\/b>起/);

@@ -952,7 +952,7 @@ export default function StaffPerformanceDashboard({
                     <div className={styles.epoRuleGrid}>
                       <article>
                         <div className={styles.epoRuleHeading}><span>01</span><h3>每日數字最高</h3><b>＋1 EPO</b></div>
-                        <p>當日數字排名最高者獲得。</p>
+                        <p>當日數字排名第一，且當日開單合計達 <b>24 堂以上</b>、成交金額合計達 <b>NT$38,112 以上</b>，方可獲得；多張開單可合併計算。</p>
                       </article>
                       <article>
                         <div className={styles.epoRuleHeading}><span>02</span><h3>額外上課達標</h3><b>＋1 EPO</b></div>
@@ -991,13 +991,13 @@ export default function StaffPerformanceDashboard({
                     <button className={styles.primary} disabled={busy || !epoEmployeeId || !epoReason.trim()} onClick={() => void addEpo()}>加入 EPO</button>
                   </div> : null}
 
-                  {topStates.length ? <details className={styles.detailGroup} open={topStates.some((top) => top.status === "tie_pending" || top.status === "assistant_selected")}><summary><span><b>每日數字最高</b><small>依分配前的當日實收計算</small></span><strong>{topStates.length} 筆</strong></summary><div className={styles.decisionList}>{topStates.map((top) => <article key={top.id}>
+                  {topStates.length ? <details className={styles.detailGroup} open={topStates.some((top) => top.status === "tie_pending" || top.status === "assistant_selected")}><summary><span><b>每日數字最高</b><small>依分配前當日實收排名，並須達 24 堂／NT$38,112</small></span><strong>{topStates.length} 筆</strong></summary><div className={styles.decisionList}>{topStates.map((top) => <article key={top.id}>
                     <div><strong>{top.business_date}｜最高實收 {money(top.top_amount)}</strong><small>{top.adjustment_business_date !== top.business_date ? `本次因 ${top.adjustment_business_date} 退款重算` : "依原始成交數字計算"}</small></div>
                     <div className={styles.candidates}>{top.candidate_employee_ids.length ? top.candidate_employee_ids.map((employeeId) => {
                       const selected = top.selected_employee_id === employeeId;
                       const canChoose = data.actor.canManageEpo && !reportConfirmed && (top.status === "tie_pending" || data.actor.canApprove);
                       return <button key={employeeId} className={selected ? styles.primary : ""} disabled={busy || !canChoose} onClick={() => { if (window.confirm(`確認選擇 ${coachName(employeeId)} 取得 ${top.business_date} 每日最高 1 EPO？`)) void act("select_daily_top", { originalBusinessDate: top.business_date, employeeId }, data.actor.canApprove ? "每日最高 EPO 已由經理決定" : "每日最高 EPO 已送經理覆核"); }}>{coachName(employeeId)}{selected ? " ✓" : ""}</button>;
-                    }) : <span>當日沒有符合的實收資料</span>}</div>
+                    }) : <span>{top.top_amount > 0 ? "當日最高者未達 24 堂／NT$38,112 雙門檻" : "當日沒有符合的實收資料"}</span>}</div>
                     <span className={styles.status}>{top.status === "tie_pending" ? "同額待決定" : top.status === "assistant_selected" ? "副理已選，待經理" : top.status === "manager_selected" ? "經理已決定" : top.status === "auto_selected" ? "單獨第一，自動取得" : "無得主"}</span>
                   </article>)}</div></details> : null}
 

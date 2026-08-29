@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import {
   classifyCompletedSessionsAgainstShift,
   contractThresholdEpoRule,
+  DAILY_TOP_MIN_AMOUNT,
+  DAILY_TOP_MIN_SESSIONS,
   evaluateDailyTop,
   sessionLoadEpoRule,
   STAFF_EPO_RULE_VERSION,
@@ -127,9 +129,17 @@ async function reconcileDailyTop(params: {
   const top = evaluateDailyTop(events.map((event: any) => ({
     employeeId: event.origin_employee_id ? String(event.origin_employee_id) : null,
     amount: Number(event.amount),
+    sourceType: event.source_type,
+    contractId: event.contract_id ? String(event.contract_id) : null,
+    contractSessions: event.contract_sessions == null ? null : Number(event.contract_sessions),
     refunded: event.metadata?.paymentStatus === "refunded" || event.metadata?.paymentStatus === "voided",
   })));
-  const sourceFingerprint = fingerprint(top.totals);
+  const sourceFingerprint = fingerprint({
+    ruleVersion: STAFF_EPO_RULE_VERSION,
+    minimumContractSessions: DAILY_TOP_MIN_SESSIONS,
+    minimumReceivedAmount: DAILY_TOP_MIN_AMOUNT,
+    totals: top.totals,
+  });
   const stateResult = await params.admin.from("staff_epo_daily_top_states").select("*")
     .eq("tenant_id", params.tenantId).eq("business_date", params.originalBusinessDate).maybeSingle();
   if (stateResult.error) throw new Error(stateResult.error.message);
@@ -211,6 +221,8 @@ async function reconcileDailyTop(params: {
 
   if (selectedEmployeeId && !state.active_award_id) {
     const isAdjustment = params.adjustmentBusinessDate !== params.originalBusinessDate || Boolean(old);
+    const selectedTotal = top.totals.find((item) => item.employeeId === selectedEmployeeId);
+    const selectedSessions = selectedTotal?.sessions || 0;
     const award = await insertAward(params.admin, {
       tenant_id: params.tenantId,
       branch_id: params.branchId,
@@ -218,8 +230,8 @@ async function reconcileDailyTop(params: {
       employee_id: selectedEmployeeId,
       quantity: 1,
       reason: isAdjustment
-        ? `退單重算補發｜${params.originalBusinessDate} 每日數字最高 ${top.amount}`
-        : `每日數字最高｜分配前實收 ${top.amount}`,
+        ? `退單重算補發｜${params.originalBusinessDate} 每日數字最高 ${selectedSessions} 堂／${top.amount}`
+        : `每日數字最高｜當日 ${selectedSessions} 堂／分配前實收 ${top.amount}`,
       status: status === "assistant_selected" ? "assistant_proposed" : "manager_approved",
       proposed_by: state.decision_by || params.actorId,
       reviewed_by: status === "manager_selected" ? state.decision_by || params.actorId : null,
@@ -231,6 +243,9 @@ async function reconcileDailyTop(params: {
         originalBusinessDate: params.originalBusinessDate,
         adjustmentBusinessDate: params.adjustmentBusinessDate,
         preAllocationReceivedAmount: top.amount,
+        dailyContractSessions: selectedSessions,
+        minimumContractSessions: DAILY_TOP_MIN_SESSIONS,
+        minimumReceivedAmount: DAILY_TOP_MIN_AMOUNT,
         candidateEmployeeIds: candidates,
         sourceFingerprint,
       },

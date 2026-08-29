@@ -1,5 +1,7 @@
 export const STAFF_PERFORMANCE_ALLOCATION_VERSION = "bige-sales-allocation-2026-08-v2";
-export const STAFF_EPO_RULE_VERSION = "bige-epo-2026-08-v1";
+export const STAFF_EPO_RULE_VERSION = "bige-epo-2026-08-v2";
+export const DAILY_TOP_MIN_SESSIONS = 24;
+export const DAILY_TOP_MIN_AMOUNT = 38_112;
 
 export type SalesSourceType = "fa" | "bb" | "renewal" | "final_payment" | "refund" | "manual_adjustment";
 
@@ -107,21 +109,50 @@ export function contractThresholdEpoRule(params: {
 export function evaluateDailyTop(receipts: Array<{
   employeeId: string | null;
   amount: number;
+  sourceType: SalesSourceType;
+  contractId?: string | null;
+  contractSessions?: number | null;
   refunded?: boolean;
 }>) {
-  const totals = new Map<string, number>();
+  const totals = new Map<string, {
+    cents: number;
+    contractSessions: Map<string, number>;
+  }>();
   for (const receipt of receipts) {
     if (!receipt.employeeId || receipt.refunded || receipt.amount <= 0) continue;
-    totals.set(receipt.employeeId, (totals.get(receipt.employeeId) || 0) + toCents(receipt.amount));
+    const total = totals.get(receipt.employeeId) || { cents: 0, contractSessions: new Map<string, number>() };
+    total.cents += toCents(receipt.amount);
+    const contractId = receipt.contractId?.trim();
+    const sessions = Math.max(0, Math.floor(Number(receipt.contractSessions || 0)));
+    const opensContract = ["fa", "renewal"].includes(receipt.sourceType);
+    if (opensContract && contractId && sessions > 0) {
+      total.contractSessions.set(contractId, Math.max(total.contractSessions.get(contractId) || 0, sessions));
+    }
+    totals.set(receipt.employeeId, total);
   }
   const ranked = [...totals.entries()]
-    .map(([employeeId, cents]) => ({ employeeId, amount: fromCents(cents) }))
+    .map(([employeeId, total]) => {
+      const amount = fromCents(total.cents);
+      const sessions = [...total.contractSessions.values()].reduce((sum, value) => sum + value, 0);
+      return {
+        employeeId,
+        amount,
+        sessions,
+        eligible: sessions >= DAILY_TOP_MIN_SESSIONS && amount >= DAILY_TOP_MIN_AMOUNT,
+      };
+    })
     .sort((left, right) => right.amount - left.amount || left.employeeId.localeCompare(right.employeeId));
   if (!ranked.length) return { status: "none" as const, amount: 0, candidateEmployeeIds: [] as string[], totals: ranked };
   const amount = ranked[0].amount;
-  const candidateEmployeeIds = ranked.filter((item) => item.amount === amount).map((item) => item.employeeId);
+  const candidateEmployeeIds = ranked
+    .filter((item) => item.amount === amount && item.eligible)
+    .map((item) => item.employeeId);
   return {
-    status: candidateEmployeeIds.length === 1 ? "unique" as const : "tie" as const,
+    status: candidateEmployeeIds.length === 0
+      ? "none" as const
+      : candidateEmployeeIds.length === 1
+        ? "unique" as const
+        : "tie" as const,
     amount,
     candidateEmployeeIds,
     totals: ranked,
