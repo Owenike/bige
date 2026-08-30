@@ -81,7 +81,7 @@
 }
 
 .page > header h1 {
-  margin: 5px 0;
+  margin: 5px 0 0;
   color: #fffaf0;
   font-size: clamp(34px, 4vw, 48px);
   font-weight: 540;
@@ -128,10 +128,22 @@
   text-decoration: none;
 }
 
-.page > header a:hover {
-  color: #f8fbfd;
-  border-color: rgba(185, 218, 240, 0.46);
-  background: linear-gradient(180deg, rgba(32, 47, 63, 0.9), rgba(12, 21, 31, 0.9));
+.page > header .scheduleLink {
+  color: #21180a;
+  border-color: rgba(255, 232, 181, 0.86);
+  background: linear-gradient(135deg, var(--leave-gold-bright) 0%, var(--leave-gold) 57%, #b98434 100%);
+  box-shadow:
+    0 8px 24px rgba(181, 131, 43, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+.page > header .scheduleLink:hover {
+  color: #171006;
+  border-color: #ffedc0;
+  background: linear-gradient(135deg, #fff0c6 0%, #e5c16f 57%, #c4903f 100%);
+  box-shadow:
+    0 10px 28px rgba(181, 131, 43, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
   text-decoration: none;
 }
 
@@ -186,9 +198,48 @@
   font-weight: 700;
 }
 
-.form p {
-  margin: 7px 0 18px;
-  line-height: 1.6;
+.leaveRule {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid rgba(242, 210, 139, 0.48);
+  border-radius: 12px;
+  margin: 12px 0 18px;
+  background:
+    linear-gradient(110deg, rgba(218, 177, 83, 0.18), transparent 72%),
+    rgba(59, 43, 16, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 239, 199, 0.1),
+    0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.leaveRuleIcon {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: #1c1408;
+  background: var(--leave-gold-bright);
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1;
+  box-shadow: 0 0 18px rgba(235, 201, 126, 0.2);
+}
+
+.leaveRule strong {
+  display: block;
+  color: #f7dea4;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.leaveRule p {
+  margin: 3px 0 0;
+  color: rgba(247, 242, 230, 0.92);
+  line-height: 1.65;
 }
 
 .fields {

@@ -187,7 +187,6 @@ export default function StaffLeaveSelfService() {
         <div>
           <p>巨挺健身館 · 員工專區</p>
           <h1>請假申請</h1>
-          <span>這裡的法定請假不受每月自選 8 天限制。</span>
         </div>
         <div>
           <input
@@ -195,7 +194,9 @@ export default function StaffLeaveSelfService() {
             value={month}
             onChange={(event) => setMonth(event.target.value)}
           />
-          <a href="/staff/schedule">我的班表</a>
+          <a className={styles.scheduleLink} href="/staff/schedule">
+            我的班表
+          </a>
         </div>
       </header>
       {error ? <div className={styles.error}>{error}</div> : null}
@@ -203,9 +204,17 @@ export default function StaffLeaveSelfService() {
       <form className={styles.form} onSubmit={submit}>
         <div>
           <h2>新增請假單</h2>
-          <p>
-            特休只能整天；病假、事假可整天或半天；婚喪公假依實際期間。
-          </p>
+          <aside className={styles.leaveRule} aria-label="請假時間規則">
+            <span className={styles.leaveRuleIcon} aria-hidden="true">
+              !
+            </span>
+            <div>
+              <strong>請假時間規則</strong>
+              <p>
+                特休只能整天；病假、事假可整天或半天；婚喪公假依實際期間。
+              </p>
+            </div>
+          </aside>
         </div>
         <div className={styles.fields}>
           <label>

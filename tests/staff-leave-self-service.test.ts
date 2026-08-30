@@ -26,6 +26,17 @@ test("family care hourly copy is removed from the employee leave form", () => {
   );
 });
 
+test("leave page highlights navigation and leave timing rules without the monthly-limit copy", () => {
+  assert.doesNotMatch(component, /這裡的法定請假不受每月自選 8 天限制/);
+  assert.match(
+    component,
+    /<a className=\{styles\.scheduleLink\} href="\/staff\/schedule">/,
+  );
+  assert.match(component, /<aside className=\{styles\.leaveRule\} aria-label="請假時間規則">/);
+  assert.match(styles, /\.page > header \.scheduleLink\s*\{[\s\S]*?var\(--leave-gold-bright\)/);
+  assert.match(styles, /\.leaveRule\s*\{[\s\S]*?rgba\(242, 210, 139, 0\.48\)/);
+});
+
 test("leave page uses the member and contracts M2-A visual language responsively", () => {
   assert.match(styles, /linear-gradient\(112deg, #183149 0%, #172b3c 45%, #202832 72%, #454542 100%\)/);
   assert.match(styles, /--leave-ice-line:\s*rgba\(177, 218, 244, 0\.38\)/);
