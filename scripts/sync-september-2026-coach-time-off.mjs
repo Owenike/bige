@@ -20,6 +20,7 @@ export const TIME_OFF_DAYS_BY_COACH = Object.freeze({
   Hailey: Object.freeze([6, 13, 14, 19, 20, 24, 29]),
   Lily: Object.freeze([1, 2, 4, 9, 14, 16, 26, 27, 28]),
   Bae: Object.freeze([1, 4, 8, 11, 15, 18, 22, 25, 26, 27, 28]),
+  Owen: Object.freeze([4, 6, 29, 30]),
 });
 
 const EXPECTED_COACHES = Object.freeze(Object.keys(TIME_OFF_DAYS_BY_COACH));

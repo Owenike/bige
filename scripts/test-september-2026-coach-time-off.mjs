@@ -17,19 +17,24 @@ const expectedDays = {
   Hailey: [6, 13, 14, 19, 20, 24, 29],
   Lily: [1, 2, 4, 9, 14, 16, 26, 27, 28],
   Bae: [1, 4, 8, 11, 15, 18, 22, 25, 26, 27, 28],
+  Owen: [4, 6, 29, 30],
 };
 
 assert.deepEqual(TIME_OFF_DAYS_BY_COACH, expectedDays);
 assert.equal(BUSINESS_CLOSURE_DATE, "2026-09-05");
 
 const plan = expectedTimeOffPlan();
-assert.equal(plan.length, 62);
-assert.equal(new Set(plan.map((item) => item.importRowKey)).size, 62);
+assert.equal(plan.length, 66);
+assert.equal(new Set(plan.map((item) => item.importRowKey)).size, 66);
 assert.equal(plan.every((item) => item.importRowKey.startsWith(`${IMPORT_PREFIX}:`)), true);
 assert.equal(plan.some((item) => item.date === BUSINESS_CLOSURE_DATE), false);
 assert.deepEqual(
   plan.filter((item) => item.coach === "Becky").map((item) => Number(item.date.slice(-2))),
   expectedDays.Becky,
+);
+assert.deepEqual(
+  plan.filter((item) => item.coach === "Owen").map((item) => Number(item.date.slice(-2))),
+  expectedDays.Owen,
 );
 
 const coaches = new Map(
@@ -39,7 +44,7 @@ const coaches = new Map(
   ]),
 );
 const rows = buildTimeOffRows({ tenantId: "tenant-1", branchId: "branch-1", coaches });
-assert.equal(rows.length, 62);
+assert.equal(rows.length, 66);
 assert.equal(rows.every((row) => row.content === "休"), true);
 assert.equal(rows.every((row) => row.source === IMPORT_SOURCE), true);
 assert.equal(rows.every((row) => row.starts_at.endsWith("T00:00:00+08:00")), true);
