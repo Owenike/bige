@@ -6,6 +6,7 @@ import {
   assertValidPreferenceDates,
   buildSelectionWindow,
   generateMonthlySchedule,
+  isConfiguredPreferenceWindowOpen,
   isSharedFrontdeskScheduleAccount,
   listMonthDates,
   missingScheduleCellKeys,
@@ -39,6 +40,19 @@ test("next-month preference window is open from the 1st through the 20th 23:59 T
     opensAt: "2026-09-01T00:00:00+08:00",
     closesAt: "2026-09-20T23:59:59+08:00",
   });
+});
+
+test("configured preference windows support scheduled, forced-open, and forced-closed modes", () => {
+  const period = {
+    status: "selection_open",
+    selectionOpensAt: "2026-09-01T00:00:00+08:00",
+    selectionClosesAt: "2026-09-20T23:59:59+08:00",
+  };
+  assert.equal(isConfiguredPreferenceWindowOpen({ ...period, selectionControlMode: "scheduled", now: new Date("2026-09-10T12:00:00+08:00") }), true);
+  assert.equal(isConfiguredPreferenceWindowOpen({ ...period, selectionControlMode: "scheduled", now: new Date("2026-09-21T00:00:00+08:00") }), false);
+  assert.equal(isConfiguredPreferenceWindowOpen({ ...period, selectionControlMode: "open", now: new Date("2026-09-30T12:00:00+08:00") }), true);
+  assert.equal(isConfiguredPreferenceWindowOpen({ ...period, selectionControlMode: "closed", now: new Date("2026-09-10T12:00:00+08:00") }), false);
+  assert.equal(isConfiguredPreferenceWindowOpen({ ...period, status: "drafting", selectionControlMode: "open", now: new Date("2026-09-10T12:00:00+08:00") }), false);
 });
 
 test("facility closure counts toward the required eight preferred days", () => {
@@ -348,16 +362,32 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   const unaDraftMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260826224221_align_una_existing_draft_shift.sql"), "utf8");
   const creditMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260827000727_add_monthly_accrued_leave_credits.sql"), "utf8");
   const middleShiftMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260828201642_update_coach_middle_shift_time.sql"), "utf8");
+  const selectionControlMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260830225406_add_staff_selection_control_mode.sql"), "utf8");
+  const notificationSource = readFileSync(resolve(process.cwd(), "lib/in-app-notifications.ts"), "utf8");
   assert.match(source, /className=\{styles\.titleRow\}[\s\S]*?全員班表控制台[\s\S]*?className=\{styles\.workflowBadge\}[\s\S]*?流程狀態[\s\S]*?stateLabel\(data\.period\.status\)/);
   assert.doesNotMatch(source, /className=\{styles\.stats\}/);
   assert.doesNotMatch(source, /<span>已選滿 8 天<\/span>|<span>尚未完成<\/span>|<span>法規阻擋<\/span>|<span>班表版本<\/span>/);
-  assert.match(source, /className=\{styles\.setupActions\}[\s\S]*?setSetupDialog\("progress"\)[\s\S]*?館休與選休進度[\s\S]*?setSetupDialog\("shifts"\)[\s\S]*?固定班別設定/);
+  assert.match(source, /className=\{styles\.setupActions\}[\s\S]*?setSetupDialog\("progress"\)[\s\S]*?館休與選休設定[\s\S]*?setSetupDialog\("shifts"\)[\s\S]*?固定班別設定/);
   assert.match(source, /setupDialogRef\.current[\s\S]*?dialog\.showModal\(\)/);
   assert.match(source, /<dialog[\s\S]*?aria-labelledby="setup-dialog-title"[\s\S]*?aria-label="關閉設定視窗"/);
   assert.match(styles, /\.workflowBadge\{[^}]*border-radius:999px/);
   assert.match(styles, /\.setupActions\{[^}]*grid-template-columns:repeat\(2,minmax\(240px,1fr\)\)/);
   assert.match(styles, /\.setupDialog::backdrop\{[^}]*backdrop-filter:blur\(8px\)/);
   assert.match(styles, /@media\(max-width:620px\)\{[\s\S]*?\.setupActions\{grid-template-columns:1fr/);
+  assert.match(source, /選休截止日[\s\S]*?update_selection_deadline[\s\S]*?儲存截止日/);
+  assert.match(source, /set_selection_window_state[\s\S]*?立即關閉選休[\s\S]*?立即開放選休/);
+  assert.match(source, /selectionWindowSummary\(data\.period\)/);
+  assert.match(styles, /\.selectionWindowControls\{[^}]*grid-template-columns:minmax\(170px,1fr\) auto auto/);
+  assert.match(styles, /@media\(max-width:620px\)\{[\s\S]*?\.selectionWindowControls\{grid-template-columns:1fr/);
+  assert.match(selfSource, /isConfiguredPreferenceWindowOpen/);
+  assert.match(selfSource, /主管已手動開放選休/);
+  assert.match(apiSource, /body\.action === "update_selection_deadline"/);
+  assert.match(apiSource, /body\.action === "set_selection_window_state"/);
+  assert.match(apiSource, /SELECTION_CONFIGURATION_STATUSES = new Set\(\["selection_open", "selection_closed", "drafting"\]\)/);
+  assert.match(apiSource, /isConfiguredPreferenceWindowOpen\(\{/);
+  assert.match(selectionControlMigration, /selection_control_mode text not null default 'scheduled'/);
+  assert.match(selectionControlMigration, /'scheduled', 'open', 'closed'/);
+  assert.match(notificationSource, /selection_control_mode[\s\S]*?isConfiguredPreferenceWindowOpen/);
   assert.match(source, /holidayRuleGroups\.map/);
   assert.match(source, /window\.setTimeout\(\(\) => setNotice\(""\), 4500\)/);
   assert.match(source, /const SCHEDULE_LOAD_TIMEOUT_MS = 20_000/);

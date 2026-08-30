@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { staffScheduleEntryOffLabel, staffScheduleShiftLabel } from "../lib/staff-scheduling";
+import {
+  isConfiguredPreferenceWindowOpen,
+  staffScheduleEntryOffLabel,
+  staffScheduleShiftLabel,
+} from "../lib/staff-scheduling";
 import styles from "../app/staff/schedule/page.module.css";
 
 type SelfState = {
@@ -12,6 +16,7 @@ type SelfState = {
     status: string;
     selection_opens_at: string;
     selection_closes_at: string;
+    selection_control_mode: "scheduled" | "open" | "closed";
     preferred_days_required: number;
   };
   employees: Array<{ id: string; displayName: string }>;
@@ -221,8 +226,20 @@ export default function StaffScheduleSelfService() {
   const remaining = Math.max(0, requiredCount - combinedCount);
   const selectedDaysLabel = selected.slice().sort().map((date) => `${Number(date.slice(-2))} 日`).join("、") || "尚未選擇";
   const selectionOpen = data?.period
-    ? Date.now() >= new Date(data.period.selection_opens_at).getTime() && Date.now() <= new Date(data.period.selection_closes_at).getTime()
+    ? isConfiguredPreferenceWindowOpen({
+        status: data.period.status,
+        selectionOpensAt: data.period.selection_opens_at,
+        selectionClosesAt: data.period.selection_closes_at,
+        selectionControlMode: data.period.selection_control_mode,
+      })
     : false;
+  const selectionNotice = data?.period?.selection_control_mode === "open"
+    ? "主管已手動開放選休；關閉前可隨時重新儲存。"
+    : selectionOpen
+      ? `可於 ${formatTime(data?.period?.selection_closes_at)} 前修改；送出後仍可重新儲存。`
+      : data?.period?.selection_control_mode === "closed"
+        ? "主管目前已關閉選休；如需修改，請直接聯絡副理。"
+        : "選休期限已截止；如需修改，請直接聯絡副理。";
   const sortedEntries = useMemo(() => [...(data?.scheduleEntries || [])].sort((a, b) => a.workDate.localeCompare(b.workDate)), [data?.scheduleEntries]);
   const greetingName = data?.actor.englishName || data?.actor.displayName || "夥伴";
 
@@ -262,7 +279,7 @@ export default function StaffScheduleSelfService() {
       ) : !data.version ? (
         <section className={styles.selectionSection}>
           <div className={styles.selectionHeader}>
-            <div><span className={styles.kicker}>自選排休</span><h2>{month.replace("-", " 年 ")} 月</h2><p className={`${styles.selectionNotice} ${selectionOpen ? styles.selectionNoticeOpen : styles.selectionNoticeClosed}`}>{selectionOpen ? "截止日前可隨時更改；送出後仍可在 20 日 23:59 前重新儲存。" : "選取期限已截止；如需修改，請直接聯絡副理。"}</p></div>
+            <div><span className={styles.kicker}>自選排休</span><h2>{month.replace("-", " 年 ")} 月</h2><p className={`${styles.selectionNotice} ${selectionOpen ? styles.selectionNoticeOpen : styles.selectionNoticeClosed}`}>{selectionNotice}</p></div>
             <div className={`${styles.counter} ${remaining === 0 ? styles.counterDone : ""}`}><strong>{combinedCount}</strong><span>/ {requiredCount} 天</span></div>
           </div>
           <div className={styles.legend}><span><i className={styles.selectedMark} />我選的排休</span><span><i className={styles.closureMark} />館休（已計入）</span></div>
@@ -285,7 +302,7 @@ export default function StaffScheduleSelfService() {
           <div className={styles.selectionFooter}>
             <div><strong>目前選擇：</strong><span>{selectedDaysLabel}</span></div>
             <button type="button" disabled={busy || !selectionOpen || combinedCount !== requiredCount} onClick={() => {
-              if (window.confirm(`確認儲存 ${month} 的 ${requiredCount} 天排休日期？截止前仍可再修改。`)) void act("save_preferences", { selectedDates: selected }, "排休日期已儲存");
+              if (window.confirm(`確認儲存 ${month} 的 ${requiredCount} 天排休日期？開放期間仍可再修改。`)) void act("save_preferences", { selectedDates: selected }, "排休日期已儲存");
             }}>儲存</button>
           </div>
         </section>

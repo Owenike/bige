@@ -9,6 +9,7 @@ import {
   buildSelectionWindow,
   dateAfter,
   generateMonthlySchedule,
+  isConfiguredPreferenceWindowOpen,
   isSharedFrontdeskScheduleAccount,
   listMonthDates,
   missingScheduleCellKeys,
@@ -43,6 +44,7 @@ const STAFF_ROLES = [
 
 const actionSchema = z.object({ action: z.string().min(1) }).passthrough();
 const monthSchema = z.string().regex(/^\d{4}-\d{2}(?:-01)?$/);
+const SELECTION_CONFIGURATION_STATUSES = new Set(["selection_open", "selection_closed", "drafting"]);
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -81,6 +83,7 @@ type PeriodRow = {
   month_start: string;
   selection_opens_at: string;
   selection_closes_at: string;
+  selection_control_mode: "scheduled" | "open" | "closed";
   preferred_days_required: number;
   middle_preference_daily_limit: number;
   status: string;
@@ -803,6 +806,63 @@ export async function POST(request: Request) {
           after: { middlePreferenceDailyLimit },
         },
       });
+    } else if (body.action === "update_selection_deadline") {
+      await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有調整選休開放時間的權限" });
+      const period = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
+      if (!period) throw new Error("請先開放這個月份");
+      if (!SELECTION_CONFIGURATION_STATUSES.has(period.status)) throw new Error("班表已進入審核或發布流程，無法再調整選休截止日");
+      const selectionDeadline = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(body.selectionDeadline);
+      const selectionClosesAt = `${selectionDeadline}T23:59:59+08:00`;
+      const selectionClosesTime = new Date(selectionClosesAt).getTime();
+      if (!Number.isFinite(selectionClosesTime)) throw new Error("請輸入有效的選休截止日");
+      if (selectionClosesTime <= new Date(period.selection_opens_at).getTime()) {
+        throw new Error("選休截止日必須晚於開放日");
+      }
+      if (selectionDeadline > (listMonthDates(monthStart).at(-1) || monthStart)) {
+        throw new Error("選休截止日不得晚於排班月份最後一天");
+      }
+      const status = Date.now() <= selectionClosesTime ? "selection_open" : "selection_closed";
+      const update = await admin.from("staff_schedule_periods").update({
+        selection_closes_at: selectionClosesAt,
+        selection_control_mode: "scheduled",
+        status,
+      }).eq("id", period.id);
+      if (update.error) throw new Error(update.error.message);
+      await writeAudit(admin, {
+        tenantId,
+        actorId: profile.id,
+        action: "staff_schedule_selection_deadline_updated",
+        targetType: "staff_schedule_period",
+        targetId: period.id,
+        payload: {
+          before: { selectionClosesAt: period.selection_closes_at, selectionControlMode: period.selection_control_mode, status: period.status },
+          after: { selectionClosesAt, selectionControlMode: "scheduled", status },
+        },
+      });
+    } else if (body.action === "set_selection_window_state") {
+      await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有開啟或關閉選休的權限" });
+      const period = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
+      if (!period) throw new Error("請先開放這個月份");
+      if (!SELECTION_CONFIGURATION_STATUSES.has(period.status)) throw new Error("班表已進入審核或發布流程，無法重新開啟選休");
+      const open = z.boolean().parse(body.open);
+      const status = open ? "selection_open" : "selection_closed";
+      const selectionControlMode = open ? "open" : "closed";
+      const update = await admin.from("staff_schedule_periods").update({
+        selection_control_mode: selectionControlMode,
+        status,
+      }).eq("id", period.id);
+      if (update.error) throw new Error(update.error.message);
+      await writeAudit(admin, {
+        tenantId,
+        actorId: profile.id,
+        action: open ? "staff_schedule_selection_opened" : "staff_schedule_selection_closed",
+        targetType: "staff_schedule_period",
+        targetId: period.id,
+        payload: {
+          before: { selectionControlMode: period.selection_control_mode, status: period.status },
+          after: { selectionControlMode, status },
+        },
+      });
     } else if (body.action === "upsert_holiday") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有維護國定假日行事曆的權限" });
       const holidayDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(body.holidayDate);
@@ -863,8 +923,12 @@ export async function POST(request: Request) {
     } else if (body.action === "save_preferences") {
       const period = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
       if (!period) throw new Error("主管尚未開放這個月份");
-      const now = Date.now();
-      if (now < new Date(period.selection_opens_at).getTime() || now > new Date(period.selection_closes_at).getTime()) {
+      if (!isConfiguredPreferenceWindowOpen({
+        status: period.status,
+        selectionOpensAt: period.selection_opens_at,
+        selectionClosesAt: period.selection_closes_at,
+        selectionControlMode: period.selection_control_mode,
+      })) {
         throw new Error("目前不在排休選取期間；請直接聯絡副理協助修改");
       }
       const selectedDates = z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(15).parse(body.selectedDates);

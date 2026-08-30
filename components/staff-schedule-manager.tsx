@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   isSharedFrontdeskScheduleAccount,
+  isConfiguredPreferenceWindowOpen,
   missingScheduleCellKeys,
   staffScheduleEntryOffLabel,
   staffScheduleGridWorkLabel,
@@ -63,6 +64,7 @@ const SHIFT_PREVIEWS: Record<Exclude<ShiftChoice, "DEFAULT">, Pick<ScheduleEntry
 
 const SCHEDULE_LOAD_TIMEOUT_MS = 20_000;
 const SCHEDULE_CHANGE_HIGHLIGHT_MS = 60_000;
+const SELECTION_CONFIGURATION_STATUSES = new Set(["selection_open", "selection_closed", "drafting"]);
 
 function scheduleEntryKey(employeeId: string, workDate: string) {
   return `${employeeId}:${workDate}`;
@@ -96,6 +98,7 @@ type ScheduleState = {
     status: string;
     selection_opens_at: string;
     selection_closes_at: string;
+    selection_control_mode: "scheduled" | "open" | "closed";
     preferred_days_required: number;
     middle_preference_daily_limit: number;
   };
@@ -160,6 +163,30 @@ function formatDateTime(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
+function formatDateInput(value: string | null | undefined) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
+
+function selectionWindowSummary(period: NonNullable<ScheduleState["period"]>) {
+  if (!SELECTION_CONFIGURATION_STATUSES.has(period.status)) return "選休設定已鎖定";
+  if (period.selection_control_mode === "open") return "手動開放中（不受截止日限制）";
+  if (period.selection_control_mode === "closed") return "已由主管手動關閉";
+  return isConfiguredPreferenceWindowOpen({
+    status: period.status,
+    selectionOpensAt: period.selection_opens_at,
+    selectionClosesAt: period.selection_closes_at,
+    selectionControlMode: period.selection_control_mode,
+  })
+    ? `開放中，${formatDateTime(period.selection_closes_at)} 自動關閉`
+    : `已於 ${formatDateTime(period.selection_closes_at)} 截止`;
+}
+
 function stateLabel(status: string) {
   return {
     selection_open: "員工選休中",
@@ -221,6 +248,7 @@ export default function StaffScheduleManager() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [closureDate, setClosureDate] = useState("");
+  const [selectionDeadline, setSelectionDeadline] = useState("");
   const [holidayDate, setHolidayDate] = useState("");
   const [holidayName, setHolidayName] = useState("");
   const [middleDailyLimit, setMiddleDailyLimit] = useState(2);
@@ -302,6 +330,10 @@ export default function StaffScheduleManager() {
   useEffect(() => {
     setClosureDate(data?.facilityClosures[0]?.closure_date || "");
   }, [data?.facilityClosures]);
+
+  useEffect(() => {
+    setSelectionDeadline(formatDateInput(data?.period?.selection_closes_at));
+  }, [data?.period?.selection_closes_at]);
 
   useEffect(() => {
     if (data?.period) setMiddleDailyLimit(data.period.middle_preference_daily_limit);
@@ -644,6 +676,17 @@ export default function StaffScheduleManager() {
     );
   }
 
+  const selectionWindowOpen = data.period ? isConfiguredPreferenceWindowOpen({
+    status: data.period.status,
+    selectionOpensAt: data.period.selection_opens_at,
+    selectionClosesAt: data.period.selection_closes_at,
+    selectionControlMode: data.period.selection_control_mode,
+  }) : false;
+  const selectionWindowEditable = Boolean(
+    data.period
+      && SELECTION_CONFIGURATION_STATUSES.has(data.period.status),
+  );
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -688,7 +731,7 @@ export default function StaffScheduleManager() {
           <section className={styles.setupActions} aria-label="排班前置設定">
             <button type="button" className={styles.setupActionButton} onClick={() => setSetupDialog("progress")}>
               <span className={styles.setupActionIcon} aria-hidden="true">休</span>
-              <span><strong>館休與選休進度</strong><small>設定館休日並查看員工選休</small></span>
+              <span><strong>館休與選休設定</strong><small>控制開放時間、館休與選休進度</small></span>
               <b aria-hidden="true">›</b>
             </button>
             <button type="button" className={styles.setupActionButton} onClick={() => setSetupDialog("shifts")}>
@@ -711,8 +754,8 @@ export default function StaffScheduleManager() {
               <div className={styles.setupDialogHeader}>
                 <div>
                   <span>{setupDialog === "progress" ? "排休設定" : "員工設定"}</span>
-                  <h2 id="setup-dialog-title">{setupDialog === "progress" ? "館休與選休進度" : "固定班別設定"}</h2>
-                  <p>{setupDialog === "progress" ? `選休截止 ${formatDateTime(data.period.selection_closes_at)}` : "設定員工平日預設班別與休假餘額"}</p>
+                  <h2 id="setup-dialog-title">{setupDialog === "progress" ? "館休與選休設定" : "固定班別設定"}</h2>
+                  <p>{setupDialog === "progress" ? selectionWindowSummary(data.period) : "設定員工平日預設班別與休假餘額"}</p>
                 </div>
                 <button type="button" className={styles.dialogCloseButton} aria-label="關閉設定視窗" onClick={() => setSetupDialog(null)}>×</button>
               </div>
@@ -720,6 +763,54 @@ export default function StaffScheduleManager() {
               <div className={styles.setupDialogBody}>
                 {setupDialog === "progress" ? (
                   <div className={styles.progressSettings}>
+                    <section className={styles.selectionWindowCard} data-open={selectionWindowOpen}>
+                      <div className={styles.selectionWindowHeading}>
+                        <div>
+                          <span>員工選休開放狀態</span>
+                          <strong>{selectionWindowOpen ? "目前開放" : "目前關閉"}</strong>
+                        </div>
+                        <span className={styles.selectionWindowBadge}>{selectionWindowSummary(data.period)}</span>
+                      </div>
+                      <div className={styles.selectionWindowControls}>
+                        <label className={styles.field}>
+                          <span>選休截止日</span>
+                          <input
+                            type="date"
+                            max={dates.at(-1)}
+                            value={selectionDeadline}
+                            disabled={!selectionWindowEditable}
+                            onChange={(event) => setSelectionDeadline(event.target.value)}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className={styles.secondaryButton}
+                          disabled={busy || !selectionWindowEditable || !selectionDeadline}
+                          onClick={() => void act(
+                            "update_selection_deadline",
+                            { selectionDeadline },
+                            "選休截止日已更新，並恢復依截止日自動關閉",
+                          )}
+                        >儲存截止日</button>
+                        <button
+                          type="button"
+                          className={selectionWindowOpen ? styles.dangerButton : styles.primaryButton}
+                          disabled={busy || !selectionWindowEditable}
+                          onClick={() => void act(
+                            "set_selection_window_state",
+                            { open: !selectionWindowOpen },
+                            selectionWindowOpen ? "員工選休已立即關閉" : "員工選休已立即開放",
+                          )}
+                        >{selectionWindowOpen ? "立即關閉選休" : "立即開放選休"}</button>
+                      </div>
+                      <small>
+                        {data.period.selection_control_mode === "open"
+                          ? "目前為手動開放，不受截止日限制；儲存截止日後會恢復自動關閉。"
+                          : data.period.selection_control_mode === "closed"
+                            ? "目前為手動關閉；員工無法新增或修改排休。"
+                            : "到截止日 23:59 自動關閉；立即開放或關閉可暫時覆蓋截止日。"}
+                      </small>
+                    </section>
                     <label className={styles.field}>
                       <span>本月館休日（自動計入員工 8 天）</span>
                       <div className={styles.inlineField}>

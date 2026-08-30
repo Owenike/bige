@@ -6,6 +6,7 @@ import { evaluateTenantAccess, type TenantStatus, type TenantSubscriptionSnapsho
 import { insertDeliveryRows } from "./notification-ops";
 import { dispatchNotificationDeliveries } from "./notification-dispatch";
 import { resolveExternalChannels } from "./notification-external";
+import { isConfiguredPreferenceWindowOpen } from "./staff-scheduling";
 
 export type NotificationSeverity = "info" | "warning" | "critical";
 export type NotificationStatus = "unread" | "read" | "archived";
@@ -641,13 +642,20 @@ export async function runNotificationSweep(input: SweepInput): Promise<{ ok: tru
     const taipeiDay = Number(taipeiToday.slice(-2));
     const openPeriods = await supabase
       .from("staff_schedule_periods")
-      .select("id, month_start, branch_id, reminder_starts_on, selection_closes_at")
+      .select("id, month_start, branch_id, reminder_starts_on, status, selection_opens_at, selection_closes_at, selection_control_mode")
       .eq("tenant_id", tenant.id)
       .eq("status", "selection_open")
-      .gte("selection_closes_at", nowIso)
-      .limit(20);
+      .order("selection_closes_at", { ascending: false })
+      .limit(50);
     if (!openPeriods.error) {
       for (const period of openPeriods.data || []) {
+        if (!isConfiguredPreferenceWindowOpen({
+          status: String(period.status),
+          selectionOpensAt: String(period.selection_opens_at),
+          selectionClosesAt: String(period.selection_closes_at),
+          selectionControlMode: period.selection_control_mode,
+          now,
+        })) continue;
         if (taipeiDay < Number(period.reminder_starts_on || 15)) continue;
         let employeeQuery = supabase
           .from("profiles")
@@ -670,13 +678,22 @@ export async function runNotificationSweep(input: SweepInput): Promise<{ ok: tru
         const incomplete = (employeeResult.data || []).filter((row) => !completed.has(String(row.id)));
         if (incomplete.length === 0) continue;
         const monthText = String(period.month_start).slice(0, 7);
+        const selectionWindowMessage = period.selection_control_mode === "open"
+          ? "主管目前已手動開放選休，請儘速完成；關閉前可再修改。"
+          : `您尚未選滿 8 天排休，請於 ${new Intl.DateTimeFormat("zh-TW", {
+              timeZone: "Asia/Taipei",
+              month: "numeric",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }).format(new Date(String(period.selection_closes_at)))} 前完成；截止前可再修改。`;
         const employeeReminder = await createInAppNotifications({
           supabase,
           tenantId: tenant.id,
           branchId: period.branch_id,
           recipientUserIds: incomplete.map((row) => String(row.id)),
           title: `${monthText} 排休尚未完成`,
-          message: "您尚未選滿 8 天排休，請於 20 日 23:59 前完成；截止前可再修改。",
+          message: selectionWindowMessage,
           severity: "warning",
           eventType: "staff_time_off_incomplete",
           targetType: "staff_schedule_period",

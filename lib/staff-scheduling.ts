@@ -266,6 +266,23 @@ export function isPreferenceWindowOpen(monthStart: string, now = new Date()) {
   return time >= new Date(window.opensAt).getTime() && time <= new Date(window.closesAt).getTime();
 }
 
+export type StaffSelectionControlMode = "scheduled" | "open" | "closed";
+
+export function isConfiguredPreferenceWindowOpen(params: {
+  status: string;
+  selectionOpensAt: string;
+  selectionClosesAt: string;
+  selectionControlMode?: StaffSelectionControlMode | null;
+  now?: Date;
+}) {
+  if (params.status !== "selection_open") return false;
+  if (params.selectionControlMode === "open") return true;
+  if (params.selectionControlMode === "closed") return false;
+  const time = (params.now || new Date()).getTime();
+  return time >= new Date(params.selectionOpensAt).getTime()
+    && time <= new Date(params.selectionClosesAt).getTime();
+}
+
 export function monthlyDaysOffEntitlement(monthStart: string) {
   return listMonthDates(monthStart).filter((date) => {
     const day = parseIsoDate(date).getUTCDay();

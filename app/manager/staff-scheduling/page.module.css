@@ -256,6 +256,20 @@
 .dialogCloseButton:hover{border-color:var(--schedule-manager-gold);color:var(--schedule-manager-gold-bright)}
 .setupDialogBody{max-height:calc(min(88dvh,920px) - 103px);padding:22px;overflow-y:auto;overscroll-behavior:contain;scrollbar-color:var(--schedule-manager-gold) rgba(10,17,27,.9)}
 .progressSettings{display:grid;gap:18px}
+.selectionWindowCard{display:grid;gap:14px;padding:16px;border:1px solid rgba(176,87,88,.48);border-radius:18px;background:linear-gradient(145deg,rgba(67,25,30,.72),rgba(25,14,20,.82))}
+.selectionWindowCard[data-open="true"]{border-color:rgba(89,171,132,.5);background:linear-gradient(145deg,rgba(20,61,47,.72),rgba(12,30,27,.82))}
+.selectionWindowHeading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.selectionWindowHeading>div{display:grid;gap:4px}
+.selectionWindowHeading>div>span{color:var(--schedule-manager-muted);font-size:12px;font-weight:800}
+.selectionWindowHeading strong{color:#fff8e9;font-size:20px}
+.selectionWindowBadge{display:inline-flex;align-items:center;min-height:30px;padding:5px 9px;border:1px solid currentColor;border-radius:999px;color:#ffc1c4;font-size:11px;font-weight:900;line-height:1.35;text-align:center}
+.selectionWindowCard[data-open="true"] .selectionWindowBadge{color:#b8f2d5}
+.selectionWindowControls{display:grid;grid-template-columns:minmax(170px,1fr) auto auto;align-items:end;gap:10px}
+.selectionWindowControls .field{gap:6px}
+.selectionWindowControls .field>span{color:#fff4d6;font-size:13px}
+.selectionWindowControls input{width:100%;min-height:42px;border:1px solid var(--schedule-manager-line);border-radius:12px;background:linear-gradient(180deg,rgba(20,29,41,.96),rgba(10,17,27,.96));padding:8px 11px;color:var(--schedule-manager-text);font:inherit}
+.selectionWindowControls button{white-space:nowrap}
+.selectionWindowCard>small{color:var(--schedule-manager-muted);font-size:12px;line-height:1.55}
 .progressSettings>.field{padding:0 0 18px;border-bottom:1px solid var(--schedule-manager-line)}
 .progressSettings>.field:last-of-type{padding-bottom:0;border-bottom:0}
 .progressSettings .field>span{color:#fff4d6;font-size:14px}
@@ -274,5 +288,9 @@
   .setupDialogBody{max-height:calc(100dvh - 107px);padding:16px}
   .progressSettings .inlineField{align-items:stretch;display:grid}
   .progressSettings .inlineField>*{width:100%}
+  .selectionWindowHeading{display:grid}
+  .selectionWindowBadge{width:fit-content;text-align:left}
+  .selectionWindowControls{grid-template-columns:1fr}
+  .selectionWindowControls button{width:100%}
   .employeeSetting summary{align-items:flex-start}
 }
