@@ -67,6 +67,70 @@ type CurrentScheduleSnapshot = {
   schedules: ScheduleRow[];
 };
 
+type ActiveLineGroupBinding = {
+  id: string;
+  line_group_id: string;
+};
+
+export async function resolveActiveBigeLineGroupBinding(params: {
+  supabase: SupabaseClient;
+  tenantId: string;
+  memberId: string;
+}): Promise<{ data: ActiveLineGroupBinding | null; error: string | null }> {
+  const membershipResult = await params.supabase
+    .from("bige_line_group_binding_members")
+    .select("binding_id")
+    .eq("tenant_id", params.tenantId)
+    .eq("member_id", params.memberId)
+    .maybeSingle();
+  if (membershipResult.error) {
+    return { data: null, error: membershipResult.error.message };
+  }
+
+  if (membershipResult.data?.binding_id) {
+    const bindingResult = await params.supabase
+      .from("bige_line_group_bindings")
+      .select("id, line_group_id")
+      .eq("tenant_id", params.tenantId)
+      .eq("id", String(membershipResult.data.binding_id))
+      .eq("status", "active")
+      .maybeSingle();
+    if (bindingResult.error) {
+      return { data: null, error: bindingResult.error.message };
+    }
+    return {
+      data: bindingResult.data
+        ? {
+            id: String(bindingResult.data.id),
+            line_group_id: String(bindingResult.data.line_group_id),
+          }
+        : null,
+      error: null,
+    };
+  }
+
+  // Keep the original primary-member pointer as a deployment-safe fallback.
+  const legacyBindingResult = await params.supabase
+    .from("bige_line_group_bindings")
+    .select("id, line_group_id")
+    .eq("tenant_id", params.tenantId)
+    .eq("member_id", params.memberId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (legacyBindingResult.error) {
+    return { data: null, error: legacyBindingResult.error.message };
+  }
+  return {
+    data: legacyBindingResult.data
+      ? {
+          id: String(legacyBindingResult.data.id),
+          line_group_id: String(legacyBindingResult.data.line_group_id),
+        }
+      : null,
+    error: null,
+  };
+}
+
 function taipeiParts(value: string) {
   const parts = new Intl.DateTimeFormat("zh-TW", {
     timeZone: "Asia/Taipei",
@@ -196,13 +260,7 @@ async function loadCurrentScheduleSnapshot(params: {
   | { ok: false; error: string; terminal?: "binding" | "member" }
 > {
   const [bindingResult, memberResult, scheduleResult] = await Promise.all([
-    params.supabase
-      .from("bige_line_group_bindings")
-      .select("id, line_group_id")
-      .eq("tenant_id", params.tenantId)
-      .eq("member_id", params.memberId)
-      .eq("status", "active")
-      .maybeSingle(),
+    resolveActiveBigeLineGroupBinding(params),
     params.supabase
       .from("members")
       .select("id, full_name")
@@ -221,8 +279,8 @@ async function loadCurrentScheduleSnapshot(params: {
       .order("starts_at", { ascending: true })
       .limit(200),
   ]);
-  const error = bindingResult.error || memberResult.error || scheduleResult.error;
-  if (error) return { ok: false, error: error.message };
+  const error = bindingResult.error || memberResult.error?.message || scheduleResult.error?.message;
+  if (error) return { ok: false, error };
   if (!bindingResult.data) {
     return { ok: false, error: "line_group_binding_required", terminal: "binding" };
   }

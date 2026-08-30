@@ -423,6 +423,7 @@ type ContractPaymentWizardStep =
 type LineGroupBinding = {
   id: string;
   member_id: string | null;
+  member_ids?: string[];
   group_name: string;
   verification_code: string | null;
   status: "pending" | "active" | "left" | "disabled";
@@ -433,6 +434,22 @@ type LineGroupBinding = {
 function lineGroupVerificationLabel(code: string | null | undefined) {
   const normalized = String(code || "").trim().toUpperCase();
   return normalized ? `BG-${normalized}` : "尚未取得驗證碼";
+}
+
+function lineGroupBindingHasMember(
+  binding: Pick<LineGroupBinding, "member_id" | "member_ids">,
+  memberId: string | null | undefined,
+) {
+  if (!memberId) return false;
+  return binding.member_ids?.includes(memberId) || binding.member_id === memberId;
+}
+
+function lineGroupBindingMemberCount(
+  binding: Pick<LineGroupBinding, "member_id" | "member_ids">,
+) {
+  return new Set(
+    [...(binding.member_ids || []), ...(binding.member_id ? [binding.member_id] : [])],
+  ).size;
 }
 type LineScheduleNotificationIssue = {
   id: string;
@@ -4931,7 +4948,7 @@ export default function BigeFitnessOperations({
       (binding.status === "active" && binding.member_id === selectedMember?.id),
   );
   const selectedMemberLineBindings = (data?.lineGroupBindings || []).filter(
-    (binding) => binding.member_id === selectedMember?.id,
+    (binding) => lineGroupBindingHasMember(binding, selectedMember?.id),
   );
   const activeMemberLineBinding = selectedMemberLineBindings.find(
     (binding) => binding.status === "active",
@@ -4942,8 +4959,8 @@ export default function BigeFitnessOperations({
   const availableMemberLineBindings = (data?.lineGroupBindings || []).filter(
     (binding) =>
       (binding.status === "pending" &&
-        (!binding.member_id || binding.member_id === selectedMember?.id)) ||
-      (binding.status === "active" && binding.member_id === selectedMember?.id),
+        (!binding.member_id || lineGroupBindingHasMember(binding, selectedMember?.id))) ||
+      binding.status === "active",
   );
   const lineScheduleNotificationIssues = data?.lineScheduleNotificationIssues || [];
   const failedLineScheduleNotificationCount = lineScheduleNotificationIssues.filter(
@@ -6992,7 +7009,7 @@ export default function BigeFitnessOperations({
                       <strong>LINE 群組</strong>
                       <p className={styles.muted}>
                         {activeMemberLineBinding
-                          ? `目前已綁定：${activeMemberLineBinding.group_name}｜${lineGroupVerificationLabel(activeMemberLineBinding.verification_code)}`
+                          ? `目前已綁定：${activeMemberLineBinding.group_name}｜${lineGroupVerificationLabel(activeMemberLineBinding.verification_code)}${lineGroupBindingMemberCount(activeMemberLineBinding) > 1 ? `｜共用 ${lineGroupBindingMemberCount(activeMemberLineBinding)} 位會員` : ""}`
                           : inactiveMemberLineBinding?.status === "left"
                             ? `原群組「${inactiveMemberLineBinding.group_name}」連線已失效`
                             : inactiveMemberLineBinding?.status === "disabled"
@@ -7014,7 +7031,7 @@ export default function BigeFitnessOperations({
                     </span>
                   </div>
                   <p className={styles.warning}>
-                    群組名稱只作提示，不會依學員姓名自動配對；請核對群組內顯示的 BG 驗證碼後再儲存。
+                    群組名稱只作提示，不會依學員姓名自動配對；請核對群組內顯示的 BG 驗證碼後再儲存。同一群組可綁多位會員，每則通知仍只列該會員自己的課表。
                   </p>
                   {selectedMemberLineNotificationIssue ? (
                     <div
@@ -7069,7 +7086,7 @@ export default function BigeFitnessOperations({
                         <option value="">請選擇待綁定群組</option>
                         {availableMemberLineBindings.map((binding) => (
                           <option key={binding.id} value={binding.id}>
-                            {binding.group_name}｜{lineGroupVerificationLabel(binding.verification_code)}（{binding.status === "active" ? "目前使用中" : "待綁定"}）
+                            {binding.group_name}｜{lineGroupVerificationLabel(binding.verification_code)}（{lineGroupBindingHasMember(binding, selectedMember?.id) ? "目前綁定" : binding.status === "active" ? `可共用，已有 ${lineGroupBindingMemberCount(binding)} 位會員` : "待綁定"}）
                           </option>
                         ))}
                       </select>

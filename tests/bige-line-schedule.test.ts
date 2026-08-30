@@ -16,8 +16,32 @@ import {
   buildBigeLineScheduleMessage,
   formatBigeLineGroupVerificationCode,
   isBigeLineGroupVerificationCodeRequest,
+  resolveActiveBigeLineGroupBinding,
   verifyBigeLineWebhookSignature,
 } from "../lib/bige-line-schedule";
+
+function fakeLineBindingSupabase(
+  responses: Record<string, Array<{ data: Record<string, unknown> | null; error: null }>>,
+) {
+  return {
+    from(table: string) {
+      const chain = {
+        select() {
+          return chain;
+        },
+        eq() {
+          return chain;
+        },
+        maybeSingle() {
+          const response = responses[table]?.shift();
+          if (!response) throw new Error(`missing fake response for ${table}`);
+          return Promise.resolve(response);
+        },
+      };
+      return chain;
+    },
+  };
+}
 
 test("formal schedule message consolidates future courses without coach identity", () => {
   const message = buildBigeLineScheduleMessage({
@@ -205,13 +229,14 @@ test("member profile exposes manual LINE binding and the audited atomic RPC", ()
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const migration = readFileSync(
-    "supabase/migrations/20260824205036_bige_member_line_group_profile_binding.sql",
+    "supabase/migrations/20260830211002_add_shared_line_group_members.sql",
     "utf8",
   );
   assert.match(route, /input\.action === "set_member_line_group_binding"/);
-  assert.match(route, /bige_set_member_line_group_binding_v1/);
+  assert.match(route, /bige_set_member_line_group_binding_v2/);
   assert.match(component, /aria-label="學員 LINE 群組設定"/);
   assert.match(component, /群組名稱只作提示，不會依學員姓名自動配對/);
+  assert.match(component, /同一群組可綁多位會員/);
   assert.match(component, /BG 驗證碼/);
   assert.match(
     component,
@@ -219,10 +244,77 @@ test("member profile exposes manual LINE binding and the audited atomic RPC", ()
   );
   assert.match(component, /lineGroupVerificationLabel/);
   assert.match(component, /activeMemberLineBinding[\s\S]*inactiveMemberLineBinding/);
-  assert.match(migration, /status = 'disabled'/);
+  assert.match(migration, /replacement_primary_member_id/);
   assert.match(migration, /bige_member_line_group_bound/);
   assert.match(migration, /'bindingSource', 'member_profile'/);
-  assert.match(migration, /revoke all on function public\.bige_set_member_line_group_binding_v1/);
+  assert.match(migration, /revoke all on function public\.bige_set_member_line_group_binding_v2/);
+});
+
+test("shared LINE groups route several members while each snapshot remains member-specific", () => {
+  const line = readFileSync("lib/bige-line-schedule.ts", "utf8");
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260830211002_add_shared_line_group_members.sql",
+    "utf8",
+  );
+
+  assert.match(migration, /create table public\.bige_line_group_binding_members/);
+  assert.match(migration, /primary key \(binding_id, member_id\)/);
+  assert.match(migration, /unique \(tenant_id, member_id\)/);
+  assert.doesNotMatch(migration, /unique \(tenant_id, binding_id\)/);
+  assert.match(migration, /where binding\.member_id is not null[\s\S]{0,80}binding\.status = 'active'/);
+  assert.match(migration, /bige_sync_line_group_primary_member_trigger/);
+  assert.match(migration, /alter table public\.bige_line_group_binding_members enable row level security/);
+  assert.match(migration, /revoke all on table public\.bige_line_group_binding_members[\s\S]{0,80}authenticated/);
+
+  assert.match(line, /resolveActiveBigeLineGroupBinding/);
+  assert.match(line, /\.from\("bige_line_group_binding_members"\)/);
+  assert.match(line, /\.eq\("member_id", params\.memberId\)/);
+  assert.match(line, /\.eq\("member_id", params\.memberId\)[\s\S]{0,240}\.eq\("is_bige_schedule", true\)/);
+  assert.match(route, /resolveActiveBigeLineGroupBinding/);
+  assert.match(route, /\.from\("bige_line_group_binding_members"\)[\s\S]{0,120}\.select\("binding_id, member_id"\)/);
+  assert.match(route, /member_ids: Array\.from\(memberIds\)/);
+  assert.match(component, /lineGroupBindingHasMember/);
+  assert.match(component, /每則通知仍只列該會員自己的課表/);
+});
+
+test("shared secondary members resolve the physical group before the legacy primary fallback", async () => {
+  const shared = fakeLineBindingSupabase({
+    bige_line_group_binding_members: [{ data: { binding_id: "shared-binding" }, error: null }],
+    bige_line_group_bindings: [
+      { data: { id: "shared-binding", line_group_id: "line-group-1" }, error: null },
+    ],
+  });
+  assert.deepEqual(
+    await resolveActiveBigeLineGroupBinding({
+      supabase: shared as never,
+      tenantId: "tenant-1",
+      memberId: "secondary-member",
+    }),
+    {
+      data: { id: "shared-binding", line_group_id: "line-group-1" },
+      error: null,
+    },
+  );
+
+  const legacy = fakeLineBindingSupabase({
+    bige_line_group_binding_members: [{ data: null, error: null }],
+    bige_line_group_bindings: [
+      { data: { id: "legacy-binding", line_group_id: "line-group-2" }, error: null },
+    ],
+  });
+  assert.deepEqual(
+    await resolveActiveBigeLineGroupBinding({
+      supabase: legacy as never,
+      tenantId: "tenant-1",
+      memberId: "primary-member",
+    }),
+    {
+      data: { id: "legacy-binding", line_group_id: "line-group-2" },
+      error: null,
+    },
+  );
 });
 
 test("LINE delivery is PT-only, future-only, refreshes latest schedules, and supersedes stale work", () => {

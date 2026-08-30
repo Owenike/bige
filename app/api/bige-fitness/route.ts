@@ -7,7 +7,10 @@ import {
   readCoachDayStatusMarker,
 } from "../../../lib/bige-coach-day-status";
 import { loadBigeBusinessDaySetting } from "../../../lib/bige-business-day";
-import { queueBigeLineScheduleSnapshot } from "../../../lib/bige-line-schedule";
+import {
+  queueBigeLineScheduleSnapshot,
+  resolveActiveBigeLineGroupBinding,
+} from "../../../lib/bige-line-schedule";
 import {
   canCancelBigeCourseAnytime,
   getBigeCourseStatusWindow,
@@ -146,14 +149,12 @@ function canSeeTrialRevenue(
 
 async function requireFormalScheduleLineBinding(tenantId: string, memberId: string) {
   if (process.env.BIGE_LINE_REQUIRE_BINDING_FOR_SCHEDULE !== "1") return null;
-  const result = await createSupabaseAdminClient()
-    .from("bige_line_group_bindings")
-    .select("id")
-    .eq("tenant_id", tenantId)
-    .eq("member_id", memberId)
-    .eq("status", "active")
-    .maybeSingle();
-  if (result.error) return result.error.message;
+  const result = await resolveActiveBigeLineGroupBinding({
+    supabase: createSupabaseAdminClient(),
+    tenantId,
+    memberId,
+  });
+  if (result.error) return result.error;
   return result.data ? null : "此學員尚未綁定有效的 LINE 群組，不能建立正式課程";
 }
 
@@ -1320,7 +1321,12 @@ async function loadBigeOperationsDashboard(
   });
   const admin = createSupabaseAdminClient();
   const canManageLineSchedules = canCreateBigeContract(context.employeeNumber);
-  const [lineBindingsResult, lineNotificationIssuesResult, walkInOperationsResult] = await Promise.all([
+  const [
+    lineBindingsResult,
+    lineMembershipsResult,
+    lineNotificationIssuesResult,
+    walkInOperationsResult,
+  ] = await Promise.all([
     canManageLineSchedules
       ? admin
           .from("bige_line_group_bindings")
@@ -1329,6 +1335,12 @@ async function loadBigeOperationsDashboard(
           .in("status", ["pending", "active", "left", "disabled"])
           .order("last_seen_at", { ascending: false })
           .limit(1000)
+      : Promise.resolve({ data: [], error: null }),
+    canManageLineSchedules
+      ? admin
+          .from("bige_line_group_binding_members")
+          .select("binding_id, member_id")
+          .eq("tenant_id", tenantId)
       : Promise.resolve({ data: [], error: null }),
     canManageLineSchedules
       ? admin
@@ -1351,8 +1363,22 @@ async function loadBigeOperationsDashboard(
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (lineBindingsResult.error) throw new Error(lineBindingsResult.error.message);
+  if (lineMembershipsResult.error) throw new Error(lineMembershipsResult.error.message);
   if (lineNotificationIssuesResult.error) throw new Error(lineNotificationIssuesResult.error.message);
   if (walkInOperationsResult.error) throw new Error(walkInOperationsResult.error.message);
+
+  const memberIdsByBinding = new Map<string, Set<string>>();
+  for (const membership of lineMembershipsResult.data || []) {
+    const bindingId = String(membership.binding_id);
+    const memberIds = memberIdsByBinding.get(bindingId) || new Set<string>();
+    memberIds.add(String(membership.member_id));
+    memberIdsByBinding.set(bindingId, memberIds);
+  }
+  const lineGroupBindings = (lineBindingsResult.data || []).map((binding) => {
+    const memberIds = memberIdsByBinding.get(String(binding.id)) || new Set<string>();
+    if (binding.member_id) memberIds.add(String(binding.member_id));
+    return { ...binding, member_ids: Array.from(memberIds) };
+  });
 
   const rawWalkInOperations = walkInOperationsResult.data || [];
   const walkInPaymentIds = Array.from(
@@ -1384,7 +1410,7 @@ async function loadBigeOperationsDashboard(
   return {
     businessDate,
     canUseWalkInPayments: walkInPaymentAllowed,
-    lineGroupBindings: lineBindingsResult.data || [],
+    lineGroupBindings,
     lineScheduleNotificationIssues: lineNotificationIssuesResult.data || [],
     walkInPaymentCount: walkInPayments.length,
     walkInPaymentTotal: walkInPayments.reduce(
@@ -2500,7 +2526,7 @@ export async function POST(request: Request) {
     if (!canCreateBigeContract(operationContext.employeeNumber)) {
       return apiError(403, "FORBIDDEN", "目前帳號不能設定學員 LINE 群組");
     }
-    const result = await operationSupabase.rpc("bige_set_member_line_group_binding_v1", {
+    const result = await operationSupabase.rpc("bige_set_member_line_group_binding_v2", {
       p_tenant_id: tenantId,
       p_member_id: input.memberId,
       p_line_binding_id: input.lineGroupBindingId,
