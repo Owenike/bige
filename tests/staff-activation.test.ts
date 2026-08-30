@@ -141,3 +141,25 @@ test("generic recovery uses the captured bearer token instead of shared browser 
   assert.match(routeSource, /getUser\(token\)/);
   assert.match(routeSource, /updateUserById\(user\.id/);
 });
+
+test("staff email conflicts record the conflicting Auth user without logging the email", () => {
+  const routeSource = readFileSync(
+    resolve(process.cwd(), "app/api/auth/staff-email/request/route.ts"),
+    "utf8",
+  );
+
+  assert.match(routeSource, /async function findConflictingEmailUserId/);
+  assert.match(routeSource, /if \(conflictingUser\) return conflictingUser\.id/);
+  assert.match(routeSource, /action: "staff_email_conflict_detected"/);
+  assert.match(routeSource, /target_id: conflictingUserId/);
+  assert.match(routeSource, /reason: "auth_email_owned_by_another_user"/);
+
+  const diagnosticStart = routeSource.indexOf('action: "staff_email_conflict_detected"');
+  const rejectionStart = routeSource.indexOf(
+    'return NextResponse.json({ error: "此 Email 已由其他帳號使用" }',
+    diagnosticStart,
+  );
+  assert.ok(diagnosticStart >= 0 && rejectionStart > diagnosticStart);
+  const diagnosticBlock = routeSource.slice(diagnosticStart, rejectionStart);
+  assert.doesNotMatch(diagnosticBlock, /(?:^|[\s,{])email\s*[:,]/i);
+});

@@ -44,24 +44,21 @@ function resolveCanonicalAppUrl(request: Request) {
   return (configured || new URL(request.url).origin).replace(/\/+$/, "");
 }
 
-async function emailBelongsToAnotherUser(email: string, currentUserId: string) {
+async function findConflictingEmailUserId(email: string, currentUserId: string) {
   const admin = createSupabaseAdminClient();
   for (let page = 1; page <= 20; page += 1) {
     const result = await admin.auth.admin.listUsers({ page, perPage: 200 });
     if (result.error) throw result.error;
     const users = result.data.users || [];
-    if (
-      users.some(
-        (user) =>
-          user.id !== currentUserId &&
-          (user.email || "").trim().toLowerCase() === email,
-      )
-    ) {
-      return true;
-    }
-    if (users.length < 200) return false;
+    const conflictingUser = users.find(
+      (user) =>
+        user.id !== currentUserId &&
+        (user.email || "").trim().toLowerCase() === email,
+    );
+    if (conflictingUser) return conflictingUser.id;
+    if (users.length < 200) return null;
   }
-  return false;
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -140,7 +137,44 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (await emailBelongsToAnotherUser(email, auth.context.userId)) {
+    const conflictingUserId = await findConflictingEmailUserId(
+      email,
+      auth.context.userId,
+    );
+    if (conflictingUserId) {
+      const conflictMode = isAccountEmailChange ? "email_change" : "activation";
+      logEvent("warn", {
+        type: "http",
+        action: "staff_email_conflict_detected",
+        ...base,
+        status: 409,
+        userId: auth.context.userId,
+        employeeNumber: profile.employee_number,
+        conflictingUserId,
+        mode: conflictMode,
+      });
+      const conflictAudit = await admin.from("audit_logs").insert({
+        tenant_id: profile.tenant_id,
+        actor_id: auth.context.userId,
+        action: "staff_email_conflict_detected",
+        target_type: "auth_user",
+        target_id: conflictingUserId,
+        reason: "auth_email_owned_by_another_user",
+        payload: {
+          requesterEmployeeNumber: profile.employee_number,
+          mode: conflictMode,
+        },
+      });
+      if (conflictAudit.error) {
+        logEvent("warn", {
+          type: "http",
+          action: "staff_email_conflict_audit_failed",
+          ...base,
+          status: 500,
+          userId: auth.context.userId,
+          error: conflictAudit.error.message,
+        });
+      }
       return NextResponse.json({ error: "此 Email 已由其他帳號使用" }, { status: 409 });
     }
   } catch (error) {
