@@ -9,8 +9,11 @@ export const IMPORT_PREFIX = "temporary-coach-off:2026-09";
 export const PERIOD_START = "2026-09-01";
 export const PERIOD_END = "2026-10-01";
 export const BUSINESS_CLOSURE_DATE = "2026-09-05";
+export const BECKY_MANAGER_PREFERENCE_BACKUP_ACTION =
+  "temporary_september_2026_becky_preference_cancellation_backup";
 
 export const TIME_OFF_DAYS_BY_COACH = Object.freeze({
+  Becky: Object.freeze([8, 9, 12, 13, 15, 20, 26, 27, 28, 29, 30]),
   Wade: Object.freeze([1, 4, 6, 7, 14, 15, 21, 22, 27, 28]),
   Wiwi: Object.freeze([6, 10, 15, 20, 23, 24, 29]),
   Una: Object.freeze([2, 11, 12, 18, 19, 25, 26]),
@@ -55,6 +58,13 @@ export function buildTimeOffRows(context) {
       },
     };
   });
+}
+
+export function selfSelectedPreferenceDates(preference) {
+  return (preference?.staff_time_off_preference_dates || [])
+    .filter((item) => item.source === "employee")
+    .map((item) => String(item.requested_date))
+    .sort();
 }
 
 function parseArgs(argv) {
@@ -137,7 +147,7 @@ async function resolveContext(supabase) {
 }
 
 async function readExistingState(supabase, context) {
-  const [notes, businessDay, bookings] = await Promise.all([
+  const [notes, businessDay, bookings, period, beckyPreferenceBackup] = await Promise.all([
     requireData(
       supabase
         .from("bige_schedule_notes")
@@ -169,21 +179,136 @@ async function readExistingState(supabase, context) {
         .lt("starts_at", "2026-09-06T00:00:00+08:00"),
       "讀取館休日既有課程",
     ),
+    requireData(
+      supabase
+        .from("staff_schedule_periods")
+        .select("id, month_start, status")
+        .eq("tenant_id", context.tenantId)
+        .eq("branch_id", context.branchId)
+        .eq("month_start", PERIOD_START)
+        .maybeSingle(),
+      "讀取 9 月主管排班月份",
+    ),
+    requireData(
+      supabase
+        .from("audit_logs")
+        .select("id, payload, created_at")
+        .eq("tenant_id", context.tenantId)
+        .eq("action", BECKY_MANAGER_PREFERENCE_BACKUP_ACTION)
+        .eq("target_type", "staff_time_off_preference")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      "讀取 Becky 自選取消備份",
+    ),
   ]);
-  return { notes: notes || [], businessDay: businessDay || null, bookings: bookings || [] };
+  const becky = context.coaches.get("becky");
+  if (!becky) throw new Error("找不到 Becky 教練帳號");
+  if (!period) throw new Error("找不到 2026 年 9 月主管排班月份");
+  const beckyPreference = await requireData(
+    supabase
+      .from("staff_time_off_preferences")
+      .select("id, period_id, tenant_id, employee_id, status, submitted_at, staff_time_off_preference_dates(id, requested_date, source)")
+      .eq("period_id", period.id)
+      .eq("employee_id", becky.id)
+      .maybeSingle(),
+    "讀取 Becky 主管後台自選資料",
+  );
+  if (!beckyPreference) throw new Error("找不到 Becky 主管後台自選紀錄");
+  return {
+    notes: notes || [],
+    businessDay: businessDay || null,
+    bookings: bookings || [],
+    period,
+    becky,
+    beckyPreference,
+    beckyPreferenceBackup: beckyPreferenceBackup || null,
+  };
 }
 
-async function writeAudit(supabase, context, action, payload) {
+async function writeAudit(supabase, context, action, payload, options = {}) {
   const result = await supabase.from("audit_logs").insert({
     tenant_id: context.tenantId,
     actor_id: null,
     action,
-    target_type: "bige_schedule_month",
-    target_id: "2026-09",
-    reason: "使用者授權：教練帳號測試前的現場休假與館休顯示",
+    target_type: options.targetType || "bige_schedule_month",
+    target_id: options.targetId || "2026-09",
+    reason: options.reason || "使用者授權：教練帳號測試前的現場休假與館休顯示",
     payload,
   });
   if (result.error) throw new Error(`寫入匯入稽核：${result.error.message}`);
+}
+
+async function cancelBeckyManagerPreferenceDates(supabase, context, state) {
+  const selectedDates = selfSelectedPreferenceDates(state.beckyPreference);
+  if (selectedDates.length === 0) return { cancelledDates: [], alreadyCancelled: true };
+  await writeAudit(
+    supabase,
+    context,
+    BECKY_MANAGER_PREFERENCE_BACKUP_ACTION,
+    {
+      preferenceId: state.beckyPreference.id,
+      periodId: state.period.id,
+      employeeId: state.becky.id,
+      status: state.beckyPreference.status,
+      selectedDates,
+    },
+    {
+      targetType: "staff_time_off_preference",
+      targetId: state.beckyPreference.id,
+      reason: "使用者授權：取消主管後台 Becky 的 2026 年 9 月員工自選日期",
+    },
+  );
+  const deletion = await supabase
+    .from("staff_time_off_preference_dates")
+    .delete()
+    .eq("preference_id", state.beckyPreference.id)
+    .eq("source", "employee")
+    .select("id, requested_date");
+  if (deletion.error) throw new Error(`取消 Becky 主管後台自選日期：${deletion.error.message}`);
+  if ((deletion.data || []).length !== selectedDates.length) {
+    throw new Error(`Becky 自選取消筆數不符：deleted=${(deletion.data || []).length}, expected=${selectedDates.length}`);
+  }
+  return { cancelledDates: selectedDates, alreadyCancelled: false };
+}
+
+function preferenceBackupDates(state) {
+  const payload = state.beckyPreferenceBackup?.payload;
+  if (!payload || !Array.isArray(payload.selectedDates)) return [];
+  return payload.selectedDates.map(String).sort();
+}
+
+async function restoreBeckyManagerPreferenceDates(supabase, context, state) {
+  const backupDates = preferenceBackupDates(state);
+  if (backupDates.length === 0) return { restoredDates: [], backupFound: false };
+  const currentDates = selfSelectedPreferenceDates(state.beckyPreference);
+  if (currentDates.length > 0) {
+    if (JSON.stringify(currentDates) !== JSON.stringify(backupDates)) {
+      throw new Error("Becky 主管後台自選日期已被另行修改，停止回復以免覆蓋新資料");
+    }
+    return { restoredDates: currentDates, backupFound: true, alreadyRestored: true };
+  }
+  const backup = state.beckyPreferenceBackup.payload;
+  if (
+    String(backup.preferenceId) !== String(state.beckyPreference.id) ||
+    String(backup.periodId) !== String(state.period.id) ||
+    String(backup.employeeId) !== String(state.becky.id)
+  ) {
+    throw new Error("Becky 自選取消備份與目前資料不一致，停止回復");
+  }
+  const restoration = await supabase.from("staff_time_off_preference_dates").insert(
+    backupDates.map((requestedDate) => ({
+      preference_id: state.beckyPreference.id,
+      period_id: state.period.id,
+      tenant_id: context.tenantId,
+      employee_id: state.becky.id,
+      requested_date: requestedDate,
+      source: "employee",
+      created_by: state.becky.id,
+    })),
+  ).select("id, requested_date");
+  if (restoration.error) throw new Error(`回復 Becky 主管後台自選日期：${restoration.error.message}`);
+  return { restoredDates: backupDates, backupFound: true, alreadyRestored: false };
 }
 
 async function applyPlan(supabase, context, state) {
@@ -257,6 +382,12 @@ async function applyPlan(supabase, context, state) {
     if (result.error) throw new Error(`更新館休：${result.error.message}`);
   }
 
+  const beckyManagerPreference = await cancelBeckyManagerPreferenceDates(
+    supabase,
+    context,
+    state,
+  );
+
   await writeAudit(supabase, context, "temporary_september_2026_coach_leave_import", {
     importSource: IMPORT_SOURCE,
     timeOffCount: rows.length,
@@ -266,6 +397,8 @@ async function applyPlan(supabase, context, state) {
     closureDate: BUSINESS_CLOSURE_DATE,
     closureOwnership,
     preservedBookingCount: state.bookings.length,
+    cancelledBeckyManagerPreferenceDates: beckyManagerPreference.cancelledDates,
+    beckyManagerPreferenceAlreadyCancelled: beckyManagerPreference.alreadyCancelled,
   });
   return {
     expected: rows.length,
@@ -274,10 +407,16 @@ async function applyPlan(supabase, context, state) {
     removed: obsolete.length,
     closureOwnership,
     preservedBookingCount: state.bookings.length,
+    beckyManagerPreference,
   };
 }
 
 async function rollbackPlan(supabase, context, state) {
+  const beckyManagerPreference = await restoreBeckyManagerPreferenceDates(
+    supabase,
+    context,
+    state,
+  );
   if (state.notes.length > 0) {
     const result = await supabase
       .from("bige_schedule_notes")
@@ -299,8 +438,9 @@ async function rollbackPlan(supabase, context, state) {
     removedTimeOffCount: state.notes.length,
     closureDate: BUSINESS_CLOSURE_DATE,
     closureRemoved,
+    restoredBeckyManagerPreferenceDates: beckyManagerPreference.restoredDates,
   });
-  return { removedTimeOffCount: state.notes.length, closureRemoved };
+  return { removedTimeOffCount: state.notes.length, closureRemoved, beckyManagerPreference };
 }
 
 async function verifyAppliedPlan(supabase, context) {
@@ -321,9 +461,17 @@ async function verifyAppliedPlan(supabase, context) {
   const closureOk = Boolean(
     state.businessDay?.is_closed && state.businessDay?.closure_label === "館休",
   );
-  if (state.notes.length !== desiredRows.length || errors.length > 0 || !closureOk) {
+  const beckyManagerPreferenceDates = selfSelectedPreferenceDates(state.beckyPreference);
+  const beckyManagerPreferenceOk =
+    state.beckyPreference.status === "submitted" && beckyManagerPreferenceDates.length === 0;
+  if (
+    state.notes.length !== desiredRows.length ||
+    errors.length > 0 ||
+    !closureOk ||
+    !beckyManagerPreferenceOk
+  ) {
     throw new Error(
-      `正式資料驗證失敗：live=${state.notes.length}, desired=${desiredRows.length}, errors=${errors.length}, closure=${closureOk}`,
+      `正式資料驗證失敗：live=${state.notes.length}, desired=${desiredRows.length}, errors=${errors.length}, closure=${closureOk}, beckyManagerPreference=${beckyManagerPreferenceOk}`,
     );
   }
   return {
@@ -332,17 +480,29 @@ async function verifyAppliedPlan(supabase, context) {
     closureDate: BUSINESS_CLOSURE_DATE,
     closureOk,
     preservedBookingCount: state.bookings.length,
+    beckyManagerPreferenceOk,
+    beckyManagerPreferenceDateCount: beckyManagerPreferenceDates.length,
   };
 }
 
 async function verifyRolledBackPlan(supabase, context) {
   const state = await readExistingState(supabase, context);
-  if (state.notes.length > 0 || state.businessDay?.source === IMPORT_SOURCE) {
+  const backupDates = preferenceBackupDates(state);
+  const currentDates = selfSelectedPreferenceDates(state.beckyPreference);
+  const preferenceRestored =
+    backupDates.length === 0 || JSON.stringify(currentDates) === JSON.stringify(backupDates);
+  if (state.notes.length > 0 || state.businessDay?.source === IMPORT_SOURCE || !preferenceRestored) {
     throw new Error(
-      `臨時資料移除驗證失敗：notes=${state.notes.length}, closureOwned=${state.businessDay?.source === IMPORT_SOURCE}`,
+      `臨時資料移除驗證失敗：notes=${state.notes.length}, closureOwned=${state.businessDay?.source === IMPORT_SOURCE}, beckyPreferenceRestored=${preferenceRestored}`,
     );
   }
-  return { ok: true, timeOffCount: 0, closureOwned: false };
+  return {
+    ok: true,
+    timeOffCount: 0,
+    closureOwned: false,
+    beckyManagerPreferenceRestored: preferenceRestored,
+    beckyManagerPreferenceDateCount: currentDates.length,
+  };
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -359,6 +519,7 @@ export async function main(argv = process.argv.slice(2)) {
         timeOffCount: plan.length,
         countsByCoach: summary,
         closureDate: BUSINESS_CLOSURE_DATE,
+        cancelBeckyManagerPreferenceDates: true,
       },
       null,
       2,
@@ -377,6 +538,9 @@ export async function main(argv = process.argv.slice(2)) {
           existingTemporaryNotes: state.notes.length,
           existingBusinessDay: state.businessDay,
           preservedBookingCount: state.bookings.length,
+          beckyManagerPreferenceStatus: state.beckyPreference.status,
+          beckyManagerPreferenceDates: selfSelectedPreferenceDates(state.beckyPreference),
+          beckyManagerPreferenceBackupFound: Boolean(state.beckyPreferenceBackup),
         },
       },
       null,
