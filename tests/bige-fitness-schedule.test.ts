@@ -79,6 +79,13 @@ import {
 const batchCoachId = "00000000-0000-4000-8000-000000000011";
 const batchMemberId = "00000000-0000-4000-8000-000000000012";
 
+test("daily schedule excludes the explicit E000099 test coach from every visible coach list", () => {
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+
+  assert.equal(route.match(/filterDailyScheduleCoaches\(/g)?.length, 3);
+  assert.match(route, /select\("id, employee_number"\)/);
+});
+
 test("daily board hides every cancellation from August 20 through 31", () => {
   const now = new Date("2026-08-26T03:00:00.000Z");
 

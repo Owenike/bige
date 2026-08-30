@@ -1,9 +1,28 @@
 export type CoachOrderItem = { id: string };
 
+export type DailyScheduleCoachItem = {
+  employee_number?: string | null;
+};
+
+const DAILY_SCHEDULE_EXCLUDED_EMPLOYEE_NUMBERS = new Set(["E000099"]);
+
 export type StoredCoachOrder = {
   coach_id: string;
   sort_order: number;
 };
+
+export function filterDailyScheduleCoaches<
+  T extends DailyScheduleCoachItem & CoachOrderItem,
+>(
+  coaches: readonly T[],
+) {
+  return coaches.filter(
+    (coach) =>
+      !DAILY_SCHEDULE_EXCLUDED_EMPLOYEE_NUMBERS.has(
+        String(coach.employee_number || "").trim().toUpperCase(),
+      ),
+  );
+}
 
 export function reorderCoachList<T extends CoachOrderItem>(
   coaches: readonly T[],

@@ -1,7 +1,11 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { apiError, apiSuccess, requireProfile, type ProfileContext } from "../../../lib/auth-context";
-import { applyStoredCoachOrder, hasExactCoachSet } from "../../../lib/bige-coach-order";
+import {
+  applyStoredCoachOrder,
+  filterDailyScheduleCoaches,
+  hasExactCoachSet,
+} from "../../../lib/bige-coach-order";
 import {
   collectCoachDayStatuses,
   readCoachDayStatusMarker,
@@ -2125,7 +2129,7 @@ export async function GET(request: Request) {
   }
 
   const orderedCoaches = applyStoredCoachOrder(
-    coachesResult.data || [],
+    filterDailyScheduleCoaches(coachesResult.data || []),
     coachOrderResult.data || [],
   );
   const rawNotes = notesResult.data || [];
@@ -2654,7 +2658,7 @@ export async function POST(request: Request) {
     });
     let coachesQuery = admin
       .from("profiles")
-      .select("id")
+      .select("id, employee_number")
       .eq("tenant_id", tenantId)
       .or("role.in.(coach,therapist),department.eq.coaching")
       .eq("is_active", true);
@@ -2667,7 +2671,9 @@ export async function POST(request: Request) {
     if (coachesResult.error) {
       return apiError(500, "INTERNAL_ERROR", coachesResult.error.message);
     }
-    const expectedCoachIds = (coachesResult.data || []).map((coach) => coach.id);
+    const expectedCoachIds = filterDailyScheduleCoaches(coachesResult.data || []).map(
+      (coach) => coach.id,
+    );
     if (!hasExactCoachSet(expectedCoachIds, input.coachIds)) {
       return apiError(409, "FORBIDDEN", "教練名單已更新，請重新整理後再調整順序");
     }
@@ -2787,7 +2793,7 @@ export async function POST(request: Request) {
       );
     }
     const coaches = applyStoredCoachOrder(
-      coachesResult.data || [],
+      filterDailyScheduleCoaches(coachesResult.data || []),
       coachOrderResult.data || [],
     );
     if (coaches.length === 0) return apiSuccess({ businessDate: taipeiDateTimeParts(input.startsAt).date, options: [] });

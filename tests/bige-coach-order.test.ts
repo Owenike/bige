@@ -3,12 +3,23 @@ import test from "node:test";
 import {
   applyCoachIdOrder,
   applyStoredCoachOrder,
+  filterDailyScheduleCoaches,
   hasExactCoachSet,
   reorderCoachList,
   synchronizeCoachOrderAcrossBoards,
 } from "../lib/bige-coach-order";
 
 const coaches = ["Bae", "Becky", "Lily", "Una", "Wade", "Wiwi"].map((id) => ({ id }));
+
+test("the explicit E000099 test account stays out of daily schedule coach lists", () => {
+  const visible = filterDailyScheduleCoaches([
+    { id: "regular", employee_number: "E000002" },
+    { id: "test", employee_number: " e000099 " },
+    { id: "unnumbered", employee_number: null },
+  ]);
+
+  assert.deepEqual(visible.map((coach) => coach.id), ["regular", "unnumbered"]);
+});
 
 test("a coach column can move from first to fifth without losing any coach", () => {
   const reordered = reorderCoachList(coaches, "Bae", "Wade");
