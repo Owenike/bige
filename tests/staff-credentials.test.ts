@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   canChooseStaffEmployeeNumber,
@@ -62,4 +63,37 @@ test("placeholder emails are deterministic and identifiable", () => {
   assert.equal(staffPlaceholderEmail("E000123"), "e000123@staff.bigefitness.invalid");
   assert.equal(isStaffPlaceholderEmail("e000123@staff.bigefitness.invalid"), true);
   assert.equal(isStaffPlaceholderEmail("staff@example.com"), false);
+});
+
+test("staff number migration repairs 13 and 14 and allocates from 15 while ignoring test 99", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260830161333_reconcile_staff_employee_numbers.sql",
+    "utf8",
+  );
+
+  assert.match(
+    migration,
+    /30d43cb4-0ffc-488c-9d32-23f570af634f[\s\S]*employee_number = 'E000013'/,
+  );
+  assert.match(
+    migration,
+    /90d57ff1-e0af-4b84-ac83-77c770271ed1[\s\S]*employee_number = 'E000014'/,
+  );
+  assert.match(migration, /employee_number <> 'E000099'/);
+  assert.match(migration, /pg_advisory_xact_lock/);
+  assert.match(migration, /pg_catalog\.setval/);
+  assert.match(migration, /pg_catalog\.nextval/);
+  assert.match(migration, /set search_path = ''/);
+  assert.match(
+    migration,
+    /revoke all on function public\.next_staff_employee_number\(\) from authenticated/,
+  );
+  assert.match(
+    migration,
+    /grant execute on function public\.next_staff_employee_number\(\) to service_role/,
+  );
+  assert.match(
+    migration,
+    /grant update on sequence public\.staff_employee_number_seq to service_role/,
+  );
 });
