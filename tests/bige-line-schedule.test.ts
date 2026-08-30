@@ -258,6 +258,10 @@ test("shared LINE groups route several members while each snapshot remains membe
     "supabase/migrations/20260830211002_add_shared_line_group_members.sql",
     "utf8",
   );
+  const indexMigration = readFileSync(
+    "supabase/migrations/20260830213831_index_shared_line_group_members_created_by.sql",
+    "utf8",
+  );
 
   assert.match(migration, /create table public\.bige_line_group_binding_members/);
   assert.match(migration, /primary key \(binding_id, member_id\)/);
@@ -267,6 +271,10 @@ test("shared LINE groups route several members while each snapshot remains membe
   assert.match(migration, /bige_sync_line_group_primary_member_trigger/);
   assert.match(migration, /alter table public\.bige_line_group_binding_members enable row level security/);
   assert.match(migration, /revoke all on table public\.bige_line_group_binding_members[\s\S]{0,80}authenticated/);
+  assert.match(
+    indexMigration,
+    /bige_line_group_binding_members_created_by_idx[\s\S]*\(created_by\)/,
+  );
 
   assert.match(line, /resolveActiveBigeLineGroupBinding/);
   assert.match(line, /\.from\("bige_line_group_binding_members"\)/);
