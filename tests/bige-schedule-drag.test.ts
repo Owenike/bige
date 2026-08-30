@@ -74,6 +74,31 @@ test("two one-hour PT bookings are grouped when swapping with a two-hour FA", ()
   assert.equal(result.plan.spanMinutes, 120);
 });
 
+test("cancelled history is ignored when swapping a two-hour FA with two active PT bookings", () => {
+  const bookings = [
+    booking("cancelled-source-fa", "coach-a", "2026-09-10T19:00:00+08:00", 120, "cancelled"),
+    booking("source-fa", "coach-a", "2026-09-10T19:00:00+08:00", 120),
+    booking("cancelled-target-a", "coach-b", "2026-09-10T19:00:00+08:00", 60, "cancelled"),
+    booking("cancelled-target-b", "coach-b", "2026-09-10T19:00:00+08:00", 60, "cancelled"),
+    booking("target-19", "coach-b", "2026-09-10T19:00:00+08:00"),
+    booking("target-20", "coach-b", "2026-09-10T20:00:00+08:00"),
+  ];
+
+  const result = analyzeScheduleDrop({
+    bookings,
+    notes: [],
+    sourceBookingId: "source-fa",
+    targetCoachId: "coach-b",
+    targetStartsAt: "2026-09-10T19:00:00+08:00",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.plan.sourceItems.map((item) => item.id), ["source-fa"]);
+  assert.deepEqual(result.plan.targetItems.map((item) => item.id), ["target-19", "target-20"]);
+  assert.equal(result.plan.spanMinutes, 120);
+});
+
 test("extending a schedule edit cannot cover the next active booking", () => {
   const conflict = findScheduleEditConflict({
     bookings: [

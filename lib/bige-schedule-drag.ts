@@ -528,6 +528,7 @@ export function analyzeScheduleDrop<TBooking extends ScheduleDragBooking>(params
     (booking) =>
       booking.id !== source.id &&
       !isLegacyScheduleReferenceBooking(booking) &&
+      booking.status !== "cancelled" &&
       booking.coach_id === params.targetCoachId &&
       requestedTargetMs >= new Date(booking.starts_at).getTime() &&
       requestedTargetMs < new Date(booking.ends_at).getTime(),
@@ -566,6 +567,7 @@ export function analyzeScheduleDrop<TBooking extends ScheduleDragBooking>(params
       const start = new Date(booking.starts_at).getTime();
       return (
         !isLegacyScheduleReferenceBooking(booking) &&
+        booking.status !== "cancelled" &&
         booking.coach_id === source.coach_id &&
         start >= sourceMs &&
         start < sourceEnd
@@ -577,6 +579,7 @@ export function analyzeScheduleDrop<TBooking extends ScheduleDragBooking>(params
       return (
         booking.coach_id === params.targetCoachId &&
         !isLegacyScheduleReferenceBooking(booking) &&
+        booking.status !== "cancelled" &&
         start >= targetMs &&
         start < targetEnd &&
         !sourceIds.has(booking.id)

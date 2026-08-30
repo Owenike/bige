@@ -2770,6 +2770,32 @@ test("schedule drag ignores a booking hidden by the schedule trash action", () =
   );
 });
 
+test("schedule drag ignores all cancelled history while preserving other locked statuses", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260830222019_allow_schedule_drag_past_cancelled_bookings.sql",
+    "utf8",
+  );
+  const dragLogic = readFileSync("lib/bige-schedule-drag.ts", "utf8");
+  const regression = readFileSync("tests/bige_schedule_drag_roundtrip.sql", "utf8");
+
+  assert.match(
+    migration,
+    /regexp_replace\([\s\S]*booking\\\.status <> 'cancelled'[\s\S]*and booking\.status <> 'cancelled'/,
+  );
+  assert.match(
+    migration,
+    /regexp_replace\([\s\S]*existing\\\.status <> 'cancelled'[\s\S]*and existing\.status <> 'cancelled'/,
+  );
+  assert.match(
+    dragLogic,
+    /targetPrimary[\s\S]*booking\.status !== "cancelled"[\s\S]*sourceItems[\s\S]*booking\.status !== "cancelled"[\s\S]*targetItems[\s\S]*booking\.status !== "cancelled"/,
+  );
+  assert.match(
+    regression,
+    /cancelled_source_fa_id[\s\S]*cancelled_target_a_id[\s\S]*cancelled_target_b_id[\s\S]*cancelled_history_swap[\s\S]*cancelled history prevented the active FA\/PT swap/,
+  );
+});
+
 test("FA ECPay conversion and restore remove only conversion-created formal identity", () => {
   const migration = readFileSync(
     "supabase/migrations/20260815221634_fix_fa_payment_and_restore_member.sql",

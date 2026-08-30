@@ -12,12 +12,21 @@ declare
   member_b_id uuid := '42000000-0000-4000-8000-000000000002';
   slot_a timestamptz := ((current_date + 3)::timestamp + time '15:00') at time zone 'Asia/Taipei';
   slot_b timestamptz := ((current_date + 3)::timestamp + time '17:00') at time zone 'Asia/Taipei';
+  source_fa_slot timestamptz := ((current_date + 3)::timestamp + time '09:00') at time zone 'Asia/Taipei';
+  target_pair_slot timestamptz := ((current_date + 3)::timestamp + time '11:00') at time zone 'Asia/Taipei';
   booking_a_id uuid;
   booking_b_id uuid;
+  cancelled_source_fa_id uuid;
+  source_fa_id uuid;
+  cancelled_target_a_id uuid;
+  cancelled_target_b_id uuid;
+  target_a_id uuid;
+  target_b_id uuid;
   first_swap jsonb;
   second_swap jsonb;
   undo_swap jsonb;
   deleted_slot_move jsonb;
+  cancelled_history_swap jsonb;
 begin
   insert into auth.users (
     id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -194,6 +203,126 @@ begin
         raise;
       end if;
   end;
+
+  -- Reproduce the production failure: cancelled historical rows share the
+  -- source and target cells with one active two-hour FA and two active PTs.
+  -- They must remain stored for history without entering the swap window.
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_b_id, null, coach_a_id,
+    'trial', 'reformer_pilates', source_fa_slot, source_fa_slot + interval '2 hours',
+    null, null, 'test:drag-roundtrip:cancelled-source-fa'
+  );
+  select id into cancelled_source_fa_id from public.bookings
+  where operation_idempotency_key = 'test:drag-roundtrip:cancelled-source-fa';
+  update public.bookings
+  set status = 'cancelled',
+      operation_result = 'cancelled',
+      status_reason = null,
+      cancelled_at = now(),
+      status_updated_at = now(),
+      updated_at = now()
+  where id = cancelled_source_fa_id;
+
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_a_id, null, coach_a_id,
+    'trial', 'reformer_pilates', source_fa_slot, source_fa_slot + interval '2 hours',
+    null, null, 'test:drag-roundtrip:active-source-fa'
+  );
+  select id into source_fa_id from public.bookings
+  where operation_idempotency_key = 'test:drag-roundtrip:active-source-fa';
+
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_a_id, null, coach_b_id,
+    'pt', 'weight_training', target_pair_slot, target_pair_slot + interval '1 hour',
+    null, null, 'test:drag-roundtrip:cancelled-target-a'
+  );
+  select id into cancelled_target_a_id from public.bookings
+  where operation_idempotency_key = 'test:drag-roundtrip:cancelled-target-a';
+  update public.bookings
+  set status = 'cancelled',
+      operation_result = 'cancelled',
+      status_reason = null,
+      cancelled_at = now(),
+      status_updated_at = now(),
+      updated_at = now()
+  where id = cancelled_target_a_id;
+
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_b_id, null, coach_b_id,
+    'pt', 'weight_training', target_pair_slot, target_pair_slot + interval '1 hour',
+    null, null, 'test:drag-roundtrip:cancelled-target-b'
+  );
+  select id into cancelled_target_b_id from public.bookings
+  where operation_idempotency_key = 'test:drag-roundtrip:cancelled-target-b';
+  update public.bookings
+  set status = 'cancelled',
+      operation_result = 'cancelled',
+      status_reason = null,
+      cancelled_at = now(),
+      status_updated_at = now(),
+      updated_at = now()
+  where id = cancelled_target_b_id;
+
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_a_id, null, coach_b_id,
+    'pt', 'weight_training', target_pair_slot, target_pair_slot + interval '1 hour',
+    null, null, 'test:drag-roundtrip:active-target-a'
+  );
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_b_id, null, coach_b_id,
+    'pt', 'reformer_pilates', target_pair_slot + interval '1 hour', target_pair_slot + interval '2 hours',
+    null, null, 'test:drag-roundtrip:active-target-b'
+  );
+  select id into target_a_id from public.bookings
+  where operation_idempotency_key = 'test:drag-roundtrip:active-target-a';
+  select id into target_b_id from public.bookings
+  where operation_idempotency_key = 'test:drag-roundtrip:active-target-b';
+
+  cancelled_history_swap := public.bige_drag_schedule_booking(
+    tenant_id, source_fa_id, coach_b_id, target_pair_slot, 'swap'
+  );
+
+  if not exists (
+    select 1 from public.bookings
+    where id = source_fa_id
+      and coach_id = coach_b_id
+      and starts_at = target_pair_slot
+      and ends_at = target_pair_slot + interval '2 hours'
+      and status = 'booked'
+  ) or not exists (
+    select 1 from public.bookings
+    where id = target_a_id
+      and coach_id = coach_a_id
+      and starts_at = source_fa_slot
+      and status = 'booked'
+  ) or not exists (
+    select 1 from public.bookings
+    where id = target_b_id
+      and coach_id = coach_a_id
+      and starts_at = source_fa_slot + interval '1 hour'
+      and status = 'booked'
+  ) then
+    raise exception 'cancelled history prevented the active FA/PT swap';
+  end if;
+
+  if exists (
+    select 1 from public.bookings
+    where id in (cancelled_source_fa_id, cancelled_target_a_id, cancelled_target_b_id)
+      and (
+        status <> 'cancelled'
+        or (id = cancelled_source_fa_id and (coach_id <> coach_a_id or starts_at <> source_fa_slot))
+        or (id in (cancelled_target_a_id, cancelled_target_b_id)
+            and (coach_id <> coach_b_id or starts_at <> target_pair_slot))
+      )
+  ) then
+    raise exception 'cancelled booking history changed during the active swap';
+  end if;
+
+  if cancelled_history_swap ->> 'mode' <> 'swap'
+     or (cancelled_history_swap ->> 'movedCount')::integer <> 3
+     or (cancelled_history_swap ->> 'cancelledCount')::integer <> 0 then
+    raise exception 'cancelled-history swap result metadata is incomplete';
+  end if;
 end;
 $$;
 
