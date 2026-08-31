@@ -214,7 +214,7 @@ test("free text also blocks a schedule edit that would cover its time", () => {
   assert.equal(conflict?.item.id, "note-16");
 });
 
-test("legacy appointment-book entries warn visually but do not block edits or drag targets", () => {
+test("legacy appointment-book entries remain non-blocking and active bookings can be dragged", () => {
   const source = booking("source", "coach-a", "2026-08-03T15:00:00+08:00");
   const legacyBooking = {
     ...booking("legacy", "coach-b", "2026-08-03T16:00:00+08:00"),
@@ -239,7 +239,7 @@ test("legacy appointment-book entries warn visually but do not block edits or dr
     }),
     null,
   );
-  assert.equal(isScheduleBookingDraggable(legacyBooking), false);
+  assert.equal(isScheduleBookingDraggable(legacyBooking), true);
 
   const drop = analyzeScheduleDrop({
     bookings: [source, legacyBooking],
@@ -252,6 +252,31 @@ test("legacy appointment-book entries warn visually but do not block edits or dr
   if (!drop.ok) return;
   assert.deepEqual(drop.plan.targetItems, []);
   assert.equal(drop.plan.targetStartsAt, "2026-08-03T16:00:00+08:00");
+});
+
+test("dragging a legacy appointment-book booking moves only that reference row", () => {
+  const legacyBooking = {
+    ...booking("legacy", "coach-a", "2026-08-03T15:00:00+08:00"),
+    operation_idempotency_key: "legacy-august:test-reference",
+  };
+  const overlappingOperationalBooking = booking(
+    "operational",
+    "coach-a",
+    "2026-08-03T15:00:00+08:00",
+  );
+
+  const drop = analyzeScheduleDrop({
+    bookings: [legacyBooking, overlappingOperationalBooking],
+    notes: [],
+    sourceBookingId: legacyBooking.id,
+    targetCoachId: "coach-b",
+    targetStartsAt: "2026-08-03T17:00:00+08:00",
+  });
+
+  assert.equal(drop.ok, true);
+  if (!drop.ok) return;
+  assert.deepEqual(drop.plan.sourceItems.map((item) => item.id), [legacyBooking.id]);
+  assert.deepEqual(drop.plan.targetItems, []);
 });
 
 test("a two-hour FA can move from 11:00 to its own occupied 12:00 second hour", () => {

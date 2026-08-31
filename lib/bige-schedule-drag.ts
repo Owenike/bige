@@ -187,10 +187,7 @@ export function findScheduleEditConflict<
 export function isScheduleBookingDraggable(
   booking: Pick<ScheduleDragBooking, "status" | "operation_idempotency_key">,
 ) {
-  return (
-    !isLegacyScheduleReferenceBooking(booking) &&
-    (BIGE_DRAGGABLE_BOOKING_STATUSES as readonly string[]).includes(booking.status)
-  );
+  return (BIGE_DRAGGABLE_BOOKING_STATUSES as readonly string[]).includes(booking.status);
 }
 
 export function isScheduleTrashDeletedBooking(booking: {
@@ -557,6 +554,7 @@ export function analyzeScheduleDrop<TBooking extends ScheduleDragBooking>(params
   let spanMs = Math.max(durationMs(source), targetPrimary ? durationMs(targetPrimary) : 0);
   let sourceItems: TBooking[] = [];
   let targetItems: TBooking[] = [];
+  const sourceIsLegacyReference = isLegacyScheduleReferenceBooking(source);
 
   // Expand both windows until every booking starting in either window is fully
   // contained. This is what lets a two-hour FA exchange with two one-hour PTs.
@@ -566,7 +564,9 @@ export function analyzeScheduleDrop<TBooking extends ScheduleDragBooking>(params
     sourceItems = params.bookings.filter((booking) => {
       const start = new Date(booking.starts_at).getTime();
       return (
-        !isLegacyScheduleReferenceBooking(booking) &&
+        (sourceIsLegacyReference
+          ? booking.id === source.id
+          : !isLegacyScheduleReferenceBooking(booking)) &&
         booking.status !== "cancelled" &&
         booking.coach_id === source.coach_id &&
         start >= sourceMs &&

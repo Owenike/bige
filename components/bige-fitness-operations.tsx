@@ -109,7 +109,6 @@ import {
   buildOptimisticFaAssistantToState,
   buildOptimisticScheduleMoveResult,
   findScheduleEditConflict,
-  isLegacyScheduleReferenceBooking,
   isLegacyScheduleReferenceNote,
   isScheduleBookingDraggable,
   runOptimisticScheduleMutation,
@@ -3214,7 +3213,7 @@ export default function BigeFitnessOperations({
       setError("");
       setScheduleDragNotice(
         isLegacyScheduleReferenceNote(payload.item)
-          ? "舊預約本資料僅供對照，不能移動或覆蓋。"
+          ? "舊預約本的自由文字請直接點擊原資料編輯；自由文字不能拖拉、交換或覆蓋。"
           : "自由文字不能拖拉、交換或覆蓋，請直接點擊原資料編輯。",
       );
       return;
@@ -3222,11 +3221,7 @@ export default function BigeFitnessOperations({
     if (!payload.movable) {
       setActiveScheduleDrag(null);
       setError("");
-      setScheduleDragNotice(
-        isLegacyScheduleReferenceBooking(payload.item)
-          ? "舊預約本資料僅供對照，不能移動或覆蓋。"
-          : "已完成、已取消、已報到或已核銷的課程不能拖拉。",
-      );
+      setScheduleDragNotice("已完成、已取消、已報到或已核銷的課程不能拖拉。");
       return;
     }
     setError("");

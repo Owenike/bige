@@ -297,6 +297,40 @@ begin
     raise exception 'drag should preserve both the reference and operational booking';
   end if;
 
+  select id into reschedule_booking_id
+  from public.bookings
+  where operation_idempotency_key = 'legacy-august:test-reference:drag';
+
+  reschedule_result := public.bige_drag_schedule_booking(
+    tenant_id,
+    reschedule_booking_id,
+    coach_b,
+    schedule_start + interval '13 hours',
+    'move'
+  );
+  if (reschedule_result ->> 'movedCount')::integer <> 1 then
+    raise exception 'dragging a legacy reference should move exactly one row';
+  end if;
+  if not exists (
+    select 1
+    from public.bookings
+    where id = reschedule_booking_id
+      and coach_id = coach_b
+      and starts_at = schedule_start + interval '13 hours'
+      and operation_idempotency_key = 'legacy-august:test-reference:drag'
+  ) then
+    raise exception 'legacy appointment-book booking did not move';
+  end if;
+  if not exists (
+    select 1
+    from public.bookings
+    where operation_idempotency_key = 'test:legacy-reference:drag'
+      and coach_id = coach_a
+      and starts_at = schedule_start + interval '11 hours'
+  ) then
+    raise exception 'moving the legacy reference also moved the overlapping formal booking';
+  end if;
+
   contract_result := public.bige_create_member_contract(
     tenant_id, branch_id, member_a, null,
     'Member A', '0911000001', '1990-01-01', 'a@test.local', false,
