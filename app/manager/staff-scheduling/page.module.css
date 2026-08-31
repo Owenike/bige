@@ -202,13 +202,13 @@
 .scheduleTable tbody .evenDateColumn{background:rgba(15,27,39,.94)}
 .scheduleTable tbody tr:hover td{background:rgba(24,38,51,.94)!important}
 .scheduleTable tbody tr:hover .nameCell{background:#192b3b!important}
-.scheduleTable .earlyShiftBadge{color:#d9bd92}
+.scheduleTable .earlyShiftBadge{color:#8b4d10}
 .scheduleTable .middleShiftBadge{color:#c0cad2}
-.scheduleTable .lateShiftBadge{color:#a9c5e0}
-.scheduleTable .offBadge{color:#d8a8ac}
-.scheduleTable thead .dateGridCell,.scheduleTable tbody .dateGridCell,.scheduleTable tfoot .dateGridCell{background:#e2e6ea;color:#111827}
-.scheduleTable thead .dateGridCell.weekend{background:#e2e6ea!important;color:#a54539}
-.scheduleTable tbody tr:hover .dateGridCell{background:#e2e6ea!important}
+.scheduleTable .lateShiftBadge{color:#24558f}
+.scheduleTable .offBadge{color:#9a3038}
+.scheduleTable thead .dateGridCell,.scheduleTable tbody .dateGridCell,.scheduleTable tfoot .dateGridCell{background:#d6dbdf;color:#111827}
+.scheduleTable thead .dateGridCell.weekend{background:#d6dbdf!important;color:#a54539}
+.scheduleTable tbody tr:hover .dateGridCell{background:#c4cfd8!important}
 .scheduleTable .dateGridCell .middleShiftBadge,.scheduleTable .dateGridCell .emptyCell{color:#111827}
 .leaveBalances i{border:1px solid rgba(216,182,105,.38);background:rgba(216,182,105,.13);color:var(--schedule-manager-gold-bright)}
 .holidayPanel{border-color:#a84a52;background:linear-gradient(145deg,rgba(70,25,31,.94),rgba(27,11,16,.94))}
