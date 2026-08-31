@@ -7,11 +7,13 @@ import {
   analyzeScheduleDrop,
   buildOptimisticFaAssistantToState,
   buildOptimisticScheduleMoveResult,
+  findScheduleBookingForTaipeiHour,
   findScheduleEditConflict,
   isScheduleBookingDraggable,
   isScheduleTrashDeletedBooking,
   isScheduleDragBlockingNote,
   runOptimisticScheduleMutation,
+  scheduleBookingDisplayEndMs,
   type ScheduleDragBooking,
 } from "../lib/bige-schedule-drag";
 import { buildBigeClassroomConflicts } from "../lib/bige-classroom-conflicts";
@@ -97,6 +99,64 @@ test("cancelled history is ignored when swapping a two-hour FA with two active P
   assert.deepEqual(result.plan.sourceItems.map((item) => item.id), ["source-fa"]);
   assert.deepEqual(result.plan.targetItems.map((item) => item.id), ["target-19", "target-20"]);
   assert.equal(result.plan.spanMinutes, 120);
+});
+
+test("moving an FA into an empty hour preserves the following hour booking", () => {
+  const sourceFa = {
+    ...booking("source-fa", "coach-a", "2026-09-10T15:00:00+08:00", 120),
+    operation_kind: "trial",
+  };
+  const followingBooking = booking(
+    "target-20",
+    "coach-b",
+    "2026-09-10T20:00:00+08:00",
+  );
+  const result = analyzeScheduleDrop({
+    bookings: [sourceFa, followingBooking],
+    notes: [],
+    sourceBookingId: sourceFa.id,
+    targetCoachId: "coach-b",
+    targetStartsAt: "2026-09-10T19:00:00+08:00",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.plan.sourceItems.map((item) => item.id), [sourceFa.id]);
+  assert.deepEqual(result.plan.targetItems, []);
+  assert.equal(result.plan.spanMinutes, 60);
+});
+
+test("an FA card yields the following hour cell to a booking that starts there", () => {
+  const movedFa = {
+    ...booking("moved-fa", "coach-b", "2026-09-10T19:00:00+08:00", 120),
+    operation_kind: "trial",
+  };
+  const followingBooking = booking(
+    "target-20",
+    "coach-b",
+    "2026-09-10T20:00:00+08:00",
+  );
+  const bookings = [movedFa, followingBooking];
+
+  assert.equal(findScheduleBookingForTaipeiHour(bookings, "coach-b", 19)?.id, movedFa.id);
+  assert.equal(
+    findScheduleBookingForTaipeiHour(bookings, "coach-b", 20)?.id,
+    followingBooking.id,
+  );
+  assert.equal(
+    scheduleBookingDisplayEndMs(movedFa, bookings),
+    new Date(followingBooking.starts_at).getTime(),
+  );
+
+  const visibleCancelledBooking = {
+    ...followingBooking,
+    id: "target-20-cancelled",
+    status: "cancelled",
+  };
+  assert.equal(
+    scheduleBookingDisplayEndMs(movedFa, [movedFa, visibleCancelledBooking]),
+    new Date(visibleCancelledBooking.starts_at).getTime(),
+  );
 });
 
 test("extending a schedule edit cannot cover the next active booking", () => {

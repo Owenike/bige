@@ -108,10 +108,12 @@ import {
   analyzeScheduleDrop,
   buildOptimisticFaAssistantToState,
   buildOptimisticScheduleMoveResult,
+  findScheduleBookingForTaipeiHour,
   findScheduleEditConflict,
   isLegacyScheduleReferenceNote,
   isScheduleBookingDraggable,
   runOptimisticScheduleMutation,
+  scheduleBookingDisplayEndMs,
   type ScheduleDropPlan,
   type ScheduleMoveResultItem,
 } from "../lib/bige-schedule-drag";
@@ -10699,12 +10701,11 @@ function HourRow(props: {
             conflict.coach_id === coach.id &&
             Math.floor(localMinutes(conflict.starts_at) / 60) === props.hour,
         );
-        const booking =
-          props.bookings.find(
-            (item) =>
-              item.coach_id === coach.id &&
-              overlapsHour(item.starts_at, bookingDurationMinutes(item), props.hour),
-          ) || null;
+        const booking = findScheduleBookingForTaipeiHour(
+          props.bookings,
+          coach.id,
+          props.hour,
+        );
         const note =
           props.notes.find(
             (item) =>
@@ -10729,7 +10730,15 @@ function HourRow(props: {
           ? Math.floor(localMinutes(entryStartsAt) / 60) === props.hour
           : false;
         const entryDuration = booking
-          ? bookingDurationMinutes(booking)
+          ? Math.min(
+              bookingDurationMinutes(booking),
+              Math.max(
+                0,
+                (scheduleBookingDisplayEndMs(booking, props.bookings) -
+                  new Date(booking.starts_at).getTime()) /
+                  60_000,
+              ),
+            )
           : note
             ? durationMinutes(note.starts_at, note.ends_at)
             : 0;

@@ -25,6 +25,7 @@ npx tsc `
   tests/bige-schedule-drag.test.ts `
   tests/bige-schedule-permissions.test.ts `
   tests/employee-booking-date-policy.test.ts `
+  tests/fa-drag-leading-hour.test.ts `
   tests/giveme-invoice.test.ts `
   tests/line-push.test.ts `
   tests/legacy-schedule-reference.test.ts `

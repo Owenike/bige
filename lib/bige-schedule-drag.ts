@@ -20,6 +20,7 @@ export type ScheduleDragBooking = {
   ends_at: string;
   status: string;
   course_type?: string | null;
+  operation_kind?: string | null;
   operation_idempotency_key?: string | null;
 };
 
@@ -112,6 +113,58 @@ function taipeiParts(value: string) {
 
 function durationMs(item: Pick<ScheduleDragBooking, "starts_at" | "ends_at">) {
   return Math.max(0, new Date(item.ends_at).getTime() - new Date(item.starts_at).getTime());
+}
+
+const SCHEDULE_HOUR_MS = 60 * 60_000;
+
+function localMinuteOfDay(value: string) {
+  const parts = taipeiParts(value);
+  return parts.hour * 60 + parts.minute;
+}
+
+export function findScheduleBookingForTaipeiHour<TBooking extends ScheduleDragBooking>(
+  bookings: TBooking[],
+  coachId: string,
+  hour: number,
+) {
+  const hourStart = hour * 60;
+  const hourEnd = hourStart + 60;
+  return bookings
+    .filter((booking) => {
+      if (booking.coach_id !== coachId) return false;
+      const start = localMinuteOfDay(booking.starts_at);
+      const end = start + durationMs(booking) / 60_000;
+      return start < hourEnd && end > hourStart;
+    })
+    .sort((first, second) => {
+      const firstStartsHere = Math.floor(localMinuteOfDay(first.starts_at) / 60) === hour;
+      const secondStartsHere = Math.floor(localMinuteOfDay(second.starts_at) / 60) === hour;
+      if (firstStartsHere !== secondStartsHere) return firstStartsHere ? -1 : 1;
+      return new Date(second.starts_at).getTime() - new Date(first.starts_at).getTime();
+    })[0] || null;
+}
+
+export function scheduleBookingDisplayEndMs<TBooking extends ScheduleDragBooking>(
+  booking: TBooking,
+  bookings: TBooking[],
+) {
+  const bookingStartsAt = new Date(booking.starts_at).getTime();
+  const bookingEndsAt = new Date(booking.ends_at).getTime();
+  if (booking.operation_kind !== "trial") return bookingEndsAt;
+
+  return bookings
+    .filter(
+      (candidate) =>
+        candidate.id !== booking.id &&
+        candidate.coach_id === booking.coach_id &&
+        new Date(candidate.starts_at).getTime() > bookingStartsAt &&
+        new Date(candidate.starts_at).getTime() < bookingEndsAt,
+    )
+    .reduce(
+      (earliest, candidate) =>
+        Math.min(earliest, new Date(candidate.starts_at).getTime()),
+      bookingEndsAt,
+    );
 }
 
 function overlaps(
@@ -551,7 +604,23 @@ export function analyzeScheduleDrop<TBooking extends ScheduleDragBooking>(params
     };
   }
 
-  let spanMs = Math.max(durationMs(source), targetPrimary ? durationMs(targetPrimary) : 0);
+  const sourceHasSecondHourBooking = params.bookings.some((booking) => {
+    const startsAt = new Date(booking.starts_at).getTime();
+    return (
+      booking.id !== source.id &&
+      booking.coach_id === source.coach_id &&
+      booking.status !== "cancelled" &&
+      !isLegacyScheduleReferenceBooking(booking) &&
+      startsAt >= sourceMs + SCHEDULE_HOUR_MS &&
+      startsAt < new Date(source.ends_at).getTime()
+    );
+  });
+  const sourceUsesSingleCell =
+    source.operation_kind === "trial" && (!targetPrimary || sourceHasSecondHourBooking);
+  const sourceOccupancyMs = sourceUsesSingleCell
+    ? Math.min(durationMs(source), SCHEDULE_HOUR_MS)
+    : durationMs(source);
+  let spanMs = Math.max(sourceOccupancyMs, targetPrimary ? durationMs(targetPrimary) : 0);
   let sourceItems: TBooking[] = [];
   let targetItems: TBooking[] = [];
   const sourceIsLegacyReference = isLegacyScheduleReferenceBooking(source);
@@ -587,7 +656,11 @@ export function analyzeScheduleDrop<TBooking extends ScheduleDragBooking>(params
     });
     const expandedSpan = Math.max(
       spanMs,
-      ...sourceItems.map((booking) => new Date(booking.ends_at).getTime() - sourceMs),
+      ...sourceItems.map((booking) =>
+        sourceUsesSingleCell && booking.id === source.id
+          ? sourceOccupancyMs
+          : new Date(booking.ends_at).getTime() - sourceMs,
+      ),
       ...targetItems.map((booking) => new Date(booking.ends_at).getTime() - targetMs),
     );
     if (expandedSpan <= spanMs) break;
@@ -620,7 +693,13 @@ export function analyzeScheduleDrop<TBooking extends ScheduleDragBooking>(params
   }
 
   const dayEndMs = Date.UTC(targetParts.year, targetParts.month - 1, targetParts.day, 16);
-  if (targetParts.hour < 9 || targetEnd > dayEndMs || sourceEnd > dayEndMs) {
+  const movedSourceEnd = targetMs + durationMs(source);
+  if (
+    targetParts.hour < 9 ||
+    targetEnd > dayEndMs ||
+    movedSourceEnd > dayEndMs ||
+    sourceEnd > dayEndMs
+  ) {
     return {
       ok: false,
       code: "outside_day",

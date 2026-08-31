@@ -14,6 +14,8 @@ declare
   slot_b timestamptz := ((current_date + 3)::timestamp + time '17:00') at time zone 'Asia/Taipei';
   source_fa_slot timestamptz := ((current_date + 3)::timestamp + time '09:00') at time zone 'Asia/Taipei';
   target_pair_slot timestamptz := ((current_date + 3)::timestamp + time '11:00') at time zone 'Asia/Taipei';
+  leading_fa_source_slot timestamptz := ((current_date + 3)::timestamp + time '13:00') at time zone 'Asia/Taipei';
+  leading_fa_target_slot timestamptz := ((current_date + 3)::timestamp + time '19:00') at time zone 'Asia/Taipei';
   booking_a_id uuid;
   booking_b_id uuid;
   cancelled_source_fa_id uuid;
@@ -22,11 +24,15 @@ declare
   cancelled_target_b_id uuid;
   target_a_id uuid;
   target_b_id uuid;
+  leading_fa_id uuid;
+  following_target_id uuid;
   first_swap jsonb;
   second_swap jsonb;
   undo_swap jsonb;
   deleted_slot_move jsonb;
   cancelled_history_swap jsonb;
+  leading_fa_move jsonb;
+  leading_fa_undo jsonb;
 begin
   insert into auth.users (
     id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -322,6 +328,78 @@ begin
      or (cancelled_history_swap ->> 'movedCount')::integer <> 3
      or (cancelled_history_swap ->> 'cancelledCount')::integer <> 0 then
     raise exception 'cancelled-history swap result metadata is incomplete';
+  end if;
+
+  -- An FA dropped into an empty 19:00 cell keeps its two-hour record, but the
+  -- coach's existing 20:00 class remains in place and outside the move set.
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_a_id, null, coach_a_id,
+    'trial', 'reformer_pilates', leading_fa_source_slot,
+    leading_fa_source_slot + interval '2 hours',
+    null, null, 'test:drag-roundtrip:leading-fa'
+  );
+  perform public.bige_create_schedule_booking(
+    tenant_id, branch_id, member_b_id, null, coach_b_id,
+    'pt', 'weight_training', leading_fa_target_slot + interval '1 hour',
+    leading_fa_target_slot + interval '2 hours',
+    null, null, 'test:drag-roundtrip:following-target'
+  );
+  select id into leading_fa_id from public.bookings
+  where operation_idempotency_key = 'test:drag-roundtrip:leading-fa';
+  select id into following_target_id from public.bookings
+  where operation_idempotency_key = 'test:drag-roundtrip:following-target';
+
+  leading_fa_move := public.bige_drag_schedule_booking(
+    tenant_id, leading_fa_id, coach_b_id, leading_fa_target_slot, 'move'
+  );
+
+  if not exists (
+    select 1 from public.bookings
+    where id = leading_fa_id
+      and coach_id = coach_b_id
+      and starts_at = leading_fa_target_slot
+      and ends_at = leading_fa_target_slot + interval '2 hours'
+      and status = 'booked'
+      and is_bige_schedule = true
+  ) then
+    raise exception 'FA did not move into the empty leading hour';
+  end if;
+  if not exists (
+    select 1 from public.bookings
+    where id = following_target_id
+      and coach_id = coach_b_id
+      and starts_at = leading_fa_target_slot + interval '1 hour'
+      and status = 'booked'
+      and is_bige_schedule = true
+  ) then
+    raise exception 'FA move changed the following-hour booking';
+  end if;
+  if leading_fa_move ->> 'mode' <> 'move'
+     or (leading_fa_move ->> 'movedCount')::integer <> 1
+     or (leading_fa_move ->> 'cancelledCount')::integer <> 0
+     or jsonb_array_length(leading_fa_move -> 'items') <> 1 then
+    raise exception 'leading FA move included the following-hour booking';
+  end if;
+
+  leading_fa_undo := public.bige_undo_schedule_booking_move(
+    tenant_id, (leading_fa_move ->> 'operationId')::uuid
+  );
+  if not exists (
+    select 1 from public.bookings
+    where id = leading_fa_id
+      and coach_id = coach_a_id
+      and starts_at = leading_fa_source_slot
+      and ends_at = leading_fa_source_slot + interval '2 hours'
+  ) or not exists (
+    select 1 from public.bookings
+    where id = following_target_id
+      and coach_id = coach_b_id
+      and starts_at = leading_fa_target_slot + interval '1 hour'
+  ) then
+    raise exception 'undo did not restore only the FA';
+  end if;
+  if leading_fa_undo ->> 'originalOperationId' <> leading_fa_move ->> 'operationId' then
+    raise exception 'leading FA undo metadata is incomplete';
   end if;
 end;
 $$;
