@@ -253,6 +253,7 @@ export default function StaffScheduleManager() {
   const [holidayName, setHolidayName] = useState("");
   const [middleDailyLimit, setMiddleDailyLimit] = useState(2);
   const [adjustedDates, setAdjustedDates] = useState<Record<string, string>>({});
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string> | null>(null);
   const [recentlyChangedEntryKeys, setRecentlyChangedEntryKeys] = useState<Set<string>>(() => new Set());
   const recentChangeTimersRef = useRef(new Map<string, number>());
   const syncedDraftVersionsRef = useRef(new Set<string>());
@@ -485,7 +486,12 @@ export default function StaffScheduleManager() {
     groups.set(key, group);
     return groups;
   }, new Map<string, { workDate: string | null; holidayName: string; rules: RuleResult[] }>()).values());
-  const visibleEmployees = scheduleEmployees;
+  const visibleEmployees = useMemo(
+    () => selectedEmployeeIds === null
+      ? scheduleEmployees
+      : scheduleEmployees.filter((employee) => selectedEmployeeIds.has(employee.id)),
+    [scheduleEmployees, selectedEmployeeIds],
+  );
   const dailyStats = useMemo(() => new Map(dates.map((date) => {
     const rows = visibleEmployees.map((employee) => entryMap.get(`${employee.id}:${date}`)).filter(Boolean);
     return [date, { work: rows.filter((entry) => entry?.entryKind === "work").length, off: rows.filter((entry) => entry?.entryKind === "off").length }];
@@ -507,6 +513,15 @@ export default function StaffScheduleManager() {
         entries: data.scheduleEntries,
       }).length
     : 0;
+
+  function toggleEmployeeVisibility(employeeId: string, checked: boolean) {
+    setSelectedEmployeeIds((current) => {
+      const next = new Set(current ?? scheduleEmployees.map((employee) => employee.id));
+      if (checked) next.add(employeeId);
+      else next.delete(employeeId);
+      return next.size === scheduleEmployees.length ? null : next;
+    });
+  }
 
   useEffect(() => {
     const version = data?.version;
@@ -934,13 +949,31 @@ export default function StaffScheduleManager() {
               <button type="button" disabled={busy} draggable={!busy} onDragStart={(event) => shiftDragStart(event, "COACH_PARTTIME_WEEKDAY")}><span>晚</span><b>晚班</b><small>18:00–22:00</small></button>
               <button type="button" className={styles.dayOffPaletteButton} disabled={busy} draggable={!busy} onDragStart={(event) => dayOffDragStart(event, "rest_day")}><span>休</span><b>休假</b><small>排為休息日</small></button>
               <button type="button" className={styles.dayOffPaletteButton} disabled={busy} draggable={!busy} onDragStart={(event) => dayOffDragStart(event, "regular_day_off")}><span>例</span><b>例假</b><small>排為例假日</small></button>
+              <details className={styles.employeeFilter}>
+                <summary aria-label="篩選班表顯示的教練"><span>篩</span><b>篩選教練</b><small>{selectedEmployeeIds === null ? "全部教練" : `已選 ${visibleEmployees.length} 位`}</small></summary>
+                <div className={styles.employeeFilterMenu}>
+                  <header><div><strong>選擇顯示教練</strong><small>已選 {visibleEmployees.length}／{scheduleEmployees.length} 位</small></div><div><button type="button" onClick={() => setSelectedEmployeeIds(null)}>全選</button><button type="button" onClick={() => setSelectedEmployeeIds(new Set())}>清除</button></div></header>
+                  <div className={styles.employeeFilterList}>
+                    {scheduleEmployees.map((employee) => (
+                      <label key={employee.id} className={styles.employeeFilterOption}>
+                        <input
+                          type="checkbox"
+                          checked={selectedEmployeeIds === null || selectedEmployeeIds.has(employee.id)}
+                          onChange={(event) => toggleEmployeeVisibility(employee.id, event.target.checked)}
+                        />
+                        <span><b>{employee.displayName}{employee.englishName ? ` ${employee.englishName}` : ""}</b><small>{employee.employeeNumber}</small></span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </details>
             </div> : null}
             {data.version ? (
               <div className={styles.scheduleScroller}>
                 <table className={styles.scheduleTable}>
                   <thead><tr><th className={styles.nameCell}>員工</th>{dates.map((date) => <th key={date} className={`${styles.dateGridCell} ${dateColumnClass(date)} ${weekday(date) === "六" || weekday(date) === "日" ? styles.weekend : ""}`}><span>{Number(date.slice(-2))}</span><small>{weekday(date)}</small></th>)}</tr></thead>
                   <tbody>
-                    {visibleEmployees.map((employee) => (
+                    {visibleEmployees.length === 0 ? <tr><td className={styles.employeeFilterEmpty} colSpan={dates.length + 1}>請至少勾選一位教練</td></tr> : visibleEmployees.map((employee) => (
                       <tr key={employee.id}>
                         <th className={styles.nameCell}><div className={styles.nameSummary}><strong>{employee.displayName}</strong><small>{employee.englishName || "未設定英文名"}</small><span className={styles.leaveBalances}><i>特休{formatDays(employee.employment?.annual_leave_balance_days)}</i><i>積假{formatDays(employee.employment?.accrued_leave_balance_days)}</i></span></div></th>
                         {dates.map((date) => {

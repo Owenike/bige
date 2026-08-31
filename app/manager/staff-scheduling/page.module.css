@@ -298,3 +298,39 @@
   .selectionWindowControls button{width:100%}
   .employeeSetting summary{align-items:flex-start}
 }
+
+.employeeFilter{position:relative;min-width:142px;color:var(--schedule-manager-text)}
+.employeeFilter>summary{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center;height:100%;padding:8px 11px;border:1px solid var(--schedule-manager-line);border-radius:12px;background:linear-gradient(180deg,rgba(22,31,43,.96),rgba(11,18,28,.96));box-shadow:inset 0 1px rgba(255,255,255,.035);cursor:pointer;list-style:none;text-align:left;user-select:none}
+.employeeFilter>summary::-webkit-details-marker{display:none}
+.employeeFilter>summary:hover,.employeeFilter[open]>summary{border-color:var(--schedule-manager-gold);box-shadow:0 8px 20px rgba(0,0,0,.2)}
+.employeeFilter>summary>span{grid-row:1/3;display:grid;width:30px;height:30px;place-items:center;border-radius:9px;background:rgba(216,182,105,.16);color:var(--schedule-manager-gold-bright);font-weight:900}
+.employeeFilter>summary>b{color:#fff8e9;font-size:13px}
+.employeeFilter>summary>small{color:var(--schedule-manager-muted);font-size:11px}
+.employeeFilterMenu{position:absolute;top:calc(100% + 8px);right:0;z-index:20;width:min(330px,calc(100vw - 48px));max-height:390px;padding:12px;border:1px solid rgba(216,182,105,.42);border-radius:16px;background:linear-gradient(145deg,rgba(15,31,45,.99),rgba(6,12,20,.99));box-shadow:0 24px 60px rgba(0,0,0,.55);overflow:auto;overscroll-behavior:contain}
+.employeeFilterMenu>header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 10px;border-bottom:1px solid var(--schedule-manager-line)}
+.employeeFilterMenu>header>div:first-child{display:grid;gap:3px}
+.employeeFilterMenu>header strong{color:#fff8e9;font-size:14px}
+.employeeFilterMenu>header small{color:var(--schedule-manager-muted);font-size:11px}
+.employeeFilterMenu>header>div:last-child{display:flex;gap:6px}
+.employeeFilterMenu button{min-height:32px;padding:5px 9px;border:1px solid var(--schedule-manager-line);border-radius:9px;background:rgba(216,182,105,.1);color:var(--schedule-manager-gold-bright);font:inherit;font-size:11px;font-weight:900;cursor:pointer}
+.employeeFilterMenu button:hover{border-color:var(--schedule-manager-gold)}
+.employeeFilterList{display:grid;gap:5px;padding-top:9px}
+.employeeFilterOption{display:flex;align-items:center;gap:10px;min-height:44px;padding:7px 9px;border:1px solid transparent;border-radius:10px;cursor:pointer}
+.employeeFilterOption:hover{border-color:var(--schedule-manager-line);background:rgba(216,182,105,.08)}
+.employeeFilterOption input{width:18px;height:18px;flex:0 0 auto;accent-color:#d8b669}
+.employeeFilterOption>span{display:grid;gap:2px;min-width:0}
+.employeeFilterOption b{overflow:hidden;color:#fff8e9;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+.employeeFilterOption small{color:var(--schedule-manager-muted);font-size:11px}
+.scheduleTable tbody .employeeFilterEmpty{height:120px;background:#d6dbdf;color:#5b6470;font-weight:900}
+
+@media(max-width:1100px) and (min-width:621px){
+  .employeeFilterMenu{right:auto;left:0}
+}
+
+@media(max-width:620px){
+  .employeeFilter{width:100%}
+  .employeeFilter>summary{min-height:48px}
+  .employeeFilterMenu{right:auto;left:0;width:100%}
+  .employeeFilterMenu>header{align-items:stretch;display:grid}
+  .employeeFilterMenu>header>div:last-child{justify-content:flex-start}
+}

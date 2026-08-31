@@ -498,3 +498,17 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(middleShiftMigration, /ends_at = time '23:00'/);
   assert.match(middleShiftMigration, /version\.status = 'draft'/);
 });
+
+test("manager schedule coach filter defaults to all and supports single or multiple selections", () => {
+  const source = readFileSync(resolve(process.cwd(), "components/staff-schedule-manager.tsx"), "utf8");
+  const styles = readFileSync(resolve(process.cwd(), "app/manager/staff-scheduling/page.module.css"), "utf8");
+  assert.match(source, /useState<Set<string> \| null>\(null\)/);
+  assert.match(source, /selectedEmployeeIds === null[\s\S]*?scheduleEmployees[\s\S]*?scheduleEmployees\.filter\(\(employee\) => selectedEmployeeIds\.has\(employee\.id\)\)/);
+  assert.match(source, /dayOffDragStart\(event, "regular_day_off"\)[\s\S]*?className=\{styles\.employeeFilter\}/);
+  assert.match(source, /篩選教練[\s\S]*?全部教練[\s\S]*?setSelectedEmployeeIds\(null\)[\s\S]*?setSelectedEmployeeIds\(new Set\(\)\)/);
+  assert.match(source, /scheduleEmployees\.map\(\(employee\) => \([\s\S]*?type="checkbox"[\s\S]*?toggleEmployeeVisibility\(employee\.id, event\.target\.checked\)/);
+  assert.match(source, /visibleEmployees\.length === 0[\s\S]*?請至少勾選一位教練[\s\S]*?visibleEmployees\.map/);
+  assert.match(styles, /\.employeeFilterMenu\{[^}]*position:absolute;[^}]*max-height:390px;[^}]*overflow:auto/);
+  assert.match(styles, /@media\(max-width:1100px\) and \(min-width:621px\)\{[\s\S]*?\.employeeFilterMenu\{right:auto;left:0\}/);
+  assert.match(styles, /@media\(max-width:620px\)\{[\s\S]*?\.employeeFilter\{width:100%\}[\s\S]*?\.employeeFilterMenu\{right:auto;left:0;width:100%\}[\s\S]*?\.employeeFilterMenu>header\{align-items:stretch;display:grid\}/);
+});
