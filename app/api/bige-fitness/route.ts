@@ -784,6 +784,7 @@ function normalizeErrorMessage(message: string) {
     invalid_bb_schedule_input: "BB 回訪只能綁定原始 FA，不可設定課別",
     bb_active_followup_exists: "這位客戶已有進行中的 BB 回訪",
     bb_source_already_converted: "這筆原始 FA 已有 BB 成交紀錄，不能再次建立 BB",
+    fa_no_sale_restore_not_available: "這筆 FA 目前不是完成未成交，無法復原",
     bb_no_sale_not_found: "這筆 BB 目前不是完成未成交，無法復原",
     bb_conversion_not_found: "找不到可復原的 BB 成交紀錄",
     bb_conversion_restore_not_available: "這筆 BB 成交目前無法復原",
@@ -4577,6 +4578,17 @@ export async function POST(request: Request) {
       p_booking_id: input.bookingId,
     });
     if (result.error) return handleDatabaseError(result.error, "復原 BB 未成交結果失敗");
+    return apiSuccess({ item: result.data });
+  }
+
+  if (input.action === "restore_trial_no_sale") {
+    if (!canManageBigeSchedule(auth.context)) {
+      return apiError(403, "FORBIDDEN", "您沒有更正 FA 結果的權限");
+    }
+    const result = await auth.supabase.rpc("bige_restore_fa_no_sale_v1", {
+      p_booking_id: input.bookingId,
+    });
+    if (result.error) return handleDatabaseError(result.error, "復原 FA 未成交結果失敗");
     return apiSuccess({ item: result.data });
   }
 

@@ -52,6 +52,7 @@ import {
   createScheduleSchema,
   changeTrialConversionPaymentSchema,
   changeTrialConversionOutcomeSchema,
+  restoreTrialNoSaleSchema,
   restoreTrialConversionSchema,
   recordPaymentSchema,
   recordPaymentsSchema,
@@ -1074,6 +1075,55 @@ test("FA conversion corrections require a valid booking and positive integer amo
       bookingId,
     }).success,
     true,
+  );
+  assert.equal(
+    restoreTrialNoSaleSchema.safeParse({
+      action: "restore_trial_no_sale",
+      bookingId,
+    }).success,
+    true,
+  );
+});
+
+test("completed not-converted FA can be restored atomically to untouched", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260831150814_restore_fa_outcome_to_untouched.sql",
+    "utf8",
+  );
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+
+  assert.match(
+    migration,
+    /status <> 'completed'[\s\S]*trial_conversion_outcome <> 'not_converted'[\s\S]*fa_no_sale_restore_not_available/,
+  );
+  assert.match(
+    migration,
+    /set status = 'booked'[\s\S]*operation_result = null[\s\S]*trial_conversion_outcome = null[\s\S]*completed_at = null/,
+  );
+  assert.match(
+    migration,
+    /fa_fee_amount = null[\s\S]*fa_fee_recipient_profile_id = null[\s\S]*fa_fee_recipient_name = null[\s\S]*fa_fee_recorded_at = null/,
+  );
+  assert.match(
+    migration,
+    /update public\.crm_leads[\s\S]*status = 'trial_booked'[\s\S]*trial_status = 'scheduled'[\s\S]*lost_reason = 'fa_not_converted'/,
+  );
+  assert.match(
+    migration,
+    /revoke all on function public\.bige_restore_fa_no_sale_v1\(uuid\)[\s\S]*from public, anon[\s\S]*to authenticated, service_role/,
+  );
+  assert.match(
+    route,
+    /input\.action === "restore_trial_no_sale"[\s\S]*canManageBigeSchedule\(auth\.context\)[\s\S]*bige_restore_fa_no_sale_v1/,
+  );
+  assert.match(
+    component,
+    /trial_conversion_outcome !== "not_converted"[\s\S]*action: "restore_trial_no_sale"/,
+  );
+  assert.match(
+    component,
+    /trial_conversion_outcome === "not_converted"[\s\S]*data\?\.canManageSchedule[\s\S]*復原為未操作/,
   );
 });
 

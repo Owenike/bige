@@ -987,6 +987,11 @@ export const restoreBbNoSaleSchema = z.object({
   bookingId: z.string().uuid(),
 });
 
+export const restoreTrialNoSaleSchema = z.object({
+  action: z.literal("restore_trial_no_sale"),
+  bookingId: z.string().uuid(),
+});
+
 export const restoreBbConversionSchema = z.object({
   action: z.literal("restore_bb_conversion"),
   bookingId: z.string().uuid(),
@@ -1099,6 +1104,7 @@ export const bigeFitnessActionSchema = z.discriminatedUnion("action", [
   completeTrialOutcomeSchema,
   completeBbOutcomeSchema,
   restoreBbNoSaleSchema,
+  restoreTrialNoSaleSchema,
   restoreBbConversionSchema,
   changeTrialConversionPaymentSchema,
   changeTrialConversionOutcomeSchema,

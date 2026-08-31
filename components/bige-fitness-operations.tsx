@@ -4573,6 +4573,41 @@ export default function BigeFitnessOperations({
     }
   };
 
+  const restoreTrialNoSale = async () => {
+    if (
+      !selectedBooking ||
+      selectedBooking.operation_kind !== "trial" ||
+      selectedBooking.status !== "completed" ||
+      selectedBooking.trial_conversion_outcome !== "not_converted" ||
+      !data?.canManageSchedule ||
+      bookingActionSubmitting
+    ) {
+      return;
+    }
+    const memberName = members.get(selectedBooking.member_id)?.full_name || "此學員";
+    const confirmed = window.confirm(
+      `確定要將 ${memberName} 的 FA 復原為未操作嗎？\n\n系統會清除「未成交」、完成時間與 FA 收款人紀錄，預約本身會保留。`,
+    );
+    if (!confirmed) return;
+
+    const booking = selectedBooking;
+    setBookingActionSubmitting(true);
+    try {
+      await post({ action: "restore_trial_no_sale", bookingId: booking.id });
+      setDialog(null);
+      setSelectedBooking(null);
+      setSuccess("FA 已復原為未操作");
+      await loadBoard({ silent: true, targetDate: boardDateRef.current });
+    } catch (caught) {
+      showOperationAlert(
+        caught instanceof Error ? caught.message : "復原 FA 未成交結果失敗",
+        "無法復原 FA 結果",
+      );
+    } finally {
+      setBookingActionSubmitting(false);
+    }
+  };
+
   const restoreBbNoSale = async () => {
     if (!selectedBooking || selectedBooking.operation_kind !== "bb" || bookingActionSubmitting) return;
     const booking = selectedBooking;
@@ -8970,16 +9005,30 @@ export default function BigeFitnessOperations({
                         {trialOutcomeSubmitting === "not_converted" ? "處理中…" : "未成交"}
                       </button>
                     ) : (
-                      <button
-                        type="button"
-                        disabled={!canOperateSelectedBooking}
-                        className={`${styles.button} ${styles.primary}`}
-                        onClick={() => setTrialOutcomePrompt(true)}
-                      >
-                        {selectedBooking.trial_conversion_outcome === "pending_conversion"
-                          ? "繼續成交／修改結果"
-                          : "修改 FA 結果"}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          disabled={!canOperateSelectedBooking}
+                          className={`${styles.button} ${styles.primary}`}
+                          onClick={() => setTrialOutcomePrompt(true)}
+                        >
+                          {selectedBooking.trial_conversion_outcome === "pending_conversion"
+                            ? "繼續成交／修改結果"
+                            : "修改 FA 結果"}
+                        </button>
+                        {selectedBooking.trial_conversion_outcome === "not_converted" &&
+                        data?.canManageSchedule ? (
+                          <button
+                            type="button"
+                            className={styles.button}
+                            disabled={bookingActionSubmitting}
+                            onClick={() => void restoreTrialNoSale()}
+                          >
+                            <RotateCcw size={17} />
+                            {bookingActionSubmitting ? "復原中…" : "復原為未操作"}
+                          </button>
+                        ) : null}
+                      </>
                     )
                   ) : null}
                   {selectedTrialActionVisibility.showSecondaryStatusActions ? (
