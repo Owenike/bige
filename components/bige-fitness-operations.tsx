@@ -5827,6 +5827,9 @@ export default function BigeFitnessOperations({
     canUseStaffScheduleNavigation(sessionIdentity?.employeeNumber);
   const canUseScheduleOverviewControls =
     managerView || data?.coachScheduleScope === "all";
+  const canSeeDailyFrontdesk =
+    canUseScheduleOverviewControls ||
+    Boolean(data?.canManageFrontdesk && data.canManageSchedule);
   const selectedBookingStatusWindow = selectedBooking
     ? getBigeCourseStatusWindow({
         startsAt: selectedBooking.starts_at,
@@ -6448,7 +6451,7 @@ export default function BigeFitnessOperations({
                   ) : null}
                 </button>
               ) : null}
-              {canUseScheduleOverviewControls ? (
+              {canSeeDailyFrontdesk ? (
                 <span
                   className={styles.frontdeskStatus}
                   title="櫃台人員將由班表自動帶入，此處不可修改"

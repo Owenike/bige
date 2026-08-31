@@ -3249,7 +3249,7 @@ test("voided contracts are excluded from balance payment and rejected by the pay
   assert.match(route, /voided_contract_payment_not_allowed: "此合約已作廢，不能再登記付款"/);
 });
 
-test("coach mobile header stays compact and overview controls require manager schedule scope", () => {
+test("coach mobile header stays compact and employee 06 can see the daily frontdesk status", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
 
@@ -3260,7 +3260,11 @@ test("coach mobile header stays compact and overview controls require manager sc
   );
   assert.match(
     component,
-    /canUseScheduleOverviewControls \? \([\s\S]*className=\{styles\.frontdeskStatus\}/,
+    /const canSeeDailyFrontdesk =\s*canUseScheduleOverviewControls \|\|\s*Boolean\(data\?\.canManageFrontdesk && data\.canManageSchedule\);/,
+  );
+  assert.match(
+    component,
+    /canSeeDailyFrontdesk \? \([\s\S]*className=\{styles\.frontdeskStatus\}/,
   );
   assert.match(
     component,
