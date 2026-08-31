@@ -6309,8 +6309,8 @@ export default function BigeFitnessOperations({
               日排課表
             </button>
             {canOpenStaffSchedule ? (
-              <a className={styles.tab} href={`/staff/schedule?month=${date.slice(0, 7)}`}>
-                整月課表
+              <a className={styles.tab} href="/staff/schedule">
+                我的班表
               </a>
             ) : null}
             {canOpenTrialBookings ? (
