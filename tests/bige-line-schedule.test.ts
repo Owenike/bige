@@ -270,6 +270,10 @@ test("shared LINE groups route several members while each snapshot remains membe
     "tests/bige_shared_line_group_delivery.sql",
     "utf8",
   );
+  const memberNameCorrection = readFileSync(
+    "supabase/migrations/20260831130904_correct_shared_member_names.sql",
+    "utf8",
+  );
 
   assert.match(migration, /create table public\.bige_line_group_binding_members/);
   assert.match(migration, /primary key \(binding_id, member_id\)/);
@@ -290,6 +294,11 @@ test("shared LINE groups route several members while each snapshot remains membe
   assert.match(deliveryRegression, /count\(distinct notification\.member_id\)/);
   assert.match(deliveryRegression, /line_group_binding_inactive/);
   assert.match(deliveryRegression, /rollback;/);
+  assert.match(memberNameCorrection, /'謝筱萱'/);
+  assert.match(memberNameCorrection, /'蘇宥溱'/);
+  assert.match(memberNameCorrection, /'蔡欣妤'/);
+  assert.match(memberNameCorrection, /shared_member_name_correction_precondition_failed/);
+  assert.match(memberNameCorrection, /shared_member_name_correction_verification_failed/);
 
   assert.match(line, /resolveActiveBigeLineGroupBinding/);
   assert.match(line, /\.from\("bige_line_group_binding_members"\)/);
