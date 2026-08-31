@@ -292,6 +292,23 @@ test("ordinary coaches stay limited to their own schedule", () => {
   );
 });
 
+test("employee 05 can view every coach schedule without receiving team-lead management permissions", () => {
+  const scheduleRoute = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const employee05 = {
+    role: "coach",
+    department: "coaching",
+    position: "coach",
+    employeeNumber: "05",
+  } as const;
+
+  assert.equal(canViewAllCoachSchedules(employee05), true);
+  assert.equal(canManageBigeSchedule(employee05), false);
+  assert.match(
+    scheduleRoute,
+    /canViewAllCoachSchedules\(\{[\s\S]{0,300}employeeNumber: auth\.context\.employeeNumber/,
+  );
+});
+
 test("coaching position labels include the coaching profession", () => {
   assert.equal(positionLabel("coach"), "教練");
   assert.equal(positionLabel("coach_team_lead"), "教練組長");
@@ -321,6 +338,11 @@ test("Becky keeps team-lead permissions while her visible title stays coach", ()
     ),
     true,
   );
+});
+
+test("employee 05 never displays a team-lead title", () => {
+  assert.equal(staffPositionForDisplay("coach_team_lead", "E000005"), "coach");
+  assert.equal(positionLabelForEmployee("coach_team_lead", "05"), "教練");
 });
 
 test("the team-lead title remains visible for every other account", () => {

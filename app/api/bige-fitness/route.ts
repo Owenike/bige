@@ -1447,6 +1447,7 @@ export async function GET(request: Request) {
     department: auth.context.department ?? null,
     position: auth.context.position ?? null,
     branchId: auth.context.branchId,
+    employeeNumber: auth.context.employeeNumber,
   });
   const requestedBranchId = url.searchParams.get("branchId");
   const branchId = hasAllCoachScheduleAccess
@@ -2657,6 +2658,7 @@ export async function POST(request: Request) {
       department: auth.context.department ?? null,
       position: auth.context.position ?? null,
       branchId: auth.context.branchId,
+      employeeNumber: auth.context.employeeNumber,
     });
     let coachesQuery = admin
       .from("profiles")

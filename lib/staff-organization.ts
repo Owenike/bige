@@ -89,7 +89,7 @@ export function positionLabel(position: StaffPosition | null | undefined) {
   return position ? labels[position] : "尚未設定";
 }
 
-const HIDDEN_TEAM_LEAD_TITLE_EMPLOYEE_NUMBERS = new Set(["E000002"]);
+const HIDDEN_TEAM_LEAD_TITLE_EMPLOYEE_NUMBERS = new Set(["E000002", "E000005"]);
 
 /**
  * Returns the position that may be shown in the UI. Permission checks must
@@ -139,7 +139,10 @@ export type OrganizationActor = {
   department: StaffDepartment | null;
   position: StaffPosition | null;
   branchId?: string | null;
+  employeeNumber?: string | null;
 };
+
+const COACH_SCHEDULE_OVERVIEW_EMPLOYEE_NUMBERS = new Set(["E000005"]);
 
 const COACH_SCHEDULE_OVERVIEW_POSITIONS = new Set<StaffPosition>([
   "coach_team_lead",
@@ -159,6 +162,13 @@ const LEGACY_SCHEDULE_OVERVIEW_ROLES = new Set<AppRole>([
 
 export function canViewAllCoachSchedules(actor: OrganizationActor) {
   if (actor.role === "platform_admin") return true;
+  if (
+    COACH_SCHEDULE_OVERVIEW_EMPLOYEE_NUMBERS.has(
+      normalizeEmployeeNumber(actor.employeeNumber),
+    )
+  ) {
+    return true;
+  }
   if (
     actor.department === "coaching" &&
     actor.position &&
