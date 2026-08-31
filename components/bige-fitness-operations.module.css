@@ -1562,34 +1562,81 @@
   min-height: 40px;
 }
 
-.personalMonthSummary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.personalMonthSummary > div {
+.personalMonthDateJump {
   min-width: 0;
-  padding: 11px 13px;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(218, 191, 131, 0.24);
+  border-radius: 10px;
+  background:
+    linear-gradient(105deg, rgba(202, 165, 78, 0.1), transparent 46%),
+    rgba(7, 13, 22, 0.66);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 244, 218, 0.06),
+    0 12px 28px rgba(0, 0, 0, 0.12);
+}
+
+.personalMonthDateJumpCopy {
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: 10px;
-  border: 1px solid rgba(224, 195, 128, 0.2);
+}
+
+.personalMonthDateJumpCopy > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.personalMonthDateJumpCopy strong {
+  color: #f6dfaa;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.personalMonthDateJumpCopy small {
+  color: rgba(221, 228, 237, 0.58);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.personalMonthDateJumpIcon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(229, 197, 124, 0.28);
   border-radius: 9px;
-  background: rgba(7, 13, 22, 0.58);
+  color: #efd18b;
+  background: rgba(204, 157, 50, 0.11);
 }
 
-.personalMonthSummary span {
-  color: rgba(222, 229, 238, 0.68);
-  font-size: 12px;
-  font-weight: 750;
+.personalMonthDateField {
+  display: grid;
+  gap: 3px;
+  flex: 0 0 auto;
 }
 
-.personalMonthSummary strong {
-  color: #f3d790;
-  font-size: 22px;
+.personalMonthDateField > span {
+  color: rgba(229, 213, 177, 0.64);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.personalMonthDateJump .personalMonthDateInput {
+  width: 158px;
+  min-height: 38px;
+  color-scheme: dark;
+  color: #fff4d8;
+  border-color: rgba(231, 199, 126, 0.34);
+  background: rgba(5, 11, 19, 0.8);
 }
 
 .personalMonthError,
@@ -1665,6 +1712,14 @@
     0 0 0 1px rgba(239, 205, 126, 0.18),
     0 0 22px rgba(215, 169, 67, 0.12),
     inset 0 1px 0 rgba(255, 245, 218, 0.08);
+}
+
+.personalMonthDay[data-selected="true"] {
+  border-color: rgba(244, 207, 119, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(244, 207, 119, 0.22),
+    0 0 24px rgba(215, 169, 67, 0.14),
+    inset 0 1px 0 rgba(255, 245, 218, 0.1);
 }
 
 .personalMonthDay[data-day-status="off"] {
@@ -1769,18 +1824,29 @@
     flex: 1 1 auto;
   }
 
-  .personalMonthSummary {
-    gap: 7px;
+  .personalMonthDateJump {
+    gap: 10px;
+    padding: 9px 10px;
   }
 
-  .personalMonthSummary > div {
-    padding: 9px;
-    display: grid;
-    justify-content: stretch;
+  .personalMonthDateJumpCopy {
+    gap: 8px;
   }
 
-  .personalMonthSummary strong {
-    font-size: 19px;
+  .personalMonthDateJumpCopy small {
+    display: none;
+  }
+
+  .personalMonthDateJumpIcon {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+
+  .personalMonthDateJump .personalMonthDateInput {
+    width: 142px;
+    min-width: 0;
+    padding-inline: 9px;
   }
 
   .personalMonthTimeline {

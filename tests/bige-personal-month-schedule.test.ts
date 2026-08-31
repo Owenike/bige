@@ -72,6 +72,15 @@ test("coach navigation inserts personal month between daily and staff schedules"
   assert.match(component, /hours\.map\(\(hour\) => \(/);
   assert.match(component, /readOnly/);
   assert.match(component, /查看 \$\{businessDate\} 的日排課表/);
+  assert.doesNotMatch(component, /personalMonthSummary/);
+  assert.doesNotMatch(styles, /\.personalMonthSummary/);
+  assert.match(component, /aria-label="選擇整月課表日期"/);
+  assert.match(component, /onInput=\{\(event\) =>/);
+  assert.match(component, /personalMonthTimelineRef/);
+  assert.match(component, /timeline\.scrollTo\(\{/);
+  assert.match(component, /data-selected=\{String\(businessDate === personalMonthSelectedDate\)\}/);
+  assert.match(styles, /\.personalMonthDateJump\s*\{[\s\S]*justify-content: space-between;/);
+  assert.match(styles, /\.personalMonthDay\[data-selected="true"\]/);
   assert.match(styles, /\.personalMonthTimeline\s*\{[\s\S]*overflow-x: auto;[\s\S]*scroll-snap-type: x mandatory;/);
   assert.match(styles, /\.personalMonthDay\s*\{[\s\S]*scroll-snap-align: start;/);
   assert.match(styles, /@media \(max-width: 780px\)[\s\S]*\.personalMonthTimeline\s*\{\s*grid-auto-columns: 100%;/);

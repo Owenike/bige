@@ -1799,6 +1799,7 @@ export default function BigeFitnessOperations({
   const [scheduleNoteUndo, setScheduleNoteUndo] = useState<ScheduleNoteUndo | null>(null);
   const [restoringScheduleNote, setRestoringScheduleNote] = useState(false);
   const [personalMonth, setPersonalMonth] = useState(() => localDate().slice(0, 7));
+  const [personalMonthSelectedDate, setPersonalMonthSelectedDate] = useState(() => localDate());
   const [personalMonthData, setPersonalMonthData] = useState<PersonalMonthData | null>(null);
   const [personalMonthLoading, setPersonalMonthLoading] = useState(false);
   const [personalMonthError, setPersonalMonthError] = useState("");
@@ -1861,6 +1862,7 @@ export default function BigeFitnessOperations({
   const coachOrderPendingRef = useRef(false);
   const dateToolbarRef = useRef<HTMLDivElement | null>(null);
   const boardWrapRef = useRef<HTMLElement | null>(null);
+  const personalMonthTimelineRef = useRef<HTMLDivElement | null>(null);
   const boardDateAnimationTimerRef = useRef<number | null>(null);
   const scheduleNoteUndoTimerRef = useRef<number | null>(null);
   const boardWheelRef = useRef({
@@ -3178,6 +3180,23 @@ export default function BigeFitnessOperations({
       ),
     [personalMonthData?.trialBookings],
   );
+
+  useEffect(() => {
+    if (tab !== "personal-month" || !coachView || !personalMonthData) return;
+    const targetIndex = personalMonthDates.indexOf(personalMonthSelectedDate);
+    if (targetIndex < 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      const timeline = personalMonthTimelineRef.current;
+      const firstDay = timeline?.firstElementChild as HTMLElement | null;
+      const targetDay = timeline?.children.item(targetIndex) as HTMLElement | null;
+      if (!timeline || !firstDay || !targetDay) return;
+      timeline.scrollTo({
+        left: targetDay.offsetLeft - firstDay.offsetLeft,
+        behavior: "smooth",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [coachView, personalMonthData, personalMonthDates, personalMonthSelectedDate, tab]);
 
   const monthlyCoachOptions = useMemo(() => {
     const coachesById = new Map<string, Coach>();
@@ -6471,6 +6490,7 @@ export default function BigeFitnessOperations({
                 type="button"
                 onClick={() => {
                   setPersonalMonth(date.slice(0, 7));
+                  setPersonalMonthSelectedDate(date);
                   setTab("personal-month");
                 }}
               >
@@ -6777,8 +6797,10 @@ export default function BigeFitnessOperations({
                   type="button"
                   title="上個月"
                   onClick={() => {
+                    const nextMonth = shiftBigePersonalMonth(personalMonth, -1);
                     setPersonalMonthData(null);
-                    setPersonalMonth((current) => shiftBigePersonalMonth(current, -1));
+                    setPersonalMonth(nextMonth);
+                    setPersonalMonthSelectedDate(`${nextMonth}-01`);
                   }}
                 >
                   <ChevronLeft size={18} aria-hidden="true" />
@@ -6792,6 +6814,7 @@ export default function BigeFitnessOperations({
                     if (!event.target.value) return;
                     setPersonalMonthData(null);
                     setPersonalMonth(event.target.value);
+                    setPersonalMonthSelectedDate(`${event.target.value}-01`);
                   }}
                 />
                 <button
@@ -6799,8 +6822,10 @@ export default function BigeFitnessOperations({
                   type="button"
                   title="下個月"
                   onClick={() => {
+                    const nextMonth = shiftBigePersonalMonth(personalMonth, 1);
                     setPersonalMonthData(null);
-                    setPersonalMonth((current) => shiftBigePersonalMonth(current, 1));
+                    setPersonalMonth(nextMonth);
+                    setPersonalMonthSelectedDate(`${nextMonth}-01`);
                   }}
                 >
                   <ChevronRight size={18} aria-hidden="true" />
@@ -6817,24 +6842,35 @@ export default function BigeFitnessOperations({
               </div>
             </header>
 
-            {personalMonthData ? (
-              <div className={styles.personalMonthSummary} aria-label="本月摘要">
+            <div className={styles.personalMonthDateJump} role="group" aria-label="日期跳轉">
+              <div className={styles.personalMonthDateJumpCopy}>
+                <span className={styles.personalMonthDateJumpIcon} aria-hidden="true">
+                  <CalendarDays size={18} />
+                </span>
                 <div>
-                  <span>本月預約</span>
-                  <strong>{personalMonthData.bookings.length}</strong>
-                </div>
-                <div>
-                  <span>有預約天數</span>
-                  <strong>{personalMonthBookingsByDate.size}</strong>
-                </div>
-                <div>
-                  <span>休假天數</span>
-                  <strong>
-                    {personalMonthData.dayStatuses.filter((status) => status.status === "off").length}
-                  </strong>
+                  <strong>快速跳至日期</strong>
+                  <small>選擇後自動移到該日課表</small>
                 </div>
               </div>
-            ) : null}
+              <label className={styles.personalMonthDateField}>
+                <span>日期</span>
+                <input
+                  className={`${styles.input} ${styles.personalMonthDateInput}`}
+                  type="date"
+                  value={personalMonthSelectedDate}
+                  aria-label="選擇整月課表日期"
+                  onInput={(event) => {
+                    const nextDate = event.currentTarget.value;
+                    if (!nextDate) return;
+                    const nextMonth = nextDate.slice(0, 7);
+                    setPersonalMonthSelectedDate(nextDate);
+                    if (nextMonth === personalMonth) return;
+                    setPersonalMonthData(null);
+                    setPersonalMonth(nextMonth);
+                  }}
+                />
+              </label>
+            </div>
 
             {personalMonthError ? (
               <div className={styles.personalMonthError} role="alert">
@@ -6867,6 +6903,7 @@ export default function BigeFitnessOperations({
                 <div
                   className={styles.personalMonthTimeline}
                   key={personalMonthData.month}
+                  ref={personalMonthTimelineRef}
                   role="region"
                   aria-label={`${personalMonthData.month} 個人整月時間軸，可左右滑動`}
                   tabIndex={0}
@@ -6879,9 +6916,11 @@ export default function BigeFitnessOperations({
                       <article
                         className={styles.personalMonthDay}
                         data-day-status={status?.status || "scheduled"}
+                        data-selected={String(businessDate === personalMonthSelectedDate)}
                         data-today={String(businessDate === localDate())}
                         key={businessDate}
                         aria-label={`${businessDate} ${weekdayLabel(businessDate)}課表`}
+                        aria-current={businessDate === personalMonthSelectedDate ? "date" : undefined}
                       >
                         <div
                           className={`${styles.board} ${styles.personalMonthDayBoard}`}
