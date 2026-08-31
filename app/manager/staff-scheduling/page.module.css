@@ -206,9 +206,9 @@
 .scheduleTable .middleShiftBadge{color:#c0cad2}
 .scheduleTable .lateShiftBadge{color:#a9c5e0}
 .scheduleTable .offBadge{color:#d8a8ac}
-.scheduleTable thead .dateGridCell,.scheduleTable tbody .dateGridCell,.scheduleTable tfoot .dateGridCell{background:#fff;color:#111827}
-.scheduleTable thead .dateGridCell.weekend{background:#fff!important;color:#a54539}
-.scheduleTable tbody tr:hover .dateGridCell{background:#fff!important}
+.scheduleTable thead .dateGridCell,.scheduleTable tbody .dateGridCell,.scheduleTable tfoot .dateGridCell{background:#f1f3f5;color:#111827}
+.scheduleTable thead .dateGridCell.weekend{background:#f1f3f5!important;color:#a54539}
+.scheduleTable tbody tr:hover .dateGridCell{background:#f1f3f5!important}
 .scheduleTable .dateGridCell .middleShiftBadge,.scheduleTable .dateGridCell .emptyCell{color:#111827}
 .leaveBalances i{border:1px solid rgba(216,182,105,.38);background:rgba(216,182,105,.13);color:var(--schedule-manager-gold-bright)}
 .holidayPanel{border-color:#a84a52;background:linear-gradient(145deg,rgba(70,25,31,.94),rgba(27,11,16,.94))}
