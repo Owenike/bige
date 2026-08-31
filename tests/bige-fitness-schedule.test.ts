@@ -2078,6 +2078,24 @@ test("existing schedule edits keep payment context and primary actions above the
   );
 });
 
+test("existing FA schedule edits show the student's phone and birthday", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+
+  assert.match(
+    component,
+    /const editingScheduleTrialIdentity =\s*[\s\S]*?editingSchedule\.item\.operation_kind === "trial"[\s\S]*?resolveBigeTrialContractIdentity\(\{[\s\S]*?trialBookings\.get\(editingSchedule\.item\.trial_booking_id\)[\s\S]*?members\.get\(editingSchedule\.item\.member_id\)/,
+  );
+  assert.match(
+    component,
+    /editingScheduleTrialIdentity \? \([\s\S]*?aria-label="FA 學員聯絡資料"[\s\S]*?<dt>電話<\/dt>[\s\S]*?editingScheduleTrialIdentity\.phone \|\| "尚未提供"[\s\S]*?<dt>生日<\/dt>[\s\S]*?formatBirthDate\(editingScheduleTrialIdentity\.birthDate\)/,
+  );
+  assert.match(
+    styles,
+    /\.managerPage \.scheduleEditDialog \.scheduleStudentIdentity \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
+  );
+});
+
 test("every save-changes button keeps a centered layout", () => {
   const operations = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const operationsStyles = readFileSync("components/bige-fitness-operations.module.css", "utf8");

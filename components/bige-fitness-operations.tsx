@@ -6256,6 +6256,17 @@ export default function BigeFitnessOperations({
     );
   };
 
+  const editingScheduleTrialIdentity =
+    editingSchedule?.kind === "booking" &&
+    editingSchedule.item.operation_kind === "trial"
+      ? resolveBigeTrialContractIdentity({
+          trialBooking: editingSchedule.item.trial_booking_id
+            ? trialBookings.get(editingSchedule.item.trial_booking_id)
+            : null,
+          member: members.get(editingSchedule.item.member_id),
+        })
+      : null;
+
   return (
     <main
       className={`${styles.page} ${styles.managerPage} ${styles.frontdeskM2A}`}
@@ -8455,6 +8466,24 @@ export default function BigeFitnessOperations({
                     }}
                   />
                 </label>
+                {editingScheduleTrialIdentity ? (
+                  <dl
+                    className={`${styles.scheduleStudentIdentity} ${styles.fieldFull}`}
+                    aria-label="FA 學員聯絡資料"
+                  >
+                    <div>
+                      <dt>電話</dt>
+                      <dd>{editingScheduleTrialIdentity.phone || "尚未提供"}</dd>
+                    </div>
+                    <div>
+                      <dt>生日</dt>
+                      <dd>
+                        {formatBirthDate(editingScheduleTrialIdentity.birthDate) ||
+                          "尚未提供"}
+                      </dd>
+                    </div>
+                  </dl>
+                ) : null}
                 {!editingSchedule && scheduleDraft.operationKind === "bb" && selectedScheduleTrialResult ? (
                   <div className={`${styles.bookingStatusGuidance} ${styles.fieldFull}`}>
                     <UserRoundCheck size={20} />
