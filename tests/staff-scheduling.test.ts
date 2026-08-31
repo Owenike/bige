@@ -467,11 +467,12 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(styles, /\.scheduleTable \.workCell,\.scheduleTable \.offCell\{background:rgba\(12,21,32,\.94\)\}/);
   assert.match(source, /function dateColumnClass\(date: string\)/);
   assert.equal(source.match(/dateColumnClass\(date\)/g)?.length, 4);
-  assert.match(styles, /\.scheduleTable thead \.oddDateColumn,\.scheduleTable tfoot \.oddDateColumn\{background:#14212e\}/);
-  assert.match(styles, /\.scheduleTable thead \.evenDateColumn,\.scheduleTable tfoot \.evenDateColumn\{background:#172635\}/);
-  assert.match(styles, /\.scheduleTable tbody \.oddDateColumn\{background:rgba\(12,21,32,\.94\)\}/);
-  assert.match(styles, /\.scheduleTable tbody \.evenDateColumn\{background:rgba\(15,27,39,\.94\)\}/);
-  assert.match(styles, /\.weekend\{background:#312329!important;color:#d7a8a6\}/);
+  assert.equal(source.match(/styles\.dateGridCell/g)?.length, 4);
+  assert.match(styles, /\.scheduleTable thead \.dateGridCell,\.scheduleTable tbody \.dateGridCell,\.scheduleTable tfoot \.dateGridCell\{background:#fff;color:#111827\}/);
+  assert.match(styles, /\.scheduleTable thead \.dateGridCell\.weekend\{background:#fff!important;color:#a54539\}/);
+  assert.match(styles, /\.scheduleTable tbody tr:hover \.dateGridCell\{background:#fff!important\}/);
+  assert.match(styles, /\.scheduleTable \.dateGridCell \.middleShiftBadge,\.scheduleTable \.dateGridCell \.emptyCell\{color:#111827\}/);
+  assert.match(styles, /\.scheduleTable \.nameCell\{background:#101d2a;color:#fff8e9\}/);
   assert.match(styles, /\.scheduleTable \.offBadge\{color:#d8a8ac\}/);
   assert.doesNotMatch(styles, /\.scheduleTable \.(?:earlyShiftBadge|middleShiftBadge|lateShiftBadge|offBadge)\{[^}]*background/);
   assert.doesNotMatch(styles, /\.scheduleTable \.(?:earlyShiftBadge|middleShiftBadge|lateShiftBadge|offBadge)\{[^}]*border/);
