@@ -1620,39 +1620,43 @@
   font-weight: 750;
 }
 
-.personalMonthWeekdays,
-.personalMonthGrid {
+.personalMonthSwipeHint {
+  margin: 0 0 10px;
+  color: rgba(232, 215, 174, 0.72);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.personalMonthTimeline {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 7px;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 16px) / 3);
+  gap: 8px;
+  padding: 1px 1px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-padding-inline: 1px;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-inline: contain;
+  scrollbar-color: rgba(227, 197, 127, 0.5) rgba(6, 12, 20, 0.62);
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
-.personalMonthWeekdays {
-  margin-bottom: 7px;
-}
-
-.personalMonthWeekdays span {
-  padding: 6px 4px;
-  color: rgba(232, 215, 174, 0.68);
-  font-size: 11px;
-  font-weight: 800;
-  text-align: center;
-}
-
-.personalMonthBlank {
-  min-width: 0;
+.personalMonthTimeline:focus-visible {
+  outline: 2px solid rgba(239, 205, 126, 0.72);
+  outline-offset: 3px;
 }
 
 .personalMonthDay {
   min-width: 0;
-  min-height: 178px;
-  padding: 9px;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid rgba(214, 190, 136, 0.18);
+  overflow: hidden;
+  border: 1px solid rgba(214, 190, 136, 0.24);
   border-radius: 10px;
   background: rgba(7, 13, 22, 0.7);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
 .personalMonthDay[data-today="true"] {
@@ -1665,7 +1669,6 @@
 
 .personalMonthDay[data-day-status="off"] {
   border-color: rgba(224, 113, 123, 0.34);
-  background: linear-gradient(145deg, rgba(94, 29, 37, 0.34), rgba(7, 13, 22, 0.78));
 }
 
 .personalMonthDay[data-day-status="early"] {
@@ -1676,156 +1679,76 @@
   border-color: rgba(159, 137, 224, 0.34);
 }
 
-.personalMonthDayHeader {
+.personalMonthDayBoard {
+  --schedule-row-height: 46px;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 62px minmax(0, 1fr);
+}
+
+.personalMonthDayBoard .timeCell,
+.personalMonthDayBoard .slotCell {
+  min-height: var(--schedule-row-height);
+}
+
+.personalMonthDayHead {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 7px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(222, 201, 153, 0.12);
-}
-
-.personalMonthDayHeader > div {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-}
-
-.personalMonthDayHeader strong {
-  color: #fff7e4;
-  font-size: 20px;
-  line-height: 1;
-}
-
-.personalMonthDayHeader > div span {
-  color: rgba(225, 231, 239, 0.58);
-  font-size: 10px;
-  font-weight: 750;
-}
-
-.personalMonthDayStatus {
-  min-height: 22px;
-  padding: 3px 7px;
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid rgba(205, 186, 142, 0.24);
-  border-radius: 999px;
-  color: #ead9b3;
-  background: rgba(222, 193, 126, 0.1);
-  font-size: 10px;
-  font-weight: 850;
-  white-space: nowrap;
-}
-
-.personalMonthDayStatus[data-status="off"] {
-  color: #ffd7dc;
-  border-color: rgba(232, 133, 142, 0.38);
-  background: rgba(150, 45, 55, 0.26);
-}
-
-.personalMonthDayStatus[data-status="early"] {
-  color: #c7f4df;
-  border-color: rgba(104, 205, 164, 0.34);
-  background: rgba(41, 124, 91, 0.24);
-}
-
-.personalMonthDayStatus[data-status="late"] {
-  color: #ded5ff;
-  border-color: rgba(157, 137, 222, 0.36);
-  background: rgba(85, 65, 151, 0.26);
-}
-
-.personalMonthEntries {
-  padding: 8px 0;
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  flex: 1 1 auto;
-}
-
-.personalMonthBooking,
-.personalMonthNote {
-  min-width: 0;
-  padding: 7px;
-  display: grid;
-  gap: 2px;
-  border: 1px solid rgba(99, 158, 211, 0.22);
-  border-radius: 7px;
-  background: rgba(39, 91, 139, 0.2);
-}
-
-.personalMonthBooking[data-operation-kind="trial"] {
-  border-color: rgba(220, 181, 91, 0.34);
-  background: rgba(135, 95, 26, 0.22);
-}
-
-.personalMonthBooking[data-operation-kind="bb"] {
-  border-color: rgba(157, 130, 220, 0.32);
-  background: rgba(87, 62, 145, 0.22);
-}
-
-.personalMonthBooking[data-booking-status="cancelled"],
-.personalMonthBooking[data-booking-status="no_show"] {
-  opacity: 0.62;
-}
-
-.personalMonthBooking span,
-.personalMonthNote span {
-  color: rgba(227, 234, 242, 0.66);
-  font-size: 10px;
-  font-weight: 750;
-}
-
-.personalMonthBooking strong,
-.personalMonthNote strong {
-  overflow: hidden;
-  color: #f5f7fa;
-  font-size: 12px;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.personalMonthBooking small {
-  overflow: hidden;
-  color: rgba(226, 232, 240, 0.66);
-  font-size: 10px;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.personalMonthNote {
-  border-color: rgba(205, 181, 121, 0.23);
-  background: rgba(109, 84, 31, 0.18);
-}
-
-.personalMonthEmpty {
-  padding: 13px 3px;
-  color: rgba(218, 225, 234, 0.34);
-  font-size: 11px;
-  text-align: center;
+  gap: 8px;
 }
 
 .personalMonthOpenDay {
-  min-height: 28px;
-  padding: 4px 7px;
-  border: 1px solid rgba(222, 194, 128, 0.2);
-  border-radius: 7px;
-  color: rgba(238, 219, 175, 0.78);
-  background: rgba(214, 173, 82, 0.08);
+  min-width: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  color: inherit;
+  background: transparent;
   font: inherit;
-  font-size: 10px;
-  font-weight: 800;
+  text-align: left;
   cursor: pointer;
 }
 
-.personalMonthOpenDay:hover,
-.personalMonthOpenDay:focus-visible {
+.personalMonthOpenDay > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.personalMonthOpenDay strong {
+  color: #fff7e4;
+  font-size: 17px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.personalMonthOpenDay small {
+  overflow: hidden;
+  color: rgba(225, 231, 239, 0.58);
+  font-size: 10px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personalMonthOpenDay:hover strong,
+.personalMonthOpenDay:focus-visible strong {
   color: #fff4d7;
-  border-color: rgba(235, 201, 123, 0.52);
-  background: rgba(214, 173, 82, 0.18);
+}
+
+.personalMonthOpenDay:focus-visible {
+  outline: 2px solid rgba(239, 205, 126, 0.7);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+
+@media (max-width: 1100px) {
+  .personalMonthTimeline {
+    grid-auto-columns: calc((100% - 8px) / 2);
+  }
 }
 
 @media (max-width: 780px) {
@@ -1860,31 +1783,8 @@
     font-size: 19px;
   }
 
-  .personalMonthWeekdays,
-  .personalMonthBlank {
-    display: none;
-  }
-
-  .personalMonthGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .personalMonthDay {
-    min-height: 0;
-  }
-
-  .personalMonthEntries {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .personalMonthEmpty {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 430px) {
-  .personalMonthEntries {
-    grid-template-columns: 1fr;
+  .personalMonthTimeline {
+    grid-auto-columns: 100%;
   }
 }
 

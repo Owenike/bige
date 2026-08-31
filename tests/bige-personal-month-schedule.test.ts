@@ -50,6 +50,11 @@ test("personal month API is server-scoped to the signed-in coach", () => {
   assert.doesNotMatch(route, /searchParams\.get\("coachId"\)/);
   assert.match(route, /shouldShowBigeScheduleBookingOnDailyBoard\(booking\)/);
   assert.match(route, /collectBigePersonalMonthDayStatuses\(rawNotes, coachId\)/);
+  assert.match(route, /trial_conversion_outcome, bb_conversion_outcome/);
+  assert.match(route, /reminder_status, converted_at/);
+  assert.match(route, /phone, email, email_unavailable, birth_date, member_code, is_prospect/);
+  assert.match(route, /id, name, phone, birthday, service/);
+  assert.match(route, /\.from\("bige_member_legacy_numbers"\)/);
 });
 
 test("coach navigation inserts personal month between daily and staff schedules", () => {
@@ -64,7 +69,10 @@ test("coach navigation inserts personal month between daily and staff schedules"
   assert.ok(navigation.indexOf("整月課表") < navigation.indexOf("我的班表"));
   assert.match(component, /tab === "personal-month" && coachView/);
   assert.match(component, /personalMonthDates\.map\(\(businessDate\) =>/);
-  assert.match(component, /查看日排課表/);
-  assert.match(styles, /\.personalMonthGrid\s*\{[\s\S]*grid-template-columns: repeat\(7, minmax\(0, 1fr\)\)/);
-  assert.match(styles, /@media \(max-width: 780px\)[\s\S]*\.personalMonthGrid\s*\{\s*grid-template-columns: 1fr;/);
+  assert.match(component, /hours\.map\(\(hour\) => \(/);
+  assert.match(component, /readOnly/);
+  assert.match(component, /查看 \$\{businessDate\} 的日排課表/);
+  assert.match(styles, /\.personalMonthTimeline\s*\{[\s\S]*overflow-x: auto;[\s\S]*scroll-snap-type: x mandatory;/);
+  assert.match(styles, /\.personalMonthDay\s*\{[\s\S]*scroll-snap-align: start;/);
+  assert.match(styles, /@media \(max-width: 780px\)[\s\S]*\.personalMonthTimeline\s*\{\s*grid-auto-columns: 100%;/);
 });

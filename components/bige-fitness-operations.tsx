@@ -503,23 +503,7 @@ type CoachDayStatus = {
   status: "early" | "late" | "off";
   label: "早班" | "晚班" | "休假";
 };
-type PersonalMonthBooking = Pick<
-  Booking,
-  | "id"
-  | "member_id"
-  | "coach_id"
-  | "service_name"
-  | "starts_at"
-  | "ends_at"
-  | "status"
-  | "note"
-  | "operation_kind"
-  | "course_type"
-  | "trial_stage"
-  | "operation_result"
-  | "trial_booking_id"
-  | "operation_idempotency_key"
->;
+type PersonalMonthBooking = Booking;
 type PersonalMonthScheduleNote = Pick<
   ScheduleNote,
   "id" | "coach_id" | "starts_at" | "ends_at" | "content" | "source"
@@ -530,8 +514,8 @@ type PersonalMonthData = {
   bookings: PersonalMonthBooking[];
   notes: PersonalMonthScheduleNote[];
   dayStatuses: BigePersonalMonthDayStatus[];
-  members: Array<{ id: string; full_name: string }>;
-  trialBookings: Array<{ id: string; name: string; phone: string; service: string }>;
+  members: Member[];
+  trialBookings: TrialBookingSummary[];
 };
 type FaAssistantToConflict = {
   coach_id: string;
@@ -2186,16 +2170,8 @@ export default function BigeFitnessOperations({
                   .filter((status) => status.coach_id === coach.id)
                   .map((status) => ({ ...status, businessDate: previewData.businessDate }))
               : [],
-          members: previewData.members.map((member) => ({
-            id: member.id,
-            full_name: member.full_name,
-          })),
-          trialBookings: (previewData.trialBookings || []).map((trial) => ({
-            id: trial.id,
-            name: trial.name,
-            phone: trial.phone,
-            service: trial.service,
-          })),
+          members: previewData.members,
+          trialBookings: previewData.trialBookings || [],
         });
         setPersonalMonthLoading(false);
         return;
@@ -3191,11 +3167,8 @@ export default function BigeFitnessOperations({
       ),
     [personalMonthData?.dayStatuses],
   );
-  const personalMonthMemberNames = useMemo(
-    () =>
-      new Map(
-        (personalMonthData?.members || []).map((member) => [member.id, member.full_name]),
-      ),
+  const personalMonthMembers = useMemo(
+    () => new Map((personalMonthData?.members || []).map((member) => [member.id, member])),
     [personalMonthData?.members],
   );
   const personalMonthTrials = useMemo(
@@ -6888,88 +6861,91 @@ export default function BigeFitnessOperations({
                 {personalMonthLoading ? (
                   <p className={styles.personalMonthUpdating} role="status">正在更新本月資料…</p>
                 ) : null}
-                <div className={styles.personalMonthWeekdays} aria-hidden="true">
-                  {["日", "一", "二", "三", "四", "五", "六"].map((weekday) => (
-                    <span key={weekday}>週{weekday}</span>
-                  ))}
-                </div>
-                <div className={styles.personalMonthGrid}>
-                  {Array.from({
-                    length: personalMonthDates[0]
-                      ? new Date(`${personalMonthDates[0]}T00:00:00Z`).getUTCDay()
-                      : 0,
-                  }).map((_, index) => (
-                    <span className={styles.personalMonthBlank} key={`blank-${index}`} aria-hidden="true" />
-                  ))}
+                <p className={styles.personalMonthSwipeHint}>
+                  左右滑動查看 1 日到月底；點日期可開啟該日的日排課表。
+                </p>
+                <div
+                  className={styles.personalMonthTimeline}
+                  key={personalMonthData.month}
+                  role="region"
+                  aria-label={`${personalMonthData.month} 個人整月時間軸，可左右滑動`}
+                  tabIndex={0}
+                >
                   {personalMonthDates.map((businessDate) => {
                     const bookings = personalMonthBookingsByDate.get(businessDate) || [];
                     const notes = personalMonthNotesByDate.get(businessDate) || [];
                     const status = personalMonthStatusByDate.get(businessDate) || null;
-                    const hasSchedule = bookings.length > 0 || notes.length > 0;
                     return (
                       <article
                         className={styles.personalMonthDay}
-                        data-day-status={status?.status || (hasSchedule ? "scheduled" : "empty")}
+                        data-day-status={status?.status || "scheduled"}
                         data-today={String(businessDate === localDate())}
                         key={businessDate}
+                        aria-label={`${businessDate} ${weekdayLabel(businessDate)}課表`}
                       >
-                        <header className={styles.personalMonthDayHeader}>
-                          <div>
-                            <strong>{Number(businessDate.slice(-2))}</strong>
-                            <span>{weekdayLabel(businessDate)}</span>
-                          </div>
-                          {status ? (
-                            <span className={styles.personalMonthDayStatus} data-status={status.status}>
-                              {status.label}
-                            </span>
-                          ) : null}
-                        </header>
-                        <div className={styles.personalMonthEntries}>
-                          {bookings.map((booking) => {
-                            const trial = booking.trial_booking_id
-                              ? personalMonthTrials.get(booking.trial_booking_id)
-                              : null;
-                            const memberName =
-                              trial?.name ||
-                              personalMonthMemberNames.get(booking.member_id) ||
-                              "未命名學員";
-                            const courseLabel =
-                              booking.operation_kind === "trial"
-                                ? booking.trial_stage || "FA 體驗"
-                                : scheduleCourseLabel(booking.course_type);
-                            return (
-                              <div
-                                className={styles.personalMonthBooking}
-                                data-operation-kind={booking.operation_kind}
-                                data-booking-status={booking.status}
-                                key={booking.id}
-                              >
-                                <span>{slotKey(booking.starts_at)}–{slotKey(booking.ends_at)}</span>
-                                <strong>{memberName}</strong>
-                                <small>
-                                  {courseLabel} · {labelOrValue(BOOKING_STATUS_LABELS, booking.status)}
-                                </small>
-                              </div>
-                            );
-                          })}
-                          {notes.map((note) => (
-                            <div className={styles.personalMonthNote} key={note.id}>
-                              <span>{slotKey(note.starts_at)}–{slotKey(note.ends_at)}</span>
-                              <strong>{note.content}</strong>
-                            </div>
-                          ))}
-                          {!hasSchedule ? <span className={styles.personalMonthEmpty}>無預約</span> : null}
-                        </div>
-                        <button
-                          className={styles.personalMonthOpenDay}
-                          type="button"
-                          onClick={() => {
-                            selectBoardDate(businessDate);
-                            setTab("schedule");
-                          }}
+                        <div
+                          className={`${styles.board} ${styles.personalMonthDayBoard}`}
+                          style={{ "--coach-count": 1 } as React.CSSProperties}
                         >
-                          查看日排課表
-                        </button>
+                          <div className={styles.timeHead} data-mobile-active="true">
+                            時間
+                          </div>
+                          <div
+                            className={`${styles.coachHead} ${styles.personalMonthDayHead}`}
+                            data-mobile-active="true"
+                            data-coach-status={status?.status}
+                          >
+                            <button
+                              className={styles.personalMonthOpenDay}
+                              type="button"
+                              onClick={() => {
+                                selectBoardDate(businessDate);
+                                setTab("schedule");
+                              }}
+                              aria-label={`查看 ${businessDate} 的日排課表`}
+                            >
+                              <span>
+                                <strong>{Number(businessDate.slice(-2))} 日</strong>
+                                <small>{weekdayLabel(businessDate)}</small>
+                              </span>
+                              <small>{coachLabel(personalMonthData.coach)}</small>
+                            </button>
+                            {status ? (
+                              <span
+                                className={styles.coachStatusBadge}
+                                data-status={status.status}
+                              >
+                                {status.label}
+                              </span>
+                            ) : null}
+                          </div>
+                          {hours.map((hour) => (
+                            <HourRow
+                              key={hour}
+                              date={businessDate}
+                              hour={hour}
+                              coaches={[personalMonthData.coach]}
+                              selectedCoach={personalMonthData.coach.id}
+                              bookings={bookings}
+                              notes={notes}
+                              coachDayStatuses={status ? [status] : []}
+                              faAssistantToConflicts={[]}
+                              classroomConflicts={[]}
+                              members={personalMonthMembers}
+                              trialBookings={personalMonthTrials}
+                              showTrialRevenue={false}
+                              canCreate={false}
+                              canDrag={false}
+                              readOnly
+                              activeDragMinute={null}
+                              scheduleNoteUndo={null}
+                              restoringScheduleNote={false}
+                              onRestoreScheduleNote={() => undefined}
+                              onBookingPrefetch={() => undefined}
+                              onCell={() => undefined}
+                            />
+                          ))}
+                        </div>
                       </article>
                     );
                   })}
@@ -11134,6 +11110,7 @@ function HourRow(props: {
   showTrialRevenue: boolean;
   canCreate: boolean;
   canDrag: boolean;
+  readOnly?: boolean;
   activeDragMinute: 0 | 30 | null;
   scheduleNoteUndo: ScheduleNoteUndo | null;
   restoringScheduleNote: boolean;
@@ -11231,7 +11208,7 @@ function HourRow(props: {
           props.selectedCoach === "all" || coach.id === props.selectedCoach,
         );
         const isOptimisticBooking = Boolean(booking?.optimistic);
-        const canInteract = booking ? !isOptimisticBooking : props.canCreate;
+        const canInteract = !props.readOnly && (booking ? !isOptimisticBooking : props.canCreate);
         const activate = () => {
           if (canInteract) props.onCell(coach.id, props.hour, booking, note);
         };
@@ -11263,12 +11240,12 @@ function HourRow(props: {
               }
               onClick={activate}
               onPointerEnter={
-                booking && !isOptimisticBooking
+                !props.readOnly && booking && !isOptimisticBooking
                   ? () => props.onBookingPrefetch(booking.member_id)
                   : undefined
               }
               onFocus={
-                booking && !isOptimisticBooking
+                !props.readOnly && booking && !isOptimisticBooking
                   ? () => props.onBookingPrefetch(booking.member_id)
                   : undefined
               }
@@ -11279,14 +11256,16 @@ function HourRow(props: {
                 }
               }}
             >
-              <ScheduleDropZone
-                date={props.date}
-                hour={props.hour}
-                minute={0}
-                coachId={coach.id}
-                activeDragMinute={props.activeDragMinute}
-                enabled={props.canCreate}
-              />
+              {!props.readOnly ? (
+                <ScheduleDropZone
+                  date={props.date}
+                  hour={props.hour}
+                  minute={0}
+                  coachId={coach.id}
+                  activeDragMinute={props.activeDragMinute}
+                  enabled={props.canCreate}
+                />
+              ) : null}
               {undoHere ? (
                 <button
                   type="button"
@@ -11324,14 +11303,16 @@ function HourRow(props: {
                   ) : null}
                 </div>
               ) : null}
-              <ScheduleDropZone
-                date={props.date}
-                hour={props.hour}
-                minute={30}
-                coachId={coach.id}
-                activeDragMinute={props.activeDragMinute}
-                enabled={props.canCreate}
-              />
+              {!props.readOnly ? (
+                <ScheduleDropZone
+                  date={props.date}
+                  hour={props.hour}
+                  minute={30}
+                  coachId={coach.id}
+                  activeDragMinute={props.activeDragMinute}
+                  enabled={props.canCreate}
+                />
+              ) : null}
               {booking && entryStartsHere ? (
                 <DraggableScheduleEntry
                   id={booking.id}

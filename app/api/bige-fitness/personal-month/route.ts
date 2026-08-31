@@ -27,7 +27,11 @@ type PersonalMonthBookingRow = {
   course_type: string | null;
   trial_stage: string | null;
   operation_result: string | null;
+  trial_conversion_outcome: string | null;
+  bb_conversion_outcome: string | null;
   trial_booking_id: string | null;
+  reminder_status: string | null;
+  converted_at: string | null;
   operation_idempotency_key: string | null;
 };
 
@@ -62,7 +66,7 @@ export async function GET(request: Request) {
   let bookingsQuery = auth.supabase
     .from("bookings")
     .select(
-      "id, branch_id, member_id, coach_id, service_name, starts_at, ends_at, status, status_reason, cancelled_at, note, operation_kind, course_type, trial_stage, operation_result, trial_booking_id, operation_idempotency_key",
+      "id, branch_id, member_id, coach_id, service_name, starts_at, ends_at, status, status_reason, cancelled_at, note, operation_kind, course_type, trial_stage, operation_result, trial_conversion_outcome, bb_conversion_outcome, trial_booking_id, reminder_status, converted_at, operation_idempotency_key",
     )
     .eq("tenant_id", tenantId)
     .eq("coach_id", coachId)
@@ -127,14 +131,14 @@ export async function GET(request: Request) {
     memberIds.length
       ? admin
           .from("members")
-          .select("id, full_name")
+          .select("id, full_name, phone, email, email_unavailable, birth_date, member_code, is_prospect")
           .eq("tenant_id", tenantId)
           .in("id", memberIds)
       : Promise.resolve({ data: [], error: null }),
     trialBookingIds.length
       ? admin
           .from("trial_bookings")
-          .select("id, name, phone, service")
+          .select("id, name, phone, birthday, service")
           .eq("tenant_id", tenantId)
           .in("id", trialBookingIds)
       : Promise.resolve({ data: [], error: null }),
@@ -150,13 +154,41 @@ export async function GET(request: Request) {
     return apiError(500, "INTERNAL_ERROR", "讀取個人整月課表學員資料失敗");
   }
 
+  let members = membersResult.data || [];
+  if (members.length > 0) {
+    const legacyResult = await admin
+      .from("bige_member_legacy_numbers")
+      .select("member_id, legacy_number")
+      .eq("tenant_id", tenantId)
+      .in("member_id", members.map((member) => member.id));
+    if (legacyResult.error) {
+      console.error("[bige-personal-month] legacy member number read failed", {
+        coachId,
+        month,
+        legacyError: legacyResult.error.message,
+      });
+      return apiError(500, "INTERNAL_ERROR", "讀取個人整月課表會員編號失敗");
+    }
+    const legacyNumbersByMember = new Map<string, string[]>();
+    for (const row of legacyResult.data || []) {
+      const values = legacyNumbersByMember.get(row.member_id) || [];
+      values.push(row.legacy_number);
+      legacyNumbersByMember.set(row.member_id, values);
+    }
+    members = members.map((member) => ({
+      ...member,
+      legacy_numbers: legacyNumbersByMember.get(member.id) || [],
+      legacy_shared: false,
+    }));
+  }
+
   return apiSuccess({
     month,
     coach: coachResult.data,
     bookings,
     notes,
     dayStatuses,
-    members: membersResult.data || [],
+    members,
     trialBookings: trialBookingsResult.data || [],
   });
 }
