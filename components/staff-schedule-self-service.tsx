@@ -164,8 +164,8 @@ function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void
   );
 }
 
-export default function StaffScheduleSelfService() {
-  const [month, setMonth] = useState(nextMonthValue);
+export default function StaffScheduleSelfService({ initialMonth }: { initialMonth?: string }) {
+  const [month, setMonth] = useState(() => initialMonth || nextMonthValue());
   const [data, setData] = useState<SelfState | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [signature, setSignature] = useState<string | null>(null);

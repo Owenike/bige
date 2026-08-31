@@ -4,6 +4,7 @@ import test from "node:test";
 
 const page = readFileSync("app/admin/trial-bookings/page.tsx", "utf8");
 const staffFitnessRoute = readFileSync("app/staff/fitness/route.ts", "utf8");
+const staffSchedulePage = readFileSync("app/staff/schedule/page.tsx", "utf8");
 const staffScheduleSelfService = readFileSync("components/staff-schedule-self-service.tsx", "utf8");
 const fitnessOperations = readFileSync("components/bige-fitness-operations.tsx", "utf8");
 const styles = readFileSync("app/globals.css", "utf8");
@@ -27,15 +28,20 @@ test("staff schedule mobile page ends after its content instead of adding a view
   assert.match(staffScheduleStyles, /@media\(max-width:560px\)\{\.page\{min-height:0;padding:12px\}/);
 });
 
-test("daily schedule navigation places the personal schedule immediately after it and excludes account 06", () => {
+test("daily schedule navigation opens the signed-in coach's whole-month schedule for the viewed month", () => {
   assert.match(
     fitnessOperations,
-    /<button[^>]*onClick=\{\(\) => setTab\("schedule"\)\}[^>]*>\s*日排課表\s*<\/button>\s*\{canOpenStaffSchedule \? \(\s*<a className=\{styles\.tab\} href="\/staff\/schedule">\s*我的班表\s*<\/a>\s*\) : null\}/s,
+    /<button[^>]*onClick=\{\(\) => setTab\("schedule"\)\}[^>]*>\s*日排課表\s*<\/button>\s*\{canOpenStaffSchedule \? \(\s*<a className=\{styles\.tab\} href=\{`\/staff\/schedule\?month=\$\{date\.slice\(0, 7\)\}`\}>\s*整月課表\s*<\/a>\s*\) : null\}/s,
   );
   assert.match(
     fitnessOperations,
     /const canOpenStaffSchedule =\s*Boolean\(previewData \|\| sessionIdentity\) &&\s*canUseStaffScheduleNavigation\(sessionIdentity\?\.employeeNumber\)/s,
   );
+  assert.match(staffSchedulePage, /searchParams: Promise<\{ month\?: string \| string\[\] \}>/);
+  assert.match(staffSchedulePage, /<StaffScheduleSelfService initialMonth=\{validMonth\(query\.month\)\} \/>/);
+  assert.match(staffScheduleSelfService, /const \[month, setMonth\] = useState\(\(\) => initialMonth \|\| nextMonthValue\(\)\)/);
+  assert.match(staffScheduleSelfService, /scheduleEntries: data\.scheduleEntries\.filter\(\(entry\) => entry\.employeeId === data\.actor\.id\)/);
+  assert.match(staffScheduleSelfService, /staffScheduleEntryOffLabel\(entry\)/);
 });
 
 test("daily schedule resolver preserves each signed-in staff role destination", () => {
