@@ -1561,7 +1561,8 @@ export async function GET(request: Request) {
       (auth.context.role !== "coach" || (bbTrialOnly && canManageBigeSchedule(auth.context))) &&
       (searchRule.mode === "phone" || searchRule.mode === "name")
     ) {
-      let trialQuery = auth.supabase
+      const trialSearchClient = createSupabaseAdminClient();
+      let trialQuery = trialSearchClient
         .from("trial_bookings")
         .select(
           "id, member_id, name, phone, birthday, service, appointment_date, appointment_time, booking_status, note",

@@ -2896,6 +2896,20 @@ test("BB is bound to a completed non-converted FA and never becomes a lesson, FA
   assert.match(route, /booking\.operation_kind === "bb" && input\.result === "completed"/);
 });
 
+test("FA and BB customer search reads tenant-scoped trial bookings on the server under RLS", () => {
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const searchStart = route.indexOf('const search = (url.searchParams.get("search")');
+  const searchEnd = route.indexOf("const memberScheduleMemberId", searchStart);
+  const searchSection = route.slice(searchStart, searchEnd);
+
+  assert.ok(searchStart >= 0 && searchEnd > searchStart);
+  assert.match(
+    searchSection,
+    /const trialSearchClient = createSupabaseAdminClient\(\);[\s\S]*let trialQuery = trialSearchClient[\s\S]*\.from\("trial_bookings"\)[\s\S]*\.eq\("tenant_id", tenantId\)/,
+  );
+  assert.doesNotMatch(searchSection, /let trialQuery = auth\.supabase/);
+});
+
 test("BB lifecycle prevents duplicate followups and supports audited corrections", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
