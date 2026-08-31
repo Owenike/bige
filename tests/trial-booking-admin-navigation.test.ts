@@ -27,11 +27,17 @@ test("staff schedule mobile page ends after its content instead of adding a view
   assert.match(staffScheduleStyles, /@media\(max-width:560px\)\{\.page\{min-height:0;padding:12px\}/);
 });
 
-test("daily schedule navigation places the personal schedule immediately after it and excludes account 06", () => {
-  assert.match(
-    fitnessOperations,
-    /<button[^>]*onClick=\{\(\) => setTab\("schedule"\)\}[^>]*>\s*日排課表\s*<\/button>\s*\{canOpenStaffSchedule \? \(\s*<a className=\{styles\.tab\} href="\/staff\/schedule">\s*我的班表\s*<\/a>\s*\) : null\}/s,
-  );
+test("coach navigation places the monthly schedule after the daily schedule, then the personal shift schedule", () => {
+  const navigationStart = fitnessOperations.indexOf('<div className={styles.navigationRow}>');
+  const dailyScheduleIndex = fitnessOperations.indexOf("日排課表", navigationStart);
+  const personalMonthIndex = fitnessOperations.indexOf("整月課表", navigationStart);
+  const staffScheduleIndex = fitnessOperations.indexOf("我的班表", navigationStart);
+
+  assert.notEqual(navigationStart, -1);
+  assert.ok(dailyScheduleIndex > navigationStart);
+  assert.ok(personalMonthIndex > dailyScheduleIndex);
+  assert.ok(staffScheduleIndex > personalMonthIndex);
+  assert.match(fitnessOperations, /\{coachView \? \([\s\S]*?setTab\("personal-month"\)/);
   assert.match(
     fitnessOperations,
     /const canOpenStaffSchedule =\s*Boolean\(previewData \|\| sessionIdentity\) &&\s*canUseStaffScheduleNavigation\(sessionIdentity\?\.employeeNumber\)/s,

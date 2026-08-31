@@ -148,12 +148,25 @@ import {
   isBigeBoardRevisionCurrent,
   readBigeBoardRevision,
 } from "../lib/bige-board-freshness";
+import {
+  bigePersonalScheduleDateKey,
+  listBigePersonalMonthDates,
+  shiftBigePersonalMonth,
+  type BigePersonalMonthDayStatus,
+} from "../lib/bige-personal-month-schedule";
 import AdministrativeAssistanceBoard from "./administrative-assistance-board";
 import styles from "./bige-fitness-operations.module.css";
 
 type RoleView = "manager" | "frontdesk" | "coach";
 type ExplicitTrialStage = "FA2" | "FAN";
-type Tab = "schedule" | "contracts" | "plans" | "reminders" | "report" | "assistance";
+type Tab =
+  | "schedule"
+  | "personal-month"
+  | "contracts"
+  | "plans"
+  | "reminders"
+  | "report"
+  | "assistance";
 type DialogName =
   | "member"
   | "slot-time"
@@ -489,6 +502,36 @@ type CoachDayStatus = {
   coach_id: string;
   status: "early" | "late" | "off";
   label: "早班" | "晚班" | "休假";
+};
+type PersonalMonthBooking = Pick<
+  Booking,
+  | "id"
+  | "member_id"
+  | "coach_id"
+  | "service_name"
+  | "starts_at"
+  | "ends_at"
+  | "status"
+  | "note"
+  | "operation_kind"
+  | "course_type"
+  | "trial_stage"
+  | "operation_result"
+  | "trial_booking_id"
+  | "operation_idempotency_key"
+>;
+type PersonalMonthScheduleNote = Pick<
+  ScheduleNote,
+  "id" | "coach_id" | "starts_at" | "ends_at" | "content" | "source"
+>;
+type PersonalMonthData = {
+  month: string;
+  coach: Coach;
+  bookings: PersonalMonthBooking[];
+  notes: PersonalMonthScheduleNote[];
+  dayStatuses: BigePersonalMonthDayStatus[];
+  members: Array<{ id: string; full_name: string }>;
+  trialBookings: Array<{ id: string; name: string; phone: string; service: string }>;
 };
 type FaAssistantToConflict = {
   coach_id: string;
@@ -1771,6 +1814,10 @@ export default function BigeFitnessOperations({
   const [deletingScheduleNote, setDeletingScheduleNote] = useState(false);
   const [scheduleNoteUndo, setScheduleNoteUndo] = useState<ScheduleNoteUndo | null>(null);
   const [restoringScheduleNote, setRestoringScheduleNote] = useState(false);
+  const [personalMonth, setPersonalMonth] = useState(() => localDate().slice(0, 7));
+  const [personalMonthData, setPersonalMonthData] = useState<PersonalMonthData | null>(null);
+  const [personalMonthLoading, setPersonalMonthLoading] = useState(false);
+  const [personalMonthError, setPersonalMonthError] = useState("");
   const [monthlySearch, setMonthlySearch] = useState("");
   const [monthlySearchResults, setMonthlySearchResults] = useState<Member[]>([]);
   const [monthlyMember, setMonthlyMember] = useState<Member | null>(null);
@@ -2110,6 +2157,73 @@ export default function BigeFitnessOperations({
     }
   }, [applyBoardData, prefetchBoardWindow, requestBoard]);
 
+  const loadPersonalCoachMonth = useCallback(
+    async (targetMonth: string, signal?: AbortSignal) => {
+      setPersonalMonthLoading(true);
+      setPersonalMonthError("");
+      if (previewData) {
+        const coach = previewData.coaches[0];
+        if (!coach) {
+          setPersonalMonthData(null);
+          setPersonalMonthError("預覽資料沒有教練");
+          setPersonalMonthLoading(false);
+          return;
+        }
+        const inTargetMonth = (value: string) =>
+          bigePersonalScheduleDateKey(value).startsWith(`${targetMonth}-`);
+        setPersonalMonthData({
+          month: targetMonth,
+          coach,
+          bookings: previewData.bookings.filter(
+            (booking) => booking.coach_id === coach.id && inTargetMonth(booking.starts_at),
+          ),
+          notes: previewData.notes.filter(
+            (note) => note.coach_id === coach.id && inTargetMonth(note.starts_at),
+          ),
+          dayStatuses:
+            previewData.businessDate.startsWith(`${targetMonth}-`)
+              ? (previewData.coachDayStatuses || [])
+                  .filter((status) => status.coach_id === coach.id)
+                  .map((status) => ({ ...status, businessDate: previewData.businessDate }))
+              : [],
+          members: previewData.members.map((member) => ({
+            id: member.id,
+            full_name: member.full_name,
+          })),
+          trialBookings: (previewData.trialBookings || []).map((trial) => ({
+            id: trial.id,
+            name: trial.name,
+            phone: trial.phone,
+            service: trial.service,
+          })),
+        });
+        setPersonalMonthLoading(false);
+        return;
+      }
+      try {
+        const response = await fetch(
+          `/api/bige-fitness/personal-month?month=${encodeURIComponent(targetMonth)}`,
+          { cache: "no-store", signal },
+        );
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(apiMessage(payload, "讀取個人整月課表失敗"));
+        }
+        if (signal?.aborted) return;
+        setPersonalMonthData((payload.data || payload) as PersonalMonthData);
+      } catch (caught) {
+        if (signal?.aborted) return;
+        setPersonalMonthData(null);
+        setPersonalMonthError(
+          caught instanceof Error ? caught.message : "讀取個人整月課表失敗",
+        );
+      } finally {
+        if (!signal?.aborted) setPersonalMonthLoading(false);
+      }
+    },
+    [previewData],
+  );
+
   const animateBoardDate = useCallback((direction: "previous" | "next") => {
     if (boardDateAnimationTimerRef.current !== null) {
       window.clearTimeout(boardDateAnimationTimerRef.current);
@@ -2306,6 +2420,13 @@ export default function BigeFitnessOperations({
     if (tab !== "reminders") return;
     void loadReminders();
   }, [loadReminders, tab]);
+
+  useEffect(() => {
+    if (tab !== "personal-month" || !coachView) return;
+    const controller = new AbortController();
+    void loadPersonalCoachMonth(personalMonth, controller.signal);
+    return () => controller.abort();
+  }, [coachView, loadPersonalCoachMonth, personalMonth, tab]);
 
   useEffect(() => {
     if (previewData) return;
@@ -3033,6 +3154,57 @@ export default function BigeFitnessOperations({
     );
     return coaches.filter((coach) => !offCoachIds.has(coach.id));
   }, [data?.coachDayStatuses, data?.coaches, hideOffCoaches]);
+
+  const personalMonthDates = useMemo(
+    () => listBigePersonalMonthDates(personalMonth),
+    [personalMonth],
+  );
+  const personalMonthBookingsByDate = useMemo(() => {
+    const byDate = new Map<string, PersonalMonthBooking[]>();
+    for (const booking of personalMonthData?.bookings || []) {
+      const businessDate = bigePersonalScheduleDateKey(booking.starts_at);
+      if (!businessDate) continue;
+      const current = byDate.get(businessDate) || [];
+      current.push(booking);
+      byDate.set(businessDate, current);
+    }
+    return byDate;
+  }, [personalMonthData?.bookings]);
+  const personalMonthNotesByDate = useMemo(() => {
+    const byDate = new Map<string, PersonalMonthScheduleNote[]>();
+    for (const note of personalMonthData?.notes || []) {
+      const businessDate = bigePersonalScheduleDateKey(note.starts_at);
+      if (!businessDate) continue;
+      const current = byDate.get(businessDate) || [];
+      current.push(note);
+      byDate.set(businessDate, current);
+    }
+    return byDate;
+  }, [personalMonthData?.notes]);
+  const personalMonthStatusByDate = useMemo(
+    () =>
+      new Map(
+        (personalMonthData?.dayStatuses || []).map((status) => [
+          status.businessDate,
+          status,
+        ]),
+      ),
+    [personalMonthData?.dayStatuses],
+  );
+  const personalMonthMemberNames = useMemo(
+    () =>
+      new Map(
+        (personalMonthData?.members || []).map((member) => [member.id, member.full_name]),
+      ),
+    [personalMonthData?.members],
+  );
+  const personalMonthTrials = useMemo(
+    () =>
+      new Map(
+        (personalMonthData?.trialBookings || []).map((trial) => [trial.id, trial]),
+      ),
+    [personalMonthData?.trialBookings],
+  );
 
   const monthlyCoachOptions = useMemo(() => {
     const coachesById = new Map<string, Coach>();
@@ -6273,6 +6445,7 @@ export default function BigeFitnessOperations({
       data-ipad-schedule-overview={useIpadScheduleOverview ? "true" : undefined}
       data-ipad-pro-desktop-layout={useIpadProDesktopLayout ? "true" : undefined}
       data-daily-schedule-active={tab === "schedule" ? "true" : undefined}
+      data-personal-month-active={tab === "personal-month" ? "true" : undefined}
       data-role-view={view}
     >
       <div className={styles.shell}>
@@ -6319,6 +6492,18 @@ export default function BigeFitnessOperations({
             <button className={`${styles.tab} ${tab === "schedule" ? styles.activeTab : ""}`} onClick={() => setTab("schedule")}>
               日排課表
             </button>
+            {coachView ? (
+              <button
+                className={`${styles.tab} ${tab === "personal-month" ? styles.activeTab : ""}`}
+                type="button"
+                onClick={() => {
+                  setPersonalMonth(date.slice(0, 7));
+                  setTab("personal-month");
+                }}
+              >
+                整月課表
+              </button>
+            ) : null}
             {canOpenStaffSchedule ? (
               <a className={styles.tab} href="/staff/schedule">
                 我的班表
@@ -6586,14 +6771,211 @@ export default function BigeFitnessOperations({
           ) : null}
         </div>
 
-        {error ? <p className={styles.error}>{error}</p> : null}
+        {tab === "schedule" && error ? <p className={styles.error}>{error}</p> : null}
         {loading ? <DailyScheduleLoadingBoard /> : null}
 
-        {!loading && data && isBusinessClosed ? (
+        {!loading && data && tab === "schedule" && isBusinessClosed ? (
           <section className={styles.closureBanner} role="status">
             <span className={styles.closureKicker}>FACILITY CLOSED</span>
             <strong>{data.businessDay?.closure_label || "館休"}</strong>
             <p>本日不營業；排課、首次體驗與自主訓練報到／放行均已停止。既有行程僅供主管檢查衝突。</p>
+          </section>
+        ) : null}
+
+        {tab === "personal-month" && coachView ? (
+          <section
+            className={`${styles.glass} ${styles.personalMonthPanel}`}
+            aria-busy={personalMonthLoading}
+            aria-label="個人整月課表"
+          >
+            <header className={styles.personalMonthHeader}>
+              <div>
+                <span className={styles.eyebrow}>PERSONAL MONTHLY SCHEDULE</span>
+                <h2>
+                  {personalMonthData?.coach
+                    ? `${coachLabel(personalMonthData.coach)} 的整月課表`
+                    : "我的整月課表"}
+                </h2>
+                <p>顯示本月每日預約、自由文字與早班／晚班／休假狀態。</p>
+              </div>
+              <div className={styles.personalMonthToolbar} role="group" aria-label="月份切換">
+                <button
+                  className={styles.iconButton}
+                  type="button"
+                  title="上個月"
+                  onClick={() => {
+                    setPersonalMonthData(null);
+                    setPersonalMonth((current) => shiftBigePersonalMonth(current, -1));
+                  }}
+                >
+                  <ChevronLeft size={18} aria-hidden="true" />
+                </button>
+                <input
+                  className={styles.input}
+                  type="month"
+                  value={personalMonth}
+                  aria-label="整月課表月份"
+                  onChange={(event) => {
+                    if (!event.target.value) return;
+                    setPersonalMonthData(null);
+                    setPersonalMonth(event.target.value);
+                  }}
+                />
+                <button
+                  className={styles.iconButton}
+                  type="button"
+                  title="下個月"
+                  onClick={() => {
+                    setPersonalMonthData(null);
+                    setPersonalMonth((current) => shiftBigePersonalMonth(current, 1));
+                  }}
+                >
+                  <ChevronRight size={18} aria-hidden="true" />
+                </button>
+                <button
+                  className={styles.iconButton}
+                  type="button"
+                  title="重新整理整月課表"
+                  disabled={personalMonthLoading}
+                  onClick={() => void loadPersonalCoachMonth(personalMonth)}
+                >
+                  <RefreshCw size={18} aria-hidden="true" />
+                </button>
+              </div>
+            </header>
+
+            {personalMonthData ? (
+              <div className={styles.personalMonthSummary} aria-label="本月摘要">
+                <div>
+                  <span>本月預約</span>
+                  <strong>{personalMonthData.bookings.length}</strong>
+                </div>
+                <div>
+                  <span>有預約天數</span>
+                  <strong>{personalMonthBookingsByDate.size}</strong>
+                </div>
+                <div>
+                  <span>休假天數</span>
+                  <strong>
+                    {personalMonthData.dayStatuses.filter((status) => status.status === "off").length}
+                  </strong>
+                </div>
+              </div>
+            ) : null}
+
+            {personalMonthError ? (
+              <div className={styles.personalMonthError} role="alert">
+                <span>{personalMonthError}</span>
+                <button
+                  className={styles.button}
+                  type="button"
+                  onClick={() => void loadPersonalCoachMonth(personalMonth)}
+                >
+                  再試一次
+                </button>
+              </div>
+            ) : null}
+
+            {personalMonthLoading && !personalMonthData ? (
+              <div className={styles.personalMonthLoading} role="status">
+                <CalendarDays size={22} aria-hidden="true" />
+                正在讀取整月課表…
+              </div>
+            ) : null}
+
+            {personalMonthData ? (
+              <>
+                {personalMonthLoading ? (
+                  <p className={styles.personalMonthUpdating} role="status">正在更新本月資料…</p>
+                ) : null}
+                <div className={styles.personalMonthWeekdays} aria-hidden="true">
+                  {["日", "一", "二", "三", "四", "五", "六"].map((weekday) => (
+                    <span key={weekday}>週{weekday}</span>
+                  ))}
+                </div>
+                <div className={styles.personalMonthGrid}>
+                  {Array.from({
+                    length: personalMonthDates[0]
+                      ? new Date(`${personalMonthDates[0]}T00:00:00Z`).getUTCDay()
+                      : 0,
+                  }).map((_, index) => (
+                    <span className={styles.personalMonthBlank} key={`blank-${index}`} aria-hidden="true" />
+                  ))}
+                  {personalMonthDates.map((businessDate) => {
+                    const bookings = personalMonthBookingsByDate.get(businessDate) || [];
+                    const notes = personalMonthNotesByDate.get(businessDate) || [];
+                    const status = personalMonthStatusByDate.get(businessDate) || null;
+                    const hasSchedule = bookings.length > 0 || notes.length > 0;
+                    return (
+                      <article
+                        className={styles.personalMonthDay}
+                        data-day-status={status?.status || (hasSchedule ? "scheduled" : "empty")}
+                        data-today={String(businessDate === localDate())}
+                        key={businessDate}
+                      >
+                        <header className={styles.personalMonthDayHeader}>
+                          <div>
+                            <strong>{Number(businessDate.slice(-2))}</strong>
+                            <span>{weekdayLabel(businessDate)}</span>
+                          </div>
+                          {status ? (
+                            <span className={styles.personalMonthDayStatus} data-status={status.status}>
+                              {status.label}
+                            </span>
+                          ) : null}
+                        </header>
+                        <div className={styles.personalMonthEntries}>
+                          {bookings.map((booking) => {
+                            const trial = booking.trial_booking_id
+                              ? personalMonthTrials.get(booking.trial_booking_id)
+                              : null;
+                            const memberName =
+                              trial?.name ||
+                              personalMonthMemberNames.get(booking.member_id) ||
+                              "未命名學員";
+                            const courseLabel =
+                              booking.operation_kind === "trial"
+                                ? booking.trial_stage || "FA 體驗"
+                                : scheduleCourseLabel(booking.course_type);
+                            return (
+                              <div
+                                className={styles.personalMonthBooking}
+                                data-operation-kind={booking.operation_kind}
+                                data-booking-status={booking.status}
+                                key={booking.id}
+                              >
+                                <span>{slotKey(booking.starts_at)}–{slotKey(booking.ends_at)}</span>
+                                <strong>{memberName}</strong>
+                                <small>
+                                  {courseLabel} · {labelOrValue(BOOKING_STATUS_LABELS, booking.status)}
+                                </small>
+                              </div>
+                            );
+                          })}
+                          {notes.map((note) => (
+                            <div className={styles.personalMonthNote} key={note.id}>
+                              <span>{slotKey(note.starts_at)}–{slotKey(note.ends_at)}</span>
+                              <strong>{note.content}</strong>
+                            </div>
+                          ))}
+                          {!hasSchedule ? <span className={styles.personalMonthEmpty}>無預約</span> : null}
+                        </div>
+                        <button
+                          className={styles.personalMonthOpenDay}
+                          type="button"
+                          onClick={() => {
+                            selectBoardDate(businessDate);
+                            setTab("schedule");
+                          }}
+                        >
+                          查看日排課表
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
+              </>
+            ) : null}
           </section>
         ) : null}
 

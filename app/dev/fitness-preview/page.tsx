@@ -400,7 +400,30 @@ const preview: BoardData = {
   expiringContracts: [],
 };
 
-export default function FitnessPreviewPage() {
+export default async function FitnessPreviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
   if (process.env.NODE_ENV !== "development") notFound();
-  return <BigeFitnessOperations view="manager" previewData={preview} />;
+  const params = await searchParams;
+  const view = params.view === "coach" ? "coach" : "manager";
+  const previewData: BoardData =
+    view === "coach"
+      ? {
+          ...preview,
+          role: "coach",
+          coachScheduleScope: "assigned",
+          canManageSchedule: false,
+          canReorderCoaches: false,
+          coachDayStatuses: [
+            {
+              coach_id: preview.coaches[0].id,
+              status: "early",
+              label: "早班",
+            },
+          ],
+        }
+      : preview;
+  return <BigeFitnessOperations view={view} previewData={previewData} />;
 }
