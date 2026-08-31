@@ -90,23 +90,31 @@ export async function POST(request: Request) {
       console.warn("[bige-line-webhook] binding lookup failed", existing.error.message);
       continue;
     }
-    const upsert = await admin.from("bige_line_group_bindings").upsert(
-      {
-        tenant_id: tenantId,
-        line_group_id: groupId,
-        group_name: groupName,
-        verification_code: verificationCode,
-        status: existing.data?.status === "active" ? "active" : "pending",
-        joined_at: event.type === "join" ? new Date().toISOString() : undefined,
-        left_at: null,
-        last_seen_at: new Date().toISOString(),
-        metadata: { lastWebhookEventId: event.webhookEventId || eventHash },
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "tenant_id,line_group_id" },
-    );
-    if (upsert.error) {
-      console.warn("[bige-line-webhook] binding upsert failed", upsert.error.message);
+    const observedAt = new Date().toISOString();
+    const bindingUpdate = {
+      group_name: groupName,
+      verification_code: verificationCode,
+      status: existing.data?.status === "active" ? "active" : "pending",
+      joined_at: event.type === "join" ? observedAt : undefined,
+      left_at: null,
+      last_seen_at: observedAt,
+      metadata: { lastWebhookEventId: event.webhookEventId || eventHash },
+      updated_at: observedAt,
+    };
+    const bindingWrite = existing.data
+      ? await admin
+          .from("bige_line_group_bindings")
+          .update(bindingUpdate)
+          .eq("tenant_id", tenantId)
+          .eq("id", existing.data.id)
+      : await admin.from("bige_line_group_bindings").insert({
+          tenant_id: tenantId,
+          line_group_id: groupId,
+          ...bindingUpdate,
+          status: "pending",
+        });
+    if (bindingWrite.error) {
+      console.warn("[bige-line-webhook] binding write failed", bindingWrite.error.message);
       continue;
     }
     const verificationRequested =

@@ -262,6 +262,14 @@ test("shared LINE groups route several members while each snapshot remains membe
     "supabase/migrations/20260830213831_index_shared_line_group_members_created_by.sql",
     "utf8",
   );
+  const deliveryMigration = readFileSync(
+    "supabase/migrations/20260831112558_fix_shared_line_group_delivery.sql",
+    "utf8",
+  );
+  const deliveryRegression = readFileSync(
+    "tests/bige_shared_line_group_delivery.sql",
+    "utf8",
+  );
 
   assert.match(migration, /create table public\.bige_line_group_binding_members/);
   assert.match(migration, /primary key \(binding_id, member_id\)/);
@@ -275,6 +283,13 @@ test("shared LINE groups route several members while each snapshot remains membe
     indexMigration,
     /bige_line_group_binding_members_created_by_idx[\s\S]*\(created_by\)/,
   );
+  assert.match(deliveryMigration, /join public\.bige_line_group_binding_members link/);
+  assert.match(deliveryMigration, /link\.member_id = p_member_id/);
+  assert.doesNotMatch(deliveryMigration, /binding\.member_id = p_member_id/);
+  assert.match(deliveryRegression, /participant_a_id[\s\S]*participant_b_id/);
+  assert.match(deliveryRegression, /count\(distinct notification\.member_id\)/);
+  assert.match(deliveryRegression, /line_group_binding_inactive/);
+  assert.match(deliveryRegression, /rollback;/);
 
   assert.match(line, /resolveActiveBigeLineGroupBinding/);
   assert.match(line, /\.from\("bige_line_group_binding_members"\)/);
@@ -391,6 +406,9 @@ test("LINE webhook stores and replies with a same-name-safe group verification c
     "utf8",
   );
   assert.match(webhook, /verification_code: verificationCode/);
+  assert.match(webhook, /existing\.data[\s\S]{0,180}\.update\(bindingUpdate\)/);
+  assert.match(webhook, /\.insert\(\{[\s\S]{0,220}status: "pending"/);
+  assert.doesNotMatch(webhook, /\.upsert\(/);
   assert.match(webhook, /\/v2\/bot\/message\/reply/);
   assert.match(webhook, /event\.type === "join" \|\| verificationRequested/);
   assert.match(webhook, /isBigeLineGroupVerificationCodeRequest/);
