@@ -82,6 +82,14 @@ test("coach navigation inserts personal month between daily and staff schedules"
   assert.match(styles, /\.personalMonthDay\[data-selected="true"\]/);
   assert.match(styles, /\.personalMonthTimeline\s*\{[\s\S]*overflow-x: auto;[\s\S]*scroll-snap-type: x mandatory;/);
   assert.match(styles, /\.personalMonthDay\s*\{[\s\S]*scroll-snap-align: start;/);
+  assert.match(
+    styles,
+    /@media \(max-width: 780px\)[\s\S]*\.personalMonthHeader p,\s*\.personalMonthToolbar\s*\{\s*display: none;/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 780px\)[\s\S]*\.personalMonthDateJump\s*\{[\s\S]*padding: 9px 10px;/,
+  );
   assert.match(styles, /@media \(max-width: 780px\)[\s\S]*\.personalMonthTimeline\s*\{\s*grid-auto-columns: 100%;/);
 });
 

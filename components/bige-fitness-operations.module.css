@@ -1884,8 +1884,9 @@
     display: grid;
   }
 
+  .personalMonthHeader p,
   .personalMonthToolbar {
-    width: 100%;
+    display: none;
   }
 
   .personalMonthToolbar .input {
