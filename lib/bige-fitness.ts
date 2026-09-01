@@ -61,6 +61,44 @@ export const BIGE_INVOICE_CARRIER_PATTERN = /^[A-Z0-9+./-]{1,80}$/;
 export const BIGE_COMPLETED_BOOKING_EDIT_MESSAGE =
   "本堂已完成並扣課，請先到「課程狀態操作」復原為未扣課，再修改時間、時長、教練或課別。";
 
+export type BigeLegacyPurchaseDateTarget = {
+  contractId: string;
+  memberId: string;
+  firstClassAt: string;
+};
+
+export function collectBigeLegacyPurchaseDateTargets(
+  bookings: ReadonlyArray<{
+    member_id?: unknown;
+    starts_at?: unknown;
+    member_plan_contract_id?: unknown;
+    package_sessions_consumed?: unknown;
+  }>,
+) {
+  const targets = new Map<string, BigeLegacyPurchaseDateTarget>();
+
+  for (const booking of bookings) {
+    const contractId = String(booking.member_plan_contract_id || "").trim();
+    const memberId = String(booking.member_id || "").trim();
+    const firstClassAt = String(booking.starts_at || "").trim();
+    const sessionsConsumed = Number(booking.package_sessions_consumed || 0);
+    if (!contractId || !memberId || !firstClassAt || !Number.isFinite(sessionsConsumed) || sessionsConsumed <= 0) {
+      continue;
+    }
+
+    const current = targets.get(contractId);
+    if (!current || firstClassAt < current.firstClassAt) {
+      targets.set(contractId, { contractId, memberId, firstClassAt });
+    }
+  }
+
+  return [...targets.values()].sort(
+    (left, right) =>
+      left.firstClassAt.localeCompare(right.firstClassAt) ||
+      left.contractId.localeCompare(right.contractId),
+  );
+}
+
 export function normalizeBigeInvoiceCarrier(value: unknown) {
   return String(value || "")
     .toUpperCase()

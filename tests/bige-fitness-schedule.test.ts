@@ -16,6 +16,7 @@ import {
   calculateBigeContractOutstandingBalance,
   calculateContractTerms,
   calculateLegacyContractExpiryDate,
+  collectBigeLegacyPurchaseDateTargets,
   flattenBigeMemberPaymentRelations,
   getBigeStudentPaymentBalanceState,
   getBigeContractDisplayName,
@@ -831,6 +832,44 @@ test("legacy contract expiry adds 3.5 days per session and the 30 day bonus", ()
   assert.equal(calculateLegacyContractExpiryDate("2026-08-14", 48), "2027-02-28");
   assert.equal(calculateLegacyContractExpiryDate("2026-08-14", 30), "2026-12-27");
   assert.equal(calculateLegacyContractExpiryDate("2026-08-14", 26), "2026-12-13");
+});
+
+test("legacy purchase-date reminders only include the contracts actually consumed that day", () => {
+  assert.deepEqual(
+    collectBigeLegacyPurchaseDateTargets([
+      {
+        member_id: "member-display-only",
+        starts_at: "2026-08-31T07:00:00.000Z",
+        member_plan_contract_id: null,
+        package_sessions_consumed: 0,
+      },
+      {
+        member_id: "member-reserved-only",
+        starts_at: "2026-08-31T08:00:00.000Z",
+        member_plan_contract_id: "contract-reserved-only",
+        package_sessions_consumed: 0,
+      },
+      {
+        member_id: "member-shared-later",
+        starts_at: "2026-08-31T10:00:00.000Z",
+        member_plan_contract_id: "contract-consumed",
+        package_sessions_consumed: 1,
+      },
+      {
+        member_id: "member-shared-earlier",
+        starts_at: "2026-08-31T09:00:00.000Z",
+        member_plan_contract_id: "contract-consumed",
+        package_sessions_consumed: 1,
+      },
+    ]),
+    [
+      {
+        contractId: "contract-consumed",
+        memberId: "member-shared-earlier",
+        firstClassAt: "2026-08-31T09:00:00.000Z",
+      },
+    ],
+  );
 });
 
 test("custom contract terms reuse the same session formula", () => {

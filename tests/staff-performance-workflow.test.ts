@@ -39,6 +39,8 @@ test("daily settlement uses versioned allocations and one transactional course/p
   assert.match(migration, /revoke all on function public\.staff_confirm_daily_settlement_v1[\s\S]*authenticated/);
   assert.match(route, /admin\.rpc\("staff_confirm_daily_settlement_v1"/);
   assert.match(route, /countLegacyPurchaseDateReminders/);
+  assert.match(route, /collectBigeLegacyPurchaseDateTargets/);
+  assert.match(contractRoute, /collectBigeLegacyPurchaseDateTargets/);
 });
 
 test("refunds remain locked to exact original finalized allocation recipients", () => {

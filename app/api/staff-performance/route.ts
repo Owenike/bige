@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { apiError, apiSuccess, requireProfile } from "../../../lib/auth-context";
+import { collectBigeLegacyPurchaseDateTargets } from "../../../lib/bige-fitness";
 import { createInAppNotifications } from "../../../lib/in-app-notifications";
 import { requireStaffPermission } from "../../../lib/staff-operation-permissions";
 import { performanceMonthRange, taiwanBusinessDate } from "../../../lib/staff-performance";
@@ -72,7 +73,9 @@ async function countLegacyPurchaseDateReminders(
   branchId: string | null,
   businessDate: string,
 ) {
-  let bookingQuery = admin.from("bookings").select("member_id")
+  let bookingQuery = admin.from("bookings").select(
+    "member_id, starts_at, member_plan_contract_id, package_sessions_consumed",
+  )
     .eq("tenant_id", tenantId).eq("is_bige_schedule", true)
     .eq("operation_kind", "pt").eq("status", "completed")
     .gte("starts_at", `${businessDate}T00:00:00+08:00`)
@@ -80,18 +83,13 @@ async function countLegacyPurchaseDateReminders(
   if (branchId) bookingQuery = bookingQuery.eq("branch_id", branchId);
   const bookingResult = await bookingQuery;
   if (bookingResult.error) throw new Error(bookingResult.error.message);
-  const memberIds = [...new Set((bookingResult.data || []).map((row) => row.member_id ? String(row.member_id) : "").filter(Boolean))];
-  if (!memberIds.length) return 0;
-  const sharedResult = await admin.from("member_plan_contract_members").select("contract_id")
-    .eq("tenant_id", tenantId).in("member_id", memberIds);
-  if (sharedResult.error) throw new Error(sharedResult.error.message);
-  const sharedIds = [...new Set((sharedResult.data || []).map((row) => String(row.contract_id)))];
-  const filter = sharedIds.length
-    ? `member_id.in.(${memberIds.join(",")}),id.in.(${sharedIds.join(",")})`
-    : `member_id.in.(${memberIds.join(",")})`;
+  const contractIds = collectBigeLegacyPurchaseDateTargets(bookingResult.data || []).map(
+    (target) => target.contractId,
+  );
+  if (!contractIds.length) return 0;
   const contractResult = await admin.from("member_plan_contracts").select("id")
     .eq("tenant_id", tenantId).eq("is_legacy_import", true)
-    .is("signed_on", null).neq("status", "canceled").or(filter);
+    .is("signed_on", null).neq("status", "canceled").in("id", contractIds);
   if (contractResult.error) throw new Error(contractResult.error.message);
   return (contractResult.data || []).length;
 }

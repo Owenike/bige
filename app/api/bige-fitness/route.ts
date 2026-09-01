@@ -31,6 +31,7 @@ import {
   calculateContractTerms,
   calculateLegacyContractExpiryDate,
   calculateMinimumDeposit,
+  collectBigeLegacyPurchaseDateTargets,
   flattenBigeMemberPaymentRelations,
   getBigeTrialContractMissingProfileFields,
   getZodMessage,
@@ -1090,7 +1091,7 @@ async function loadLegacyPurchaseDateReminders(
   const range = taipeiRange(businessDate);
   let bookingQuery = supabase
     .from("bookings")
-    .select("member_id, starts_at")
+    .select("member_id, starts_at, member_plan_contract_id, package_sessions_consumed")
     .eq("tenant_id", tenantId)
     .eq("is_bige_schedule", true)
     .eq("operation_kind", "pt")
@@ -1101,30 +1102,11 @@ async function loadLegacyPurchaseDateReminders(
   const bookingsResult = await bookingQuery;
   if (bookingsResult.error) throw new Error(bookingsResult.error.message);
 
-  const firstClassByMember = new Map<string, string>();
-  for (const booking of bookingsResult.data || []) {
-    const memberId = String(booking.member_id || "");
-    if (!memberId) continue;
-    const startsAt = String(booking.starts_at || "");
-    const current = firstClassByMember.get(memberId);
-    if (!current || startsAt < current) firstClassByMember.set(memberId, startsAt);
-  }
-  const memberIds = [...firstClassByMember.keys()];
-  if (memberIds.length === 0) return [];
-
-  const sharedMembersResult = await supabase
-    .from("member_plan_contract_members")
-    .select("contract_id, member_id")
-    .eq("tenant_id", tenantId)
-    .in("member_id", memberIds);
-  if (sharedMembersResult.error) throw new Error(sharedMembersResult.error.message);
-  const sharedContractIds = [
-    ...new Set((sharedMembersResult.data || []).map((row: any) => String(row.contract_id))),
-  ];
-  const directMemberFilter = `member_id.in.(${memberIds.join(",")})`;
-  const contractFilter = sharedContractIds.length
-    ? `${directMemberFilter},id.in.(${sharedContractIds.join(",")})`
-    : directMemberFilter;
+  const targets = collectBigeLegacyPurchaseDateTargets(bookingsResult.data || []);
+  if (targets.length === 0) return [];
+  const targetByContract = new Map(targets.map((target) => [target.contractId, target]));
+  const contractIds = targets.map((target) => target.contractId);
+  const memberIds = [...new Set(targets.map((target) => target.memberId))];
 
   const [contractsResult, membersResult] = await Promise.all([
     supabase
@@ -1136,7 +1118,7 @@ async function loadLegacyPurchaseDateReminders(
       .eq("is_legacy_import", true)
       .is("signed_on", null)
       .neq("status", "canceled")
-      .or(contractFilter)
+      .in("id", contractIds)
       .order("created_at", { ascending: true }),
     supabase
       .from("members")
@@ -1149,27 +1131,15 @@ async function loadLegacyPurchaseDateReminders(
 
   const members = await attachLegacyNumbers(tenantId, membersResult.data || []);
   const memberMap = new Map(members.map((member) => [String(member.id), member]));
-  const sharedAttendeeByContract = new Map<string, string>();
-  for (const row of sharedMembersResult.data || []) {
-    const memberId = String(row.member_id);
-    if (!firstClassByMember.has(memberId)) continue;
-    const contractId = String(row.contract_id);
-    if (!sharedAttendeeByContract.has(contractId)) {
-      sharedAttendeeByContract.set(contractId, memberId);
-    }
-  }
   return (contractsResult.data || []).map((contract: any) => {
-    const directMemberId = String(contract.member_id);
-    const attendanceMemberId = firstClassByMember.has(directMemberId)
-      ? directMemberId
-      : sharedAttendeeByContract.get(String(contract.id)) || directMemberId;
-    const member = memberMap.get(attendanceMemberId);
+    const target = targetByContract.get(String(contract.id));
+    const member = target ? memberMap.get(target.memberId) : undefined;
     return {
       ...contract,
       member_name: member?.full_name || "未命名會員",
       member_code: member?.member_code || null,
       legacy_numbers: member?.legacy_numbers || [],
-      first_class_at: firstClassByMember.get(attendanceMemberId) || null,
+      first_class_at: target?.firstClassAt || null,
     };
   });
 }
