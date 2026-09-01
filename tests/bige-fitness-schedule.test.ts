@@ -3368,3 +3368,21 @@ test("coach mobile header stays compact and employee 06 can see the daily frontd
     /data-role-view="coach"\] \.sessionIdentity \{[\s\S]*flex-direction: row;/,
   );
 });
+
+test("frontdesk daily schedules expose the all-coach scope instead of defaulting to Becky", () => {
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+
+  assert.match(
+    route,
+    /const coachScheduleScope = coachScheduleScopeForActor\(scheduleActor\);/,
+  );
+  assert.equal(
+    (route.match(/if \(coachScheduleScope === "assigned"\)/g) || []).length,
+    3,
+  );
+  assert.match(route, /coachScheduleScope,\s*tenantId,/);
+  assert.doesNotMatch(
+    route,
+    /coachScheduleScope: hasAllCoachScheduleAccess \? "all" : "assigned"/,
+  );
+});

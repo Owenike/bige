@@ -179,6 +179,14 @@ export function canViewAllCoachSchedules(actor: OrganizationActor) {
   return LEGACY_SCHEDULE_OVERVIEW_ROLES.has(actor.role);
 }
 
+export function coachScheduleScopeForActor(
+  actor: OrganizationActor,
+): "all" | "assigned" {
+  return actor.role === "coach" && !canViewAllCoachSchedules(actor)
+    ? "assigned"
+    : "all";
+}
+
 export function canCreatePosition(actor: OrganizationActor, target: StaffPosition) {
   if (actor.role === "platform_admin") return true;
   if (!actor.department || !actor.position) return false;

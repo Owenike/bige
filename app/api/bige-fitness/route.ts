@@ -58,6 +58,7 @@ import {
   canRecordBigeContractPayment,
   canUseBigeWalkInPayments,
   canViewAllCoachSchedules,
+  coachScheduleScopeForActor,
   isBigeContractRiskRequester,
 } from "../../../lib/staff-organization";
 import {
@@ -1442,13 +1443,15 @@ export async function GET(request: Request) {
     auth.context.role === "platform_admin" ? requestedTenantId || auth.context.tenantId : auth.context.tenantId;
   if (!tenantId) return apiError(400, "FORBIDDEN", "tenantId is required");
 
-  const hasAllCoachScheduleAccess = canViewAllCoachSchedules({
+  const scheduleActor = {
     role: auth.context.role,
     department: auth.context.department ?? null,
     position: auth.context.position ?? null,
     branchId: auth.context.branchId,
     employeeNumber: auth.context.employeeNumber,
-  });
+  };
+  const hasAllCoachScheduleAccess = canViewAllCoachSchedules(scheduleActor);
+  const coachScheduleScope = coachScheduleScopeForActor(scheduleActor);
   const requestedBranchId = url.searchParams.get("branchId");
   const branchId = hasAllCoachScheduleAccess
     ? requestedBranchId
@@ -2031,7 +2034,7 @@ export async function GET(request: Request) {
     .lt("starts_at", range.end)
     .order("starts_at", { ascending: true });
   if (branchId) bookingsQuery = bookingsQuery.eq("branch_id", branchId);
-  if (auth.context.role === "coach" && !hasAllCoachScheduleAccess) {
+  if (coachScheduleScope === "assigned") {
     bookingsQuery = bookingsQuery.eq("coach_id", auth.context.userId);
   }
 
@@ -2043,7 +2046,7 @@ export async function GET(request: Request) {
     .lt("starts_at", range.end)
     .order("starts_at", { ascending: true });
   if (branchId) notesQuery = notesQuery.eq("branch_id", branchId);
-  if (auth.context.role === "coach" && !hasAllCoachScheduleAccess) {
+  if (coachScheduleScope === "assigned") {
     notesQuery = notesQuery.eq("coach_id", auth.context.userId);
   }
 
@@ -2056,7 +2059,7 @@ export async function GET(request: Request) {
     .order("english_name", { nullsFirst: false })
     .order("display_name");
   if (branchId) coachesQuery = coachesQuery.or(`branch_id.eq.${branchId},branch_id.is.null`);
-  if (auth.context.role === "coach" && !hasAllCoachScheduleAccess) {
+  if (coachScheduleScope === "assigned") {
     coachesQuery = coachesQuery.eq("id", auth.context.userId);
   }
 
@@ -2425,7 +2428,7 @@ export async function GET(request: Request) {
     role: auth.context.role,
     department: auth.context.department,
     position: auth.context.position,
-    scope: hasAllCoachScheduleAccess ? "all" : "assigned",
+    scope: coachScheduleScope,
     branchId,
     coachCount: orderedCoaches.length,
     bookingCount: bookings.length,
@@ -2438,7 +2441,7 @@ export async function GET(request: Request) {
   const response = apiSuccess({
     businessDate,
     role: auth.context.role,
-    coachScheduleScope: hasAllCoachScheduleAccess ? "all" : "assigned",
+    coachScheduleScope,
     tenantId,
     branchId,
     bookings,

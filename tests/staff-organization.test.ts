@@ -15,6 +15,7 @@ import {
   canUseBigeWalkInPayments,
   canManagePosition,
   canViewAllCoachSchedules,
+  coachScheduleScopeForActor,
   legacyRoleForPosition,
   roleForOrganizationAssignment,
   positionLabel,
@@ -289,6 +290,33 @@ test("ordinary coaches stay limited to their own schedule", () => {
       position: "frontdesk",
     }),
     false,
+  );
+});
+
+test("daily schedule scope limits only ordinary coaches, not frontdesk staff", () => {
+  assert.equal(
+    coachScheduleScopeForActor({
+      role: "coach",
+      department: "coaching",
+      position: "coach",
+    }),
+    "assigned",
+  );
+  assert.equal(
+    coachScheduleScopeForActor({
+      role: "frontdesk",
+      department: "general_affairs",
+      position: "frontdesk",
+    }),
+    "all",
+  );
+  assert.equal(
+    coachScheduleScopeForActor({
+      role: "coach",
+      department: "coaching",
+      position: "coach_team_lead",
+    }),
+    "all",
   );
 });
 
