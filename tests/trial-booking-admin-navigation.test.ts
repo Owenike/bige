@@ -32,11 +32,13 @@ test("coach navigation places the monthly schedule after the daily schedule, the
   const dailyScheduleIndex = fitnessOperations.indexOf("日排課表", navigationStart);
   const personalMonthIndex = fitnessOperations.indexOf("整月課表", navigationStart);
   const staffScheduleIndex = fitnessOperations.indexOf("我的班表", navigationStart);
+  const personalInfoIndex = fitnessOperations.indexOf("個人資訊", navigationStart);
 
   assert.notEqual(navigationStart, -1);
   assert.ok(dailyScheduleIndex > navigationStart);
   assert.ok(personalMonthIndex > dailyScheduleIndex);
   assert.ok(staffScheduleIndex > personalMonthIndex);
+  assert.ok(personalInfoIndex > staffScheduleIndex);
   assert.match(fitnessOperations, /\{coachView \? \([\s\S]*?setTab\("personal-month"\)/);
   assert.match(
     fitnessOperations,

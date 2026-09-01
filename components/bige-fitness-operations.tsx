@@ -1714,7 +1714,9 @@ export default function BigeFitnessOperations({
       title: "教練營運後台",
     },
   };
-  const [tab, setTab] = useState<Tab>("schedule");
+  const [tab, setTab] = useState<Tab>(() =>
+    coachView && previewData?.coachScheduleScope !== "all" ? "personal-month" : "schedule",
+  );
   const [date, setDate] = useState(localDate);
   const [data, setData] = useState<BoardData | null>(previewData || null);
   const [boardDateDirection, setBoardDateDirection] = useState<"previous" | "next" | null>(null);
@@ -1727,6 +1729,7 @@ export default function BigeFitnessOperations({
   const [legacyPurchaseDates, setLegacyPurchaseDates] = useState<Record<string, string>>({});
   const [legacyPurchaseDateSubmitting, setLegacyPurchaseDateSubmitting] = useState<string | null>(null);
   const [sessionIdentity, setSessionIdentity] = useState<SessionIdentity | null>(null);
+  const [mobilePersonalMenuOpen, setMobilePersonalMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<DialogName>(null);
   const [slotChoice, setSlotChoice] = useState<{ coachId: string; hour: number } | null>(null);
   const [staffManagerOpen, setStaffManagerOpen] = useState(false);
@@ -1841,6 +1844,7 @@ export default function BigeFitnessOperations({
   const [activityLoading, setActivityLoading] = useState(false);
   const boardDateRef = useRef(date);
   const hasBoardRef = useRef(Boolean(previewData));
+  const coachInitialTabResolvedRef = useRef(!coachView || Boolean(previewData));
   const boardCacheRef = useRef<Map<string, BoardData>>(new Map());
   const boardRequestsRef = useRef<Map<string, Promise<BoardData>>>(new Map());
   const boardRevisionRef = useRef(new Map<string, number>());
@@ -1863,6 +1867,8 @@ export default function BigeFitnessOperations({
   const dateToolbarRef = useRef<HTMLDivElement | null>(null);
   const boardWrapRef = useRef<HTMLElement | null>(null);
   const personalMonthTimelineRef = useRef<HTMLDivElement | null>(null);
+  const mobilePersonalMenuRef = useRef<HTMLDivElement | null>(null);
+  const mobilePersonalMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const boardDateAnimationTimerRef = useRef<number | null>(null);
   const scheduleNoteUndoTimerRef = useRef<number | null>(null);
   const boardWheelRef = useRef({
@@ -2008,7 +2014,13 @@ export default function BigeFitnessOperations({
     )) {
       scheduleMemberDetailCacheRef.current.set(memberId, detail);
     }
+    const shouldDefaultCoachToPersonalMonth =
+      coachView &&
+      !coachInitialTabResolvedRef.current &&
+      merged.coachScheduleScope !== "all";
+    coachInitialTabResolvedRef.current = true;
     startTransition(() => {
+      if (shouldDefaultCoachToPersonalMonth) setTab("personal-month");
       setData(merged);
       setSelectedCoach((current) => {
         if (merged.coachScheduleScope === "all") {
@@ -2021,7 +2033,7 @@ export default function BigeFitnessOperations({
           : merged.coaches[0]?.id || "";
       });
     });
-  }, []);
+  }, [coachView]);
 
   const loadOperationsDashboard = useCallback(async (targetDate = boardDateRef.current) => {
     if (previewData) return operationsDashboardRef.current;
@@ -2423,6 +2435,29 @@ export default function BigeFitnessOperations({
       cancelled = true;
     };
   }, [previewData]);
+
+  useEffect(() => {
+    if (!mobilePersonalMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !mobilePersonalMenuRef.current?.contains(target)) {
+        setMobilePersonalMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMobilePersonalMenuOpen(false);
+      mobilePersonalMenuButtonRef.current?.focus();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobilePersonalMenuOpen]);
 
   useEffect(() => {
     if (dialog !== "booking" || !selectedBooking) return;
@@ -6028,6 +6063,9 @@ export default function BigeFitnessOperations({
     canUseStaffScheduleNavigation(sessionIdentity?.employeeNumber);
   const canUseScheduleOverviewControls =
     managerView || data?.coachScheduleScope === "all";
+  const canShowDailyScheduleTab = !coachView || canUseScheduleOverviewControls;
+  const canShowMobilePersonalMenu = coachView && canOpenStaffSchedule;
+  const canShowMobileAccountActions = Boolean(previewData) || canOpenAccountSettings;
   const canSeeDailyFrontdesk =
     canUseScheduleOverviewControls ||
     Boolean(data?.canManageFrontdesk && data.canManageSchedule);
@@ -6480,10 +6518,20 @@ export default function BigeFitnessOperations({
         </header>
 
         <div className={styles.navigationRow}>
-          <nav className={styles.tabs} aria-label="營運功能">
-            <button className={`${styles.tab} ${tab === "schedule" ? styles.activeTab : ""}`} onClick={() => setTab("schedule")}>
-              日排課表
-            </button>
+          <nav
+            className={styles.tabs}
+            aria-label="營運功能"
+            data-personal-menu-open={mobilePersonalMenuOpen ? "true" : undefined}
+          >
+            {canShowDailyScheduleTab ? (
+              <button
+                className={`${styles.tab} ${tab === "schedule" ? styles.activeTab : ""}`}
+                type="button"
+                onClick={() => setTab("schedule")}
+              >
+                日排課表
+              </button>
+            ) : null}
             {coachView ? (
               <button
                 className={`${styles.tab} ${tab === "personal-month" ? styles.activeTab : ""}`}
@@ -6501,6 +6549,64 @@ export default function BigeFitnessOperations({
               <a className={styles.tab} href="/staff/schedule">
                 我的班表
               </a>
+            ) : null}
+            {canShowMobilePersonalMenu ? (
+              <div className={styles.mobilePersonalMenu} ref={mobilePersonalMenuRef}>
+                {mobilePersonalMenuOpen ? (
+                  <div
+                    className={styles.mobilePersonalMenuPanel}
+                    id="mobile-personal-menu"
+                    role="menu"
+                    aria-label="個人資訊選單"
+                  >
+                    {canShowMobileAccountActions ? (
+                      <>
+                        <a
+                          className={styles.mobilePersonalMenuAction}
+                          href="/staff/account#email"
+                          role="menuitem"
+                          onClick={() => setMobilePersonalMenuOpen(false)}
+                        >
+                          <Mail size={15} aria-hidden="true" />
+                          更改信箱
+                        </a>
+                        <a
+                          className={styles.mobilePersonalMenuAction}
+                          href="/staff/account#password"
+                          role="menuitem"
+                          onClick={() => setMobilePersonalMenuOpen(false)}
+                        >
+                          <KeyRound size={15} aria-hidden="true" />
+                          更改密碼
+                        </a>
+                      </>
+                    ) : null}
+                    <a
+                      className={`${styles.mobilePersonalMenuAction} ${styles.mobilePersonalMenuLogout}`}
+                      href="/logout"
+                      role="menuitem"
+                      onClick={() => setMobilePersonalMenuOpen(false)}
+                    >
+                      <LogOut size={15} aria-hidden="true" />
+                      登出
+                    </a>
+                  </div>
+                ) : null}
+                <button
+                  className={`${styles.tab} ${styles.mobilePersonalMenuButton} ${
+                    mobilePersonalMenuOpen ? styles.mobilePersonalMenuButtonOpen : ""
+                  }`}
+                  type="button"
+                  ref={mobilePersonalMenuButtonRef}
+                  aria-expanded={mobilePersonalMenuOpen}
+                  aria-controls="mobile-personal-menu"
+                  aria-haspopup="menu"
+                  onClick={() => setMobilePersonalMenuOpen((current) => !current)}
+                >
+                  個人資訊
+                  <ChevronDown size={15} aria-hidden="true" />
+                </button>
+              </div>
             ) : null}
             {canOpenTrialBookings ? (
               <a className={`${styles.tab} ${styles.gold}`} href="/admin/trial-bookings">

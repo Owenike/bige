@@ -60,13 +60,12 @@ test("personal month API is server-scoped to the signed-in coach", () => {
 test("coach navigation inserts personal month between daily and staff schedules", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
-  const navigation = component.slice(
-    component.indexOf('<nav className={styles.tabs} aria-label="營運功能">'),
-    component.indexOf("</nav>", component.indexOf('<nav className={styles.tabs} aria-label="營運功能">')),
-  );
+  const navigationStart = component.lastIndexOf("<nav", component.indexOf('aria-label="營運功能"'));
+  const navigation = component.slice(navigationStart, component.indexOf("</nav>", navigationStart));
 
   assert.ok(navigation.indexOf("日排課表") < navigation.indexOf("整月課表"));
   assert.ok(navigation.indexOf("整月課表") < navigation.indexOf("我的班表"));
+  assert.ok(navigation.indexOf("我的班表") < navigation.indexOf("個人資訊"));
   assert.match(component, /tab === "personal-month" && coachView/);
   assert.match(component, /personalMonthDates\.map\(\(businessDate\) =>/);
   assert.match(component, /hours\.map\(\(hour\) => \(/);
@@ -84,4 +83,57 @@ test("coach navigation inserts personal month between daily and staff schedules"
   assert.match(styles, /\.personalMonthTimeline\s*\{[\s\S]*overflow-x: auto;[\s\S]*scroll-snap-type: x mandatory;/);
   assert.match(styles, /\.personalMonthDay\s*\{[\s\S]*scroll-snap-align: start;/);
   assert.match(styles, /@media \(max-width: 780px\)[\s\S]*\.personalMonthTimeline\s*\{\s*grid-auto-columns: 100%;/);
+});
+
+test("ordinary coaches default to personal month while overview roles retain daily navigation", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+
+  assert.match(
+    component,
+    /coachView && previewData\?\.coachScheduleScope !== "all" \? "personal-month" : "schedule"/,
+  );
+  assert.match(
+    component,
+    /const shouldDefaultCoachToPersonalMonth =[\s\S]*coachView &&[\s\S]*!coachInitialTabResolvedRef\.current &&[\s\S]*merged\.coachScheduleScope !== "all"/,
+  );
+  assert.match(component, /if \(shouldDefaultCoachToPersonalMonth\) setTab\("personal-month"\)/);
+  assert.match(
+    component,
+    /const canShowDailyScheduleTab = !coachView \|\| canUseScheduleOverviewControls;/,
+  );
+  assert.match(component, /\{canShowDailyScheduleTab \? \([\s\S]*日排課表[\s\S]*\) : null\}/);
+  assert.match(
+    component,
+    /selectBoardDate\(businessDate\);\s*setTab\("schedule"\);/,
+  );
+});
+
+test("coach mobile replaces the header account controls with an upward personal menu", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+
+  assert.match(component, /aria-label="個人資訊選單"/);
+  assert.match(component, /aria-expanded=\{mobilePersonalMenuOpen\}/);
+  assert.match(component, /data-personal-menu-open=\{mobilePersonalMenuOpen \? "true" : undefined\}/);
+  assert.match(component, /aria-haspopup="menu"/);
+  assert.match(component, /個人資訊[\s\S]*<ChevronDown size=\{15\}/);
+  assert.match(component, /href="\/staff\/account#email"[\s\S]*更改信箱/);
+  assert.match(component, /href="\/staff\/account#password"[\s\S]*更改密碼/);
+  assert.match(component, /href="\/logout"[\s\S]*登出/);
+  assert.match(component, /document\.addEventListener\("pointerdown", handlePointerDown\)/);
+  assert.match(component, /event\.key !== "Escape"/);
+  assert.match(styles, /\.mobilePersonalMenu\s*\{[\s\S]*display: none;/);
+  assert.match(
+    styles,
+    /@media \(max-width: 780px\)[\s\S]*\.page\[data-role-view="coach"\] \.header\s*\{\s*display: none;/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 780px\)[\s\S]*\.page\[data-role-view="coach"\] \.mobilePersonalMenu\s*\{\s*display: block;/,
+  );
+  assert.match(styles, /\.mobilePersonalMenuPanel\s*\{[\s\S]*bottom: calc\(100% \+ 9px\);/);
+  assert.match(
+    styles,
+    /\.page\[data-role-view="coach"\] \.tabs\[data-personal-menu-open="true"\]\s*\{\s*margin-top: 74px;/,
+  );
 });
