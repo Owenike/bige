@@ -264,12 +264,12 @@
 .mobilePersonalMenuPanel {
   position: absolute;
   z-index: 80;
+  top: calc(100% + 9px);
   right: 0;
-  bottom: calc(100% + 9px);
-  width: min(330px, calc(100vw - 24px));
+  width: min(210px, calc(100vw - 24px));
   padding: 7px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   border: 1px solid rgba(225, 194, 124, 0.44);
   border-radius: 12px;
@@ -284,19 +284,20 @@
 }
 
 .mobilePersonalMenuAction {
+  width: 100%;
   min-width: 0;
   min-height: 48px;
-  padding: 7px 5px;
+  padding: 9px 12px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
+  justify-content: flex-start;
+  gap: 8px;
   color: rgba(247, 242, 230, 0.92);
   border: 1px solid rgba(189, 211, 226, 0.2);
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(35, 51, 65, 0.84), rgba(12, 23, 33, 0.88));
   box-shadow: inset 0 1px 0 rgba(230, 243, 251, 0.07);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   line-height: 1.2;
   text-decoration: none;
@@ -2886,28 +2887,38 @@
     display: none;
   }
 
+  .page[data-role-view="coach"] .navigationRow {
+    position: relative;
+    z-index: 90;
+  }
+
   .page[data-role-view="coach"] .tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) max-content;
+    align-items: stretch;
+    gap: 4px;
     overflow: visible;
   }
 
-  .page[data-role-view="coach"] .tabs[data-personal-menu-open="true"] {
-    margin-top: 74px;
+  .page[data-role-view="coach"] .tabs[data-daily-schedule-visible="true"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) max-content;
   }
 
-  .page[data-role-view="coach"] .tabs > .tab,
-  .page[data-role-view="coach"] .mobilePersonalMenu {
+  .page[data-role-view="coach"] .tabs > .tab {
+    width: 100%;
     min-width: 0;
-    flex: 1 1 0;
+    padding-inline: 8px;
   }
 
   .page[data-role-view="coach"] .mobilePersonalMenu {
+    min-width: 98px;
     display: block;
   }
 
   .page[data-role-view="coach"] .mobilePersonalMenuButton {
     width: 100%;
-    min-width: 0;
-    padding-inline: 8px;
+    min-width: 98px;
+    padding-inline: 10px;
     display: inline-flex;
     align-items: center;
     justify-content: center;

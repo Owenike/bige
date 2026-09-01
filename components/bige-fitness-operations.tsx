@@ -6521,7 +6521,7 @@ export default function BigeFitnessOperations({
           <nav
             className={styles.tabs}
             aria-label="營運功能"
-            data-personal-menu-open={mobilePersonalMenuOpen ? "true" : undefined}
+            data-daily-schedule-visible={canShowDailyScheduleTab ? "true" : undefined}
           >
             {canShowDailyScheduleTab ? (
               <button
@@ -6558,6 +6558,7 @@ export default function BigeFitnessOperations({
                     id="mobile-personal-menu"
                     role="menu"
                     aria-label="個人資訊選單"
+                    aria-orientation="vertical"
                   >
                     {canShowMobileAccountActions ? (
                       <>

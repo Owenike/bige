@@ -108,14 +108,15 @@ test("ordinary coaches default to personal month while overview roles retain dai
   );
 });
 
-test("coach mobile replaces the header account controls with an upward personal menu", () => {
+test("coach mobile replaces the header account controls with a vertical dropdown button menu", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
 
   assert.match(component, /aria-label="個人資訊選單"/);
   assert.match(component, /aria-expanded=\{mobilePersonalMenuOpen\}/);
-  assert.match(component, /data-personal-menu-open=\{mobilePersonalMenuOpen \? "true" : undefined\}/);
+  assert.match(component, /data-daily-schedule-visible=\{canShowDailyScheduleTab \? "true" : undefined\}/);
   assert.match(component, /aria-haspopup="menu"/);
+  assert.match(component, /aria-orientation="vertical"/);
   assert.match(component, /個人資訊[\s\S]*<ChevronDown size=\{15\}/);
   assert.match(component, /href="\/staff\/account#email"[\s\S]*更改信箱/);
   assert.match(component, /href="\/staff\/account#password"[\s\S]*更改密碼/);
@@ -129,11 +130,26 @@ test("coach mobile replaces the header account controls with an upward personal 
   );
   assert.match(
     styles,
-    /@media \(max-width: 780px\)[\s\S]*\.page\[data-role-view="coach"\] \.mobilePersonalMenu\s*\{\s*display: block;/,
+    /\.page\[data-role-view="coach"\] \.navigationRow\s*\{\s*position: relative;\s*z-index: 90;/,
   );
-  assert.match(styles, /\.mobilePersonalMenuPanel\s*\{[\s\S]*bottom: calc\(100% \+ 9px\);/);
   assert.match(
     styles,
-    /\.page\[data-role-view="coach"\] \.tabs\[data-personal-menu-open="true"\]\s*\{\s*margin-top: 74px;/,
+    /@media \(max-width: 780px\)[\s\S]*\.page\[data-role-view="coach"\] \.mobilePersonalMenu\s*\{[^}]*display: block;/,
+  );
+  assert.match(
+    styles,
+    /\.mobilePersonalMenuPanel\s*\{[\s\S]*top: calc\(100% \+ 9px\);[\s\S]*grid-template-columns: minmax\(0, 1fr\);/,
+  );
+  assert.match(
+    styles,
+    /\.mobilePersonalMenuAction\s*\{[\s\S]*width: 100%;[\s\S]*justify-content: flex-start;/,
+  );
+  assert.match(
+    styles,
+    /\.page\[data-role-view="coach"\] \.tabs\[data-daily-schedule-visible="true"\]\s*\{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) max-content;/,
+  );
+  assert.match(
+    styles,
+    /\.page\[data-role-view="coach"\] \.mobilePersonalMenu\s*\{[\s\S]*min-width: 98px;/,
   );
 });
