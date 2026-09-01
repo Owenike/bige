@@ -7005,7 +7005,9 @@ export default function BigeFitnessOperations({
                   <p className={styles.personalMonthUpdating} role="status">正在更新本月資料…</p>
                 ) : null}
                 <p className={styles.personalMonthSwipeHint}>
-                  左右滑動查看 1 日到月底；點日期可開啟該日的日排課表。
+                  {canShowDailyScheduleTab
+                    ? "左右滑動查看 1 日到月底；點日期可開啟該日的日排課表。"
+                    : "左右滑動查看 1 日到月底。"}
                 </p>
                 <div
                   className={styles.personalMonthTimeline}
@@ -7041,21 +7043,31 @@ export default function BigeFitnessOperations({
                             data-mobile-active="true"
                             data-coach-status={status?.status}
                           >
-                            <button
-                              className={styles.personalMonthOpenDay}
-                              type="button"
-                              onClick={() => {
-                                selectBoardDate(businessDate);
-                                setTab("schedule");
-                              }}
-                              aria-label={`查看 ${businessDate} 的日排課表`}
-                            >
-                              <span>
-                                <strong>{Number(businessDate.slice(-2))} 日</strong>
-                                <small>{weekdayLabel(businessDate)}</small>
-                              </span>
-                              <small>{coachLabel(personalMonthData.coach)}</small>
-                            </button>
+                            {canShowDailyScheduleTab ? (
+                              <button
+                                className={styles.personalMonthOpenDay}
+                                type="button"
+                                onClick={() => {
+                                  selectBoardDate(businessDate);
+                                  setTab("schedule");
+                                }}
+                                aria-label={`查看 ${businessDate} 的日排課表`}
+                              >
+                                <span>
+                                  <strong>{Number(businessDate.slice(-2))} 日</strong>
+                                  <small>{weekdayLabel(businessDate)}</small>
+                                </span>
+                                <small>{coachLabel(personalMonthData.coach)}</small>
+                              </button>
+                            ) : (
+                              <div className={styles.personalMonthOpenDay} data-read-only="true">
+                                <span>
+                                  <strong>{Number(businessDate.slice(-2))} 日</strong>
+                                  <small>{weekdayLabel(businessDate)}</small>
+                                </span>
+                                <small>{coachLabel(personalMonthData.coach)}</small>
+                              </div>
+                            )}
                             {status ? (
                               <span
                                 className={styles.coachStatusBadge}

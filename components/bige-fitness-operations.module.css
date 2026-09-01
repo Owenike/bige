@@ -1836,6 +1836,10 @@
   cursor: pointer;
 }
 
+.personalMonthOpenDay[data-read-only="true"] {
+  cursor: default;
+}
+
 .personalMonthOpenDay > span {
   display: inline-flex;
   align-items: baseline;
@@ -1858,7 +1862,7 @@
   white-space: nowrap;
 }
 
-.personalMonthOpenDay:hover strong,
+.personalMonthOpenDay:not([data-read-only="true"]):hover strong,
 .personalMonthOpenDay:focus-visible strong {
   color: #fff4d7;
 }

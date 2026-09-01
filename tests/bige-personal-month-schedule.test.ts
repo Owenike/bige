@@ -95,6 +95,7 @@ test("coach navigation inserts personal month between daily and staff schedules"
 
 test("ordinary coaches default to personal month while overview roles retain daily navigation", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
 
   assert.match(
     component,
@@ -114,6 +115,16 @@ test("ordinary coaches default to personal month while overview roles retain dai
     component,
     /selectBoardDate\(businessDate\);\s*setTab\("schedule"\);/,
   );
+  assert.match(
+    component,
+    /\{canShowDailyScheduleTab\s*\?\s*"左右滑動查看 1 日到月底；點日期可開啟該日的日排課表。"\s*:\s*"左右滑動查看 1 日到月底。"\}/,
+  );
+  assert.match(
+    component,
+    /\{canShowDailyScheduleTab \? \([\s\S]*aria-label=\{`查看 \$\{businessDate\} 的日排課表`\}[\s\S]*\) : \([\s\S]*data-read-only="true"/,
+  );
+  assert.match(styles, /\.personalMonthOpenDay\[data-read-only="true"\]\s*\{\s*cursor: default;/);
+  assert.match(styles, /\.personalMonthOpenDay:not\(\[data-read-only="true"\]\):hover strong/);
 });
 
 test("coach mobile replaces the header account controls with a vertical dropdown button menu", () => {
