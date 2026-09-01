@@ -169,6 +169,10 @@ test("coach mobile replaces the header account controls with a vertical dropdown
   );
   assert.match(
     styles,
+    /\.page\[data-role-view="coach"\] \.tabs > \.tab\s*\{[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*justify-content: center;[\s\S]*text-align: center;/,
+  );
+  assert.match(
+    styles,
     /\.page\[data-role-view="coach"\] \.mobilePersonalMenu\s*\{[\s\S]*min-width: 98px;/,
   );
 });
