@@ -283,6 +283,23 @@ export function isConfiguredPreferenceWindowOpen(params: {
     && time <= new Date(params.selectionClosesAt).getTime();
 }
 
+export function isStaffPreferenceSelectionOpen(params: {
+  status: string;
+  selectionOpensAt: string;
+  selectionClosesAt: string;
+  selectionControlMode?: StaffSelectionControlMode | null;
+  employeeOverrideOpen?: boolean;
+  now?: Date;
+}) {
+  if (
+    params.employeeOverrideOpen
+    && ["selection_open", "selection_closed", "drafting"].includes(params.status)
+  ) {
+    return true;
+  }
+  return isConfiguredPreferenceWindowOpen(params);
+}
+
 export function monthlyDaysOffEntitlement(monthStart: string) {
   return listMonthDates(monthStart).filter((date) => {
     const day = parseIsoDate(date).getUTCDay();

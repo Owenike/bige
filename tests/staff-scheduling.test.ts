@@ -7,6 +7,7 @@ import {
   buildSelectionWindow,
   generateMonthlySchedule,
   isConfiguredPreferenceWindowOpen,
+  isStaffPreferenceSelectionOpen,
   isSharedFrontdeskScheduleAccount,
   listMonthDates,
   missingScheduleCellKeys,
@@ -53,6 +54,20 @@ test("configured preference windows support scheduled, forced-open, and forced-c
   assert.equal(isConfiguredPreferenceWindowOpen({ ...period, selectionControlMode: "open", now: new Date("2026-09-30T12:00:00+08:00") }), true);
   assert.equal(isConfiguredPreferenceWindowOpen({ ...period, selectionControlMode: "closed", now: new Date("2026-09-10T12:00:00+08:00") }), false);
   assert.equal(isConfiguredPreferenceWindowOpen({ ...period, status: "drafting", selectionControlMode: "open", now: new Date("2026-09-10T12:00:00+08:00") }), false);
+});
+
+test("an employee catch-up override opens only editable schedule stages", () => {
+  const closedPeriod = {
+    status: "drafting",
+    selectionOpensAt: "2026-08-01T00:00:00+08:00",
+    selectionClosesAt: "2026-08-20T23:59:59+08:00",
+    selectionControlMode: "scheduled" as const,
+    now: new Date("2026-09-02T12:00:00+08:00"),
+  };
+  assert.equal(isStaffPreferenceSelectionOpen({ ...closedPeriod, employeeOverrideOpen: false }), false);
+  assert.equal(isStaffPreferenceSelectionOpen({ ...closedPeriod, employeeOverrideOpen: true }), true);
+  assert.equal(isStaffPreferenceSelectionOpen({ ...closedPeriod, status: "manager_review", employeeOverrideOpen: true }), false);
+  assert.equal(isStaffPreferenceSelectionOpen({ ...closedPeriod, status: "published", employeeOverrideOpen: true }), false);
 });
 
 test("facility closure counts toward the required eight preferred days", () => {
@@ -363,7 +378,10 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   const creditMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260827000727_add_monthly_accrued_leave_credits.sql"), "utf8");
   const middleShiftMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260828201642_update_coach_middle_shift_time.sql"), "utf8");
   const selectionControlMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260830225406_add_staff_selection_control_mode.sql"), "utf8");
+  const selectionOverrideMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260901163733_add_staff_selection_overrides.sql"), "utf8");
   const notificationSource = readFileSync(resolve(process.cwd(), "lib/in-app-notifications.ts"), "utf8");
+  const selfPage = readFileSync(resolve(process.cwd(), "app/staff/schedule/page.tsx"), "utf8");
+  const managerPage = readFileSync(resolve(process.cwd(), "app/manager/staff-scheduling/page.tsx"), "utf8");
   assert.match(source, /className=\{styles\.titleRow\}[\s\S]*?全員班表控制台[\s\S]*?className=\{styles\.workflowBadge\}[\s\S]*?流程狀態[\s\S]*?stateLabel\(data\.period\.status\)/);
   assert.doesNotMatch(source, /className=\{styles\.stats\}/);
   assert.doesNotMatch(source, /<span>已選滿 8 天<\/span>|<span>尚未完成<\/span>|<span>法規阻擋<\/span>|<span>班表版本<\/span>/);
@@ -376,17 +394,37 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(styles, /@media\(max-width:620px\)\{[\s\S]*?\.setupActions\{grid-template-columns:1fr/);
   assert.match(source, /選休截止日[\s\S]*?update_selection_deadline[\s\S]*?儲存截止日/);
   assert.match(source, /set_selection_window_state[\s\S]*?立即關閉選休[\s\S]*?立即開放選休/);
+  assert.match(source, /set_employee_selection_window_state[\s\S]*?關閉單獨選休[\s\S]*?單獨開放選休/);
+  assert.match(source, /selectionOverrideMap/);
   assert.match(source, /selectionWindowSummary\(data\.period\)/);
   assert.match(styles, /\.selectionWindowControls\{[^}]*grid-template-columns:minmax\(170px,1fr\) auto auto/);
   assert.match(styles, /@media\(max-width:620px\)\{[\s\S]*?\.selectionWindowControls\{grid-template-columns:1fr/);
   assert.match(selfSource, /isConfiguredPreferenceWindowOpen/);
+  assert.match(selfSource, /isStaffPreferenceSelectionOpen/);
+  assert.match(selfSource, /主管已為您單獨開放本月選休/);
   assert.match(selfSource, /主管已手動開放選休/);
+  assert.match(selfSource, /response\.status === 401[\s\S]*?\/login\/staff\?returnTo=/);
+  assert.match(source, /response\.status === 401[\s\S]*?\/login\/staff\?returnTo=/);
   assert.match(apiSource, /body\.action === "update_selection_deadline"/);
   assert.match(apiSource, /body\.action === "set_selection_window_state"/);
+  assert.match(apiSource, /body\.action === "set_employee_selection_window_state"/);
+  assert.match(apiSource, /staff_schedule_selection_overrides/);
+  assert.match(apiSource, /staff_schedule_selection_override_opened/);
   assert.match(apiSource, /SELECTION_CONFIGURATION_STATUSES = new Set\(\["selection_open", "selection_closed", "drafting"\]\)/);
-  assert.match(apiSource, /isConfiguredPreferenceWindowOpen\(\{/);
+  assert.match(apiSource, /isStaffPreferenceSelectionOpen\(\{/);
   assert.match(selectionControlMigration, /selection_control_mode text not null default 'scheduled'/);
   assert.match(selectionControlMigration, /'scheduled', 'open', 'closed'/);
+  assert.match(selectionOverrideMigration, /create table if not exists public\.staff_schedule_selection_overrides/);
+  assert.match(selectionOverrideMigration, /enable row level security/);
+  assert.match(selectionOverrideMigration, /grant select, insert, update, delete on table public\.staff_schedule_selection_overrides to service_role/);
+  assert.match(selectionOverrideMigration, /employee\.employee_number = 'E000015'/);
+  assert.match(selectionOverrideMigration, /period\.month_start = date '2026-09-01'/);
+  assert.match(selectionOverrideMigration, /staff_schedule_selection_override_opened/);
+  assert.match(selectionOverrideMigration, /\/staff\/schedule\?month=2026-09/);
+  assert.match(selfPage, /searchParams: Promise<\{ month\?: string \}>/);
+  assert.match(selfPage, /StaffScheduleSelfService initialMonth=\{initialMonth\}/);
+  assert.match(managerPage, /searchParams: Promise<\{ month\?: string \}>/);
+  assert.match(managerPage, /StaffScheduleManager initialMonth=\{initialMonth\}/);
   assert.match(notificationSource, /selection_control_mode[\s\S]*?isConfiguredPreferenceWindowOpen/);
   assert.match(source, /holidayRuleGroups\.map/);
   assert.match(source, /window\.setTimeout\(\(\) => setNotice\(""\), 4500\)/);

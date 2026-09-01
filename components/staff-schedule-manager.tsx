@@ -109,6 +109,12 @@ type ScheduleState = {
     submitted_at: string | null;
     staff_time_off_preference_dates?: Array<{ requested_date: string; source: string }>;
   }>;
+  selectionOverrides: Array<{
+    employee_id: string;
+    is_open: boolean;
+    reason: string | null;
+    updated_at: string;
+  }>;
   facilityClosures: Array<{ id: string; closure_date: string }>;
   holidays: Array<{ holiday_date: string; holiday_name: string }>;
   version: null | { id: string; version_number: number; status: string; published_at: string | null };
@@ -205,6 +211,11 @@ function formatDays(value: number | null | undefined) {
 }
 
 async function parseResponse<T = ScheduleState>(response: Response): Promise<T> {
+  if (response.status === 401) {
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(`/login/staff?returnTo=${encodeURIComponent(returnTo)}`);
+    throw new Error("請先登入員工帳號");
+  }
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) throw new Error(payload?.message || payload?.error?.message || "操作失敗");
   return payload.data as T;
@@ -239,8 +250,8 @@ function applyScheduleEntryPatch(current: ScheduleState | null, patch: ScheduleE
   };
 }
 
-export default function StaffScheduleManager() {
-  const [month, setMonth] = useState(nextMonthValue);
+export default function StaffScheduleManager({ initialMonth }: { initialMonth?: string }) {
+  const [month, setMonth] = useState(() => initialMonth || nextMonthValue());
   const [data, setData] = useState<ScheduleState | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -465,6 +476,10 @@ export default function StaffScheduleManager() {
     () => new Map((data?.preferences || []).map((item) => [item.employee_id, item])),
     [data?.preferences],
   );
+  const selectionOverrideMap = useMemo(
+    () => new Map((data?.selectionOverrides || []).map((item) => [item.employee_id, item])),
+    [data?.selectionOverrides],
+  );
   const entryMap = useMemo(
     () => new Map((data?.scheduleEntries || []).map((entry) => [`${entry.employeeId}:${entry.workDate}`, entry])),
     [data?.scheduleEntries],
@@ -474,6 +489,9 @@ export default function StaffScheduleManager() {
   ), [data?.employees]);
   const employeeMap = useMemo(() => new Map(scheduleEmployees.map((employee) => [employee.id, employee])), [scheduleEmployees]);
   const incompleteEmployees = scheduleEmployees.filter((employee) => preferenceMap.get(employee.id)?.status !== "submitted");
+  const selectionAttentionEmployees = scheduleEmployees.filter((employee) =>
+    preferenceMap.get(employee.id)?.status !== "submitted" || selectionOverrideMap.get(employee.id)?.is_open
+  );
   const blockingRules = data?.ruleResults.filter((rule) => !rule.passed && rule.severity === "blocking") || [];
   const warningRules = data?.ruleResults.filter((rule) => !rule.passed && rule.severity === "warning") || [];
   const holidayRules = blockingRules.filter((rule) => rule.rule_code === "HOLIDAY_ADJUSTMENT_REQUIRED");
@@ -861,10 +879,33 @@ export default function StaffScheduleManager() {
                       <small>2026 已內建；未來年度由主管依官方行事曆逐筆加入，不需先設定當天誰出勤。</small>
                       {data.holidays.length ? <div className={styles.holidayChips}>{data.holidays.map((holiday) => <span key={holiday.holiday_date}>{holiday.holiday_date.slice(5)} {holiday.holiday_name}<button title="移除本館自行設定項目" onClick={() => { if (window.confirm(`確認移除 ${holiday.holiday_date} ${holiday.holiday_name}？`)) void act("remove_holiday", { holidayDate: holiday.holiday_date }, "國定假日項目已移除"); }}>×</button></span>)}</div> : null}
                     </div>
-                    {incompleteEmployees.length > 0 ? (
+                    {selectionAttentionEmployees.length > 0 ? (
                       <div className={styles.reminderBox}>
-                        <strong>15 日起每天提醒副理：</strong>
-                        <span>{incompleteEmployees.map((employee) => employee.displayName).join("、")}</span>
+                        <strong>未完成與單獨補開：</strong>
+                        <div className={styles.selectionOverrideList}>
+                          {selectionAttentionEmployees.map((employee) => {
+                            const submitted = preferenceMap.get(employee.id)?.status === "submitted";
+                            const overrideOpen = Boolean(selectionOverrideMap.get(employee.id)?.is_open);
+                            return (
+                              <div className={styles.selectionOverrideRow} key={employee.id}>
+                                <span>
+                                  <b>{employee.displayName}{employee.englishName ? ` ${employee.englishName}` : ""}</b>
+                                  <small>{employee.employeeNumber || "無員工編號"} · {submitted ? "已完成" : "尚未完成"}{overrideOpen ? " · 單獨開放中" : ""}</small>
+                                </span>
+                                <button
+                                  type="button"
+                                  className={overrideOpen ? styles.dangerButton : styles.secondaryButton}
+                                  disabled={busy || !selectionWindowEditable}
+                                  onClick={() => void act(
+                                    "set_employee_selection_window_state",
+                                    { employeeId: employee.id, open: !overrideOpen },
+                                    overrideOpen ? `${employee.displayName} 的單獨選休已關閉` : `${employee.displayName} 已可單獨自選 ${month} 排休`,
+                                  )}
+                                >{overrideOpen ? "關閉單獨選休" : "單獨開放選休"}</button>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     ) : <div className={styles.successBox}>全部員工都已完成自選排休。</div>}
                   </div>

@@ -9,7 +9,7 @@ import {
   buildSelectionWindow,
   dateAfter,
   generateMonthlySchedule,
-  isConfiguredPreferenceWindowOpen,
+  isStaffPreferenceSelectionOpen,
   isSharedFrontdeskScheduleAccount,
   listMonthDates,
   missingScheduleCellKeys,
@@ -87,6 +87,18 @@ type PeriodRow = {
   preferred_days_required: number;
   middle_preference_daily_limit: number;
   status: string;
+};
+
+type SelectionOverrideRow = {
+  id: string;
+  period_id: string;
+  tenant_id: string;
+  employee_id: string;
+  is_open: boolean;
+  reason: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 const TAIWAN_2026_STATUTORY_HOLIDAYS = [
@@ -212,6 +224,17 @@ async function getPeriod(admin: AdminClient, tenantId: string, branchId: string 
   const tenantWide = await baseQuery().is("branch_id", null).maybeSingle();
   if (tenantWide.error) throw new Error(tenantWide.error.message);
   return (tenantWide.data as PeriodRow | null) ?? null;
+}
+
+async function getSelectionOverride(admin: AdminClient, periodId: string, employeeId: string) {
+  const result = await admin
+    .from("staff_schedule_selection_overrides")
+    .select("*")
+    .eq("period_id", periodId)
+    .eq("employee_id", employeeId)
+    .maybeSingle();
+  if (result.error) throw new Error(result.error.message);
+  return (result.data as SelectionOverrideRow | null) ?? null;
 }
 
 async function ensureDefaultShifts(admin: AdminClient, tenantId: string, branchId: string | null, actorId: string) {
@@ -547,6 +570,7 @@ async function buildState(params: {
       period: null,
       employees: [],
       preferences: [],
+      selectionOverrides: [],
       facilityClosures: [],
       version: null,
       scheduleEntries: [],
@@ -559,11 +583,16 @@ async function buildState(params: {
   const employees = scope.teamView ? allEmployees : [params.profile];
   const employments = await ensureEmploymentProfiles(params.admin, employees, params.profile.id);
   const employeeIds = employees.map((item) => item.id);
-  const [closureResult, preferenceResult, holidayResult] = await Promise.all([
+  const [closureResult, preferenceResult, selectionOverrideResult, holidayResult] = await Promise.all([
     params.admin.from("staff_facility_closures").select("*").eq("period_id", period.id).order("closure_date"),
     params.admin
       .from("staff_time_off_preferences")
       .select("*, staff_time_off_preference_dates(*)")
+      .eq("period_id", period.id)
+      .in("employee_id", employeeIds),
+    params.admin
+      .from("staff_schedule_selection_overrides")
+      .select("*")
       .eq("period_id", period.id)
       .in("employee_id", employeeIds),
     params.admin
@@ -576,6 +605,7 @@ async function buildState(params: {
   ]);
   if (closureResult.error) throw new Error(closureResult.error.message);
   if (preferenceResult.error) throw new Error(preferenceResult.error.message);
+  if (selectionOverrideResult.error) throw new Error(selectionOverrideResult.error.message);
   if (holidayResult.error) throw new Error(holidayResult.error.message);
 
   const version = await getLatestVersion(params.admin, period.id, scope.publishedOnly);
@@ -661,6 +691,7 @@ async function buildState(params: {
       employment: employmentMap.get(employee.id) || null,
     })),
     preferences: preferenceResult.data || [],
+    selectionOverrides: selectionOverrideResult.data || [],
     facilityClosures: closureResult.data || [],
     holidays: holidayResult.data || [],
     version,
@@ -863,6 +894,63 @@ export async function POST(request: Request) {
           after: { selectionControlMode, status },
         },
       });
+    } else if (body.action === "set_employee_selection_window_state") {
+      await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有單獨開啟或關閉員工選休的權限" });
+      const period = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
+      if (!period) throw new Error("請先開放這個月份");
+      if (!SELECTION_CONFIGURATION_STATUSES.has(period.status)) throw new Error("班表已進入審核或發布流程，無法單獨重新開啟選休");
+      const employeeId = z.string().uuid().parse(body.employeeId);
+      const open = z.boolean().parse(body.open);
+      const reason = typeof body.reason === "string" ? z.string().trim().max(500).parse(body.reason) : null;
+      const target = await admin
+        .from("profiles")
+        .select("id, branch_id, display_name, english_name, employee_number, is_active, staff_deleted_at")
+        .eq("id", employeeId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (target.error || !target.data || !target.data.is_active || target.data.staff_deleted_at) throw new Error("找不到此館有效員工");
+      if (profile.branch_id && target.data.branch_id && target.data.branch_id !== profile.branch_id) throw new Error("不能調整其他館別員工的選休權限");
+      if (isSharedFrontdeskScheduleAccount(target.data.employee_number)) throw new Error("共用櫃台帳號不使用員工選休");
+      const existing = await getSelectionOverride(admin, period.id, employeeId);
+      const upsert = await admin.from("staff_schedule_selection_overrides").upsert({
+        period_id: period.id,
+        tenant_id: tenantId,
+        employee_id: employeeId,
+        is_open: open,
+        reason,
+        updated_by: profile.id,
+      }, { onConflict: "period_id,employee_id" }).select("id").single();
+      if (upsert.error) throw new Error(upsert.error.message);
+      if (open) {
+        await createInAppNotifications({
+          supabase: admin,
+          tenantId,
+          recipientUserIds: [employeeId],
+          title: `${monthStart.slice(0, 7)} 已單獨開放選休`,
+          message: "請進入我的班表完成本月 8 天排休；主管關閉前可重新儲存。",
+          eventType: "staff_schedule_selection_override_opened",
+          targetType: "staff_schedule_period",
+          targetId: period.id,
+          actionUrl: `/staff/schedule?month=${monthStart.slice(0, 7)}`,
+          dedupeKey: `staff-schedule-selection-override:${period.id}:${employeeId}`,
+          createdBy: profile.id,
+        });
+      }
+      await writeAudit(admin, {
+        tenantId,
+        actorId: profile.id,
+        action: open ? "staff_schedule_employee_selection_opened" : "staff_schedule_employee_selection_closed",
+        targetType: "staff_schedule_selection_override",
+        targetId: upsert.data.id,
+        reason,
+        payload: {
+          monthStart,
+          employeeId,
+          employeeNumber: target.data.employee_number,
+          before: { isOpen: existing?.is_open ?? false },
+          after: { isOpen: open },
+        },
+      });
     } else if (body.action === "upsert_holiday") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有維護國定假日行事曆的權限" });
       const holidayDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(body.holidayDate);
@@ -923,11 +1011,13 @@ export async function POST(request: Request) {
     } else if (body.action === "save_preferences") {
       const period = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
       if (!period) throw new Error("主管尚未開放這個月份");
-      if (!isConfiguredPreferenceWindowOpen({
+      const selectionOverride = await getSelectionOverride(admin, period.id, profile.id);
+      if (!isStaffPreferenceSelectionOpen({
         status: period.status,
         selectionOpensAt: period.selection_opens_at,
         selectionClosesAt: period.selection_closes_at,
         selectionControlMode: period.selection_control_mode,
+        employeeOverrideOpen: selectionOverride?.is_open,
       })) {
         throw new Error("目前不在排休選取期間；請直接聯絡副理協助修改");
       }

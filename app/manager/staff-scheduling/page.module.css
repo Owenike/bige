@@ -274,6 +274,12 @@
 .selectionWindowControls input{width:100%;min-height:42px;border:1px solid var(--schedule-manager-line);border-radius:12px;background:linear-gradient(180deg,rgba(20,29,41,.96),rgba(10,17,27,.96));padding:8px 11px;color:var(--schedule-manager-text);font:inherit}
 .selectionWindowControls button{white-space:nowrap}
 .selectionWindowCard>small{color:var(--schedule-manager-muted);font-size:12px;line-height:1.55}
+.selectionOverrideList{display:grid;gap:8px;margin-top:4px}
+.selectionOverrideRow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid rgba(211,170,80,.36);border-radius:12px;background:rgba(13,21,31,.38)}
+.selectionOverrideRow>span{display:grid;gap:3px;min-width:0}
+.selectionOverrideRow b{color:#fff4d6}
+.selectionOverrideRow small{color:#e7c978}
+.selectionOverrideRow button{flex:0 0 auto;min-height:36px;padding:7px 11px;font-size:12px}
 .progressSettings>.field{padding:0 0 18px;border-bottom:1px solid var(--schedule-manager-line)}
 .progressSettings>.field:last-of-type{padding-bottom:0;border-bottom:0}
 .progressSettings .field>span{color:#fff4d6;font-size:14px}
@@ -296,6 +302,8 @@
   .selectionWindowBadge{width:fit-content;text-align:left}
   .selectionWindowControls{grid-template-columns:1fr}
   .selectionWindowControls button{width:100%}
+  .selectionOverrideRow{align-items:stretch;flex-direction:column}
+  .selectionOverrideRow button{width:100%}
   .employeeSetting summary{align-items:flex-start}
 }
 

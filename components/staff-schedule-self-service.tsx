@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   isConfiguredPreferenceWindowOpen,
+  isStaffPreferenceSelectionOpen,
   staffScheduleEntryOffLabel,
   staffScheduleShiftLabel,
 } from "../lib/staff-scheduling";
@@ -25,6 +26,11 @@ type SelfState = {
     status: string;
     submitted_at: string | null;
     staff_time_off_preference_dates?: Array<{ requested_date: string; source: string }>;
+  }>;
+  selectionOverrides: Array<{
+    employee_id: string;
+    is_open: boolean;
+    reason: string | null;
   }>;
   facilityClosures: Array<{ closure_date: string }>;
   version: null | { id: string; version_number: number; status: string; published_at: string | null };
@@ -79,6 +85,11 @@ function formatTime(value: string | null | undefined) {
 }
 
 async function parseResponse(response: Response) {
+  if (response.status === 401) {
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(`/login/staff?returnTo=${encodeURIComponent(returnTo)}`);
+    throw new Error("請先登入員工帳號");
+  }
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) throw new Error(payload?.message || payload?.error?.message || "操作失敗");
   const data = payload.data as SelfState;
@@ -86,6 +97,7 @@ async function parseResponse(response: Response) {
     ...data,
     employees: data.employees.filter((employee) => employee.id === data.actor.id),
     preferences: data.preferences.filter((preference) => preference.employee_id === data.actor.id),
+    selectionOverrides: data.selectionOverrides.filter((override) => override.employee_id === data.actor.id),
     version: data.version?.status === "published" ? data.version : null,
     scheduleEntries: data.scheduleEntries.filter((entry) => entry.employeeId === data.actor.id),
     holidayAdjustments: data.holidayAdjustments.filter((adjustment) => adjustment.employee_id === data.actor.id),
@@ -164,8 +176,8 @@ function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void
   );
 }
 
-export default function StaffScheduleSelfService() {
-  const [month, setMonth] = useState(nextMonthValue);
+export default function StaffScheduleSelfService({ initialMonth }: { initialMonth?: string }) {
+  const [month, setMonth] = useState(() => initialMonth || nextMonthValue());
   const [data, setData] = useState<SelfState | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [signature, setSignature] = useState<string | null>(null);
@@ -225,7 +237,7 @@ export default function StaffScheduleSelfService() {
   const combinedCount = new Set([...selected, ...closureDates]).size;
   const remaining = Math.max(0, requiredCount - combinedCount);
   const selectedDaysLabel = selected.slice().sort().map((date) => `${Number(date.slice(-2))} 日`).join("、") || "尚未選擇";
-  const selectionOpen = data?.period
+  const configuredSelectionOpen = data?.period
     ? isConfiguredPreferenceWindowOpen({
         status: data.period.status,
         selectionOpensAt: data.period.selection_opens_at,
@@ -233,7 +245,19 @@ export default function StaffScheduleSelfService() {
         selectionControlMode: data.period.selection_control_mode,
       })
     : false;
-  const selectionNotice = data?.period?.selection_control_mode === "open"
+  const employeeOverrideOpen = Boolean(data?.selectionOverrides.some((override) => override.is_open));
+  const selectionOpen = data?.period
+    ? isStaffPreferenceSelectionOpen({
+        status: data.period.status,
+        selectionOpensAt: data.period.selection_opens_at,
+        selectionClosesAt: data.period.selection_closes_at,
+        selectionControlMode: data.period.selection_control_mode,
+        employeeOverrideOpen,
+      })
+    : false;
+  const selectionNotice = employeeOverrideOpen && !configuredSelectionOpen
+    ? "主管已為您單獨開放本月選休；關閉前可隨時重新儲存。"
+    : data?.period?.selection_control_mode === "open"
     ? "主管已手動開放選休；關閉前可隨時重新儲存。"
     : selectionOpen
       ? `可於 ${formatTime(data?.period?.selection_closes_at)} 前修改；送出後仍可重新儲存。`
