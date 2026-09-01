@@ -9756,7 +9756,43 @@ export default function BigeFitnessOperations({
             setDialog(null);
           }}
         >
+          {contractPaymentWizardActive ? (
+            <div className={styles.paymentWizardPinnedHeader}>
+              <section
+                className={styles.paymentWizardIdentity}
+                aria-label="付款學員資料"
+              >
+                <div>
+                  <span>學員姓名</span>
+                  <strong>{contractDraft.fullName || "尚未提供"}</strong>
+                </div>
+                <div>
+                  <span>電話</span>
+                  <strong>{contractDraft.phone || "尚未提供"}</strong>
+                </div>
+              </section>
+              <ol className={styles.paymentWizardSteps}>
+                {contractPaymentWizardSteps.map((step, index) => (
+                  <li
+                    key={step}
+                    data-state={
+                      index === contractPaymentWizardStepIndex
+                        ? "current"
+                        : index < contractPaymentWizardStepIndex
+                          ? "complete"
+                          : "upcoming"
+                    }
+                    aria-current={index === contractPaymentWizardStepIndex ? "step" : undefined}
+                  >
+                    <span>{index + 1}</span>
+                    {contractPaymentWizardStepLabels[step]}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
           <form
+            id={contractPaymentWizardActive ? "contract-payment-wizard-form" : undefined}
             className={`${styles.formGrid} ${contractPaymentWizardActive ? styles.contractPaymentWizardForm : ""}`}
             onSubmit={(event) => {
               if (contractPaymentWizardActive && contractPaymentWizardStep !== "review") {
@@ -9767,41 +9803,6 @@ export default function BigeFitnessOperations({
               void submitContract(event);
             }}
           >
-            {contractPaymentWizardActive ? (
-              <>
-                <section
-                  className={`${styles.paymentWizardIdentity} ${styles.fieldFull}`}
-                  aria-label="付款學員資料"
-                >
-                  <div>
-                    <span>學員姓名</span>
-                    <strong>{contractDraft.fullName || "尚未提供"}</strong>
-                  </div>
-                  <div>
-                    <span>電話</span>
-                    <strong>{contractDraft.phone || "尚未提供"}</strong>
-                  </div>
-                </section>
-                <ol className={`${styles.paymentWizardSteps} ${styles.fieldFull}`}>
-                  {contractPaymentWizardSteps.map((step, index) => (
-                    <li
-                      key={step}
-                      data-state={
-                        index === contractPaymentWizardStepIndex
-                          ? "current"
-                          : index < contractPaymentWizardStepIndex
-                            ? "complete"
-                            : "upcoming"
-                      }
-                      aria-current={index === contractPaymentWizardStepIndex ? "step" : undefined}
-                    >
-                      <span>{index + 1}</span>
-                      {contractPaymentWizardStepLabels[step]}
-                    </li>
-                  ))}
-                </ol>
-              </>
-            ) : null}
             {contractError ? (
               <p className={`${styles.error} ${styles.fieldFull}`} role="alert">
                 {contractError}
@@ -10385,92 +10386,94 @@ export default function BigeFitnessOperations({
                 </dl>
               </section>
             ) : null}
-            {contractPaymentWizardActive ? (
-              <div className={`${styles.paymentWizardActions} ${styles.fieldFull}`}>
-                {contractPaymentWizardStepIndex > 0 ? (
-                  <button
-                    className={styles.button}
-                    type="button"
-                    disabled={contractSubmitting}
-                    onClick={returnContractPaymentWizard}
-                  >
-                    <ChevronLeft size={17} /> 上一步
-                  </button>
-                ) : <span />}
-                {contractPaymentWizardStep === "review" ? (
-                  <button
-                    className={`${styles.button} ${styles.primary}`}
-                    type="submit"
-                    disabled={contractSubmitting}
-                  >
-                    {contractSubmitting ? (
-                      <>
-                        <RefreshCw className={styles.processingIcon} size={17} />
-                        付款中…
-                      </>
-                    ) : (
-                      <>
-                        <Check size={17} /> 確認付款
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    className={`${styles.button} ${styles.primary}`}
-                    type="button"
-                    onClick={advanceContractPaymentWizard}
-                  >
-                    下一步 <ChevronRight size={17} />
-                  </button>
-                )}
-              </div>
-            ) : (
-            <div className={`${styles.formActions} ${styles.fieldFull}`}>
-              <button
-                className={`${styles.button} ${styles.primary}`}
-                type="submit"
-                disabled={
-                  contractSubmitting ||
-                  missingContractIdentityFields.length > 0 ||
-                  (studentPaymentContext?.paymentType === "balance" &&
-                    (!scheduleMemberDetail?.canRecordContractPayment ||
-                      !studentPaymentTarget ||
+            {!contractPaymentWizardActive ? (
+              <div className={`${styles.formActions} ${styles.fieldFull}`}>
+                <button
+                  className={`${styles.button} ${styles.primary}`}
+                  type="submit"
+                  disabled={
+                    contractSubmitting ||
+                    missingContractIdentityFields.length > 0 ||
+                    (studentPaymentContext?.paymentType === "balance" &&
+                      (!scheduleMemberDetail?.canRecordContractPayment ||
+                        !studentPaymentTarget ||
+                        !isBigeContractPaymentAmountAllowed(
+                          contractPaymentTotal,
+                          studentPaymentTarget.outstanding,
+                        ))) ||
+                    (studentPaymentContext?.paymentType !== "balance" &&
                       !isBigeContractPaymentAmountAllowed(
                         contractPaymentTotal,
-                        studentPaymentTarget.outstanding,
-                      ))) ||
-                  (studentPaymentContext?.paymentType !== "balance" &&
-                    !isBigeContractPaymentAmountAllowed(
-                      contractPaymentTotal,
-                      maximumInitialPayment,
-                      {
-                        minimumAmount:
-                          studentPaymentContext || selectedConversionBooking
-                            ? minimumInitialPayment
-                            : 0,
-                      },
-                    )) ||
-                  Boolean(
-                    studentPaymentContext &&
-                      studentPaymentContext.paymentType !== "balance" &&
-                      !data.canCreateContract,
-                  )
-                }
-              >
-                {contractSubmitting ? (
-                  <>
-                    <RefreshCw className={styles.processingIcon} size={17} />
-                    {studentPaymentContext ? "付款中…" : "建立中…"}
-                  </>
-                ) : (
-                  <>
-                    <Check size={17} /> {studentPaymentContext ? "確認付款" : "確認建立"}
-                  </>
-                )}
-              </button>
-            </div>
-            )}
+                        maximumInitialPayment,
+                        {
+                          minimumAmount:
+                            studentPaymentContext || selectedConversionBooking
+                              ? minimumInitialPayment
+                              : 0,
+                        },
+                      )) ||
+                    Boolean(
+                      studentPaymentContext &&
+                        studentPaymentContext.paymentType !== "balance" &&
+                        !data.canCreateContract,
+                    )
+                  }
+                >
+                  {contractSubmitting ? (
+                    <>
+                      <RefreshCw className={styles.processingIcon} size={17} />
+                      {studentPaymentContext ? "付款中…" : "建立中…"}
+                    </>
+                  ) : (
+                    <>
+                      <Check size={17} /> {studentPaymentContext ? "確認付款" : "確認建立"}
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : null}
           </form>
+          {contractPaymentWizardActive ? (
+            <div className={styles.paymentWizardActions}>
+              {contractPaymentWizardStepIndex > 0 ? (
+                <button
+                  className={styles.button}
+                  type="button"
+                  disabled={contractSubmitting}
+                  onClick={returnContractPaymentWizard}
+                >
+                  <ChevronLeft size={17} /> 上一步
+                </button>
+              ) : <span />}
+              {contractPaymentWizardStep === "review" ? (
+                <button
+                  className={`${styles.button} ${styles.primary}`}
+                  type="submit"
+                  form="contract-payment-wizard-form"
+                  disabled={contractSubmitting}
+                >
+                  {contractSubmitting ? (
+                    <>
+                      <RefreshCw className={styles.processingIcon} size={17} />
+                      付款中…
+                    </>
+                  ) : (
+                    <>
+                      <Check size={17} /> 確認付款
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  className={`${styles.button} ${styles.primary}`}
+                  type="button"
+                  onClick={advanceContractPaymentWizard}
+                >
+                  下一步 <ChevronRight size={17} />
+                </button>
+              )}
+            </div>
+          ) : null}
         </Dialog>
       ) : null}
 

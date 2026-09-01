@@ -1707,12 +1707,20 @@ test("schedule payments use a fixed-identity wizard and persist invoice carrier 
     component,
     /\["plan", "payment", "carrier", "recipient", "group", "review"\]/,
   );
-  assert.match(component, /className=\{`\$\{styles\.paymentWizardIdentity\}/);
+  assert.match(component, /className=\{styles\.paymentWizardPinnedHeader\}/);
+  assert.match(component, /id=\{contractPaymentWizardActive \? "contract-payment-wizard-form"/);
+  assert.match(component, /form="contract-payment-wizard-form"/);
   assert.match(component, /pattern="\[A-Z0-9\+\.\/-\]\{1,80\}"/);
   assert.match(component, /載具候補/);
   assert.match(component, /可直接使用條碼掃描器嗶入/);
-  assert.match(styles, /\.paymentWizardIdentity[\s\S]*position: sticky/);
-  assert.match(styles, /\.paymentWizardActions[\s\S]*position: sticky/);
+  assert.match(
+    styles,
+    /\.contractPaymentWizardDialog[\s\S]*grid-template-rows: auto auto minmax\(0, 1fr\) auto;[\s\S]*overflow: hidden/,
+  );
+  assert.match(
+    styles,
+    /\.contractPaymentWizardForm[\s\S]*min-height: 0;[\s\S]*overflow-y: auto/,
+  );
   assert.match(
     styles,
     /\.paymentWizardActions \.button\s*\{[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*justify-content: center;[\s\S]*white-space: nowrap;/,
