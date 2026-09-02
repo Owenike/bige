@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { apiError, requireProfile } from "../../../../lib/auth-context";
 import { getPurchasableProduct } from "../../../../lib/products";
+import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 export async function POST(request: Request) {
   const auth = await requireProfile(["member"], request);
   if (!auth.ok) return auth.response;
-  const supabase = auth.supabase;
+  // All ownership and product validation happens in this server route. Keep
+  // member Data API access read-only and perform the validated write here.
+  const supabase = createSupabaseAdminClient();
   const userId = auth.context.userId;
 
   const body = await request.json().catch(() => null);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 import { httpLogBase, logEvent } from "../../../../lib/observability";
-import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../lib/rate-limit";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 import { isEmployeeNumber, normalizeEmployeeNumber } from "../../../../lib/staff-credentials";
 import {
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error }, { status, headers });
   };
 
-  const rl = rateLimitFixedWindow({
+  const rl = await rateLimitShared({
     key: `login:${ip}`,
     limit: 20,
     windowMs: 10 * 60 * 1000,

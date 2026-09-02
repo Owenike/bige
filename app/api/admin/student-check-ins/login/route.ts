@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { hasAuthCapability } from "../../../../../lib/auth-capabilities";
-import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../lib/rate-limit";
 import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 import { recordSystemAuditEvent, type SystemAuditOutcome } from "../../../../../lib/system-audit";
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       reason,
       metadata: { statusCode: status, entryPoint: "student_checkin_admin" },
     });
-  const limit = rateLimitFixedWindow({
+  const limit = await rateLimitShared({
     key: `student-checkin-admin-login:${ip}`,
     limit: 20,
     windowMs: 10 * 60 * 1000,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../lib/auth-context";
+import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 import { resolveBranchTherapists } from "../../../../lib/therapist-scheduling";
 import { mapBranchSummary, mapStorefrontServiceRow } from "../../../../lib/storefront";
 import type { TherapistBlockItem, TherapistManagementPayload, TherapistRecurringSchedule } from "../../../../types/therapist-scheduling";
@@ -233,7 +234,11 @@ export async function PATCH(request: Request) {
   if (primaryBranchId !== undefined) updatePayload.branch_id = primaryBranchId;
   if (typeof isActive === "boolean") updatePayload.is_active = isActive;
 
-  const profileUpdate = await auth.supabase
+  // The route has already enforced manager scope. Use the trusted server
+  // client for privileged profile fields so direct user-token updates can be
+  // rejected by the database trigger.
+  const admin = createSupabaseAdminClient();
+  const profileUpdate = await admin
     .from("profiles")
     .update(updatePayload)
     .eq("tenant_id", auth.context.tenantId)

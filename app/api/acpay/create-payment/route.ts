@@ -23,7 +23,10 @@ type TrialBookingPaymentRow = {
 };
 
 function jsonError(status: number, error: string) {
-  return NextResponse.json({ ok: false, error }, { status });
+  return NextResponse.json(
+    { ok: false, error: status >= 500 ? "付款服務暫時無法處理，請稍後再試。" : error },
+    { status },
+  );
 }
 
 function normalizeBookingAmount(input: number | string | null) {
@@ -114,9 +117,8 @@ export async function POST(request: Request) {
     authorizationRequestXml: requestXml,
     outTradeNo,
   });
-  console.info("[acpay] authorization request xml for checklist", {
+  console.info("[acpay] authorization request prepared", {
     outTradeNo,
-    requestXml,
     bookingId,
   });
 
@@ -136,10 +138,11 @@ export async function POST(request: Request) {
       codeUrl: parsed.code_url,
       outTradeNo,
     });
-    console.info("[acpay] authorization response xml for checklist", {
+    console.info("[acpay] authorization response received", {
       outTradeNo,
       bookingId,
-      responseXml: responseText,
+      status: parsed.status || null,
+      resultCode: parsed.result_code || null,
       hasCodeUrl: Boolean(parsed.code_url),
     });
 

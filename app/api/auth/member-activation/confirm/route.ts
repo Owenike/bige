@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { httpLogBase, logEvent } from "../../../../../lib/observability";
-import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../lib/rate-limit";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 
 function tokenHash(raw: string) {
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
   }
 
-  const rl = rateLimitFixedWindow({
+  const rl = await rateLimitShared({
     key: `member_activation_confirm:${ip}:${token.slice(0, 16)}`,
     limit: 10,
     windowMs: 10 * 60 * 1000,

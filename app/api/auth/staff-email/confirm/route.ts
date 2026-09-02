@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { httpLogBase } from "../../../../../lib/observability";
-import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../lib/rate-limit";
 import { canUseStaffAccountSettings } from "../../../../../lib/staff-credentials";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   const base = httpLogBase(request);
-  const rateLimit = rateLimitFixedWindow({
+  const rateLimit = await rateLimitShared({
     key: `staff_email_confirm:${base.ip || "unknown"}:${token.slice(0, 16)}`,
     limit: 10,
     windowMs: 10 * 60 * 1000,

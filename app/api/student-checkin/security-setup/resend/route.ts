@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../lib/rate-limit";
 import { loadStudentProfileById, readStudentAuthSession } from "../../../../../lib/student-checkin";
 import {
   createStudentSecuritySetupToken,
@@ -13,7 +13,7 @@ import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 
 export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const limit = rateLimitFixedWindow({
+  const limit = await rateLimitShared({
     key: `student-checkin-security-setup-resend:${ip}`,
     limit: 5,
     windowMs: 30 * 60 * 1000,

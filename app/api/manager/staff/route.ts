@@ -876,6 +876,7 @@ export async function PATCH(request: Request) {
     credentials: body?.reauth,
   });
   if (!reauth.ok) return apiError(401, "UNAUTHORIZED", reauth.message);
+  const admin = createSupabaseAdminClient();
 
   const id = typeof body?.id === "string" ? body.id.trim() : "";
   if (!id) return apiError(400, "FORBIDDEN", "id is required");
@@ -924,7 +925,6 @@ export async function PATCH(request: Request) {
 
     let restoredEmployeeNumber = existing.employee_number;
     if (!restoredEmployeeNumber) {
-      const admin = createSupabaseAdminClient();
       const employeeNumberResult = await admin.rpc(
         "next_staff_employee_number",
       );
@@ -945,7 +945,7 @@ export async function PATCH(request: Request) {
     }
 
     const now = new Date().toISOString();
-    const restoreResult = await scoped.auth.supabase
+    const restoreResult = await admin
       .from("profiles")
       .update({
         employee_number: restoredEmployeeNumber,
@@ -1180,7 +1180,7 @@ export async function PATCH(request: Request) {
   updates.updated_by = reauth.operator.userId;
   updates.updated_at = new Date().toISOString();
 
-  const { data, error } = await scoped.auth.supabase
+  const { data, error } = await admin
     .from("profiles")
     .update(updates)
     .eq("tenant_id", scoped.scopedTenantId)

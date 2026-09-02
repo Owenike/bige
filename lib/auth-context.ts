@@ -162,15 +162,22 @@ export function jsonError(status: number, error: string) {
 }
 
 export function apiError(status: number, code: ErrorCode, message: string) {
+  const isInternal = status >= 500 || code === "INTERNAL_ERROR";
+  const incidentId = isInternal ? crypto.randomUUID() : null;
+  const publicMessage = isInternal ? "系統暫時無法處理，請稍後再試。" : message;
+  if (incidentId) {
+    console.error("[api] internal error", { incidentId, status, code });
+  }
   return NextResponse.json(
     {
       ok: false,
-      error: { code, message },
+      error: { code, message: publicMessage, ...(incidentId ? { incidentId } : {}) },
       code,
-      message,
+      message: publicMessage,
       // Legacy compatibility fields.
-      errorMessage: message,
-      legacyError: message,
+      errorMessage: publicMessage,
+      legacyError: publicMessage,
+      ...(incidentId ? { incidentId } : {}),
     },
     { status },
   );

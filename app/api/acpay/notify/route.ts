@@ -203,12 +203,6 @@ export async function POST(request: Request) {
       hasTransactionId: Boolean(parsed.transaction_id),
       alreadyPaid: booking.payment_status === "paid",
     });
-    console.info("[acpay] notify xml for checklist", {
-      outTradeNo: parsed.out_trade_no,
-      rawXml: rawBody,
-      parsedPayload: parsed,
-    });
-
     return textResponse("SUCCESS");
   }
 

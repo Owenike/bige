@@ -1,6 +1,8 @@
+import { NextResponse } from "next/server";
 import { apiError, apiSuccess } from "../../../../lib/auth-context";
 import { sendLineBookingNotification } from "../../../../lib/line-push";
-import { createSupabaseServerClient } from "../../../../lib/supabase/server";
+import { rateLimitShared } from "../../../../lib/rate-limit";
+import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 const GENDER_OPTIONS = new Set(["男性", "女性"]);
 const DAY_TYPE_OPTIONS = new Set(["平日", "假日", "都可以"]);
@@ -34,6 +36,19 @@ function publicBookingError(message: string) {
 }
 
 export async function POST(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ipLimit = await rateLimitShared({
+    key: `public-booking:create:ip:${ip}`,
+    limit: 12,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!ipLimit.ok) {
+    return NextResponse.json(
+      { ok: false, error: "送出次數過多，請稍後再試，或直接聯繫櫃台協助。" },
+      { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSec) } },
+    );
+  }
+
   const body = await request.json().catch(() => null);
   const contactName = text(body?.contactName);
   const gender = text(body?.gender);
@@ -51,9 +66,21 @@ export async function POST(request: Request) {
   if (!DAY_TYPE_OPTIONS.has(preferredDayType)) return apiError(400, "FORBIDDEN", "請選擇可預約日期");
   if (!TIME_SLOT_OPTIONS.has(preferredTimeSlot)) return apiError(400, "FORBIDDEN", "請選擇可預約時段");
 
+  const phoneLimit = await rateLimitShared({
+    key: `public-booking:create:phone:${contactPhone.replace(/\D/g, "")}`,
+    limit: 4,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!phoneLimit.ok) {
+    return NextResponse.json(
+      { ok: false, error: "這個手機號碼送出次數過多，請稍後再試，或直接聯繫櫃台協助。" },
+      { status: 429, headers: { "Retry-After": String(phoneLimit.retryAfterSec) } },
+    );
+  }
+
   let supabase;
   try {
-    supabase = await createSupabaseServerClient(request);
+    supabase = createSupabaseAdminClient();
   } catch (error) {
     return apiError(500, "INTERNAL_ERROR", error instanceof Error ? error.message : "Supabase client initialization failed");
   }

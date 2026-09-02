@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../lib/rate-limit";
 import {
   isValidTaiwanMobile,
   isCompleteStudentProfile,
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       reason,
       metadata: { statusCode: status, authMethod: "phone" },
     });
-  const limit = rateLimitFixedWindow({ key: `student-checkin-login:${ip}`, limit: 12, windowMs: 10 * 60 * 1000 });
+  const limit = await rateLimitShared({ key: `student-checkin-login:${ip}`, limit: 12, windowMs: 10 * 60 * 1000 });
   if (!limit.ok) {
     await auditLogin(429, "rate_limit_exceeded");
     return NextResponse.json(

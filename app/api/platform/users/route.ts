@@ -166,7 +166,8 @@ export async function PATCH(request: Request) {
     return fail(400, "FORBIDDEN", "tenantId is required for non-platform users");
   }
 
-  const { data, error } = await auth.supabase
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
     .from("profiles")
     .update({
       role,

@@ -25,6 +25,10 @@ const globalForAcpay = globalThis as typeof globalThis & {
   __bigeAcpayChecklist?: AcpayChecklistStore;
 };
 
+function checklistEnabled() {
+  return process.env.ACPAY_ENV === "test";
+}
+
 function snapshot() {
   if (!globalForAcpay.__bigeAcpayChecklist) {
     globalForAcpay.__bigeAcpayChecklist = {};
@@ -38,6 +42,7 @@ function getSnapshotOutTradeNo(update: AcpayChecklistSnapshot) {
 }
 
 export function recordAcpayChecklist(update: AcpayChecklistSnapshot) {
+  if (!checklistEnabled()) return {};
   const current = snapshot();
   const updatedAt = new Date().toISOString();
   const nextUpdate = {
@@ -61,6 +66,7 @@ export function recordAcpayChecklist(update: AcpayChecklistSnapshot) {
 }
 
 export function getAcpayChecklistSnapshot(outTradeNo?: string) {
+  if (!checklistEnabled()) return {};
   const current = snapshot();
   if (outTradeNo) {
     return {

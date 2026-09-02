@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireProfile } from "../../../../../lib/auth-context";
 import { sendNotification } from "../../../../../lib/integrations/notify";
 import { httpLogBase, logEvent } from "../../../../../lib/observability";
-import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../lib/rate-limit";
 import { verifyStaffCurrentPassword } from "../../../../../lib/staff-account-security";
 import {
   canUseStaffAccountSettings,
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
   }
 
   const base = httpLogBase(request);
-  const rateLimit = rateLimitFixedWindow({
+  const rateLimit = await rateLimitShared({
     key: `staff_email_request:${base.ip || "unknown"}:${auth.context.userId}`,
     limit: 5,
     windowMs: 10 * 60 * 1000,

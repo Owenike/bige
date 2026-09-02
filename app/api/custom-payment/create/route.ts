@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { rateLimitShared } from "@/lib/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const allowedPurposes = new Set(["course_fee", "price_difference", "event_fee", "other"]);
@@ -40,6 +41,19 @@ function parseAmount(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ipLimit = await rateLimitShared({
+    key: `custom-payment:create:ip:${ip}`,
+    limit: 20,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!ipLimit.ok) {
+    return NextResponse.json(
+      { ok: false, error: "送出次數過多，請稍後再試。" },
+      { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSec) } },
+    );
+  }
+
   let body: CustomPaymentRequest;
 
   try {
@@ -58,6 +72,18 @@ export async function POST(request: Request) {
   if (!phone) return validationError("請輸入電話。");
   if (!allowedPurposes.has(purpose)) return validationError("請選擇有效的付款用途。");
   if (amount == null) return validationError("付款金額必須為大於 0 的正整數。");
+
+  const phoneLimit = await rateLimitShared({
+    key: `custom-payment:create:phone:${phone.replace(/\D/g, "")}`,
+    limit: 6,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!phoneLimit.ok) {
+    return NextResponse.json(
+      { ok: false, error: "這個手機號碼送出次數過多，請稍後再試。" },
+      { status: 429, headers: { "Retry-After": String(phoneLimit.retryAfterSec) } },
+    );
+  }
 
   try {
     const supabase = createSupabaseAdminClient();

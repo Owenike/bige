@@ -6,17 +6,19 @@ import {
   reservePackageForBooking,
 } from "../../../../lib/booking-commerce";
 import { scheduleBookingNotifications } from "../../../../lib/booking-notifications";
+import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 import { mapBookingConflictError, validateBookingSchedule } from "../../../../lib/therapist-scheduling";
 
 export async function GET(request: Request) {
   const auth = await requireProfile(["member"], request);
   if (!auth.ok) return auth.response;
+  const supabase = createSupabaseAdminClient();
 
   if (!auth.context.tenantId) {
     return apiError(400, "FORBIDDEN", "Tenant context is required");
   }
 
-  const memberResult = await auth.supabase
+  const memberResult = await supabase
     .from("members")
     .select("id")
     .eq("tenant_id", auth.context.tenantId)
@@ -29,7 +31,7 @@ export async function GET(request: Request) {
 
   const status = new URL(request.url).searchParams.get("status");
 
-  let query = auth.supabase
+  let query = supabase
     .from("bookings")
     .select("id, coach_id, service_name, starts_at, ends_at, status, note")
     .eq("tenant_id", auth.context.tenantId)
@@ -48,6 +50,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await requireProfile(["member"], request);
   if (!auth.ok) return auth.response;
+  const supabase = createSupabaseAdminClient();
 
   const body = await request.json().catch(() => null);
   const coachId = typeof body?.coachId === "string" ? body.coachId : null;
@@ -70,7 +73,7 @@ export async function POST(request: Request) {
     return apiError(400, "FORBIDDEN", "Booking must be in the future");
   }
 
-  const memberResult = await auth.supabase
+  const memberResult = await supabase
     .from("members")
     .select("id, store_id")
     .eq("tenant_id", auth.context.tenantId)
@@ -84,7 +87,7 @@ export async function POST(request: Request) {
   let commercials;
   try {
     commercials = await prepareBookingCommercials({
-      supabase: auth.supabase,
+      supabase,
       tenantId: auth.context.tenantId,
       branchId: (typeof memberResult.data.store_id === "string" ? memberResult.data.store_id : null) || auth.context.branchId,
       memberId: memberResult.data.id,
@@ -100,7 +103,7 @@ export async function POST(request: Request) {
   }
 
   const scheduleValidation = await validateBookingSchedule({
-    supabase: auth.supabase,
+    supabase,
     tenantId: auth.context.tenantId,
     branchId: (typeof memberResult.data.store_id === "string" ? memberResult.data.store_id : null) || auth.context.branchId,
     memberId: memberResult.data.id,
@@ -114,7 +117,7 @@ export async function POST(request: Request) {
     return apiError(409, "FORBIDDEN", scheduleValidation.message);
   }
 
-  const { data, error } = await auth.supabase
+  const { data, error } = await supabase
     .from("bookings")
     .insert({
       tenant_id: auth.context.tenantId,
@@ -155,7 +158,7 @@ export async function POST(request: Request) {
   if (data && commercials.packageSelection) {
     try {
       await reservePackageForBooking({
-        supabase: auth.supabase,
+        supabase,
         tenantId: auth.context.tenantId,
         bookingId: String(data.id),
         memberId: memberResult.data.id,
@@ -166,7 +169,7 @@ export async function POST(request: Request) {
         idempotencyKey: `booking:${data.id}:reserve`,
       });
     } catch (reserveError) {
-      await auth.supabase
+      await supabase
         .from("bookings")
         .delete()
         .eq("tenant_id", auth.context.tenantId)
@@ -179,7 +182,7 @@ export async function POST(request: Request) {
     }
   }
 
-  await auth.supabase.from("audit_logs").insert({
+  await supabase.from("audit_logs").insert({
     tenant_id: auth.context.tenantId,
     actor_id: auth.context.userId,
     action: "member_booking_create",
@@ -204,7 +207,7 @@ export async function POST(request: Request) {
     if (commercials.bookingInsertPatch.payment_status === "deposit_pending") {
       try {
         const depositResult = await createOrReuseBookingDepositPayment({
-          supabase: auth.supabase,
+          supabase,
           tenantId: auth.context.tenantId,
           bookingId: String(data.id),
           actorId: auth.context.userId,
@@ -212,7 +215,7 @@ export async function POST(request: Request) {
         });
         depositPayment = depositResult.depositPayment;
       } catch (paymentError) {
-        await auth.supabase
+        await supabase
           .from("bookings")
           .delete()
           .eq("tenant_id", auth.context.tenantId)

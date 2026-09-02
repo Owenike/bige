@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../lib/rate-limit";
 import { hashStudentPassword } from "../../../../../lib/student-checkin";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 
@@ -8,7 +8,7 @@ const schema = z.object({ password: z.string().min(6).max(100) });
 
 export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const limit = rateLimitFixedWindow({ key: `student-password-reset:${ip}`, limit: 8, windowMs: 60 * 60 * 1000 });
+  const limit = await rateLimitShared({ key: `student-password-reset:${ip}`, limit: 8, windowMs: 60 * 60 * 1000 });
   if (!limit.ok) {
     return NextResponse.json(
       { ok: false, error: "重設次數過多，請稍後再試。" },

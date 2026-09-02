@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { rateLimitFixedWindow } from "../../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../../lib/rate-limit";
 import {
   attachPasskeyChallengeCookie,
   createPasskeyAuthenticationOptions,
@@ -7,7 +7,7 @@ import {
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const limit = rateLimitFixedWindow({
+  const limit = await rateLimitShared({
     key: `student-passkey-auth:${ip}`,
     limit: 20,
     windowMs: 10 * 60 * 1000,

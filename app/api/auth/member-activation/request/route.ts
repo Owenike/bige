@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { sendNotification } from "../../../../../lib/integrations/notify";
 import { httpLogBase, logEvent } from "../../../../../lib/observability";
-import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../lib/rate-limit";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 
 function normalizePhone(input: string) {
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Phone is required and must be valid" }, { status: 400 });
   }
 
-  const rl = rateLimitFixedWindow({
+  const rl = await rateLimitShared({
     key: `member_activation_request:${ip}:${phone}`,
     limit: 5,
     windowMs: 10 * 60 * 1000,

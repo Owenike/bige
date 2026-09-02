@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { bigeFacilityClosedMessage, isBigeFacilityClosed } from "../../../../lib/bige-business-day";
-import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../lib/rate-limit";
 import { ensureStudentDropInEntitlement } from "../../../../lib/student-drop-in";
 import {
   loadStudentProfileById,
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const tokenHash = hashStudentEmailVerificationToken(parsed.data.token);
-  const limit = rateLimitFixedWindow({
+  const limit = await rateLimitShared({
     key: `student-checkin-email-verify:${ip}:${tokenHash.slice(0, 16)}`,
     limit: 10,
     windowMs: 10 * 60 * 1000,

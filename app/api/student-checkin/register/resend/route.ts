@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../lib/rate-limit";
 import {
   createStudentEmailVerificationToken,
   loadStudentEmailVerificationById,
@@ -14,7 +14,7 @@ const RESEND_COOLDOWN_MS = 60 * 1000;
 
 export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const limit = rateLimitFixedWindow({
+  const limit = await rateLimitShared({
     key: `student-checkin-email-resend:${ip}`,
     limit: 5,
     windowMs: 60 * 60 * 1000,

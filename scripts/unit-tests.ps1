@@ -35,6 +35,7 @@ npx tsc `
   tests/notification-productization.test.ts `
   tests/notify-integration.test.ts `
   tests/resend-delivery-diagnostics.test.ts `
+  tests/security-hardening.test.ts `
   tests/permission-model.test.ts `
   tests/staff-activation.test.ts `
   tests/staff-credentials.test.ts `

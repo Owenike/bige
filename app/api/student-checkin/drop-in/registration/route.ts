@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../lib/rate-limit";
 import {
   ensureStudentDropInEntitlement,
   publicStudentDropInRegistration,
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   }
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const limit = rateLimitFixedWindow({
+  const limit = await rateLimitShared({
     key: `student-drop-in-registration:${profile.id}:${ip}`,
     limit: 10,
     windowMs: 60 * 60 * 1000,

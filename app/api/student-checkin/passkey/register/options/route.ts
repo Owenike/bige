@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { rateLimitFixedWindow } from "../../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../../lib/rate-limit";
 import {
   isCompleteStudentProfile,
   loadStudentProfileById,
@@ -13,7 +13,7 @@ import {
 export async function POST(request: NextRequest) {
   const session = await readStudentAuthSession();
   if (!session) return NextResponse.json({ ok: false, error: "請先使用手機與密碼登入。" }, { status: 401 });
-  const limit = rateLimitFixedWindow({
+  const limit = await rateLimitShared({
     key: `student-passkey-register:${session.profileId}`,
     limit: 6,
     windowMs: 10 * 60 * 1000,

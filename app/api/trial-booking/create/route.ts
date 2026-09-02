@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { bigeFacilityClosedMessage, isBigeFacilityClosed } from "../../../../lib/bige-business-day";
 import { sendLineTrialBookingNotification } from "../../../../lib/line-push";
+import { rateLimitShared } from "../../../../lib/rate-limit";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 const serviceValues = ["weight_training", "boxing_fitness", "pilates", "sports_massage"] as const;
@@ -39,7 +40,10 @@ const trialBookingSchema = z.object({
 });
 
 function jsonError(status: number, error: string) {
-  return NextResponse.json({ ok: false, error }, { status });
+  return NextResponse.json(
+    { ok: false, error: status >= 500 ? "系統暫時無法建立預約，請稍後再試。" : error },
+    { status },
+  );
 }
 
 function serviceLabel(value: (typeof serviceValues)[number]) {
@@ -71,6 +75,19 @@ function trialAmount(value: (typeof serviceValues)[number]) {
 }
 
 export async function POST(request: Request) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ipLimit = await rateLimitShared({
+    key: `trial-booking:create:ip:${ip}`,
+    limit: 12,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!ipLimit.ok) {
+    return NextResponse.json(
+      { ok: false, error: "送出次數過多，請稍後再試，或直接聯繫櫃台。" },
+      { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSec) } },
+    );
+  }
+
   const facility = await isBigeFacilityClosed({});
   if (facility.closed) {
     return NextResponse.json(
@@ -89,6 +106,18 @@ export async function POST(request: Request) {
   const parsed = trialBookingSchema.safeParse(body);
   if (!parsed.success) {
     return jsonError(400, "請確認必填欄位與資料格式是否正確。");
+  }
+
+  const phoneLimit = await rateLimitShared({
+    key: `trial-booking:create:phone:${parsed.data.phone.replace(/\D/g, "")}`,
+    limit: 4,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!phoneLimit.ok) {
+    return NextResponse.json(
+      { ok: false, error: "這個手機號碼送出次數過多，請稍後再試，或直接聯繫櫃台。" },
+      { status: 429, headers: { "Retry-After": String(phoneLimit.retryAfterSec) } },
+    );
   }
 
   let admin;

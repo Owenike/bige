@@ -4,7 +4,7 @@ import { bigeFacilityClosedMessage, isBigeFacilityClosed } from "../../../../lib
 import { issueEntryToken } from "../../../../lib/entry-token";
 import { ENTRY_SCHEMA } from "../../../../lib/entry-schema";
 import { httpLogBase, logEvent } from "../../../../lib/observability";
-import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../lib/rate-limit";
 
 interface MemberTokenSourceRow {
   id: string;
@@ -26,8 +26,8 @@ export async function POST(request: Request) {
 
   // Limit token issuance per user and per IP to reduce abuse.
   const ip = base.ip || "unknown";
-  const rlUser = rateLimitFixedWindow({ key: `entry_issue:user:${userId}`, limit: 30, windowMs: 60 * 1000 });
-  const rlIp = rateLimitFixedWindow({ key: `entry_issue:ip:${ip}`, limit: 60, windowMs: 60 * 1000 });
+  const rlUser = await rateLimitShared({ key: `entry_issue:user:${userId}`, limit: 30, windowMs: 60 * 1000 });
+  const rlIp = await rateLimitShared({ key: `entry_issue:ip:${ip}`, limit: 60, windowMs: 60 * 1000 });
   if (!rlUser.ok || !rlIp.ok) {
     const retryAfterSec = Math.max(rlUser.retryAfterSec, rlIp.retryAfterSec);
     logEvent("warn", {

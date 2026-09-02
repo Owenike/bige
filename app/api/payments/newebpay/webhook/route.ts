@@ -6,14 +6,14 @@ import {
 } from "../../../../../lib/booking-deposit-payments";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 import { httpLogBase, logEvent } from "../../../../../lib/observability";
-import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../lib/rate-limit";
 
 export async function POST(request: Request) {
   const t0 = Date.now();
   const base = httpLogBase(request);
   const ip = base.ip || "unknown";
 
-  const rl = rateLimitFixedWindow({
+  const rl = await rateLimitShared({
     key: `webhook:newebpay:${ip}`,
     limit: 600,
     windowMs: 60 * 1000,

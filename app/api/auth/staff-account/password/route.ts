@@ -1,5 +1,5 @@
 import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-context";
-import { rateLimitFixedWindow } from "../../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../../lib/rate-limit";
 import { verifyStaffCurrentPassword } from "../../../../../lib/staff-account-security";
 import { canUseStaffAccountSettings } from "../../../../../lib/staff-credentials";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const auth = await requireProfile([...STAFF_ACCOUNT_ROLES], request);
   if (!auth.ok) return auth.response;
 
-  const rateLimit = rateLimitFixedWindow({
+  const rateLimit = await rateLimitShared({
     key: `staff_account_password:${auth.context.userId}`,
     limit: 5,
     windowMs: 10 * 60 * 1000,

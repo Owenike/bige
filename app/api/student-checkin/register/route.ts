@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { bigeFacilityClosedMessage, isBigeFacilityClosed } from "../../../../lib/bige-business-day";
-import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../lib/rate-limit";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 import {
   hashStudentPassword,
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   }
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const limit = rateLimitFixedWindow({ key: `student-checkin-register:${ip}`, limit: 8, windowMs: 60 * 60 * 1000 });
+  const limit = await rateLimitShared({ key: `student-checkin-register:${ip}`, limit: 8, windowMs: 60 * 60 * 1000 });
   if (!limit.ok) {
     return NextResponse.json(
       { ok: false, error: "建立資料次數過多，請洽現場工作人員。" },

@@ -14,7 +14,7 @@ import { apiSuccess, requireOpenShift, requireProfile } from "../../../../lib/au
 import { bigeFacilityClosedMessage, isBigeFacilityClosed } from "../../../../lib/bige-business-day";
 import { checkMemberEligibility } from "../../../../lib/entitlement-eligibility";
 import { httpLogBase, logEvent } from "../../../../lib/observability";
-import { rateLimitFixedWindow } from "../../../../lib/rate-limit";
+import { rateLimitShared } from "../../../../lib/rate-limit";
 import { insertShiftItem } from "../../../../lib/shift-reconciliation";
 
 const ANTI_PASSBACK_MINUTES = 10;
@@ -188,12 +188,12 @@ export async function POST(request: Request) {
 
   // Generous limit: scanning should be fast, but still guarded against abuse.
   const ip = base.ip || "unknown";
-  const rlUser = rateLimitFixedWindow({
+  const rlUser = await rateLimitShared({
     key: `entry_verify:user:${auth.context.userId}`,
     limit: 300,
     windowMs: 60 * 1000,
   });
-  const rlIp = rateLimitFixedWindow({
+  const rlIp = await rateLimitShared({
     key: `entry_verify:ip:${ip}`,
     limit: 600,
     windowMs: 60 * 1000,

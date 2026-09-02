@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { createOrReuseBookingDepositPayment } from "../../../../../lib/booking-deposit-payments";
 import { TEMP_DISABLE_ROLE_GUARD, requireProfile } from "../../../../../lib/auth-context";
+import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 
 export async function POST(request: Request) {
   const auth = await requireProfile(["member", "frontdesk", "manager"], request);
   if (!auth.ok) return auth.response;
+  const supabase = createSupabaseAdminClient();
 
   const body = await request.json().catch(() => null);
   const orderId = typeof body?.orderId === "string" ? body.orderId : "";
@@ -15,7 +17,7 @@ export async function POST(request: Request) {
   }
 
   if (bookingId) {
-    const bookingResult = await auth.supabase
+    const bookingResult = await supabase
       .from("bookings")
       .select("id, tenant_id, branch_id, member_id, status")
       .eq("id", bookingId)
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
     }
 
     if (!TEMP_DISABLE_ROLE_GUARD && auth.context.role === "member") {
-      const memberResult = await auth.supabase
+      const memberResult = await supabase
         .from("members")
         .select("id")
         .eq("auth_user_id", auth.context.userId)
@@ -49,7 +51,7 @@ export async function POST(request: Request) {
 
     try {
       const depositPayment = await createOrReuseBookingDepositPayment({
-        supabase: auth.supabase,
+        supabase,
         tenantId: auth.context.tenantId,
         bookingId,
         actorId: auth.context.userId,
@@ -71,7 +73,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const { data: order, error: orderError } = await auth.supabase
+  const { data: order, error: orderError } = await supabase
     .from("orders")
     .select("id, amount, status, member_id, branch_id")
     .eq("id", orderId)
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
   }
 
   if (!TEMP_DISABLE_ROLE_GUARD && auth.context.role === "member") {
-    const memberResult = await auth.supabase
+    const memberResult = await supabase
       .from("members")
       .select("id")
       .eq("auth_user_id", auth.context.userId)
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const { data: payment, error: paymentError } = await auth.supabase
+  const { data: payment, error: paymentError } = await supabase
     .from("payments")
     .insert({
       tenant_id: auth.context.tenantId,
