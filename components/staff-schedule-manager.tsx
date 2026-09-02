@@ -264,6 +264,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   const [holidayName, setHolidayName] = useState("");
   const [middleDailyLimit, setMiddleDailyLimit] = useState(2);
   const [adjustedDates, setAdjustedDates] = useState<Record<string, string>>({});
+  const [employmentDrafts, setEmploymentDrafts] = useState<Record<string, Employment>>({});
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string> | null>(null);
   const [recentlyChangedEntryKeys, setRecentlyChangedEntryKeys] = useState<Set<string>>(() => new Set());
   const recentChangeTimersRef = useRef(new Map<string, number>());
@@ -550,9 +551,16 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
     void act("sync_missing_draft_cells", {}, "已將新進員工補入目前草稿，既有排班保持不變");
   }, [busy, data?.version, missingScheduleCellCount, month]);
 
-  async function saveEmployee(employee: Employee, patch: Partial<Employment>) {
-    const current = { ...employee.employment, ...patch } as Employment;
-    await act("configure_employee", {
+  function updateEmployeeDraft(employee: Employee, patch: Partial<Employment>) {
+    if (!employee.employment) return;
+    setEmploymentDrafts((current) => ({
+      ...current,
+      [employee.id]: { ...(current[employee.id] || employee.employment), ...patch },
+    }));
+  }
+
+  async function saveEmployee(employee: Employee, current: Employment) {
+    const saved = await act("configure_employee", {
       employeeId: employee.id,
       employmentType: current.employment_type,
       payBasis: current.pay_basis,
@@ -566,6 +574,12 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
       annualLeaveBalanceDays: current.annual_leave_balance_days,
       accruedLeaveBalanceDays: current.accrued_leave_balance_days,
     }, `${employee.displayName}的班別設定已更新`);
+    if (!saved) return;
+    setEmploymentDrafts((drafts) => {
+      const next = { ...drafts };
+      delete next[employee.id];
+      return next;
+    });
   }
 
   function exportPng() {
@@ -762,12 +776,12 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
       ) : (
         <>
           <section className={styles.setupActions} aria-label="排班前置設定">
-            <button type="button" className={styles.setupActionButton} onClick={() => setSetupDialog("progress")}>
+            <button type="button" className={styles.setupActionButton} onClick={() => { setEmploymentDrafts({}); setSetupDialog("progress"); }}>
               <span className={styles.setupActionIcon} aria-hidden="true">休</span>
               <span><strong>館休與選休設定</strong><small>控制開放時間、館休與選休進度</small></span>
               <b aria-hidden="true">›</b>
             </button>
-            <button type="button" className={styles.setupActionButton} onClick={() => setSetupDialog("shifts")}>
+            <button type="button" className={styles.setupActionButton} onClick={() => { setEmploymentDrafts({}); setSetupDialog("shifts"); }}>
               <span className={styles.setupActionIcon} aria-hidden="true">班</span>
               <span><strong>固定班別設定</strong><small>調整員工預設班別與工時</small></span>
               <b aria-hidden="true">›</b>
@@ -778,9 +792,9 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
             ref={setupDialogRef}
             className={styles.setupDialog}
             aria-labelledby="setup-dialog-title"
-            onClose={() => setSetupDialog(null)}
+            onClose={() => { setEmploymentDrafts({}); setSetupDialog(null); }}
             onClick={(event) => {
-              if (event.target === event.currentTarget) setSetupDialog(null);
+              if (event.target === event.currentTarget) { setEmploymentDrafts({}); setSetupDialog(null); }
             }}
           >
             <div className={styles.setupDialogCard}>
@@ -790,10 +804,12 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
                   <h2 id="setup-dialog-title">{setupDialog === "progress" ? "館休與選休設定" : "固定班別設定"}</h2>
                   <p>{setupDialog === "progress" ? selectionWindowSummary(data.period) : "設定員工平日預設班別與休假餘額"}</p>
                 </div>
-                <button type="button" className={styles.dialogCloseButton} aria-label="關閉設定視窗" onClick={() => setSetupDialog(null)}>×</button>
+                <button type="button" className={styles.dialogCloseButton} aria-label="關閉設定視窗" onClick={() => { setEmploymentDrafts({}); setSetupDialog(null); }}>×</button>
               </div>
 
               <div className={styles.setupDialogBody}>
+                {error ? <div className={styles.error} role="alert">{error}</div> : null}
+                {notice ? <div className={styles.notice} role="status"><span>{notice}</span><button type="button" aria-label="關閉提示" onClick={() => setNotice("")}>×</button></div> : null}
                 {setupDialog === "progress" ? (
                   <div className={styles.progressSettings}>
                     <section className={styles.selectionWindowCard} data-open={selectionWindowOpen}>
@@ -912,8 +928,9 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
                 ) : setupDialog === "shifts" ? (
                   <div className={styles.employeeSettings}>
                     {scheduleEmployees.map((employee) => {
-                      const terms = employee.employment;
+                      const terms = employmentDrafts[employee.id] || employee.employment;
                       if (!terms) return null;
+                      const hasChanges = Boolean(employmentDrafts[employee.id]);
                       return (
                         <details key={employee.id} className={styles.employeeSetting}>
                           <summary>
@@ -922,7 +939,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
                           </summary>
                           <div className={styles.settingFields}>
                             <label>身分類型
-                              <select value={terms.employment_type} onChange={(event) => void saveEmployee(employee, {
+                              <select disabled={busy} value={terms.employment_type} onChange={(event) => updateEmployeeDraft(employee, {
                                 employment_type: event.target.value as Employment["employment_type"],
                                 pay_basis: event.target.value === "part_time" ? "hourly" : "monthly",
                               })}>
@@ -930,9 +947,9 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
                               </select>
                             </label>
                             <label>工作類別
-                              <select value={terms.work_group} onChange={(event) => {
+                              <select disabled={busy} value={terms.work_group} onChange={(event) => {
                                 const workGroup = event.target.value as Employment["work_group"];
-                                void saveEmployee(employee, {
+                                updateEmployeeDraft(employee, {
                                   work_group: workGroup,
                                   default_shift_code: workGroup === "frontdesk" ? "FRONTDESK_DAY" : "COACH_MIDDLE",
                                   counts_toward_middle_limit: workGroup === "coach",
@@ -942,21 +959,25 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
                               </select>
                             </label>
                             <label>固定班別
-                              <select value={terms.default_shift_code} onChange={(event) => void saveEmployee(employee, { default_shift_code: event.target.value })}>
+                              <select disabled={busy} value={terms.default_shift_code} onChange={(event) => updateEmployeeDraft(employee, { default_shift_code: event.target.value })}>
                                 <option value="FRONTDESK_DAY">早班 09:30–16:30（櫃台）</option>
                                 <option value="COACH_EARLY">早班 10:00–19:00</option>
                                 <option value="COACH_MIDDLE">中班 14:00–23:00</option>
                                 <option value="COACH_PARTTIME_WEEKDAY">晚班 18:00–22:00</option>
                               </select>
                             </label>
-                            <label className={styles.checkField}><input type="checkbox" checked={terms.is_original_early_shift} onChange={(event) => void saveEmployee(employee, { is_original_early_shift: event.target.checked, default_shift_code: event.target.checked ? "COACH_EARLY" : terms.default_shift_code })} />原固定早班（週三 12:00–21:00）</label>
-                            <label className={styles.checkField}><input type="checkbox" checked={terms.counts_toward_middle_limit} onChange={(event) => void saveEmployee(employee, { counts_toward_middle_limit: event.target.checked })} />自選排休納入中班每日上限</label>
+                            <label className={styles.checkField}><input type="checkbox" disabled={busy} checked={terms.is_original_early_shift} onChange={(event) => updateEmployeeDraft(employee, { is_original_early_shift: event.target.checked, default_shift_code: event.target.checked ? "COACH_EARLY" : terms.default_shift_code })} />原固定早班（週三 12:00–21:00）</label>
+                            <label className={styles.checkField}><input type="checkbox" disabled={busy} checked={terms.counts_toward_middle_limit} onChange={(event) => updateEmployeeDraft(employee, { counts_toward_middle_limit: event.target.checked })} />自選排休納入中班每日上限</label>
                             <label>特休餘額（天）
-                              <input key={`${employee.id}:annual:${terms.annual_leave_balance_days}`} type="number" min={0} max={365} step={0.5} defaultValue={terms.annual_leave_balance_days} disabled={busy} onBlur={(event) => void saveEmployee(employee, { annual_leave_balance_days: Number(event.target.value) })} />
+                              <input key={`${employee.id}:annual:${employee.employment?.annual_leave_balance_days}`} type="number" min={0} max={365} step={0.5} defaultValue={terms.annual_leave_balance_days} disabled={busy} onChange={(event) => updateEmployeeDraft(employee, { annual_leave_balance_days: Number(event.target.value) })} />
                             </label>
                             <label>積假餘額（天）
-                              <input key={`${employee.id}:accrued:${terms.accrued_leave_balance_days}`} type="number" min={0} max={365} step={0.5} defaultValue={terms.accrued_leave_balance_days} disabled={busy} onBlur={(event) => void saveEmployee(employee, { accrued_leave_balance_days: Number(event.target.value) })} />
+                              <input key={`${employee.id}:accrued:${employee.employment?.accrued_leave_balance_days}`} type="number" min={0} max={365} step={0.5} defaultValue={terms.accrued_leave_balance_days} disabled={busy} onChange={(event) => updateEmployeeDraft(employee, { accrued_leave_balance_days: Number(event.target.value) })} />
                             </label>
+                            <div className={styles.employeeSettingActions}>
+                              <span>{hasChanges ? "尚有未儲存變更" : "設定已儲存"}</span>
+                              <button type="button" className={styles.primaryButton} disabled={busy || !hasChanges} onClick={() => void saveEmployee(employee, terms)}>{busy && hasChanges ? "儲存中…" : "儲存變更"}</button>
+                            </div>
                           </div>
                         </details>
                       );

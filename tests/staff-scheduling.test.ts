@@ -431,7 +431,14 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(styles, /\.workflowBadge\{[^}]*border-radius:999px/);
   assert.match(styles, /\.setupActions\{[^}]*grid-template-columns:repeat\(2,minmax\(240px,1fr\)\)/);
   assert.match(styles, /\.setupDialog::backdrop\{[^}]*backdrop-filter:blur\(8px\)/);
+  assert.match(styles, /\.setupDialog \.settingFields select option\{background:#101b28;color:#f5f0e6\}/);
+  assert.match(styles, /\.employeeSettingActions\{[^}]*grid-column:1\/-1/);
   assert.match(styles, /@media\(max-width:620px\)\{[\s\S]*?\.setupActions\{grid-template-columns:1fr/);
+  assert.match(source, /const \[employmentDrafts, setEmploymentDrafts\] = useState<Record<string, Employment>>\(\{\}\)/);
+  assert.match(source, /function updateEmployeeDraft\(employee: Employee, patch: Partial<Employment>\)/);
+  assert.match(source, /尚有未儲存變更[\s\S]*?儲存變更/);
+  assert.doesNotMatch(source, /onChange=\{\(event\) => void saveEmployee\(employee/);
+  assert.doesNotMatch(source, /onBlur=\{\(event\) => void saveEmployee\(employee/);
   assert.match(source, /選休截止日[\s\S]*?update_selection_deadline[\s\S]*?儲存截止日/);
   assert.match(source, /set_selection_window_state[\s\S]*?立即關閉選休[\s\S]*?立即開放選休/);
   assert.match(source, /set_employee_selection_window_state[\s\S]*?關閉單獨選休[\s\S]*?單獨開放選休/);
