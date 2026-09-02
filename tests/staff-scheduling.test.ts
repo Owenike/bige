@@ -27,6 +27,10 @@ import {
   validateSchedule,
   type EmployeeScheduleConfig,
 } from "../lib/staff-scheduling";
+import {
+  buildSeptemberTemporaryScheduleEntries,
+  shouldUseSeptemberTemporarySchedule,
+} from "../lib/september-2026-staff-schedule-bridge";
 
 const middleCoach: EmployeeScheduleConfig = {
   employeeId: "coach-1",
@@ -38,6 +42,41 @@ const middleCoach: EmployeeScheduleConfig = {
   canCoverEarlyShift: false,
   countsTowardMiddleLimit: true,
 };
+
+test("September temporary staff schedule bridge is self-only and never replaces a published version", () => {
+  assert.equal(shouldUseSeptemberTemporarySchedule({ monthStart: "2026-09-01", view: "self", hasPublishedVersion: false }), true);
+  assert.equal(shouldUseSeptemberTemporarySchedule({ monthStart: "2026-10-01", view: "self", hasPublishedVersion: false }), false);
+  assert.equal(shouldUseSeptemberTemporarySchedule({ monthStart: "2026-09-01", view: "team", hasPublishedVersion: false }), false);
+  assert.equal(shouldUseSeptemberTemporarySchedule({ monthStart: "2026-09-01", view: "self", hasPublishedVersion: true }), false);
+});
+
+test("September temporary staff schedule mirrors only the signed-in coach's imported daily statuses", () => {
+  const entries = buildSeptemberTemporaryScheduleEntries({
+    coachId: "coach-1",
+    notes: [
+      { coach_id: "coach-1", starts_at: "2026-08-31T16:00:00.000Z", content: "休", source: "temporary_coach_leave_import" },
+      { coach_id: "coach-1", starts_at: "2026-09-01T16:00:00.000Z", content: "早", source: "temporary_coach_shift_import" },
+      { coach_id: "coach-1", starts_at: "2026-09-03T16:00:00.000Z", content: "休", source: "manual" },
+      { coach_id: "coach-2", starts_at: "2026-09-04T16:00:00.000Z", content: "休", source: "temporary_coach_leave_import" },
+      { coach_id: "coach-1", starts_at: "2026-10-01T16:00:00.000Z", content: "休", source: "temporary_coach_leave_import" },
+    ],
+    facilityClosureDates: ["2026-09-05", "2026-10-10"],
+  });
+
+  assert.deepEqual(entries.map((entry) => entry.workDate), ["2026-09-01", "2026-09-05"]);
+  assert.deepEqual(entries.map((entry) => entry.entryKind), ["off", "off"]);
+  assert.equal(entries[0].offKind, "preferred_off");
+  assert.equal(entries[1].offKind, "facility_closure");
+  assert.equal(entries[1].employeeVisibleNote, "館休");
+});
+
+test("September closure alone does not opt unrelated staff into the temporary bridge", () => {
+  assert.deepEqual(buildSeptemberTemporaryScheduleEntries({
+    coachId: "employee-without-import",
+    notes: [],
+    facilityClosureDates: ["2026-09-05"],
+  }), []);
+});
 
 test("next-month preference window is open from the 1st through the 20th 23:59 Taiwan time", () => {
   assert.deepEqual(buildSelectionWindow("2026-10-01"), {
@@ -513,6 +552,11 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(apiSource, /body\.action === "set_employee_selection_window_state"/);
   assert.match(apiSource, /staff_schedule_selection_overrides/);
   assert.match(apiSource, /staff_schedule_selection_override_opened/);
+  assert.match(apiSource, /shouldUseSeptemberTemporarySchedule/);
+  assert.match(apiSource, /\.eq\("coach_id", params\.profile\.id\)/);
+  assert.match(apiSource, /\.eq\("source", "temporary_coach_leave_import"\)/);
+  assert.match(apiSource, /9 月日排休假同步/);
+  assert.match(selfSource, /10 月起恢復員工選休與主管審核的正式流程/);
   assert.match(apiSource, /SELECTION_CONFIGURATION_STATUSES = new Set\(\["selection_open", "selection_closed", "drafting"\]\)/);
   assert.match(apiSource, /isStaffPreferenceSelectionOpen\(\{/);
   assert.match(apiSource, /status: preferenceComplete \? "submitted" : "draft"/);

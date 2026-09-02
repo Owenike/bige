@@ -2,6 +2,11 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { apiError, apiSuccess, requireProfile, type ProfileContext } from "../../../lib/auth-context";
 import { createInAppNotifications } from "../../../lib/in-app-notifications";
+import {
+  buildSeptemberTemporaryScheduleEntries,
+  shouldUseSeptemberTemporarySchedule,
+  type SeptemberTemporaryScheduleEntry,
+} from "../../../lib/september-2026-staff-schedule-bridge";
 import { hasStaffPermission, requireStaffPermission } from "../../../lib/staff-operation-permissions";
 import {
   DEFAULT_SHIFT_DEFINITIONS,
@@ -945,6 +950,7 @@ async function buildState(params: {
       selectionOverrides: [],
       facilityClosures: [],
       version: null,
+      temporarySchedule: null,
       scheduleEntries: [],
       ruleResults: [],
       holidayAdjustments: [],
@@ -982,6 +988,8 @@ async function buildState(params: {
 
   const version = await getLatestVersion(params.admin, period.id, scope.publishedOnly);
   let scheduleEntries: Record<string, unknown>[] = [];
+  let temporaryScheduleEntries: SeptemberTemporaryScheduleEntry[] = [];
+  let temporarySchedule: null | { source: "daily_board"; label: string } = null;
   let ruleResults: Record<string, unknown>[] = [];
   let holidayAdjustments: Record<string, unknown>[] = [];
   let acknowledgement: Record<string, unknown> | null = null;
@@ -1016,6 +1024,35 @@ async function buildState(params: {
     acknowledgement = acknowledgementResult.data as Record<string, unknown> | null;
   }
 
+  if (shouldUseSeptemberTemporarySchedule({
+    monthStart: params.monthStart,
+    view: params.view,
+    hasPublishedVersion: Boolean(version),
+  })) {
+    let temporaryNotesQuery = params.admin
+      .from("bige_schedule_notes")
+      .select("id, coach_id, starts_at, content, source")
+      .eq("tenant_id", tenantId)
+      .eq("coach_id", params.profile.id)
+      .eq("source", "temporary_coach_leave_import")
+      .gte("starts_at", "2026-09-01T00:00:00+08:00")
+      .lt("starts_at", "2026-10-01T00:00:00+08:00")
+      .order("starts_at");
+    if (params.profile.branch_id) {
+      temporaryNotesQuery = temporaryNotesQuery.eq("branch_id", params.profile.branch_id);
+    }
+    const temporaryNotesResult = await temporaryNotesQuery;
+    if (temporaryNotesResult.error) throw new Error(temporaryNotesResult.error.message);
+    temporaryScheduleEntries = buildSeptemberTemporaryScheduleEntries({
+      coachId: params.profile.id,
+      notes: temporaryNotesResult.data || [],
+      facilityClosureDates: (closureResult.data || []).map((row) => String(row.closure_date)),
+    });
+    if (temporaryScheduleEntries.length > 0) {
+      temporarySchedule = { source: "daily_board", label: "9 月日排休假同步" };
+    }
+  }
+
   const employmentMap = new Map(employments.map((item) => [item.employee_id, item]));
   const configMap = new Map(employees.flatMap((employee) => {
     const employment = employmentMap.get(employee.id);
@@ -1025,21 +1062,26 @@ async function buildState(params: {
     .flatMap((preference) => (preference.staff_time_off_preference_dates || [])
       .filter((date: { source?: string }) => date.source === "employee")
       .map((date: { requested_date: string }) => `${preference.employee_id}:${date.requested_date}`)));
-  const displayScheduleEntries = scheduleEntries.map((rawEntry) => {
-    const entry = mapEntry(rawEntry);
-    const employee = configMap.get(entry.employeeId);
-    return {
-      rawEntry,
-      entry: scope.teamView && employee
-        ? normalizeUnselectedPreferenceEntry({
-            entry,
-            employee,
-            preferenceDateSelected: selectedPreferenceKeys.has(`${entry.employeeId}:${entry.workDate}`),
-            manualOverride: Boolean(rawEntry.requires_resign),
-          })
-        : entry,
-    };
-  });
+  const displayScheduleEntries = temporaryScheduleEntries.length > 0
+    ? temporaryScheduleEntries.map((entry) => ({
+        rawEntry: { id: entry.id, requires_resign: false, internal_note: null },
+        entry,
+      }))
+    : scheduleEntries.map((rawEntry) => {
+        const entry = mapEntry(rawEntry);
+        const employee = configMap.get(entry.employeeId);
+        return {
+          rawEntry,
+          entry: scope.teamView && employee
+            ? normalizeUnselectedPreferenceEntry({
+                entry,
+                employee,
+                preferenceDateSelected: selectedPreferenceKeys.has(`${entry.employeeId}:${entry.workDate}`),
+                manualOverride: Boolean(rawEntry.requires_resign),
+              })
+            : entry,
+        };
+      });
   return {
     actor: {
       id: params.profile.id,
@@ -1066,6 +1108,7 @@ async function buildState(params: {
     facilityClosures: closureResult.data || [],
     holidays: holidayResult.data || [],
     version,
+    temporarySchedule,
     scheduleEntries: displayScheduleEntries.map(({ rawEntry, entry }) => ({
       id: rawEntry.id,
       employeeId: entry.employeeId,

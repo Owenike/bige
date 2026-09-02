@@ -34,6 +34,7 @@ type SelfState = {
   }>;
   facilityClosures: Array<{ closure_date: string }>;
   version: null | { id: string; version_number: number; status: string; published_at: string | null };
+  temporarySchedule: null | { source: "daily_board"; label: string };
   scheduleEntries: Array<{
     id: string;
     employeeId: string;
@@ -44,6 +45,7 @@ type SelfState = {
     startsAt: string | null;
     endsAt: string | null;
     offKind: string | null;
+    source?: string | null;
     employeeVisibleNote?: string | null;
   }>;
   holidayAdjustments: Array<{
@@ -176,6 +178,29 @@ function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void
   );
 }
 
+function ScheduleEntryList({ entries }: { entries: SelfState["scheduleEntries"] }) {
+  return (
+    <section className={styles.scheduleList}>
+      {entries.map((entry) => {
+        const entryClass = entry.entryKind === "off"
+          ? styles.offEntry
+          : ["FRONTDESK_DAY", "COACH_EARLY"].includes(entry.shiftCode || "")
+            ? styles.earlyEntry
+            : entry.shiftCode === "COACH_PARTTIME_WEEKDAY"
+              ? styles.lateEntry
+              : styles.workEntry;
+        const workDetail = entry.startsAt && entry.endsAt
+          ? `${entry.startsAt}–${entry.endsAt}${entry.employeeVisibleNote ? ` · ${entry.employeeVisibleNote}` : ""}`
+          : entry.employeeVisibleNote || "依日排課表";
+        return <article key={entry.id} className={entryClass}>
+          <div><strong>{Number(entry.workDate.slice(-2))}</strong><span>{formatDate(entry.workDate).split("週").at(-1)}</span></div>
+          <div>{entry.entryKind === "work" ? <><h3>{staffScheduleShiftLabel(entry)}</h3><p>{workDetail}</p></> : <><h3>{staffScheduleEntryOffLabel(entry)}</h3><p>{entry.employeeVisibleNote || "本日不上班"}</p></>}</div>
+        </article>;
+      })}
+    </section>
+  );
+}
+
 export default function StaffScheduleSelfService({ initialMonth }: { initialMonth?: string }) {
   const [month, setMonth] = useState(() => initialMonth || nextMonthValue());
   const [data, setData] = useState<SelfState | null>(null);
@@ -300,6 +325,14 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
 
       {!data?.period ? (
         <section className={styles.empty}><span>🗓️</span><h2>主管尚未開放 {month} 排休</h2><p>開放後即可在這裡自選 8 天；其他法定請假不受這 8 天限制。</p></section>
+      ) : data.temporarySchedule && !data.version ? (
+        <>
+          <section className={styles.publishedHeader}>
+            <div><span className={styles.kicker}>{data.temporarySchedule.label}</span><h2>{month.replace("-", " 年 ")} 月休假日</h2><p>本月休假日由日排課表同步；10 月起恢復員工選休與主管審核的正式流程。</p></div>
+            <span className={styles.statusBadge}>已同步</span>
+          </section>
+          <ScheduleEntryList entries={sortedEntries} />
+        </>
       ) : !data.version ? (
         <section className={styles.selectionSection}>
           <div className={styles.selectionHeader}>
@@ -343,21 +376,7 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
             <span className={styles.statusBadge}>{data.acknowledgement?.status === "signed" ? "已簽名" : data.acknowledgement?.status === "carried_forward" ? "內容未變更，沿用原簽署" : data.acknowledgement?.status === "objected" ? "已提出異議" : "等待確認與簽名"}</span>
           </section>
 
-          <section className={styles.scheduleList}>
-            {sortedEntries.map((entry) => {
-              const entryClass = entry.entryKind === "off"
-                ? styles.offEntry
-                : ["FRONTDESK_DAY", "COACH_EARLY"].includes(entry.shiftCode || "")
-                  ? styles.earlyEntry
-                  : entry.shiftCode === "COACH_PARTTIME_WEEKDAY"
-                    ? styles.lateEntry
-                    : styles.workEntry;
-              return <article key={entry.id} className={entryClass}>
-                <div><strong>{Number(entry.workDate.slice(-2))}</strong><span>{formatDate(entry.workDate).split("週").at(-1)}</span></div>
-                <div>{entry.entryKind === "work" ? <><h3>{staffScheduleShiftLabel(entry)}</h3><p>{entry.startsAt}–{entry.endsAt}{entry.employeeVisibleNote ? ` · ${entry.employeeVisibleNote}` : ""}</p></> : <><h3>{staffScheduleEntryOffLabel(entry)}</h3><p>{entry.employeeVisibleNote || "本日不上班"}</p></>}</div>
-              </article>;
-            })}
-          </section>
+          <ScheduleEntryList entries={sortedEntries} />
 
           {data.holidayAdjustments.length > 0 ? (
             <section className={styles.holidayBox}>
