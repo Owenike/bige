@@ -73,7 +73,7 @@ test("an employee catch-up override opens only editable schedule stages", () => 
 test("facility closure counts toward the required eight preferred days", () => {
   const dates = assertValidPreferenceDates({
     monthStart: "2026-10-01",
-    selectedDates: ["2026-10-04", "2026-10-05", "2026-10-06", "2026-10-12", "2026-10-13", "2026-10-19", "2026-10-20"],
+    selectedDates: ["2026-10-04", "2026-10-10", "2026-10-11", "2026-10-17", "2026-10-18", "2026-10-24", "2026-10-25"],
     facilityClosureDates: ["2026-10-03"],
   });
   assert.equal(dates.length, 8);
@@ -92,13 +92,32 @@ test("monthly Saturday and Sunday days beyond eight become accrued leave", () =>
   assert.equal(monthlyAccruedLeaveCreditDays("2026-08-01"), 2);
 });
 
-test("eight selected days must cover every complete Monday-Sunday week", () => {
+test("preferences may cross Monday-Sunday boundaries when work streaks stay within six days", () => {
+  const dates = assertValidPreferenceDates({
+    monthStart: "2026-09-01",
+    selectedDates: ["2026-09-06", "2026-09-07", "2026-09-14", "2026-09-15", "2026-09-21", "2026-09-22", "2026-09-27"],
+    facilityClosureDates: ["2026-09-05"],
+  });
+  assert.deepEqual(dates, [
+    "2026-09-05",
+    "2026-09-06",
+    "2026-09-07",
+    "2026-09-14",
+    "2026-09-15",
+    "2026-09-21",
+    "2026-09-22",
+    "2026-09-27",
+  ]);
+});
+
+test("preferences reject seven consecutive work days within the selected month", () => {
   assert.throws(
     () => assertValidPreferenceDates({
-      monthStart: "2026-10-01",
-      selectedDates: ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08"],
+      monthStart: "2026-09-01",
+      selectedDates: ["2026-09-06", "2026-09-07", "2026-09-15", "2026-09-16", "2026-09-22", "2026-09-23", "2026-09-29"],
+      facilityClosureDates: ["2026-09-05"],
     }),
-    /這一週至少要選 2 天/,
+    /8–14 日連續上班 7 天/,
   );
 });
 

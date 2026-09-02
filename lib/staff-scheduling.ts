@@ -318,7 +318,8 @@ export function assertValidPreferenceDates(params: {
   requiredCount?: number;
 }) {
   const requiredCount = params.requiredCount ?? PREFERRED_DAYS_REQUIRED;
-  const monthDates = new Set(listMonthDates(params.monthStart));
+  const monthDates = listMonthDates(params.monthStart);
+  const monthDateSet = new Set(monthDates);
   const unique = Array.from(new Set(params.selectedDates));
   const closureDates = new Set(params.facilityClosureDates || []);
   const combined = new Set([...unique, ...closureDates]);
@@ -326,22 +327,22 @@ export function assertValidPreferenceDates(params: {
     throw new Error(`必須選滿 ${requiredCount} 天（館休日已自動計入）`);
   }
   for (const date of combined) {
-    if (!monthDates.has(date)) throw new Error("排休日期必須位於指定月份");
+    if (!monthDateSet.has(date)) throw new Error("排休日期必須位於指定月份");
   }
 
-  const completeWeeks = new Map<string, string[]>();
+  let consecutiveWorkDays = 0;
+  let consecutiveWorkStart = "";
   for (const date of monthDates) {
-    const weekStart = mondayOfWeek(date);
-    const weekDates = completeWeeks.get(weekStart) || [];
-    weekDates.push(date);
-    completeWeeks.set(weekStart, weekDates);
-  }
-  for (const weekDates of completeWeeks.values()) {
-    if (weekDates.length !== 7) continue;
-    const selectedInWeek = weekDates.filter((date) => combined.has(date));
-    if (selectedInWeek.length < 2) {
+    if (combined.has(date)) {
+      consecutiveWorkDays = 0;
+      consecutiveWorkStart = "";
+      continue;
+    }
+    if (consecutiveWorkDays === 0) consecutiveWorkStart = date;
+    consecutiveWorkDays += 1;
+    if (consecutiveWorkDays > 6) {
       throw new Error(
-        `${Number(weekDates[0].slice(-2))}–${Number(weekDates[6].slice(-2))} 日這一週至少要選 2 天，才能自動安排例假與休假`,
+        `${Number(consecutiveWorkStart.slice(-2))}–${Number(date.slice(-2))} 日連續上班 ${consecutiveWorkDays} 天，最多只能連續上班 6 天`,
       );
     }
   }
