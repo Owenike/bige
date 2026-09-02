@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   collectCoachDayStatuses,
@@ -36,4 +37,11 @@ test("real late and off markers keep their explicit statuses", () => {
     { coach_id: "lily", status: "late", label: "晚班" },
     { coach_id: "bae", status: "off", label: "休假" },
   ]);
+});
+
+test("the temporary September time-off import never assigns blanket shift markers", () => {
+  const importer = readFileSync("scripts/sync-september-2026-coach-time-off.mjs", "utf8");
+
+  assert.doesNotMatch(importer, /temporary_coach_shift_import/);
+  assert.doesNotMatch(importer, /SHIFT_MARKER_BY_COACH/);
 });

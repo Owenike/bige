@@ -22,6 +22,7 @@ npx tsc `
   tests/bige-personal-month-schedule.test.ts `
   tests/bige-explicit-fa-stage.test.ts `
   tests/bige-course-status-window.test.ts `
+  tests/bige-coach-day-status.test.ts `
   tests/bige-coach-order.test.ts `
   tests/bige-schedule-drag.test.ts `
   tests/bige-schedule-permissions.test.ts `
@@ -71,6 +72,7 @@ npx tsc `
   lib/bige-line-schedule.ts `
   lib/bige-fitness.ts `
   lib/bige-course-status-window.ts `
+  lib/bige-coach-day-status.ts `
   lib/bige-coach-order.ts `
   lib/bige-schedule-drag.ts `
   lib/bige-schedule-permissions.ts `

@@ -66,6 +66,7 @@ import {
 } from "../../../lib/staff-organization";
 import {
   canCompleteBigeTrialOutcome,
+  canManageBigeLineNotifications,
   canManageBigeSchedule,
   canReorderBigeScheduleCoaches,
   canViewBigeScheduleActivity,
@@ -1298,15 +1299,16 @@ async function loadBigeOperationsDashboard(
     employeeNumber: context.employeeNumber,
   });
   const admin = createSupabaseAdminClient();
-  const canManageLineSchedules = canCreateBigeContract(context.employeeNumber);
-  const canScheduleLineBatch = isManager(context);
+  const canManageLineBindings = canCreateBigeContract(context.employeeNumber);
+  const canManageLineSchedules = canManageBigeLineNotifications(context);
+  const canScheduleLineBatch = canManageLineSchedules;
   const [
     lineBindingsResult,
     lineMembershipsResult,
     lineNotificationIssuesResult,
     walkInOperationsResult,
   ] = await Promise.all([
-    canManageLineSchedules
+    canManageLineBindings
       ? admin
           .from("bige_line_group_bindings")
           .select("id, member_id, group_name, verification_code, status, verified_at, last_seen_at")
@@ -1315,7 +1317,7 @@ async function loadBigeOperationsDashboard(
           .order("last_seen_at", { ascending: false })
           .limit(1000)
       : Promise.resolve({ data: [], error: null }),
-    canManageLineSchedules
+    canManageLineBindings
       ? admin
           .from("bige_line_group_binding_members")
           .select("binding_id, member_id")
@@ -2520,8 +2522,8 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "queue_line_schedule_batch") {
-    if (!isManager(operationContext)) {
-      return apiError(403, "FORBIDDEN", "只有主管帳號可以建立一次性 LINE 課表補發");
+    if (!canManageBigeLineNotifications(operationContext)) {
+      return apiError(403, "FORBIDDEN", "只有教練經理或副理可以建立一次性 LINE 課表補發");
     }
     const scheduledFor = new Date(input.scheduledFor);
     const now = new Date();
@@ -2629,8 +2631,8 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "retry_line_schedule_notification") {
-    if (!canCreateBigeContract(operationContext.employeeNumber)) {
-      return apiError(403, "FORBIDDEN", "目前帳號不能補送學員 LINE 課表通知");
+    if (!canManageBigeLineNotifications(operationContext)) {
+      return apiError(403, "FORBIDDEN", "只有教練經理或副理可以補送學員 LINE 課表通知");
     }
     const admin = createSupabaseAdminClient();
     const notificationResult = await admin

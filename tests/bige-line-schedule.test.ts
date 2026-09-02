@@ -299,13 +299,17 @@ test("one-time LINE batches are auditable, idempotent, and never become recurrin
   const regression = readFileSync("tests/bige_one_time_line_schedule_batch.sql", "utf8");
 
   assert.match(route, /input\.action === "queue_line_schedule_batch"/);
-  assert.match(route, /if \(!isManager\(operationContext\)\)/);
+  assert.match(route, /if \(!canManageBigeLineNotifications\(operationContext\)\)/);
   assert.match(route, /membersWithoutSchedules/);
   assert.match(route, /membersWithoutBindings/);
   assert.match(component, /一次性批次補發/);
   assert.match(component, /送出後不會建立每日或重複排程/);
   assert.match(component, /僅一次/);
   assert.match(component, /共用群組仍會依會員分開發送課表/);
+  assert.match(component, /tab === "schedule" &&[\s\S]{0,80}data\.canScheduleLineBatch \? \(/);
+  assert.doesNotMatch(component, /data\.canScheduleLineBatch \|\| lineScheduleNotificationIssues\.length/);
+  assert.match(route, /const canManageLineBindings = canCreateBigeContract\(context\.employeeNumber\)/);
+  assert.match(route, /const canManageLineSchedules = canManageBigeLineNotifications\(context\)/);
   assert.match(line, /bige_queue_line_schedule_notification_v3/);
   assert.match(line, /scheduleMonth: notification\.schedule_month/);
   assert.match(line, /isBigeLineScheduleDispatchDue/);

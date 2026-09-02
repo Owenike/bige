@@ -6922,8 +6922,7 @@ export default function BigeFitnessOperations({
           {data ? (
             <div className={styles.businessDayControls}>
               {tab === "schedule" &&
-              data.canCreateContract &&
-              (data.canScheduleLineBatch || lineScheduleNotificationIssues.length > 0) ? (
+              data.canScheduleLineBatch ? (
                 <button
                   className={styles.lineNotificationButton}
                   data-failed={String(failedLineScheduleNotificationCount > 0)}

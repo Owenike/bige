@@ -6,8 +6,6 @@ import { createClient } from "@supabase/supabase-js";
 
 export const IMPORT_SOURCE = "temporary_coach_leave_import";
 export const IMPORT_PREFIX = "temporary-coach-off:2026-09";
-export const SHIFT_IMPORT_SOURCE = "temporary_coach_shift_import";
-export const SHIFT_IMPORT_PREFIX = "temporary-coach-shift:2026-09";
 export const PERIOD_START = "2026-09-01";
 export const PERIOD_END = "2026-10-01";
 export const BUSINESS_CLOSURE_DATE = "2026-09-05";
@@ -25,17 +23,6 @@ export const TIME_OFF_DAYS_BY_COACH = Object.freeze({
   Owen: Object.freeze([4, 6, 29, 30]),
 });
 
-export const SHIFT_MARKER_BY_COACH = Object.freeze({
-  Becky: "晚",
-  Wade: "晚",
-  Wiwi: "晚",
-  Una: "早",
-  Hailey: "晚",
-  Lily: "晚",
-  Bae: "晚",
-  Owen: "晚",
-});
-
 const EXPECTED_COACHES = Object.freeze(Object.keys(TIME_OFF_DAYS_BY_COACH));
 
 const clean = (value) => String(value ?? "").trim();
@@ -49,20 +36,6 @@ export function expectedTimeOffPlan() {
       importRowKey: `${IMPORT_PREFIX}:${monthDate(day)}:${coach.toLowerCase()}`,
     })),
   );
-}
-
-export function expectedShiftStatusPlan() {
-  return EXPECTED_COACHES.flatMap((coach) => {
-    const timeOffDays = new Set(TIME_OFF_DAYS_BY_COACH[coach]);
-    return Array.from({ length: 30 }, (_, index) => index + 1)
-      .filter((day) => monthDate(day) !== BUSINESS_CLOSURE_DATE && !timeOffDays.has(day))
-      .map((day) => ({
-        coach,
-        date: monthDate(day),
-        marker: SHIFT_MARKER_BY_COACH[coach],
-        importRowKey: `${SHIFT_IMPORT_PREFIX}:${monthDate(day)}:${coach.toLowerCase()}`,
-      }));
-  });
 }
 
 export function buildTimeOffRows(context) {
@@ -83,29 +56,6 @@ export function buildTimeOffRows(context) {
         purpose: "pre_staff_schedule_integration_operational_display",
         sourceMonth: "2026-09",
         removalKey: IMPORT_PREFIX,
-      },
-    };
-  });
-}
-
-export function buildShiftStatusRows(context) {
-  return expectedShiftStatusPlan().map((item) => {
-    const coach = context.coaches.get(item.coach.toLowerCase());
-    if (!coach) throw new Error(`找不到教練帳號：${item.coach}`);
-    return {
-      tenant_id: context.tenantId,
-      branch_id: coach.branch_id || context.branchId,
-      coach_id: coach.id,
-      starts_at: `${item.date}T00:00:00+08:00`,
-      ends_at: `${item.date}T00:01:00+08:00`,
-      content: item.marker,
-      source: SHIFT_IMPORT_SOURCE,
-      import_row_key: item.importRowKey,
-      metadata: {
-        temporary: true,
-        purpose: "september_2026_operational_shift_display",
-        sourceMonth: "2026-09",
-        removalKey: SHIFT_IMPORT_PREFIX,
       },
     };
   });
@@ -198,7 +148,7 @@ async function resolveContext(supabase) {
 }
 
 async function readExistingState(supabase, context) {
-  const [notes, shiftNotes, businessDay, bookings, period, beckyPreferenceBackup] = await Promise.all([
+  const [notes, businessDay, bookings, period, beckyPreferenceBackup] = await Promise.all([
     requireData(
       supabase
         .from("bige_schedule_notes")
@@ -209,17 +159,6 @@ async function readExistingState(supabase, context) {
         .lt("starts_at", `${PERIOD_END}T00:00:00+08:00`)
         .like("import_row_key", `${IMPORT_PREFIX}:%`),
       "讀取既有臨時休假",
-    ),
-    requireData(
-      supabase
-        .from("bige_schedule_notes")
-        .select("id, coach_id, starts_at, ends_at, content, source, import_row_key, metadata")
-        .eq("tenant_id", context.tenantId)
-        .eq("source", SHIFT_IMPORT_SOURCE)
-        .gte("starts_at", `${PERIOD_START}T00:00:00+08:00`)
-        .lt("starts_at", `${PERIOD_END}T00:00:00+08:00`)
-        .like("import_row_key", `${SHIFT_IMPORT_PREFIX}:%`),
-      "讀取既有臨時班別",
     ),
     requireData(
       supabase
@@ -279,7 +218,6 @@ async function readExistingState(supabase, context) {
   if (!beckyPreference) throw new Error("找不到 Becky 主管後台自選紀錄");
   return {
     notes: notes || [],
-    shiftNotes: shiftNotes || [],
     businessDay: businessDay || null,
     bookings: bookings || [],
     period,
@@ -376,7 +314,6 @@ async function restoreBeckyManagerPreferenceDates(supabase, context, state) {
 
 async function applyPlan(supabase, context, state) {
   const rows = buildTimeOffRows(context);
-  const shiftRows = buildShiftStatusRows(context);
   const existingBusinessDay = state.businessDay;
   if (
     existingBusinessDay &&
@@ -419,44 +356,6 @@ async function applyPlan(supabase, context, state) {
     if (result.error) throw new Error(`清除過時臨時休假：${result.error.message}`);
   }
 
-  const existingShiftByKey = new Map(
-    state.shiftNotes.map((item) => [item.import_row_key, item]),
-  );
-  const desiredShiftKeys = new Set(shiftRows.map((row) => row.import_row_key));
-  const shiftInserts = shiftRows.filter((row) => !existingShiftByKey.has(row.import_row_key));
-  const shiftUpdates = shiftRows.filter((row) => existingShiftByKey.has(row.import_row_key));
-  const obsoleteShifts = state.shiftNotes.filter(
-    (row) => !desiredShiftKeys.has(row.import_row_key),
-  );
-
-  if (shiftInserts.length > 0) {
-    const result = await supabase.from("bige_schedule_notes").insert(shiftInserts).select("id");
-    if (result.error) throw new Error(`新增臨時班別：${result.error.message}`);
-  }
-  for (const row of shiftUpdates) {
-    const existing = existingShiftByKey.get(row.import_row_key);
-    const result = await supabase
-      .from("bige_schedule_notes")
-      .update({
-        branch_id: row.branch_id,
-        coach_id: row.coach_id,
-        starts_at: row.starts_at,
-        ends_at: row.ends_at,
-        content: row.content,
-        source: row.source,
-        metadata: row.metadata,
-      })
-      .eq("id", existing.id);
-    if (result.error) throw new Error(`更新臨時班別：${result.error.message}`);
-  }
-  if (obsoleteShifts.length > 0) {
-    const result = await supabase
-      .from("bige_schedule_notes")
-      .delete()
-      .in("id", obsoleteShifts.map((item) => item.id));
-    if (result.error) throw new Error(`清除過時臨時班別：${result.error.message}`);
-  }
-
   let closureOwnership = existingBusinessDay?.source === IMPORT_SOURCE ? "updated" : "preserved";
   if (!existingBusinessDay) {
     const result = await supabase.from("bige_business_day_settings").insert({
@@ -490,17 +389,12 @@ async function applyPlan(supabase, context, state) {
     state,
   );
 
-  await writeAudit(supabase, context, "temporary_september_2026_coach_schedule_import", {
+  await writeAudit(supabase, context, "temporary_september_2026_coach_leave_import", {
     importSource: IMPORT_SOURCE,
-    shiftImportSource: SHIFT_IMPORT_SOURCE,
     timeOffCount: rows.length,
-    shiftStatusCount: shiftRows.length,
     inserted: inserts.length,
     updated: updates.length,
     removed: obsolete.length,
-    shiftInserted: shiftInserts.length,
-    shiftUpdated: shiftUpdates.length,
-    shiftRemoved: obsoleteShifts.length,
     closureDate: BUSINESS_CLOSURE_DATE,
     closureOwnership,
     preservedBookingCount: state.bookings.length,
@@ -509,13 +403,9 @@ async function applyPlan(supabase, context, state) {
   });
   return {
     expected: rows.length,
-    expectedShiftStatuses: shiftRows.length,
     inserted: inserts.length,
     updated: updates.length,
     removed: obsolete.length,
-    shiftInserted: shiftInserts.length,
-    shiftUpdated: shiftUpdates.length,
-    shiftRemoved: obsoleteShifts.length,
     closureOwnership,
     preservedBookingCount: state.bookings.length,
     beckyManagerPreference,
@@ -535,13 +425,6 @@ async function rollbackPlan(supabase, context, state) {
       .in("id", state.notes.map((item) => item.id));
     if (result.error) throw new Error(`移除臨時休假：${result.error.message}`);
   }
-  if (state.shiftNotes.length > 0) {
-    const result = await supabase
-      .from("bige_schedule_notes")
-      .delete()
-      .in("id", state.shiftNotes.map((item) => item.id));
-    if (result.error) throw new Error(`移除臨時班別：${result.error.message}`);
-  }
   let closureRemoved = false;
   if (state.businessDay?.source === IMPORT_SOURCE) {
     const result = await supabase
@@ -551,31 +434,20 @@ async function rollbackPlan(supabase, context, state) {
     if (result.error) throw new Error(`移除臨時館休：${result.error.message}`);
     closureRemoved = true;
   }
-  await writeAudit(supabase, context, "temporary_september_2026_coach_schedule_removed", {
+  await writeAudit(supabase, context, "temporary_september_2026_coach_leave_removed", {
     importSource: IMPORT_SOURCE,
-    shiftImportSource: SHIFT_IMPORT_SOURCE,
     removedTimeOffCount: state.notes.length,
-    removedShiftStatusCount: state.shiftNotes.length,
     closureDate: BUSINESS_CLOSURE_DATE,
     closureRemoved,
     restoredBeckyManagerPreferenceDates: beckyManagerPreference.restoredDates,
   });
-  return {
-    removedTimeOffCount: state.notes.length,
-    removedShiftStatusCount: state.shiftNotes.length,
-    closureRemoved,
-    beckyManagerPreference,
-  };
+  return { removedTimeOffCount: state.notes.length, closureRemoved, beckyManagerPreference };
 }
 
 async function verifyAppliedPlan(supabase, context) {
   const state = await readExistingState(supabase, context);
   const desiredRows = buildTimeOffRows(context);
-  const desiredShiftRows = buildShiftStatusRows(context);
   const desiredByKey = new Map(desiredRows.map((row) => [row.import_row_key, row]));
-  const desiredShiftByKey = new Map(
-    desiredShiftRows.map((row) => [row.import_row_key, row]),
-  );
   const errors = state.notes.filter((row) => {
     const desired = desiredByKey.get(row.import_row_key);
     return (
@@ -583,17 +455,6 @@ async function verifyAppliedPlan(supabase, context) {
       row.coach_id !== desired.coach_id ||
       row.content !== "休" ||
       row.source !== IMPORT_SOURCE ||
-      new Date(row.starts_at).toISOString() !== new Date(desired.starts_at).toISOString() ||
-      new Date(row.ends_at).toISOString() !== new Date(desired.ends_at).toISOString()
-    );
-  });
-  const shiftErrors = state.shiftNotes.filter((row) => {
-    const desired = desiredShiftByKey.get(row.import_row_key);
-    return (
-      !desired ||
-      row.coach_id !== desired.coach_id ||
-      row.content !== desired.content ||
-      row.source !== SHIFT_IMPORT_SOURCE ||
       new Date(row.starts_at).toISOString() !== new Date(desired.starts_at).toISOString() ||
       new Date(row.ends_at).toISOString() !== new Date(desired.ends_at).toISOString()
     );
@@ -607,21 +468,16 @@ async function verifyAppliedPlan(supabase, context) {
   if (
     state.notes.length !== desiredRows.length ||
     errors.length > 0 ||
-    state.shiftNotes.length !== desiredShiftRows.length ||
-    shiftErrors.length > 0 ||
     !closureOk ||
     !beckyManagerPreferenceOk
   ) {
     throw new Error(
-      `正式資料驗證失敗：timeOffLive=${state.notes.length}, timeOffDesired=${desiredRows.length}, timeOffErrors=${errors.length}, shiftLive=${state.shiftNotes.length}, shiftDesired=${desiredShiftRows.length}, shiftErrors=${shiftErrors.length}, closure=${closureOk}, beckyManagerPreference=${beckyManagerPreferenceOk}`,
+      `正式資料驗證失敗：live=${state.notes.length}, desired=${desiredRows.length}, errors=${errors.length}, closure=${closureOk}, beckyManagerPreference=${beckyManagerPreferenceOk}`,
     );
   }
   return {
     ok: true,
     timeOffCount: state.notes.length,
-    shiftStatusCount: state.shiftNotes.length,
-    earlyShiftCount: state.shiftNotes.filter((row) => row.content === "早").length,
-    lateShiftCount: state.shiftNotes.filter((row) => row.content === "晚").length,
     closureDate: BUSINESS_CLOSURE_DATE,
     closureOk,
     preservedBookingCount: state.bookings.length,
@@ -636,20 +492,14 @@ async function verifyRolledBackPlan(supabase, context) {
   const currentDates = selfSelectedPreferenceDates(state.beckyPreference);
   const preferenceRestored =
     backupDates.length === 0 || JSON.stringify(currentDates) === JSON.stringify(backupDates);
-  if (
-    state.notes.length > 0 ||
-    state.shiftNotes.length > 0 ||
-    state.businessDay?.source === IMPORT_SOURCE ||
-    !preferenceRestored
-  ) {
+  if (state.notes.length > 0 || state.businessDay?.source === IMPORT_SOURCE || !preferenceRestored) {
     throw new Error(
-      `臨時資料移除驗證失敗：timeOffNotes=${state.notes.length}, shiftNotes=${state.shiftNotes.length}, closureOwned=${state.businessDay?.source === IMPORT_SOURCE}, beckyPreferenceRestored=${preferenceRestored}`,
+      `臨時資料移除驗證失敗：notes=${state.notes.length}, closureOwned=${state.businessDay?.source === IMPORT_SOURCE}, beckyPreferenceRestored=${preferenceRestored}`,
     );
   }
   return {
     ok: true,
     timeOffCount: 0,
-    shiftStatusCount: 0,
     closureOwned: false,
     beckyManagerPreferenceRestored: preferenceRestored,
     beckyManagerPreferenceDateCount: currentDates.length,
@@ -659,7 +509,6 @@ async function verifyRolledBackPlan(supabase, context) {
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const plan = expectedTimeOffPlan();
-  const shiftPlan = expectedShiftStatusPlan();
   const summary = Object.fromEntries(
     EXPECTED_COACHES.map((coach) => [coach, TIME_OFF_DAYS_BY_COACH[coach].length]),
   );
@@ -669,9 +518,6 @@ export async function main(argv = process.argv.slice(2)) {
         mode: args.rollback ? "rollback" : args.apply ? "apply" : "dry-run",
         month: "2026-09",
         timeOffCount: plan.length,
-        shiftStatusCount: shiftPlan.length,
-        earlyShiftCount: shiftPlan.filter((item) => item.marker === "早").length,
-        lateShiftCount: shiftPlan.filter((item) => item.marker === "晚").length,
         countsByCoach: summary,
         closureDate: BUSINESS_CLOSURE_DATE,
         cancelBeckyManagerPreferenceDates: true,
@@ -691,7 +537,6 @@ export async function main(argv = process.argv.slice(2)) {
         preflight: {
           matchedCoaches: context.coaches.size,
           existingTemporaryNotes: state.notes.length,
-          existingTemporaryShiftNotes: state.shiftNotes.length,
           existingBusinessDay: state.businessDay,
           preservedBookingCount: state.bookings.length,
           beckyManagerPreferenceStatus: state.beckyPreference.status,

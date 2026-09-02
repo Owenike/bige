@@ -2,11 +2,55 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   canCompleteBigeTrialOutcome,
+  canManageBigeLineNotifications,
   canManageBigeSchedule,
   canReorderBigeScheduleCoaches,
   canViewBigeScheduleActivity,
   normalizeEmployeeNumber,
 } from "../lib/bige-schedule-permissions";
+
+test("only coaching managers and assistant managers can manage LINE notifications", () => {
+  assert.equal(
+    canManageBigeLineNotifications({
+      role: "manager",
+      department: "coaching",
+      position: "coach_manager",
+    }),
+    true,
+  );
+  assert.equal(
+    canManageBigeLineNotifications({
+      role: "supervisor",
+      department: "coaching",
+      position: "coach_assistant_manager",
+    }),
+    true,
+  );
+  assert.equal(
+    canManageBigeLineNotifications({
+      role: "platform_admin",
+      department: null,
+      position: null,
+    }),
+    false,
+  );
+  assert.equal(
+    canManageBigeLineNotifications({
+      role: "coach",
+      department: "coaching",
+      position: "coach_team_lead",
+    }),
+    false,
+  );
+  assert.equal(
+    canManageBigeLineNotifications({
+      role: "manager",
+      department: "general_affairs",
+      position: "general_affairs_manager",
+    }),
+    false,
+  );
+});
 
 test("platform admins, coaching managers, and assistant managers can reorder coach columns", () => {
   assert.equal(

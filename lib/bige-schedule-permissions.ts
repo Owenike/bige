@@ -89,6 +89,13 @@ export function canViewBigeScheduleActivity(actor: SchedulePermissionActor) {
   return !actor.department && !actor.position && LEGACY_ACTIVITY_VIEWER_ROLES.has(actor.role);
 }
 
+export function canManageBigeLineNotifications(actor: SchedulePermissionActor) {
+  return (
+    actor.department === "coaching" &&
+    (actor.position === "coach_manager" || actor.position === "coach_assistant_manager")
+  );
+}
+
 export function isExplicitFrontdeskScheduleManager(actor: SchedulePermissionActor) {
   return normalizeEmployeeNumber(actor.employeeNumber) === "E000006";
 }

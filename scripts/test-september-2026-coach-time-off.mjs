@@ -3,13 +3,8 @@ import {
   BUSINESS_CLOSURE_DATE,
   IMPORT_PREFIX,
   IMPORT_SOURCE,
-  SHIFT_IMPORT_PREFIX,
-  SHIFT_IMPORT_SOURCE,
-  SHIFT_MARKER_BY_COACH,
   TIME_OFF_DAYS_BY_COACH,
-  buildShiftStatusRows,
   buildTimeOffRows,
-  expectedShiftStatusPlan,
   expectedTimeOffPlan,
   selfSelectedPreferenceDates,
 } from "./sync-september-2026-coach-time-off.mjs";
@@ -26,16 +21,6 @@ const expectedDays = {
 };
 
 assert.deepEqual(TIME_OFF_DAYS_BY_COACH, expectedDays);
-assert.deepEqual(SHIFT_MARKER_BY_COACH, {
-  Becky: "晚",
-  Wade: "晚",
-  Wiwi: "晚",
-  Una: "早",
-  Hailey: "晚",
-  Lily: "晚",
-  Bae: "晚",
-  Owen: "晚",
-});
 assert.equal(BUSINESS_CLOSURE_DATE, "2026-09-05");
 
 const plan = expectedTimeOffPlan();
@@ -66,41 +51,6 @@ assert.equal(rows.every((row) => row.starts_at.endsWith("T00:00:00+08:00")), tru
 assert.equal(rows.every((row) => row.ends_at.endsWith("T00:01:00+08:00")), true);
 assert.equal(rows.every((row) => row.metadata.temporary === true), true);
 assert.equal(rows.every((row) => row.metadata.removalKey === IMPORT_PREFIX), true);
-
-const shiftPlan = expectedShiftStatusPlan();
-assert.equal(shiftPlan.length, 165);
-assert.equal(new Set(shiftPlan.map((item) => item.importRowKey)).size, 165);
-assert.equal(shiftPlan.some((item) => item.date === BUSINESS_CLOSURE_DATE), false);
-assert.equal(
-  shiftPlan.some(
-    (item) => TIME_OFF_DAYS_BY_COACH[item.coach].includes(Number(item.date.slice(-2))),
-  ),
-  false,
-);
-assert.equal(shiftPlan.filter((item) => item.marker === "早").length, 22);
-assert.equal(shiftPlan.filter((item) => item.marker === "晚").length, 143);
-assert.deepEqual(
-  shiftPlan.filter((item) => item.coach === "Una").map((item) => item.marker),
-  Array(22).fill("早"),
-);
-
-const shiftRows = buildShiftStatusRows({
-  tenantId: "tenant-1",
-  branchId: "branch-1",
-  coaches,
-});
-assert.equal(shiftRows.length, 165);
-assert.equal(shiftRows.every((row) => row.source === SHIFT_IMPORT_SOURCE), true);
-assert.equal(
-  shiftRows.every((row) => row.import_row_key.startsWith(`${SHIFT_IMPORT_PREFIX}:`)),
-  true,
-);
-assert.equal(shiftRows.every((row) => row.content === "早" || row.content === "晚"), true);
-assert.equal(shiftRows.every((row) => row.metadata.temporary === true), true);
-assert.equal(
-  shiftRows.every((row) => row.metadata.removalKey === SHIFT_IMPORT_PREFIX),
-  true,
-);
 
 assert.deepEqual(
   selfSelectedPreferenceDates({
