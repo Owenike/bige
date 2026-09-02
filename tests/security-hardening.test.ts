@@ -125,9 +125,22 @@ test("every route receives the baseline browser security headers", () => {
   const configSource = readFileSync("next.config.js", "utf8");
   assert.match(configSource, /poweredByHeader:\s*false/);
   assert.match(configSource, /Content-Security-Policy/);
-  assert.match(configSource, /frame-ancestors 'none'/);
+  assert.match(configSource, /frame-ancestors 'self'/);
+  assert.doesNotMatch(configSource, /frame-ancestors 'none'/);
+  assert.match(configSource, /frame-src 'self'/);
+  assert.match(configSource, /X-Frame-Options[\s\S]*SAMEORIGIN/);
   assert.match(configSource, /NODE_ENV === "development" \? " 'unsafe-eval'" : ""/);
   assert.match(configSource, /X-Content-Type-Options[\s\S]*nosniff/);
   assert.match(configSource, /Permissions-Policy/);
   assert.match(configSource, /source:\s*"\/:path\*"/);
+});
+
+test("same-origin staff management iframe stays compatible with clickjacking protection", () => {
+  const operations = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const configSource = readFileSync("next.config.js", "utf8");
+
+  assert.match(operations, /<iframe[\s\S]*src="\/manager\/staff"[\s\S]*title="員工帳號管理"/);
+  assert.match(configSource, /frame-ancestors 'self'/);
+  assert.match(configSource, /frame-src 'self'/);
+  assert.match(configSource, /X-Frame-Options[\s\S]*SAMEORIGIN/);
 });
