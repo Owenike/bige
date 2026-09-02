@@ -973,6 +973,35 @@ test("all valid employee accounts including 06 may create a BIG E contract", () 
   assert.equal(canCreateBigeContract("member"), false);
 });
 
+test("database contract chain does not retain the legacy employee 06 block", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260902142421_allow_employee_06_contract_payment.sql",
+    "utf8",
+  );
+
+  assert.match(
+    migration,
+    /public\.bige_create_member_contract_v2\(uuid,uuid,uuid,uuid,text,text,date,text,boolean,text,uuid,jsonb,date,text,bigint,text,jsonb,text\)/,
+  );
+  assert.match(
+    migration,
+    /forbidden_guard constant text :=[\s\S]*upper\(actor\.employee_number\) = 'E000006' then/,
+  );
+  assert.match(
+    migration,
+    /execute replace\(function_definition, forbidden_guard, allowed_guard\)/,
+  );
+  assert.match(
+    migration,
+    /upper\(actor\.employee_number\) !~ '\^E\[0-9\]\{6\}\$'/,
+  );
+  assert.match(migration, /bige_create_member_contract_v2_not_found/);
+  assert.match(
+    migration,
+    /bige_create_member_contract_v2_employee_06_guard_still_present/,
+  );
+});
+
 test("FA completion requires an explicit converted or not-converted path", () => {
   const bookingId = "00000000-0000-4000-8000-000000000001";
   assert.equal(
