@@ -36,6 +36,7 @@ type TrialBookingContactLog = {
 type TrialBookingRow = {
   id: string;
   created_at: string;
+  scheduled_at: string | null;
   name: string;
   phone: string;
   birthday: string | null;
@@ -1483,6 +1484,7 @@ export default function TrialBookingsAdminPage() {
                                   <h3>其他資訊</h3>
                                   <dl>
                                     <div><dt>來源</dt><dd>{sourceLabels[bookingSource]}</dd></div>
+                                    {workflowGroup === "marketing_report" ? <div><dt>預約單送出時間</dt><dd>{formatDateTime(booking.scheduled_at)}</dd></div> : null}
                                     <div><dt>建立時間</dt><dd>{formatDateTime(booking.created_at)}</dd></div>
                                     <div><dt>最後更新</dt><dd>{formatDateTime(booking.updated_at)}</dd></div>
                                     <div><dt>LINE 通知</dt><dd>{lineStatusLabels[lineStatus(booking)]}</dd></div>
@@ -1549,6 +1551,7 @@ export default function TrialBookingsAdminPage() {
                           <div><dt>預約教練</dt><dd>{booking.booking_coach || "-"}</dd></div>
                           <div><dt>執行教練</dt><dd>{booking.executing_coach || "-"}</dd></div>
                           <div><dt>來源</dt><dd>{sourceLabels[bookingSource]}</dd></div>
+                          {workflowGroup === "marketing_report" ? <div><dt>預約單送出時間</dt><dd>{formatDateTime(booking.scheduled_at)}</dd></div> : null}
                           <div><dt>建立時間</dt><dd>{formatDateTime(booking.created_at)}</dd></div>
                           <div><dt>LINE</dt><dd>{lineStatusLabels[lineStatus(booking)]}</dd></div>
                           <div className="trialAdminMobilePayment"><dt>付款資訊</dt><dd>{renderPaymentManagement(booking)}</dd></div>

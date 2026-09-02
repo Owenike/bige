@@ -208,7 +208,7 @@ function nextDateInputValue(value: string) {
   return nextDate.toISOString().slice(0, 10);
 }
 
-function updatedAtRange(fromDate: string | null, toDate: string | null) {
+function dateTimeRange(fromDate: string | null, toDate: string | null) {
   if (!fromDate || !toDate || !dateInputPattern.test(fromDate) || !dateInputPattern.test(toDate) || fromDate > toDate) {
     return null;
   }
@@ -223,7 +223,7 @@ async function loadStats(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   fromDate: string | null,
   toDate: string | null,
-  dateBasis: "appointment_date" | "updated_at",
+  dateBasis: "appointment_date" | "scheduled_at",
 ) {
   if (!fromDate || !toDate || !dateInputPattern.test(fromDate) || !dateInputPattern.test(toDate) || fromDate > toDate) {
     return emptyStats();
@@ -235,12 +235,13 @@ async function loadStats(
     .not("appointment_date", "is", null)
     .in("booking_status", arrangedBookingStatuses);
 
-  const marketingRange = dateBasis === "updated_at" ? updatedAtRange(fromDate, toDate) : null;
-  if (dateBasis === "updated_at") {
+  const marketingRange = dateBasis === "scheduled_at" ? dateTimeRange(fromDate, toDate) : null;
+  if (dateBasis === "scheduled_at") {
     if (!marketingRange) return emptyStats();
     query = query
-      .gte("updated_at", marketingRange.fromInclusive)
-      .lt("updated_at", marketingRange.toExclusive);
+      .neq("source", "legacy_schedule_import")
+      .gte("scheduled_at", marketingRange.fromInclusive)
+      .lt("scheduled_at", marketingRange.toExclusive);
   } else {
     query = query
       .gte("appointment_date", fromDate)
@@ -268,7 +269,6 @@ async function loadStats(
   stats.websiteRegistration = websiteRegistrationResult.count || 0;
   for (const row of result.data || []) {
     const source = typeof row.source === "string" ? row.source : "website";
-    if (dateBasis === "updated_at" && source === "legacy_schedule_import") continue;
     stats.total += 1;
     if (source === "official_line") stats.officialLine += 1;
     else if (source === "walk_in") stats.walkIn += 1;
@@ -305,19 +305,20 @@ export async function GET(request: Request) {
       .neq("booking_status", "cancelled");
 
     query = isMarketingReport
-      ? query.order("updated_at", { ascending: false })
+      ? query.order("scheduled_at", { ascending: false })
       : query.order("created_at", { ascending: false });
 
     query = query.limit(500);
 
     if (isMarketingReport) {
-      const range = updatedAtRange(statsFrom, statsTo);
+      const range = dateTimeRange(statsFrom, statsTo);
       query = query
+        .neq("source", "legacy_schedule_import")
         .not("appointment_date", "is", null)
         .in("booking_status", arrangedBookingStatuses);
 
       query = range
-        ? query.gte("updated_at", range.fromInclusive).lt("updated_at", range.toExclusive)
+        ? query.gte("scheduled_at", range.fromInclusive).lt("scheduled_at", range.toExclusive)
         : query.eq("id", "00000000-0000-0000-0000-000000000000");
     }
 
@@ -343,7 +344,7 @@ export async function GET(request: Request) {
 
     const [result, stats, coachesResult] = await Promise.all([
       query,
-      loadStats(admin, statsFrom, statsTo, isMarketingReport ? "updated_at" : "appointment_date"),
+      loadStats(admin, statsFrom, statsTo, isMarketingReport ? "scheduled_at" : "appointment_date"),
       coachesQuery,
     ]);
 

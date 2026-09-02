@@ -54,6 +54,12 @@ Query params:
 - `statsTo`: `YYYY-MM-DD`
 - `q`: searches `name`, `phone`, and `line_name`; trimmed and capped at 80 characters
 
+When `workflowGroup=marketing_report`, `statsFrom` and `statsTo` filter arranged appointments by
+`scheduled_at`, the first time staff completed and submitted the appointment details. Later payment,
+note, status, or reschedule updates do not move an appointment into another reporting period. The
+`websiteRegistration` total remains based on the public website lead's `created_at` timestamp. Legacy
+schedule imports are excluded because they were not submitted through the appointment form.
+
 Success response:
 
 ```json

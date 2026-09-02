@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const page = readFileSync("app/admin/trial-bookings/page.tsx", "utf8");
+const trialBookingRoute = readFileSync("app/api/admin/trial-bookings/route.ts", "utf8");
 const staffFitnessRoute = readFileSync("app/staff/fitness/route.ts", "utf8");
 const staffScheduleSelfService = readFileSync("components/staff-schedule-self-service.tsx", "utf8");
 const fitnessOperations = readFileSync("components/bige-fitness-operations.tsx", "utf8");
@@ -72,4 +73,35 @@ test("daily schedule link stays left-aligned on wide layouts and follows the sha
     styles,
     /@media \(max-width: 900px\)\{[\s\S]*?\.trialAdminButton\{\s*width:\s*100%;\s*\}/,
   );
+});
+
+test("marketing report uses the first submitted appointment time instead of later record updates", () => {
+  const loadStatsStart = trialBookingRoute.indexOf("async function loadStats");
+  const getHandlerStart = trialBookingRoute.indexOf("export async function GET");
+  const postHandlerStart = trialBookingRoute.indexOf("export async function POST");
+  assert.notEqual(loadStatsStart, -1);
+  assert.notEqual(getHandlerStart, -1);
+  assert.notEqual(postHandlerStart, -1);
+
+  const loadStats = trialBookingRoute.slice(loadStatsStart, getHandlerStart);
+  const getHandler = trialBookingRoute.slice(getHandlerStart, postHandlerStart);
+
+  assert.match(loadStats, /dateBasis: "appointment_date" \| "scheduled_at"/);
+  assert.match(loadStats, /\.neq\("source", "legacy_schedule_import"\)[\s\S]*?\.gte\("scheduled_at", marketingRange\.fromInclusive\)[\s\S]*?\.lt\("scheduled_at", marketingRange\.toExclusive\)/);
+  assert.doesNotMatch(loadStats, /\.gte\("updated_at"|\.lt\("updated_at"/);
+  assert.match(getHandler, /query\.order\("scheduled_at", \{ ascending: false \}\)/);
+  assert.match(getHandler, /\.neq\("source", "legacy_schedule_import"\)[\s\S]*?\.not\("appointment_date", "is", null\)/);
+  assert.match(getHandler, /query\.gte\("scheduled_at", range\.fromInclusive\)\.lt\("scheduled_at", range\.toExclusive\)/);
+  assert.match(getHandler, /isMarketingReport \? "scheduled_at" : "appointment_date"/);
+  assert.doesNotMatch(getHandler, /query\.gte\("updated_at"|query\.lt\("updated_at"/);
+});
+
+test("marketing report keeps website registrations on lead creation time and shows appointment submission time", () => {
+  assert.match(
+    trialBookingRoute,
+    /\.eq\("source", "website"\)[\s\S]*?\.gte\("created_at", marketingRange\.fromInclusive\)[\s\S]*?\.lt\("created_at", marketingRange\.toExclusive\)/,
+  );
+  assert.match(page, /scheduled_at: string \| null/);
+  assert.equal(page.match(/預約單送出時間/g)?.length, 2);
+  assert.equal(page.match(/formatDateTime\(booking\.scheduled_at\)/g)?.length, 2);
 });
