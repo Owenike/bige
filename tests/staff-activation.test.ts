@@ -13,6 +13,11 @@ import {
   staffActivationCodeHash,
   staffActivationExpiresAt,
 } from "../lib/staff-activation";
+import {
+  archivedStudentCheckinAppMetadata,
+  isStudentCheckinMergeMetadata,
+  studentCheckinArchivedEmail,
+} from "../lib/staff-email-merge";
 
 test("activation codes are eight numeric digits", () => {
   for (let index = 0; index < 50; index += 1) {
@@ -148,18 +153,68 @@ test("staff email conflicts record the conflicting Auth user without logging the
     "utf8",
   );
 
-  assert.match(routeSource, /async function findConflictingEmailUserId/);
-  assert.match(routeSource, /if \(conflictingUser\) return conflictingUser\.id/);
+  assert.match(routeSource, /findConflictingEmailUser/);
+  assert.match(routeSource, /loadStudentCheckinMergeCandidate/);
   assert.match(routeSource, /action: "staff_email_conflict_detected"/);
-  assert.match(routeSource, /target_id: conflictingUserId/);
+  assert.match(routeSource, /target_id: conflictingUser\.id/);
   assert.match(routeSource, /reason: "auth_email_owned_by_another_user"/);
 
   const diagnosticStart = routeSource.indexOf('action: "staff_email_conflict_detected"');
   const rejectionStart = routeSource.indexOf(
-    'return NextResponse.json({ error: "此 Email 已由其他帳號使用" }',
+    '"此 Email 已由其他帳號使用"',
     diagnosticStart,
   );
   assert.ok(diagnosticStart >= 0 && rejectionStart > diagnosticStart);
   const diagnosticBlock = routeSource.slice(diagnosticStart, rejectionStart);
   assert.doesNotMatch(diagnosticBlock, /(?:^|[\s,{])email\s*[:,]/i);
+});
+
+test("verified student check-in Auth conflicts are archived for a staff merge", () => {
+  assert.equal(
+    isStudentCheckinMergeMetadata({
+      account_type: "student_checkin",
+      registration_id: "registration-1",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentCheckinMergeMetadata({
+      account_type: "member",
+      registration_id: "registration-1",
+    }),
+    false,
+  );
+  assert.equal(isStudentCheckinMergeMetadata({ account_type: "student_checkin" }), false);
+  assert.equal(
+    studentCheckinArchivedEmail("F13A86B7-1F83-416B-A24D-65D7357FF40B"),
+    "student-checkin-archived-f13a86b71f83@staff.bigefitness.invalid",
+  );
+  assert.deepEqual(
+    archivedStudentCheckinAppMetadata(
+      {
+        provider: "email",
+        account_type: "student_checkin",
+        registration_id: "registration-1",
+        entry_mode: "autonomous",
+      },
+      "staff-user-1",
+    ),
+    {
+      provider: "email",
+      account_type: "student_checkin_archived",
+      archived_into_user_id: "staff-user-1",
+    },
+  );
+});
+
+test("staff email confirmation only merges an eligible activation conflict", () => {
+  const routeSource = readFileSync(
+    resolve(process.cwd(), "app/api/auth/staff-email/confirm/route.ts"),
+    "utf8",
+  );
+
+  assert.match(routeSource, /!isAccountEmailChange[\s\S]*loadStudentCheckinMergeCandidate/);
+  assert.match(routeSource, /mergeStudentCheckinAuthAccount/);
+  assert.match(routeSource, /action: "staff_student_checkin_account_merged"/);
+  assert.match(routeSource, /reason: "verified_staff_email_claim"/);
 });

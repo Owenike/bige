@@ -9,6 +9,10 @@ import {
   canUseStaffAccountSettings,
   isStaffPlaceholderEmail,
 } from "../../../../../lib/staff-credentials";
+import {
+  findConflictingEmailUser,
+  loadStudentCheckinMergeCandidate,
+} from "../../../../../lib/staff-email-merge";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 
 const STAFF_ROLES = [
@@ -42,23 +46,6 @@ function tokenHash(raw: string) {
 function resolveCanonicalAppUrl(request: Request) {
   const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
   return (configured || new URL(request.url).origin).replace(/\/+$/, "");
-}
-
-async function findConflictingEmailUserId(email: string, currentUserId: string) {
-  const admin = createSupabaseAdminClient();
-  for (let page = 1; page <= 20; page += 1) {
-    const result = await admin.auth.admin.listUsers({ page, perPage: 200 });
-    if (result.error) throw result.error;
-    const users = result.data.users || [];
-    const conflictingUser = users.find(
-      (user) =>
-        user.id !== currentUserId &&
-        (user.email || "").trim().toLowerCase() === email,
-    );
-    if (conflictingUser) return conflictingUser.id;
-    if (users.length < 200) return null;
-  }
-  return null;
 }
 
 export async function POST(request: Request) {
@@ -137,49 +124,82 @@ export async function POST(request: Request) {
   }
 
   try {
-    const conflictingUserId = await findConflictingEmailUserId(
+    const conflictingUser = await findConflictingEmailUser(
+      admin,
       email,
       auth.context.userId,
     );
-    if (conflictingUserId) {
+    if (conflictingUser) {
       const conflictMode = isAccountEmailChange ? "email_change" : "activation";
-      logEvent("warn", {
-        type: "http",
-        action: "staff_email_conflict_detected",
-        ...base,
-        status: 409,
-        userId: auth.context.userId,
-        employeeNumber: profile.employee_number,
-        conflictingUserId,
-        mode: conflictMode,
-      });
-      const conflictAudit = await admin.from("audit_logs").insert({
-        tenant_id: profile.tenant_id,
-        actor_id: auth.context.userId,
-        action: "staff_email_conflict_detected",
-        target_type: "auth_user",
-        target_id: conflictingUserId,
-        reason: "auth_email_owned_by_another_user",
-        payload: {
-          requesterEmployeeNumber: profile.employee_number,
+      const mergeCandidate = !isAccountEmailChange
+        ? await loadStudentCheckinMergeCandidate(
+            admin,
+            conflictingUser,
+            auth.context.userId,
+            email,
+          )
+        : null;
+      if (mergeCandidate) {
+        logEvent("info", {
+          type: "http",
+          action: "staff_email_student_checkin_merge_eligible",
+          ...base,
+          status: 200,
+          userId: auth.context.userId,
+          employeeNumber: profile.employee_number,
+          conflictingUserId: conflictingUser.id,
           mode: conflictMode,
-        },
-      });
-      if (conflictAudit.error) {
+        });
+      } else {
         logEvent("warn", {
           type: "http",
-          action: "staff_email_conflict_audit_failed",
+          action: "staff_email_conflict_detected",
           ...base,
-          status: 500,
+          status: 409,
           userId: auth.context.userId,
-          error: conflictAudit.error.message,
+          employeeNumber: profile.employee_number,
+          conflictingUserId: conflictingUser.id,
+          mode: conflictMode,
         });
+        const conflictAudit = await admin.from("audit_logs").insert({
+          tenant_id: profile.tenant_id,
+          actor_id: auth.context.userId,
+          action: "staff_email_conflict_detected",
+          target_type: "auth_user",
+          target_id: conflictingUser.id,
+          reason: "auth_email_owned_by_another_user",
+          payload: {
+            requesterEmployeeNumber: profile.employee_number,
+            mode: conflictMode,
+          },
+        });
+        if (conflictAudit.error) {
+          logEvent("warn", {
+            type: "http",
+            action: "staff_email_conflict_audit_failed",
+            ...base,
+            status: 500,
+            userId: auth.context.userId,
+            error: conflictAudit.error.message,
+          });
+        }
+        return NextResponse.json(
+          { error: "此 Email 已由其他帳號使用" },
+          { status: 409 },
+        );
       }
-      return NextResponse.json({ error: "此 Email 已由其他帳號使用" }, { status: 409 });
     }
   } catch (error) {
+    logEvent("warn", {
+      type: "http",
+      action: "staff_email_conflict_check_failed",
+      ...base,
+      status: 500,
+      userId: auth.context.userId,
+      error: error instanceof Error ? error.message : "unknown_error",
+    });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "檢查 Email 失敗" },
+      { error: "檢查 Email 失敗，請稍後再試" },
       { status: 500 },
     );
   }

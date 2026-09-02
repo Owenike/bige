@@ -1,33 +1,19 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
-import { httpLogBase } from "../../../../../lib/observability";
+import { httpLogBase, logEvent } from "../../../../../lib/observability";
 import { rateLimitShared } from "../../../../../lib/rate-limit";
 import { canUseStaffAccountSettings } from "../../../../../lib/staff-credentials";
+import {
+  findConflictingEmailUser,
+  loadStudentCheckinMergeCandidate,
+  mergeStudentCheckinAuthAccount,
+  type StudentCheckinMergeResult,
+} from "../../../../../lib/staff-email-merge";
 import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
 
 function tokenHash(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
-}
-
-async function emailBelongsToAnotherUser(email: string, currentUserId: string) {
-  const admin = createSupabaseAdminClient();
-  for (let page = 1; page <= 20; page += 1) {
-    const result = await admin.auth.admin.listUsers({ page, perPage: 200 });
-    if (result.error) throw result.error;
-    const users = result.data.users || [];
-    if (
-      users.some(
-        (user) =>
-          user.id !== currentUserId &&
-          (user.email || "").trim().toLowerCase() === email,
-      )
-    ) {
-      return true;
-    }
-    if (users.length < 200) return false;
-  }
-  return false;
 }
 
 export async function POST(request: Request) {
@@ -104,32 +90,84 @@ export async function POST(request: Request) {
     );
   }
   const previousEmail = currentUserResult.data.user.email?.trim().toLowerCase() || null;
+  let studentMerge: StudentCheckinMergeResult | null = null;
 
   try {
-    if (await emailBelongsToAnotherUser(tokenRow.email, tokenRow.profile_id)) {
-      return NextResponse.json({ error: "此 Email 已由其他帳號使用" }, { status: 409 });
+    const conflictingUser = await findConflictingEmailUser(
+      admin,
+      tokenRow.email,
+      tokenRow.profile_id,
+    );
+    if (conflictingUser) {
+      const mergeCandidate = !isAccountEmailChange
+        ? await loadStudentCheckinMergeCandidate(
+            admin,
+            conflictingUser,
+            tokenRow.profile_id,
+            tokenRow.email,
+          )
+        : null;
+      if (!mergeCandidate) {
+        return NextResponse.json({ error: "此 Email 已由其他帳號使用" }, { status: 409 });
+      }
+      studentMerge = await mergeStudentCheckinAuthAccount(
+        admin,
+        mergeCandidate,
+        tokenRow.profile_id,
+        tokenRow.email,
+      );
+      logEvent("info", {
+        type: "http",
+        action: "staff_email_student_checkin_account_merged",
+        ...base,
+        status: 200,
+        userId: tokenRow.profile_id,
+        conflictingUserId: studentMerge.sourceUserId,
+        studentProfileId: studentMerge.studentProfileId,
+      });
+      if (studentMerge.sourceBanError) {
+        logEvent("warn", {
+          type: "http",
+          action: "staff_email_student_checkin_archive_ban_failed",
+          ...base,
+          status: 500,
+          userId: tokenRow.profile_id,
+          conflictingUserId: studentMerge.sourceUserId,
+          error: studentMerge.sourceBanError,
+        });
+      }
     }
   } catch (error) {
     await admin
       .from("staff_email_verification_tokens")
       .update({ used_at: null })
       .eq("id", tokenRow.id);
+    logEvent("warn", {
+      type: "http",
+      action: "staff_email_student_checkin_merge_failed",
+      ...base,
+      status: 500,
+      userId: tokenRow.profile_id,
+      error: error instanceof Error ? error.message : "unknown_error",
+    });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "檢查 Email 失敗" },
+      { error: "合併既有報到帳號失敗，請稍後再試" },
       { status: 500 },
     );
   }
 
-  const authUpdate = await admin.auth.admin.updateUserById(tokenRow.profile_id, {
-    email: tokenRow.email,
-    email_confirm: true,
-  });
-  if (authUpdate.error) {
-    await admin
-      .from("staff_email_verification_tokens")
-      .update({ used_at: null })
-      .eq("id", tokenRow.id);
-    return NextResponse.json({ error: authUpdate.error.message }, { status: 500 });
+  if (!studentMerge) {
+    const authUpdate = await admin.auth.admin.updateUserById(tokenRow.profile_id, {
+      email: tokenRow.email,
+      email_confirm: true,
+    });
+    if (authUpdate.error) {
+      await admin
+        .from("staff_email_verification_tokens")
+        .update({ used_at: null })
+        .eq("id", tokenRow.id);
+      return NextResponse.json({ error: "更新登入信箱失敗，請稍後再試" }, { status: 500 });
+    }
   }
 
   const profileUpdate = await admin
@@ -144,7 +182,7 @@ export async function POST(request: Request) {
       .from("staff_email_verification_tokens")
       .update({ used_at: null })
       .eq("id", tokenRow.id);
-    return NextResponse.json({ error: profileUpdate.error.message }, { status: 500 });
+    return NextResponse.json({ error: "更新員工資料失敗，請稍後再試" }, { status: 500 });
   }
 
   const signInLink = await admin.auth.admin.generateLink({
@@ -152,8 +190,12 @@ export async function POST(request: Request) {
     email: tokenRow.email,
   });
   if (signInLink.error || !signInLink.data.properties?.hashed_token) {
+    await admin
+      .from("staff_email_verification_tokens")
+      .update({ used_at: null })
+      .eq("id", tokenRow.id);
     return NextResponse.json(
-      { error: signInLink.error?.message || "建立員工啟用工作階段失敗" },
+      { error: "建立員工啟用工作階段失敗，請重新開啟驗證連結" },
       { status: 500 },
     );
   }
@@ -164,8 +206,12 @@ export async function POST(request: Request) {
     type: "magiclink",
   });
   if (sessionResult.error || !sessionResult.data.user) {
+    await admin
+      .from("staff_email_verification_tokens")
+      .update({ used_at: null })
+      .eq("id", tokenRow.id);
     return NextResponse.json(
-      { error: sessionResult.error?.message || "建立員工啟用工作階段失敗" },
+      { error: "建立員工啟用工作階段失敗，請重新開啟驗證連結" },
       { status: 500 },
     );
   }
@@ -183,8 +229,27 @@ export async function POST(request: Request) {
           newEmail: tokenRow.email,
           changedAt: now,
         }
-      : { verifiedAt: now },
+      : {
+          verifiedAt: now,
+          mergedStudentCheckinUserId: studentMerge?.sourceUserId || null,
+          mergedStudentProfileId: studentMerge?.studentProfileId || null,
+        },
   });
+
+  if (studentMerge) {
+    await admin.from("audit_logs").insert({
+      tenant_id: tokenRow.tenant_id,
+      actor_id: tokenRow.profile_id,
+      action: "staff_student_checkin_account_merged",
+      target_type: "auth_user",
+      target_id: studentMerge.sourceUserId,
+      reason: "verified_staff_email_claim",
+      payload: {
+        mergedIntoUserId: tokenRow.profile_id,
+        studentProfileId: studentMerge.studentProfileId,
+      },
+    });
+  }
 
   return NextResponse.json({
     verified: true,
