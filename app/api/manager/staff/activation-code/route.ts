@@ -1,4 +1,5 @@
-import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-context";
+import { apiError, apiSuccess } from "../../../../../lib/auth-context";
+import { requireStaffAccountAdministrator } from "../../../../../lib/staff-account-admin";
 import { createInAppNotifications } from "../../../../../lib/in-app-notifications";
 import { requirePermission } from "../../../../../lib/permissions";
 import { verifySensitiveOperator } from "../../../../../lib/sensitive-reauth";
@@ -19,7 +20,7 @@ import { createSupabaseAdminClient } from "../../../../../lib/supabase/admin";
 const STAFF_ROLES = ["manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales"] as const;
 
 export async function POST(request: Request) {
-  const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager"], request);
+  const auth = await requireStaffAccountAdministrator(request);
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);

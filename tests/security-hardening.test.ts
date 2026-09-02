@@ -144,3 +144,31 @@ test("same-origin staff management iframe stays compatible with clickjacking pro
   assert.match(configSource, /frame-src 'self'/);
   assert.match(configSource, /X-Frame-Options[\s\S]*SAMEORIGIN/);
 });
+
+test("staff account registration is visible and callable only by the 01 platform administrator", () => {
+  const operations = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const layoutSource = readFileSync("app/manager/staff/layout.tsx", "utf8");
+  const guardedRoutes = [
+    "app/api/manager/staff/route.ts",
+    "app/api/manager/staff/activation-code/route.ts",
+    "app/api/manager/staff/reset-password/route.ts",
+    "app/api/manager/staff/email-history/route.ts",
+    "app/api/platform/users/route.ts",
+  ];
+
+  assert.match(operations, /const canOpenStaffAccountManagement = canManageStaffAccounts/);
+  assert.match(
+    operations,
+    /tab === "schedule" && canOpenStaffAccountManagement/,
+  );
+  assert.match(layoutSource, /requireStaffAccountAdministrator\(\)/);
+  assert.match(layoutSource, /\/forbidden\?code=FORBIDDEN/);
+
+  for (const route of guardedRoutes) {
+    assert.match(
+      readFileSync(route, "utf8"),
+      /requireStaffAccountAdministrator\(request\)/,
+      `${route} must enforce the 01-only guard`,
+    );
+  }
+});

@@ -1,4 +1,5 @@
-import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-context";
+import { apiError, apiSuccess } from "../../../../../lib/auth-context";
+import { requireStaffAccountAdministrator } from "../../../../../lib/staff-account-admin";
 import { requirePermission } from "../../../../../lib/permissions";
 import { verifySensitiveOperator } from "../../../../../lib/sensitive-reauth";
 import { canManagePosition, normalizeStaffDepartment, normalizeStaffPosition } from "../../../../../lib/staff-organization";
@@ -25,7 +26,7 @@ function resolveCanonicalAppUrl(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireProfile(["platform_admin", "manager", "supervisor", "branch_manager"], request);
+  const auth = await requireStaffAccountAdministrator(request);
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);

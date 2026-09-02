@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { apiError, apiSuccess, requireProfile } from "../../../../lib/auth-context";
+import { apiError, apiSuccess } from "../../../../lib/auth-context";
+import { requireStaffAccountAdministrator } from "../../../../lib/staff-account-admin";
 import { createSupabaseAdminClient } from "../../../../lib/supabase/admin";
 
 const ROLES = ["platform_admin", "manager", "supervisor", "branch_manager", "frontdesk", "coach", "sales", "member"] as const;
@@ -14,7 +15,7 @@ function fail(status: number, code: "UNAUTHORIZED" | "FORBIDDEN" | "INTERNAL_ERR
 }
 
 export async function GET(request: Request) {
-  const auth = await requireProfile(["platform_admin"], request);
+  const auth = await requireStaffAccountAdministrator(request);
   if (!auth.ok) return auth.response;
 
   const searchParams = new URL(request.url).searchParams;
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireProfile(["platform_admin"], request);
+  const auth = await requireStaffAccountAdministrator(request);
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);
@@ -148,7 +149,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const auth = await requireProfile(["platform_admin"], request);
+  const auth = await requireStaffAccountAdministrator(request);
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);

@@ -1,10 +1,10 @@
 import {
   apiError,
   apiSuccess,
-  requireProfile,
   type AppRole,
   type ProfileContext,
 } from "../../../../lib/auth-context";
+import { requireStaffAccountAdministrator } from "../../../../lib/staff-account-admin";
 import {
   claimIdempotency,
   finalizeIdempotency,
@@ -193,10 +193,7 @@ async function checkOperationPermission(params: {
 }
 
 async function resolveTenantScope(request: Request) {
-  const auth = await requireProfile(
-    ["platform_admin", "manager", "supervisor", "branch_manager"],
-    request,
-  );
+  const auth = await requireStaffAccountAdministrator(request);
   if (!auth.ok) return auth;
 
   const requestedTenantId = new URL(request.url).searchParams.get("tenantId");

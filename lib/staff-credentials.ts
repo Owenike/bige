@@ -23,6 +23,16 @@ export function canChooseStaffEmployeeNumber(value: unknown) {
   return normalizeEmployeeNumber(value) === CUSTOM_EMPLOYEE_NUMBER_MANAGER;
 }
 
+export function canManageStaffAccounts(context: {
+  role?: unknown;
+  employeeNumber?: unknown;
+}) {
+  return (
+    context.role === "platform_admin" &&
+    normalizeEmployeeNumber(context.employeeNumber) === CUSTOM_EMPLOYEE_NUMBER_MANAGER
+  );
+}
+
 export function canUseStaffAccountSettings(value: unknown) {
   const employeeNumber = normalizeEmployeeNumber(value);
   return isEmployeeNumber(employeeNumber) && employeeNumber !== STAFF_ACCOUNT_SETTINGS_EXCLUDED;

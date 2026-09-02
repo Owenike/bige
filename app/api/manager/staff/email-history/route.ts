@@ -1,4 +1,5 @@
-import { apiError, apiSuccess, requireProfile } from "../../../../../lib/auth-context";
+import { apiError, apiSuccess } from "../../../../../lib/auth-context";
+import { requireStaffAccountAdministrator } from "../../../../../lib/staff-account-admin";
 import {
   CUSTOM_EMPLOYEE_NUMBER_MANAGER,
   normalizeEmployeeNumber,
@@ -16,7 +17,7 @@ function stringOrNull(value: unknown) {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireProfile(["platform_admin", "manager"], request);
+  const auth = await requireStaffAccountAdministrator(request);
   if (!auth.ok) return auth.response;
 
   const admin = createSupabaseAdminClient();

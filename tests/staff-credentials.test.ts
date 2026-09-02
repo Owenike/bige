@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   canChooseStaffEmployeeNumber,
+  canManageStaffAccounts,
   canUseStaffAccountSettings,
   canUseStaffNotificationCenter,
   canUseStaffScheduleNavigation,
@@ -33,6 +34,29 @@ test("only employee 01 can choose staff employee numbers", () => {
   assert.equal(canChooseStaffEmployeeNumber("02"), false);
   assert.equal(canChooseStaffEmployeeNumber("E000006"), false);
   assert.equal(canChooseStaffEmployeeNumber(null), false);
+});
+
+test("only the 01 platform administrator can manage staff accounts", () => {
+  assert.equal(
+    canManageStaffAccounts({ role: "platform_admin", employeeNumber: "01" }),
+    true,
+  );
+  assert.equal(
+    canManageStaffAccounts({ role: "platform_admin", employeeNumber: "E000001" }),
+    true,
+  );
+  assert.equal(
+    canManageStaffAccounts({ role: "manager", employeeNumber: "E000001" }),
+    false,
+  );
+  assert.equal(
+    canManageStaffAccounts({ role: "platform_admin", employeeNumber: "E000006" }),
+    false,
+  );
+  assert.equal(
+    canManageStaffAccounts({ role: "platform_admin", employeeNumber: null }),
+    false,
+  );
 });
 
 test("staff account settings are available to every numbered employee except 06", () => {

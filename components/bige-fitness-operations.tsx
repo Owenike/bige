@@ -133,6 +133,7 @@ import {
 } from "../lib/staff-organization";
 import {
   CUSTOM_EMPLOYEE_NUMBER_MANAGER,
+  canManageStaffAccounts,
   canUseStaffAccountSettings,
   canUseStaffScheduleNavigation,
   normalizeEmployeeNumber,
@@ -6237,6 +6238,10 @@ export default function BigeFitnessOperations({
   const canOpenTrialBookings =
     view === "frontdesk" ||
     normalizeEmployeeNumber(sessionIdentity?.employeeNumber) === CUSTOM_EMPLOYEE_NUMBER_MANAGER;
+  const canOpenStaffAccountManagement = canManageStaffAccounts({
+    role: sessionIdentity?.role,
+    employeeNumber: sessionIdentity?.employeeNumber,
+  });
   const canOpenAccountSettings = canUseStaffAccountSettings(
     sessionIdentity?.employeeNumber,
   );
@@ -6826,7 +6831,7 @@ export default function BigeFitnessOperations({
                 行政協助事項
               </button>
             ) : null}
-            {!loading && data && tab === "schedule" && managerView ? (
+            {!loading && data && tab === "schedule" && canOpenStaffAccountManagement ? (
               <button
                 className={`${styles.tab} ${styles.primary}`}
                 type="button"
@@ -7445,7 +7450,7 @@ export default function BigeFitnessOperations({
               <p className={styles.muted}>
                 請先由主管建立教練的後台帳號，日排課表才會顯示教練欄位。
               </p>
-              {managerView ? (
+              {canOpenStaffAccountManagement ? (
                 <button className={`${styles.button} ${styles.primary}`} type="button" onClick={() => setStaffManagerOpen(true)}>
                   新增教練
                 </button>
