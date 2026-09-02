@@ -129,4 +129,9 @@ foreach ($testFile in $testFiles) {
   }
 }
 
+node scripts/test-september-2026-frontdesk-schedule.mjs
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}
+
 exit 0
