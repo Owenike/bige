@@ -7,16 +7,19 @@ import {
   buildSelectionWindow,
   generateMonthlySchedule,
   isConfiguredPreferenceWindowOpen,
+  isAutomaticScheduleSource,
   isStaffPreferenceSelectionOpen,
   isSharedFrontdeskScheduleAccount,
   listMonthDates,
   missingScheduleCellKeys,
   monthlyAccruedLeaveCreditDays,
   monthlyDaysOffEntitlement,
+  mergeAutomaticScheduleEntries,
   paidMinutesForEntry,
   normalizeStaffScheduleView,
   normalizeUnselectedPreferenceEntry,
   resolveStaffScheduleDataScope,
+  scheduleEntryContentChanged,
   staffScheduleEntryOffLabel,
   staffScheduleGridWorkLabel,
   staffScheduleOffLabel,
@@ -179,6 +182,55 @@ test("draft synchronization finds every missing date for staff added after the v
   assert.equal(missing.length, 30);
   assert.equal(missing[0], "hailey:2026-09-01");
   assert.equal(missing[missing.length - 1], "hailey:2026-09-30");
+});
+
+test("automatic schedule refresh replaces generated sources but preserves manual and approved entries", () => {
+  const generated = generateMonthlySchedule({
+    monthStart: "2026-09-01",
+    employees: [middleCoach],
+    preferencesByEmployee: { "coach-1": [] },
+  });
+  const regenerated = generateMonthlySchedule({
+    monthStart: "2026-09-01",
+    employees: [{ ...middleCoach, defaultShiftCode: "COACH_EARLY" }],
+    preferencesByEmployee: { "coach-1": ["2026-09-03"] },
+  });
+  const current = generated.map((entry) => entry.workDate === "2026-09-01"
+    ? { ...entry, source: "supervisor" as const, shiftCode: "COACH_PARTTIME_WEEKDAY", startsAt: "18:00", endsAt: "22:00" }
+    : entry.workDate === "2026-09-02"
+      ? { ...entry, source: "leave" as const, entryKind: "off" as const, shiftCode: null, shiftLabel: null, startsAt: null, endsAt: null, offKind: "annual_leave" as const }
+      : entry);
+
+  const merged = mergeAutomaticScheduleEntries({ current, regenerated });
+  const byDate = new Map(merged.map((entry) => [entry.workDate, entry]));
+  assert.equal(byDate.get("2026-09-01")?.source, "supervisor");
+  assert.equal(byDate.get("2026-09-01")?.shiftCode, "COACH_PARTTIME_WEEKDAY");
+  assert.equal(byDate.get("2026-09-02")?.source, "leave");
+  assert.equal(byDate.get("2026-09-02")?.offKind, "annual_leave");
+  assert.equal(byDate.get("2026-09-03")?.source, "preference");
+  assert.equal(byDate.get("2026-09-04")?.shiftCode, "COACH_EARLY");
+  assert.equal(isAutomaticScheduleSource("facility_closure"), true);
+  assert.equal(isAutomaticScheduleSource("holiday_adjustment"), false);
+  assert.equal(scheduleEntryContentChanged(generated[3], byDate.get("2026-09-04")!), true);
+});
+
+test("automatic schedule refresh can target one employee and append missing generated cells", () => {
+  const secondCoach = { ...middleCoach, employeeId: "coach-2", displayName: "第二位教練" };
+  const current = generateMonthlySchedule({
+    monthStart: "2026-09-01",
+    employees: [middleCoach, secondCoach],
+    preferencesByEmployee: { "coach-1": [], "coach-2": [] },
+  });
+  const regenerated = generateMonthlySchedule({
+    monthStart: "2026-09-01",
+    employees: [{ ...middleCoach, defaultShiftCode: "COACH_EARLY" }, secondCoach],
+    preferencesByEmployee: { "coach-1": [], "coach-2": [] },
+  });
+  const withoutLastCoachOneCell = current.filter((entry) => !(entry.employeeId === "coach-1" && entry.workDate === "2026-09-30"));
+  const merged = mergeAutomaticScheduleEntries({ current: withoutLastCoachOneCell, regenerated, affectedEmployeeIds: ["coach-1"] });
+  assert.equal(merged.find((entry) => entry.employeeId === "coach-1" && entry.workDate === "2026-09-01")?.shiftCode, "COACH_EARLY");
+  assert.equal(merged.find((entry) => entry.employeeId === "coach-1" && entry.workDate === "2026-09-30")?.shiftCode, "COACH_EARLY");
+  assert.equal(merged.find((entry) => entry.employeeId === "coach-2" && entry.workDate === "2026-09-01")?.shiftCode, "COACH_MIDDLE");
 });
 
 test("front desk paid break keeps all seven scheduled hours payable", () => {
@@ -506,10 +558,19 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(source, /const scheduleEmployees = useMemo/);
   assert.match(source, /isSharedFrontdeskScheduleAccount\(employee\.employeeNumber\)/);
   assert.doesNotMatch(source, /employee\.employment\?\.work_group !== "frontdesk"/);
-  assert.match(source, /sync_missing_draft_cells/);
+  assert.doesNotMatch(source, /sync_missing_draft_cells/);
   assert.match(apiSource, /body\.action === "sync_missing_draft_cells"/);
   assert.match(apiSource, /version\.status !== "draft"/);
   assert.match(apiSource, /missingScheduleCellKeys/);
+  assert.match(source, /const AUTO_SCHEDULE_SYNC_INTERVAL_MS = 15_000/);
+  assert.match(source, /action: "ensure_schedule_draft"/);
+  assert.match(source, /document\.visibilityState !== "visible"/);
+  assert.match(source, /window\.setInterval\(syncWhenVisible, AUTO_SCHEDULE_SYNC_INTERVAL_MS\)/);
+  assert.match(source, /自動同步：最多 15 秒/);
+  assert.doesNotMatch(source, />依排休重建新版本<|>產生正式班表草稿<|>開放這個月份</);
+  assert.match(apiSource, /body\.action === "ensure_schedule_draft"[\s\S]*?ensureAndSyncAutomaticSchedule/);
+  assert.match(apiSource, /body\.action === "configure_employee"[\s\S]*?affectedEmployeeIds: \[employeeId\][\s\S]*?員工固定班別變更後自動同步班表/);
+  assert.match(apiSource, /body\.action === "save_preferences"[\s\S]*?affectedEmployeeIds: \[profile\.id\][\s\S]*?員工排休變更後自動同步班表/);
   assert.match(source, /shiftDragStart\(event, "DEFAULT"\)[\s\S]*>復原<\/b>[\s\S]*shiftDragStart\(event, "COACH_EARLY"\)[\s\S]*shiftDragStart\(event, "COACH_MIDDLE"\)[\s\S]*shiftDragStart\(event, "COACH_PARTTIME_WEEKDAY"\)[\s\S]*dayOffDragStart\(event, "rest_day"\)[\s\S]*dayOffDragStart\(event, "regular_day_off"\)/);
   assert.match(source, /payload\.shiftCode !== "DEFAULT"/);
   assert.match(source, /action: "assign_day_off"/);

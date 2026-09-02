@@ -489,6 +489,51 @@ export function generateMonthlySchedule(params: {
   return entries;
 }
 
+const AUTOMATIC_SCHEDULE_SOURCES = new Set<ScheduleEntryDraft["source"]>([
+  "generated",
+  "preference",
+  "facility_closure",
+]);
+
+export function isAutomaticScheduleSource(source: ScheduleEntryDraft["source"]) {
+  return AUTOMATIC_SCHEDULE_SOURCES.has(source);
+}
+
+export function scheduleEntryContentChanged(left: ScheduleEntryDraft, right: ScheduleEntryDraft) {
+  return left.entryKind !== right.entryKind
+    || String(left.shiftCode || "") !== String(right.shiftCode || "")
+    || String(left.shiftLabel || "") !== String(right.shiftLabel || "")
+    || String(left.startsAt || "") !== String(right.startsAt || "")
+    || String(left.endsAt || "") !== String(right.endsAt || "")
+    || left.breakMinutes !== right.breakMinutes
+    || left.paidBreak !== right.paidBreak
+    || left.breakHiddenFromEmployee !== right.breakHiddenFromEmployee
+    || left.countsTowardMiddleLimit !== right.countsTowardMiddleLimit
+    || String(left.offKind || "") !== String(right.offKind || "")
+    || left.source !== right.source
+    || String(left.employeeVisibleNote || "") !== String(right.employeeVisibleNote || "");
+}
+
+export function mergeAutomaticScheduleEntries(params: {
+  current: ScheduleEntryDraft[];
+  regenerated: ScheduleEntryDraft[];
+  affectedEmployeeIds?: string[];
+}) {
+  const affected = params.affectedEmployeeIds ? new Set(params.affectedEmployeeIds) : null;
+  const currentKeys = new Set(params.current.map((entry) => `${entry.employeeId}:${entry.workDate}`));
+  const regeneratedByKey = new Map(params.regenerated.map((entry) => [`${entry.employeeId}:${entry.workDate}`, entry]));
+  const merged = params.current.map((entry) => {
+    if (affected && !affected.has(entry.employeeId)) return entry;
+    if (!isAutomaticScheduleSource(entry.source)) return entry;
+    return regeneratedByKey.get(`${entry.employeeId}:${entry.workDate}`) || entry;
+  });
+  for (const entry of params.regenerated) {
+    if (affected && !affected.has(entry.employeeId)) continue;
+    if (!currentKeys.has(`${entry.employeeId}:${entry.workDate}`)) merged.push(entry);
+  }
+  return merged;
+}
+
 export function missingScheduleCellKeys(params: {
   monthStart: string;
   employeeIds: string[];

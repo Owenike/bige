@@ -240,6 +240,11 @@
 .workflowBadge i{width:8px;height:8px;border-radius:50%;background:var(--schedule-manager-gold-bright);box-shadow:0 0 0 4px rgba(216,182,105,.12)}
 .workflowBadge span{color:#c6b98f;font-weight:700}
 .workflowBadge strong{color:#fff4d6;font-size:13px}
+.autoSyncStatus{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:6px 10px;border:1px solid rgba(93,174,137,.42);border-radius:999px;background:rgba(37,104,77,.2);color:#b8f2d5;font-size:12px;font-weight:900;white-space:nowrap}
+.autoSyncStatus::before{width:7px;height:7px;border-radius:50%;background:#78d6a9;box-shadow:0 0 0 4px rgba(120,214,169,.1);content:""}
+.autoSyncStatus[data-syncing="true"]{border-color:rgba(216,182,105,.5);background:rgba(216,182,105,.12);color:var(--schedule-manager-gold-bright)}
+.autoSyncStatus[data-syncing="true"]::before{background:var(--schedule-manager-gold-bright);animation:autoSchedulePulse 1s ease-in-out infinite alternate}
+@keyframes autoSchedulePulse{to{opacity:.38;transform:scale(.72)}}
 .setupActions{display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:12px;max-width:820px;margin:0 0 16px}
 .setupActionButton{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;min-height:76px;padding:13px 15px;border:1px solid var(--schedule-manager-gold-line);border-radius:18px;background:linear-gradient(145deg,rgba(15,31,45,.95),rgba(7,13,22,.94));color:var(--schedule-manager-text);box-shadow:0 14px 34px rgba(0,0,0,.2),inset 0 1px rgba(255,255,255,.035);font:inherit;text-align:left;cursor:pointer;transition:border-color .18s ease,transform .18s ease,box-shadow .18s ease}
 .setupActionButton:hover{transform:translateY(-1px);border-color:rgba(216,182,105,.72);box-shadow:0 18px 38px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.05)}
@@ -312,6 +317,7 @@
   .selectionOverrideRow{align-items:stretch;flex-direction:column}
   .selectionOverrideRow button{width:100%}
   .employeeSetting summary{align-items:flex-start}
+  .autoSyncStatus{width:100%;justify-content:center}
 }
 
 .employeeFilter{position:relative;min-width:142px;color:var(--schedule-manager-text)}

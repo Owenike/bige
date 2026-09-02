@@ -12,6 +12,7 @@ import {
   isStaffPreferenceSelectionOpen,
   isSharedFrontdeskScheduleAccount,
   listMonthDates,
+  mergeAutomaticScheduleEntries,
   missingScheduleCellKeys,
   monthlyAccruedLeaveCreditDays,
   monthlyDaysOffEntitlement,
@@ -20,6 +21,7 @@ import {
   normalizeMonthStart,
   normalizeUnselectedPreferenceEntry,
   resolveStaffScheduleDataScope,
+  scheduleEntryContentChanged,
   shiftForEmployeeDate,
   validateSchedule,
   type EmployeeScheduleConfig,
@@ -467,6 +469,368 @@ async function getLatestVersion(admin: AdminClient, periodId: string, employeeOn
   return result.data as Record<string, unknown> | null;
 }
 
+async function ensureSchedulePeriod(params: {
+  admin: AdminClient;
+  profile: ProfileRow;
+  tenantId: string;
+  monthStart: string;
+}) {
+  const existing = await getPeriod(params.admin, params.tenantId, params.profile.branch_id, params.monthStart);
+  if (existing) return { period: existing, created: false };
+  const selectionWindow = buildSelectionWindow(params.monthStart);
+  const insert = await params.admin.from("staff_schedule_periods").insert({
+    tenant_id: params.tenantId,
+    branch_id: params.profile.branch_id,
+    month_start: params.monthStart,
+    selection_opens_at: selectionWindow.opensAt,
+    selection_closes_at: selectionWindow.closesAt,
+    created_by: params.profile.id,
+  });
+  if (insert.error && insert.error.code !== "23505") throw new Error(insert.error.message);
+  const period = await getPeriod(params.admin, params.tenantId, params.profile.branch_id, params.monthStart);
+  if (!period) throw new Error("自動建立排班月份失敗");
+  return { period, created: !insert.error };
+}
+
+async function loadAutomaticScheduleGeneration(params: {
+  admin: AdminClient;
+  profile: ProfileRow;
+  tenantId: string;
+  period: PeriodRow;
+  monthStart: string;
+}) {
+  await ensureDefaultShifts(params.admin, params.tenantId, params.profile.branch_id, params.profile.id);
+  const employees = await listEmployees(params.admin, params.tenantId, params.profile.branch_id);
+  const employments = await ensureEmploymentProfiles(params.admin, employees, params.profile.id);
+  const monthEnd = listMonthDates(params.monthStart).at(-1) || params.monthStart;
+  const [preferences, closures, holidays, approvedLeaves, contextEntries, shiftIds] = await Promise.all([
+    params.admin
+      .from("staff_time_off_preferences")
+      .select("employee_id, staff_time_off_preference_dates(requested_date, source)")
+      .eq("period_id", params.period.id)
+      .eq("status", "submitted"),
+    params.admin.from("staff_facility_closures").select("closure_date").eq("period_id", params.period.id),
+    params.admin
+      .from("staff_holiday_calendar")
+      .select("holiday_date, holiday_name")
+      .or(`tenant_id.is.null,tenant_id.eq.${params.tenantId}`)
+      .gte("holiday_date", params.monthStart)
+      .lte("holiday_date", monthEnd),
+    params.admin
+      .from("staff_leave_requests")
+      .select("id, employee_id, leave_type, starts_at, ends_at, unit")
+      .eq("tenant_id", params.tenantId)
+      .eq("status", "approved")
+      .gte("starts_at", `${params.monthStart}T00:00:00+08:00`)
+      .lte("starts_at", `${monthEnd}T23:59:59+08:00`),
+    loadBoundaryScheduleEntries(params.admin, params.tenantId, params.monthStart),
+    loadShiftIds(params.admin, params.tenantId, params.profile.branch_id),
+  ]);
+  const queryError = preferences.error || closures.error || holidays.error || approvedLeaves.error;
+  if (queryError) throw new Error(queryError.message);
+  const preferencesByEmployee: Record<string, string[]> = {};
+  for (const preference of preferences.data || []) {
+    preferencesByEmployee[String(preference.employee_id)] = (preference.staff_time_off_preference_dates || [])
+      .filter((date: { source?: string }) => date.source === "employee")
+      .map((date: { requested_date: string }) => String(date.requested_date));
+  }
+  const employmentMap = new Map(employments.map((row) => [row.employee_id, row]));
+  const configs = employees.flatMap((employee) => {
+    const employment = employmentMap.get(employee.id);
+    return employment ? [configFromRows(employee, employment)] : [];
+  });
+  const generatedEntries = applyApprovedLeaves(generateMonthlySchedule({
+    monthStart: params.monthStart,
+    employees: configs,
+    preferencesByEmployee,
+    facilityClosureDates: (closures.data || []).map((row) => String(row.closure_date)),
+  }), (approvedLeaves.data || []) as ApprovedLeaveRow[]);
+  return {
+    employees,
+    configs,
+    generatedEntries,
+    holidays: (holidays.data || []).map((row) => ({ date: String(row.holiday_date), name: String(row.holiday_name) })),
+    contextEntries,
+    shiftIds,
+  };
+}
+
+async function clonePublishedVersionForAutomaticSync(params: {
+  admin: AdminClient;
+  period: PeriodRow;
+  version: Record<string, unknown>;
+  actorId: string;
+  changedEmployeeIds: Set<string>;
+  reviewEmployeeIds: Set<string>;
+  changeSummary: string;
+}): Promise<Record<string, unknown>> {
+  const inserted = await params.admin.from("staff_schedule_versions").insert({
+    period_id: params.period.id,
+    tenant_id: params.period.tenant_id,
+    version_number: Number(params.version.version_number) + 1,
+    status: "draft",
+    based_on_version_id: params.version.id,
+    change_summary: params.changeSummary,
+    created_by: params.actorId,
+  }).select("*").single();
+  let activeVersion = inserted.data as Record<string, unknown> | null;
+  if (inserted.error) {
+    if (inserted.error.code !== "23505") throw new Error(inserted.error.message);
+    activeVersion = await getLatestVersion(params.admin, params.period.id);
+    if (!activeVersion || activeVersion.status === "published") throw new Error("自動建立新版班表失敗");
+  }
+  if (!activeVersion) throw new Error("自動建立新版班表失敗");
+  const baseVersionId = String(activeVersion.based_on_version_id || params.version.id);
+  const [sourceEntries, sourceAdjustments] = await Promise.all([
+    params.admin.from("staff_schedule_entries").select("*").eq("version_id", baseVersionId),
+    params.admin.from("staff_holiday_adjustments").select("*").eq("version_id", baseVersionId),
+  ]);
+  if (sourceEntries.error || sourceAdjustments.error) throw new Error(sourceEntries.error?.message || sourceAdjustments.error?.message || "讀取正式班表失敗");
+  const clonedEntries = (sourceEntries.data || []).map((row) => {
+    const { id: _id, created_at: _createdAt, updated_at: _updatedAt, ...rest } = row;
+    return {
+      ...rest,
+      version_id: activeVersion!.id,
+      requires_resign: params.changedEmployeeIds.has(String(row.employee_id)),
+      created_by: params.actorId,
+      updated_by: params.actorId,
+    };
+  });
+  if (clonedEntries.length > 0) {
+    const copy = await params.admin.from("staff_schedule_entries").upsert(clonedEntries, {
+      onConflict: "version_id,employee_id,work_date",
+      ignoreDuplicates: true,
+    });
+    if (copy.error) throw new Error(copy.error.message);
+  }
+  const clonedAdjustments = (sourceAdjustments.data || []).map((row) => {
+    const { id: _id, created_at: _createdAt, updated_at: _updatedAt, ...rest } = row;
+    const affected = params.reviewEmployeeIds.has(String(row.employee_id));
+    return {
+      ...rest,
+      version_id: activeVersion!.id,
+      status: affected ? "draft" : row.status,
+      manager_approved_by: affected ? null : row.manager_approved_by,
+      manager_approved_at: affected ? null : row.manager_approved_at,
+    };
+  });
+  if (clonedAdjustments.length > 0) {
+    const copy = await params.admin.from("staff_holiday_adjustments").upsert(clonedAdjustments, {
+      onConflict: "version_id,employee_id,holiday_date",
+      ignoreDuplicates: true,
+    });
+    if (copy.error) throw new Error(copy.error.message);
+  }
+  return activeVersion;
+}
+
+async function replaceAutomaticScheduleRules(params: {
+  admin: AdminClient;
+  tenantId: string;
+  period: PeriodRow;
+  versionId: string;
+  monthStart: string;
+  configs: EmployeeScheduleConfig[];
+  holidays: Array<{ date: string; name: string }>;
+  contextEntries: ScheduleEntryDraft[];
+}) {
+  const [entriesResult, adjustmentsResult] = await Promise.all([
+    params.admin.from("staff_schedule_entries").select("*").eq("version_id", params.versionId),
+    params.admin.from("staff_holiday_adjustments").select("employee_id, holiday_date, adjusted_day_off, status").eq("version_id", params.versionId),
+  ]);
+  if (entriesResult.error || adjustmentsResult.error) throw new Error(entriesResult.error?.message || adjustmentsResult.error?.message || "重新檢查班表失敗");
+  const entries = (entriesResult.data || []).map((row) => mapEntry(row));
+  const adjustmentMap = new Map((adjustmentsResult.data || []).map((row) => [`${row.employee_id}:${row.holiday_date}`, row]));
+  const rules = validateSchedule({
+    monthStart: params.monthStart,
+    employees: params.configs,
+    entries,
+    contextEntries: params.contextEntries,
+    preferenceDailyLimit: params.period.middle_preference_daily_limit,
+    holidays: params.holidays,
+  }).map((rule) => {
+    if (rule.ruleCode !== "HOLIDAY_ADJUSTMENT_REQUIRED" || !rule.employeeId || !rule.workDate) return rule;
+    const adjustment = adjustmentMap.get(`${rule.employeeId}:${rule.workDate}`);
+    const adjustedEntry = adjustment ? entries.find((entry) => entry.employeeId === rule.employeeId && entry.workDate === adjustment.adjusted_day_off) : null;
+    if (!adjustment || !["manager_approved", "employee_signed"].includes(String(adjustment.status)) || adjustedEntry?.offKind !== "holiday_adjustment") return rule;
+    return { ...rule, passed: true, message: `已安排 ${adjustment.adjusted_day_off} 為國定假日調休日。` };
+  });
+  const remove = await params.admin.from("staff_schedule_rule_results").delete().eq("version_id", params.versionId);
+  if (remove.error) throw new Error(remove.error.message);
+  if (rules.length > 0) {
+    const insert = await params.admin.from("staff_schedule_rule_results").insert(rules.map((rule) => ({
+      version_id: params.versionId,
+      period_id: params.period.id,
+      tenant_id: params.tenantId,
+      employee_id: rule.employeeId,
+      work_date: rule.workDate,
+      rule_code: rule.ruleCode,
+      severity: rule.severity,
+      passed: rule.passed,
+      message: rule.message,
+      details: rule.details,
+    })));
+    if (insert.error) throw new Error(insert.error.message);
+  }
+}
+
+async function ensureAndSyncAutomaticSchedule(params: {
+  admin: AdminClient;
+  profile: ProfileRow;
+  tenantId: string;
+  monthStart: string;
+  affectedEmployeeIds?: string[];
+  forceRevalidate?: boolean;
+  changeSummary: string;
+}) {
+  const ensuredPeriod = await ensureSchedulePeriod(params);
+  const period = ensuredPeriod.period;
+  if (ensuredPeriod.created) await seedKnownHolidays(params.admin, params.tenantId, params.monthStart, params.profile.id);
+  const generation = await loadAutomaticScheduleGeneration({ ...params, period });
+  const activeEmployeeIds = new Set(generation.employees.map((employee) => employee.id));
+  const affectedEmployeeIds = params.affectedEmployeeIds?.filter((employeeId) => activeEmployeeIds.has(employeeId));
+  let reviewEmployeeIds = new Set(affectedEmployeeIds || []);
+  let version = await getLatestVersion(params.admin, period.id);
+  let createdVersion = false;
+  if (!version) {
+    const insert = await params.admin.from("staff_schedule_versions").insert({
+      period_id: period.id,
+      tenant_id: params.tenantId,
+      version_number: 1,
+      status: "draft",
+      based_on_version_id: null,
+      change_summary: "進入主管班表時自動建立初始草稿",
+      created_by: params.profile.id,
+    }).select("*").single();
+    if (insert.error && insert.error.code !== "23505") throw new Error(insert.error.message);
+    version = insert.error ? await getLatestVersion(params.admin, period.id) : insert.data as Record<string, unknown>;
+    if (!version) throw new Error("自動建立班表草稿失敗");
+    createdVersion = !insert.error;
+  }
+
+  let currentResult = await params.admin.from("staff_schedule_entries").select("*").eq("version_id", String(version.id));
+  if (currentResult.error) throw new Error(currentResult.error.message);
+  let currentEntries = (currentResult.data || []).map((row) => mapEntry(row));
+  let mergedEntries = mergeAutomaticScheduleEntries({
+    current: currentEntries,
+    regenerated: generation.generatedEntries,
+    affectedEmployeeIds,
+  });
+  let currentMap = new Map(currentEntries.map((entry) => [`${entry.employeeId}:${entry.workDate}`, entry]));
+  let changedEntries = mergedEntries.filter((entry) => {
+    if (affectedEmployeeIds && !affectedEmployeeIds.includes(entry.employeeId)) return false;
+    const current = currentMap.get(`${entry.employeeId}:${entry.workDate}`);
+    return !current || scheduleEntryContentChanged(current, entry);
+  });
+  if (!affectedEmployeeIds) {
+    reviewEmployeeIds = params.forceRevalidate || createdVersion
+      ? new Set(activeEmployeeIds)
+      : new Set(changedEntries.map((entry) => entry.employeeId));
+  }
+  const needsReviewReset = createdVersion || changedEntries.length > 0 || params.forceRevalidate === true;
+  if (version.status === "published" && needsReviewReset) {
+    version = await clonePublishedVersionForAutomaticSync({
+      admin: params.admin,
+      period,
+      version,
+      actorId: params.profile.id,
+      changedEmployeeIds: new Set(changedEntries.map((entry) => entry.employeeId)),
+      reviewEmployeeIds,
+      changeSummary: params.changeSummary,
+    });
+    currentResult = await params.admin.from("staff_schedule_entries").select("*").eq("version_id", String(version.id));
+    if (currentResult.error) throw new Error(currentResult.error.message);
+    currentEntries = (currentResult.data || []).map((row) => mapEntry(row));
+    mergedEntries = mergeAutomaticScheduleEntries({ current: currentEntries, regenerated: generation.generatedEntries, affectedEmployeeIds });
+    currentMap = new Map(currentEntries.map((entry) => [`${entry.employeeId}:${entry.workDate}`, entry]));
+    changedEntries = mergedEntries.filter((entry) => {
+      if (affectedEmployeeIds && !affectedEmployeeIds.includes(entry.employeeId)) return false;
+      const current = currentMap.get(`${entry.employeeId}:${entry.workDate}`);
+      return !current || scheduleEntryContentChanged(current, entry);
+    });
+  }
+
+  if (changedEntries.length > 0) {
+    const currentRows = new Map((currentResult.data || []).map((row) => [`${row.employee_id}:${row.work_date}`, row]));
+    const rows = changedEntries.map((entry) => {
+      const previous = currentRows.get(`${entry.employeeId}:${entry.workDate}`);
+      const changedAfterPublished = Boolean(version!.based_on_version_id);
+      return {
+        ...entryInsertRow({
+          draft: entry,
+          versionId: String(version!.id),
+          periodId: period.id,
+          tenantId: params.tenantId,
+          actorId: params.profile.id,
+          shiftIds: generation.shiftIds,
+        }),
+        created_by: previous?.created_by || params.profile.id,
+        requires_resign: Boolean(previous?.requires_resign) || changedAfterPublished,
+      };
+    });
+    const upsert = await params.admin.from("staff_schedule_entries").upsert(rows, { onConflict: "version_id,employee_id,work_date" });
+    if (upsert.error) throw new Error(upsert.error.message);
+  }
+
+  if (needsReviewReset) {
+    const versionUpdate = await params.admin.from("staff_schedule_versions").update({ status: "draft", change_summary: params.changeSummary }).eq("id", String(version.id));
+    if (versionUpdate.error) throw new Error(versionUpdate.error.message);
+    const approvals = await params.admin.from("staff_schedule_approvals").delete().eq("version_id", String(version.id));
+    if (approvals.error) throw new Error(approvals.error.message);
+    if (reviewEmployeeIds.size > 0) {
+      const adjustments = await params.admin.from("staff_holiday_adjustments").update({
+        status: "draft",
+        manager_approved_by: null,
+        manager_approved_at: null,
+      }).eq("version_id", String(version.id)).in("employee_id", Array.from(reviewEmployeeIds));
+      if (adjustments.error) throw new Error(adjustments.error.message);
+    }
+    await replaceAutomaticScheduleRules({
+      admin: params.admin,
+      tenantId: params.tenantId,
+      period,
+      versionId: String(version.id),
+      monthStart: params.monthStart,
+      configs: generation.configs,
+      holidays: generation.holidays,
+      contextEntries: generation.contextEntries,
+    });
+    const periodUpdate = await params.admin.from("staff_schedule_periods").update({ status: "drafting" }).eq("id", period.id);
+    if (periodUpdate.error) throw new Error(periodUpdate.error.message);
+    await applyMonthlyAccruedLeaveCredits({
+      admin: params.admin,
+      period,
+      employees: generation.employees,
+      monthStart: params.monthStart,
+      tenantId: params.tenantId,
+      actorId: params.profile.id,
+    });
+    await writeAudit(params.admin, {
+      tenantId: params.tenantId,
+      actorId: params.profile.id,
+      action: createdVersion ? "staff_schedule_draft_auto_created" : "staff_schedule_sources_auto_synced",
+      targetType: "staff_schedule_version",
+      targetId: String(version.id),
+      payload: {
+        monthStart: params.monthStart,
+        changedCells: changedEntries.length,
+        affectedEmployeeIds: Array.from(reviewEmployeeIds),
+      },
+    });
+  }
+  if (ensuredPeriod.created) {
+    await writeAudit(params.admin, {
+      tenantId: params.tenantId,
+      actorId: params.profile.id,
+      action: "staff_schedule_period_auto_initialized",
+      targetType: "staff_schedule_period",
+      targetId: period.id,
+      payload: { monthStart: params.monthStart },
+    });
+  }
+  return { period, version, changedCells: changedEntries.length, createdVersion };
+}
+
 async function clonePublishedVersionForEmployee(params: {
   admin: AdminClient;
   period: PeriodRow;
@@ -531,20 +895,29 @@ async function buildState(params: {
 }) {
   const tenantId = params.profile.tenant_id;
   if (!tenantId) throw new Error("此帳號尚未設定館別，無法使用員工班表");
-  const manager = await hasStaffPermission({
-    supabase: params.admin,
-    tenantId,
-    employeeId: params.profile.id,
-    context: params.context,
-    permission: "view_team_schedule",
-  });
-  const finalApprover = await hasStaffPermission({
-    supabase: params.admin,
-    tenantId,
-    employeeId: params.profile.id,
-    context: params.context,
-    permission: "publish_schedule",
-  });
+  const [manager, scheduleManager, finalApprover] = await Promise.all([
+    hasStaffPermission({
+      supabase: params.admin,
+      tenantId,
+      employeeId: params.profile.id,
+      context: params.context,
+      permission: "view_team_schedule",
+    }),
+    hasStaffPermission({
+      supabase: params.admin,
+      tenantId,
+      employeeId: params.profile.id,
+      context: params.context,
+      permission: "manage_schedule",
+    }),
+    hasStaffPermission({
+      supabase: params.admin,
+      tenantId,
+      employeeId: params.profile.id,
+      context: params.context,
+      permission: "publish_schedule",
+    }),
+  ]);
   const allEmployees = params.view === "team"
     ? await listEmployees(params.admin, tenantId, params.profile.branch_id)
     : [params.profile];
@@ -563,7 +936,7 @@ async function buildState(params: {
         englishName: params.profile.english_name,
         role: params.profile.role,
         position: params.profile.position,
-        canManage: manager,
+        canManage: scheduleManager,
         canFinalApprove: finalApprover,
       },
       monthStart: params.monthStart,
@@ -676,7 +1049,7 @@ async function buildState(params: {
       englishName: params.profile.english_name,
       role: params.profile.role,
       position: params.profile.position,
-      canManage: manager,
+      canManage: scheduleManager,
       canFinalApprove: finalApprover,
     },
     monthStart: params.monthStart,
@@ -768,7 +1141,16 @@ export async function POST(request: Request) {
     const monthStart = monthStartFromInput(typeof body.monthStart === "string" ? body.monthStart : null);
     let compactMutation: Record<string, unknown> | null = null;
 
-    if (body.action === "initialize_period") {
+    if (body.action === "ensure_schedule_draft") {
+      await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有管理班表的權限" });
+      await ensureAndSyncAutomaticSchedule({
+        admin,
+        profile,
+        tenantId,
+        monthStart,
+        changeSummary: "固定班別、完整排休與排班設定已自動同步",
+      });
+    } else if (body.action === "initialize_period") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有開放排休月份的權限" });
       const existing = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
       if (!existing) {
@@ -817,6 +1199,13 @@ export async function POST(request: Request) {
         });
         if (insert.error) throw new Error(insert.error.message);
       }
+      await ensureAndSyncAutomaticSchedule({
+        admin,
+        profile,
+        tenantId,
+        monthStart,
+        changeSummary: "館休日變更後自動同步班表",
+      });
     } else if (body.action === "update_schedule_rules") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有調整排班規則的權限" });
       const period = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
@@ -836,6 +1225,14 @@ export async function POST(request: Request) {
           before: { middlePreferenceDailyLimit: period.middle_preference_daily_limit },
           after: { middlePreferenceDailyLimit },
         },
+      });
+      await ensureAndSyncAutomaticSchedule({
+        admin,
+        profile,
+        tenantId,
+        monthStart,
+        forceRevalidate: true,
+        changeSummary: "排班規則變更後自動重新檢查班表",
       });
     } else if (body.action === "update_selection_deadline") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有調整選休開放時間的權限" });
@@ -963,6 +1360,7 @@ export async function POST(request: Request) {
         : await admin.from("staff_holiday_calendar").insert({ tenant_id: tenantId, holiday_date: holidayDate, holiday_name: holidayName, holiday_kind: "statutory", source_label: "主管依當年度官方行事曆設定", created_by: profile.id });
       if (saved.error) throw new Error(saved.error.message);
       await writeAudit(admin, { tenantId, actorId: profile.id, action: "staff_holiday_calendar_updated", targetType: "staff_holiday_calendar", targetId: existing.data?.id || null, payload: { holidayDate, before: existing.data?.holiday_name || null, after: holidayName } });
+      await ensureAndSyncAutomaticSchedule({ admin, profile, tenantId, monthStart, forceRevalidate: true, changeSummary: "國定假日設定變更後自動重新檢查班表" });
     } else if (body.action === "remove_holiday") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有維護國定假日行事曆的權限" });
       const holidayDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(body.holidayDate);
@@ -972,6 +1370,7 @@ export async function POST(request: Request) {
       const remove = await admin.from("staff_holiday_calendar").delete().eq("id", existing.data.id);
       if (remove.error) throw new Error(remove.error.message);
       await writeAudit(admin, { tenantId, actorId: profile.id, action: "staff_holiday_calendar_removed", targetType: "staff_holiday_calendar", targetId: existing.data.id, payload: { holidayDate, holidayName: existing.data.holiday_name } });
+      await ensureAndSyncAutomaticSchedule({ admin, profile, tenantId, monthStart, forceRevalidate: true, changeSummary: "國定假日設定變更後自動重新檢查班表" });
     } else if (body.action === "configure_employee") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有設定員工班別的權限" });
       const employeeId = z.string().uuid().parse(body.employeeId);
@@ -1008,6 +1407,14 @@ export async function POST(request: Request) {
         configured_by: profile.id,
       }, { onConflict: "employee_id" });
       if (update.error) throw new Error(update.error.message);
+      await ensureAndSyncAutomaticSchedule({
+        admin,
+        profile,
+        tenantId,
+        monthStart,
+        affectedEmployeeIds: [employeeId],
+        changeSummary: "員工固定班別變更後自動同步班表",
+      });
     } else if (body.action === "save_preferences") {
       const period = await getPeriod(admin, tenantId, profile.branch_id, monthStart);
       if (!period) throw new Error("主管尚未開放這個月份");
@@ -1067,6 +1474,14 @@ export async function POST(request: Request) {
         targetType: "staff_time_off_preference",
         targetId: upsert.data.id,
         payload: { monthStart, selectedDates, facilityClosureDates: closureDates, status: preferenceComplete ? "submitted" : "draft" },
+      });
+      await ensureAndSyncAutomaticSchedule({
+        admin,
+        profile,
+        tenantId,
+        monthStart,
+        affectedEmployeeIds: [profile.id],
+        changeSummary: "員工排休變更後自動同步班表",
       });
     } else if (body.action === "create_draft") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有建立班表草稿的權限" });

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   isSharedFrontdeskScheduleAccount,
   isConfiguredPreferenceWindowOpen,
-  missingScheduleCellKeys,
   staffScheduleEntryOffLabel,
   staffScheduleGridWorkLabel,
   staffScheduleOffLabel,
@@ -64,6 +63,7 @@ const SHIFT_PREVIEWS: Record<Exclude<ShiftChoice, "DEFAULT">, Pick<ScheduleEntry
 
 const SCHEDULE_LOAD_TIMEOUT_MS = 20_000;
 const SCHEDULE_CHANGE_HIGHLIGHT_MS = 60_000;
+const AUTO_SCHEDULE_SYNC_INTERVAL_MS = 15_000;
 const SELECTION_CONFIGURATION_STATUSES = new Set(["selection_open", "selection_closed", "drafting"]);
 
 function scheduleEntryKey(employeeId: string, workDate: string) {
@@ -255,6 +255,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   const [data, setData] = useState<ScheduleState | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [autoSyncing, setAutoSyncing] = useState(false);
   const [setupDialog, setSetupDialog] = useState<"progress" | "shifts" | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -268,9 +269,13 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string> | null>(null);
   const [recentlyChangedEntryKeys, setRecentlyChangedEntryKeys] = useState<Set<string>>(() => new Set());
   const recentChangeTimersRef = useRef(new Map<string, number>());
-  const syncedDraftVersionsRef = useRef(new Set<string>());
+  const automaticSyncInFlightRef = useRef(false);
+  const automaticSyncStartedMonthsRef = useRef(new Set<string>());
+  const mutationSequenceRef = useRef(0);
   const setupDialogRef = useRef<HTMLDialogElement>(null);
   const dates = useMemo(() => monthDates(month), [month]);
+  const loadedScheduleMonth = data?.monthStart;
+  const canAutoSync = Boolean(data?.actor.canManage);
 
   const highlightChangedEntries = useCallback((entries: Array<{ employeeId: string; workDate: string }>) => {
     const keys = entries.map((entry) => scheduleEntryKey(entry.employeeId, entry.workDate));
@@ -336,9 +341,62 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
     }
   }, [month]);
 
+  const syncAutomaticSchedule = useCallback(async (showNotice = false) => {
+    if (automaticSyncInFlightRef.current) return false;
+    automaticSyncInFlightRef.current = true;
+    setAutoSyncing(true);
+    if (showNotice) {
+      setError("");
+      setNotice("");
+    }
+    const requestSequence = mutationSequenceRef.current;
+    try {
+      const response = await fetch("/api/staff-scheduling", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "ensure_schedule_draft", monthStart: `${month}-01`, view: "team" }),
+      });
+      const nextState = await parseResponse<ScheduleState>(response);
+      if (requestSequence === mutationSequenceRef.current) setData(nextState);
+      if (showNotice) setNotice("班表已依最新固定班別與排休自動同步");
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? `班表自動同步失敗：${caught.message}` : "班表自動同步失敗");
+      return false;
+    } finally {
+      automaticSyncInFlightRef.current = false;
+      setAutoSyncing(false);
+    }
+  }, [month]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const monthStart = `${month}-01`;
+    if (loading || loadedScheduleMonth !== monthStart || !canAutoSync) return;
+    if (automaticSyncStartedMonthsRef.current.has(month)) return;
+    automaticSyncStartedMonthsRef.current.add(month);
+    void syncAutomaticSchedule().then((success) => {
+      if (!success) automaticSyncStartedMonthsRef.current.delete(month);
+    });
+  }, [canAutoSync, loadedScheduleMonth, loading, month, syncAutomaticSchedule]);
+
+  useEffect(() => {
+    const monthStart = `${month}-01`;
+    if (!canAutoSync || loadedScheduleMonth !== monthStart) return;
+    const syncWhenVisible = () => {
+      if (document.visibilityState !== "visible" || loading || busy) return;
+      void syncAutomaticSchedule();
+    };
+    const interval = window.setInterval(syncWhenVisible, AUTO_SCHEDULE_SYNC_INTERVAL_MS);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+    };
+  }, [busy, canAutoSync, loadedScheduleMonth, loading, month, syncAutomaticSchedule]);
 
   useEffect(() => {
     setClosureDate(data?.facilityClosures[0]?.closure_date || "");
@@ -359,6 +417,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   }, [notice]);
 
   async function act(action: string, values: Record<string, unknown> = {}, successMessage = "已完成") {
+    const requestSequence = ++mutationSequenceRef.current;
     setBusy(true);
     setError("");
     setNotice("");
@@ -368,7 +427,8 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, monthStart: `${month}-01`, view: "team", ...values }),
       });
-      setData(await parseResponse(response));
+      const nextState = await parseResponse<ScheduleState>(response);
+      if (requestSequence === mutationSequenceRef.current) setData(nextState);
       setNotice(successMessage);
       return true;
     } catch (caught) {
@@ -380,6 +440,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   }
 
   async function assignShift(employeeId: string, workDate: string, shiftCode: ShiftChoice) {
+    ++mutationSequenceRef.current;
     const previousData = data;
     setBusy(true);
     setError("");
@@ -419,6 +480,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   }
 
   async function assignDayOff(employeeId: string, workDate: string, offKind: DayOffChoice) {
+    ++mutationSequenceRef.current;
     const previousData = data;
     setBusy(true);
     setError("");
@@ -525,14 +587,6 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
     const employee = scheduleEmployees.find((item) => item.id === preference.employee_id);
     return employee ? [{ employee, selectedDates }] : [];
   }), [data?.preferences, scheduleEmployees]);
-  const missingScheduleCellCount = data?.version
-    ? missingScheduleCellKeys({
-        monthStart: `${month}-01`,
-        employeeIds: scheduleEmployees.map((employee) => employee.id),
-        entries: data.scheduleEntries,
-      }).length
-    : 0;
-
   function toggleEmployeeVisibility(employeeId: string, checked: boolean) {
     setSelectedEmployeeIds((current) => {
       const next = new Set(current ?? scheduleEmployees.map((employee) => employee.id));
@@ -541,15 +595,6 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
       return next.size === scheduleEmployees.length ? null : next;
     });
   }
-
-  useEffect(() => {
-    const version = data?.version;
-    if (!version || version.status !== "draft" || missingScheduleCellCount === 0 || busy) return;
-    const syncKey = `${month}:${version.id}`;
-    if (syncedDraftVersionsRef.current.has(syncKey)) return;
-    syncedDraftVersionsRef.current.add(syncKey);
-    void act("sync_missing_draft_cells", {}, "已將新進員工補入目前草稿，既有排班保持不變");
-  }, [busy, data?.version, missingScheduleCellCount, month]);
 
   function updateEmployeeDraft(employee: Employee, patch: Partial<Employment>) {
     if (!employee.employment) return;
@@ -573,7 +618,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
       countsTowardMiddleLimit: current.counts_toward_middle_limit,
       annualLeaveBalanceDays: current.annual_leave_balance_days,
       accruedLeaveBalanceDays: current.accrued_leave_balance_days,
-    }, `${employee.displayName}的班別設定已更新`);
+    }, `${employee.displayName}的固定班別與班表已更新`);
     if (!saved) return;
     setEmploymentDrafts((drafts) => {
       const next = { ...drafts };
@@ -744,7 +789,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
             <span className={styles.workflowBadge}>
               <i aria-hidden="true" />
               <span>流程狀態</span>
-              <strong>{data.period ? stateLabel(data.period.status) : "尚未開放"}</strong>
+              <strong>{data.period ? stateLabel(data.period.status) : "自動建立中"}</strong>
             </span>
           </div>
           <p>副理統整與初審，經理逐筆終審；發布後的實質修改會產生新版本並要求受影響員工重簽。</p>
@@ -766,12 +811,12 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
       {error ? <div className={styles.error} role="alert">{error}</div> : null}
       {notice ? <div className={styles.notice} role="status"><span>{notice}</span><button type="button" aria-label="關閉提示" onClick={() => setNotice("")}>×</button></div> : null}
 
-      {!data?.period ? (
+      {!data?.period || !data.version ? (
         <section className={styles.emptyPanel}>
-          <span className={styles.emptyIcon}>🗓️</span>
-          <h2>{month} 尚未開放排休</h2>
-          <p>開放後，員工可在前一個月 1 日至 20 日 23:59 自選 8 天；館休日若已設定會自動計入。</p>
-          <button className={styles.primaryButton} disabled={busy} onClick={() => void act("initialize_period", {}, "月份已建立，可設定館休及員工班別")}>開放這個月份</button>
+          <span className={styles.emptyIcon}>↻</span>
+          <h2>{autoSyncing ? `${month} 班表建立中` : `${month} 班表尚未完成自動建立`}</h2>
+          <p>進入此頁後會自動建立草稿，並依最新固定班別與員工排休持續更新，不需要另外按下重建按鈕。</p>
+          {!autoSyncing ? <button className={styles.primaryButton} disabled={busy} onClick={() => void syncAutomaticSchedule(true)}>重新嘗試自動建立</button> : null}
         </section>
       ) : (
         <>
@@ -992,9 +1037,9 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
             <div className={styles.panelHeading}>
               <div><span className={styles.step}>3</span><h2>副理統整表</h2></div>
               <div className={styles.actionRow}>
+                <span className={styles.autoSyncStatus} data-syncing={autoSyncing} role="status">{autoSyncing ? "正在自動同步…" : "自動同步：最多 15 秒"}</span>
                 <button className={styles.secondaryButton} disabled={busy} onClick={() => void load()}>重新整理</button>
                 {data.version ? <><a className={styles.secondaryButton} href={`/api/staff-scheduling/export?month=${month}`}>匯出 Excel</a><a className={styles.secondaryButton} href={`/manager/staff-scheduling/print?month=${month}`} target="_blank" rel="noreferrer">列印／另存 PDF</a><button className={styles.secondaryButton} onClick={exportPng}>匯出圖片</button></> : null}
-                <button className={styles.primaryButton} disabled={busy} onClick={() => void act("create_draft", {}, data.version ? "已依最新排休重建新版本" : "正式班表草稿已建立")}>{data.version ? "依排休重建新版本" : "產生正式班表草稿"}</button>
               </div>
             </div>
             {selectedPreferenceRows.length > 0 ? <div className={styles.preferenceSummary}>
@@ -1067,7 +1112,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
                   <tfoot><tr><th className={styles.nameCell}>上班人數</th>{dates.map((date) => <td key={date} className={`${styles.dateGridCell} ${dateColumnClass(date)}`}>{dailyStats.get(date)?.work || 0}</td>)}</tr><tr><th className={styles.nameCell}>休假人數</th>{dates.map((date) => <td key={date} className={`${styles.dateGridCell} ${dateColumnClass(date)}`}>{dailyStats.get(date)?.off || 0}</td>)}</tr></tfoot>
                 </table>
               </div>
-            ) : <div className={styles.placeholder}>員工選休完成後，點「產生正式班表草稿」即可看到這張表。</div>}
+            ) : <div className={styles.placeholder}>班表正在依最新固定班別與排休自動建立。</div>}
           </section>
 
           {holidayRules.length > 0 ? (
