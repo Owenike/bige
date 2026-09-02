@@ -13,7 +13,7 @@ export const BECKY_MANAGER_PREFERENCE_BACKUP_ACTION =
   "temporary_september_2026_becky_preference_cancellation_backup";
 
 export const TIME_OFF_DAYS_BY_COACH = Object.freeze({
-  Becky: Object.freeze([8, 9, 12, 13, 14, 20, 26, 27, 28, 29, 30]),
+  Becky: Object.freeze([7, 8, 9, 12, 13, 14, 20, 26, 27, 28, 29, 30]),
   Wade: Object.freeze([1, 4, 6, 7, 14, 15, 21, 22, 27, 28]),
   Wiwi: Object.freeze([6, 10, 15, 20, 23, 24, 29]),
   Una: Object.freeze([2, 11, 12, 18, 19, 25, 26]),

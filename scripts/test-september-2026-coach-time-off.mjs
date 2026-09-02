@@ -10,7 +10,7 @@ import {
 } from "./sync-september-2026-coach-time-off.mjs";
 
 const expectedDays = {
-  Becky: [8, 9, 12, 13, 14, 20, 26, 27, 28, 29, 30],
+  Becky: [7, 8, 9, 12, 13, 14, 20, 26, 27, 28, 29, 30],
   Wade: [1, 4, 6, 7, 14, 15, 21, 22, 27, 28],
   Wiwi: [6, 10, 15, 20, 23, 24, 29],
   Una: [2, 11, 12, 18, 19, 25, 26],
@@ -24,8 +24,8 @@ assert.deepEqual(TIME_OFF_DAYS_BY_COACH, expectedDays);
 assert.equal(BUSINESS_CLOSURE_DATE, "2026-09-05");
 
 const plan = expectedTimeOffPlan();
-assert.equal(plan.length, 66);
-assert.equal(new Set(plan.map((item) => item.importRowKey)).size, 66);
+assert.equal(plan.length, 67);
+assert.equal(new Set(plan.map((item) => item.importRowKey)).size, 67);
 assert.equal(plan.every((item) => item.importRowKey.startsWith(`${IMPORT_PREFIX}:`)), true);
 assert.equal(plan.some((item) => item.date === BUSINESS_CLOSURE_DATE), false);
 assert.deepEqual(
@@ -44,7 +44,7 @@ const coaches = new Map(
   ]),
 );
 const rows = buildTimeOffRows({ tenantId: "tenant-1", branchId: "branch-1", coaches });
-assert.equal(rows.length, 66);
+assert.equal(rows.length, 67);
 assert.equal(rows.every((row) => row.content === "休"), true);
 assert.equal(rows.every((row) => row.source === IMPORT_SOURCE), true);
 assert.equal(rows.every((row) => row.starts_at.endsWith("T00:00:00+08:00")), true);
