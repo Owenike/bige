@@ -5,6 +5,8 @@ import test from "node:test";
 import {
   assertValidPreferenceDates,
   buildSelectionWindow,
+  currentStaffMonthStart,
+  defaultStaffScheduleMonthStart,
   generateMonthlySchedule,
   isConfiguredPreferenceWindowOpen,
   isAutomaticScheduleSource,
@@ -86,6 +88,17 @@ test("next-month preference window is open from the 1st through the 20th 23:59 T
   });
   assert.equal(nextStaffPreferenceMonthStart(new Date("2026-09-30T23:59:59+08:00")), "2026-10-01");
   assert.equal(nextStaffPreferenceMonthStart(new Date("2026-10-01T00:00:00+08:00")), "2026-11-01");
+});
+
+test("staff schedule defaults to the current month after next-month preferences are complete", () => {
+  const september = new Date("2026-09-03T09:00:00+08:00");
+  assert.equal(currentStaffMonthStart(september), "2026-09-01");
+  assert.equal(defaultStaffScheduleMonthStart({ preferenceComplete: true, now: september }), "2026-09-01");
+  assert.equal(defaultStaffScheduleMonthStart({ preferenceComplete: false, now: september }), "2026-10-01");
+  assert.equal(defaultStaffScheduleMonthStart({
+    preferenceComplete: true,
+    now: new Date("2026-10-01T00:00:00+08:00"),
+  }), "2026-10-01");
 });
 
 test("configured preference windows support scheduled, forced-open, and forced-closed modes", () => {
@@ -570,6 +583,11 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(apiSource, /\.eq\("source", "temporary_coach_leave_import"\)/);
   assert.match(apiSource, /9 月日排休假同步/);
   assert.match(selfSource, /已從日排課表同步，休假日期直接顯示於月曆/);
+  assert.match(selfSource, /requestedMonth \|\| data\?\.monthStart\.slice\(0, 7\) \|\| currentStaffMonthStart\(\)/);
+  assert.match(selfSource, /if \(requestedMonth\) searchParams\.set\("month", requestedMonth\)/);
+  assert.match(apiSource, /async function defaultSelfMonthStart/);
+  assert.match(apiSource, /preference\.data\?\.status === "submitted"/);
+  assert.match(apiSource, /view === "self"[\s\S]*?await defaultSelfMonthStart\(admin, profile\)/);
   assert.match(apiSource, /params\.monthStart === nextStaffPreferenceMonthStart\(\)[\s\S]*?ensureSchedulePeriod/);
   assert.match(apiSource, /SELECTION_CONFIGURATION_STATUSES = new Set\(\["selection_open", "selection_closed", "drafting"\]\)/);
   assert.match(apiSource, /isStaffPreferenceSelectionOpen\(\{/);

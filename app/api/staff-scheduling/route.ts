@@ -12,6 +12,7 @@ import {
   DEFAULT_SHIFT_DEFINITIONS,
   assertValidPreferenceDates,
   buildSelectionWindow,
+  defaultStaffScheduleMonthStart,
   dateAfter,
   generateMonthlySchedule,
   isStaffPreferenceSelectionOpen,
@@ -238,6 +239,23 @@ async function getSelectionOverride(admin: AdminClient, periodId: string, employ
     .maybeSingle();
   if (result.error) throw new Error(result.error.message);
   return (result.data as SelectionOverrideRow | null) ?? null;
+}
+
+async function defaultSelfMonthStart(admin: AdminClient, profile: ProfileRow) {
+  if (!profile.tenant_id) throw new Error("此帳號尚未設定館別，無法使用員工班表");
+  const preferenceMonthStart = nextStaffPreferenceMonthStart();
+  const period = await getPeriod(admin, profile.tenant_id, profile.branch_id, preferenceMonthStart);
+  if (!period) return preferenceMonthStart;
+  const preference = await admin
+    .from("staff_time_off_preferences")
+    .select("status")
+    .eq("period_id", period.id)
+    .eq("employee_id", profile.id)
+    .maybeSingle();
+  if (preference.error) throw new Error(preference.error.message);
+  return defaultStaffScheduleMonthStart({
+    preferenceComplete: preference.data?.status === "submitted",
+  });
 }
 
 async function ensureDefaultShifts(admin: AdminClient, tenantId: string, branchId: string | null, actorId: string) {
@@ -1171,10 +1189,15 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
   try {
     const url = new URL(request.url);
-    const monthStart = monthStartFromInput(url.searchParams.get("month"));
+    const requestedMonth = url.searchParams.get("month");
     const view = normalizeStaffScheduleView(url.searchParams.get("view"));
     const admin = createSupabaseAdminClient();
     const profile = await getProfile(admin, auth.context.userId);
+    const monthStart = requestedMonth
+      ? monthStartFromInput(requestedMonth)
+      : view === "self"
+        ? await defaultSelfMonthStart(admin, profile)
+        : monthStartFromInput(null);
     const state = await buildState({ admin, profile, context: auth.context, monthStart, view });
     return apiSuccess(state);
   } catch (error) {

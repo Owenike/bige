@@ -225,7 +225,7 @@ export function normalizeMonthStart(value: string) {
   return toIsoDate(date);
 }
 
-export function nextStaffPreferenceMonthStart(now = new Date()) {
+function staffYearMonth(now: Date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: STAFF_TIME_ZONE,
     year: "numeric",
@@ -236,7 +236,26 @@ export function nextStaffPreferenceMonthStart(now = new Date()) {
   if (!Number.isInteger(year) || !Number.isInteger(month)) {
     throw new Error("Unable to resolve the current staff preference month");
   }
+  return { year, month };
+}
+
+export function currentStaffMonthStart(now = new Date()) {
+  const { year, month } = staffYearMonth(now);
+  return toIsoDate(new Date(Date.UTC(year, month - 1, 1)));
+}
+
+export function nextStaffPreferenceMonthStart(now = new Date()) {
+  const { year, month } = staffYearMonth(now);
   return toIsoDate(new Date(Date.UTC(year, month, 1)));
+}
+
+export function defaultStaffScheduleMonthStart(params: {
+  preferenceComplete: boolean;
+  now?: Date;
+}) {
+  return params.preferenceComplete
+    ? currentStaffMonthStart(params.now)
+    : nextStaffPreferenceMonthStart(params.now);
 }
 
 export function listMonthDates(monthStartInput: string) {

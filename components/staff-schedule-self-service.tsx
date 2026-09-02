@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  currentStaffMonthStart,
   isConfiguredPreferenceWindowOpen,
   isStaffPreferenceSelectionOpen,
-  nextStaffPreferenceMonthStart,
   staffScheduleEntryOffLabel,
   staffScheduleShiftLabel,
 } from "../lib/staff-scheduling";
@@ -197,7 +197,7 @@ function ScheduleEntryList({ entries }: { entries: SelfState["scheduleEntries"] 
 }
 
 export default function StaffScheduleSelfService({ initialMonth }: { initialMonth?: string }) {
-  const [month, setMonth] = useState(() => initialMonth || nextStaffPreferenceMonthStart().slice(0, 7));
+  const [requestedMonth, setRequestedMonth] = useState<string | undefined>(() => initialMonth);
   const [data, setData] = useState<SelfState | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [signature, setSignature] = useState<string | null>(null);
@@ -208,6 +208,7 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const month = requestedMonth || data?.monthStart.slice(0, 7) || currentStaffMonthStart().slice(0, 7);
   const calendarCells = useMemo(() => listCalendarCells(month), [month]);
   const closureDates = useMemo(() => new Set((data?.facilityClosures || []).map((item) => item.closure_date)), [data?.facilityClosures]);
 
@@ -215,7 +216,9 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/staff-scheduling?month=${month}&view=self`, { cache: "no-store" });
+      const searchParams = new URLSearchParams({ view: "self" });
+      if (requestedMonth) searchParams.set("month", requestedMonth);
+      const response = await fetch(`/api/staff-scheduling?${searchParams.toString()}`, { cache: "no-store" });
       const next = await parseResponse(response);
       setData(next);
       const preference = next.preferences.find((item) => item.employee_id === next.actor.id);
@@ -225,7 +228,7 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
     } finally {
       setLoading(false);
     }
-  }, [month]);
+  }, [requestedMonth]);
 
   useEffect(() => {
     void load();
@@ -315,7 +318,7 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
       <header className={styles.header}>
         <div><p>巨挺健身館 · 員工專區</p><h1 className={styles.greeting} lang="en">Hi! {greetingName}</h1></div>
         <div className={styles.headerActions}>
-          <label className={styles.monthField}>月份<span className={styles.monthControl}><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></span></label>
+          <label className={styles.monthField}>月份<span className={styles.monthControl}><input type="month" value={month} onChange={(event) => setRequestedMonth(event.target.value)} /></span></label>
           <a className={styles.stackedHeaderAction} href="/staff/fitness" aria-label="日排課表"><span>日排</span><span>課表</span></a>
           <a className={styles.stackedHeaderAction} href="/staff/attendance" aria-label="打卡確認"><span>打卡</span><span>確認</span></a>
           <a href="/staff/leave">請假</a>
