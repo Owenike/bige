@@ -77,10 +77,27 @@ test("facility closure counts toward the required eight preferred days", () => {
     facilityClosureDates: ["2026-10-03"],
   });
   assert.equal(dates.length, 8);
+  assert.deepEqual(assertValidPreferenceDates({
+    monthStart: "2026-10-01",
+    selectedDates: ["2026-10-04", "2026-10-10", "2026-10-11"],
+    facilityClosureDates: ["2026-10-03"],
+  }), ["2026-10-03", "2026-10-04", "2026-10-10", "2026-10-11"]);
   assert.throws(
-    () => assertValidPreferenceDates({ monthStart: "2026-10-01", selectedDates: dates.slice(0, 7) }),
-    /必須選滿 8 天/,
+    () => assertValidPreferenceDates({
+      monthStart: "2026-10-01",
+      selectedDates: ["2026-10-01", "2026-10-04", "2026-10-10", "2026-10-11", "2026-10-17", "2026-10-18", "2026-10-24", "2026-10-25"],
+      facilityClosureDates: ["2026-10-03"],
+    }),
+    /最多只能選 8 天/,
   );
+});
+
+test("incomplete preferences can be saved before the selection window closes", () => {
+  assert.deepEqual(assertValidPreferenceDates({
+    monthStart: "2026-09-01",
+    selectedDates: ["2026-09-06"],
+    facilityClosureDates: ["2026-09-05"],
+  }), ["2026-09-05", "2026-09-06"]);
 });
 
 test("monthly Saturday and Sunday days beyond eight become accrued leave", () => {
@@ -360,6 +377,10 @@ test("staff self-service leave picker keeps its mobile layout and selection disp
   assert.doesNotMatch(source, /還差 \$\{remaining\} 天/);
   assert.match(source, />儲存<\/button>/);
   assert.doesNotMatch(source, /儲存我的 \{requiredCount\} 天排休/);
+  assert.match(source, /disabled=\{busy \|\| !selectionOpen\}/);
+  assert.doesNotMatch(source, /combinedCount !== requiredCount/);
+  assert.match(source, /目前選了 \$\{combinedCount\}\/\$\{requiredCount\} 天/);
+  assert.match(source, /關閉選休前仍可繼續新增/);
   assert.match(source, /className=\{styles\.monthField\}>月份<span className=\{styles\.monthControl\}><input type="month"/);
   assert.match(source, /aria-label="日排課表"><span>日排<\/span><span>課表<\/span>/);
   assert.match(source, /aria-label="打卡確認"><span>打卡<\/span><span>確認<\/span>/);
@@ -431,6 +452,9 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(apiSource, /staff_schedule_selection_override_opened/);
   assert.match(apiSource, /SELECTION_CONFIGURATION_STATUSES = new Set\(\["selection_open", "selection_closed", "drafting"\]\)/);
   assert.match(apiSource, /isStaffPreferenceSelectionOpen\(\{/);
+  assert.match(apiSource, /status: preferenceComplete \? "submitted" : "draft"/);
+  assert.match(apiSource, /submitted_at: preferenceComplete \? submittedAt : null/);
+  assert.match(apiSource, /if \(selectedDates\.length > 0\)/);
   assert.match(selectionControlMigration, /selection_control_mode text not null default 'scheduled'/);
   assert.match(selectionControlMigration, /'scheduled', 'open', 'closed'/);
   assert.match(selectionOverrideMigration, /create table if not exists public\.staff_schedule_selection_overrides/);

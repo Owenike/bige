@@ -323,27 +323,29 @@ export function assertValidPreferenceDates(params: {
   const unique = Array.from(new Set(params.selectedDates));
   const closureDates = new Set(params.facilityClosureDates || []);
   const combined = new Set([...unique, ...closureDates]);
-  if (combined.size !== requiredCount) {
-    throw new Error(`必須選滿 ${requiredCount} 天（館休日已自動計入）`);
+  if (combined.size > requiredCount) {
+    throw new Error(`最多只能選 ${requiredCount} 天（館休日已自動計入）`);
   }
   for (const date of combined) {
     if (!monthDateSet.has(date)) throw new Error("排休日期必須位於指定月份");
   }
 
-  let consecutiveWorkDays = 0;
-  let consecutiveWorkStart = "";
-  for (const date of monthDates) {
-    if (combined.has(date)) {
-      consecutiveWorkDays = 0;
-      consecutiveWorkStart = "";
-      continue;
-    }
-    if (consecutiveWorkDays === 0) consecutiveWorkStart = date;
-    consecutiveWorkDays += 1;
-    if (consecutiveWorkDays > 6) {
-      throw new Error(
-        `${Number(consecutiveWorkStart.slice(-2))}–${Number(date.slice(-2))} 日連續上班 ${consecutiveWorkDays} 天，最多只能連續上班 6 天`,
-      );
+  if (requiredCount > 0 && combined.size === requiredCount) {
+    let consecutiveWorkDays = 0;
+    let consecutiveWorkStart = "";
+    for (const date of monthDates) {
+      if (combined.has(date)) {
+        consecutiveWorkDays = 0;
+        consecutiveWorkStart = "";
+        continue;
+      }
+      if (consecutiveWorkDays === 0) consecutiveWorkStart = date;
+      consecutiveWorkDays += 1;
+      if (consecutiveWorkDays > 6) {
+        throw new Error(
+          `${Number(consecutiveWorkStart.slice(-2))}–${Number(date.slice(-2))} 日連續上班 ${consecutiveWorkDays} 天，最多只能連續上班 6 天`,
+        );
+      }
     }
   }
   return Array.from(combined).sort();

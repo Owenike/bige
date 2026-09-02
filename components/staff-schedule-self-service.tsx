@@ -256,11 +256,11 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
       })
     : false;
   const selectionNotice = employeeOverrideOpen && !configuredSelectionOpen
-    ? "主管已為您單獨開放本月選休；關閉前可隨時重新儲存。"
+    ? "主管已為您單獨開放本月選休；關閉前可隨時儲存進度並繼續新增或修改。"
     : data?.period?.selection_control_mode === "open"
-    ? "主管已手動開放選休；關閉前可隨時重新儲存。"
+    ? "主管已手動開放選休；關閉前可隨時儲存進度並繼續新增或修改。"
     : selectionOpen
-      ? `可於 ${formatTime(data?.period?.selection_closes_at)} 前修改；送出後仍可重新儲存。`
+      ? `可於 ${formatTime(data?.period?.selection_closes_at)} 前隨時儲存進度並繼續新增或修改。`
       : data?.period?.selection_control_mode === "closed"
         ? "主管目前已關閉選休；如需修改，請直接聯絡副理。"
         : "選休期限已截止；如需修改，請直接聯絡副理。";
@@ -325,8 +325,14 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
           </div>
           <div className={styles.selectionFooter}>
             <div><strong>目前選擇：</strong><span>{selectedDaysLabel}</span></div>
-            <button type="button" disabled={busy || !selectionOpen || combinedCount !== requiredCount} onClick={() => {
-              if (window.confirm(`確認儲存 ${month} 的 ${requiredCount} 天排休日期？開放期間仍可再修改。`)) void act("save_preferences", { selectedDates: selected }, "排休日期已儲存");
+            <button type="button" disabled={busy || !selectionOpen} onClick={() => {
+              const confirmation = combinedCount === requiredCount
+                ? `確認儲存 ${month} 的 ${requiredCount} 天排休日期？開放期間仍可再修改。`
+                : `目前選了 ${combinedCount}/${requiredCount} 天，確認先儲存進度？關閉選休前仍可繼續新增。`;
+              const successMessage = combinedCount === requiredCount
+                ? "排休日期已完成並儲存"
+                : `排休進度已儲存（${combinedCount}/${requiredCount} 天）`;
+              if (window.confirm(confirmation)) void act("save_preferences", { selectedDates: selected }, successMessage);
             }}>儲存</button>
           </div>
         </section>

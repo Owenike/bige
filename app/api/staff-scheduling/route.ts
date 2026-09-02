@@ -1025,19 +1025,21 @@ export async function POST(request: Request) {
       const closures = await admin.from("staff_facility_closures").select("closure_date").eq("period_id", period.id);
       if (closures.error) throw new Error(closures.error.message);
       const closureDates = (closures.data || []).map((row) => String(row.closure_date));
-      assertValidPreferenceDates({
+      const validatedDates = assertValidPreferenceDates({
         monthStart,
         selectedDates,
         facilityClosureDates: closureDates,
         requiredCount: period.preferred_days_required,
       });
+      const preferenceComplete = validatedDates.length === period.preferred_days_required;
+      const submittedAt = new Date().toISOString();
       const upsert = await admin.from("staff_time_off_preferences").upsert({
         period_id: period.id,
         tenant_id: tenantId,
         employee_id: profile.id,
-        status: "submitted",
-        submitted_at: new Date().toISOString(),
-        last_edited_at: new Date().toISOString(),
+        status: preferenceComplete ? "submitted" : "draft",
+        submitted_at: preferenceComplete ? submittedAt : null,
+        last_edited_at: submittedAt,
       }, { onConflict: "period_id,employee_id" }).select("id, revision").single();
       if (upsert.error) throw new Error(upsert.error.message);
       const deletion = await admin
@@ -1046,23 +1048,25 @@ export async function POST(request: Request) {
         .eq("preference_id", upsert.data.id)
         .eq("source", "employee");
       if (deletion.error) throw new Error(deletion.error.message);
-      const insert = await admin.from("staff_time_off_preference_dates").insert(selectedDates.map((requestedDate) => ({
-        preference_id: upsert.data.id,
-        period_id: period.id,
-        tenant_id: tenantId,
-        employee_id: profile.id,
-        requested_date: requestedDate,
-        source: "employee",
-        created_by: profile.id,
-      })));
-      if (insert.error) throw new Error(insert.error.message);
+      if (selectedDates.length > 0) {
+        const insert = await admin.from("staff_time_off_preference_dates").insert(selectedDates.map((requestedDate) => ({
+          preference_id: upsert.data.id,
+          period_id: period.id,
+          tenant_id: tenantId,
+          employee_id: profile.id,
+          requested_date: requestedDate,
+          source: "employee",
+          created_by: profile.id,
+        })));
+        if (insert.error) throw new Error(insert.error.message);
+      }
       await writeAudit(admin, {
         tenantId,
         actorId: profile.id,
         action: "staff_time_off_preferences_saved",
         targetType: "staff_time_off_preference",
         targetId: upsert.data.id,
-        payload: { monthStart, selectedDates, facilityClosureDates: closureDates },
+        payload: { monthStart, selectedDates, facilityClosureDates: closureDates, status: preferenceComplete ? "submitted" : "draft" },
       });
     } else if (body.action === "create_draft") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: profile.id, context: auth.context, permission: "manage_schedule", message: "您沒有建立班表草稿的權限" });
