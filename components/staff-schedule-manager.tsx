@@ -578,14 +578,13 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
     return [date, { work: rows.filter((entry) => entry?.entryKind === "work").length, off: rows.filter((entry) => entry?.entryKind === "off").length }];
   })), [dates, entryMap, visibleEmployees]);
   const selectedPreferenceRows = useMemo(() => (data?.preferences || []).flatMap((preference) => {
-    if (preference.status !== "submitted") return [];
     const selectedDates = (preference.staff_time_off_preference_dates || [])
       .filter((item) => item.source === "employee")
       .map((item) => item.requested_date)
       .sort();
     if (selectedDates.length === 0) return [];
     const employee = scheduleEmployees.find((item) => item.id === preference.employee_id);
-    return employee ? [{ employee, selectedDates }] : [];
+    return employee ? [{ employee, selectedDates, complete: preference.status === "submitted" }] : [];
   }), [data?.preferences, scheduleEmployees]);
   function toggleEmployeeVisibility(employeeId: string, checked: boolean) {
     setSelectedEmployeeIds((current) => {
@@ -1044,8 +1043,8 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
             </div>
             {selectedPreferenceRows.length > 0 ? <div className={styles.preferenceSummary}>
               <strong>員工自選休假日期</strong>
-              <div>{selectedPreferenceRows.map(({ employee, selectedDates }) => (
-                <span key={employee.id}><b>{employee.displayName}{employee.englishName ? ` ${employee.englishName}` : ""}</b>{selectedDates.map((date) => Number(date.slice(-2))).join("、")} 日</span>
+              <div>{selectedPreferenceRows.map(({ employee, selectedDates, complete }) => (
+                <span key={employee.id}><b>{employee.displayName}{employee.englishName ? ` ${employee.englishName}` : ""}</b>{selectedDates.map((date) => Number(date.slice(-2))).join("、")} 日{complete ? "" : `（已選 ${selectedDates.length}/${data.period?.preferred_days_required ?? 8} 天，尚未完成）`}</span>
               ))}</div>
             </div> : null}
             {data.version ? <div className={styles.shiftPalette}>

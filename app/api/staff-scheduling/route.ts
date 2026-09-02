@@ -507,8 +507,7 @@ async function loadAutomaticScheduleGeneration(params: {
     params.admin
       .from("staff_time_off_preferences")
       .select("employee_id, staff_time_off_preference_dates(requested_date, source)")
-      .eq("period_id", params.period.id)
-      .eq("status", "submitted"),
+      .eq("period_id", params.period.id),
     params.admin.from("staff_facility_closures").select("closure_date").eq("period_id", params.period.id),
     params.admin
       .from("staff_holiday_calendar")
@@ -1023,7 +1022,6 @@ async function buildState(params: {
     return employment ? [[employee.id, configFromRows(employee, employment)] as const] : [];
   }));
   const selectedPreferenceKeys = new Set((preferenceResult.data || [])
-    .filter((preference) => preference.status === "submitted")
     .flatMap((preference) => (preference.staff_time_off_preference_dates || [])
       .filter((date: { source?: string }) => date.source === "employee")
       .map((date: { requested_date: string }) => `${preference.employee_id}:${date.requested_date}`)));
@@ -1491,18 +1489,17 @@ export async function POST(request: Request) {
       await seedKnownHolidays(admin, tenantId, monthStart, profile.id);
       const employees = await listEmployees(admin, tenantId, profile.branch_id);
       const employments = await ensureEmploymentProfiles(admin, employees, profile.id);
-      const submittedPreferences = await admin
+      const preferences = await admin
         .from("staff_time_off_preferences")
         .select("id, employee_id")
-        .eq("period_id", period.id)
-        .eq("status", "submitted");
-      if (submittedPreferences.error) throw new Error(submittedPreferences.error.message);
-      const submittedPreferenceIds = (submittedPreferences.data || []).map((preference) => String(preference.id));
-      const preferencesResult = submittedPreferenceIds.length > 0
+        .eq("period_id", period.id);
+      if (preferences.error) throw new Error(preferences.error.message);
+      const preferenceIds = (preferences.data || []).map((preference) => String(preference.id));
+      const preferencesResult = preferenceIds.length > 0
         ? await admin
             .from("staff_time_off_preference_dates")
             .select("employee_id, requested_date")
-            .in("preference_id", submittedPreferenceIds)
+            .in("preference_id", preferenceIds)
             .eq("source", "employee")
         : { data: [], error: null };
       if (preferencesResult.error) throw new Error(preferencesResult.error.message);
@@ -1634,8 +1631,7 @@ export async function POST(request: Request) {
         admin
           .from("staff_time_off_preferences")
           .select("employee_id, staff_time_off_preference_dates(requested_date, source)")
-          .eq("period_id", period.id)
-          .eq("status", "submitted"),
+          .eq("period_id", period.id),
         admin
           .from("staff_leave_requests")
           .select("employee_id, leave_type, starts_at, unit")

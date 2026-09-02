@@ -93,7 +93,7 @@ export async function GET(request: Request) {
     const employeeIds = Array.from(
       new Set((entries.data || []).map((row) => String(row.employee_id))),
     );
-    const [employees, employments, submittedPreferences] = await Promise.all([
+    const [employees, employments, preferences] = await Promise.all([
       employeeIds.length
         ? admin
             .from("profiles")
@@ -113,14 +113,13 @@ export async function GET(request: Request) {
       admin
         .from("staff_time_off_preferences")
         .select("employee_id, staff_time_off_preference_dates(requested_date, source)")
-        .eq("period_id", period.data.id)
-        .eq("status", "submitted"),
+        .eq("period_id", period.data.id),
     ]);
-    if (employees.error || employments.error || submittedPreferences.error)
+    if (employees.error || employments.error || preferences.error)
       throw new Error(
         employees.error?.message ||
           employments.error?.message ||
-          submittedPreferences.error?.message ||
+          preferences.error?.message ||
           "員工資料讀取失敗",
       );
     const employeeMap = new Map(
@@ -130,7 +129,7 @@ export async function GET(request: Request) {
       (employments.data || []).map((row) => [String(row.employee_id), row]),
     );
     const selectedPreferenceKeys = new Set(
-      (submittedPreferences.data || []).flatMap((preference) =>
+      (preferences.data || []).flatMap((preference) =>
         (preference.staff_time_off_preference_dates || [])
           .filter((date) => date.source === "employee")
           .map((date) => `${preference.employee_id}:${date.requested_date}`),

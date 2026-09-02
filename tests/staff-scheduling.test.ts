@@ -474,6 +474,10 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   const notificationSource = readFileSync(resolve(process.cwd(), "lib/in-app-notifications.ts"), "utf8");
   const selfPage = readFileSync(resolve(process.cwd(), "app/staff/schedule/page.tsx"), "utf8");
   const managerPage = readFileSync(resolve(process.cwd(), "app/manager/staff-scheduling/page.tsx"), "utf8");
+  const automaticGenerationSource = apiSource.slice(
+    apiSource.indexOf("async function loadAutomaticScheduleGeneration"),
+    apiSource.indexOf("async function replaceAutomaticScheduleRules"),
+  );
   assert.match(source, /className=\{styles\.titleRow\}[\s\S]*?全員班表控制台[\s\S]*?className=\{styles\.workflowBadge\}[\s\S]*?流程狀態[\s\S]*?stateLabel\(data\.period\.status\)/);
   assert.doesNotMatch(source, /className=\{styles\.stats\}/);
   assert.doesNotMatch(source, /<span>已選滿 8 天<\/span>|<span>尚未完成<\/span>|<span>法規阻擋<\/span>|<span>班表版本<\/span>/);
@@ -553,8 +557,9 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(styles, /\.workCell small\{color:#66778e;font-size:12px\}/);
   assert.match(styles, /\.nameCell small\{margin-top:4px;color:#65758a;font-size:13px\}/);
   assert.match(source, /員工自選休假日期/);
+  assert.match(source, /已選 \$\{selectedDates\.length\}\/\$\{data\.period\?\.preferred_days_required \?\? 8\} 天，尚未完成/);
   assert.doesNotMatch(source, /className=\{styles\.filterBar\}|className=\{styles\.gridHelp\}|此草稿仍含舊規則補排/);
-  assert.match(source, /preference\.status !== "submitted"/);
+  assert.doesNotMatch(source, /if \(preference\.status !== "submitted"\) return \[\]/);
   assert.match(source, /const scheduleEmployees = useMemo/);
   assert.match(source, /isSharedFrontdeskScheduleAccount\(employee\.employeeNumber\)/);
   assert.doesNotMatch(source, /employee\.employment\?\.work_group !== "frontdesk"/);
@@ -571,6 +576,11 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(apiSource, /body\.action === "ensure_schedule_draft"[\s\S]*?ensureAndSyncAutomaticSchedule/);
   assert.match(apiSource, /body\.action === "configure_employee"[\s\S]*?affectedEmployeeIds: \[employeeId\][\s\S]*?員工固定班別變更後自動同步班表/);
   assert.match(apiSource, /body\.action === "save_preferences"[\s\S]*?affectedEmployeeIds: \[profile\.id\][\s\S]*?員工排休變更後自動同步班表/);
+  assert.match(automaticGenerationSource, /staff_time_off_preferences[\s\S]*?\.eq\("period_id", params\.period\.id\),/);
+  assert.doesNotMatch(automaticGenerationSource, /\.eq\("status", "submitted"\)/);
+  assert.match(apiSource, /const selectedPreferenceKeys = new Set\(\(preferenceResult\.data \|\| \[\]\)\s*\.flatMap/);
+  assert.match(exportSource, /staff_time_off_preferences[\s\S]*?\.eq\("period_id", period\.data\.id\),/);
+  assert.doesNotMatch(exportSource, /\.eq\("status", "submitted"\)/);
   assert.match(source, /shiftDragStart\(event, "DEFAULT"\)[\s\S]*>復原<\/b>[\s\S]*shiftDragStart\(event, "COACH_EARLY"\)[\s\S]*shiftDragStart\(event, "COACH_MIDDLE"\)[\s\S]*shiftDragStart\(event, "COACH_PARTTIME_WEEKDAY"\)[\s\S]*dayOffDragStart\(event, "rest_day"\)[\s\S]*dayOffDragStart\(event, "regular_day_off"\)/);
   assert.match(source, /payload\.shiftCode !== "DEFAULT"/);
   assert.match(source, /action: "assign_day_off"/);
