@@ -293,7 +293,7 @@ test("one-time LINE batches are auditable, idempotent, and never become recurrin
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   const line = readFileSync("lib/bige-line-schedule.ts", "utf8");
   const migration = readFileSync(
-    "supabase/migrations/20260902211209_add_one_time_line_schedule_batches.sql",
+    "supabase/migrations/20260902213419_add_one_time_line_schedule_batches.sql",
     "utf8",
   );
   const regression = readFileSync("tests/bige_one_time_line_schedule_batch.sql", "utf8");
