@@ -3734,6 +3734,161 @@
   overflow: auto;
 }
 
+.lineBatchPanel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(224, 179, 79, 0.42);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(36, 31, 24, 0.96), rgba(16, 24, 34, 0.94));
+}
+
+.lineBatchHeader,
+.lineBatchActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.lineBatchHeader > div {
+  display: grid;
+  gap: 5px;
+}
+
+.lineBatchHeader p {
+  margin: 0;
+}
+
+.lineBatchOneTimeBadge {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  color: #2d210a;
+  border-radius: 999px;
+  background: #f4cb6c;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.lineBatchFields {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1.2fr) minmax(210px, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.lineBatchTimingField {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.lineBatchTimingField legend {
+  margin-bottom: 8px;
+}
+
+.lineBatchTimingField label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(245, 237, 220, 0.88);
+  font-size: 13px;
+}
+
+.lineBatchSearchInput {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.lineBatchSearchInput svg {
+  position: absolute;
+  left: 11px;
+  z-index: 1;
+  color: rgba(238, 231, 215, 0.58);
+  pointer-events: none;
+}
+
+.lineBatchSearchInput .input {
+  width: 100%;
+  padding-left: 35px;
+}
+
+.lineBatchSearchResults {
+  max-height: 180px;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid rgba(118, 132, 153, 0.24);
+  border-radius: 9px;
+  background: rgba(10, 17, 25, 0.64);
+}
+
+.lineBatchSearchResult {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  color: rgba(249, 243, 230, 0.94);
+  border: 1px solid rgba(118, 132, 153, 0.2);
+  border-radius: 8px;
+  background: rgba(31, 42, 54, 0.84);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lineBatchSearchResult:hover {
+  border-color: rgba(232, 196, 112, 0.58);
+}
+
+.lineBatchSearchResult span {
+  color: rgba(238, 231, 215, 0.62);
+  font-size: 12px;
+}
+
+.lineBatchSelected {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 9px;
+  border: 1px dashed rgba(224, 179, 79, 0.3);
+  border-radius: 9px;
+}
+
+.lineBatchMemberChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px 5px 10px;
+  color: #2d210a;
+  border-radius: 999px;
+  background: rgba(244, 203, 108, 0.92);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.lineBatchMemberChip button {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: inherit;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(45, 33, 10, 0.1);
+  cursor: pointer;
+}
+
 .lineNotificationIssueRow {
   display: grid;
   grid-template-columns: minmax(130px, 0.75fr) minmax(220px, 1.5fr) auto;
@@ -3774,6 +3929,24 @@
   .lineNotificationIssueRow {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .lineBatchFields {
+    grid-template-columns: 1fr;
+  }
+
+  .lineBatchHeader,
+  .lineBatchActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lineBatchOneTimeBadge {
+    align-self: flex-start;
+  }
+
+  .lineBatchActions .button {
+    width: 100%;
   }
 
   .lineNotificationMemberIssue {

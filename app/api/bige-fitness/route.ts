@@ -12,6 +12,8 @@ import {
 } from "../../../lib/bige-coach-day-status";
 import { loadBigeBusinessDaySetting } from "../../../lib/bige-business-day";
 import {
+  bigeLineScheduleMonthRange,
+  queueBigeLineScheduleBatch,
   queueBigeLineScheduleSnapshot,
   resolveActiveBigeLineGroupBinding,
 } from "../../../lib/bige-line-schedule";
@@ -1297,6 +1299,7 @@ async function loadBigeOperationsDashboard(
   });
   const admin = createSupabaseAdminClient();
   const canManageLineSchedules = canCreateBigeContract(context.employeeNumber);
+  const canScheduleLineBatch = isManager(context);
   const [
     lineBindingsResult,
     lineMembershipsResult,
@@ -1321,7 +1324,7 @@ async function loadBigeOperationsDashboard(
     canManageLineSchedules
       ? admin
           .from("bige_line_schedule_notifications")
-          .select("id, member_id, event_kind, status, attempts, max_attempts, next_retry_at, last_attempt_at, last_error, updated_at, member:members(full_name), binding:bige_line_group_bindings(group_name)")
+          .select("id, member_id, event_kind, status, attempts, max_attempts, next_retry_at, last_attempt_at, last_error, updated_at, scheduled_for, schedule_month, batch_key, member:members(full_name), binding:bige_line_group_bindings(group_name)")
           .eq("tenant_id", tenantId)
           .in("status", ["pending", "retrying", "failed"])
           .order("updated_at", { ascending: false })
@@ -1386,6 +1389,7 @@ async function loadBigeOperationsDashboard(
   return {
     businessDate,
     canUseWalkInPayments: walkInPaymentAllowed,
+    canScheduleLineBatch,
     lineGroupBindings,
     lineScheduleNotificationIssues: lineNotificationIssuesResult.data || [],
     walkInPaymentCount: walkInPayments.length,
@@ -2515,6 +2519,115 @@ export async function POST(request: Request) {
     return apiSuccess({ item: result.data });
   }
 
+  if (input.action === "queue_line_schedule_batch") {
+    if (!isManager(operationContext)) {
+      return apiError(403, "FORBIDDEN", "只有主管帳號可以建立一次性 LINE 課表補發");
+    }
+    const scheduledFor = new Date(input.scheduledFor);
+    const now = new Date();
+    if (scheduledFor.getTime() < now.getTime() - 2 * 60_000) {
+      return apiError(400, "FORBIDDEN", "發送時間已經過期，請重新選擇時間");
+    }
+    if (scheduledFor.getTime() > now.getTime() + 366 * 24 * 60 * 60_000) {
+      return apiError(400, "FORBIDDEN", "一次性發送時間不可超過一年後");
+    }
+
+    const monthRange = bigeLineScheduleMonthRange(input.scheduleMonth);
+    if (new Date(monthRange.end).getTime() <= now.getTime()) {
+      return apiError(400, "FORBIDDEN", "選定月份已沒有可補發的未來課程");
+    }
+
+    const memberIds = Array.from(new Set(input.memberIds));
+    const admin = createSupabaseAdminClient();
+    const [membersResult, bookingsResult] = await Promise.all([
+      admin
+        .from("members")
+        .select("id, full_name, store_id, is_prospect")
+        .eq("tenant_id", tenantId)
+        .in("id", memberIds),
+      admin
+        .from("bookings")
+        .select("member_id")
+        .eq("tenant_id", tenantId)
+        .eq("is_bige_schedule", true)
+        .eq("operation_kind", "pt")
+        .in("status", ACTIVE_BOOKING_STATUSES)
+        .in("member_id", memberIds)
+        .gt("starts_at", now.toISOString())
+        .gte("starts_at", monthRange.start)
+        .lt("starts_at", monthRange.end),
+    ]);
+    if (membersResult.error || bookingsResult.error) {
+      return apiError(
+        500,
+        "INTERNAL_ERROR",
+        membersResult.error?.message || bookingsResult.error?.message || "讀取補發資料失敗",
+      );
+    }
+    const membersById = new Map(
+      (membersResult.data || []).map((member) => [String(member.id), member]),
+    );
+    const invalidMembers = memberIds.filter((memberId) => {
+      const member = membersById.get(memberId);
+      return !member || member.is_prospect;
+    });
+    if (invalidMembers.length > 0) {
+      return apiError(400, "FORBIDDEN", "補發名單包含不存在或非正式會員");
+    }
+    const membersWithSchedules = new Set(
+      (bookingsResult.data || []).map((booking) => String(booking.member_id)),
+    );
+    const membersWithoutSchedules = memberIds
+      .filter((memberId) => !membersWithSchedules.has(memberId))
+      .map((memberId) => String(membersById.get(memberId)?.full_name || memberId));
+    if (membersWithoutSchedules.length > 0) {
+      return apiError(
+        409,
+        "FORBIDDEN",
+        `以下會員在 ${input.scheduleMonth} 沒有尚未開始的正式課程：${membersWithoutSchedules.join("、")}`,
+      );
+    }
+
+    const bindingChecks = await Promise.all(
+      memberIds.map(async (memberId) => ({
+        memberId,
+        result: await resolveActiveBigeLineGroupBinding({
+          supabase: admin,
+          tenantId,
+          memberId,
+        }),
+      })),
+    );
+    const bindingLookupError = bindingChecks.find((check) => check.result.error)?.result.error;
+    if (bindingLookupError) {
+      return apiError(500, "INTERNAL_ERROR", bindingLookupError);
+    }
+    const membersWithoutBindings = bindingChecks
+      .filter((check) => !check.result.data)
+      .map((check) => String(membersById.get(check.memberId)?.full_name || check.memberId));
+    if (membersWithoutBindings.length > 0) {
+      return apiError(
+        409,
+        "FORBIDDEN",
+        `以下會員尚未綁定有效的 LINE 群組：${membersWithoutBindings.join("、")}`,
+      );
+    }
+
+    const batch = await queueBigeLineScheduleBatch({
+      tenantId,
+      targets: memberIds.map((memberId) => ({
+        memberId,
+        branchId: membersById.get(memberId)?.store_id || operationContext.branchId || null,
+      })),
+      scheduleMonth: input.scheduleMonth,
+      scheduledFor: scheduledFor.toISOString(),
+      idempotencyKey: input.idempotencyKey,
+      createdBy: operationContext.userId,
+      supabase: admin,
+    });
+    return apiSuccess({ item: batch });
+  }
+
   if (input.action === "retry_line_schedule_notification") {
     if (!canCreateBigeContract(operationContext.employeeNumber)) {
       return apiError(403, "FORBIDDEN", "目前帳號不能補送學員 LINE 課表通知");
@@ -2522,7 +2635,7 @@ export async function POST(request: Request) {
     const admin = createSupabaseAdminClient();
     const notificationResult = await admin
       .from("bige_line_schedule_notifications")
-      .select("id, branch_id, member_id, status")
+      .select("id, branch_id, member_id, status, schedule_month, batch_key")
       .eq("tenant_id", tenantId)
       .eq("id", input.notificationId)
       .maybeSingle();
@@ -2543,6 +2656,13 @@ export async function POST(request: Request) {
       dedupeKey: `manual-resend:${notificationResult.data.id}:${randomUUID()}`,
       createdBy: operationContext.userId,
       manualRetryOfNotificationId: notificationResult.data.id,
+      scheduledFor: notificationResult.data.batch_key ? new Date().toISOString() : null,
+      scheduleMonth: notificationResult.data.schedule_month
+        ? String(notificationResult.data.schedule_month).slice(0, 7)
+        : null,
+      batchKey: notificationResult.data.batch_key
+        ? `manual-retry:${notificationResult.data.id}`
+        : null,
       supabase: admin,
     });
     if (!resend.notificationId) {

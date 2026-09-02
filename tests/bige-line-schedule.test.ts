@@ -4,18 +4,21 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   createContractSchema,
+  queueLineScheduleBatchSchema,
   recordWalkInPaymentSchema,
   retryLineScheduleNotificationSchema,
   setMemberLineGroupBindingSchema,
 } from "../lib/bige-fitness";
 import {
   bigeLineScheduleAnnouncementTitle,
+  bigeLineScheduleMonthRange,
   bigeLineGroupVerificationCode,
   bigeLineRetryDelayMinutes,
   buildBigeLineGroupVerificationMessage,
   buildBigeLineScheduleMessage,
   formatBigeLineGroupVerificationCode,
   isBigeLineGroupVerificationCodeRequest,
+  isBigeLineScheduleDispatchDue,
   resolveActiveBigeLineGroupBinding,
   verifyBigeLineWebhookSignature,
 } from "../lib/bige-line-schedule";
@@ -223,6 +226,101 @@ test("LINE retry cadence is 5 minutes, 15 minutes, 1 hour, then 6 hours", () => 
     [1, 2, 3, 4, 5].map(bigeLineRetryDelayMinutes),
     [5, 15, 60, 360, 360],
   );
+});
+
+test("one-time LINE batch input is bounded and requires an offset delivery time", () => {
+  const valid = {
+    action: "queue_line_schedule_batch" as const,
+    memberIds: ["00000000-0000-4000-8000-000000000091"],
+    scheduleMonth: "2026-09",
+    scheduledFor: "2026-09-04T13:00:00+08:00",
+    idempotencyKey: "line-batch-test-0001",
+  };
+  assert.equal(queueLineScheduleBatchSchema.safeParse(valid).success, true);
+  assert.equal(queueLineScheduleBatchSchema.safeParse({ ...valid, memberIds: [] }).success, false);
+  assert.equal(
+    queueLineScheduleBatchSchema.safeParse({
+      ...valid,
+      memberIds: Array.from(
+        { length: 51 },
+        (_, index) => `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      ),
+    }).success,
+    false,
+  );
+  assert.equal(
+    queueLineScheduleBatchSchema.safeParse({ ...valid, scheduleMonth: "2026-13" }).success,
+    false,
+  );
+  assert.equal(
+    queueLineScheduleBatchSchema.safeParse({
+      ...valid,
+      scheduledFor: "2026-09-04T13:00:00",
+    }).success,
+    false,
+  );
+});
+
+test("one-time LINE batches stay month-scoped and cannot dispatch before their due time", () => {
+  assert.deepEqual(bigeLineScheduleMonthRange("2026-09"), {
+    start: "2026-09-01T00:00:00+08:00",
+    end: "2026-10-01T00:00:00+08:00",
+  });
+  assert.throws(() => bigeLineScheduleMonthRange("2026-00"), /invalid_line_schedule_month/);
+
+  const now = new Date("2026-09-03T04:00:00Z");
+  assert.equal(
+    isBigeLineScheduleDispatchDue({ scheduledFor: "2026-09-03T13:00:00+08:00", now }),
+    false,
+  );
+  assert.equal(
+    isBigeLineScheduleDispatchDue({ scheduledFor: "2026-09-03T11:59:59+08:00", now }),
+    true,
+  );
+  assert.equal(
+    isBigeLineScheduleDispatchDue({
+      scheduledFor: "2026-09-03T11:00:00+08:00",
+      nextRetryAt: "2026-09-03T13:05:00+08:00",
+      now,
+    }),
+    false,
+  );
+  assert.equal(isBigeLineScheduleDispatchDue({ scheduledFor: "not-a-date", now }), false);
+});
+
+test("one-time LINE batches are auditable, idempotent, and never become recurring work", () => {
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const line = readFileSync("lib/bige-line-schedule.ts", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260902211209_add_one_time_line_schedule_batches.sql",
+    "utf8",
+  );
+  const regression = readFileSync("tests/bige_one_time_line_schedule_batch.sql", "utf8");
+
+  assert.match(route, /input\.action === "queue_line_schedule_batch"/);
+  assert.match(route, /if \(!isManager\(operationContext\)\)/);
+  assert.match(route, /membersWithoutSchedules/);
+  assert.match(route, /membersWithoutBindings/);
+  assert.match(component, /一次性批次補發/);
+  assert.match(component, /送出後不會建立每日或重複排程/);
+  assert.match(component, /僅一次/);
+  assert.match(component, /共用群組仍會依會員分開發送課表/);
+  assert.match(line, /bige_queue_line_schedule_notification_v3/);
+  assert.match(line, /scheduleMonth: notification\.schedule_month/);
+  assert.match(line, /isBigeLineScheduleDispatchDue/);
+  assert.match(migration, /add column if not exists scheduled_for timestamptz/);
+  assert.match(migration, /add column if not exists schedule_month date/);
+  assert.match(migration, /add column if not exists batch_key text/);
+  assert.match(migration, /bige_line_schedule_one_time_batch_queued/);
+  assert.match(migration, /notification\.batch_key is null/);
+  assert.match(migration, /notification\.id = p_manual_retry_of_notification_id/);
+  assert.match(migration, /grant execute on function public\.bige_queue_line_schedule_notification_v3[\s\S]*to service_role/);
+  assert.doesNotMatch(migration, /to authenticated/);
+  assert.match(regression, /duplicate queue call must stay idempotent/);
+  assert.match(regression, /ordinary schedule changes must not cancel one-time batches/);
+  assert.match(regression, /count\(distinct notification\.member_id\)/);
+  assert.match(regression, /rollback;/);
 });
 
 test("member profile exposes manual LINE binding and the audited atomic RPC", () => {

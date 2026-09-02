@@ -476,6 +476,9 @@ type LineScheduleNotificationIssue = {
   last_attempt_at: string | null;
   last_error: string | null;
   updated_at: string;
+  scheduled_for?: string | null;
+  schedule_month?: string | null;
+  batch_key?: string | null;
   member?: { full_name?: string | null } | null;
   binding?: { group_name?: string | null } | null;
 };
@@ -540,6 +543,7 @@ export type BoardData = {
   canEditContractPayment?: boolean;
   canManageCourseAllocations?: boolean;
   canCreateContract?: boolean;
+  canScheduleLineBatch?: boolean;
   canUseWalkInPayments?: boolean;
   canChangeTrialConversion?: boolean;
   canRestoreTrialConversion?: boolean;
@@ -586,6 +590,7 @@ type OperationsDashboard = Pick<
   BoardData,
   | "businessDate"
   | "canUseWalkInPayments"
+  | "canScheduleLineBatch"
   | "lineGroupBindings"
   | "lineScheduleNotificationIssues"
   | "walkInPaymentCount"
@@ -956,6 +961,28 @@ function localDate() {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+function localDateTimeInput(minutesAhead = 5) {
+  const rounded = new Date(
+    Math.ceil((Date.now() + minutesAhead * 60_000) / (5 * 60_000)) * 5 * 60_000,
+  );
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(rounded);
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value || "";
+  return `${read("year")}-${read("month")}-${read("day")}T${read("hour")}:${read("minute")}`;
+}
+
+function taipeiDateTimeInputToIso(value: string) {
+  return new Date(`${value}:00+08:00`).toISOString();
 }
 
 function shiftDate(value: string, days: number) {
@@ -1851,6 +1878,7 @@ export default function BigeFitnessOperations({
   const operationsDashboardRef = useRef<OperationsDashboard>({
     businessDate: previewData?.businessDate || date,
     canUseWalkInPayments: previewData?.canUseWalkInPayments,
+    canScheduleLineBatch: previewData?.canScheduleLineBatch,
     lineGroupBindings: previewData?.lineGroupBindings || [],
     lineScheduleNotificationIssues: previewData?.lineScheduleNotificationIssues || [],
     walkInPaymentCount: previewData?.walkInPaymentCount || 0,
@@ -1907,6 +1935,17 @@ export default function BigeFitnessOperations({
   const [memberLineBindingError, setMemberLineBindingError] = useState("");
   const [lineNotificationRetryingId, setLineNotificationRetryingId] = useState<string | null>(null);
   const [lineNotificationError, setLineNotificationError] = useState("");
+  const [lineBatchSearch, setLineBatchSearch] = useState("");
+  const [lineBatchSearchResults, setLineBatchSearchResults] = useState<Member[]>([]);
+  const [lineBatchSelectedMembers, setLineBatchSelectedMembers] = useState<Member[]>([]);
+  const [lineBatchScheduleMonth, setLineBatchScheduleMonth] = useState(() => localDate().slice(0, 7));
+  const [lineBatchTiming, setLineBatchTiming] = useState<"now" | "scheduled">("now");
+  const [lineBatchScheduledFor, setLineBatchScheduledFor] = useState(() => localDateTimeInput());
+  const [lineBatchSearching, setLineBatchSearching] = useState(false);
+  const [lineBatchSubmitting, setLineBatchSubmitting] = useState(false);
+  const [lineBatchIdempotencyKey, setLineBatchIdempotencyKey] = useState(() =>
+    `line-batch-ui:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`}`,
+  );
   const [scheduleMemberDetail, setScheduleMemberDetail] = useState<MemberDetail | null>(null);
   const [scheduleMemberDetailLoading, setScheduleMemberDetailLoading] = useState(false);
   const [scheduleMemberDetailError, setScheduleMemberDetailError] = useState("");
@@ -2002,6 +2041,7 @@ export default function BigeFitnessOperations({
     const merged = {
       ...next,
       canUseWalkInPayments: operations.canUseWalkInPayments,
+      canScheduleLineBatch: operations.canScheduleLineBatch,
       lineGroupBindings: operations.lineGroupBindings,
       lineScheduleNotificationIssues: operations.lineScheduleNotificationIssues,
       walkInPaymentCount: walkInMatchesDate ? operations.walkInPaymentCount : 0,
@@ -2047,6 +2087,7 @@ export default function BigeFitnessOperations({
     const dashboard: OperationsDashboard = {
       businessDate: next.businessDate || targetDate,
       canUseWalkInPayments: next.canUseWalkInPayments,
+      canScheduleLineBatch: next.canScheduleLineBatch,
       lineGroupBindings: next.lineGroupBindings || [],
       lineScheduleNotificationIssues: next.lineScheduleNotificationIssues || [],
       walkInPaymentCount: next.walkInPaymentCount || 0,
@@ -2556,6 +2597,44 @@ export default function BigeFitnessOperations({
       window.clearTimeout(timer);
     };
   }, [dialog, monthlyMember, monthlySearch]);
+
+  useEffect(() => {
+    if (dialog !== "line-notifications" || lineBatchSearch.trim().length < 1) {
+      setLineBatchSearchResults([]);
+      setLineBatchSearching(false);
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setLineBatchSearching(true);
+      try {
+        const response = await fetch(
+          `/api/bige-fitness?search=${encodeURIComponent(lineBatchSearch.trim())}&memberScope=formal`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(apiMessage(payload, "搜尋正式會員失敗"));
+        if (!cancelled) {
+          const selectedIds = new Set(lineBatchSelectedMembers.map((member) => member.id));
+          setLineBatchSearchResults(
+            (((payload.data || payload)?.members || []) as Member[])
+              .filter((member) => !selectedIds.has(member.id))
+              .slice(0, 12),
+          );
+        }
+      } catch {
+        if (!cancelled && !controller.signal.aborted) setLineBatchSearchResults([]);
+      } finally {
+        if (!cancelled) setLineBatchSearching(false);
+      }
+    }, 180);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [dialog, lineBatchSearch, lineBatchSelectedMembers]);
 
   const post = async (
     body: Record<string, unknown>,
@@ -3881,6 +3960,109 @@ export default function BigeFitnessOperations({
       );
     } finally {
       setLineNotificationRetryingId(null);
+    }
+  };
+
+  const addLineBatchMember = (member: Member) => {
+    setLineBatchSelectedMembers((current) =>
+      current.some((item) => item.id === member.id) ? current : [...current, member],
+    );
+    setLineBatchSearch("");
+    setLineBatchSearchResults([]);
+    setLineNotificationError("");
+  };
+
+  const removeLineBatchMember = (memberId: string) => {
+    setLineBatchSelectedMembers((current) =>
+      current.filter((member) => member.id !== memberId),
+    );
+  };
+
+  const queueOneTimeLineScheduleBatch = async () => {
+    if (lineBatchSubmitting) return;
+    if (lineBatchSelectedMembers.length === 0) {
+      setLineNotificationError("請先加入至少一位正式會員");
+      return;
+    }
+    let scheduledFor: string;
+    try {
+      scheduledFor =
+        lineBatchTiming === "now"
+          ? new Date().toISOString()
+          : taipeiDateTimeInputToIso(lineBatchScheduledFor);
+    } catch {
+      setLineNotificationError("請輸入正確的發送日期與時間");
+      return;
+    }
+    if (!Number.isFinite(new Date(scheduledFor).getTime())) {
+      setLineNotificationError("請輸入正確的發送日期與時間");
+      return;
+    }
+
+    setLineBatchSubmitting(true);
+    setLineNotificationError("");
+    try {
+      const response = await post(
+        {
+          action: "queue_line_schedule_batch",
+          memberIds: lineBatchSelectedMembers.map((member) => member.id),
+          scheduleMonth: lineBatchScheduleMonth,
+          scheduledFor,
+          idempotencyKey: lineBatchIdempotencyKey,
+        },
+        { errorPresentation: "inline" },
+      );
+      const batch = response?.item as
+        | {
+            total?: number;
+            accepted?: number;
+            failed?: number;
+            retrying?: number;
+            delivered?: number;
+            results?: Array<{ memberId?: string; status?: string; accepted?: boolean }>;
+          }
+        | undefined;
+      await loadOperationsDashboard();
+      if ((batch?.failed || 0) > 0) {
+        const queuedForRetry = batch?.retrying || 0;
+        setLineNotificationError(
+          queuedForRetry > 0
+            ? `${batch?.failed || 0} 筆未能建立，另有 ${queuedForRetry} 筆已進入自動重試；請查看下方狀態。`
+            : `${batch?.failed || 0} 筆未能建立，請查看下方狀態後重試。`,
+        );
+        const failedMemberIds = new Set(
+          (batch?.results || [])
+            .filter((result) => !result.accepted)
+            .map((result) => result.memberId)
+            .filter(Boolean),
+        );
+        setLineBatchSelectedMembers((current) =>
+          current.filter((member) => failedMemberIds.has(member.id)),
+        );
+        setLineBatchIdempotencyKey(`line-batch-ui:${crypto.randomUUID()}`);
+        return;
+      }
+      if ((batch?.retrying || 0) > 0) {
+        setSuccess(
+          `已建立 ${batch?.accepted || lineBatchSelectedMembers.length} 筆一次性發送；${batch?.delivered || 0} 筆已送達，${batch?.retrying || 0} 筆由系統自動補送`,
+        );
+      } else {
+        setSuccess(
+          lineBatchTiming === "now"
+            ? `已完成 ${batch?.accepted || lineBatchSelectedMembers.length} 筆一次性課表發送`
+            : `已安排 ${batch?.accepted || lineBatchSelectedMembers.length} 筆一次性課表發送`,
+        );
+      }
+      setLineBatchSelectedMembers([]);
+      setLineBatchSearch("");
+      setLineBatchIdempotencyKey(`line-batch-ui:${crypto.randomUUID()}`);
+      setLineBatchScheduledFor(localDateTimeInput());
+    } catch (caught) {
+      setLineNotificationError(
+        caught instanceof Error ? caught.message : "建立一次性 LINE 課表補發失敗",
+      );
+    } finally {
+      setLineBatchSubmitting(false);
     }
   };
 
@@ -6739,7 +6921,9 @@ export default function BigeFitnessOperations({
           </div>
           {data ? (
             <div className={styles.businessDayControls}>
-              {tab === "schedule" && data.canCreateContract && lineScheduleNotificationIssues.length > 0 ? (
+              {tab === "schedule" &&
+              data.canCreateContract &&
+              (data.canScheduleLineBatch || lineScheduleNotificationIssues.length > 0) ? (
                 <button
                   className={styles.lineNotificationButton}
                   data-failed={String(failedLineScheduleNotificationCount > 0)}
@@ -6751,14 +6935,16 @@ export default function BigeFitnessOperations({
                 >
                   <BellRing size={16} aria-hidden="true" />
                   LINE 通知
-                  <span
-                    className={styles.lineNotificationCountBadge}
-                    aria-label={`LINE 通知待處理 ${lineScheduleNotificationIssues.length} 筆`}
-                  >
-                    {lineScheduleNotificationIssues.length > 99
-                      ? "99+"
-                      : lineScheduleNotificationIssues.length}
-                  </span>
+                  {lineScheduleNotificationIssues.length > 0 ? (
+                    <span
+                      className={styles.lineNotificationCountBadge}
+                      aria-label={`LINE 通知待處理 ${lineScheduleNotificationIssues.length} 筆`}
+                    >
+                      {lineScheduleNotificationIssues.length > 99
+                        ? "99+"
+                        : lineScheduleNotificationIssues.length}
+                    </span>
+                  ) : null}
                 </button>
               ) : null}
               {tab === "schedule" && data.canUseWalkInPayments ? (
@@ -9677,6 +9863,133 @@ export default function BigeFitnessOperations({
       {dialog === "line-notifications" && data ? (
         <Dialog title="LINE 課表通知" onClose={() => setDialog(null)} wide>
           <div className={styles.lineNotificationWorkspace}>
+            {data.canScheduleLineBatch ? (
+              <section className={styles.lineBatchPanel} aria-labelledby="line-batch-title">
+                <div className={styles.lineBatchHeader}>
+                  <div>
+                    <strong id="line-batch-title">一次性批次補發</strong>
+                    <p className={styles.muted}>
+                      只發送選定月份的尚未開始正式課程；送出後不會建立每日或重複排程。
+                    </p>
+                  </div>
+                  <span className={styles.lineBatchOneTimeBadge}>僅一次</span>
+                </div>
+
+                <div className={styles.lineBatchFields}>
+                  <label className={styles.field}>
+                    <span className={styles.label}>課表月份</span>
+                    <input
+                      className={styles.input}
+                      type="month"
+                      min={localDate().slice(0, 7)}
+                      value={lineBatchScheduleMonth}
+                      onChange={(event) => setLineBatchScheduleMonth(event.target.value)}
+                    />
+                  </label>
+                  <fieldset className={styles.lineBatchTimingField}>
+                    <legend className={styles.label}>發送時間</legend>
+                    <label>
+                      <input
+                        type="radio"
+                        name="line-batch-timing"
+                        checked={lineBatchTiming === "now"}
+                        onChange={() => setLineBatchTiming("now")}
+                      />
+                      立即發送
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="line-batch-timing"
+                        checked={lineBatchTiming === "scheduled"}
+                        onChange={() => setLineBatchTiming("scheduled")}
+                      />
+                      指定時間
+                    </label>
+                  </fieldset>
+                  {lineBatchTiming === "scheduled" ? (
+                    <label className={styles.field}>
+                      <span className={styles.label}>台灣時間</span>
+                      <input
+                        className={styles.input}
+                        type="datetime-local"
+                        min={localDateTimeInput(0)}
+                        value={lineBatchScheduledFor}
+                        onChange={(event) => setLineBatchScheduledFor(event.target.value)}
+                      />
+                    </label>
+                  ) : null}
+                </div>
+
+                <label className={styles.field}>
+                  <span className={styles.label}>搜尋正式會員</span>
+                  <div className={styles.lineBatchSearchInput}>
+                    <Search size={16} aria-hidden="true" />
+                    <input
+                      className={styles.input}
+                      value={lineBatchSearch}
+                      onChange={(event) => setLineBatchSearch(event.target.value)}
+                      placeholder="輸入姓名、會員編號或手機"
+                    />
+                  </div>
+                </label>
+                {lineBatchSearch.trim() ? (
+                  <div className={styles.lineBatchSearchResults} aria-live="polite">
+                    {lineBatchSearching ? <span className={styles.muted}>搜尋中…</span> : null}
+                    {!lineBatchSearching && lineBatchSearchResults.length === 0 ? (
+                      <span className={styles.muted}>沒有可加入的正式會員。</span>
+                    ) : null}
+                    {lineBatchSearchResults.map((member) => (
+                      <button
+                        className={styles.lineBatchSearchResult}
+                        type="button"
+                        key={member.id}
+                        onClick={() => addLineBatchMember(member)}
+                      >
+                        <strong>{member.full_name}</strong>
+                        <span>{member.member_code || "尚無會員編號"}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className={styles.lineBatchSelected} aria-label="已選擇會員">
+                  {lineBatchSelectedMembers.map((member) => (
+                    <span className={styles.lineBatchMemberChip} key={member.id}>
+                      {member.full_name}
+                      <button
+                        type="button"
+                        aria-label={`移除 ${member.full_name}`}
+                        onClick={() => removeLineBatchMember(member.id)}
+                      >
+                        <X size={14} aria-hidden="true" />
+                      </button>
+                    </span>
+                  ))}
+                  {lineBatchSelectedMembers.length === 0 ? (
+                    <span className={styles.muted}>尚未選擇會員。</span>
+                  ) : null}
+                </div>
+
+                <div className={styles.lineBatchActions}>
+                  <span className={styles.muted}>
+                    已選 {lineBatchSelectedMembers.length} 位；共用群組仍會依會員分開發送課表。
+                  </span>
+                  <button
+                    className={`${styles.button} ${styles.primary}`}
+                    type="button"
+                    disabled={lineBatchSubmitting || lineBatchSelectedMembers.length === 0}
+                    onClick={() => void queueOneTimeLineScheduleBatch()}
+                  >
+                    {lineBatchSubmitting
+                      ? "處理中…"
+                      : lineBatchTiming === "now"
+                        ? "立即發送一次"
+                        : "安排一次性發送"}
+                  </button>
+                </div>
+              </section>
+            ) : null}
             <p className={styles.warning}>
               暫時失敗會在 5 分鐘、15 分鐘、1 小時、6 小時後自動補送；每次送出前都會重新整理成學員目前最新的未來課表。
             </p>
@@ -9700,14 +10013,21 @@ export default function BigeFitnessOperations({
                         ? "補送失敗"
                         : notification.status === "retrying"
                           ? "自動補送中"
-                          : "等待發送"}
+                          : notification.batch_key
+                            ? "一次性發送已排定"
+                            : "等待發送"}
                     </strong>
                     <span>
-                      {lineScheduleNotificationErrorLabel(notification.last_error)} · 已嘗試 {notification.attempts}/
-                      {notification.max_attempts} 次
+                      {notification.batch_key && notification.status === "pending"
+                        ? `${String(notification.schedule_month || "").slice(0, 7)} 課表 · 尚未開始發送`
+                        : `${lineScheduleNotificationErrorLabel(notification.last_error)} · 已嘗試 ${notification.attempts}/${notification.max_attempts} 次`}
                     </span>
                     <span>
-                      {notification.next_retry_at
+                      {notification.batch_key &&
+                      notification.status === "pending" &&
+                      notification.scheduled_for
+                        ? `預定發送：${formatDateTime(notification.scheduled_for)}`
+                        : notification.next_retry_at
                         ? `下次補送：${formatDateTime(notification.next_retry_at)}`
                         : `最後處理：${formatDateTime(notification.last_attempt_at || notification.updated_at)}`}
                     </span>

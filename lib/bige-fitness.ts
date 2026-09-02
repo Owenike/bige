@@ -956,6 +956,14 @@ export const retryLineScheduleNotificationSchema = z.object({
   notificationId: z.string().uuid(),
 });
 
+export const queueLineScheduleBatchSchema = z.object({
+  action: z.literal("queue_line_schedule_batch"),
+  memberIds: z.array(z.string().uuid()).min(1).max(50),
+  scheduleMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  scheduledFor: z.string().datetime({ offset: true }),
+  idempotencyKey: z.string().trim().min(8).max(120),
+});
+
 export const updatePaymentSchema = z.object({
   action: z.literal("update_payment"),
   paymentId: z.string().uuid(),
@@ -1137,6 +1145,7 @@ export const bigeFitnessActionSchema = z.discriminatedUnion("action", [
   recordWalkInPaymentSchema,
   setMemberLineGroupBindingSchema,
   retryLineScheduleNotificationSchema,
+  queueLineScheduleBatchSchema,
   updatePaymentSchema,
   completeBookingSchema,
   completeTrialOutcomeSchema,

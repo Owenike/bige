@@ -67,6 +67,30 @@ type CurrentScheduleSnapshot = {
   schedules: ScheduleRow[];
 };
 
+export function bigeLineScheduleMonthRange(scheduleMonth: string) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(scheduleMonth)) {
+    throw new Error("invalid_line_schedule_month");
+  }
+  const [year, month] = scheduleMonth.split("-").map(Number);
+  const nextMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 7);
+  return {
+    start: `${scheduleMonth}-01T00:00:00+08:00`,
+    end: `${nextMonth}-01T00:00:00+08:00`,
+  };
+}
+
+export function isBigeLineScheduleDispatchDue(params: {
+  nextRetryAt?: string | null;
+  scheduledFor?: string | null;
+  now?: Date;
+}) {
+  const availableAt = params.nextRetryAt || params.scheduledFor;
+  if (!availableAt) return true;
+  const timestamp = new Date(availableAt).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+  return timestamp <= (params.now || new Date()).getTime();
+}
+
 type ActiveLineGroupBinding = {
   id: string;
   line_group_id: string;
@@ -255,10 +279,29 @@ async function loadCurrentScheduleSnapshot(params: {
   supabase: SupabaseClient;
   tenantId: string;
   memberId: string;
+  scheduleMonth?: string | null;
 }): Promise<
   | { ok: true; data: CurrentScheduleSnapshot }
   | { ok: false; error: string; terminal?: "binding" | "member" }
 > {
+  const monthRange = params.scheduleMonth
+    ? bigeLineScheduleMonthRange(params.scheduleMonth)
+    : null;
+  let scheduleQuery = params.supabase
+    .from("bookings")
+    .select("id, starts_at, ends_at, course_type, service_name")
+    .eq("tenant_id", params.tenantId)
+    .eq("member_id", params.memberId)
+    .eq("is_bige_schedule", true)
+    .eq("operation_kind", "pt")
+    .in("status", ACTIVE_BOOKING_STATUSES)
+    .gt("starts_at", new Date().toISOString());
+  if (monthRange) {
+    scheduleQuery = scheduleQuery
+      .gte("starts_at", monthRange.start)
+      .lt("starts_at", monthRange.end);
+  }
+
   const [bindingResult, memberResult, scheduleResult] = await Promise.all([
     resolveActiveBigeLineGroupBinding(params),
     params.supabase
@@ -267,17 +310,7 @@ async function loadCurrentScheduleSnapshot(params: {
       .eq("tenant_id", params.tenantId)
       .eq("id", params.memberId)
       .maybeSingle(),
-    params.supabase
-      .from("bookings")
-      .select("id, starts_at, ends_at, course_type, service_name")
-      .eq("tenant_id", params.tenantId)
-      .eq("member_id", params.memberId)
-      .eq("is_bige_schedule", true)
-      .eq("operation_kind", "pt")
-      .in("status", ACTIVE_BOOKING_STATUSES)
-      .gt("starts_at", new Date().toISOString())
-      .order("starts_at", { ascending: true })
-      .limit(200),
+    scheduleQuery.order("starts_at", { ascending: true }).limit(200),
   ]);
   const error = bindingResult.error || memberResult.error?.message || scheduleResult.error?.message;
   if (error) return { ok: false, error };
@@ -350,7 +383,7 @@ export async function dispatchBigeLineScheduleNotification(params: {
   const supabase = params.supabase || createSupabaseAdminClient();
   const notificationResult = await supabase
     .from("bige_line_schedule_notifications")
-    .select("id, tenant_id, branch_id, member_id, event_kind, status, attempts, max_attempts")
+    .select("id, tenant_id, branch_id, member_id, event_kind, status, attempts, max_attempts, next_retry_at, scheduled_for, schedule_month, batch_key")
     .eq("id", params.notificationId)
     .maybeSingle();
   if (notificationResult.error || !notificationResult.data) {
@@ -360,6 +393,12 @@ export async function dispatchBigeLineScheduleNotification(params: {
   if (!["pending", "retrying"].includes(String(notification.status))) {
     return { ok: true as const, status: String(notification.status) };
   }
+  if (!isBigeLineScheduleDispatchDue({
+    nextRetryAt: notification.next_retry_at ? String(notification.next_retry_at) : null,
+    scheduledFor: notification.scheduled_for ? String(notification.scheduled_for) : null,
+  })) {
+    return { ok: true as const, status: "scheduled" };
+  }
 
   const attempts = Number(notification.attempts || 0) + 1;
   const maxAttempts = Number(notification.max_attempts || 5);
@@ -368,6 +407,9 @@ export async function dispatchBigeLineScheduleNotification(params: {
     supabase,
     tenantId: String(notification.tenant_id),
     memberId: String(notification.member_id),
+    scheduleMonth: notification.schedule_month
+      ? String(notification.schedule_month).slice(0, 7)
+      : null,
   });
   if (snapshot.ok === false) {
     if (snapshot.terminal === "binding") {
@@ -542,13 +584,32 @@ export async function queueBigeLineScheduleSnapshot(params: {
   dedupeKey: string;
   createdBy?: string | null;
   manualRetryOfNotificationId?: string | null;
+  scheduledFor?: string | null;
+  scheduleMonth?: string | null;
+  batchKey?: string | null;
   supabase?: SupabaseClient;
 }) {
   const supabase = params.supabase || createSupabaseAdminClient();
+  const oneTimeValues = [params.scheduledFor, params.scheduleMonth, params.batchKey];
+  const isOneTimeBatch = oneTimeValues.some(Boolean);
+  if (isOneTimeBatch && oneTimeValues.some((value) => !value)) {
+    return { ok: false as const, error: "invalid_one_time_line_schedule_request" };
+  }
+  if (params.scheduleMonth) {
+    try {
+      bigeLineScheduleMonthRange(params.scheduleMonth);
+    } catch {
+      return { ok: false as const, error: "invalid_line_schedule_month" };
+    }
+  }
+  if (params.scheduledFor && !Number.isFinite(new Date(params.scheduledFor).getTime())) {
+    return { ok: false as const, error: "invalid_line_schedule_delivery_time" };
+  }
   const snapshot = await loadCurrentScheduleSnapshot({
     supabase,
     tenantId: params.tenantId,
     memberId: params.memberId,
+    scheduleMonth: params.scheduleMonth,
   });
   if (snapshot.ok === false) {
     if (snapshot.terminal === "binding") {
@@ -561,22 +622,57 @@ export async function queueBigeLineScheduleSnapshot(params: {
     eventKind: params.eventKind,
     schedules: snapshot.data.schedules,
   });
-  const queued = await supabase.rpc("bige_queue_line_schedule_notification_v2", {
-    p_tenant_id: params.tenantId,
-    p_branch_id: params.branchId || null,
-    p_member_id: params.memberId,
-    p_binding_id: snapshot.data.binding.id,
-    p_event_kind: params.eventKind,
-    p_message: message,
-    p_schedule_snapshot: snapshot.data.schedules,
-    p_dedupe_key: params.dedupeKey,
-    p_created_by: params.createdBy || null,
-    p_manual_retry_of_notification_id: params.manualRetryOfNotificationId || null,
-  });
+  const queued = await supabase.rpc(
+    isOneTimeBatch
+      ? "bige_queue_line_schedule_notification_v3"
+      : "bige_queue_line_schedule_notification_v2",
+    {
+      p_tenant_id: params.tenantId,
+      p_branch_id: params.branchId || null,
+      p_member_id: params.memberId,
+      p_binding_id: snapshot.data.binding.id,
+      p_event_kind: params.eventKind,
+      p_message: message,
+      p_schedule_snapshot: snapshot.data.schedules,
+      p_dedupe_key: params.dedupeKey,
+      p_created_by: params.createdBy || null,
+      p_manual_retry_of_notification_id: params.manualRetryOfNotificationId || null,
+      ...(isOneTimeBatch
+        ? {
+            p_scheduled_for: params.scheduledFor,
+            p_schedule_month: `${params.scheduleMonth}-01`,
+            p_batch_key: params.batchKey,
+          }
+        : {}),
+    },
+  );
   if (queued.error) return { ok: false as const, error: queued.error.message };
   const row = Array.isArray(queued.data) ? queued.data[0] : queued.data;
   if (!row?.notification_id) return { ok: false as const, error: "line_notification_queue_failed" };
-  if (!row.inserted) return { ok: true as const, status: "deduplicated" };
+  if (!row.inserted) {
+    const existingStatus = String(row.notification_status || "pending");
+    const status =
+      existingStatus === "pending" &&
+      isOneTimeBatch &&
+      !isBigeLineScheduleDispatchDue({ scheduledFor: params.scheduledFor })
+        ? "scheduled"
+        : existingStatus;
+    return {
+      ok: !["failed", "cancelled"].includes(existingStatus),
+      status,
+      notificationId: String(row.notification_id),
+      deduplicated: true as const,
+    };
+  }
+  if (isOneTimeBatch && !isBigeLineScheduleDispatchDue({
+    scheduledFor: params.scheduledFor,
+  })) {
+    return {
+      ok: true as const,
+      status: "scheduled",
+      notificationId: String(row.notification_id),
+    };
+  }
   const delivery = await dispatchBigeLineScheduleNotification({
     supabase,
     notificationId: row.notification_id,
@@ -586,6 +682,74 @@ export async function queueBigeLineScheduleSnapshot(params: {
     status: delivery.ok ? delivery.status : "queued",
     notificationId: row.notification_id,
     error: delivery.ok ? undefined : delivery.error,
+  };
+}
+
+export async function queueBigeLineScheduleBatch(params: {
+  tenantId: string;
+  targets: Array<{ memberId: string; branchId?: string | null }>;
+  scheduleMonth: string;
+  scheduledFor: string;
+  idempotencyKey: string;
+  createdBy: string;
+  supabase?: SupabaseClient;
+}) {
+  const supabase = params.supabase || createSupabaseAdminClient();
+  const uniqueTargets = Array.from(
+    new Map(params.targets.map((target) => [target.memberId, target])).values(),
+  );
+  const batchKey = `one-time:${params.idempotencyKey}`;
+  const results: Array<{
+    memberId: string;
+    ok: boolean;
+    accepted: boolean;
+    status: string;
+    notificationId?: string;
+    error?: string;
+  }> = [];
+
+  for (const target of uniqueTargets) {
+    const dedupeHash = createHash("sha256")
+      .update(`${params.tenantId}:${params.idempotencyKey}:${target.memberId}`)
+      .digest("hex");
+    const queued = await queueBigeLineScheduleSnapshot({
+      tenantId: params.tenantId,
+      branchId: target.branchId || null,
+      memberId: target.memberId,
+      eventKind: "updated",
+      dedupeKey: `one-time:${dedupeHash}`,
+      createdBy: params.createdBy,
+      scheduledFor: params.scheduledFor,
+      scheduleMonth: params.scheduleMonth,
+      batchKey,
+      supabase,
+    });
+    const status = "status" in queued ? String(queued.status) : queued.ok ? "accepted" : "failed";
+    results.push({
+      memberId: target.memberId,
+      ok: queued.ok,
+      accepted: queued.ok || status === "queued",
+      status,
+      notificationId: "notificationId" in queued ? queued.notificationId : undefined,
+      error: queued.ok ? undefined : queued.error,
+    });
+  }
+
+  const accepted = results.filter((result) => result.accepted).length;
+  const failed = results.length - accepted;
+  const retrying = results.filter((result) => ["queued", "retrying"].includes(result.status)).length;
+  const delivered = results.filter((result) => result.status === "sent").length;
+  return {
+    ok: failed === 0,
+    batchKey,
+    scheduledFor: params.scheduledFor,
+    scheduleMonth: params.scheduleMonth,
+    total: results.length,
+    accepted,
+    failed,
+    retrying,
+    delivered,
+    results,
   };
 }
 

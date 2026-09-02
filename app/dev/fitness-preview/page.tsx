@@ -12,6 +12,7 @@ const preview: BoardData = {
   canEditContractPayment: true,
   canManageCourseAllocations: true,
   canCreateContract: true,
+  canScheduleLineBatch: true,
   canUseWalkInPayments: true,
   canChangeTrialConversion: true,
   canRestoreTrialConversion: true,
