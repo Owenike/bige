@@ -117,6 +117,7 @@
 .objectedPanel{border-color:#a84a52;background:linear-gradient(145deg,rgba(91,31,38,.92),rgba(36,14,19,.94))}
 .notice{border-color:#aa8237;background:rgba(73,52,13,.88);color:#ffe3a0}
 .error{border-color:#a84a52;background:rgba(83,27,34,.9);color:#ffd9dc}
+.readOnlyDay{cursor:default;pointer-events:none}
 .page button:focus-visible,.page a:focus-visible,.page input:focus-visible,.page textarea:focus-visible{outline:3px solid rgba(240,212,147,.62);outline-offset:2px}
 @media(max-width:800px){
   .header{padding:18px}

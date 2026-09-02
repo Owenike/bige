@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   isConfiguredPreferenceWindowOpen,
   isStaffPreferenceSelectionOpen,
+  nextStaffPreferenceMonthStart,
   staffScheduleEntryOffLabel,
   staffScheduleShiftLabel,
 } from "../lib/staff-scheduling";
@@ -58,12 +59,6 @@ type SelfState = {
   }>;
   acknowledgement: null | { status: string; signed_at: string | null; objection_reason: string | null };
 };
-
-function nextMonthValue() {
-  const now = new Date();
-  const target = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}`;
-}
 
 function listCalendarCells(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
@@ -202,7 +197,7 @@ function ScheduleEntryList({ entries }: { entries: SelfState["scheduleEntries"] 
 }
 
 export default function StaffScheduleSelfService({ initialMonth }: { initialMonth?: string }) {
-  const [month, setMonth] = useState(() => initialMonth || nextMonthValue());
+  const [month, setMonth] = useState(() => initialMonth || nextStaffPreferenceMonthStart().slice(0, 7));
   const [data, setData] = useState<SelfState | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [signature, setSignature] = useState<string | null>(null);
@@ -290,6 +285,14 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
         ? "主管目前已關閉選休；如需修改，請直接聯絡副理。"
         : "選休期限已截止；如需修改，請直接聯絡副理。";
   const sortedEntries = useMemo(() => [...(data?.scheduleEntries || [])].sort((a, b) => a.workDate.localeCompare(b.workDate)), [data?.scheduleEntries]);
+  const temporaryLeaveDates = useMemo(() => new Set(sortedEntries
+    .filter((entry) => entry.entryKind === "off" && entry.offKind !== "facility_closure")
+    .map((entry) => entry.workDate)), [sortedEntries]);
+  const temporaryLeaveCount = new Set([...temporaryLeaveDates, ...closureDates]).size;
+  const temporaryLeaveDaysLabel = [...temporaryLeaveDates, ...closureDates]
+    .sort()
+    .map((date) => `${Number(date.slice(-2))} 日`)
+    .join("、") || "本月沒有休假日";
   const greetingName = data?.actor.englishName || data?.actor.displayName || "夥伴";
 
   function toggleDate(date: string) {
@@ -326,13 +329,32 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
       {!data?.period ? (
         <section className={styles.empty}><span>🗓️</span><h2>主管尚未開放 {month} 排休</h2><p>開放後即可在這裡自選 8 天；其他法定請假不受這 8 天限制。</p></section>
       ) : data.temporarySchedule && !data.version ? (
-        <>
-          <section className={styles.publishedHeader}>
-            <div><span className={styles.kicker}>{data.temporarySchedule.label}</span><h2>{month.replace("-", " 年 ")} 月休假日</h2><p>本月休假日由日排課表同步；10 月起恢復員工選休與主管審核的正式流程。</p></div>
-            <span className={styles.statusBadge}>已同步</span>
-          </section>
-          <ScheduleEntryList entries={sortedEntries} />
-        </>
+        <section className={styles.selectionSection}>
+          <div className={styles.selectionHeader}>
+            <div>
+              <span className={styles.kicker}>{data.temporarySchedule.label}</span>
+              <h2>{month.replace("-", " 年 ")} 月</h2>
+              <p className={`${styles.selectionNotice} ${styles.selectionNoticeOpen}`}>已從日排課表同步，休假日期直接顯示於月曆。</p>
+            </div>
+            <div className={`${styles.counter} ${styles.counterDone}`}><strong>{temporaryLeaveCount}</strong><span>天休假</span></div>
+          </div>
+          <div className={styles.legend}><span><i className={styles.selectedMark} />排休</span><span><i className={styles.closureMark} />館休</span></div>
+          <div className={styles.calendar} aria-label={`${month} 休假月曆`}>
+            {["日", "一", "二", "三", "四", "五", "六"].map((label) => <div className={styles.weekday} key={label}>{label}</div>)}
+            {calendarCells.map((date, index) => date ? (
+              <div
+                key={date}
+                className={`${styles.day} ${styles.readOnlyDay} ${temporaryLeaveDates.has(date) ? styles.selectedDay : ""} ${closureDates.has(date) ? styles.closureDay : ""}`}
+              >
+                <strong>{Number(date.slice(-2))}</strong>
+                <span>{closureDates.has(date) ? "館休" : temporaryLeaveDates.has(date) ? "排休" : "未排休"}</span>
+              </div>
+            ) : <div className={styles.blankDay} key={`blank-${index}`} />)}
+          </div>
+          <div className={styles.selectionFooter}>
+            <div><strong>休假日期：</strong><span>{temporaryLeaveDaysLabel}</span></div>
+          </div>
+        </section>
       ) : !data.version ? (
         <section className={styles.selectionSection}>
           <div className={styles.selectionHeader}>

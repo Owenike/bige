@@ -15,6 +15,7 @@ import {
   monthlyAccruedLeaveCreditDays,
   monthlyDaysOffEntitlement,
   mergeAutomaticScheduleEntries,
+  nextStaffPreferenceMonthStart,
   paidMinutesForEntry,
   normalizeStaffScheduleView,
   normalizeUnselectedPreferenceEntry,
@@ -83,6 +84,8 @@ test("next-month preference window is open from the 1st through the 20th 23:59 T
     opensAt: "2026-09-01T00:00:00+08:00",
     closesAt: "2026-09-20T23:59:59+08:00",
   });
+  assert.equal(nextStaffPreferenceMonthStart(new Date("2026-09-30T23:59:59+08:00")), "2026-10-01");
+  assert.equal(nextStaffPreferenceMonthStart(new Date("2026-10-01T00:00:00+08:00")), "2026-11-01");
 });
 
 test("configured preference windows support scheduled, forced-open, and forced-closed modes", () => {
@@ -95,7 +98,9 @@ test("configured preference windows support scheduled, forced-open, and forced-c
   assert.equal(isConfiguredPreferenceWindowOpen({ ...period, selectionControlMode: "scheduled", now: new Date("2026-09-21T00:00:00+08:00") }), false);
   assert.equal(isConfiguredPreferenceWindowOpen({ ...period, selectionControlMode: "open", now: new Date("2026-09-30T12:00:00+08:00") }), true);
   assert.equal(isConfiguredPreferenceWindowOpen({ ...period, selectionControlMode: "closed", now: new Date("2026-09-10T12:00:00+08:00") }), false);
-  assert.equal(isConfiguredPreferenceWindowOpen({ ...period, status: "drafting", selectionControlMode: "open", now: new Date("2026-09-10T12:00:00+08:00") }), false);
+  assert.equal(isConfiguredPreferenceWindowOpen({ ...period, status: "drafting", selectionControlMode: "scheduled", now: new Date("2026-09-10T12:00:00+08:00") }), true);
+  assert.equal(isConfiguredPreferenceWindowOpen({ ...period, status: "selection_closed", selectionControlMode: "scheduled", now: new Date("2026-09-10T12:00:00+08:00") }), true);
+  assert.equal(isConfiguredPreferenceWindowOpen({ ...period, status: "manager_review", selectionControlMode: "open", now: new Date("2026-09-10T12:00:00+08:00") }), false);
 });
 
 test("an employee catch-up override opens only editable schedule stages", () => {
@@ -460,6 +465,9 @@ test("staff self-service leave picker keeps its mobile layout and selection disp
   const styles = readFileSync(resolve(process.cwd(), "app/staff/schedule/page.module.css"), "utf8");
   const layout = readFileSync(resolve(process.cwd(), "app/layout-chrome.tsx"), "utf8");
   const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+  const temporaryScheduleStart = source.indexOf(") : data.temporarySchedule && !data.version ? (");
+  const regularSelectionStart = source.indexOf(") : !data.version ? (", temporaryScheduleStart);
+  const temporaryScheduleSource = source.slice(temporaryScheduleStart, regularSelectionStart);
 
   assert.match(source, /const trailingCellCount = \(7 - \(cells\.length % 7\)\) % 7/);
   assert.match(source, /const selectedDaysLabel = selected\.slice\(\)\.sort\(\)/);
@@ -476,6 +484,11 @@ test("staff self-service leave picker keeps its mobile layout and selection disp
   assert.match(source, /aria-label="日排課表"><span>日排<\/span><span>課表<\/span>/);
   assert.match(source, /aria-label="打卡確認"><span>打卡<\/span><span>確認<\/span>/);
   assert.match(source, /styles\.selectionNoticeClosed/);
+  assert.ok(temporaryScheduleStart >= 0 && regularSelectionStart > temporaryScheduleStart);
+  assert.match(temporaryScheduleSource, /className=\{styles\.calendar\}/);
+  assert.match(temporaryScheduleSource, /temporaryLeaveDates\.has\(date\) \? "排休" : "未排休"/);
+  assert.doesNotMatch(temporaryScheduleSource, /ScheduleEntryList/);
+  assert.match(styles, /\.readOnlyDay\{cursor:default;pointer-events:none\}/);
   assert.match(styles, /\.monthControl\{[^}]*height:52px;min-height:52px;max-height:52px;[^}]*overflow:hidden/);
   assert.match(styles, /\.monthControl,\.headerActions a\{width:100%;height:64px;min-height:64px;max-height:64px\}/);
   assert.match(styles, /\.headerActions \.stackedHeaderAction\{flex-direction:column;/);
@@ -556,7 +569,8 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(apiSource, /\.eq\("coach_id", params\.profile\.id\)/);
   assert.match(apiSource, /\.eq\("source", "temporary_coach_leave_import"\)/);
   assert.match(apiSource, /9 月日排休假同步/);
-  assert.match(selfSource, /10 月起恢復員工選休與主管審核的正式流程/);
+  assert.match(selfSource, /已從日排課表同步，休假日期直接顯示於月曆/);
+  assert.match(apiSource, /params\.monthStart === nextStaffPreferenceMonthStart\(\)[\s\S]*?ensureSchedulePeriod/);
   assert.match(apiSource, /SELECTION_CONFIGURATION_STATUSES = new Set\(\["selection_open", "selection_closed", "drafting"\]\)/);
   assert.match(apiSource, /isStaffPreferenceSelectionOpen\(\{/);
   assert.match(apiSource, /status: preferenceComplete \? "submitted" : "draft"/);

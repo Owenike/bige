@@ -22,6 +22,7 @@ import {
   monthlyAccruedLeaveCreditDays,
   monthlyDaysOffEntitlement,
   moveDayOff,
+  nextStaffPreferenceMonthStart,
   normalizeStaffScheduleView,
   normalizeMonthStart,
   normalizeUnselectedPreferenceEntry,
@@ -129,12 +130,7 @@ const TAIWAN_2026_STATUTORY_HOLIDAYS = [
 const HOLIDAY_SOURCE_URL = "https://www.dgpa.gov.tw/information?pid=12685&uid=30";
 
 function monthStartFromInput(input: string | null | undefined) {
-  const candidate = input || (() => {
-    const now = new Date();
-    const month = now.getUTCMonth() + 2;
-    const target = new Date(Date.UTC(now.getUTCFullYear(), month - 1, 1));
-    return target.toISOString().slice(0, 7);
-  })();
+  const candidate = input || nextStaffPreferenceMonthStart().slice(0, 7);
   const parsed = monthSchema.safeParse(candidate);
   if (!parsed.success) throw new Error("月份格式錯誤");
   return normalizeMonthStart(candidate.length === 7 ? `${candidate}-01` : candidate);
@@ -931,7 +927,27 @@ async function buildState(params: {
     actorId: params.profile.id,
     allEmployeeIds: allEmployees.map((employee) => employee.id),
   });
-  const period = await getPeriod(params.admin, tenantId, params.profile.branch_id, params.monthStart);
+  let period = await getPeriod(params.admin, tenantId, params.profile.branch_id, params.monthStart);
+  if (!period && params.monthStart === nextStaffPreferenceMonthStart()) {
+    const ensuredPeriod = await ensureSchedulePeriod({
+      admin: params.admin,
+      profile: params.profile,
+      tenantId,
+      monthStart: params.monthStart,
+    });
+    period = ensuredPeriod.period;
+    if (ensuredPeriod.created) {
+      await seedKnownHolidays(params.admin, tenantId, params.monthStart, params.profile.id);
+      await writeAudit(params.admin, {
+        tenantId,
+        actorId: params.profile.id,
+        action: "staff_schedule_period_auto_initialized",
+        targetType: "staff_schedule_period",
+        targetId: period.id,
+        payload: { monthStart: params.monthStart, source: "automatic_monthly_selection_cycle" },
+      });
+    }
+  }
   if (!period) {
     return {
       actor: {

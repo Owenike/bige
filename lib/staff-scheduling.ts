@@ -225,6 +225,20 @@ export function normalizeMonthStart(value: string) {
   return toIsoDate(date);
 }
 
+export function nextStaffPreferenceMonthStart(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: STAFF_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(now);
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  if (!Number.isInteger(year) || !Number.isInteger(month)) {
+    throw new Error("Unable to resolve the current staff preference month");
+  }
+  return toIsoDate(new Date(Date.UTC(year, month, 1)));
+}
+
 export function listMonthDates(monthStartInput: string) {
   const monthStart = normalizeMonthStart(monthStartInput);
   const start = parseIsoDate(monthStart);
@@ -275,7 +289,7 @@ export function isConfiguredPreferenceWindowOpen(params: {
   selectionControlMode?: StaffSelectionControlMode | null;
   now?: Date;
 }) {
-  if (params.status !== "selection_open") return false;
+  if (!["selection_open", "selection_closed", "drafting"].includes(params.status)) return false;
   if (params.selectionControlMode === "open") return true;
   if (params.selectionControlMode === "closed") return false;
   const time = (params.now || new Date()).getTime();
