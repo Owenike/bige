@@ -8152,6 +8152,15 @@
   box-shadow: inset 0 1px 0 rgba(228, 199, 122, 0.06);
 }
 
+.frontdeskM2A[data-daily-schedule-active="true"] .coachStatusBadge[data-status="early"] {
+  color: #ffe7b3;
+  border-color: rgba(251, 191, 36, 0.62);
+  background: rgba(245, 158, 11, 0.24);
+  box-shadow:
+    0 0 12px rgba(245, 158, 11, 0.18),
+    inset 0 1px 0 rgba(255, 240, 199, 0.14);
+}
+
 .frontdeskM2A[data-daily-schedule-active="true"] .coachStatusBadge[data-status="late"] {
   color: #dcecff;
   border-color: rgba(99, 144, 202, 0.52);
@@ -8167,6 +8176,14 @@
 
 .frontdeskM2A[data-daily-schedule-active="true"] .coachHead[data-coach-status="off"] {
   background: linear-gradient(180deg, rgba(64, 31, 27, 0.86), rgba(16, 15, 16, 0.98));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .coachHead[data-coach-status="early"] {
+  border-bottom-color: rgba(251, 191, 36, 0.46);
+  background:
+    radial-gradient(circle at 50% 0, rgba(245, 158, 11, 0.2), transparent 70%),
+    linear-gradient(180deg, rgba(72, 44, 14, 0.94), rgba(18, 16, 13, 0.98));
+  box-shadow: inset 0 -2px 0 rgba(251, 191, 36, 0.28);
 }
 
 .frontdeskM2A[data-daily-schedule-active="true"] .coachHead[data-coach-status="late"] {
@@ -8213,6 +8230,15 @@
 
 .frontdeskM2A[data-daily-schedule-active="true"] .slotCell[data-coach-status="off"] {
   background: linear-gradient(180deg, rgba(85, 38, 33, 0.11), rgba(9, 12, 14, 0.95));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .timeCell[data-coach-status="early"] {
+  color: #fcd98a;
+  background: linear-gradient(90deg, rgba(88, 55, 15, 0.86), rgba(22, 18, 12, 0.98));
+}
+
+.frontdeskM2A[data-daily-schedule-active="true"] .slotCell[data-coach-status="early"] {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.12), rgba(9, 12, 14, 0.95));
 }
 
 .frontdeskM2A[data-daily-schedule-active="true"] .timeCell[data-coach-status="late"] {

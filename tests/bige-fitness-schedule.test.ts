@@ -2349,7 +2349,11 @@ test("daily schedule noir-gold palette is color-only and scoped to the active sc
   assert.match(palette, /\.bookingCompleted[\s\S]*#68ffad/);
   assert.match(palette, /\.bookingNoShow[\s\S]*#64beff/);
   assert.match(palette, /\.coachStatusBadge\[data-status="off"\][\s\S]*rgba\(105, 45, 38, 0\.28\)/);
+  assert.match(palette, /\.coachStatusBadge\[data-status="early"\][\s\S]*rgba\(245, 158, 11, 0\.24\)/);
   assert.match(palette, /\.coachStatusBadge\[data-status="late"\][\s\S]*rgba\(34, 68, 112, 0\.42\)/);
+  assert.match(palette, /\.coachHead\[data-coach-status="early"\][\s\S]*rgba\(245, 158, 11, 0\.2\)/);
+  assert.match(palette, /\.timeCell\[data-coach-status="early"\][\s\S]*#fcd98a/);
+  assert.match(palette, /\.slotCell\[data-coach-status="early"\][\s\S]*rgba\(245, 158, 11, 0\.12\)/);
   assert.doesNotMatch(
     palette,
     /(?:^|[;{]\s*)(?:display|position|inset|top|right|bottom|left|width|height|min-width|max-width|min-height|max-height|padding|margin|gap|grid-template(?:-columns|-rows)?|overflow(?:-x|-y)?|transform|border-radius|font-size|line-height|letter-spacing|white-space)\s*:/m,
