@@ -1609,6 +1609,20 @@ test("contract payment records accept the new ECPay methods and legacy card term
   assert.equal(recordPaymentSchema.safeParse({ ...baseInput, method: "card_terminal" }).success, true);
 });
 
+test("FA payment hides card terminal while preserving legacy payment compatibility", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const contractDialogStart = component.indexOf('{dialog === "contract"');
+  const planDialogStart = component.indexOf('{dialog === "plan"', contractDialogStart);
+  const contractDialog = component.slice(contractDialogStart, planDialogStart);
+
+  assert.ok(contractDialogStart >= 0);
+  assert.ok(planDialogStart > contractDialogStart);
+  assert.match(
+    contractDialog,
+    /studentPaymentContext\?\.paymentType !== "new" \? \(\s*<option value="card_terminal">刷卡機<\/option>\s*\) : null/,
+  );
+});
+
 test("one receipt can contain multiple validated payment methods", () => {
   const input = {
     action: "record_payments" as const,

@@ -10173,7 +10173,9 @@ export default function BigeFitnessOperations({
                       >
                         <option value="cash">現金</option>
                         <option value="bank_transfer">轉帳</option>
-                        <option value="card_terminal">刷卡機</option>
+                        {studentPaymentContext?.paymentType !== "new" ? (
+                          <option value="card_terminal">刷卡機</option>
+                        ) : null}
                         <option value="ecpay">綠界</option>
                         <option value="ecpay_installment">綠界分期</option>
                         <option value="acpay">ACPay</option>
