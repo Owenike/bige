@@ -9,7 +9,7 @@ import {
 import { rateLimitFixedWindow, rateLimitShared } from "../lib/rate-limit";
 
 const migration = readFileSync(
-  "supabase/migrations/20260902114706_harden_core_authorization.sql",
+  "supabase/migrations/20260902123009_harden_core_authorization.sql",
   "utf8",
 );
 
@@ -71,15 +71,16 @@ test("local fixed-window limiter blocks after the configured allowance", () => {
 });
 
 test("shared limiter keeps development and test runs local", async () => {
-  const originalNodeEnv = process.env.NODE_ENV;
-  process.env.NODE_ENV = "test";
+  const mutableEnv = process.env as Record<string, string | undefined>;
+  const originalNodeEnv = mutableEnv.NODE_ENV;
+  mutableEnv.NODE_ENV = "test";
   try {
     const key = `shared-security-test:${Date.now()}:${Math.random()}`;
     assert.equal((await rateLimitShared({ key, limit: 1, windowMs: 60_000 })).ok, true);
     assert.equal((await rateLimitShared({ key, limit: 1, windowMs: 60_000 })).ok, false);
   } finally {
-    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = originalNodeEnv;
+    if (originalNodeEnv === undefined) delete mutableEnv.NODE_ENV;
+    else mutableEnv.NODE_ENV = originalNodeEnv;
   }
 });
 
