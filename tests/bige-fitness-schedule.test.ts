@@ -3472,3 +3472,40 @@ test("frontdesk daily schedules expose the all-coach scope instead of defaulting
     /coachScheduleScope: hasAllCoachScheduleAccess \? "all" : "assigned"/,
   );
 });
+
+test("fascia plans cover every fixed session tier with matching prices and allocations", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260903155325_add_fascia_relaxation_and_knife_plans.sql",
+    "utf8",
+  );
+
+  const expectedTiers = [
+    [12, 21456, 72, 42, 21],
+    [24, 38112, 114, 84, 42],
+    [30, 44640, 135, 105, 53],
+    [36, 53568, 156, 126, 63],
+    [48, 66624, 198, 168, 84],
+    [72, 92736, 282, 252, 126],
+    [100, 118800, 380, 350, 175],
+  ];
+
+  for (const tier of expectedTiers) {
+    assert.match(
+      migration,
+      new RegExp(`\\(${tier[0]},\\s+${tier[1]}::numeric,\\s+${tier[2]},\\s+${tier[3]},\\s+${tier[4]}\\)`),
+    );
+  }
+
+  assert.match(migration, /\('relaxation', 'fascia_relaxation', '筋膜放鬆'\)/);
+  assert.match(migration, /\('fascia_knife', 'fascia_knife', '筋膜刀'\)/);
+  assert.match(migration, /jsonb_build_array\(plan_courses\.course_key\)/);
+  assert.match(
+    migration,
+    /'relaxation', case when plan_courses\.course_key = 'relaxation' then plan_tiers\.total_sessions else 0 end/,
+  );
+  assert.match(
+    migration,
+    /'fascia_knife', case when plan_courses\.course_key = 'fascia_knife' then plan_tiers\.total_sessions else 0 end/,
+  );
+  assert.match(migration, /on conflict \(tenant_id, code\) do update/);
+});
