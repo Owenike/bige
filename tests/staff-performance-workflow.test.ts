@@ -25,7 +25,7 @@ const staleDailyTopMigration = readFileSync(
   "utf8",
 );
 const finalPaymentDefaultMigration = readFileSync(
-  "supabase/migrations/20260903134118_allow_final_payment_default_sales_allocation.sql",
+  "supabase/migrations/20260903134336_allow_final_payment_default_sales_allocation.sql",
   "utf8",
 );
 const migration = readFileSync(
