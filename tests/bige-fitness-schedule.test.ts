@@ -3053,7 +3053,7 @@ test("BB is bound to a completed non-converted FA and never becomes a lesson, FA
   assert.match(migration, /extract\(epoch from \(ends_at - starts_at\)\) \/ 60 in \(30, 60, 90, 120\)/);
   assert.match(migration, /source_booking\.coach_id, 'bb', source_booking\.id/);
   assert.match(migration, /'epoEligible', false/);
-  assert.match(settlement, /\["fa", "bb", "renewal"\]\.includes/);
+  assert.match(settlement, /\["fa", "bb", "renewal", "final_payment"\]\.includes/);
   assert.match(sync, /if \(params\.originKind === "bb"\) return "bb"/);
   assert.match(route, /booking\.operation_kind === "bb" && input\.result === "completed"/);
 });

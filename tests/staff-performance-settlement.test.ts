@@ -10,7 +10,7 @@ import {
   validateSalesAllocations,
 } from "../lib/staff-performance-settlement";
 
-test("FA, BB, and renewal default half of the received amount to the origin coach", () => {
+test("FA, BB, renewal, and final payments default half of the received amount to the origin coach", () => {
   assert.deepEqual(buildDefaultSalesAllocations({ amount: 100_001, sourceType: "fa", originEmployeeId: "coach-a" }), {
     allocations: [{ employeeId: "coach-a", amount: 50_000.5, allocationKind: "origin_default" }],
     allocatedAmount: 50_000.5,
@@ -21,7 +21,11 @@ test("FA, BB, and renewal default half of the received amount to the origin coac
     allocatedAmount: 40_000,
     remainingAmount: 40_000,
   });
-  assert.equal(buildDefaultSalesAllocations({ amount: 80_000, sourceType: "final_payment", originEmployeeId: "coach-a" }).allocatedAmount, 0);
+  assert.deepEqual(buildDefaultSalesAllocations({ amount: 10_456, sourceType: "final_payment", originEmployeeId: "coach-a" }), {
+    allocations: [{ employeeId: "coach-a", amount: 5_228, allocationKind: "origin_default" }],
+    allocatedAmount: 5_228,
+    remainingAmount: 5_228,
+  });
 });
 
 test("sales allocations must add up exactly and cannot repeat an employee", () => {

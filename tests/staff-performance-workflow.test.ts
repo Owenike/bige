@@ -24,6 +24,10 @@ const staleDailyTopMigration = readFileSync(
   "supabase/migrations/20260822093355_clear_stale_daily_top_after_sales_date_alignment.sql",
   "utf8",
 );
+const finalPaymentDefaultMigration = readFileSync(
+  "supabase/migrations/20260903134118_allow_final_payment_default_sales_allocation.sql",
+  "utf8",
+);
 const migration = readFileSync(
   "supabase/migrations/20260818225608_staff_sales_allocation_epo_settlement.sql",
   "utf8",
@@ -239,9 +243,20 @@ test("sales workspace supports queue navigation, in-place allocation, manager re
   assert.match(dashboard, /reviewEvent\(selectedEvent\.id, "approve"\)/);
   assert.match(dashboard, /目前分配內容尚未儲存，確定切換到其他業績/);
   assert.match(dashboard, /退款分配已鎖定/);
+  assert.match(dashboard, /原成交教練：<b className=\{styles\.coachBilingualName\}>\{coachName\(event\.origin_employee_id\)\}<\/b>/);
+  assert.match(dashboard, /selectedEvent\.origin_employee_id === coach\.id \? <b>原成交<\/b>/);
+  assert.match(dashboard, /value=\{allocationDraft\[coach\.id\] \|\| ""\}/);
   assert.match(dashboardStyles, /\.salesWorkspaceGrid \{[^}]*grid-template-columns/);
   assert.match(dashboardStyles, /@media \(max-width: 780px\)[\s\S]*\.salesModal \{[^}]*100dvh/);
   assert.match(dashboardStyles, /@media \(max-width: 780px\)[\s\S]*\.salesWorkspaceGrid \{[^}]*grid-template-columns: 1fr/);
+});
+
+test("final payments seed an editable half allocation for the originating coach", () => {
+  assert.match(finalPaymentDefaultMigration, /target_event\.source_type not in \('fa', 'bb', 'renewal', 'final_payment'\)/);
+  assert.match(finalPaymentDefaultMigration, /round\(p_amount \+ p_remaining_amount, 2\) <> round\(target_event\.amount, 2\)/);
+  assert.match(finalPaymentDefaultMigration, /'origin_default', 'pending_manager'/);
+  assert.match(finalPaymentDefaultMigration, /from public, anon, authenticated/);
+  assert.match(finalPaymentDefaultMigration, /to service_role/);
 });
 
 test("monthly overview labels unsettled projections in operational language", () => {

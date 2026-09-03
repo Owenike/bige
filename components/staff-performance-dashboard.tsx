@@ -676,6 +676,7 @@ export default function StaffPerformanceDashboard({
       <div className={styles.eventIdentity}>
         <div><span className={styles.sourceTag}>{SOURCE_LABELS[event.source_type] || event.source_type}</span><span className={needsAttention ? styles.attentionTag : styles.queueStatus}>{actionStatus}</span></div>
         <strong>{event.label}</strong>
+        <small>原成交教練：<b className={styles.coachBilingualName}>{coachName(event.origin_employee_id)}</b></small>
         <small>{event.contract_sessions ? `${event.contract_sessions} 堂｜` : ""}{event.allocations.length ? `已分配 ${money(allocated)}` : "尚無分配"}</small>
       </div>
       <div className={styles.eventAllocation}>

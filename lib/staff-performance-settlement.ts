@@ -27,7 +27,7 @@ export function buildDefaultSalesAllocations(params: {
   originEmployeeId: string | null;
 }) {
   const totalCents = toCents(params.amount);
-  if (totalCents <= 0 || !params.originEmployeeId || !["fa", "bb", "renewal"].includes(params.sourceType)) {
+  if (totalCents <= 0 || !params.originEmployeeId || !["fa", "bb", "renewal", "final_payment"].includes(params.sourceType)) {
     return { allocations: [] as SalesAllocationDraft[], allocatedAmount: 0, remainingAmount: params.amount };
   }
   const originCents = Math.round(totalCents / 2);
