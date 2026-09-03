@@ -8,6 +8,27 @@ export type CourseFeeTier = {
   sessionRate: number;
 };
 
+export function hasUnresolvedEpoBeforeSales(params: {
+  awardStatuses: readonly string[];
+  dailyTopStatuses: readonly string[];
+}) {
+  return params.awardStatuses.includes("assistant_proposed")
+    || params.dailyTopStatuses.some((status) => ["tie_pending", "assistant_selected"].includes(status));
+}
+
+export function sortCoachesForSalesAllocation<T extends { cumulativeEpo: number }>(
+  coaches: readonly T[],
+) {
+  return coaches
+    .map((coach, index) => ({ coach, index }))
+    .sort((left, right) => {
+      const epoDifference = Math.max(0, Number(right.coach.cumulativeEpo || 0))
+        - Math.max(0, Number(left.coach.cumulativeEpo || 0));
+      return epoDifference || left.index - right.index;
+    })
+    .map(({ coach }) => coach);
+}
+
 export const FULL_TIME_COURSE_FEE_TIERS: readonly CourseFeeTier[] = [
   { salesThreshold: 0, sessionThreshold: 0, sessionRate: 250 },
   { salesThreshold: 200_000, sessionThreshold: 110, sessionRate: 280 },

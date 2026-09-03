@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import styles from "../app/staff/performance/page.module.css";
+import { hasUnresolvedEpoBeforeSales, sortCoachesForSalesAllocation } from "../lib/staff-performance";
 import {
   normalizeStaffPosition,
   positionLabel,
@@ -22,6 +23,7 @@ type CoachSummary = {
   completedSessions: number;
   confirmedEpo: number;
   projectedEpo: number;
+  cumulativeEpo: number;
   sessionRate: number;
   courseFeeAmount: number;
   salesRemaining: number;
@@ -471,6 +473,10 @@ export default function StaffPerformanceDashboard({
   }
 
   const coachMap = useMemo(() => new Map((data?.coaches || []).map((coach) => [coach.id, coach])), [data?.coaches]);
+  const allocationCoaches = useMemo(
+    () => sortCoachesForSalesAllocation(data?.coaches || []),
+    [data?.coaches],
+  );
   const coachName = (id: string | null) => {
     const coach = id ? coachMap.get(id) : null;
     return coachIdentityParts(coach).names.join("｜");
@@ -508,13 +514,17 @@ export default function StaffPerformanceDashboard({
   const epoTaskStatus = epoTaskCount ? `${epoTaskCount} 項需要確認` : pendingEpoCount ? "已送經理覆核" : "已完成";
   const viewDataReady = data?.selectedDate === date && !loading;
   const sourceDataReady = viewDataReady && !refreshing && !refreshError;
+  const salesBlockedByEpo = !reportConfirmed && sourceDataReady && hasUnresolvedEpoBeforeSales({
+    awardStatuses: dayEpo.map((award) => award.status),
+    dailyTopStatuses: topStates.map((state) => state.status),
+  });
   const activeTaskStep = reportConfirmed
     ? null
     : !viewDataReady || pendingCourseCount
       ? 1
-      : !sourceDataReady || salesTaskCount
+      : !sourceDataReady || salesBlockedByEpo
         ? 2
-        : epoTaskCount
+        : salesTaskCount
           ? 3
           : 4;
   const unavailableSourceLabel = refreshError ? "待重試" : refreshing ? "核對中…" : "讀取中…";
@@ -643,6 +653,7 @@ export default function StaffPerformanceDashboard({
   }
 
   function openSalesWorkspace() {
+    if (salesBlockedByEpo) return;
     const hasPending = actionableSalesEvents.length > 0;
     const firstEvent = (hasPending ? actionableSalesEvents : completedSalesEvents)[0] || null;
     setSalesListMode(hasPending ? "pending" : "completed");
@@ -799,15 +810,15 @@ export default function StaffPerformanceDashboard({
                     <div><strong>課程狀態</strong><span>{viewDataReady ? pendingCourseCount ? `${pendingCourseCount} 堂尚未完成` : "已完成" : "正在讀取課程資料"}</span></div>
                     {!viewDataReady ? <span className={styles.taskWaiting}>讀取中</span> : pendingCourseCount ? <Link className={styles.taskPrimaryAction} href="/manager/fitness">前往班表</Link> : <span className={styles.taskDone}>完成</span>}
                   </article>
-                  <article className={`${!sourceDataReady ? styles.taskChecking : salesTaskCount ? styles.taskPending : styles.taskReady} ${activeTaskStep === 2 ? styles.taskCurrent : ""}`} aria-current={activeTaskStep === 2 ? "step" : undefined}>
-                    <b className={styles.taskStepNumber}>{sourceDataReady && !salesTaskCount ? "✓" : "2"}</b>
-                    <div><strong>業績分配</strong><span>{sourceDataReady ? salesTaskStatus : refreshError ? "最新資料核對失敗" : "正在核對最新收款"}</span></div>
-                    <button className={sourceDataReady && salesTaskCount ? styles.taskPrimaryAction : styles.taskSecondaryAction} type="button" disabled={!sourceDataReady} onClick={openSalesWorkspace}>{!sourceDataReady ? refreshError ? "請先重試" : "核對中" : salesActionLabel}</button>
-                  </article>
-                  <article className={`${!sourceDataReady ? styles.taskChecking : epoTaskCount ? styles.taskPending : styles.taskReady} ${activeTaskStep === 3 ? styles.taskCurrent : ""}`} aria-current={activeTaskStep === 3 ? "step" : undefined}>
-                    <b className={styles.taskStepNumber}>{sourceDataReady && !epoTaskCount ? "✓" : "3"}</b>
+                  <article className={`${!sourceDataReady ? styles.taskChecking : pendingEpoCount ? styles.taskPending : styles.taskReady} ${activeTaskStep === 2 ? styles.taskCurrent : ""}`} aria-current={activeTaskStep === 2 ? "step" : undefined}>
+                    <b className={styles.taskStepNumber}>{sourceDataReady && !pendingEpoCount ? "✓" : "2"}</b>
                     <div><strong>EPO 判定</strong><span>{sourceDataReady ? epoTaskStatus : refreshError ? "最新資料核對失敗" : "正在核對最新 EPO"}</span></div>
                     <button className={sourceDataReady && epoTaskCount ? styles.taskPrimaryAction : styles.taskSecondaryAction} type="button" disabled={!sourceDataReady} onClick={() => setActiveModal("epo")}>{!sourceDataReady ? refreshError ? "請先重試" : "核對中" : epoTaskCount ? "處理 EPO" : "查看紀錄"}</button>
+                  </article>
+                  <article className={`${!sourceDataReady || salesBlockedByEpo ? styles.taskChecking : salesTaskCount ? styles.taskPending : styles.taskReady} ${activeTaskStep === 3 ? styles.taskCurrent : ""}`} aria-current={activeTaskStep === 3 ? "step" : undefined}>
+                    <b className={styles.taskStepNumber}>{sourceDataReady && !salesBlockedByEpo && !salesTaskCount ? "✓" : "3"}</b>
+                    <div><strong>業績分配</strong><span>{salesBlockedByEpo ? "請先完成 EPO 裁示" : sourceDataReady ? salesTaskStatus : refreshError ? "最新資料核對失敗" : "正在核對最新收款"}</span></div>
+                    <button className={sourceDataReady && !salesBlockedByEpo && salesTaskCount ? styles.taskPrimaryAction : styles.taskSecondaryAction} type="button" disabled={!sourceDataReady || salesBlockedByEpo} onClick={openSalesWorkspace}>{!sourceDataReady ? refreshError ? "請先重試" : "核對中" : salesBlockedByEpo ? "等待 EPO 裁示" : salesActionLabel}</button>
                   </article>
                   <article className={`${reportConfirmed ? styles.taskReady : !sourceDataReady ? styles.taskChecking : settlementAttentionCount ? styles.taskPending : styles.taskReady} ${activeTaskStep === 4 ? styles.taskCurrent : ""}`} aria-current={activeTaskStep === 4 ? "step" : undefined}>
                     <b className={styles.taskStepNumber}>{reportConfirmed ? "✓" : "4"}</b>
@@ -938,7 +949,7 @@ export default function StaffPerformanceDashboard({
                         </div>
                         <div className={styles.salesEditorHeading}><strong>{editingEventId === selectedEvent.id ? "分配給教練" : "分配明細"}</strong><span>{editingEventId === selectedEvent.id ? "輸入各教練分配金額，合計必須等於實收金額。" : selectedEvent.allocations.length ? `${selectedEvent.allocations.length} 位教練` : "尚未建立分配"}</span></div>
                         {editingEventId === selectedEvent.id ? <div className={styles.allocationEditor}>
-                          {data.coaches.map((coach) => <label key={coach.id}><span><span className={styles.coachBilingualName}>{coachName(coach.id)}</span>{selectedEvent.origin_employee_id === coach.id ? <b>原成交</b> : null}</span><div><span>NT$</span><input type="number" min="0" step="1" value={allocationDraft[coach.id] || ""} onChange={(change) => setAllocationDraft((current) => ({ ...current, [coach.id]: change.target.value }))} placeholder="0" /></div></label>)}
+                          {allocationCoaches.map((coach) => <label key={coach.id}><span><span className={styles.coachBilingualName}>{coachName(coach.id)}</span>{coach.cumulativeEpo > 0 ? <b className={styles.epoPriorityBadge}>累積 {coach.cumulativeEpo} EPO</b> : null}{selectedEvent.origin_employee_id === coach.id ? <b>原成交</b> : null}</span><div><span>NT$</span><input type="number" min="0" step="1" value={allocationDraft[coach.id] || ""} onChange={(change) => setAllocationDraft((current) => ({ ...current, [coach.id]: change.target.value }))} placeholder="0" /></div></label>)}
                         </div> : selectedEvent.allocations.length ? <div className={styles.allocationList}>{selectedEvent.allocations.map((allocation) => <span key={allocation.id}><b className={styles.coachBilingualName}>{coachName(allocation.employee_id)}</b><span>{money(allocation.amount)}{allocation.allocation_kind === "origin_default" ? "（預設 50%）" : allocation.allocation_kind === "refund_reversal" ? "（原分配扣回）" : ""}</span></span>)}</div> : <div className={styles.empty}>這筆業績尚未分配。</div>}
                         {selectedEvent.source_type === "refund" ? <div className={styles.infoBox}>退款分配已鎖定，只能按原正式分配扣回，不可改給其他人。</div> : selectedEvent.allocation_note ? <div className={styles.infoBox}>{selectedEvent.allocation_note}</div> : null}
                         {selectedEvent.review_note ? <div className={styles.infoBox}>覆核備註：{selectedEvent.review_note}</div> : null}

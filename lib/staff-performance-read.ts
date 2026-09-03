@@ -177,10 +177,11 @@ export async function getStaffPerformanceState(
   const appointmentNextIso = scope === "daily"
     ? new Date(new Date(`${selectedDate}T00:00:00+08:00`).getTime() + 24 * 60 * 60 * 1000).toISOString()
     : range.nextIso;
-  const [eventResult, allocationResult, epoResult, reportResult, bookingResult, topStateResult, courseResult, courseClosureResult, coachDayNotesResult, appointmentCredits] = await Promise.all([
+  const [eventResult, allocationResult, epoResult, cumulativeEpoResult, reportResult, bookingResult, topStateResult, courseResult, courseClosureResult, coachDayNotesResult, appointmentCredits] = await Promise.all([
     admin.from("staff_sales_events").select("*").eq("tenant_id", tenantId).gte("business_date", startDate).lte("business_date", endDate).order("source_occurred_at", { ascending: false }),
     admin.from("staff_sales_allocations").select("*, staff_sales_events!inner(business_date)").eq("tenant_id", tenantId).gte("staff_sales_events.business_date", startDate).lte("staff_sales_events.business_date", endDate),
     admin.from("staff_epo_awards").select("*").eq("tenant_id", tenantId).gte("business_date", startDate).lte("business_date", endDate).order("created_at", { ascending: false }),
+    admin.from("staff_epo_awards").select("employee_id, quantity").eq("tenant_id", tenantId).lte("business_date", selectedDate).in("status", ["manager_approved", "daily_confirmed"]),
     admin.from("staff_sales_daily_reports").select("*").eq("tenant_id", tenantId).gte("business_date", startDate).lte("business_date", endDate).order("business_date", { ascending: false }),
     scope === "month" && coachIds.length
       ? admin.from("bookings").select("id, coach_id, starts_at, course_type, operation_kind, trial_stage, status, trial_conversion_outcome, bb_conversion_outcome, converted_at, trial_booking_id").eq("tenant_id", tenantId).eq("is_bige_schedule", true).eq("status", "completed").or(`and(starts_at.gte.${range.startIso},starts_at.lt.${range.nextIso}),and(operation_kind.eq.bb,converted_at.gte.${range.startIso},converted_at.lt.${range.nextIso})`).in("coach_id", coachIds)
@@ -198,13 +199,21 @@ export async function getStaffPerformanceState(
     }),
   ]);
   const dataMs = Date.now() - dataStartedAt;
-  if (eventResult.error || allocationResult.error || epoResult.error || reportResult.error || bookingResult.error || topStateResult.error || courseResult.error || courseClosureResult.error || coachDayNotesResult.error) {
-    throw new Error(eventResult.error?.message || allocationResult.error?.message || epoResult.error?.message || reportResult.error?.message || bookingResult.error?.message || topStateResult.error?.message || courseResult.error?.message || courseClosureResult.error?.message || coachDayNotesResult.error?.message || "業績資料讀取失敗");
+  if (eventResult.error || allocationResult.error || epoResult.error || cumulativeEpoResult.error || reportResult.error || bookingResult.error || topStateResult.error || courseResult.error || courseClosureResult.error || coachDayNotesResult.error) {
+    throw new Error(eventResult.error?.message || allocationResult.error?.message || epoResult.error?.message || cumulativeEpoResult.error?.message || reportResult.error?.message || bookingResult.error?.message || topStateResult.error?.message || courseResult.error?.message || courseClosureResult.error?.message || coachDayNotesResult.error?.message || "業績資料讀取失敗");
   }
 
   const allEvents = eventResult.data || [];
   const allAllocations = allocationResult.data || [];
   const allEpo = epoResult.data || [];
+  const cumulativeEpoByEmployee = new Map<string, number>();
+  for (const award of cumulativeEpoResult.data || []) {
+    const employeeId = String(award.employee_id);
+    cumulativeEpoByEmployee.set(
+      employeeId,
+      (cumulativeEpoByEmployee.get(employeeId) || 0) + Number(award.quantity),
+    );
+  }
   const bookings = bookingResult.data || [];
   const eventsWithAllocations = allEvents.map((event) => ({
     ...event,
@@ -241,6 +250,7 @@ export async function getStaffPerformanceState(
       projectedSales,
       confirmedEpo: allEpo.filter((row) => String(row.employee_id) === employeeId && row.status === "daily_confirmed").reduce((sum, row) => sum + Number(row.quantity), 0),
       projectedEpo: allEpo.filter((row) => String(row.employee_id) === employeeId && ["assistant_proposed", "manager_approved", "daily_confirmed"].includes(String(row.status))).reduce((sum, row) => sum + Number(row.quantity), 0),
+      cumulativeEpo: cumulativeEpoByEmployee.get(employeeId) || 0,
       formalCourseCounts: formalCourseCounts(coachScheduledBookings),
       faExecutionCounts: faExecutionCounts(coachScheduledBookings),
       faConverted,

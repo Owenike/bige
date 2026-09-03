@@ -9,6 +9,28 @@ import {
   sessionLoadEpoRule,
   validateSalesAllocations,
 } from "../lib/staff-performance-settlement";
+import { hasUnresolvedEpoBeforeSales, sortCoachesForSalesAllocation } from "../lib/staff-performance";
+
+test("sales handling waits for every EPO decision state but not approved awards", () => {
+  assert.equal(hasUnresolvedEpoBeforeSales({ awardStatuses: ["assistant_proposed"], dailyTopStatuses: [] }), true);
+  assert.equal(hasUnresolvedEpoBeforeSales({ awardStatuses: [], dailyTopStatuses: ["tie_pending"] }), true);
+  assert.equal(hasUnresolvedEpoBeforeSales({ awardStatuses: [], dailyTopStatuses: ["assistant_selected"] }), true);
+  assert.equal(hasUnresolvedEpoBeforeSales({ awardStatuses: ["manager_approved"], dailyTopStatuses: ["manager_selected"] }), false);
+});
+
+test("sales allocation prioritizes accumulated positive EPO and preserves directory order for ties", () => {
+  const coaches = [
+    { id: "zero", cumulativeEpo: 0 },
+    { id: "one", cumulativeEpo: 1 },
+    { id: "three-a", cumulativeEpo: 3 },
+    { id: "three-b", cumulativeEpo: 3 },
+    { id: "reversed", cumulativeEpo: -1 },
+  ];
+  assert.deepEqual(
+    sortCoachesForSalesAllocation(coaches).map((coach) => coach.id),
+    ["three-a", "three-b", "one", "zero", "reversed"],
+  );
+});
 
 test("FA, BB, renewal, and final payments default half of the received amount to the origin coach", () => {
   assert.deepEqual(buildDefaultSalesAllocations({ amount: 100_001, sourceType: "fa", originEmployeeId: "coach-a" }), {

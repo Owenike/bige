@@ -4,7 +4,7 @@ import { apiError, apiSuccess, requireProfile } from "../../../lib/auth-context"
 import { collectBigeLegacyPurchaseDateTargets } from "../../../lib/bige-fitness";
 import { createInAppNotifications } from "../../../lib/in-app-notifications";
 import { requireStaffPermission } from "../../../lib/staff-operation-permissions";
-import { performanceMonthRange, taiwanBusinessDate } from "../../../lib/staff-performance";
+import { hasUnresolvedEpoBeforeSales, performanceMonthRange, taiwanBusinessDate } from "../../../lib/staff-performance";
 import {
   getStaffPerformanceState,
   staffPerformancePermissions,
@@ -39,6 +39,29 @@ async function ensureDraftDay(admin: AdminClient, tenantId: string, date: string
     .eq("tenant_id", tenantId).eq("business_date", date).maybeSingle();
   if (result.error) throw new Error(result.error.message);
   if (result.data?.status === "confirmed") throw new Error("此日期已完成每日報表確認；如需修改，請由經理先重新開啟");
+}
+
+async function ensureDailyEpoResolvedBeforeSales(
+  admin: AdminClient,
+  tenantId: string,
+  businessDate: string,
+) {
+  const [awardResult, topResult] = await Promise.all([
+    admin.from("staff_epo_awards").select("status").eq("tenant_id", tenantId)
+      .eq("business_date", businessDate).eq("status", "assistant_proposed").limit(1),
+    admin.from("staff_epo_daily_top_states").select("status").eq("tenant_id", tenantId)
+      .or(`business_date.eq.${businessDate},adjustment_business_date.eq.${businessDate}`)
+      .in("status", ["tie_pending", "assistant_selected"]).limit(1),
+  ]);
+  if (awardResult.error || topResult.error) {
+    throw new Error(awardResult.error?.message || topResult.error?.message || "EPO 裁示狀態讀取失敗");
+  }
+  if (hasUnresolvedEpoBeforeSales({
+    awardStatuses: (awardResult.data || []).map((row) => String(row.status)),
+    dailyTopStatuses: (topResult.data || []).map((row) => String(row.status)),
+  })) {
+    throw new Error("請先完成 EPO 裁示，再處理業績");
+  }
 }
 
 function normalizedDatabaseMessage(message: string) {
@@ -215,6 +238,7 @@ export async function POST(request: Request) {
     if (body.action === "save_allocations") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: user.id, context: auth.context, permission: "allocate_sales_performance", message: "您沒有分配業績的權限" });
       await ensureDraftDay(admin, tenantId, body.date);
+      await ensureDailyEpoResolvedBeforeSales(admin, tenantId, body.date);
       const values = z.object({
         eventId: z.string().uuid(),
         allocations: z.array(z.object({ employeeId: z.string().uuid(), amount: z.coerce.number().positive() })).min(1).max(30),
@@ -244,6 +268,7 @@ export async function POST(request: Request) {
     } else if (body.action === "review_event") {
       await requireStaffPermission({ supabase: admin, tenantId, employeeId: user.id, context: auth.context, permission: "approve_sales_performance", message: "只有經理能覆核業績" });
       await ensureDraftDay(admin, tenantId, body.date);
+      await ensureDailyEpoResolvedBeforeSales(admin, tenantId, body.date);
       const values = z.object({ eventId: z.string().uuid(), decision: z.enum(["approve", "reject"]), note: z.string().trim().max(1000).optional() }).parse(body);
       if (values.decision === "reject" && !values.note) throw new Error("駁回時請填寫原因");
       const update = await admin.rpc("staff_review_sales_allocations_v1", {

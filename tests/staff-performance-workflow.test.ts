@@ -233,6 +233,21 @@ test("daily workbench presents one four-step flow and a consolidated allocation 
   assert.match(dashboardStyles, /@media \(max-width: 780px\)[\s\S]*\.taskList \{ grid-template-columns: 1fr; \}/);
 });
 
+test("EPO is resolved before sales and accumulated EPO coaches lead the allocation list", () => {
+  const epoStep = dashboard.indexOf("<strong>EPO 判定</strong>");
+  const salesStep = dashboard.indexOf("<strong>業績分配</strong>", epoStep);
+  assert.ok(epoStep >= 0 && salesStep > epoStep);
+  assert.match(dashboard, /const salesBlockedByEpo = !reportConfirmed && sourceDataReady && hasUnresolvedEpoBeforeSales/);
+  assert.match(dashboard, /salesBlockedByEpo \? "等待 EPO 裁示" : salesActionLabel/);
+  assert.match(route, /ensureDailyEpoResolvedBeforeSales\(admin, tenantId, body\.date\)/);
+  assert.match(route, /請先完成 EPO 裁示，再處理業績/);
+  assert.match(performanceRead, /\.lte\("business_date", selectedDate\)\.in\("status", \["manager_approved", "daily_confirmed"\]\)/);
+  assert.match(performanceRead, /cumulativeEpo: cumulativeEpoByEmployee\.get\(employeeId\) \|\| 0/);
+  assert.match(dashboard, /sortCoachesForSalesAllocation\(data\?\.coaches \|\| \[\]\)/);
+  assert.match(dashboard, /累積 \{coach\.cumulativeEpo\} EPO/);
+  assert.match(dashboardStyles, /\.epoPriorityBadge/);
+});
+
 test("sales workspace supports queue navigation, in-place allocation, manager review, and responsive full-screen use", () => {
   assert.match(dashboard, /const \[salesListMode, setSalesListMode\] = useState<SalesListMode>\("pending"\)/);
   assert.match(dashboard, /待處理 <b>\{actionableSalesEvents\.length\}<\/b>/);
@@ -248,6 +263,7 @@ test("sales workspace supports queue navigation, in-place allocation, manager re
   assert.match(dashboard, /value=\{allocationDraft\[coach\.id\] \|\| ""\}/);
   assert.match(dashboardStyles, /\.salesWorkspaceGrid \{[^}]*grid-template-columns/);
   assert.match(dashboardStyles, /@media \(max-width: 780px\)[\s\S]*\.salesModal \{[^}]*100dvh/);
+  assert.match(dashboardStyles, /\.salesModal \{[^}]*height: calc\(100dvh - 12px\);[^}]*max-height: calc\(100dvh - 12px\)/);
   assert.match(dashboardStyles, /@media \(max-width: 780px\)[\s\S]*\.salesWorkspaceGrid \{[^}]*grid-template-columns: 1fr/);
 });
 
