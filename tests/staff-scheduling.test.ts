@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 import {
+  MONTHLY_REGULAR_DAYS_OFF_BASE,
+  PREFERRED_DAYS_REQUIRED,
   assertValidPreferenceDates,
   buildSelectionWindow,
   currentStaffMonthStart,
@@ -130,13 +132,14 @@ test("an employee catch-up override opens only editable schedule stages", () => 
   assert.equal(isStaffPreferenceSelectionOpen({ ...closedPeriod, status: "published", employeeOverrideOpen: true }), false);
 });
 
-test("facility closure counts toward the required eight preferred days", () => {
+test("facility closure counts toward the required seven preferred days", () => {
   const dates = assertValidPreferenceDates({
     monthStart: "2026-10-01",
-    selectedDates: ["2026-10-04", "2026-10-10", "2026-10-11", "2026-10-17", "2026-10-18", "2026-10-24", "2026-10-25"],
+    selectedDates: ["2026-10-09", "2026-10-15", "2026-10-21", "2026-10-27", "2026-10-30", "2026-10-31"],
     facilityClosureDates: ["2026-10-03"],
   });
-  assert.equal(dates.length, 8);
+  assert.equal(PREFERRED_DAYS_REQUIRED, 7);
+  assert.equal(dates.length, 7);
   assert.deepEqual(assertValidPreferenceDates({
     monthStart: "2026-10-01",
     selectedDates: ["2026-10-04", "2026-10-10", "2026-10-11"],
@@ -145,10 +148,10 @@ test("facility closure counts toward the required eight preferred days", () => {
   assert.throws(
     () => assertValidPreferenceDates({
       monthStart: "2026-10-01",
-      selectedDates: ["2026-10-01", "2026-10-04", "2026-10-10", "2026-10-11", "2026-10-17", "2026-10-18", "2026-10-24", "2026-10-25"],
+      selectedDates: ["2026-10-01", "2026-10-04", "2026-10-10", "2026-10-11", "2026-10-17", "2026-10-18", "2026-10-24"],
       facilityClosureDates: ["2026-10-03"],
     }),
-    /最多只能選 8 天/,
+    /最多只能選 7 天/,
   );
 });
 
@@ -161,6 +164,7 @@ test("incomplete preferences can be saved before the selection window closes", (
 });
 
 test("monthly Saturday and Sunday days beyond eight become accrued leave", () => {
+  assert.equal(MONTHLY_REGULAR_DAYS_OFF_BASE, 8);
   assert.equal(monthlyDaysOffEntitlement("2026-09-01"), 8);
   assert.equal(monthlyAccruedLeaveCreditDays("2026-09-01"), 0);
   assert.equal(monthlyDaysOffEntitlement("2026-10-01"), 9);
@@ -172,12 +176,11 @@ test("monthly Saturday and Sunday days beyond eight become accrued leave", () =>
 test("preferences may cross Monday-Sunday boundaries when work streaks stay within six days", () => {
   const dates = assertValidPreferenceDates({
     monthStart: "2026-09-01",
-    selectedDates: ["2026-09-06", "2026-09-07", "2026-09-14", "2026-09-15", "2026-09-21", "2026-09-22", "2026-09-27"],
+    selectedDates: ["2026-09-07", "2026-09-14", "2026-09-15", "2026-09-21", "2026-09-22", "2026-09-27"],
     facilityClosureDates: ["2026-09-05"],
   });
   assert.deepEqual(dates, [
     "2026-09-05",
-    "2026-09-06",
     "2026-09-07",
     "2026-09-14",
     "2026-09-15",
@@ -191,7 +194,7 @@ test("preferences reject seven consecutive work days within the selected month",
   assert.throws(
     () => assertValidPreferenceDates({
       monthStart: "2026-09-01",
-      selectedDates: ["2026-09-06", "2026-09-07", "2026-09-15", "2026-09-16", "2026-09-22", "2026-09-23", "2026-09-29"],
+      selectedDates: ["2026-09-06", "2026-09-07", "2026-09-15", "2026-09-16", "2026-09-22", "2026-09-29"],
       facilityClosureDates: ["2026-09-05"],
     }),
     /8–14 日連續上班 7 天/,
@@ -536,6 +539,7 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   const middleShiftMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260828201642_update_coach_middle_shift_time.sql"), "utf8");
   const selectionControlMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260830225406_add_staff_selection_control_mode.sql"), "utf8");
   const selectionOverrideMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260901163733_add_staff_selection_overrides.sql"), "utf8");
+  const sevenDayPreferenceMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260903064323_set_staff_preferred_days_to_seven.sql"), "utf8");
   const notificationSource = readFileSync(resolve(process.cwd(), "lib/in-app-notifications.ts"), "utf8");
   const selfPage = readFileSync(resolve(process.cwd(), "app/staff/schedule/page.tsx"), "utf8");
   const managerPage = readFileSync(resolve(process.cwd(), "app/manager/staff-scheduling/page.tsx"), "utf8");
@@ -545,7 +549,7 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   );
   assert.match(source, /className=\{styles\.titleRow\}[\s\S]*?全員班表控制台[\s\S]*?className=\{styles\.workflowBadge\}[\s\S]*?流程狀態[\s\S]*?stateLabel\(data\.period\.status\)/);
   assert.doesNotMatch(source, /className=\{styles\.stats\}/);
-  assert.doesNotMatch(source, /<span>已選滿 8 天<\/span>|<span>尚未完成<\/span>|<span>法規阻擋<\/span>|<span>班表版本<\/span>/);
+  assert.doesNotMatch(source, /<span>已選滿 \d+ 天<\/span>|<span>尚未完成<\/span>|<span>法規阻擋<\/span>|<span>班表版本<\/span>/);
   assert.match(source, /className=\{styles\.setupActions\}[\s\S]*?setSetupDialog\("progress"\)[\s\S]*?館休與選休設定[\s\S]*?setSetupDialog\("shifts"\)[\s\S]*?固定班別設定/);
   assert.match(source, /setupDialogRef\.current[\s\S]*?dialog\.showModal\(\)/);
   assert.match(source, /<dialog[\s\S]*?aria-labelledby="setup-dialog-title"[\s\S]*?aria-label="關閉設定視窗"/);
@@ -633,7 +637,7 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(styles, /\.workCell small\{color:#66778e;font-size:12px\}/);
   assert.match(styles, /\.nameCell small\{margin-top:4px;color:#65758a;font-size:13px\}/);
   assert.match(source, /員工自選休假日期/);
-  assert.match(source, /已選 \$\{selectedDates\.length\}\/\$\{data\.period\?\.preferred_days_required \?\? 8\} 天，尚未完成/);
+  assert.match(source, /已選 \$\{selectedDates\.length\}\/\$\{preferredDaysRequired\} 天，尚未完成/);
   assert.doesNotMatch(source, /className=\{styles\.filterBar\}|className=\{styles\.gridHelp\}|此草稿仍含舊規則補排/);
   assert.doesNotMatch(source, /if \(preference\.status !== "submitted"\) return \[\]/);
   assert.match(source, /const scheduleEmployees = useMemo/);
@@ -661,7 +665,16 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(source, /payload\.shiftCode !== "DEFAULT"/);
   assert.match(source, /action: "assign_day_off"/);
   assert.match(apiSource, /body\.action === "assign_day_off"/);
-  assert.match(apiSource, /尚有 \$\{incompleteEmployees\.length\} 位員工未完成 8 天排休/);
+  assert.match(apiSource, /尚有 \$\{incompleteEmployees\.length\} 位員工未完成 \$\{period\.preferred_days_required\} 天排休/);
+  assert.match(selfSource, /const requiredCount = data\?\.period\?\.preferred_days_required \|\| PREFERRED_DAYS_REQUIRED/);
+  assert.match(notificationSource, /preferred_days_required/);
+  assert.match(notificationSource, /PREFERRED_DAYS_REQUIRED/);
+  assert.match(sevenDayPreferenceMigration, /alter column preferred_days_required set default 7/);
+  assert.match(sevenDayPreferenceMigration, /month_start >= date '2026-10-01'/);
+  assert.match(sevenDayPreferenceMigration, /status in \('selection_open', 'selection_closed', 'drafting'\)/);
+  assert.match(sevenDayPreferenceMigration, /preference\.status = 'draft'/);
+  assert.match(sevenDayPreferenceMigration, /totals\.selected_days = 7/);
+  assert.doesNotMatch(sevenDayPreferenceMigration, /delete from public\.staff_time_off_preference_dates/);
   assert.match(apiSource, /normalizeUnselectedPreferenceEntry/);
   assert.match(apiSource, /preferenceDateSelected: selectedPreferenceKeys\.has/);
   assert.match(exportSource, /normalizeUnselectedPreferenceEntry/);

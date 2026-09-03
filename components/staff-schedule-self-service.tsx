@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  PREFERRED_DAYS_REQUIRED,
   currentStaffMonthStart,
   isConfiguredPreferenceWindowOpen,
   isStaffPreferenceSelectionOpen,
@@ -256,7 +257,7 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
     }
   }
 
-  const requiredCount = data?.period?.preferred_days_required || 8;
+  const requiredCount = data?.period?.preferred_days_required || PREFERRED_DAYS_REQUIRED;
   const combinedCount = new Set([...selected, ...closureDates]).size;
   const remaining = Math.max(0, requiredCount - combinedCount);
   const selectedDaysLabel = selected.slice().sort().map((date) => `${Number(date.slice(-2))} 日`).join("、") || "尚未選擇";
@@ -330,7 +331,7 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
       {notice ? <div className={styles.notice}>{notice}</div> : null}
 
       {!data?.period ? (
-        <section className={styles.empty}><span>🗓️</span><h2>主管尚未開放 {month} 排休</h2><p>開放後即可在這裡自選 8 天；其他法定請假不受這 8 天限制。</p></section>
+        <section className={styles.empty}><span>🗓️</span><h2>主管尚未開放 {month} 排休</h2><p>開放後即可在這裡自選 {PREFERRED_DAYS_REQUIRED} 天；其他法定請假不受這 {PREFERRED_DAYS_REQUIRED} 天限制。</p></section>
       ) : data.temporarySchedule && !data.version ? (
         <section className={styles.selectionSection}>
           <div className={styles.selectionHeader}>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  PREFERRED_DAYS_REQUIRED,
   isSharedFrontdeskScheduleAccount,
   isConfiguredPreferenceWindowOpen,
   staffScheduleEntryOffLabel,
@@ -276,6 +277,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   const dates = useMemo(() => monthDates(month), [month]);
   const loadedScheduleMonth = data?.monthStart;
   const canAutoSync = Boolean(data?.actor.canManage);
+  const preferredDaysRequired = data?.period?.preferred_days_required ?? PREFERRED_DAYS_REQUIRED;
 
   const highlightChangedEntries = useCallback((entries: Array<{ employeeId: string; workDate: string }>) => {
     const keys = entries.map((entry) => scheduleEntryKey(entry.employeeId, entry.workDate));
@@ -712,7 +714,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
         return;
       }
       if (preferenceMap.get(employeeId)?.status !== "submitted") {
-        setError("此員工尚未完成 8 天排休，完成後才能安排休假或例假。");
+        setError(`此員工尚未完成 ${preferredDaysRequired} 天排休，完成後才能安排休假或例假。`);
         return;
       }
       if (target.entryKind === "off" && !["rest_day", "regular_day_off"].includes(target.offKind || "")) {
@@ -905,7 +907,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
                       </small>
                     </section>
                     <label className={styles.field}>
-                      <span>本月館休日（自動計入員工 8 天）</span>
+                      <span>本月館休日（自動計入員工 {preferredDaysRequired} 天）</span>
                       <div className={styles.inlineField}>
                         <input type="date" min={`${month}-01`} max={dates.at(-1)} value={closureDate} onChange={(event) => setClosureDate(event.target.value)} />
                         <button className={styles.secondaryButton} disabled={busy || !closureDate} onClick={() => void act("set_facility_closure", { closureDate }, "館休日已更新")}>儲存館休</button>
@@ -1044,7 +1046,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
             {selectedPreferenceRows.length > 0 ? <div className={styles.preferenceSummary}>
               <strong>員工自選休假日期</strong>
               <div>{selectedPreferenceRows.map(({ employee, selectedDates, complete }) => (
-                <span key={employee.id}><b>{employee.displayName}{employee.englishName ? ` ${employee.englishName}` : ""}</b>{selectedDates.map((date) => Number(date.slice(-2))).join("、")} 日{complete ? "" : `（已選 ${selectedDates.length}/${data.period?.preferred_days_required ?? 8} 天，尚未完成）`}</span>
+                <span key={employee.id}><b>{employee.displayName}{employee.englishName ? ` ${employee.englishName}` : ""}</b>{selectedDates.map((date) => Number(date.slice(-2))).join("、")} 日{complete ? "" : `（已選 ${selectedDates.length}/${preferredDaysRequired} 天，尚未完成）`}</span>
               ))}</div>
             </div> : null}
             {data.version ? <div className={styles.shiftPalette}>

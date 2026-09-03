@@ -27,7 +27,7 @@ test("family care hourly copy is removed from the employee leave form", () => {
 });
 
 test("leave page highlights navigation and leave timing rules without the monthly-limit copy", () => {
-  assert.doesNotMatch(component, /這裡的法定請假不受每月自選 8 天限制/);
+  assert.doesNotMatch(component, /這裡的法定請假不受每月自選 (?:7|8) 天限制/);
   assert.match(
     component,
     /<a className=\{styles\.scheduleLink\} href="\/staff\/schedule">/,

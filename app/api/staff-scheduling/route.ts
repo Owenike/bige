@@ -1404,7 +1404,7 @@ export async function POST(request: Request) {
           tenantId,
           recipientUserIds: [employeeId],
           title: `${monthStart.slice(0, 7)} 已單獨開放選休`,
-          message: "請進入我的班表完成本月 8 天排休；主管關閉前可重新儲存。",
+          message: `請進入我的班表完成本月 ${period.preferred_days_required} 天排休；主管關閉前可重新儲存。`,
           eventType: "staff_schedule_selection_override_opened",
           targetType: "staff_schedule_period",
           targetId: period.id,
@@ -2032,7 +2032,7 @@ export async function POST(request: Request) {
         .eq("status", "submitted")
         .maybeSingle();
       if (submittedPreference.error) throw new Error(submittedPreference.error.message);
-      if (!submittedPreference.data) throw new Error("此員工尚未完成 8 天排休，完成後才能安排休假或例假");
+      if (!submittedPreference.data) throw new Error(`此員工尚未完成 ${period.preferred_days_required} 天排休，完成後才能安排休假或例假`);
       const [latestVersion, employees, employments] = await Promise.all([
         getLatestVersion(admin, period.id),
         listEmployees(admin, tenantId, profile.branch_id),
@@ -2269,7 +2269,7 @@ export async function POST(request: Request) {
       const submittedEmployeeIds = new Set((submittedPreferences.data || []).map((preference) => String(preference.employee_id)));
       const incompleteEmployees = scheduleEmployees.filter((employee) => !submittedEmployeeIds.has(employee.id));
       if (incompleteEmployees.length > 0) {
-        throw new Error(`尚有 ${incompleteEmployees.length} 位員工未完成 8 天排休，不能送經理審核`);
+        throw new Error(`尚有 ${incompleteEmployees.length} 位員工未完成 ${period.preferred_days_required} 天排休，不能送經理審核`);
       }
       const scheduleEmployeeIds = scheduleEmployees.map((employee) => employee.id);
       const [blocking, unoverriddenWarnings] = await Promise.all([

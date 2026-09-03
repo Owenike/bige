@@ -6,7 +6,7 @@ import { evaluateTenantAccess, type TenantStatus, type TenantSubscriptionSnapsho
 import { insertDeliveryRows } from "./notification-ops";
 import { dispatchNotificationDeliveries } from "./notification-dispatch";
 import { resolveExternalChannels } from "./notification-external";
-import { isConfiguredPreferenceWindowOpen } from "./staff-scheduling";
+import { isConfiguredPreferenceWindowOpen, PREFERRED_DAYS_REQUIRED } from "./staff-scheduling";
 
 export type NotificationSeverity = "info" | "warning" | "critical";
 export type NotificationStatus = "unread" | "read" | "archived";
@@ -642,7 +642,7 @@ export async function runNotificationSweep(input: SweepInput): Promise<{ ok: tru
     const taipeiDay = Number(taipeiToday.slice(-2));
     const openPeriods = await supabase
       .from("staff_schedule_periods")
-      .select("id, month_start, branch_id, reminder_starts_on, status, selection_opens_at, selection_closes_at, selection_control_mode")
+      .select("id, month_start, branch_id, reminder_starts_on, status, selection_opens_at, selection_closes_at, selection_control_mode, preferred_days_required")
       .eq("tenant_id", tenant.id)
       .eq("status", "selection_open")
       .order("selection_closes_at", { ascending: false })
@@ -680,7 +680,7 @@ export async function runNotificationSweep(input: SweepInput): Promise<{ ok: tru
         const monthText = String(period.month_start).slice(0, 7);
         const selectionWindowMessage = period.selection_control_mode === "open"
           ? "主管目前已手動開放選休，請儘速完成；關閉前可再修改。"
-          : `您尚未選滿 8 天排休，請於 ${new Intl.DateTimeFormat("zh-TW", {
+          : `您尚未選滿 ${Number(period.preferred_days_required || PREFERRED_DAYS_REQUIRED)} 天排休，請於 ${new Intl.DateTimeFormat("zh-TW", {
               timeZone: "Asia/Taipei",
               month: "numeric",
               day: "numeric",

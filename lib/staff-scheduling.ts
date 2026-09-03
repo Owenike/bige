@@ -1,5 +1,6 @@
 export const STAFF_TIME_ZONE = "Asia/Taipei";
-export const PREFERRED_DAYS_REQUIRED = 8;
+export const PREFERRED_DAYS_REQUIRED = 7;
+export const MONTHLY_REGULAR_DAYS_OFF_BASE = 8;
 export const DEFAULT_MIDDLE_PREFERENCE_LIMIT = 2;
 export const SHARED_FRONTDESK_EMPLOYEE_NUMBER = "E000006";
 
@@ -340,7 +341,7 @@ export function monthlyDaysOffEntitlement(monthStart: string) {
   }).length;
 }
 
-export function monthlyAccruedLeaveCreditDays(monthStart: string, monthlyLimit = PREFERRED_DAYS_REQUIRED) {
+export function monthlyAccruedLeaveCreditDays(monthStart: string, monthlyLimit = MONTHLY_REGULAR_DAYS_OFF_BASE) {
   return Math.max(0, monthlyDaysOffEntitlement(monthStart) - monthlyLimit);
 }
 
