@@ -25,6 +25,24 @@ export function resolveSalesPerformanceOccurrence(params: {
   } as const;
 }
 
+export function resolvePaymentOriginEmployeeId(params: {
+  contractOriginEmployeeId?: unknown;
+  convertedBookingCoachId?: unknown;
+  paymentBookingCoachId?: unknown;
+  memberPrimaryCoachId?: unknown;
+}) {
+  for (const value of [
+    params.contractOriginEmployeeId,
+    params.convertedBookingCoachId,
+    params.paymentBookingCoachId,
+    params.memberPrimaryCoachId,
+  ]) {
+    const employeeId = value ? String(value).trim() : "";
+    if (employeeId) return employeeId;
+  }
+  return null;
+}
+
 function occursInMonth(value: string | null | undefined, range: ReturnType<typeof performanceMonthRange>) {
   if (!value) return false;
   const date = taiwanBusinessDate(value);
@@ -57,7 +75,7 @@ function activeAllocationRows(event: any, allocations: any[]) {
 
 /**
  * Mirrors BIG E receipts/refunds into the settlement inbox, snapshots the
- * source coach, creates the editable 50% FA/BB/renewal default, and generates
+ * source coach, creates the editable 50% receipt default, and generates
  * exact refund reversals from the frozen original allocation rows.
  */
 export async function syncBigePaymentPerformanceSources(
@@ -80,13 +98,13 @@ export async function syncBigePaymentPerformanceSources(
     .map((row: any) => row.converted_contract_id ? String(row.converted_contract_id) : "")
     .filter(Boolean))];
   const datedPaymentPromise = admin.from("bige_contract_payments")
-    .select("id, contract_id, payment_kind, amount, status, paid_at, voided_at, void_reason, recorded_by")
+    .select("id, contract_id, payment_kind, amount, status, paid_at, voided_at, void_reason, recorded_by, source_booking_id")
     .eq("tenant_id", tenantId)
     .or(`and(paid_at.gte.${range.startIso},paid_at.lt.${range.nextIso}),and(voided_at.gte.${range.startIso},voided_at.lt.${range.nextIso})`)
     .order("paid_at", { ascending: true });
   const originPaymentPromise = originContractIds.length
     ? admin.from("bige_contract_payments")
-      .select("id, contract_id, payment_kind, amount, status, paid_at, voided_at, void_reason, recorded_by")
+      .select("id, contract_id, payment_kind, amount, status, paid_at, voided_at, void_reason, recorded_by, source_booking_id")
       .eq("tenant_id", tenantId)
       .in("contract_id", originContractIds)
       .order("paid_at", { ascending: true })
@@ -117,7 +135,10 @@ export async function syncBigePaymentPerformanceSources(
   }
   const contracts = new Map((contractResult.data || []).map((row: any) => [String(row.id), row]));
   const memberIds = [...new Set((contractResult.data || []).map((row: any) => row.member_id ? String(row.member_id) : "").filter(Boolean))];
-  const bookingIds = [...new Set((contractResult.data || []).flatMap((row: any) => [row.converted_from_booking_id].filter(Boolean)).map(String))];
+  const bookingIds = [...new Set([
+    ...(contractResult.data || []).map((row: any) => row.converted_from_booking_id),
+    ...payments.map((row: any) => row.source_booking_id),
+  ].filter(Boolean).map(String))];
   const [memberResult, bookingResult] = await Promise.all([
     memberIds.length
       ? admin.from("members").select("id, full_name, primary_coach_id").eq("tenant_id", tenantId).in("id", memberIds)
@@ -142,11 +163,16 @@ export async function syncBigePaymentPerformanceSources(
     if (!contract) continue;
     const member: any = contract.member_id ? members.get(String(contract.member_id)) : null;
     const memberName = String(member?.full_name || "會員");
-    const originEmployeeId = contract.sales_origin_coach_id
-      ? String(contract.sales_origin_coach_id)
-      : contract.converted_from_booking_id
-        ? originBookings.get(String(contract.converted_from_booking_id))?.coach_id || null
-        : member?.primary_coach_id ? String(member.primary_coach_id) : null;
+    const originEmployeeId = resolvePaymentOriginEmployeeId({
+      contractOriginEmployeeId: contract.sales_origin_coach_id,
+      convertedBookingCoachId: contract.converted_from_booking_id
+        ? originBookings.get(String(contract.converted_from_booking_id))?.coach_id
+        : null,
+      paymentBookingCoachId: payment.source_booking_id
+        ? originBookings.get(String(payment.source_booking_id))?.coach_id
+        : null,
+      memberPrimaryCoachId: member?.primary_coach_id,
+    });
     const isFa = contract.sales_origin_kind === "fa" || (
       !contract.sales_origin_kind && Boolean(contract.converted_from_booking_id || contract.source_trial_booking_id)
     );
@@ -194,6 +220,7 @@ export async function syncBigePaymentPerformanceSources(
           contractPaymentStatus: contract.payment_status,
           originEmployeeId,
           paymentPaidAt: payment.paid_at,
+          paymentSourceBookingId: payment.source_booking_id || null,
           settlementDateSource: occurrence.dateSource,
           originBookingStartsAt: originBooking?.starts_at || null,
         },

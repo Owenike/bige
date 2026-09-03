@@ -1,6 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveSalesPerformanceOccurrence } from "../lib/staff-performance-sync";
+import {
+  resolvePaymentOriginEmployeeId,
+  resolveSalesPerformanceOccurrence,
+} from "../lib/staff-performance-sync";
+
+test("payment origin coach preserves snapshots and falls back through linked bookings", () => {
+  assert.equal(resolvePaymentOriginEmployeeId({
+    contractOriginEmployeeId: "snapshot-coach",
+    convertedBookingCoachId: "conversion-coach",
+    paymentBookingCoachId: "payment-coach",
+    memberPrimaryCoachId: "member-coach",
+  }), "snapshot-coach");
+  assert.equal(resolvePaymentOriginEmployeeId({
+    contractOriginEmployeeId: null,
+    convertedBookingCoachId: null,
+    paymentBookingCoachId: "payment-coach",
+    memberPrimaryCoachId: "member-coach",
+  }), "payment-coach");
+  assert.equal(resolvePaymentOriginEmployeeId({
+    contractOriginEmployeeId: null,
+    convertedBookingCoachId: null,
+    paymentBookingCoachId: null,
+    memberPrimaryCoachId: null,
+  }), null);
+});
 
 test("FA first payment settles on the originating appointment date", () => {
   assert.deepEqual(resolveSalesPerformanceOccurrence({

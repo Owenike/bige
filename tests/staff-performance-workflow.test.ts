@@ -252,6 +252,9 @@ test("sales workspace supports queue navigation, in-place allocation, manager re
 });
 
 test("final payments seed an editable half allocation for the originating coach", () => {
+  assert.match(performanceSync, /source_booking_id/);
+  assert.match(performanceSync, /paymentBookingCoachId: payment\.source_booking_id/);
+  assert.match(performanceSync, /resolvePaymentOriginEmployeeId/);
   assert.match(finalPaymentDefaultMigration, /target_event\.source_type not in \('fa', 'bb', 'renewal', 'final_payment'\)/);
   assert.match(finalPaymentDefaultMigration, /round\(p_amount \+ p_remaining_amount, 2\) <> round\(target_event\.amount, 2\)/);
   assert.match(finalPaymentDefaultMigration, /'origin_default', 'pending_manager'/);
