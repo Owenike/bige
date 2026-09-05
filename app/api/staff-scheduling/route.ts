@@ -55,6 +55,7 @@ const STAFF_ROLES = [
 const actionSchema = z.object({ action: z.string().min(1) }).passthrough();
 const monthSchema = z.string().regex(/^\d{4}-\d{2}(?:-01)?$/);
 const SELECTION_CONFIGURATION_STATUSES = new Set(["selection_open", "selection_closed", "drafting"]);
+const AUTOMATIC_SCHEDULE_WRITE_SOURCES = ["generated", "preference", "facility_closure"] as const;
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -468,6 +469,38 @@ function entryInsertRow(params: {
   };
 }
 
+async function writeAutomaticScheduleEntryChanges(params: {
+  admin: AdminClient;
+  rows: Array<Record<string, unknown>>;
+  currentRows: Map<string, Record<string, unknown>>;
+}) {
+  const insertRows = params.rows.filter((row) =>
+    !params.currentRows.has(`${String(row.employee_id)}:${String(row.work_date)}`));
+  const updateRows = params.rows.filter((row) =>
+    params.currentRows.has(`${String(row.employee_id)}:${String(row.work_date)}`));
+
+  if (insertRows.length > 0) {
+    const insert = await params.admin.from("staff_schedule_entries").upsert(insertRows, {
+      onConflict: "version_id,employee_id,work_date",
+      ignoreDuplicates: true,
+    });
+    if (insert.error) throw new Error(insert.error.message);
+  }
+
+  const updateBatchSize = 8;
+  for (let index = 0; index < updateRows.length; index += updateBatchSize) {
+    const results = await Promise.all(updateRows.slice(index, index + updateBatchSize).map((row) =>
+      params.admin.from("staff_schedule_entries")
+        .update(row)
+        .eq("version_id", String(row.version_id))
+        .eq("employee_id", String(row.employee_id))
+        .eq("work_date", String(row.work_date))
+        .in("source", [...AUTOMATIC_SCHEDULE_WRITE_SOURCES])));
+    const failure = results.find((result) => result.error)?.error;
+    if (failure) throw new Error(failure.message);
+  }
+}
+
 async function loadShiftIds(admin: AdminClient, tenantId: string, branchId: string | null) {
   let query = admin.from("staff_shift_templates").select("id, code").eq("tenant_id", tenantId).eq("is_active", true);
   query = branchId ? query.eq("branch_id", branchId) : query.is("branch_id", null);
@@ -787,8 +820,11 @@ async function ensureAndSyncAutomaticSchedule(params: {
         requires_resign: Boolean(previous?.requires_resign) || changedAfterPublished,
       };
     });
-    const upsert = await params.admin.from("staff_schedule_entries").upsert(rows, { onConflict: "version_id,employee_id,work_date" });
-    if (upsert.error) throw new Error(upsert.error.message);
+    await writeAutomaticScheduleEntryChanges({
+      admin: params.admin,
+      rows,
+      currentRows,
+    });
   }
 
   if (needsReviewReset) {

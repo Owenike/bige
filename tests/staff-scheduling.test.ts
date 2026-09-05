@@ -673,7 +673,7 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(source, /window\.setTimeout\(\(\) => setNotice\(""\), 4500\)/);
   assert.match(source, /const SCHEDULE_LOAD_TIMEOUT_MS = 20_000/);
   assert.match(source, /window\.setTimeout\(\(\) => controller\.abort\(\), SCHEDULE_LOAD_TIMEOUT_MS\)/);
-  assert.match(source, /const SCHEDULE_CHANGE_HIGHLIGHT_MS = 60_000/);
+  assert.match(source, /const SCHEDULE_CHANGE_HIGHLIGHT_MS = 10_000/);
   assert.match(source, /window\.setTimeout\(\(\) => \{[\s\S]*?SCHEDULE_CHANGE_HIGHLIGHT_MS\)/);
   assert.match(source, /recentlyChangedEntryKeys\.has\(entryKey\) \? styles\.resignCell/);
   assert.doesNotMatch(source, /entry\?\.requiresResign \? styles\.resignCell/);
@@ -709,6 +709,12 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(source, /document\.visibilityState !== "visible"/);
   assert.match(source, /window\.setInterval\(syncWhenVisible, AUTO_SCHEDULE_SYNC_INTERVAL_MS\)/);
   assert.match(source, /自動同步：最多 15 秒/);
+  assert.match(apiSource, /const AUTOMATIC_SCHEDULE_WRITE_SOURCES = \["generated", "preference", "facility_closure"\] as const/);
+  assert.match(apiSource, /async function writeAutomaticScheduleEntryChanges/);
+  assert.match(apiSource, /\.update\(row\)[\s\S]*?\.in\("source", \[\.\.\.AUTOMATIC_SCHEDULE_WRITE_SOURCES\]\)/);
+  assert.match(apiSource, /\.upsert\(insertRows, \{[\s\S]*?ignoreDuplicates: true/);
+  assert.match(apiSource, /await writeAutomaticScheduleEntryChanges\(\{[\s\S]*?currentRows/);
+  assert.doesNotMatch(apiSource, /from\("staff_schedule_entries"\)\.upsert\(rows, \{ onConflict: "version_id,employee_id,work_date" \}\)/);
   assert.doesNotMatch(source, />依排休重建新版本<|>產生正式班表草稿<|>開放這個月份</);
   assert.match(apiSource, /body\.action === "ensure_schedule_draft"[\s\S]*?ensureAndSyncAutomaticSchedule/);
   assert.match(apiSource, /body\.action === "configure_employee"[\s\S]*?affectedEmployeeIds: \[employeeId\][\s\S]*?員工固定班別變更後自動同步班表/);
