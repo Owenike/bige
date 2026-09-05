@@ -102,26 +102,14 @@ export function collectCoachDayStatuses(
 function statusFromStaffScheduleEntry(
   entry: CoachStaffScheduleEntry,
 ): BigeCoachDayStatusValue | null {
-  if (entry.entry_kind === "off") return "off";
   if (entry.entry_kind !== "work") return null;
   if (
-    entry.shift_code === "FRONTDESK_DAY" ||
     entry.shift_code === "COACH_EARLY" ||
     entry.shift_code === "COACH_EARLY_WED"
   ) {
     return "early";
   }
-  if (
-    entry.shift_code === "COACH_MIDDLE" ||
-    entry.shift_code === "COACH_PARTTIME_WEEKDAY" ||
-    entry.shift_code === "COACH_PARTTIME_WEEKEND"
-  ) {
-    return "late";
-  }
-  if (!entry.starts_at || !entry.ends_at) return null;
-  return readCoachShiftRangeStatus(
-    `${String(entry.starts_at).slice(0, 5)}-${String(entry.ends_at).slice(0, 5)}`,
-  );
+  return null;
 }
 
 export function collectStaffScheduleCoachDayStatuses(

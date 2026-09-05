@@ -48,20 +48,32 @@ test("the temporary September time-off import never assigns blanket shift marker
   assert.doesNotMatch(importer, /SHIFT_MARKER_BY_COACH/);
 });
 
-test("daily board falls back to the latest draft staff schedule when no version is published", () => {
+test("daily board only supplements explicit early shifts from the latest draft staff schedule", () => {
   const statuses = collectStaffScheduleCoachDayStatuses(
     [
       { employee_id: "una", entry_kind: "work", shift_code: "COACH_MIDDLE", version_id: "draft-1", version_status: "draft", version_number: 1 },
       { employee_id: "una", entry_kind: "work", shift_code: "COACH_EARLY_WED", version_id: "draft-2", version_status: "manager_review", version_number: 2 },
       { employee_id: "lily", entry_kind: "work", shift_code: "COACH_MIDDLE", version_id: "draft-2", version_status: "manager_review", version_number: 2 },
+      { employee_id: "bae", entry_kind: "work", shift_code: "COACH_PARTTIME_WEEKEND", version_id: "draft-2", version_status: "manager_review", version_number: 2 },
+      { employee_id: "lulu", entry_kind: "off", shift_code: null, version_id: "draft-2", version_status: "manager_review", version_number: 2 },
     ],
-    new Set(["una", "lily"]),
+    new Set(["una", "lily", "bae", "lulu"]),
   );
 
   assert.deepEqual(statuses, [
     { coach_id: "una", status: "early", label: "早班" },
-    { coach_id: "lily", status: "late", label: "晚班" },
   ]);
+});
+
+test("staff schedule times never infer late status for non-early coach shifts", () => {
+  const statuses = collectStaffScheduleCoachDayStatuses(
+    [
+      { employee_id: "wade", entry_kind: "work", shift_code: null, starts_at: "14:00", ends_at: "23:00", version_id: "draft-1", version_status: "draft", version_number: 1 },
+    ],
+    new Set(["wade"]),
+  );
+
+  assert.deepEqual(statuses, []);
 });
 
 test("published staff schedule remains authoritative over a newer draft", () => {
