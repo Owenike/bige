@@ -34,6 +34,7 @@ import {
 } from "../lib/staff-scheduling";
 import {
   buildSeptemberTemporaryScheduleEntries,
+  mergeSeptemberTemporaryScheduleEntries,
   shouldUseSeptemberTemporarySchedule,
 } from "../lib/september-2026-staff-schedule-bridge";
 
@@ -48,39 +49,91 @@ const middleCoach: EmployeeScheduleConfig = {
   countsTowardMiddleLimit: true,
 };
 
-test("September temporary staff schedule bridge is self-only and never replaces a published version", () => {
+test("September daily-board bridge supports self and team views but never replaces a published version", () => {
   assert.equal(shouldUseSeptemberTemporarySchedule({ monthStart: "2026-09-01", view: "self", hasPublishedVersion: false }), true);
   assert.equal(shouldUseSeptemberTemporarySchedule({ monthStart: "2026-10-01", view: "self", hasPublishedVersion: false }), false);
-  assert.equal(shouldUseSeptemberTemporarySchedule({ monthStart: "2026-09-01", view: "team", hasPublishedVersion: false }), false);
+  assert.equal(shouldUseSeptemberTemporarySchedule({ monthStart: "2026-09-01", view: "team", hasPublishedVersion: false }), true);
   assert.equal(shouldUseSeptemberTemporarySchedule({ monthStart: "2026-09-01", view: "self", hasPublishedVersion: true }), false);
+  assert.equal(shouldUseSeptemberTemporarySchedule({ monthStart: "2026-09-01", view: "team", hasPublishedVersion: true }), false);
 });
 
-test("September temporary staff schedule mirrors only the signed-in coach's imported daily statuses", () => {
+test("September daily-board bridge fills every day for every coach that has a daily status", () => {
+  const earlyCoach: EmployeeScheduleConfig = {
+    ...middleCoach,
+    employeeId: "coach-2",
+    displayName: "早班教練",
+    defaultShiftCode: "COACH_EARLY",
+    countsTowardMiddleLimit: false,
+  };
   const entries = buildSeptemberTemporaryScheduleEntries({
-    coachId: "coach-1",
+    coaches: [middleCoach, earlyCoach],
     notes: [
       { coach_id: "coach-1", starts_at: "2026-08-31T16:00:00.000Z", content: "休", source: "temporary_coach_leave_import" },
       { coach_id: "coach-1", starts_at: "2026-09-01T16:00:00.000Z", content: "早", source: "temporary_coach_shift_import" },
       { coach_id: "coach-1", starts_at: "2026-09-03T16:00:00.000Z", content: "休", source: "manual" },
-      { coach_id: "coach-2", starts_at: "2026-09-04T16:00:00.000Z", content: "休", source: "temporary_coach_leave_import" },
+      { coach_id: "coach-2", starts_at: "2026-09-02T16:00:00.000Z", content: "晚", source: "manual" },
       { coach_id: "coach-1", starts_at: "2026-10-01T16:00:00.000Z", content: "休", source: "temporary_coach_leave_import" },
     ],
     facilityClosureDates: ["2026-09-05", "2026-10-10"],
   });
 
-  assert.deepEqual(entries.map((entry) => entry.workDate), ["2026-09-01", "2026-09-05"]);
-  assert.deepEqual(entries.map((entry) => entry.entryKind), ["off", "off"]);
-  assert.equal(entries[0].offKind, "preferred_off");
-  assert.equal(entries[1].offKind, "facility_closure");
-  assert.equal(entries[1].employeeVisibleNote, "館休");
+  const byCell = new Map(entries.map((entry) => [`${entry.employeeId}:${entry.workDate}`, entry]));
+  assert.equal(entries.length, 60);
+  assert.equal(byCell.get("coach-1:2026-09-01")?.offKind, "preferred_off");
+  assert.equal(byCell.get("coach-1:2026-09-02")?.shiftLabel, "早班");
+  assert.equal(byCell.get("coach-1:2026-09-03")?.shiftCode, "COACH_MIDDLE");
+  assert.equal(byCell.get("coach-1:2026-09-04")?.entryKind, "off");
+  assert.equal(byCell.get("coach-2:2026-09-03")?.shiftLabel, "晚班");
+  assert.equal(byCell.get("coach-2:2026-09-04")?.shiftCode, "COACH_EARLY");
+  assert.equal(byCell.get("coach-1:2026-09-05")?.offKind, "facility_closure");
+  assert.equal(byCell.get("coach-2:2026-09-05")?.employeeVisibleNote, "館休");
 });
 
 test("September closure alone does not opt unrelated staff into the temporary bridge", () => {
   assert.deepEqual(buildSeptemberTemporaryScheduleEntries({
-    coachId: "employee-without-import",
+    coaches: [{ ...middleCoach, employeeId: "employee-without-import" }],
     notes: [],
     facilityClosureDates: ["2026-09-05"],
   }), []);
+});
+
+test("September daily-board bridge is authoritative for opted-in coaches and preserves other staff", () => {
+  const temporary = buildSeptemberTemporaryScheduleEntries({
+    coaches: [middleCoach],
+    notes: [{ coach_id: "coach-1", starts_at: "2026-08-31T16:00:00.000Z", content: "休" }],
+  });
+  const generatedDay = temporary.find((entry) => entry.workDate === "2026-09-02")!;
+  const supervisorDay = {
+    ...generatedDay,
+    workDate: "2026-09-03",
+    entryKind: "off" as const,
+    shiftCode: null,
+    source: "supervisor" as const,
+  };
+  const leaveDay = {
+    ...generatedDay,
+    workDate: "2026-09-04",
+    entryKind: "off" as const,
+    shiftCode: null,
+    source: "leave" as const,
+  };
+  const merged = mergeSeptemberTemporaryScheduleEntries({
+    persisted: [
+      { ...generatedDay, shiftLabel: "舊自動班別" },
+      supervisorDay,
+      leaveDay,
+      { ...generatedDay, employeeId: "unrelated", workDate: "2026-09-01" },
+    ],
+    temporary,
+  });
+  const byCell = new Map(merged.map((entry) => [`${entry.employeeId}:${entry.workDate}`, entry]));
+
+  assert.equal(merged.length, 31);
+  assert.equal(byCell.get("coach-1:2026-09-01")?.entryKind, "off");
+  assert.equal(byCell.get("coach-1:2026-09-02")?.shiftLabel, "中班");
+  assert.equal(byCell.get("coach-1:2026-09-03")?.entryKind, "work");
+  assert.equal(byCell.get("coach-1:2026-09-04")?.entryKind, "work");
+  assert.ok(merged.some((entry) => entry.employeeId === "unrelated"));
 });
 
 test("next-month preference window is open from the 1st through the 20th 23:59 Taiwan time", () => {
@@ -583,9 +636,9 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(apiSource, /staff_schedule_selection_overrides/);
   assert.match(apiSource, /staff_schedule_selection_override_opened/);
   assert.match(apiSource, /shouldUseSeptemberTemporarySchedule/);
-  assert.match(apiSource, /\.eq\("coach_id", params\.profile\.id\)/);
-  assert.match(apiSource, /\.eq\("source", "temporary_coach_leave_import"\)/);
-  assert.match(apiSource, /9 月日排休假同步/);
+  assert.match(apiSource, /\.in\("coach_id", temporaryCoachIds\)/);
+  assert.match(apiSource, /mergeSeptemberTemporaryScheduleEntries/);
+  assert.match(apiSource, /9 月日排課表同步/);
   assert.match(selfSource, /已從日排課表同步，休假日期直接顯示於月曆/);
   assert.match(selfSource, /requestedMonth \|\| data\?\.monthStart\.slice\(0, 7\) \|\| currentStaffMonthStart\(\)/);
   assert.match(selfSource, /if \(requestedMonth\) searchParams\.set\("month", requestedMonth\)/);
