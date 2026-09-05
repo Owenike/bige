@@ -11,6 +11,17 @@ type CoachDayStatusNote = {
   content?: unknown;
 };
 
+export type CoachStaffScheduleEntry = {
+  employee_id: string;
+  entry_kind: string;
+  shift_code?: string | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  version_id: string;
+  version_status: string;
+  version_number: number;
+};
+
 const COACH_DAY_STATUS_BY_MARKER: Record<string, BigeCoachDayStatusValue> = {
   早: "early",
   晚: "late",
@@ -86,4 +97,72 @@ export function collectCoachDayStatuses(
     status: value.status,
     label: COACH_DAY_STATUS_LABELS[value.status],
   }));
+}
+
+function statusFromStaffScheduleEntry(
+  entry: CoachStaffScheduleEntry,
+): BigeCoachDayStatusValue | null {
+  if (entry.entry_kind === "off") return "off";
+  if (entry.entry_kind !== "work") return null;
+  if (
+    entry.shift_code === "FRONTDESK_DAY" ||
+    entry.shift_code === "COACH_EARLY" ||
+    entry.shift_code === "COACH_EARLY_WED"
+  ) {
+    return "early";
+  }
+  if (
+    entry.shift_code === "COACH_MIDDLE" ||
+    entry.shift_code === "COACH_PARTTIME_WEEKDAY" ||
+    entry.shift_code === "COACH_PARTTIME_WEEKEND"
+  ) {
+    return "late";
+  }
+  if (!entry.starts_at || !entry.ends_at) return null;
+  return readCoachShiftRangeStatus(
+    `${String(entry.starts_at).slice(0, 5)}-${String(entry.ends_at).slice(0, 5)}`,
+  );
+}
+
+export function collectStaffScheduleCoachDayStatuses(
+  entries: readonly CoachStaffScheduleEntry[],
+  activeCoachIds: ReadonlySet<string>,
+): BigeCoachDayStatus[] {
+  const eligibleEntries = entries.filter(
+    (entry) =>
+      activeCoachIds.has(entry.employee_id) &&
+      !["superseded", "cancelled"].includes(entry.version_status),
+  );
+  const publishedEntries = eligibleEntries.filter(
+    (entry) => entry.version_status === "published",
+  );
+  const versionPool = publishedEntries.length > 0 ? publishedEntries : eligibleEntries;
+  const selectedVersion = versionPool.reduce<CoachStaffScheduleEntry | null>(
+    (current, entry) =>
+      !current || entry.version_number > current.version_number ? entry : current,
+    null,
+  )?.version_id;
+  if (!selectedVersion) return [];
+
+  return versionPool
+    .filter((entry) => entry.version_id === selectedVersion)
+    .flatMap((entry) => {
+      const status = statusFromStaffScheduleEntry(entry);
+      return status
+        ? [{
+            coach_id: entry.employee_id,
+            status,
+            label: COACH_DAY_STATUS_LABELS[status],
+          }]
+        : [];
+    });
+}
+
+export function mergeCoachDayStatuses(
+  base: readonly BigeCoachDayStatus[],
+  overrides: readonly BigeCoachDayStatus[],
+) {
+  const byCoach = new Map(base.map((status) => [status.coach_id, status]));
+  for (const status of overrides) byCoach.set(status.coach_id, status);
+  return [...byCoach.values()];
 }

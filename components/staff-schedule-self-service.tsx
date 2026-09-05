@@ -61,6 +61,8 @@ type SelfState = {
   acknowledgement: null | { status: string; signed_at: string | null; objection_reason: string | null };
 };
 
+const TEMPORARY_EARLY_SHIFT_CODES = new Set(["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"]);
+
 function listCalendarCells(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
   const days = new Date(year, monthNumber, 0).getDate();
@@ -289,6 +291,10 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
         ? "主管目前已關閉選休；如需修改，請直接聯絡副理。"
         : "選休期限已截止；如需修改，請直接聯絡副理。";
   const sortedEntries = useMemo(() => [...(data?.scheduleEntries || [])].sort((a, b) => a.workDate.localeCompare(b.workDate)), [data?.scheduleEntries]);
+  const temporaryEntryByDate = useMemo(
+    () => new Map(sortedEntries.map((entry) => [entry.workDate, entry])),
+    [sortedEntries],
+  );
   const temporaryLeaveDates = useMemo(() => new Set(sortedEntries
     .filter((entry) => entry.entryKind === "off" && entry.offKind !== "facility_closure")
     .map((entry) => entry.workDate)), [sortedEntries]);
@@ -338,22 +344,28 @@ export default function StaffScheduleSelfService({ initialMonth }: { initialMont
             <div>
               <span className={styles.kicker}>{data.temporarySchedule.label}</span>
               <h2>{month.replace("-", " 年 ")} 月</h2>
-              <p className={`${styles.selectionNotice} ${styles.selectionNoticeOpen}`}>已從日排課表同步，休假日期直接顯示於月曆。</p>
+              <p className={`${styles.selectionNotice} ${styles.selectionNoticeOpen}`}>已從日排課表同步，班別與休假日期直接顯示於月曆。</p>
             </div>
             <div className={`${styles.counter} ${styles.counterDone}`}><strong>{temporaryLeaveCount}</strong><span>天休假</span></div>
           </div>
-          <div className={styles.legend}><span><i className={styles.selectedMark} />排休</span><span><i className={styles.closureMark} />館休</span></div>
-          <div className={styles.calendar} aria-label={`${month} 休假月曆`}>
+          <div className={styles.legend}><span><i className={styles.earlyMark} />早班</span><span><i className={styles.workMark} />中班／晚班</span><span><i className={styles.selectedMark} />排休</span><span><i className={styles.closureMark} />館休</span></div>
+          <div className={styles.calendar} aria-label={`${month} 班表月曆`}>
             {["日", "一", "二", "三", "四", "五", "六"].map((label) => <div className={styles.weekday} key={label}>{label}</div>)}
-            {calendarCells.map((date, index) => date ? (
-              <div
-                key={date}
-                className={`${styles.day} ${styles.readOnlyDay} ${temporaryLeaveDates.has(date) ? styles.selectedDay : ""} ${closureDates.has(date) ? styles.closureDay : ""}`}
-              >
-                <strong>{Number(date.slice(-2))}</strong>
-                <span>{closureDates.has(date) ? "館休" : temporaryLeaveDates.has(date) ? "排休" : "未排休"}</span>
-              </div>
-            ) : <div className={styles.blankDay} key={`blank-${index}`} />)}
+            {calendarCells.map((date, index) => {
+              if (!date) return <div className={styles.blankDay} key={`blank-${index}`} />;
+              const entry = temporaryEntryByDate.get(date);
+              const isEarly = entry?.entryKind === "work" && TEMPORARY_EARLY_SHIFT_CODES.has(entry.shiftCode || "");
+              const isOtherWork = entry?.entryKind === "work" && !isEarly;
+              return (
+                <div
+                  key={date}
+                  className={`${styles.day} ${styles.readOnlyDay} ${isEarly ? styles.earlyDay : ""} ${isOtherWork ? styles.workDay : ""} ${temporaryLeaveDates.has(date) ? styles.selectedDay : ""} ${closureDates.has(date) ? styles.closureDay : ""}`}
+                >
+                  <strong>{Number(date.slice(-2))}</strong>
+                  <span>{closureDates.has(date) ? "館休" : temporaryLeaveDates.has(date) ? "排休" : entry?.entryKind === "work" ? staffScheduleShiftLabel(entry) : "未排班"}</span>
+                </div>
+              );
+            })}
           </div>
           <div className={styles.selectionFooter}>
             <div><strong>休假日期：</strong><span>{temporaryLeaveDaysLabel}</span></div>

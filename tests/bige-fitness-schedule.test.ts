@@ -3464,7 +3464,7 @@ test("frontdesk daily schedules expose the all-coach scope instead of defaulting
   );
   assert.equal(
     (route.match(/if \(coachScheduleScope === "assigned"\)/g) || []).length,
-    3,
+    4,
   );
   assert.match(route, /coachScheduleScope,\s*tenantId,/);
   assert.doesNotMatch(

@@ -555,7 +555,11 @@ test("staff self-service leave picker keeps its mobile layout and selection disp
   assert.match(source, /styles\.selectionNoticeClosed/);
   assert.ok(temporaryScheduleStart >= 0 && regularSelectionStart > temporaryScheduleStart);
   assert.match(temporaryScheduleSource, /className=\{styles\.calendar\}/);
-  assert.match(temporaryScheduleSource, /temporaryLeaveDates\.has\(date\) \? "排休" : "未排休"/);
+  assert.match(temporaryScheduleSource, /temporaryEntryByDate\.get\(date\)/);
+  assert.match(temporaryScheduleSource, /staffScheduleShiftLabel\(entry\)/);
+  assert.match(source, /TEMPORARY_EARLY_SHIFT_CODES = new Set\(\["FRONTDESK_DAY", "COACH_EARLY", "COACH_EARLY_WED"\]\)/);
+  assert.match(temporaryScheduleSource, /TEMPORARY_EARLY_SHIFT_CODES\.has/);
+  assert.match(temporaryScheduleSource, /班別與休假日期直接顯示於月曆/);
   assert.doesNotMatch(temporaryScheduleSource, /ScheduleEntryList/);
   assert.match(styles, /\.readOnlyDay\{cursor:default;pointer-events:none\}/);
   assert.match(styles, /\.monthControl\{[^}]*height:52px;min-height:52px;max-height:52px;[^}]*overflow:hidden/);
@@ -639,7 +643,7 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.match(apiSource, /\.in\("coach_id", temporaryCoachIds\)/);
   assert.match(apiSource, /mergeSeptemberTemporaryScheduleEntries/);
   assert.match(apiSource, /9 月日排課表同步/);
-  assert.match(selfSource, /已從日排課表同步，休假日期直接顯示於月曆/);
+  assert.match(selfSource, /已從日排課表同步，班別與休假日期直接顯示於月曆/);
   assert.match(selfSource, /requestedMonth \|\| data\?\.monthStart\.slice\(0, 7\) \|\| currentStaffMonthStart\(\)/);
   assert.match(selfSource, /if \(requestedMonth\) searchParams\.set\("month", requestedMonth\)/);
   assert.match(apiSource, /async function defaultSelfMonthStart/);

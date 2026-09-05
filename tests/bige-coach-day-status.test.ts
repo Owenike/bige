@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   collectCoachDayStatuses,
+  collectStaffScheduleCoachDayStatuses,
+  mergeCoachDayStatuses,
   readCoachShiftRangeStatus,
 } from "../lib/bige-coach-day-status";
 
@@ -44,4 +46,60 @@ test("the temporary September time-off import never assigns blanket shift marker
 
   assert.doesNotMatch(importer, /temporary_coach_shift_import/);
   assert.doesNotMatch(importer, /SHIFT_MARKER_BY_COACH/);
+});
+
+test("daily board falls back to the latest draft staff schedule when no version is published", () => {
+  const statuses = collectStaffScheduleCoachDayStatuses(
+    [
+      { employee_id: "una", entry_kind: "work", shift_code: "COACH_MIDDLE", version_id: "draft-1", version_status: "draft", version_number: 1 },
+      { employee_id: "una", entry_kind: "work", shift_code: "COACH_EARLY_WED", version_id: "draft-2", version_status: "manager_review", version_number: 2 },
+      { employee_id: "lily", entry_kind: "work", shift_code: "COACH_MIDDLE", version_id: "draft-2", version_status: "manager_review", version_number: 2 },
+    ],
+    new Set(["una", "lily"]),
+  );
+
+  assert.deepEqual(statuses, [
+    { coach_id: "una", status: "early", label: "早班" },
+    { coach_id: "lily", status: "late", label: "晚班" },
+  ]);
+});
+
+test("published staff schedule remains authoritative over a newer draft", () => {
+  const statuses = collectStaffScheduleCoachDayStatuses(
+    [
+      { employee_id: "una", entry_kind: "work", shift_code: "COACH_EARLY", version_id: "published-1", version_status: "published", version_number: 1 },
+      { employee_id: "una", entry_kind: "off", shift_code: null, version_id: "draft-2", version_status: "draft", version_number: 2 },
+    ],
+    new Set(["una"]),
+  );
+
+  assert.deepEqual(statuses, [
+    { coach_id: "una", status: "early", label: "早班" },
+  ]);
+});
+
+test("daily-board notes override the staff schedule status for the same coach", () => {
+  const scheduleStatuses = collectStaffScheduleCoachDayStatuses(
+    [
+      { employee_id: "una", entry_kind: "work", shift_code: "COACH_EARLY", version_id: "draft-1", version_status: "draft", version_number: 1 },
+    ],
+    new Set(["una"]),
+  );
+  const noteStatuses = collectCoachDayStatuses(
+    [{ coach_id: "una", content: "休" }],
+    new Set(["una"]),
+  );
+
+  assert.deepEqual(mergeCoachDayStatuses(scheduleStatuses, noteStatuses), [
+    { coach_id: "una", status: "off", label: "休假" },
+  ]);
+});
+
+test("daily-board API loads staff schedule entries without serializing the board reads", () => {
+  const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");
+
+  assert.match(route, /\.from\("staff_schedule_entries"\)/);
+  assert.match(route, /staff_schedule_versions!inner\(status, version_number\)/);
+  assert.match(route, /Promise\.all\(\[\s*bookingsQuery,\s*notesQuery,\s*staffScheduleEntriesQuery,/);
+  assert.match(route, /mergeCoachDayStatuses\([\s\S]*collectStaffScheduleCoachDayStatuses\([\s\S]*collectCoachDayStatuses\(/);
 });

@@ -8,7 +8,10 @@ import {
 } from "../../../lib/bige-coach-order";
 import {
   collectCoachDayStatuses,
+  collectStaffScheduleCoachDayStatuses,
+  mergeCoachDayStatuses,
   readCoachDayStatusMarker,
+  type CoachStaffScheduleEntry,
 } from "../../../lib/bige-coach-day-status";
 import { loadBigeBusinessDaySetting } from "../../../lib/bige-business-day";
 import {
@@ -2026,6 +2029,20 @@ export async function GET(request: Request) {
     notesQuery = notesQuery.eq("coach_id", auth.context.userId);
   }
 
+  let staffScheduleEntriesQuery = createSupabaseAdminClient()
+    .from("staff_schedule_entries")
+    .select(
+      "employee_id, entry_kind, shift_code, starts_at, ends_at, version_id, staff_schedule_versions!inner(status, version_number)",
+    )
+    .eq("tenant_id", tenantId)
+    .eq("work_date", businessDate);
+  if (coachScheduleScope === "assigned") {
+    staffScheduleEntriesQuery = staffScheduleEntriesQuery.eq(
+      "employee_id",
+      auth.context.userId,
+    );
+  }
+
   let coachesQuery = scheduleSupabase
     .from("profiles")
     .select("id, branch_id, display_name, english_name, employee_number, role, department, position, is_active")
@@ -2042,6 +2059,7 @@ export async function GET(request: Request) {
   const [
     bookingsResult,
     notesResult,
+    staffScheduleEntriesResult,
     coachesResult,
     coachOrderResult,
     plansResult,
@@ -2052,6 +2070,7 @@ export async function GET(request: Request) {
   ] = await Promise.all([
     bookingsQuery,
     notesQuery,
+    staffScheduleEntriesQuery,
     coachesQuery,
     createSupabaseAdminClient()
       .from("bige_schedule_coach_order")
@@ -2093,6 +2112,7 @@ export async function GET(request: Request) {
   for (const result of [
     bookingsResult,
     notesResult,
+    staffScheduleEntriesResult,
     coachesResult,
     coachOrderResult,
     plansResult,
@@ -2191,7 +2211,27 @@ export async function GET(request: Request) {
     });
   }
   const activeCoachIds = new Set(orderedCoaches.map((coach: any) => coach.id));
-  const coachDayStatuses = collectCoachDayStatuses(rawNotes, activeCoachIds);
+  const staffScheduleEntries = (staffScheduleEntriesResult.data || []).map(
+    (entry: any): CoachStaffScheduleEntry => {
+      const version = Array.isArray(entry.staff_schedule_versions)
+        ? entry.staff_schedule_versions[0]
+        : entry.staff_schedule_versions;
+      return {
+        employee_id: String(entry.employee_id),
+        entry_kind: String(entry.entry_kind),
+        shift_code: entry.shift_code ? String(entry.shift_code) : null,
+        starts_at: entry.starts_at ? String(entry.starts_at) : null,
+        ends_at: entry.ends_at ? String(entry.ends_at) : null,
+        version_id: String(entry.version_id),
+        version_status: String(version?.status || ""),
+        version_number: Number(version?.version_number || 0),
+      };
+    },
+  );
+  const coachDayStatuses = mergeCoachDayStatuses(
+    collectStaffScheduleCoachDayStatuses(staffScheduleEntries, activeCoachIds),
+    collectCoachDayStatuses(rawNotes, activeCoachIds),
+  );
   const visibleNotes = rawNotes.filter((note: any) => !readCoachDayStatusMarker(note.content));
 
   // A real class or a manual note wins over the assistant-manager's automatic
@@ -2408,6 +2448,8 @@ export async function GET(request: Request) {
     branchId,
     coachCount: orderedCoaches.length,
     bookingCount: bookings.length,
+    staffScheduleEntryCount: staffScheduleEntries.length,
+    coachDayStatusCount: coachDayStatuses.length,
   });
 
   const expiringContracts = expiringContractsResult.data || [];
