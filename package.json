@@ -6,6 +6,8 @@
         "dev": "next dev --webpack",
         "build": "next build --webpack",
         "start": "next start",
+        "deploy:check": "node scripts/check-vercel-deployment-author.mjs",
+        "deploy:prod": "npm run deploy:check && vercel deploy --prod --yes",
         "lint": "eslint .",
         "typecheck": "tsc --noEmit",
         "repo:hygiene": "powershell -ExecutionPolicy Bypass -File scripts/repo-hygiene-check.ps1",

@@ -8,6 +8,8 @@
 ## Deployment
 - After completing and verifying user-facing application changes, deploy the current version to production and verify the live deployment unless the user explicitly asks not to deploy.
 - Treat a user-facing change as incomplete until the production deployment and post-deploy check have succeeded.
+- For production Vercel releases, always use `npm run deploy:prod`; do not call `vercel deploy --prod` directly. The deployment guard compares the latest Git author email with the currently authenticated Vercel account and blocks placeholder, test, or mismatched identities before upload.
+- Never create release commits with sample identities such as `example.com`. Keep this repository's local Git identity aligned with the verified Vercel account before committing.
 
 ## Mandatory Regression-Prevention Workflow
 - Treat regression prevention as part of every change. A task is not complete merely because the requested behavior works in isolation.
