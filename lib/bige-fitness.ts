@@ -50,6 +50,26 @@ export const BIGE_COURSE_LABELS: Record<BigeCourseType, string> = {
   onsite_assessment: "現場評估",
 };
 
+type BigeFitnessPlanSpecialtySource = {
+  course_allocations?: Partial<Record<BigeContractCourseType, unknown>> | null;
+};
+
+export function isBigeFitnessPlanForSpecialty(
+  plan: BigeFitnessPlanSpecialtySource,
+  specialty: BigeContractCourseType,
+) {
+  const allocatedSessions = Number(plan.course_allocations?.[specialty] || 0);
+  return Number.isFinite(allocatedSessions) && allocatedSessions > 0;
+}
+
+export function listBigeFitnessPlanSpecialties(
+  plans: ReadonlyArray<BigeFitnessPlanSpecialtySource>,
+) {
+  return BIGE_CONTRACT_COURSE_TYPES.filter((specialty) =>
+    plans.some((plan) => isBigeFitnessPlanForSpecialty(plan, specialty)),
+  );
+}
+
 export const BIGE_OPERATION_KINDS = ["pt", "trial", "bb"] as const;
 export const BIGE_BATCH_OPERATION_KINDS = ["pt", "trial"] as const;
 export const BIGE_EXPLICIT_TRIAL_STAGES = ["FA2", "FAN"] as const;

@@ -74,12 +74,14 @@ import {
   getBigeTrialBookingActionVisibility,
   getBigeTrialOutcomeVisualState,
   isValidBigeInvoiceCarrier,
+  isBigeFitnessPlanForSpecialty,
   isBigeContractEligibleForPayment,
   isBigeContractVoidedForDisplay,
   isBigeContractPaymentAmountAllowed,
   isBigeTrialReminderConfirmed,
   nextBigeTrialReminderStatus,
   normalizeBigeInvoiceCarrier,
+  listBigeFitnessPlanSpecialties,
   resolveBigeTrialContractIdentity,
   summarizeBigeMemberCourseSessions,
   toTaipeiDateString,
@@ -5369,6 +5371,8 @@ export default function BigeFitnessOperations({
   const [contractPaymentEntries, setContractPaymentEntries] = useState<PaymentEntryDraft[]>(
     () => [createPaymentEntryDraft()],
   );
+  const [contractPlanSpecialty, setContractPlanSpecialty] =
+    useState<BigeContractCourseType | "">("");
   const [contractSubmitting, setContractSubmitting] = useState(false);
   const [contractError, setContractError] = useState("");
   const [contractPaymentWizardStep, setContractPaymentWizardStep] =
@@ -5382,6 +5386,31 @@ export default function BigeFitnessOperations({
   const [walkInStartingMemberId, setWalkInStartingMemberId] = useState<string | null>(null);
   const [walkInError, setWalkInError] = useState("");
   const selectedPlan = data?.plans.find((plan) => plan.id === contractDraft.planId);
+  const contractPlanSpecialties = listBigeFitnessPlanSpecialties(data?.plans || []);
+  const specialtyContractPlans = contractPlanSpecialty
+    ? (data?.plans || []).filter((plan) =>
+        isBigeFitnessPlanForSpecialty(plan, contractPlanSpecialty),
+      )
+    : [];
+  const selectedPlanMatchesSpecialty = Boolean(
+    contractPlanSpecialty &&
+      selectedPlan &&
+      isBigeFitnessPlanForSpecialty(selectedPlan, contractPlanSpecialty),
+  );
+  const selectContractPlanSpecialty = (specialty: BigeContractCourseType) => {
+    setContractPlanSpecialty(specialty);
+    setContractError("");
+    setContractDraft((current) => {
+      const currentPlan = data?.plans.find((plan) => plan.id === current.planId);
+      return {
+        ...current,
+        planId:
+          currentPlan && isBigeFitnessPlanForSpecialty(currentPlan, specialty)
+            ? current.planId
+            : "",
+      };
+    });
+  };
   const maximumInitialPayment =
     contractDraft.planMode === "custom"
       ? Number(customContractPlan.totalAmount || 0)
@@ -5472,13 +5501,14 @@ export default function BigeFitnessOperations({
       notifyManagerProfileChange:
         booking?.operation_kind === "trial" && missingProfileFields.length > 0,
       planMode: "builtin",
-      planId: data?.plans[0]?.id || "",
+      planId: "",
       signedOn: booking ? toTaipeiDateString(new Date(booking.starts_at)) : localDate(),
       initialPayment: 0,
       paymentMethod: "cash",
       installmentCount: null,
       lineGroupBindingId: activeLineBinding?.id || "",
     }));
+    setContractPlanSpecialty("");
     setContractPaymentEntries([createPaymentEntryDraft()]);
     setCustomContractPlan(customContractPlanFrom(data?.plans[0]));
     setContractPaymentWizardStep("plan");
@@ -5678,7 +5708,8 @@ export default function BigeFitnessOperations({
       return;
     }
     if (
-      (contractDraft.planMode === "builtin" && !selectedPlan) ||
+      (contractDraft.planMode === "builtin" &&
+        (!contractPlanSpecialty || !selectedPlanMatchesSpecialty)) ||
       (contractDraft.planMode === "custom" &&
         (!customContractPlan.name.trim() ||
           customContractPlan.totalSessions <= 0 ||
@@ -5696,17 +5727,21 @@ export default function BigeFitnessOperations({
       )
     ) {
       const message =
-        contractDraft.planMode === "custom" &&
-        !validateCourseAllocationTotal(
-          customContractPlan.allocations,
-          customContractPlan.totalSessions,
-        )
-          ? "自訂方案的課別分配加總必須等於總堂數"
-          : maximumInitialPayment > 0
-            ? requiresInitialPayment
-              ? `本次付款最低為 ${formatMoney(minimumInitialPayment)}，且不能超過合約總額 ${formatMoney(maximumInitialPayment)}`
-              : `首次付款不能超過合約總額 ${formatMoney(maximumInitialPayment)}`
-            : "請先完整填寫方案";
+        contractDraft.planMode === "builtin" && !contractPlanSpecialty
+          ? "請先選擇專項"
+          : contractDraft.planMode === "builtin" && !selectedPlanMatchesSpecialty
+            ? "請先選擇內建方案"
+            : contractDraft.planMode === "custom" &&
+                !validateCourseAllocationTotal(
+                  customContractPlan.allocations,
+                  customContractPlan.totalSessions,
+                )
+              ? "自訂方案的課別分配加總必須等於總堂數"
+              : maximumInitialPayment > 0
+                ? requiresInitialPayment
+                  ? `本次付款最低為 ${formatMoney(minimumInitialPayment)}，且不能超過合約總額 ${formatMoney(maximumInitialPayment)}`
+                  : `首次付款不能超過合約總額 ${formatMoney(maximumInitialPayment)}`
+                : "請先完整填寫方案";
       setContractError(message);
       return;
     }
@@ -6398,7 +6433,11 @@ export default function BigeFitnessOperations({
           return;
         }
       } else if (contractDraft.planMode === "builtin") {
-        if (!selectedPlan) {
+        if (!contractPlanSpecialty) {
+          setContractError("請先選擇專項");
+          return;
+        }
+        if (!selectedPlanMatchesSpecialty) {
           setContractError("請先選擇內建方案");
           return;
         }
@@ -10384,17 +10423,51 @@ export default function BigeFitnessOperations({
               </div>
             </div>
             {contractDraft.planMode === "builtin" ? (
-              <label className={`${styles.field} ${styles.fieldFull}`}>
-                <span className={styles.label}>內建方案</span>
-                <select className={styles.select} required value={contractDraft.planId} onChange={(event) => setContractDraft({ ...contractDraft, planId: event.target.value })}>
-                  <option value="">請選擇</option>
-                  {data.plans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.name} · {plan.total_sessions} 堂 · {formatMoney(plan.price_amount)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className={`${styles.builtinPlanPicker} ${styles.fieldFull}`}>
+                <div className={styles.field}>
+                  <span className={styles.label}>選擇專項</span>
+                  <div
+                    className={styles.contractPlanSpecialties}
+                    role="group"
+                    aria-label="內建方案專項"
+                  >
+                    {contractPlanSpecialties.map((specialty) => (
+                      <button
+                        key={specialty}
+                        type="button"
+                        className={`${styles.button} ${contractPlanSpecialty === specialty ? styles.primary : ""}`}
+                        aria-pressed={contractPlanSpecialty === specialty}
+                        onClick={() => selectContractPlanSpecialty(specialty)}
+                      >
+                        {BIGE_COURSE_LABELS[specialty]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {contractPlanSpecialty ? (
+                  <label className={styles.field}>
+                    <span className={styles.label}>
+                      {BIGE_COURSE_LABELS[contractPlanSpecialty]}方案
+                    </span>
+                    <select
+                      className={styles.select}
+                      required
+                      value={contractDraft.planId}
+                      onChange={(event) => {
+                        setContractError("");
+                        setContractDraft({ ...contractDraft, planId: event.target.value });
+                      }}
+                    >
+                      <option value="">請選擇</option>
+                      {specialtyContractPlans.map((plan) => (
+                        <option key={plan.id} value={plan.id}>
+                          {plan.name} · {plan.total_sessions} 堂 · {formatMoney(plan.price_amount)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
             ) : (
               <div className={`${styles.customPlanFields} ${styles.fieldFull}`}>
                 <label className={styles.field}>

@@ -6164,6 +6164,22 @@
   gap: 10px;
 }
 
+.builtinPlanPicker {
+  display: grid;
+  gap: 14px;
+}
+
+.contractPlanSpecialties {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+  gap: 10px;
+}
+
+.contractPlanSpecialties .button {
+  min-width: 0;
+  min-height: 48px;
+}
+
 .customPlanFields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

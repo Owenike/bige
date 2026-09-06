@@ -26,6 +26,7 @@ import {
   isBigeContractPaymentAmountAllowed,
   isBigeContractVoidedForDisplay,
   isValidBigeInvoiceCarrier,
+  isBigeFitnessPlanForSpecialty,
   isBigeScheduleNoteUndoAvailable,
   isBigeTrialReminderConfirmed,
   getBigeTrialOutcomeVisualState,
@@ -62,6 +63,7 @@ import {
   updateLegacyContractPurchaseDateSchema,
   updateCourseAllocationsSchema,
   validateCourseAllocationTotal,
+  listBigeFitnessPlanSpecialties,
 } from "../lib/bige-fitness";
 import { canCreateBigeContract } from "../lib/staff-credentials";
 import { findBigeScheduleBatchConflict } from "../lib/bige-schedule-batch";
@@ -3614,4 +3616,38 @@ test("fascia plans cover every fixed session tier with matching prices and alloc
     /'fascia_knife', case when plan_courses\.course_key = 'fascia_knife' then plan_tiers\.total_sessions else 0 end/,
   );
   assert.match(migration, /on conflict \(tenant_id, code\) do update/);
+});
+
+test("built-in payment plans are grouped by specialty before showing their dropdown", () => {
+  const plans = [
+    { course_allocations: { weight_training: 12 } },
+    { course_allocations: { reformer_pilates: 24 } },
+    { course_allocations: { relaxation: 12 } },
+    { course_allocations: { fascia_knife: 36 } },
+    { course_allocations: { boxing: 0 } },
+  ];
+
+  assert.deepEqual(listBigeFitnessPlanSpecialties(plans), [
+    "weight_training",
+    "relaxation",
+    "reformer_pilates",
+    "fascia_knife",
+  ]);
+  assert.equal(isBigeFitnessPlanForSpecialty(plans[1], "reformer_pilates"), true);
+  assert.equal(isBigeFitnessPlanForSpecialty(plans[1], "weight_training"), false);
+
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  assert.match(component, /setContractPlanSpecialty\(""\)/);
+  assert.match(component, /planId: ""/);
+  assert.match(
+    component,
+    /contractPlanSpecialties\.map\(\(specialty\) =>[\s\S]*aria-label="內建方案專項"|aria-label="內建方案專項"[\s\S]*contractPlanSpecialties\.map/,
+  );
+  assert.match(
+    component,
+    /contractPlanSpecialty \? \([\s\S]*specialtyContractPlans\.map\(\(plan\) =>/,
+  );
+  assert.match(component, /if \(!contractPlanSpecialty\) \{[\s\S]*請先選擇專項/);
+  assert.match(component, /const openStudentPayment =[\s\S]*openContract\(booking, member\)/);
+  assert.match(component, /const openWalkInMemberPayment =[\s\S]*openContract\(undefined, member\)/);
 });
