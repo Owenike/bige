@@ -2,6 +2,7 @@ import { collectBigePersonalMonthDayStatuses } from "./bige-personal-month-sched
 import {
   DEFAULT_SHIFT_DEFINITIONS,
   generateMonthlySchedule,
+  isAutomaticScheduleSource,
   type EmployeeScheduleConfig,
   type ScheduleEntryDraft,
 } from "./staff-scheduling";
@@ -120,7 +121,7 @@ export function mergeSeptemberTemporaryScheduleEntries(params: {
     const temporaryEntry = temporaryByCell.get(entryKey);
     if (!temporaryEntry) return entry;
     temporaryByCell.delete(entryKey);
-    return temporaryEntry;
+    return isAutomaticScheduleSource(entry.source) ? temporaryEntry : entry;
   });
 
   return [...merged, ...temporaryByCell.values()];

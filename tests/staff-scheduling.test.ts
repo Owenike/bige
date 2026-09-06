@@ -97,31 +97,46 @@ test("September closure alone does not opt unrelated staff into the temporary br
   }), []);
 });
 
-test("September daily-board bridge is authoritative for opted-in coaches and preserves other staff", () => {
+test("September daily-board bridge replaces automatic entries but preserves manual decisions and other staff", () => {
   const temporary = buildSeptemberTemporaryScheduleEntries({
     coaches: [middleCoach],
     notes: [{ coach_id: "coach-1", starts_at: "2026-08-31T16:00:00.000Z", content: "休" }],
   });
   const generatedDay = temporary.find((entry) => entry.workDate === "2026-09-02")!;
-  const supervisorDay = {
+  const supervisorEarlyDay = {
     ...generatedDay,
     workDate: "2026-09-03",
+    entryKind: "work" as const,
+    shiftCode: "COACH_EARLY",
+    shiftLabel: "早班",
+    source: "supervisor" as const,
+  };
+  const supervisorOffDay = {
+    ...generatedDay,
+    workDate: "2026-09-04",
     entryKind: "off" as const,
     shiftCode: null,
     source: "supervisor" as const,
   };
   const leaveDay = {
     ...generatedDay,
-    workDate: "2026-09-04",
+    workDate: "2026-09-05",
     entryKind: "off" as const,
     shiftCode: null,
     source: "leave" as const,
   };
+  const holidayAdjustmentDay = {
+    ...generatedDay,
+    workDate: "2026-09-06",
+    source: "holiday_adjustment" as const,
+  };
   const merged = mergeSeptemberTemporaryScheduleEntries({
     persisted: [
       { ...generatedDay, shiftLabel: "舊自動班別" },
-      supervisorDay,
+      supervisorEarlyDay,
+      supervisorOffDay,
       leaveDay,
+      holidayAdjustmentDay,
       { ...generatedDay, employeeId: "unrelated", workDate: "2026-09-01" },
     ],
     temporary,
@@ -131,8 +146,10 @@ test("September daily-board bridge is authoritative for opted-in coaches and pre
   assert.equal(merged.length, 31);
   assert.equal(byCell.get("coach-1:2026-09-01")?.entryKind, "off");
   assert.equal(byCell.get("coach-1:2026-09-02")?.shiftLabel, "中班");
-  assert.equal(byCell.get("coach-1:2026-09-03")?.entryKind, "work");
-  assert.equal(byCell.get("coach-1:2026-09-04")?.entryKind, "work");
+  assert.equal(byCell.get("coach-1:2026-09-03"), supervisorEarlyDay);
+  assert.equal(byCell.get("coach-1:2026-09-04"), supervisorOffDay);
+  assert.equal(byCell.get("coach-1:2026-09-05"), leaveDay);
+  assert.equal(byCell.get("coach-1:2026-09-06"), holidayAdjustmentDay);
   assert.ok(merged.some((entry) => entry.employeeId === "unrelated"));
 });
 
