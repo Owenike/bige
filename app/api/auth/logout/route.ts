@@ -12,6 +12,11 @@ function tableMissing(message: string | undefined, tableName: string) {
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient(request);
   const authResult = await supabase.auth.getUser();
+  const claimsResult = await supabase.auth.getClaims();
+  const authSessionId =
+    typeof (claimsResult.data?.claims as Record<string, unknown> | undefined)?.session_id === "string"
+      ? String((claimsResult.data?.claims as Record<string, unknown>).session_id)
+      : null;
   const user = authResult.data.user;
   const ip = getClientIp(request) || null;
   const userAgent = request.headers.get("user-agent") || null;
@@ -23,6 +28,17 @@ export async function POST(request: Request) {
 
   if (user?.id) {
     const admin = createSupabaseAdminClient();
+    if (authSessionId) {
+      await admin
+        .from("supervisor_biometric_sessions")
+        .update({
+          revoked_at: new Date().toISOString(),
+          revoke_reason: "user_logout",
+        })
+        .eq("profile_id", user.id)
+        .eq("auth_session_id", authSessionId)
+        .is("revoked_at", null);
+    }
     const profileResult = await admin
       .from("profiles")
       .select("role, tenant_id, branch_id")

@@ -6,6 +6,15 @@ import { I18nProvider } from "./i18n-provider";
 import LayoutChrome from "./layout-chrome";
 import { getLocaleFromCookies } from "../lib/i18n-server";
 
+export const metadata = {
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent" as const,
+    title: "BIG E 驗證",
+  },
+};
+
 const GTM_ID = "GTM-588ZGDKH";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

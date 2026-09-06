@@ -14,6 +14,7 @@ import {
 } from "../../../../lib/staff-activation";
 import { createInAppNotifications } from "../../../../lib/in-app-notifications";
 import { recordSystemAuditEvent, type SystemAuditOutcome } from "../../../../lib/system-audit";
+import { isSupervisorBiometricEnforced } from "../../../../lib/supervisor-biometric";
 
 function normalizePhone(input: string) {
   return input.replace(/\D/g, "");
@@ -132,11 +133,13 @@ export async function POST(request: Request) {
         tenant_id: string | null;
         branch_id: string | null;
         role: string | null;
+        position: string | null;
         display_name: string | null;
         employee_number: string | null;
         is_active: boolean;
         staff_deleted_at: string | null;
         staff_activation_status: string | null;
+        supervisor_biometric_enforced_at: string | null;
       }
     | null = null;
   if (emailCredential) {
@@ -152,7 +155,7 @@ export async function POST(request: Request) {
 
     const profileResult = await admin
       .from("profiles")
-      .select("id, tenant_id, branch_id, role, display_name, employee_number, is_active, staff_deleted_at, staff_activation_status")
+      .select("id, tenant_id, branch_id, role, position, display_name, employee_number, is_active, staff_deleted_at, staff_activation_status, supervisor_biometric_enforced_at")
       .eq("id", authUser.id)
       .maybeSingle();
 
@@ -175,6 +178,13 @@ export async function POST(request: Request) {
     if (!isStaffActivationComplete(staffProfile.staff_activation_status)) {
       return rejectLogin(401, "Invalid credentials", "staff_activation_incomplete");
     }
+    if (isSupervisorBiometricEnforced(staffProfile)) {
+      return rejectLogin(
+        403,
+        "主管帳號不能使用密碼登入，請輸入員工編號並使用綁定手機驗證。",
+        "supervisor_password_login_blocked",
+      );
+    }
     emailToLogin = emailCredential;
   } else if (employeeNumber) {
     if (!isEmployeeNumber(employeeNumber)) {
@@ -183,7 +193,7 @@ export async function POST(request: Request) {
 
     const profileResult = await admin
       .from("profiles")
-      .select("id, tenant_id, branch_id, role, display_name, employee_number, is_active, staff_deleted_at, staff_activation_status")
+      .select("id, tenant_id, branch_id, role, position, display_name, employee_number, is_active, staff_deleted_at, staff_activation_status, supervisor_biometric_enforced_at")
       .eq("employee_number", employeeNumber)
       .maybeSingle();
 
@@ -234,6 +244,13 @@ export async function POST(request: Request) {
     }
     emailToLogin = staffEmail;
     activationLogin = !isStaffActivationComplete(staffProfile.staff_activation_status);
+    if (!activationLogin && isSupervisorBiometricEnforced(staffProfile)) {
+      return rejectLogin(
+        403,
+        "主管帳號不能使用密碼登入，請使用綁定手機驗證。",
+        "supervisor_password_login_blocked",
+      );
+    }
   } else if (phone) {
     const memberByPhoneWithPortal = await admin
       .from("members")

@@ -1,0 +1,120 @@
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(214, 184, 116, .18), transparent 34%),
+    linear-gradient(145deg, #05070a, #111923 58%, #07110f);
+  color: #f5f7fb;
+}
+
+.card {
+  width: min(100%, 520px);
+  display: grid;
+  gap: 18px;
+  padding: clamp(24px, 6vw, 36px);
+  border: 1px solid rgba(255, 240, 202, .35);
+  border-radius: 28px;
+  background: rgba(7, 10, 14, .78);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .42);
+  backdrop-filter: blur(22px);
+}
+
+.eyebrow {
+  margin: 0;
+  color: #d6b874;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .14em;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(28px, 7vw, 38px);
+  font-weight: 650;
+  line-height: 1.18;
+}
+
+.copy {
+  margin: 0;
+  color: rgba(238, 243, 250, .72);
+  line-height: 1.75;
+}
+
+.details {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(214, 184, 116, .25);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .045);
+}
+
+.details span {
+  color: rgba(238, 243, 250, .66);
+  font-size: 13px;
+}
+
+.details strong {
+  font-size: 17px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.button {
+  min-height: 52px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .07);
+  color: #fff;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.primary {
+  border-color: rgba(255, 247, 223, .82);
+  background: linear-gradient(135deg, #fffaf0, #d6b874);
+  color: #05070a;
+}
+
+.danger {
+  border-color: rgba(255, 168, 168, .34);
+  color: #ffd0d0;
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: .52;
+}
+
+.message {
+  margin: 0;
+  padding: 13px 14px;
+  border-radius: 14px;
+  background: rgba(49, 143, 91, .2);
+  color: #c8f7d9;
+  line-height: 1.55;
+}
+
+.error {
+  margin: 0;
+  padding: 13px 14px;
+  border-radius: 14px;
+  background: rgba(151, 53, 53, .24);
+  color: #ffd0d0;
+  line-height: 1.55;
+}
+
+@media (max-width: 520px) {
+  .page { align-items: end; padding: 14px; }
+  .card { border-radius: 24px; }
+  .actions { grid-template-columns: 1fr; }
+}

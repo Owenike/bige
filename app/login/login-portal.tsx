@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { normalizeEmployeeNumber } from "../../lib/staff-credentials";
@@ -29,6 +29,7 @@ type MemberActivationRequestResponse = {
 
 type LoginPanel = "staff" | "member" | "activation";
 export type LoginPortal = "staff" | "member";
+type StaffAuthMethod = "password" | "supervisor_biometric";
 
 type LoginEntryCopy = {
   eyebrow: string;
@@ -208,6 +209,10 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
   const [employeeNumber, setEmployeeNumber] = useState("");
   const [password, setPassword] = useState("");
   const [showStaffPassword, setShowStaffPassword] = useState(false);
+  const [staffAuthMethod, setStaffAuthMethod] = useState<StaffAuthMethod>("password");
+  const [methodBusy, setMethodBusy] = useState(false);
+  const [supervisorLoginRequestId, setSupervisorLoginRequestId] = useState("");
+  const [supervisorLoginMessage, setSupervisorLoginMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -221,6 +226,97 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
   const [activationError, setActivationError] = useState<string | null>(null);
   const [activationMessage, setActivationMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (activePanel !== "staff" || employeeNumber.includes("@")) {
+      setStaffAuthMethod("password");
+      setMethodBusy(false);
+      return;
+    }
+    const normalized = normalizeEmployeeNumber(employeeNumber);
+    if (!/^E\d{6}$/.test(normalized)) {
+      setStaffAuthMethod("password");
+      setMethodBusy(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setMethodBusy(true);
+      void fetch("/api/auth/method", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeNumber: normalized }),
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          const payload = await response.json().catch(() => null);
+          if (!response.ok) return;
+          const method = payload?.method === "supervisor_biometric" ? "supervisor_biometric" : "password";
+          setStaffAuthMethod(method);
+          if (method === "supervisor_biometric") setPassword("");
+        })
+        .catch(() => null)
+        .finally(() => setMethodBusy(false));
+    }, 320);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [activePanel, employeeNumber]);
+
+  const finishStaffLogin = useCallback(async () => {
+    const meRes = await fetch("/api/auth/me", { cache: "no-store" });
+    const mePayload = (await meRes.json().catch(() => null)) as MeResponse | null;
+    if (!meRes.ok || !mePayload?.role) {
+      throw new Error((mePayload as { error?: string } | null)?.error || "Profile not ready");
+    }
+    if (mePayload.role === "member") {
+      await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+      throw new Error(zh ? "會員請使用會員登入入口。" : "Members must use the member login.");
+    }
+    router.replace(
+      mePayload.staffActivationStatus && mePayload.staffActivationStatus !== "completed"
+        ? "/staff/activate"
+        : mePayload.mustChangePassword
+          ? "/staff/change-password"
+          : returnTo || roleHome(mePayload.role),
+    );
+  }, [returnTo, router, zh]);
+
+  useEffect(() => {
+    if (!supervisorLoginRequestId) return;
+    let active = true;
+    let timer = 0;
+    const poll = async () => {
+      try {
+        const response = await fetch(
+          `/api/auth/supervisor-login/status?requestId=${encodeURIComponent(supervisorLoginRequestId)}`,
+          { cache: "no-store" },
+        );
+        const payload = await response.json().catch(() => null);
+        if (!active) return;
+        if (response.ok && payload?.authenticated) {
+          setSupervisorLoginMessage(zh ? "手機驗證成功，正在登入…" : "Approved. Signing in…");
+          await finishStaffLogin();
+          return;
+        }
+        if (!response.ok) {
+          setSupervisorLoginRequestId("");
+          setSupervisorLoginMessage("");
+          setError(staffLoginErrorMessage(payload?.error, zh));
+          return;
+        }
+        timer = window.setTimeout(() => void poll(), 1400);
+      } catch {
+        if (active) timer = window.setTimeout(() => void poll(), 1800);
+      }
+    };
+    void poll();
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [finishStaffLogin, supervisorLoginRequestId, zh]);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -231,6 +327,20 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
         ? employeeNumber.trim().toLowerCase()
         : normalizeEmployeeNumber(employeeNumber);
       setEmployeeNumber(normalizedAccount);
+      if (staffAuthMethod === "supervisor_biometric") {
+        const requestResponse = await fetch("/api/auth/supervisor-login/request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ employeeNumber: normalizedAccount }),
+        });
+        const requestPayload = await requestResponse.json().catch(() => null);
+        if (!requestResponse.ok) throw new Error(staffLoginErrorMessage(requestPayload?.error, zh));
+        setSupervisorLoginRequestId(requestPayload?.requestId || "");
+        setSupervisorLoginMessage(
+          zh ? "已傳送到綁定手機，請於兩分鐘內完成生物辨識。" : "Sent to the bound phone. Approve within two minutes.",
+        );
+        return;
+      }
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -239,21 +349,7 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
       const payload = await res.json().catch(() => null);
       if (!res.ok) throw new Error(staffLoginErrorMessage(payload?.error, zh));
 
-      const meRes = await fetch("/api/auth/me");
-      const mePayload = (await meRes.json().catch(() => null)) as MeResponse | null;
-      if (!meRes.ok || !mePayload?.role) throw new Error((mePayload as { error?: string } | null)?.error || "Profile not ready");
-      if (mePayload.role === "member") {
-        await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
-        throw new Error(zh ? "會員請使用會員登入入口。" : "Members must use the member login.");
-      }
-
-      router.replace(
-        mePayload.staffActivationStatus && mePayload.staffActivationStatus !== "completed"
-          ? "/staff/activate"
-          : mePayload.mustChangePassword
-            ? "/staff/change-password"
-            : returnTo || roleHome(mePayload.role),
-      );
+      await finishStaffLogin();
     } catch (err) {
       setError(staffLoginErrorMessage(err instanceof Error ? err.message : null, zh));
     } finally {
@@ -473,7 +569,12 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
                   autoCapitalize="characters"
                   autoFocus={activePanel === "staff"}
                   className="input"
-                  onChange={(e) => setEmployeeNumber(e.target.value)}
+                  onChange={(e) => {
+                    setEmployeeNumber(e.target.value);
+                    setSupervisorLoginRequestId("");
+                    setSupervisorLoginMessage("");
+                    setError(null);
+                  }}
                   onBlur={() => {
                     if (!employeeNumber.includes("@")) {
                       setEmployeeNumber(normalizeEmployeeNumber(employeeNumber));
@@ -486,50 +587,73 @@ function LoginContent({ portal }: { portal: LoginPortal }) {
                 />
               </label>
 
-              <div className="field">
-                <label
-                  className={isStudentCheckInAdminEntry ? "studentAdminLoginLabel" : "kvLabel"}
-                  htmlFor="staff-password"
-                  style={{ textTransform: "none" }}
-                >
-                  {zh ? "正式密碼／一次性啟用碼" : "Permanent password / activation code"}
-                </label>
-                <div className={isStudentCheckInAdminEntry ? "studentAdminLoginPasswordField" : undefined}>
-                  <input
-                    autoComplete="current-password"
-                    className="input"
-                    id="staff-password"
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={zh ? "首次登入請向主管索取啟用碼" : "First sign-in: request a code from your supervisor"}
-                    required
-                    type={isStudentCheckInAdminEntry && showStaffPassword ? "text" : "password"}
-                    value={password}
-                  />
-                  {isStudentCheckInAdminEntry ? (
-                    <button
-                      aria-label={showStaffPassword ? "隱藏密碼" : "顯示密碼"}
-                      className="studentAdminLoginPasswordToggle"
-                      onClick={() => setShowStaffPassword((visible) => !visible)}
-                      title={showStaffPassword ? "隱藏密碼" : "顯示密碼"}
-                      type="button"
-                    >
-                      {showStaffPassword ? "隱藏" : "顯示"}
-                    </button>
-                  ) : null}
+              {staffAuthMethod === "password" ? (
+                <div className="field">
+                  <label
+                    className={isStudentCheckInAdminEntry ? "studentAdminLoginLabel" : "kvLabel"}
+                    htmlFor="staff-password"
+                    style={{ textTransform: "none" }}
+                  >
+                    {zh ? "正式密碼／一次性啟用碼" : "Permanent password / activation code"}
+                  </label>
+                  <div className={isStudentCheckInAdminEntry ? "studentAdminLoginPasswordField" : undefined}>
+                    <input
+                      autoComplete="current-password"
+                      className="input"
+                      id="staff-password"
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={zh ? "首次登入請向主管索取啟用碼" : "First sign-in: request a code from your supervisor"}
+                      required
+                      type={isStudentCheckInAdminEntry && showStaffPassword ? "text" : "password"}
+                      value={password}
+                    />
+                    {isStudentCheckInAdminEntry ? (
+                      <button
+                        aria-label={showStaffPassword ? "隱藏密碼" : "顯示密碼"}
+                        className="studentAdminLoginPasswordToggle"
+                        onClick={() => setShowStaffPassword((visible) => !visible)}
+                        title={showStaffPassword ? "隱藏密碼" : "顯示密碼"}
+                        type="button"
+                      >
+                        {showStaffPassword ? "隱藏" : "顯示"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="field">
+                  <span className={isStudentCheckInAdminEntry ? "studentAdminLoginLabel" : "kvLabel"}>
+                    {zh ? "主管手機驗證" : "Supervisor phone approval"}
+                  </span>
+                  <p className={styles.staffBiometricHint}>
+                    {supervisorLoginMessage || (zh ? "此主管帳號不使用密碼，請傳送要求到綁定手機。" : "This supervisor account uses its bound phone instead of a password.")}
+                  </p>
+                </div>
+              )}
 
               <div className={isStudentCheckInAdminEntry ? "studentAdminLoginActions" : "actions"} style={{ marginTop: 2 }}>
                 <button
                   className={isStudentCheckInAdminEntry ? "studentAdminLoginSubmit" : `btn ${busy ? "" : "btnPrimary"}`}
-                  disabled={busy}
+                  disabled={busy || methodBusy || Boolean(supervisorLoginRequestId)}
                   type="submit"
                 >
-                  {busy ? t("auth.signing_in") : isStudentCheckInAdminEntry ? (zh ? "登入後台" : "Sign In") : t("auth.sign_in")}
+                  {methodBusy
+                    ? (zh ? "確認帳號中…" : "Checking account…")
+                    : supervisorLoginRequestId
+                      ? (zh ? "等待手機確認…" : "Waiting for phone…")
+                      : busy
+                        ? t("auth.signing_in")
+                        : staffAuthMethod === "supervisor_biometric"
+                          ? (zh ? "傳送手機驗證" : "Send phone approval")
+                          : isStudentCheckInAdminEntry
+                            ? (zh ? "登入後台" : "Sign In")
+                            : t("auth.sign_in")}
                 </button>
-                <Link className={isStudentCheckInAdminEntry ? "studentAdminLoginLink" : "btn"} href="/forgot-password">
-                  {zh ? "忘記密碼" : "Forgot Password"}
-                </Link>
+                {staffAuthMethod === "password" ? (
+                  <Link className={isStudentCheckInAdminEntry ? "studentAdminLoginLink" : "btn"} href="/forgot-password">
+                    {zh ? "忘記密碼" : "Forgot Password"}
+                  </Link>
+                ) : null}
                 <Link className={isStudentCheckInAdminEntry ? "studentAdminLoginLink" : "btn"} href="/">
                   {t("common.back_home")}
                 </Link>

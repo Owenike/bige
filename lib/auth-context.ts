@@ -10,6 +10,7 @@ import {
   type StaffDepartment,
   type StaffPosition,
 } from "./staff-organization";
+import { hasApprovedSupervisorSession } from "./supervisor-biometric";
 
 export type AppRole =
   | "platform_admin"
@@ -131,6 +132,7 @@ interface ProfileRow {
   branch_id: string | null;
   is_active: boolean;
   staff_activation_status: string | null;
+  supervisor_biometric_enforced_at: string | null;
 }
 
 interface OpenShiftRow {
@@ -259,7 +261,7 @@ export async function requireProfile(
 
   const profileResult = await supabase
     .from("profiles")
-    .select("id, role, employee_number, department, position, tenant_id, branch_id, is_active, staff_activation_status")
+    .select("id, role, employee_number, department, position, tenant_id, branch_id, is_active, staff_activation_status, supervisor_biometric_enforced_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -303,6 +305,21 @@ export async function requireProfile(
         "STAFF_ACTIVATION_REQUIRED",
         "請先完成員工帳號啟用流程",
       ),
+    };
+  }
+
+  const authSessionId =
+    typeof (claims as Record<string, unknown>).session_id === "string"
+      ? String((claims as Record<string, unknown>).session_id)
+      : null;
+  const supervisorSessionApproved = await hasApprovedSupervisorSession({
+    profile,
+    authSessionId,
+  });
+  if (!supervisorSessionApproved) {
+    return {
+      ok: false as const,
+      response: apiError(401, "UNAUTHORIZED", "主管登入需要由綁定手機完成生物辨識"),
     };
   }
 

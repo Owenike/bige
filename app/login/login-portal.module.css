@@ -188,6 +188,20 @@
   gap: 14px;
 }
 
+.staffBiometricHint {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 12px 15px;
+  border: 1px solid rgba(214, 184, 116, .34);
+  border-radius: 16px;
+  background: rgba(214, 184, 116, .1);
+  color: rgba(255, 248, 227, .9);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
 .staffLoginFormSection :global(form) {
   display: grid;
   gap: 14px;

@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Save,
   ShieldCheck,
+  Smartphone,
   Trash2,
   UserRoundCheck,
   UserRoundX,
@@ -21,6 +22,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AppRole } from "../../../lib/auth-context";
 import {
   canChooseStaffEmployeeNumber,
+  canManageStaffAccounts,
   isEmployeeNumber,
   normalizeEmployeeNumber,
 } from "../../../lib/staff-credentials";
@@ -36,6 +38,7 @@ import {
   type StaffDepartment,
   type StaffPosition,
 } from "../../../lib/staff-organization";
+import { requiresSupervisorBiometric } from "../../../lib/supervisor-biometric";
 import styles from "./page.module.css";
 
 type StaffItem = {
@@ -109,6 +112,24 @@ type EmailHistoryItem = {
   changedAt: string;
 };
 
+type SupervisorDeviceItem = {
+  id: string;
+  profile_id: string;
+  device_type: string | null;
+  backed_up: boolean;
+  user_agent: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  last_push_at: string | null;
+};
+
+type SupervisorBindingReveal = {
+  employeeNumber: string;
+  displayName: string;
+  expiresAt: string;
+  bindingUrl: string;
+};
+
 const EMPTY_REAUTH: Reauth = { account: "", password: "", reason: "" };
 
 function readError(payload: ApiErrorBody | null, fallback: string) {
@@ -170,6 +191,9 @@ export default function ManagerStaffPage() {
   const [emailHistoryTarget, setEmailHistoryTarget] = useState<StaffItem | null>(null);
   const [emailHistory, setEmailHistory] = useState<EmailHistoryItem[]>([]);
   const [emailHistoryLoading, setEmailHistoryLoading] = useState(false);
+  const [supervisorDevices, setSupervisorDevices] = useState<SupervisorDeviceItem[]>([]);
+  const [supervisorEnforcedProfileIds, setSupervisorEnforcedProfileIds] = useState<string[]>([]);
+  const [supervisorBindingReveal, setSupervisorBindingReveal] = useState<SupervisorBindingReveal | null>(null);
 
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthTitle, setReauthTitle] = useState("");
@@ -201,6 +225,10 @@ export default function ManagerStaffPage() {
   const canViewEmailHistory =
     me.role === "platform_admin" ||
     normalizeEmployeeNumber(me.employeeNumber) === "E000001";
+  const canManageSupervisorDevices = canManageStaffAccounts({
+    role: me.role,
+    employeeNumber: me.employeeNumber,
+  });
   const createPositions = DEPARTMENT_POSITIONS[newDepartment].filter((position) =>
     assignablePositions.includes(position),
   );
@@ -244,6 +272,18 @@ export default function ManagerStaffPage() {
       if (!staffResponse.ok) throw new Error(readError(staffPayload, "讀取員工清單失敗"));
       setItems(staffPayload?.items || []);
       setBranches(branchResponse.ok ? branchPayload?.items || [] : []);
+      if (canManageStaffAccounts({ role: mePayload.role, employeeNumber: mePayload.employeeNumber })) {
+        const deviceResponse = await fetch("/api/manager/staff/supervisor-devices", { cache: "no-store" });
+        const devicePayload = await deviceResponse.json().catch(() => null);
+        if (!deviceResponse.ok) throw new Error(readError(devicePayload, "讀取主管手機狀態失敗"));
+        setSupervisorDevices(devicePayload?.items || devicePayload?.data?.items || []);
+        setSupervisorEnforcedProfileIds(
+          devicePayload?.enforcedProfileIds || devicePayload?.data?.enforcedProfileIds || [],
+        );
+      } else {
+        setSupervisorDevices([]);
+        setSupervisorEnforcedProfileIds([]);
+      }
     } catch (caught) {
       setItems([]);
       setError(caught instanceof Error ? caught.message : "讀取員工資料失敗");
@@ -291,6 +331,18 @@ export default function ManagerStaffPage() {
     }),
     [items],
   );
+  const supervisorDeviceByProfile = useMemo(
+    () => new Map(supervisorDevices.map((device) => [device.profile_id, device])),
+    [supervisorDevices],
+  );
+  const supervisorEnforcedSet = useMemo(
+    () => new Set(supervisorEnforcedProfileIds),
+    [supervisorEnforcedProfileIds],
+  );
+  const supervisorItems = useMemo(
+    () => items.filter((item) => requiresSupervisorBiometric({ role: item.role, position: item.position })),
+    [items],
+  );
 
   function scopedPath(path: string) {
     if (me.role !== "platform_admin" || !me.tenantId) return path;
@@ -303,6 +355,40 @@ export default function ManagerStaffPage() {
     setReauthError(null);
     setPendingAction(() => action);
     setReauthOpen(true);
+  }
+
+  function createSupervisorBinding(item: StaffItem) {
+    requestSensitive("確認建立主管手機綁定", async (credentials) => {
+      const response = await fetch("/api/manager/staff/supervisor-devices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId: item.id, reauth: credentials }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(readError(payload, "建立手機綁定連結失敗"));
+      const data = payload?.data || payload;
+      setSupervisorBindingReveal({
+        employeeNumber: data.employeeNumber || item.employee_number || "主管",
+        displayName: data.displayName || item.display_name || item.english_name || "主管",
+        expiresAt: data.expiresAt,
+        bindingUrl: data.bindingUrl,
+      });
+      setNotice("主管手機綁定連結已建立");
+    });
+  }
+
+  function revokeSupervisorDevice(item: StaffItem) {
+    requestSensitive("確認解除主管手機綁定", async (credentials) => {
+      const response = await fetch("/api/manager/staff/supervisor-devices", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId: item.id, reauth: credentials }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(readError(payload, "解除主管手機綁定失敗"));
+      setSupervisorDevices((current) => current.filter((device) => device.profile_id !== item.id));
+      setNotice("舊手機已解除；此主管在重新綁定前無法登入");
+    });
   }
 
   async function confirmSensitive() {
@@ -736,6 +822,68 @@ export default function ManagerStaffPage() {
           </section>
         ) : null}
 
+        {canManageSupervisorDevices ? (
+          <section className={`${styles.glassCard} ${styles.listPanel}`}>
+            <div className={styles.listHeader}>
+              <div>
+                <h2 className={styles.panelTitle}>主管手機登入</h2>
+                <span className={styles.count}>只有 01 可以建立或解除綁定</span>
+              </div>
+              <Smartphone size={22} />
+            </div>
+            <p className={styles.panelHint}>
+              手機成功綁定後，該主管的密碼登入會永久關閉。舊手機解除後，在新手機完成綁定前無法登入。
+            </p>
+            <div className={styles.staffList}>
+              {supervisorItems.map((item) => {
+                const device = supervisorDeviceByProfile.get(item.id);
+                const enforced = supervisorEnforcedSet.has(item.id);
+                return (
+                  <article className={styles.staffRow} key={`supervisor-device-${item.id}`}>
+                    <div className={styles.staffIdentity}>
+                      <span className={styles.staffName}>{item.display_name || item.english_name || "未命名主管"}</span>
+                      <span className={styles.staffEmail}>員工編號：{item.employee_number || "尚未建立"}</span>
+                    </div>
+                    <span className={styles.role}>{positionLabelForEmployee(item.position, item.employee_number)}</span>
+                    <div>
+                      <span className={styles.meta}>
+                        {device
+                          ? `已綁定：${formatDate(device.created_at)}`
+                          : enforced
+                            ? "舊手機已解除，重新綁定前無法登入"
+                            : "尚未綁定，目前仍使用密碼"}
+                      </span>
+                      {device?.last_used_at ? <span className={styles.meta}>最近核准：{formatDate(device.last_used_at)}</span> : null}
+                    </div>
+                    <span className={`${styles.status} ${device ? "" : styles.inactive}`}>
+                      {device ? "手機已綁定" : enforced ? "等待重新綁定" : "等待首次綁定"}
+                    </span>
+                    <div className={styles.rowActions}>
+                      {device ? (
+                        <button className={`${styles.button} ${styles.danger}`} type="button" onClick={() => revokeSupervisorDevice(item)}>
+                          解除舊手機
+                        </button>
+                      ) : (
+                        <button
+                          className={`${styles.button} ${styles.primary}`}
+                          type="button"
+                          onClick={() => createSupervisorBinding(item)}
+                          disabled={item.staff_activation_status !== "completed"}
+                          title={item.staff_activation_status === "completed" ? "建立 15 分鐘有效的手機綁定連結" : "請先完成員工帳號首次啟用"}
+                        >
+                          <Smartphone size={16} />
+                          建立綁定連結
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+              {!loading && supervisorItems.length === 0 ? <p className={styles.empty}>目前沒有主管帳號</p> : null}
+            </div>
+          </section>
+        ) : null}
+
         <section className={`${styles.glassCard} ${styles.listPanel}`}>
           <div className={styles.listHeader}>
             <div>
@@ -839,6 +987,50 @@ export default function ManagerStaffPage() {
             {!loading && visibleItems.length === 0 ? <p className={styles.empty}>目前沒有符合條件的員工</p> : null}
           </div>
         </section>
+
+        {supervisorBindingReveal ? (
+          <div className={styles.modalBackdrop}>
+            <section
+              className={`${styles.glassCard} ${styles.modal}`}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="supervisor-binding-title"
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>15 分鐘內有效</p>
+                  <h2 className={styles.panelTitle} id="supervisor-binding-title">主管手機綁定連結</h2>
+                </div>
+                <button className={styles.iconButton} type="button" onClick={() => setSupervisorBindingReveal(null)} title="關閉">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className={styles.modalIdentity}>
+                <strong>{supervisorBindingReveal.displayName}</strong>
+                <span>員工編號：{supervisorBindingReveal.employeeNumber}</span>
+              </div>
+              <p className={styles.panelHint}>
+                將下方連結傳給該主管本人，並由本人在要綁定的手機開啟。請勿傳給其他人。
+              </p>
+              <div className={styles.activationCode}>
+                <span>一次性綁定連結</span>
+                <strong style={{ fontSize: 13, overflowWrap: "anywhere" }}>{supervisorBindingReveal.bindingUrl}</strong>
+                <button
+                  className={styles.iconButton}
+                  type="button"
+                  title="複製綁定連結"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(supervisorBindingReveal.bindingUrl);
+                    setNotice("主管手機綁定連結已複製");
+                  }}
+                >
+                  <Copy size={17} />
+                </button>
+              </div>
+              <p className={styles.panelHint}>有效期限：{formatDate(supervisorBindingReveal.expiresAt)}</p>
+            </section>
+          </div>
+        ) : null}
 
         {activationReveal ? (
           <div className={styles.modalBackdrop}>

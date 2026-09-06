@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "./lib/supabase/admin";
 import { evaluateTenantAccess, type TenantStatus, type TenantSubscriptionSnapshot } from "./lib/tenant-subscription";
 import { hasAuthCapability } from "./lib/auth-capabilities";
 import { studentCheckinAdminCookieCandidates } from "./lib/student-checkin-admin-session";
+import { hasApprovedSupervisorSession } from "./lib/supervisor-biometric";
 
 const REQUEST_ID_HEADER = "x-request-id";
 
@@ -113,6 +114,7 @@ async function loadSessionContext(
   let supabase: ReturnType<typeof createServerClient> | null = null;
   let userId: string | null = null;
   let appMetadata: unknown = null;
+  let authSessionId: string | null = null;
 
   for (const cookieName of cookieNames) {
     const candidate = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -133,6 +135,10 @@ async function loadSessionContext(
       supabase = candidate;
       userId = claimsResult.data.claims.sub;
       appMetadata = claimsResult.data.claims.app_metadata;
+      authSessionId =
+        typeof (claimsResult.data.claims as Record<string, unknown>).session_id === "string"
+          ? String((claimsResult.data.claims as Record<string, unknown>).session_id)
+          : null;
       break;
     }
   }
@@ -142,7 +148,7 @@ async function loadSessionContext(
 
   const profileResult = await supabase
     .from("profiles")
-    .select("id, role, is_active, tenant_id, branch_id, must_change_password")
+    .select("id, role, position, is_active, tenant_id, branch_id, must_change_password, staff_activation_status, supervisor_biometric_enforced_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -179,8 +185,23 @@ async function loadSessionContext(
     is_active: boolean;
     tenant_id: string | null;
     branch_id: string | null;
+    position: string | null;
     must_change_password: boolean | null;
+    staff_activation_status: string | null;
+    supervisor_biometric_enforced_at: string | null;
   };
+
+  const supervisorSessionApproved = await hasApprovedSupervisorSession({
+    profile: {
+      id: profile.id,
+      role: profile.role,
+      position: profile.position,
+      staff_activation_status: profile.staff_activation_status,
+      supervisor_biometric_enforced_at: profile.supervisor_biometric_enforced_at,
+    },
+    authSessionId,
+  });
+  if (!supervisorSessionApproved) return null;
 
   let tenantStatus: TenantStatus = null;
   let subscription: TenantSubscriptionSnapshot | null = null;
