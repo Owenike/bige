@@ -10,6 +10,10 @@ import {
   staffScheduleOffLabel,
   staffScheduleShiftLabel,
 } from "../lib/staff-scheduling";
+import {
+  shouldApplyStaffScheduleResponse,
+  staffScheduleMonthStart,
+} from "../lib/staff-schedule-response-guard";
 import styles from "../app/manager/staff-scheduling/page.module.css";
 
 type Employment = {
@@ -273,11 +277,38 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   const automaticSyncInFlightRef = useRef(false);
   const automaticSyncStartedMonthsRef = useRef(new Set<string>());
   const mutationSequenceRef = useRef(0);
+  const activeMonthRef = useRef(month);
+  const scheduleStateRequestRevisionRef = useRef(0);
+  const loadAbortControllerRef = useRef<AbortController | null>(null);
   const setupDialogRef = useRef<HTMLDialogElement>(null);
   const dates = useMemo(() => monthDates(month), [month]);
   const loadedScheduleMonth = data?.monthStart;
   const canAutoSync = Boolean(data?.actor.canManage);
   const preferredDaysRequired = data?.period?.preferred_days_required ?? PREFERRED_DAYS_REQUIRED;
+
+  const canApplyScheduleResponse = useCallback((
+    requestedMonth: string,
+    requestRevision: number,
+    responseMonthStart?: string | null,
+  ) => shouldApplyStaffScheduleResponse({
+    requestedMonth,
+    activeMonth: activeMonthRef.current,
+    requestRevision,
+    latestRequestRevision: scheduleStateRequestRevisionRef.current,
+    responseMonthStart,
+  }), []);
+
+  const changeMonth = useCallback((nextMonth: string) => {
+    activeMonthRef.current = nextMonth;
+    scheduleStateRequestRevisionRef.current += 1;
+    mutationSequenceRef.current += 1;
+    automaticSyncStartedMonthsRef.current.delete(nextMonth);
+    loadAbortControllerRef.current?.abort();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    setMonth(nextMonth);
+  }, []);
 
   const highlightChangedEntries = useCallback((entries: Array<{ employeeId: string; workDate: string }>) => {
     const keys = entries.map((entry) => scheduleEntryKey(entry.employeeId, entry.workDate));
@@ -306,6 +337,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   useEffect(() => {
     const timers = recentChangeTimersRef.current;
     return () => {
+      loadAbortControllerRef.current?.abort();
       timers.forEach((timer) => window.clearTimeout(timer));
       timers.clear();
     };
@@ -319,32 +351,51 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   }, [setupDialog]);
 
   const load = useCallback(async () => {
+    const requestedMonth = month;
+    const requestRevision = ++scheduleStateRequestRevisionRef.current;
+    const mutationSequence = mutationSequenceRef.current;
     setLoading(true);
     setError("");
+    loadAbortControllerRef.current?.abort();
     const controller = new AbortController();
+    loadAbortControllerRef.current = controller;
     const timeout = window.setTimeout(() => controller.abort(), SCHEDULE_LOAD_TIMEOUT_MS);
     try {
-      const response = await fetch(`/api/staff-scheduling?month=${month}&view=team`, {
+      const response = await fetch(`/api/staff-scheduling?month=${requestedMonth}&view=team`, {
         cache: "no-store",
         signal: controller.signal,
       });
-      setData(await parseResponse(response));
+      const nextState = await parseResponse<ScheduleState>(response);
+      if (mutationSequence !== mutationSequenceRef.current) return;
+      if (canApplyScheduleResponse(requestedMonth, requestRevision, nextState.monthStart)) {
+        setData(nextState);
+      } else if (canApplyScheduleResponse(requestedMonth, requestRevision)) {
+        setData(null);
+        setError("班表回傳月份不一致，已阻止錯誤資料覆蓋畫面。請重新讀取班表。");
+      }
     } catch (caught) {
-      setError(
-        caught instanceof DOMException && caught.name === "AbortError"
-          ? "班表讀取超過 20 秒，已停止等待。請按下方按鈕重新讀取。"
-          : caught instanceof Error
-            ? caught.message
-            : "讀取失敗",
-      );
+      if (mutationSequence === mutationSequenceRef.current && canApplyScheduleResponse(requestedMonth, requestRevision)) {
+        setError(
+          caught instanceof DOMException && caught.name === "AbortError"
+            ? "班表讀取超過 20 秒，已停止等待。請按下方按鈕重新讀取。"
+            : caught instanceof Error
+              ? caught.message
+              : "讀取失敗",
+        );
+      }
     } finally {
       window.clearTimeout(timeout);
-      setLoading(false);
+      if (loadAbortControllerRef.current === controller) loadAbortControllerRef.current = null;
+      if (mutationSequence === mutationSequenceRef.current && canApplyScheduleResponse(requestedMonth, requestRevision)) {
+        setLoading(false);
+      }
     }
-  }, [month]);
+  }, [canApplyScheduleResponse, month]);
 
   const syncAutomaticSchedule = useCallback(async (showNotice = false) => {
     if (automaticSyncInFlightRef.current) return false;
+    const requestedMonth = month;
+    const requestRevision = ++scheduleStateRequestRevisionRef.current;
     automaticSyncInFlightRef.current = true;
     setAutoSyncing(true);
     if (showNotice) {
@@ -356,20 +407,27 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
       const response = await fetch("/api/staff-scheduling", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "ensure_schedule_draft", monthStart: `${month}-01`, view: "team" }),
+        body: JSON.stringify({ action: "ensure_schedule_draft", monthStart: staffScheduleMonthStart(requestedMonth), view: "team" }),
       });
       const nextState = await parseResponse<ScheduleState>(response);
-      if (requestSequence === mutationSequenceRef.current) setData(nextState);
-      if (showNotice) setNotice("班表已依最新固定班別與排休自動同步");
+      if (requestSequence !== mutationSequenceRef.current) return true;
+      if (canApplyScheduleResponse(requestedMonth, requestRevision, nextState.monthStart)) {
+        setData(nextState);
+        if (showNotice) setNotice("班表已依最新固定班別與排休自動同步");
+      } else if (canApplyScheduleResponse(requestedMonth, requestRevision)) {
+        setError("自動同步回傳了其他月份，已阻止錯誤資料覆蓋目前班表。");
+      }
       return true;
     } catch (caught) {
-      setError(caught instanceof Error ? `班表自動同步失敗：${caught.message}` : "班表自動同步失敗");
+      if (requestSequence === mutationSequenceRef.current && canApplyScheduleResponse(requestedMonth, requestRevision)) {
+        setError(caught instanceof Error ? `班表自動同步失敗：${caught.message}` : "班表自動同步失敗");
+      }
       return false;
     } finally {
       automaticSyncInFlightRef.current = false;
       setAutoSyncing(false);
     }
-  }, [month]);
+  }, [canApplyScheduleResponse, month]);
 
   useEffect(() => {
     void load();
@@ -419,6 +477,8 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   }, [notice]);
 
   async function act(action: string, values: Record<string, unknown> = {}, successMessage = "已完成") {
+    const requestedMonth = month;
+    const stateRequestRevision = ++scheduleStateRequestRevisionRef.current;
     const requestSequence = ++mutationSequenceRef.current;
     setBusy(true);
     setError("");
@@ -427,14 +487,23 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
       const response = await fetch("/api/staff-scheduling", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, monthStart: `${month}-01`, view: "team", ...values }),
+        body: JSON.stringify({ action, monthStart: staffScheduleMonthStart(requestedMonth), view: "team", ...values }),
       });
       const nextState = await parseResponse<ScheduleState>(response);
-      if (requestSequence === mutationSequenceRef.current) setData(nextState);
-      setNotice(successMessage);
-      return true;
+      if (requestSequence !== mutationSequenceRef.current) return false;
+      if (canApplyScheduleResponse(requestedMonth, stateRequestRevision, nextState.monthStart)) {
+        setData(nextState);
+        setNotice(successMessage);
+        return true;
+      }
+      if (canApplyScheduleResponse(requestedMonth, stateRequestRevision)) {
+        setError("操作回傳了其他月份，已阻止錯誤資料覆蓋目前班表。");
+      }
+      return false;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "操作失敗");
+      if (requestSequence === mutationSequenceRef.current && canApplyScheduleResponse(requestedMonth, stateRequestRevision)) {
+        setError(caught instanceof Error ? caught.message : "操作失敗");
+      }
       return false;
     } finally {
       setBusy(false);
@@ -442,7 +511,9 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   }
 
   async function assignShift(employeeId: string, workDate: string, shiftCode: ShiftChoice) {
-    ++mutationSequenceRef.current;
+    const requestedMonth = month;
+    const stateRequestRevision = ++scheduleStateRequestRevisionRef.current;
+    const requestSequence = ++mutationSequenceRef.current;
     const previousData = data;
     setBusy(true);
     setError("");
@@ -454,7 +525,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           action: "assign_shift",
-          monthStart: `${month}-01`,
+          monthStart: staffScheduleMonthStart(requestedMonth),
           view: "team",
           employeeId,
           workDate,
@@ -464,17 +535,27 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
         }),
       });
       const result = await parseResponse<ScheduleState | ScheduleEntryPatch>(response);
+      if (requestSequence !== mutationSequenceRef.current || !canApplyScheduleResponse(requestedMonth, stateRequestRevision)) return false;
       if ((result as ScheduleEntryPatch).action === "assign_shift") {
-        setData((current) => applyScheduleEntryPatch(current, result as ScheduleEntryPatch));
+        setData((current) => current?.monthStart === staffScheduleMonthStart(requestedMonth)
+          ? applyScheduleEntryPatch(current, result as ScheduleEntryPatch)
+          : current);
       } else {
-        setData(result as ScheduleState);
+        const nextState = result as ScheduleState;
+        if (!canApplyScheduleResponse(requestedMonth, stateRequestRevision, nextState.monthStart)) {
+          setError("調班回傳了其他月份，已阻止錯誤資料覆蓋目前班表。");
+          return false;
+        }
+        setData(nextState);
       }
       setNotice("個別班次已更新，合法性檢查已重新執行");
       return true;
     } catch (caught) {
-      setData(previousData);
-      setNotice("");
-      setError(caught instanceof Error ? `${caught.message}；班別已恢復原狀。` : "操作失敗；班別已恢復原狀。");
+      if (requestSequence === mutationSequenceRef.current && canApplyScheduleResponse(requestedMonth, stateRequestRevision)) {
+        setData(previousData);
+        setNotice("");
+        setError(caught instanceof Error ? `${caught.message}；班別已恢復原狀。` : "操作失敗；班別已恢復原狀。");
+      }
       return false;
     } finally {
       setBusy(false);
@@ -482,7 +563,9 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
   }
 
   async function assignDayOff(employeeId: string, workDate: string, offKind: DayOffChoice) {
-    ++mutationSequenceRef.current;
+    const requestedMonth = month;
+    const stateRequestRevision = ++scheduleStateRequestRevisionRef.current;
+    const requestSequence = ++mutationSequenceRef.current;
     const previousData = data;
     setBusy(true);
     setError("");
@@ -510,7 +593,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           action: "assign_day_off",
-          monthStart: `${month}-01`,
+          monthStart: staffScheduleMonthStart(requestedMonth),
           view: "team",
           employeeId,
           workDate,
@@ -520,17 +603,27 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
         }),
       });
       const result = await parseResponse<ScheduleState | ScheduleEntryPatch>(response);
+      if (requestSequence !== mutationSequenceRef.current || !canApplyScheduleResponse(requestedMonth, stateRequestRevision)) return false;
       if ((result as ScheduleEntryPatch).action === "assign_day_off") {
-        setData((current) => applyScheduleEntryPatch(current, result as ScheduleEntryPatch));
+        setData((current) => current?.monthStart === staffScheduleMonthStart(requestedMonth)
+          ? applyScheduleEntryPatch(current, result as ScheduleEntryPatch)
+          : current);
       } else {
-        setData(result as ScheduleState);
+        const nextState = result as ScheduleState;
+        if (!canApplyScheduleResponse(requestedMonth, stateRequestRevision, nextState.monthStart)) {
+          setError("休假調整回傳了其他月份，已阻止錯誤資料覆蓋目前班表。");
+          return false;
+        }
+        setData(nextState);
       }
       setNotice(`${offKind === "regular_day_off" ? "例假" : "休假"}已更新，合法性檢查已重新執行`);
       return true;
     } catch (caught) {
-      setData(previousData);
-      setNotice("");
-      setError(caught instanceof Error ? `${caught.message}；休假設定已恢復原狀。` : "操作失敗；休假設定已恢復原狀。");
+      if (requestSequence === mutationSequenceRef.current && canApplyScheduleResponse(requestedMonth, stateRequestRevision)) {
+        setData(previousData);
+        setNotice("");
+        setError(caught instanceof Error ? `${caught.message}；休假設定已恢復原狀。` : "操作失敗；休假設定已恢復原狀。");
+      }
       return false;
     } finally {
       setBusy(false);
@@ -798,7 +891,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
         <div className={styles.headerActions}>
           <label className={styles.monthField}>
             排班月份
-            <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+            <input type="month" value={month} onChange={(event) => changeMonth(event.target.value)} />
           </label>
           <a className={styles.secondaryButton} href="/manager/fitness">返回營運後台</a>
           <a className={styles.secondaryButton} href="/manager/staff-attendance">打卡異常</a>
