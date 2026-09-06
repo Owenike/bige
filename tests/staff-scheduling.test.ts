@@ -823,3 +823,15 @@ test("manager schedule coach filter defaults to all and supports single or multi
   assert.match(styles, /@media\(max-width:1100px\) and \(min-width:621px\)\{[\s\S]*?\.employeeFilterMenu\{right:auto;left:0\}/);
   assert.match(styles, /@media\(max-width:620px\)\{[\s\S]*?\.employeeFilter\{width:100%\}[\s\S]*?\.employeeFilterMenu\{right:auto;left:0;width:100%\}[\s\S]*?\.employeeFilterMenu>header\{align-items:stretch;display:grid\}/);
 });
+
+test("manager schedule uses filled cells for off, early, and late shifts while middle stays neutral", () => {
+  const source = readFileSync(resolve(process.cwd(), "components/staff-schedule-manager.tsx"), "utf8");
+  const styles = readFileSync(resolve(process.cwd(), "app/manager/staff-scheduling/page.module.css"), "utf8");
+  assert.match(source, /tone === "early" \? styles\.earlyShiftCell : tone === "late" \? styles\.lateShiftCell/);
+  assert.match(styles, /\.dateGridCell\.offCell\{background:#9a3038!important;color:#fff\}/);
+  assert.match(styles, /\.dateGridCell\.earlyShiftCell\{background:#8b4d10!important;color:#fff\}/);
+  assert.match(styles, /\.dateGridCell\.lateShiftCell\{background:#24558f!important;color:#fff\}/);
+  assert.match(styles, /\.offBadge,[^}]*\.earlyShiftBadge,[^}]*\.lateShiftBadge\{color:#fff\}/);
+  assert.doesNotMatch(styles, /\.dateGridCell\.middleShiftCell/);
+  assert.match(styles, /\.dateGridCell \.middleShiftBadge[^}]*\{color:#111827\}/);
+});

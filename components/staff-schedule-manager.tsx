@@ -1092,7 +1092,7 @@ export default function StaffScheduleManager({ initialMonth }: { initialMonth?: 
                           return (
                             <td
                               key={date}
-                              className={`${styles.dateGridCell} ${isOff ? styles.offCell : styles.workCell} ${dateColumnClass(date)} ${recentlyChangedEntryKeys.has(entryKey) ? styles.resignCell : ""}`}
+                              className={`${styles.dateGridCell} ${isOff ? styles.offCell : styles.workCell} ${tone === "early" ? styles.earlyShiftCell : tone === "late" ? styles.lateShiftCell : ""} ${dateColumnClass(date)} ${recentlyChangedEntryKeys.has(entryKey) ? styles.resignCell : ""}`}
                               onDragOver={(event) => event.preventDefault()}
                               onDrop={(event) => void dropOn(event, employee.id, date)}
                               title={isOff ? `${entry ? staffScheduleEntryOffLabel(entry) : "休假"}（可拖曳）` : `${entry ? staffScheduleShiftLabel(entry) : "未排班"} ${entry?.startsAt || ""}–${entry?.endsAt || ""}`}
