@@ -8718,7 +8718,7 @@
   --schedule-holo-strength: 0.48;
   isolation: isolate;
   backface-visibility: hidden;
-  transform: perspective(720px) rotateX(var(--schedule-holo-rotate-x))
+  transform: perspective(900px) rotateX(var(--schedule-holo-rotate-x))
     rotateY(var(--schedule-holo-rotate-y));
   transform-origin: center;
   transition: transform 150ms ease-out;
@@ -8863,8 +8863,7 @@
 
 .scheduleHoloCard.scheduleDraggingSource,
 .scheduleHoloCard:active {
-  --schedule-holo-rotate-x: 0deg;
-  --schedule-holo-rotate-y: 0deg;
+  transform: perspective(900px) rotateX(0deg) rotateY(0deg);
 }
 
 .scheduleHoloCard.scheduleDraggingSource::before,

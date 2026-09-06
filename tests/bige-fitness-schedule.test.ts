@@ -82,6 +82,7 @@ import {
 import {
   BIGE_SCHEDULE_HOLO_PILOT_DATES,
   BIGE_SCHEDULE_HOLO_PILOT_EMPLOYEE_NUMBER,
+  BIGE_SCHEDULE_HOLO_RESET_DELAY_MS,
   isBigeScheduleHoloPilotEnabled,
   resolveBigeScheduleHoloTone,
 } from "../lib/bige-schedule-holo";
@@ -159,9 +160,21 @@ test("schedule holo pilot stays hover-only and does not intercept schedule input
   assert.match(component, /holoEnabled=\{scheduleHoloPilotEnabled\}/);
   assert.match(component, /sessionIdentity\?\.employeeNumber \|\| previewEmployeeNumber/);
   assert.match(component, /event\.pointerType === "touch" \|\| event\.buttons !== 0/);
+  assert.equal(BIGE_SCHEDULE_HOLO_RESET_DELAY_MS, 1_000);
+  assert.match(
+    component,
+    /holoResetTimerRef\.current = setTimeout\([\s\S]*BIGE_SCHEDULE_HOLO_RESET_DELAY_MS\);/,
+  );
+  assert.match(component, /onPointerEnter=\{handleHoloPointerEnter\}/);
+  assert.match(component, /onPointerLeave=\{scheduleHoloPointerReset\}/);
+  assert.match(component, /onPointerCancel=\{resetHoloPointerImmediately\}/);
   assert.match(styles, /\.scheduleHoloCard::before,[\s\S]*pointer-events: none;/);
   assert.match(styles, /@media \(hover: hover\) and \(pointer: fine\)[\s\S]*\.scheduleHoloCard:hover::before/);
   assert.match(styles, /\.scheduleHoloCard\.scheduleDraggingSource::before,[\s\S]*opacity: 0;/);
+  assert.match(
+    styles,
+    /\.scheduleHoloCard\.scheduleDraggingSource,[\s\S]*transform: perspective\(900px\) rotateX\(0deg\) rotateY\(0deg\);/,
+  );
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.scheduleHoloCard \{[\s\S]*transform: none;/);
 });
 

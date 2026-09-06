@@ -158,6 +158,7 @@ import {
   type BigePersonalMonthDayStatus,
 } from "../lib/bige-personal-month-schedule";
 import {
+  BIGE_SCHEDULE_HOLO_RESET_DELAY_MS,
   isBigeScheduleHoloPilotEnabled,
   resolveBigeScheduleHoloTone,
   type BigeScheduleHoloTone,
@@ -11703,10 +11704,34 @@ function DraggableScheduleEntry(props: {
     data: props.data,
     disabled: !props.enabled,
   });
+  const holoResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearHoloResetTimer = () => {
+    if (holoResetTimerRef.current === null) return;
+    clearTimeout(holoResetTimerRef.current);
+    holoResetTimerRef.current = null;
+  };
+  const resetHoloElement = (element: HTMLDivElement) => {
+    element.style.setProperty("--schedule-holo-x", "50%");
+    element.style.setProperty("--schedule-holo-y", "50%");
+    element.style.setProperty("--schedule-holo-rotate-x", "0deg");
+    element.style.setProperty("--schedule-holo-rotate-y", "0deg");
+  };
+  useEffect(
+    () => () => {
+      if (holoResetTimerRef.current !== null) {
+        clearTimeout(holoResetTimerRef.current);
+      }
+    },
+    [],
+  );
+  const handleHoloPointerEnter = () => {
+    clearHoloResetTimer();
+  };
   const handleHoloPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!props.holoTone || isDragging || event.pointerType === "touch" || event.buttons !== 0) {
       return;
     }
+    clearHoloResetTimer();
     const bounds = event.currentTarget.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) return;
     const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
@@ -11715,18 +11740,25 @@ function DraggableScheduleEntry(props: {
     event.currentTarget.style.setProperty("--schedule-holo-y", `${(y * 100).toFixed(2)}%`);
     event.currentTarget.style.setProperty(
       "--schedule-holo-rotate-x",
-      `${((0.5 - y) * 1.6).toFixed(2)}deg`,
+      `${((0.5 - y) * 2.4).toFixed(2)}deg`,
     );
     event.currentTarget.style.setProperty(
       "--schedule-holo-rotate-y",
-      `${((x - 0.5) * 1.8).toFixed(2)}deg`,
+      `${((x - 0.5) * 2.8).toFixed(2)}deg`,
     );
   };
-  const resetHoloPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.currentTarget.style.setProperty("--schedule-holo-x", "50%");
-    event.currentTarget.style.setProperty("--schedule-holo-y", "50%");
-    event.currentTarget.style.setProperty("--schedule-holo-rotate-x", "0deg");
-    event.currentTarget.style.setProperty("--schedule-holo-rotate-y", "0deg");
+  const scheduleHoloPointerReset = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!props.holoTone) return;
+    clearHoloResetTimer();
+    const element = event.currentTarget;
+    holoResetTimerRef.current = setTimeout(() => {
+      resetHoloElement(element);
+      holoResetTimerRef.current = null;
+    }, BIGE_SCHEDULE_HOLO_RESET_DELAY_MS);
+  };
+  const resetHoloPointerImmediately = (event: ReactPointerEvent<HTMLDivElement>) => {
+    clearHoloResetTimer();
+    resetHoloElement(event.currentTarget);
   };
   return (
     <div
@@ -11736,9 +11768,10 @@ function DraggableScheduleEntry(props: {
       }`}
       style={props.style}
       data-holo-tone={props.holoTone || undefined}
+      onPointerEnter={handleHoloPointerEnter}
       onPointerMove={handleHoloPointerMove}
-      onPointerLeave={resetHoloPointer}
-      onPointerCancel={resetHoloPointer}
+      onPointerLeave={scheduleHoloPointerReset}
+      onPointerCancel={resetHoloPointerImmediately}
       {...listeners}
       {...attributes}
     >
