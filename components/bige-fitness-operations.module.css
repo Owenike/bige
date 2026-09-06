@@ -8712,6 +8712,8 @@
   --schedule-holo-y: 50%;
   --schedule-holo-rotate-x: 0deg;
   --schedule-holo-rotate-y: 0deg;
+  --schedule-holo-rotate-z: 0deg;
+  --schedule-holo-scale: 1;
   --schedule-holo-color-a: 239, 205, 122;
   --schedule-holo-color-b: 103, 208, 231;
   --schedule-holo-color-c: 225, 137, 247;
@@ -8719,7 +8721,8 @@
   isolation: isolate;
   backface-visibility: hidden;
   transform: perspective(900px) rotateX(var(--schedule-holo-rotate-x))
-    rotateY(var(--schedule-holo-rotate-y));
+    rotateY(var(--schedule-holo-rotate-y)) rotateZ(var(--schedule-holo-rotate-z))
+    scale(var(--schedule-holo-scale));
   transform-origin: center;
   transition: transform 150ms ease-out;
 }
@@ -8863,7 +8866,7 @@
 
 .scheduleHoloCard.scheduleDraggingSource,
 .scheduleHoloCard:active {
-  transform: perspective(900px) rotateX(0deg) rotateY(0deg);
+  transform: perspective(900px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1);
 }
 
 .scheduleHoloCard.scheduleDraggingSource::before,

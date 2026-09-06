@@ -158,7 +158,11 @@ import {
   type BigePersonalMonthDayStatus,
 } from "../lib/bige-personal-month-schedule";
 import {
+  BIGE_SCHEDULE_HOLO_HOVER_SCALE,
   BIGE_SCHEDULE_HOLO_RESET_DELAY_MS,
+  BIGE_SCHEDULE_HOLO_TILT_MAX_X_DEG,
+  BIGE_SCHEDULE_HOLO_TILT_MAX_Y_DEG,
+  BIGE_SCHEDULE_HOLO_TURN_DEG,
   isBigeScheduleHoloPilotEnabled,
   resolveBigeScheduleHoloTone,
   type BigeScheduleHoloTone,
@@ -11715,6 +11719,8 @@ function DraggableScheduleEntry(props: {
     element.style.setProperty("--schedule-holo-y", "50%");
     element.style.setProperty("--schedule-holo-rotate-x", "0deg");
     element.style.setProperty("--schedule-holo-rotate-y", "0deg");
+    element.style.setProperty("--schedule-holo-rotate-z", "0deg");
+    element.style.setProperty("--schedule-holo-scale", "1");
   };
   useEffect(
     () => () => {
@@ -11724,10 +11730,7 @@ function DraggableScheduleEntry(props: {
     },
     [],
   );
-  const handleHoloPointerEnter = () => {
-    clearHoloResetTimer();
-  };
-  const handleHoloPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const updateHoloPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!props.holoTone || isDragging || event.pointerType === "touch" || event.buttons !== 0) {
       return;
     }
@@ -11740,11 +11743,19 @@ function DraggableScheduleEntry(props: {
     event.currentTarget.style.setProperty("--schedule-holo-y", `${(y * 100).toFixed(2)}%`);
     event.currentTarget.style.setProperty(
       "--schedule-holo-rotate-x",
-      `${((0.5 - y) * 2.4).toFixed(2)}deg`,
+      `${((0.5 - y) * BIGE_SCHEDULE_HOLO_TILT_MAX_X_DEG * 2).toFixed(2)}deg`,
     );
     event.currentTarget.style.setProperty(
       "--schedule-holo-rotate-y",
-      `${((x - 0.5) * 2.8).toFixed(2)}deg`,
+      `${((x - 0.5) * BIGE_SCHEDULE_HOLO_TILT_MAX_Y_DEG * 2).toFixed(2)}deg`,
+    );
+    event.currentTarget.style.setProperty(
+      "--schedule-holo-rotate-z",
+      `${BIGE_SCHEDULE_HOLO_TURN_DEG}deg`,
+    );
+    event.currentTarget.style.setProperty(
+      "--schedule-holo-scale",
+      `${BIGE_SCHEDULE_HOLO_HOVER_SCALE}`,
     );
   };
   const scheduleHoloPointerReset = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -11768,8 +11779,8 @@ function DraggableScheduleEntry(props: {
       }`}
       style={props.style}
       data-holo-tone={props.holoTone || undefined}
-      onPointerEnter={handleHoloPointerEnter}
-      onPointerMove={handleHoloPointerMove}
+      onPointerEnter={updateHoloPointer}
+      onPointerMove={updateHoloPointer}
       onPointerLeave={scheduleHoloPointerReset}
       onPointerCancel={resetHoloPointerImmediately}
       {...listeners}

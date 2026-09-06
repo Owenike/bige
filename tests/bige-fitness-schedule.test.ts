@@ -80,9 +80,13 @@ import {
   retainBigeMonthlyDateCourseTypes,
 } from "../lib/bige-monthly-selection";
 import {
+  BIGE_SCHEDULE_HOLO_HOVER_SCALE,
   BIGE_SCHEDULE_HOLO_PILOT_DATES,
   BIGE_SCHEDULE_HOLO_PILOT_EMPLOYEE_NUMBER,
   BIGE_SCHEDULE_HOLO_RESET_DELAY_MS,
+  BIGE_SCHEDULE_HOLO_TILT_MAX_X_DEG,
+  BIGE_SCHEDULE_HOLO_TILT_MAX_Y_DEG,
+  BIGE_SCHEDULE_HOLO_TURN_DEG,
   isBigeScheduleHoloPilotEnabled,
   resolveBigeScheduleHoloTone,
 } from "../lib/bige-schedule-holo";
@@ -161,19 +165,26 @@ test("schedule holo pilot stays hover-only and does not intercept schedule input
   assert.match(component, /sessionIdentity\?\.employeeNumber \|\| previewEmployeeNumber/);
   assert.match(component, /event\.pointerType === "touch" \|\| event\.buttons !== 0/);
   assert.equal(BIGE_SCHEDULE_HOLO_RESET_DELAY_MS, 1_000);
+  assert.equal(BIGE_SCHEDULE_HOLO_TILT_MAX_X_DEG, 2.2);
+  assert.equal(BIGE_SCHEDULE_HOLO_TILT_MAX_Y_DEG, 3.2);
+  assert.equal(BIGE_SCHEDULE_HOLO_TURN_DEG, -1.4);
+  assert.equal(BIGE_SCHEDULE_HOLO_HOVER_SCALE, 1.018);
   assert.match(
     component,
     /holoResetTimerRef\.current = setTimeout\([\s\S]*BIGE_SCHEDULE_HOLO_RESET_DELAY_MS\);/,
   );
-  assert.match(component, /onPointerEnter=\{handleHoloPointerEnter\}/);
+  assert.match(component, /onPointerEnter=\{updateHoloPointer\}/);
+  assert.match(component, /onPointerMove=\{updateHoloPointer\}/);
   assert.match(component, /onPointerLeave=\{scheduleHoloPointerReset\}/);
   assert.match(component, /onPointerCancel=\{resetHoloPointerImmediately\}/);
+  assert.match(component, /--schedule-holo-rotate-z/);
+  assert.match(component, /--schedule-holo-scale/);
   assert.match(styles, /\.scheduleHoloCard::before,[\s\S]*pointer-events: none;/);
   assert.match(styles, /@media \(hover: hover\) and \(pointer: fine\)[\s\S]*\.scheduleHoloCard:hover::before/);
   assert.match(styles, /\.scheduleHoloCard\.scheduleDraggingSource::before,[\s\S]*opacity: 0;/);
   assert.match(
     styles,
-    /\.scheduleHoloCard\.scheduleDraggingSource,[\s\S]*transform: perspective\(900px\) rotateX\(0deg\) rotateY\(0deg\);/,
+    /\.scheduleHoloCard\.scheduleDraggingSource,[\s\S]*transform: perspective\(900px\) rotateX\(0deg\) rotateY\(0deg\) rotateZ\(0deg\) scale\(1\);/,
   );
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.scheduleHoloCard \{[\s\S]*transform: none;/);
 });

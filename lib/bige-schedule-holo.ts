@@ -8,6 +8,10 @@ import { normalizeEmployeeNumber } from "./staff-credentials";
 export const BIGE_SCHEDULE_HOLO_PILOT_EMPLOYEE_NUMBER = "E000001";
 export const BIGE_SCHEDULE_HOLO_PILOT_DATES = ["2026-09-06", "2026-09-07"] as const;
 export const BIGE_SCHEDULE_HOLO_RESET_DELAY_MS = 1_000;
+export const BIGE_SCHEDULE_HOLO_TILT_MAX_X_DEG = 2.2;
+export const BIGE_SCHEDULE_HOLO_TILT_MAX_Y_DEG = 3.2;
+export const BIGE_SCHEDULE_HOLO_TURN_DEG = -1.4;
+export const BIGE_SCHEDULE_HOLO_HOVER_SCALE = 1.018;
 
 const BIGE_SCHEDULE_HOLO_PILOT_DATE_SET = new Set<string>(
   BIGE_SCHEDULE_HOLO_PILOT_DATES,
