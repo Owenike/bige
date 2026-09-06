@@ -8688,3 +8688,182 @@
     drop-shadow(0 0 14px rgba(45, 135, 255, 0.5));
 }
 /* End daily schedule noir-gold palette. */
+
+/* Account 01 visual pilot for September 6-7. The base schedule remains unchanged
+   until a supported pointer deliberately hovers one occupied card. */
+.scheduleHoloCard {
+  --schedule-holo-x: 50%;
+  --schedule-holo-y: 50%;
+  --schedule-holo-rotate-x: 0deg;
+  --schedule-holo-rotate-y: 0deg;
+  --schedule-holo-color-a: 239, 205, 122;
+  --schedule-holo-color-b: 103, 208, 231;
+  --schedule-holo-color-c: 225, 137, 247;
+  --schedule-holo-strength: 0.48;
+  isolation: isolate;
+  backface-visibility: hidden;
+  transform: perspective(720px) rotateX(var(--schedule-holo-rotate-x))
+    rotateY(var(--schedule-holo-rotate-y));
+  transform-origin: center;
+  transition: transform 150ms ease-out;
+}
+
+.scheduleHoloCard::before,
+.scheduleHoloCard::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: inherit;
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-out;
+}
+
+.scheduleHoloCard::before {
+  background:
+    radial-gradient(
+      circle at var(--schedule-holo-x) var(--schedule-holo-y),
+      rgba(255, 255, 255, 0.72) 0,
+      rgba(var(--schedule-holo-color-a), 0.34) 11%,
+      rgba(var(--schedule-holo-color-b), 0.18) 23%,
+      transparent 46%
+    ),
+    conic-gradient(
+      from 210deg at var(--schedule-holo-x) var(--schedule-holo-y),
+      transparent 0deg,
+      rgba(var(--schedule-holo-color-a), 0.22) 55deg,
+      rgba(var(--schedule-holo-color-b), 0.2) 115deg,
+      rgba(var(--schedule-holo-color-c), 0.16) 175deg,
+      transparent 245deg
+    );
+  mix-blend-mode: screen;
+}
+
+.scheduleHoloCard::after {
+  background:
+    repeating-linear-gradient(
+      118deg,
+      transparent 0 13px,
+      rgba(255, 255, 255, 0.08) 14px,
+      transparent 16px 27px
+    );
+  background-position: var(--schedule-holo-x) var(--schedule-holo-y);
+  mix-blend-mode: soft-light;
+}
+
+.scheduleHoloCard > * {
+  position: relative;
+  z-index: 2;
+}
+
+.scheduleHoloCard[data-holo-tone="fa"] {
+  --schedule-holo-color-a: 255, 210, 104;
+  --schedule-holo-color-b: 255, 143, 91;
+  --schedule-holo-color-c: 224, 111, 230;
+  --schedule-holo-strength: 0.52;
+}
+
+.scheduleHoloCard[data-holo-tone="fa-reminded"] {
+  --schedule-holo-color-a: 117, 255, 186;
+  --schedule-holo-color-b: 83, 219, 188;
+  --schedule-holo-color-c: 182, 244, 213;
+  --schedule-holo-strength: 0.42;
+}
+
+.scheduleHoloCard[data-holo-tone="fa-converted"] {
+  --schedule-holo-color-a: 105, 255, 174;
+  --schedule-holo-color-b: 79, 231, 138;
+  --schedule-holo-color-c: 230, 255, 166;
+  --schedule-holo-strength: 0.56;
+}
+
+.scheduleHoloCard[data-holo-tone="fa-not-converted"] {
+  --schedule-holo-color-a: 126, 218, 213;
+  --schedule-holo-color-b: 103, 155, 227;
+  --schedule-holo-color-c: 154, 177, 208;
+  --schedule-holo-strength: 0.34;
+}
+
+.scheduleHoloCard[data-holo-tone="fa-pending-conversion"] {
+  --schedule-holo-color-a: 255, 210, 105;
+  --schedule-holo-color-b: 240, 151, 59;
+  --schedule-holo-color-c: 255, 232, 172;
+  --schedule-holo-strength: 0.5;
+}
+
+.scheduleHoloCard[data-holo-tone="bb"] {
+  --schedule-holo-color-a: 194, 156, 255;
+  --schedule-holo-color-b: 120, 178, 255;
+  --schedule-holo-color-c: 231, 187, 255;
+  --schedule-holo-strength: 0.4;
+}
+
+.scheduleHoloCard[data-holo-tone="completed"] {
+  --schedule-holo-color-a: 105, 255, 174;
+  --schedule-holo-color-b: 111, 213, 154;
+  --schedule-holo-color-c: 208, 255, 222;
+  --schedule-holo-strength: 0.3;
+}
+
+.scheduleHoloCard[data-holo-tone="no-show"] {
+  --schedule-holo-color-a: 144, 178, 207;
+  --schedule-holo-color-b: 89, 126, 168;
+  --schedule-holo-color-c: 169, 184, 198;
+  --schedule-holo-strength: 0.24;
+}
+
+.scheduleHoloCard[data-holo-tone="note"] {
+  --schedule-holo-color-a: 201, 211, 215;
+  --schedule-holo-color-b: 132, 164, 171;
+  --schedule-holo-color-c: 229, 220, 195;
+  --schedule-holo-strength: 0.22;
+}
+
+.scheduleHoloCard[data-holo-tone="no-show"]::after {
+  background:
+    repeating-linear-gradient(
+      126deg,
+      transparent 0 9px,
+      rgba(189, 211, 228, 0.12) 10px,
+      transparent 12px 20px
+    );
+  mix-blend-mode: normal;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .scheduleHoloCard:hover::before,
+  .scheduleHoloCard:hover::after {
+    opacity: var(--schedule-holo-strength);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .scheduleHoloCard:active::before,
+  .scheduleHoloCard:active::after {
+    opacity: var(--schedule-holo-strength);
+  }
+}
+
+.scheduleHoloCard.scheduleDraggingSource,
+.scheduleHoloCard:active {
+  --schedule-holo-rotate-x: 0deg;
+  --schedule-holo-rotate-y: 0deg;
+}
+
+.scheduleHoloCard.scheduleDraggingSource::before,
+.scheduleHoloCard.scheduleDraggingSource::after {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scheduleHoloCard {
+    transform: none;
+    transition: none;
+  }
+
+  .scheduleHoloCard::before,
+  .scheduleHoloCard::after {
+    transition: none;
+  }
+}

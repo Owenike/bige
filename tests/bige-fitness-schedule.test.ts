@@ -77,9 +77,91 @@ import {
   removeBigeMonthlyDateCourseType,
   retainBigeMonthlyDateCourseTypes,
 } from "../lib/bige-monthly-selection";
+import {
+  BIGE_SCHEDULE_HOLO_PILOT_DATES,
+  BIGE_SCHEDULE_HOLO_PILOT_EMPLOYEE_NUMBER,
+  isBigeScheduleHoloPilotEnabled,
+  resolveBigeScheduleHoloTone,
+} from "../lib/bige-schedule-holo";
 
 const batchCoachId = "00000000-0000-4000-8000-000000000011";
 const batchMemberId = "00000000-0000-4000-8000-000000000012";
+
+test("schedule holo pilot is limited to account 01 on September 6-7 manager daily boards", () => {
+  assert.equal(BIGE_SCHEDULE_HOLO_PILOT_EMPLOYEE_NUMBER, "E000001");
+  assert.deepEqual(BIGE_SCHEDULE_HOLO_PILOT_DATES, ["2026-09-06", "2026-09-07"]);
+  assert.equal(
+    isBigeScheduleHoloPilotEnabled({
+      employeeNumber: "01",
+      businessDate: "2026-09-06",
+      view: "manager",
+      tab: "schedule",
+    }),
+    true,
+  );
+  assert.equal(
+    isBigeScheduleHoloPilotEnabled({
+      employeeNumber: "E000001",
+      businessDate: "2026-09-07",
+      view: "manager",
+      tab: "schedule",
+    }),
+    true,
+  );
+  for (const input of [
+    { employeeNumber: "E000002", businessDate: "2026-09-06", view: "manager", tab: "schedule" },
+    { employeeNumber: "E000001", businessDate: "2026-09-08", view: "manager", tab: "schedule" },
+    { employeeNumber: "E000001", businessDate: "2026-09-06", view: "frontdesk", tab: "schedule" },
+    { employeeNumber: "E000001", businessDate: "2026-09-06", view: "manager", tab: "personal-month" },
+  ]) {
+    assert.equal(isBigeScheduleHoloPilotEnabled(input), false);
+  }
+});
+
+test("schedule holo tones preserve outcome priority and disable cancelled cards", () => {
+  assert.equal(
+    resolveBigeScheduleHoloTone({ operationKind: "trial", status: "cancelled", trialOutcome: "converted" }),
+    null,
+  );
+  assert.equal(
+    resolveBigeScheduleHoloTone({ operationKind: "trial", status: "no_show", trialOutcome: "converted" }),
+    "no-show",
+  );
+  assert.equal(
+    resolveBigeScheduleHoloTone({ operationKind: "trial", status: "completed", trialOutcome: "converted" }),
+    "fa-converted",
+  );
+  assert.equal(
+    resolveBigeScheduleHoloTone({ operationKind: "trial", status: "completed", trialOutcome: "not_converted" }),
+    "fa-not-converted",
+  );
+  assert.equal(
+    resolveBigeScheduleHoloTone({ operationKind: "trial", status: "completed", trialOutcome: "pending_conversion" }),
+    "fa-pending-conversion",
+  );
+  assert.equal(
+    resolveBigeScheduleHoloTone({ operationKind: "trial", status: "booked", reminderStatus: "reached" }),
+    "fa-reminded",
+  );
+  assert.equal(resolveBigeScheduleHoloTone({ operationKind: "trial", status: "booked" }), "fa");
+  assert.equal(resolveBigeScheduleHoloTone({ operationKind: "pt", status: "completed" }), "completed");
+  assert.equal(resolveBigeScheduleHoloTone({ operationKind: "bb", status: "booked" }), "bb");
+  assert.equal(resolveBigeScheduleHoloTone({ operationKind: "pt", status: "booked" }), "pt");
+});
+
+test("schedule holo pilot stays hover-only and does not intercept schedule input", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+
+  assert.match(component, /data-schedule-holo-pilot=\{scheduleHoloPilotEnabled \? "true" : undefined\}/);
+  assert.match(component, /holoEnabled=\{scheduleHoloPilotEnabled\}/);
+  assert.match(component, /sessionIdentity\?\.employeeNumber \|\| previewEmployeeNumber/);
+  assert.match(component, /event\.pointerType === "touch" \|\| event\.buttons !== 0/);
+  assert.match(styles, /\.scheduleHoloCard::before,[\s\S]*pointer-events: none;/);
+  assert.match(styles, /@media \(hover: hover\) and \(pointer: fine\)[\s\S]*\.scheduleHoloCard:hover::before/);
+  assert.match(styles, /\.scheduleHoloCard\.scheduleDraggingSource::before,[\s\S]*opacity: 0;/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.scheduleHoloCard \{[\s\S]*transform: none;/);
+});
 
 test("daily schedule excludes the explicit E000099 test coach from every visible coach list", () => {
   const route = readFileSync("app/api/bige-fitness/route.ts", "utf8");

@@ -155,6 +155,11 @@ import {
   shiftBigePersonalMonth,
   type BigePersonalMonthDayStatus,
 } from "../lib/bige-personal-month-schedule";
+import {
+  isBigeScheduleHoloPilotEnabled,
+  resolveBigeScheduleHoloTone,
+  type BigeScheduleHoloTone,
+} from "../lib/bige-schedule-holo";
 import AdministrativeAssistanceBoard from "./administrative-assistance-board";
 import styles from "./bige-fitness-operations.module.css";
 
@@ -1724,9 +1729,11 @@ function DailyScheduleLoadingBoard() {
 export default function BigeFitnessOperations({
   view,
   previewData,
+  previewEmployeeNumber,
 }: {
   view: RoleView;
   previewData?: BoardData;
+  previewEmployeeNumber?: string;
 }) {
   const managerView = view === "manager";
   const coachView = view === "coach";
@@ -6289,6 +6296,12 @@ export default function BigeFitnessOperations({
   const canSeeDailyFrontdesk =
     canUseScheduleOverviewControls ||
     Boolean(data?.canManageFrontdesk && data.canManageSchedule);
+  const scheduleHoloPilotEnabled = isBigeScheduleHoloPilotEnabled({
+    employeeNumber: sessionIdentity?.employeeNumber || previewEmployeeNumber,
+    businessDate: date,
+    view,
+    tab,
+  });
   const selectedBookingStatusWindow = selectedBooking
     ? getBigeCourseStatusWindow({
         startsAt: selectedBooking.starts_at,
@@ -6696,6 +6709,7 @@ export default function BigeFitnessOperations({
       data-ipad-pro-desktop-layout={useIpadProDesktopLayout ? "true" : undefined}
       data-daily-schedule-active={tab === "schedule" ? "true" : undefined}
       data-personal-month-active={tab === "personal-month" ? "true" : undefined}
+      data-schedule-holo-pilot={scheduleHoloPilotEnabled ? "true" : undefined}
       data-role-view={view}
     >
       <div className={styles.shell}>
@@ -7445,6 +7459,7 @@ export default function BigeFitnessOperations({
                         members={members}
                         trialBookings={trialBookings}
                         showTrialRevenue={Boolean(data.canSeeTrialRevenue)}
+                        holoEnabled={scheduleHoloPilotEnabled}
                         canCreate={
                           Boolean(data.canManageSchedule) &&
                           !isBusinessClosed &&
@@ -11605,6 +11620,7 @@ function DraggableScheduleEntry(props: {
   id: string;
   data: ScheduleDragPayload;
   enabled: boolean;
+  holoTone: BigeScheduleHoloTone | "note" | null;
   className: string;
   style: React.CSSProperties;
   children: React.ReactNode;
@@ -11614,13 +11630,42 @@ function DraggableScheduleEntry(props: {
     data: props.data,
     disabled: !props.enabled,
   });
+  const handleHoloPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!props.holoTone || isDragging || event.pointerType === "touch" || event.buttons !== 0) {
+      return;
+    }
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return;
+    const x = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+    const y = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
+    event.currentTarget.style.setProperty("--schedule-holo-x", `${(x * 100).toFixed(2)}%`);
+    event.currentTarget.style.setProperty("--schedule-holo-y", `${(y * 100).toFixed(2)}%`);
+    event.currentTarget.style.setProperty(
+      "--schedule-holo-rotate-x",
+      `${((0.5 - y) * 1.6).toFixed(2)}deg`,
+    );
+    event.currentTarget.style.setProperty(
+      "--schedule-holo-rotate-y",
+      `${((x - 0.5) * 1.8).toFixed(2)}deg`,
+    );
+  };
+  const resetHoloPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.currentTarget.style.setProperty("--schedule-holo-x", "50%");
+    event.currentTarget.style.setProperty("--schedule-holo-y", "50%");
+    event.currentTarget.style.setProperty("--schedule-holo-rotate-x", "0deg");
+    event.currentTarget.style.setProperty("--schedule-holo-rotate-y", "0deg");
+  };
   return (
     <div
       ref={setNodeRef}
-      className={`${props.className} ${props.enabled ? styles.scheduleDraggable : ""} ${
+      className={`${props.className} ${props.holoTone ? styles.scheduleHoloCard : ""} ${props.enabled ? styles.scheduleDraggable : ""} ${
         isDragging ? styles.scheduleDraggingSource : ""
       }`}
       style={props.style}
+      data-holo-tone={props.holoTone || undefined}
+      onPointerMove={handleHoloPointerMove}
+      onPointerLeave={resetHoloPointer}
+      onPointerCancel={resetHoloPointer}
       {...listeners}
       {...attributes}
     >
@@ -11642,6 +11687,7 @@ function HourRow(props: {
   members: Map<string, Member>;
   trialBookings: Map<string, TrialBookingSummary>;
   showTrialRevenue: boolean;
+  holoEnabled?: boolean;
   canCreate: boolean;
   canDrag: boolean;
   readOnly?: boolean;
@@ -11737,6 +11783,19 @@ function HourRow(props: {
               convertedAt: booking.converted_at,
               outcome: booking.trial_conversion_outcome,
             })
+          : null;
+        const holoTone = props.holoEnabled
+          ? booking
+            ? resolveBigeScheduleHoloTone({
+                operationKind: booking.operation_kind,
+                status: booking.status,
+                reminderStatus: booking.reminder_status,
+                convertedAt: booking.converted_at,
+                trialOutcome: booking.trial_conversion_outcome,
+              })
+            : note
+              ? "note"
+              : null
           : null;
         const mobileActive = String(
           props.selectedCoach === "all" || coach.id === props.selectedCoach,
@@ -11856,6 +11915,7 @@ function HourRow(props: {
                     item: booking,
                     movable: !isOptimisticBooking && isScheduleBookingDraggable(booking),
                   }}
+                  holoTone={holoTone}
                   className={[
                     styles.booking,
                     startsOnHour ? styles.cellEntryFull : styles.cellEntryHalf,
@@ -11981,6 +12041,7 @@ function HourRow(props: {
                   id={note.id}
                   enabled={props.canDrag}
                   data={{ kind: "note", item: note, movable: false }}
+                  holoTone={holoTone}
                   className={[
                     styles.note,
                     startsOnHour ? styles.cellEntryFull : styles.cellEntryHalf,
