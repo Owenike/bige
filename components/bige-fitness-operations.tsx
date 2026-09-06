@@ -1574,6 +1574,7 @@ function SignaturePad(props: { onChange: (dataUrl: string) => void }) {
 const DAILY_SCHEDULE_LOADING_COACH_COUNT = 7;
 const DAILY_SCHEDULE_LOADING_ROW_STEP_MS = 65;
 const DAILY_SCHEDULE_LOADING_SECOND_TURN_MS = 1900;
+const DAILY_SCHEDULE_MANUAL_REFRESH_MINIMUM_MS = 1000;
 const DAILY_SCHEDULE_LOADING_HOURS = Array.from(
   { length: 15 },
   (_, index) => index + 9,
@@ -1751,6 +1752,7 @@ export default function BigeFitnessOperations({
   const [reminderData, setReminderData] = useState<BoardData | null>(null);
   const [remindersLoading, setRemindersLoading] = useState(false);
   const [loading, setLoading] = useState(!previewData);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [businessDaySubmitting, setBusinessDaySubmitting] = useState(false);
@@ -1876,6 +1878,7 @@ export default function BigeFitnessOperations({
   const boardCacheRef = useRef<Map<string, BoardData>>(new Map());
   const boardRequestsRef = useRef<Map<string, Promise<BoardData>>>(new Map());
   const boardRevisionRef = useRef(new Map<string, number>());
+  const manualRefreshPendingRef = useRef(false);
   const operationsDashboardRef = useRef<OperationsDashboard>({
     businessDate: previewData?.businessDate || date,
     canUseWalkInPayments: previewData?.canUseWalkInPayments,
@@ -2196,6 +2199,36 @@ export default function BigeFitnessOperations({
       if (boardDateRef.current === targetDate) setLoading(false);
     }
   }, [applyBoardData, prefetchBoardWindow, requestBoard]);
+
+  const refreshBoardManually = useCallback(async () => {
+    if (manualRefreshPendingRef.current) return;
+
+    const targetDate = boardDateRef.current;
+    manualRefreshPendingRef.current = true;
+    setManualRefreshing(true);
+    setError("");
+
+    try {
+      const [, operationsResult] = await Promise.allSettled([
+        loadBoard({ silent: true, targetDate }),
+        loadOperationsDashboard(targetDate),
+        new Promise<void>((resolve) => {
+          window.setTimeout(resolve, DAILY_SCHEDULE_MANUAL_REFRESH_MINIMUM_MS);
+        }),
+      ]);
+
+      if (operationsResult.status === "rejected" && boardDateRef.current === targetDate) {
+        setError(
+          operationsResult.reason instanceof Error
+            ? operationsResult.reason.message
+            : "讀取營運資料失敗",
+        );
+      }
+    } finally {
+      manualRefreshPendingRef.current = false;
+      setManualRefreshing(false);
+    }
+  }, [loadBoard, loadOperationsDashboard]);
 
   const loadPersonalCoachMonth = useCallback(
     async (targetMonth: string, signal?: AbortSignal) => {
@@ -6903,8 +6936,22 @@ export default function BigeFitnessOperations({
               <button className={styles.iconButton} onClick={() => shiftBoardDate(1)} title="後一天">
                 <ChevronRight size={18} />
               </button>
-              <button className={styles.iconButton} onClick={() => void loadBoard({ silent: true })} title="重新整理">
-                <RefreshCw size={18} />
+              <button
+                className={`${styles.iconButton} ${styles.refreshButton}`}
+                type="button"
+                data-refreshing={manualRefreshing ? "true" : undefined}
+                aria-busy={manualRefreshing}
+                aria-label={manualRefreshing ? "正在重新整理日排課表" : "重新整理日排課表"}
+                disabled={manualRefreshing}
+                onClick={() => void refreshBoardManually()}
+                title="重新整理"
+              >
+                <span className={styles.refreshClockEffect} aria-hidden="true">
+                  <span className={`${styles.refreshClockRing} ${styles.refreshClockRingOuter}`} />
+                  <span className={`${styles.refreshClockRing} ${styles.refreshClockRingMiddle}`} />
+                  <span className={`${styles.refreshClockRing} ${styles.refreshClockRingInner}`} />
+                </span>
+                <RefreshCw className={styles.refreshClockIcon} size={18} aria-hidden="true" />
               </button>
               {tab === "schedule" && data?.canManageDailyReports ? (
                 <a

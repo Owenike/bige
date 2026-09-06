@@ -3144,6 +3144,30 @@ test("authorized schedule users see the daily settlement link immediately after 
   );
 });
 
+test("manual daily schedule refresh shows a scoped noir-gold clock for at least one second", () => {
+  const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
+  const styles = readFileSync("components/bige-fitness-operations.module.css", "utf8");
+
+  assert.match(component, /const DAILY_SCHEDULE_MANUAL_REFRESH_MINIMUM_MS = 1000;/);
+  assert.match(
+    component,
+    /Promise\.allSettled\(\[[\s\S]*loadBoard\(\{ silent: true, targetDate \}\)[\s\S]*loadOperationsDashboard\(targetDate\)[\s\S]*DAILY_SCHEDULE_MANUAL_REFRESH_MINIMUM_MS/,
+  );
+  assert.match(component, /data-refreshing=\{manualRefreshing \? "true" : undefined\}/);
+  assert.match(component, /aria-busy=\{manualRefreshing\}/);
+  assert.match(component, /disabled=\{manualRefreshing\}/);
+  assert.match(component, /refreshClockRingOuter[\s\S]*refreshClockRingMiddle[\s\S]*refreshClockRingInner/);
+  assert.match(styles, /\.refreshButton \{[\s\S]*--refresh-clock-bright: var\(--schedule-gold-bright, #e4c77a\)/);
+  assert.match(styles, /\.refreshClockEffect \{[\s\S]*width: 70px;[\s\S]*height: 70px;/);
+  assert.match(styles, /\.refreshButton\[data-refreshing="true"\] \.refreshClockRingOuter \{[\s\S]*refresh-clock-spin/);
+  assert.match(styles, /\.refreshButton\[data-refreshing="true"\] \.refreshClockRingMiddle \{[\s\S]*refresh-clock-spin-reverse/);
+  assert.match(
+    styles,
+    /\.frontdeskM2A\[data-daily-schedule-active="true"\] \.navigationRow \.dateToolbar \.refreshButton:disabled \{[\s\S]*opacity: 1;[\s\S]*var\(--schedule-gold-bright\)/,
+  );
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.refreshButton\[data-refreshing="true"\]/);
+});
+
 test("completed PT mutations reject stale board responses without shrinking the warm cache", () => {
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
 
