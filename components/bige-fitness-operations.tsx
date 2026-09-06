@@ -67,6 +67,7 @@ import {
   calculateContractTerms,
   calculateLegacyContractExpiryDate,
   calculateMinimumDeposit,
+  getBigeContractPlanSpecialtyLabel,
   getBigeFaFeeAmount,
   getBigeContractDisplayName,
   getBigeStudentPaymentBalanceState,
@@ -10439,7 +10440,7 @@ export default function BigeFitnessOperations({
                         aria-pressed={contractPlanSpecialty === specialty}
                         onClick={() => selectContractPlanSpecialty(specialty)}
                       >
-                        {BIGE_COURSE_LABELS[specialty]}
+                        {getBigeContractPlanSpecialtyLabel(specialty)}
                       </button>
                     ))}
                   </div>
@@ -10447,7 +10448,7 @@ export default function BigeFitnessOperations({
                 {contractPlanSpecialty ? (
                   <label className={styles.field}>
                     <span className={styles.label}>
-                      {BIGE_COURSE_LABELS[contractPlanSpecialty]}方案
+                      {getBigeContractPlanSpecialtyLabel(contractPlanSpecialty)}方案
                     </span>
                     <select
                       className={styles.select}

@@ -70,6 +70,12 @@ export function listBigeFitnessPlanSpecialties(
   );
 }
 
+export function getBigeContractPlanSpecialtyLabel(
+  specialty: BigeContractCourseType,
+) {
+  return specialty === "relaxation" ? "筋膜放鬆" : BIGE_COURSE_LABELS[specialty];
+}
+
 export const BIGE_OPERATION_KINDS = ["pt", "trial", "bb"] as const;
 export const BIGE_BATCH_OPERATION_KINDS = ["pt", "trial"] as const;
 export const BIGE_EXPLICIT_TRIAL_STAGES = ["FA2", "FAN"] as const;

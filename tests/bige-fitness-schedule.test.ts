@@ -18,6 +18,7 @@ import {
   calculateLegacyContractExpiryDate,
   collectBigeLegacyPurchaseDateTargets,
   flattenBigeMemberPaymentRelations,
+  getBigeContractPlanSpecialtyLabel,
   getBigeStudentPaymentBalanceState,
   getBigeContractDisplayName,
   getBigeFaFeeAmount,
@@ -3635,6 +3636,8 @@ test("built-in payment plans are grouped by specialty before showing their dropd
   ]);
   assert.equal(isBigeFitnessPlanForSpecialty(plans[1], "reformer_pilates"), true);
   assert.equal(isBigeFitnessPlanForSpecialty(plans[1], "weight_training"), false);
+  assert.equal(getBigeContractPlanSpecialtyLabel("relaxation"), "筋膜放鬆");
+  assert.equal(getBigeContractPlanSpecialtyLabel("weight_training"), "重訓");
 
   const component = readFileSync("components/bige-fitness-operations.tsx", "utf8");
   assert.match(component, /setContractPlanSpecialty\(""\)/);
@@ -3647,6 +3650,8 @@ test("built-in payment plans are grouped by specialty before showing their dropd
     component,
     /contractPlanSpecialty \? \([\s\S]*specialtyContractPlans\.map\(\(plan\) =>/,
   );
+  assert.match(component, /getBigeContractPlanSpecialtyLabel\(specialty\)/);
+  assert.match(component, /getBigeContractPlanSpecialtyLabel\(contractPlanSpecialty\)/);
   assert.match(component, /if \(!contractPlanSpecialty\) \{[\s\S]*請先選擇專項/);
   assert.match(component, /const openStudentPayment =[\s\S]*openContract\(booking, member\)/);
   assert.match(component, /const openWalkInMemberPayment =[\s\S]*openContract\(undefined, member\)/);
