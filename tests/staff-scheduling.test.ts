@@ -781,7 +781,8 @@ test("manager cleanup preserves drag-and-drop and both holiday decisions", () =>
   assert.equal(source.match(/styles\.dateGridCell/g)?.length, 4);
   assert.match(styles, /\.scheduleTable thead \.dateGridCell,\.scheduleTable tbody \.dateGridCell,\.scheduleTable tfoot \.dateGridCell\{background:#d6dbdf;color:#111827\}/);
   assert.match(styles, /\.scheduleTable thead \.dateGridCell\.weekend\{background:#d6dbdf!important;color:#a54539\}/);
-  assert.match(styles, /\.scheduleTable tbody tr:hover \.dateGridCell\{background:#c4cfd8!important\}/);
+  assert.doesNotMatch(styles, /\.scheduleTable tbody tr:hover[^\{]*\{[^}]*background/);
+  assert.match(styles, /\.scheduleTable tbody tr:hover>\*::after\{border-top-color:rgba\(239,211,145,\.82\);border-bottom-color:rgba\(239,211,145,\.82\)\}/);
   assert.match(styles, /\.scheduleTable \.dateGridCell \.middleShiftBadge,\.scheduleTable \.dateGridCell \.emptyCell\{color:#111827\}/);
   assert.match(styles, /\.scheduleTable \.nameCell\{background:#101d2a;color:#fff8e9\}/);
   assert.match(styles, /\.scheduleTable \.earlyShiftBadge\{color:#8b4d10\}/);
@@ -824,14 +825,17 @@ test("manager schedule coach filter defaults to all and supports single or multi
   assert.match(styles, /@media\(max-width:620px\)\{[\s\S]*?\.employeeFilter\{width:100%\}[\s\S]*?\.employeeFilterMenu\{right:auto;left:0;width:100%\}[\s\S]*?\.employeeFilterMenu>header\{align-items:stretch;display:grid\}/);
 });
 
-test("manager schedule uses filled cells for off, early, and late shifts while middle stays neutral", () => {
+test("manager schedule uses dimensional cells and an outline-only row hover while middle stays neutral", () => {
   const source = readFileSync(resolve(process.cwd(), "components/staff-schedule-manager.tsx"), "utf8");
   const styles = readFileSync(resolve(process.cwd(), "app/manager/staff-scheduling/page.module.css"), "utf8");
   assert.match(source, /tone === "early" \? styles\.earlyShiftCell : tone === "late" \? styles\.lateShiftCell/);
-  assert.match(styles, /\.dateGridCell\.offCell\{background:#9a3038!important;color:#fff\}/);
-  assert.match(styles, /\.dateGridCell\.earlyShiftCell\{background:#8b4d10!important;color:#fff\}/);
-  assert.match(styles, /\.dateGridCell\.lateShiftCell\{background:#24558f!important;color:#fff\}/);
-  assert.match(styles, /\.offBadge,[^}]*\.earlyShiftBadge,[^}]*\.lateShiftBadge\{color:#fff\}/);
+  assert.match(styles, /\.dateGridCell\.offCell\{background:radial-gradient\([^}]*linear-gradient\(145deg,#aa414b[^}]*color:#fff\}/);
+  assert.match(styles, /\.dateGridCell\.earlyShiftCell\{background:radial-gradient\([^}]*linear-gradient\(145deg,#a86419[^}]*color:#fff\}/);
+  assert.match(styles, /\.dateGridCell\.lateShiftCell\{background:radial-gradient\([^}]*linear-gradient\(145deg,#356da9[^}]*color:#fff\}/);
+  assert.match(styles, /\.offBadge,[^}]*\.earlyShiftBadge,[^}]*\.lateShiftBadge\{color:#fff;text-shadow:0 1px 2px rgba\(0,0,0,\.28\)\}/);
+  assert.match(styles, /\.scheduleTable tbody tr>\*::after\{[^}]*border-top:1px solid transparent;[^}]*border-bottom:1px solid transparent/);
+  assert.match(styles, /\.scheduleTable tbody tr:hover>:first-child::after\{border-left-color:rgba\(239,211,145,\.82\);box-shadow:-3px 0 12px rgba\(216,182,105,\.18\)\}/);
+  assert.doesNotMatch(styles, /\.scheduleTable tbody tr:hover[^\{]*\{[^}]*background/);
   assert.doesNotMatch(styles, /\.dateGridCell\.middleShiftCell/);
   assert.match(styles, /\.dateGridCell \.middleShiftBadge[^}]*\{color:#111827\}/);
 });

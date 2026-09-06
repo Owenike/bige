@@ -11,7 +11,6 @@
 .notice button{width:30px;height:30px;display:grid;place-items:center;flex:0 0 auto;border:0;border-radius:9px;background:rgba(22,102,60,.1);color:inherit;font-size:20px;line-height:1;cursor:pointer}
 .scheduleTable th,.scheduleTable td{width:72px;min-width:72px;height:58px}
 .scheduleTable .nameCell{width:138px;min-width:138px}
-.scheduleTable tbody tr:hover td,.scheduleTable tbody tr:hover .nameCell{background:#f3f8ff}
 .workCell span,.offCell strong{white-space:nowrap}
 .holidayIntro{margin:-4px 0 14px;color:#6d4c47;font-size:13px;line-height:1.55}
 .holidayList{gap:14px}
@@ -200,20 +199,24 @@
 .scheduleTable .workCell,.scheduleTable .offCell{background:rgba(12,21,32,.94)}
 .scheduleTable tbody .oddDateColumn{background:rgba(12,21,32,.94)}
 .scheduleTable tbody .evenDateColumn{background:rgba(15,27,39,.94)}
-.scheduleTable tbody tr:hover td{background:rgba(24,38,51,.94)!important}
-.scheduleTable tbody tr:hover .nameCell{background:#192b3b!important}
+.scheduleTable tbody tr>*{position:relative}
+.scheduleTable tbody tr>*::after{content:"";position:absolute;z-index:5;inset:0;pointer-events:none;border-top:1px solid transparent;border-bottom:1px solid transparent;transition:border-color .14s ease,box-shadow .14s ease}
+.scheduleTable tbody tr>:first-child::after{border-left:1px solid transparent;border-radius:7px 0 0 7px}
+.scheduleTable tbody tr>:last-child::after{border-right:1px solid transparent;border-radius:0 7px 7px 0}
+.scheduleTable tbody tr:hover>*::after{border-top-color:rgba(239,211,145,.82);border-bottom-color:rgba(239,211,145,.82)}
+.scheduleTable tbody tr:hover>:first-child::after{border-left-color:rgba(239,211,145,.82);box-shadow:-3px 0 12px rgba(216,182,105,.18)}
+.scheduleTable tbody tr:hover>:last-child::after{border-right-color:rgba(239,211,145,.82);box-shadow:3px 0 12px rgba(216,182,105,.18)}
 .scheduleTable .earlyShiftBadge{color:#8b4d10}
 .scheduleTable .middleShiftBadge{color:#c0cad2}
 .scheduleTable .lateShiftBadge{color:#24558f}
 .scheduleTable .offBadge{color:#9a3038}
 .scheduleTable thead .dateGridCell,.scheduleTable tbody .dateGridCell,.scheduleTable tfoot .dateGridCell{background:#d6dbdf;color:#111827}
 .scheduleTable thead .dateGridCell.weekend{background:#d6dbdf!important;color:#a54539}
-.scheduleTable tbody tr:hover .dateGridCell{background:#c4cfd8!important}
 .scheduleTable .dateGridCell .middleShiftBadge,.scheduleTable .dateGridCell .emptyCell{color:#111827}
-.scheduleTable tbody .dateGridCell.offCell{background:#9a3038!important;color:#fff}
-.scheduleTable tbody .dateGridCell.earlyShiftCell{background:#8b4d10!important;color:#fff}
-.scheduleTable tbody .dateGridCell.lateShiftCell{background:#24558f!important;color:#fff}
-.scheduleTable .dateGridCell.offCell .offBadge,.scheduleTable .dateGridCell.earlyShiftCell .earlyShiftBadge,.scheduleTable .dateGridCell.lateShiftCell .lateShiftBadge{color:#fff}
+.scheduleTable tbody .dateGridCell.offCell{background:radial-gradient(circle at 22% 16%,rgba(255,205,210,.16),transparent 44%),linear-gradient(145deg,#aa414b 0%,#8f2e37 56%,#75232c 100%)!important;border-color:rgba(255,190,196,.2);color:#fff}
+.scheduleTable tbody .dateGridCell.earlyShiftCell{background:radial-gradient(circle at 22% 16%,rgba(255,226,166,.17),transparent 44%),linear-gradient(145deg,#a86419 0%,#87470d 56%,#6f3708 100%)!important;border-color:rgba(244,201,126,.2);color:#fff}
+.scheduleTable tbody .dateGridCell.lateShiftCell{background:radial-gradient(circle at 22% 16%,rgba(198,224,255,.17),transparent 44%),linear-gradient(145deg,#356da9 0%,#285a93 56%,#1d4474 100%)!important;border-color:rgba(178,211,246,.2);color:#fff}
+.scheduleTable .dateGridCell.offCell .offBadge,.scheduleTable .dateGridCell.earlyShiftCell .earlyShiftBadge,.scheduleTable .dateGridCell.lateShiftCell .lateShiftBadge{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.28)}
 .leaveBalances i{border:1px solid rgba(216,182,105,.38);background:rgba(216,182,105,.13);color:var(--schedule-manager-gold-bright)}
 .holidayPanel{border-color:#a84a52;background:linear-gradient(145deg,rgba(70,25,31,.94),rgba(27,11,16,.94))}
 .holidayGroup{border-color:rgba(207,99,105,.46);background:rgba(42,17,22,.82)}
