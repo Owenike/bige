@@ -17,6 +17,7 @@ jobs:
           import Foundation
           import Vision
           import ImageIO
+          import CoreImage
           
           // The same implementation is called by the iPhone module and the Apple-platform benchmark.
           public enum LabelVisionCore {
@@ -38,7 +39,45 @@ jobs:
                 throw NSError(domain: "NutritionLabel", code: 2, userInfo: [NSLocalizedDescriptionKey: "此裝置尚不支援繁體中文標示辨識。"])
               }
               request.recognitionLanguages = ["zh-Hant", "en-US"].filter { supported.contains($0) }
-              try VNImageRequestHandler(cgImage: image, orientation: orientation, options: [:]).perform([request])
+              let context = CIContext()
+              var prepared = CIImage(cgImage: image).oriented(orientation)
+              func run(_ input: CIImage) throws {
+                guard let rendered = context.createCGImage(input, from: input.extent.integral) else {
+                  throw NSError(domain: "NutritionLabel", code: 6, userInfo: [NSLocalizedDescriptionKey: "無法處理照片。"])
+                }
+                try VNImageRequestHandler(cgImage: rendered, orientation: .up, options: [:]).perform([request])
+              }
+              try run(prepared)
+              func clean(_ value: String) -> String { value.replacingOccurrences(of: " ", with: "") }
+              let anchors = (request.results ?? []).filter { observation in
+                let value = clean(observation.topCandidates(1).first?.string ?? "")
+                return value.hasPrefix("每一份") || value.hasPrefix("每100") || ["蛋白質", "脂肪", "碳水化合物", "反式脂肪", "飽和脂肪"].contains(value)
+              }
+              let angles = anchors.map { atan2($0.topRight.y - $0.topLeft.y, $0.topRight.x - $0.topLeft.x) }.sorted()
+              var rotation = 0.0
+              if angles.count >= 3 {
+                let middle = angles[angles.count / 2]
+                if abs(middle) > 0.015 && abs(middle) < 0.4 && angles.filter({ abs($0-middle)<0.1 }).count >= 3 {
+                  rotation = Double(middle)
+                  prepared = prepared.transformed(by: CGAffineTransform(rotationAngle: -middle))
+                  try run(prepared)
+                }
+              }
+              let full = request.results ?? []
+              var cropped = false
+              if let serving = full.first(where: { clean($0.topCandidates(1).first?.string ?? "").hasPrefix("每一份量") }),
+                 let hundred = full.first(where: { clean($0.topCandidates(1).first?.string ?? "").hasPrefix("每100") && abs($0.boundingBox.midY-serving.boundingBox.midY)<0.15 }) {
+                let h = serving.boundingBox.height
+                let left = max(0, serving.boundingBox.minX-h)
+                let right = min(1, max(serving.boundingBox.maxX, hundred.boundingBox.maxX)+h*3)
+                let top = min(1, serving.boundingBox.maxY+h*2)
+                let bottom = max(0, serving.boundingBox.minY-h*13)
+                let region = CGRect(x:left,y:bottom,width:right-left,height:top-bottom)
+                let extent = prepared.extent
+                let crop = CGRect(x:extent.minX+region.minX*extent.width,y:extent.minY+region.minY*extent.height,width:region.width*extent.width,height:region.height*extent.height).integral
+                // Cropping/reorienting changes pixels only; it never substitutes expected nutrition values.
+                try run(prepared.cropped(to: crop)); cropped = true
+              }
               let lines: [[String: Any]] = (request.results ?? []).compactMap { observation in
                 guard let text = observation.topCandidates(1).first else { return nil }
                 let box = observation.boundingBox
@@ -51,7 +90,7 @@ jobs:
               let platform = "macos"
               #endif
               return ["engine": "apple-vision", "platform": platform, "revision": request.revision,
-                      "languages": request.recognitionLanguages, "lines": lines]
+                      "languages": request.recognitionLanguages, "lines": lines, "preprocessing": ["deskewRadians": rotation, "nutritionRegion": cropped], "fullText": full.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")]
             }
           }
           
