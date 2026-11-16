@@ -1,0 +1,88 @@
+name: Nutrition Apple Vision benchmark
+on:
+  push:
+    branches: [codex/nutrition-vision-benchmark-20261117]
+permissions:
+  contents: read
+jobs:
+  apple-vision:
+    runs-on: macos-15
+    timeout-minutes: 8
+    steps:
+      - name: Recognize existing public package photos on Apple Vision
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > main.swift <<'SWIFT'
+          import Foundation
+          import Vision
+          import ImageIO
+          
+          // The same implementation is called by the iPhone module and the Apple-platform benchmark.
+          public enum LabelVisionCore {
+            public static func recognize(url: URL) throws -> [String: Any] {
+              guard url.isFileURL,
+                    let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                    let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                throw NSError(domain: "NutritionLabel", code: 1, userInfo: [NSLocalizedDescriptionKey: "無法讀取照片，請重新拍攝。"])
+              }
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+              let orientation = CGImagePropertyOrientation(rawValue: (properties?[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1) ?? .up
+              let request = VNRecognizeTextRequest()
+              request.recognitionLevel = .accurate
+              request.usesLanguageCorrection = false
+              // Pin the revision for comparable benchmarks; do not silently switch recognizers.
+              request.revision = VNRecognizeTextRequestRevision3
+              let supported = try request.supportedRecognitionLanguages()
+              guard supported.contains("zh-Hant") else {
+                throw NSError(domain: "NutritionLabel", code: 2, userInfo: [NSLocalizedDescriptionKey: "此裝置尚不支援繁體中文標示辨識。"])
+              }
+              request.recognitionLanguages = ["zh-Hant", "en-US"].filter { supported.contains($0) }
+              try VNImageRequestHandler(cgImage: image, orientation: orientation, options: [:]).perform([request])
+              let lines: [[String: Any]] = (request.results ?? []).compactMap { observation in
+                guard let text = observation.topCandidates(1).first else { return nil }
+                let box = observation.boundingBox
+                return ["text": text.string, "confidence": Double(text.confidence),
+                        "x": Double(box.minX), "y": Double(box.minY), "width": Double(box.width), "height": Double(box.height)]
+              }
+              #if os(iOS)
+              let platform = "ios"
+              #else
+              let platform = "macos"
+              #endif
+              return ["engine": "apple-vision", "platform": platform, "revision": request.revision,
+                      "languages": request.recognitionLanguages, "lines": lines]
+            }
+          }
+          
+          for file in CommandLine.arguments.dropFirst() {
+            do {
+              let result = try LabelVisionCore.recognize(url: URL(fileURLWithPath: file))
+              let record: [String: Any] = ["file": file, "result": result, "os": ProcessInfo.processInfo.operatingSystemVersionString]
+              let data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
+              print("VISION_RESULT=" + String(data: data, encoding: .utf8)!)
+            } catch {
+              print("VISION_FAILURE=" + file + ": " + error.localizedDescription)
+            }
+          }
+          
+          SWIFT
+          swiftc main.swift -o label-vision
+          if curl --fail --location --max-time 45 --retry 1 'https://i.meee.com.tw/BdP2O1B.jpg' -o 'seven-label-weiding-cheese-288-label.jpg'; then
+            echo 'bab64b19d54ade2c0f4edd2540107109048e5dab3315a4487d8493f57f5b9be3  seven-label-weiding-cheese-288-label.jpg' | shasum -a 256 --check
+            ./label-vision 'seven-label-weiding-cheese-288-label.jpg'
+          else
+            echo 'PHOTO_UNAVAILABLE=seven-label-weiding-cheese-288'
+          fi
+          if curl --fail --location --max-time 45 --retry 1 'https://images.vocus.cc/43176194-8df7-441a-a91d-ddb559a14e89.jpg' -o 'seven-label-kagaya-tendon-215-label.jpg'; then
+            echo 'bfc4d5fe10c84f31d38d6b40374fb0b3cf427580e4c329d84f38915a33ea678f  seven-label-kagaya-tendon-215-label.jpg' | shasum -a 256 --check
+            ./label-vision 'seven-label-kagaya-tendon-215-label.jpg'
+          else
+            echo 'PHOTO_UNAVAILABLE=seven-label-kagaya-tendon-215'
+          fi
+          if curl --fail --location --max-time 45 --retry 1 'https://megapx-assets.dcard.tw/images/4217c0a3-2ed8-45e1-b6d2-04dbf94e60a7/1280.jpeg' -o 'hilife-label-taro-cheese-85-label.jpg'; then
+            echo 'd990eb70f1b9ea1a9c2fff8e5d131651fa8cf99f75007b89bfa0194c0c934af1  hilife-label-taro-cheese-85-label.jpg' | shasum -a 256 --check
+            ./label-vision 'hilife-label-taro-cheese-85-label.jpg'
+          else
+            echo 'PHOTO_UNAVAILABLE=hilife-label-taro-cheese-85'
+          fi
