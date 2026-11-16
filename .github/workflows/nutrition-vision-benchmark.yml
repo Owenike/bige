@@ -53,7 +53,7 @@ jobs:
                 let value = clean(observation.topCandidates(1).first?.string ?? "")
                 return value.hasPrefix("每一份") || value.hasPrefix("每100") || ["蛋白質", "脂肪", "碳水化合物", "反式脂肪", "飽和脂肪"].contains(value)
               }
-              let angles = anchors.map { atan2($0.topRight.y - $0.topLeft.y, $0.topRight.x - $0.topLeft.x) }.sorted()
+              let angles = anchors.map { atan2(($0.topRight.y - $0.topLeft.y) * prepared.extent.height, ($0.topRight.x - $0.topLeft.x) * prepared.extent.width) }.sorted()
               var rotation = 0.0
               if angles.count >= 3 {
                 let middle = angles[angles.count / 2]
@@ -68,7 +68,7 @@ jobs:
               if let serving = full.first(where: { clean($0.topCandidates(1).first?.string ?? "").hasPrefix("每一份量") }),
                  let hundred = full.first(where: { clean($0.topCandidates(1).first?.string ?? "").hasPrefix("每100") && abs($0.boundingBox.midY-serving.boundingBox.midY)<0.15 }) {
                 let h = serving.boundingBox.height
-                let left = max(0, serving.boundingBox.minX-h)
+                let left = max(0, serving.boundingBox.minX-h*0.15)
                 let right = min(1, max(serving.boundingBox.maxX, hundred.boundingBox.maxX)+h*3)
                 let top = min(1, serving.boundingBox.maxY+h*2)
                 let bottom = max(0, serving.boundingBox.minY-h*13)
